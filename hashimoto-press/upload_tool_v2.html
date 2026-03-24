@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>生産予定表アップロード</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, set, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import * as XLSX from "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/xlsx.mjs";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCvh4rDrk6ljWhNBJc-Kt_YFpvEevLxb6o",
+  authDomain: "hashimoto-press.firebaseapp.com",
+  databaseURL: "https://hashimoto-press-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "hashimoto-press",
+  storageBucket: "hashimoto-press.firebasestorage.app",
+  messagingSenderId: "508495109760",
+  appId: "1:508495109760:web:53d266bb4483ab04a29065"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+const SHEET_MAP = {
+  'A1-5':  { id: 'A1',  name: 'A1号機(5)' },
+  'A2-4':  { id: 'A2',  name: 'A2号機(4)' },
+  'B1-20': { id: 'B1',  name: 'B1号機(20)' },
+  'B2-6':  { id: 'B2',  name: 'B2号機(6)' },
+  'B-P2':  { id: 'BP2', name: 'BラインP2' },
+  'C-P3':  { id: 'CP3', name: 'CラインP3' },
+};
+
+function fmtTime(t) {
+  if (t == null || t === '') return '';
+  // Excelのシリアル値（0〜1の小数）→ HH:MM変換
+  if (typeof t === 'number' && t >= 0 && t < 1) {
+    const totalMin = Math.round(t * 24 * 60);
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    return h.toString().padStart(2,'0') + ':' + m.toString().padStart(2,'0');
+  }
+  const s = String(t);
+  if (s.includes(':')) {
+    const p = s.split(':');
+    return p[0].padStart(2,'0') + ':' + p[1].padStart(2,'0');
+  }
+  return '';
+}
+
+function parseSheet(rows) {
+  const jobs = [];
+  for (const row of rows) {
+    const seq = row[0];
+    if (seq == null || isNaN(seq) || seq <= 0) continue;
+    const part = row[1] != null ? String(row[1]).trim() : '';
+    const setup = row[2] != null && !isNaN(row[2]) ? Number(row[2]) : 0;
+    const plan = row[3] != null && !isNaN(row[3]) ? Number(row[3]) : 0;
+    const start = fmtTime(row[5]);
+    const end = fmtTime(row[6]);
+    if (part && part !== '0' && plan > 0) {
+      jobs.push({ seq: Number(seq), part, plan, actual: 0, start, end, setup, status: 'waiting', note: '', updatedAt: 0 });
+    }
+  }
+  return jobs;
+}
+
+window.uploadFile = async function() {
+  const fileInput = document.getElementById('file-input');
+  if (!fileInput.files[0]) { alert('ファイルを選択してください'); return; }
+  const keepActual = document.getElementById('keep-actual').checked;
+
+  const btn = document.getElementById('upload-btn');
+  btn.disabled = true;
+  btn.textContent = '処理中...';
+  document.getElementById('result').innerHTML = '';
+
+  try {
+    const buf = await fileInput.files[0].arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    let html = '';
+
+    // 既存データを取得（実績維持モード用）
+    let existingLines = {};
+    if (keepActual) {
+      const snap = await get(ref(db, 'lines'));
+      existingLines = snap.val() || {};
+    }
+
+    const lines = {};
+    for (const [sheetName, info] of Object.entries(SHEET_MAP)) {
+      if (!wb.SheetNames.includes(sheetName)) {
+        html += `<div class="skip">スキップ: ${sheetName}（シートなし）</div>`;
+        continue;
+      }
+      const ws = wb.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+      const jobs = parseSheet(rows);
+      const mainJob = jobs[0] || null;
+      const ex = existingLines[info.id] || {};
+
+      if (keepActual && ex.updatedAt) {
+        // 実績維持モード
+        const exJobs = ex.jobs || [];
+        // 新計画の品番リスト
+        const newParts = new Set(jobs.map(j => j.part));
+        // 旧計画の品番リスト
+        const exParts = new Set(exJobs.map(j => j.part));
+        // 追加品番・削除品番を特定
+        const added = jobs.filter(j => !exParts.has(j.part));
+        const removed = exJobs.filter(j => !newParts.has(j.part));
+
+        // 新計画の品番に実績データをマージ
+        const mergedJobs = jobs.map(newJ => {
+          const oldJ = exJobs.find(oj => oj.part === newJ.part) || {};
+          return { ...newJ,
+            actualStart: oldJ.actualStart || '',
+            actualEnd: oldJ.actualEnd || '',
+            actualCount: oldJ.actualCount || 0,
+            setupStartTime: oldJ.setupStartTime || '',
+            setupActualMin: oldJ.setupActualMin || 0,
+            paceInfo: oldJ.paceInfo || null,
+            status: oldJ.status || 'waiting',
+          };
+        });
+
+        // 削除品番のうち実績あり → 履歴として末尾に追加（historyフラグ付き）
+        const historyJobs = removed
+          .filter(j => j.actualCount > 0 || j.actualStart)
+          .map(j => ({ ...j, history: true, status: 'history' }));
+        mergedJobs.push(...historyJobs);
+
+        // 現在表示中の品番が削除された場合は最初の品番に切替
+        let newPart = ex.part;
+        let newActual = ex.actual || 0;
+        let newWorkStart = ex.workStart || '';
+        let newWorkEnd = ex.workEnd || '';
+        if (!newParts.has(ex.part)) {
+          newPart = mainJob ? mainJob.part : '';
+          newActual = 0;
+          newWorkStart = '';
+          newWorkEnd = '';
+        }
+
+        lines[info.id] = {
+          ...ex,
+          name: info.name,
+          part: newPart,
+          plan: mergedJobs.find(j=>j.part===newPart)?.plan || (mainJob?.plan||0),
+          actual: newActual,
+          workStart: newWorkStart,
+          workEnd: newWorkEnd,
+          jobs: mergedJobs,
+        };
+
+        // 変更サマリー
+        let summary = `✓ ${info.name}：計画更新（実績維持）`;
+        if (added.length) summary += ` ／ 追加品番: ${added.map(j=>j.part).join('、')}`;
+        const removedWithData = removed.filter(j => j.actualCount > 0 || j.actualStart);
+        const removedNoData = removed.filter(j => !j.actualCount && !j.actualStart);
+        if (removedWithData.length) summary += ` ／ 履歴保持（削除）: ${removedWithData.map(j=>j.part).join('、')}`;
+        if (removedNoData.length) summary += ` ／ 削除: ${removedNoData.map(j=>j.part).join('、')}`;
+        html += `<div class="ok">${summary}</div>`;
+      } else {
+        // 通常モード：全リセット
+        lines[info.id] = {
+          name: info.name,
+          part: mainJob ? mainJob.part : '',
+          plan: mainJob ? mainJob.plan : 0,
+          actual: 0,
+          status: 'running',
+          note: '',
+          updatedAt: Date.now(),
+          jobs,
+        };
+        const total = jobs.reduce((s, j) => s + j.plan, 0);
+        html += `<div class="ok">✓ ${info.name}：${jobs.length}工程 / 計画合計 ${total.toLocaleString()}個</div>`;
+      }
+    }
+
+    await set(ref(db, 'lines'), lines);
+    const modeLabel = keepActual ? '計画更新（実績維持）' : '全データリセット';
+    document.getElementById('result').innerHTML = `<div class="success">✓ ${modeLabel}完了！ダッシュボードに反映されました。</div>` + html;
+  } catch(e) {
+    document.getElementById('result').innerHTML = `<div class="error">エラー: ${e.message}</div>`;
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'アップロードする';
+};
+</script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans JP',sans-serif;background:#f0efe8;min-height:100vh;display:flex;align-items:center;justify-content:center;}
+.card{background:#fff;border-radius:12px;padding:32px;max-width:520px;width:100%;box-shadow:0 2px 12px rgba(0,0,0,0.08);}
+h1{font-size:18px;font-weight:700;margin-bottom:6px;}
+.sub{font-size:13px;color:#888;margin-bottom:24px;}
+.drop-zone{border:2px dashed #ccc;border-radius:8px;padding:32px;text-align:center;cursor:pointer;margin-bottom:16px;transition:border-color 0.2s;}
+.drop-zone:hover,.drop-zone.active{border-color:#1a1a1a;}
+.drop-zone input{display:none;}
+.drop-icon{font-size:32px;margin-bottom:8px;}
+.drop-text{font-size:14px;color:#555;}
+.drop-name{font-size:13px;color:#1a1a1a;font-weight:500;margin-top:8px;}
+.btn{width:100%;background:#1a1a1a;color:#fff;border:none;border-radius:8px;padding:13px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;}
+.btn:disabled{opacity:0.5;cursor:not-allowed;}
+.result{margin-top:16px;}
+.ok{font-size:13px;color:#27ae60;padding:4px 0;}
+.skip{font-size:13px;color:#888;padding:4px 0;}
+.error{font-size:13px;color:#c0392b;padding:8px;background:#fdf0ee;border-radius:6px;margin-bottom:8px;}
+.success{font-size:14px;font-weight:700;color:#27ae60;padding:10px;background:#eafaf1;border-radius:6px;margin-bottom:12px;}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>生産予定表アップロード</h1>
+  <p class="sub">毎朝このツールでExcelをアップロードすると、進捗ボードに当日の計画が自動セットされます。</p>
+  <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+    <div class="drop-icon">📂</div>
+    <div class="drop-text">クリックまたはドラッグ＆ドロップ</div>
+    <div class="drop-name" id="file-name">ファイル未選択</div>
+    <input type="file" id="file-input" accept=".xlsx,.xls" onchange="onFileChange(this)">
+  </div>
+  <div style="margin:12px 0;padding:12px 16px;background:#fff8e1;border:1px solid #ffe082;border-radius:8px;">
+  <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13px;font-weight:700;">
+    <input type="checkbox" id="keep-actual" style="width:18px;height:18px;">
+    実績を維持したまま計画のみ更新する（計画変更時に使用）
+  </label>
+  <div style="font-size:11px;color:#888;margin-top:6px;margin-left:28px;">
+    ※チェックなし：全データをリセット（通常の朝イチアップロード）<br>
+    ※チェックあり：入力済みの実績・時間を保持し、計画数・品番構成のみ更新
+  </div>
+</div>
+<button class="btn" id="upload-btn" onclick="uploadFile()">アップロードする</button>
+  <div class="result" id="result"></div>
+</div>
+<script>
+function onFileChange(input) {
+  const name = input.files[0] ? input.files[0].name : 'ファイル未選択';
+  document.getElementById('file-name').textContent = name;
+}
+const dz = document.getElementById('drop-zone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('active'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('active'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('active');
+  const fi = document.getElementById('file-input');
+  fi.files = e.dataTransfer.files;
+  onFileChange(fi);
+});
+</script>
+</body>
+</html>
