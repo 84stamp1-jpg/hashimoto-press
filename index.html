@@ -380,8 +380,11 @@ function calcLineRate(l){
     const elapsedNet=netMins(sm,effectiveEnd);
     planTimeSum+=elapsedNet;
 
-    // 実績
-    const jAct=j.part===l.part?(l.actual||0):(j.actualCount||0);
+    // 実績：jobレベルのactualCountを優先、なければlineレベルのactual
+    // （現在稼働中jobはactualCountに最新値が入っていない場合があるのでl.actualも参照）
+    const jActCount=j.actualCount||0;
+    const isCurrentJob=(j.part===l.part&&(l.workStart?j.actualStart===l.workStart:true));
+    const jAct=isCurrentJob&&(l.actual||0)>jActCount?(l.actual||0):jActCount;
     if(jAct>0){
       hasSomeActual=true;
       valueSum+=jAct*planCT;
@@ -643,7 +646,9 @@ function renderBoard(){
         var details=[];
         var allJobs2=(l.jobs||[]).filter(function(j){return j.plan>0&&j.start&&j.end&&!j.history;});
         allJobs2.forEach(function(j){
-          var jAct=j.part===l.part?(l.actual||0):(j.actualCount||0);
+          var jActB=j.actualCount||0;
+          var isCurB=(j.part===l.part&&(l.workStart?j.actualStart===l.workStart:true));
+          var jAct=isCurB&&(l.actual||0)>jActB?(l.actual||0):jActB;
           if(jAct<=0) return;
           details.push(j.part.split('-').slice(-1)[0]+'：'+jAct.toLocaleString()+'個');
         });
