@@ -345,31 +345,51 @@ const fmtTs=ts=>(!ts||ts===0)?'--:--':`${String(new Date(ts).getHours()).padStar
 const timeToH=t=>{if(!t)return null;const p=t.split(':');return +p[0]+ +p[1]/60;};
 const timeToMin=t=>{if(!t||t==='')return null;const p=t.split(':');return +p[0]*60+(+p[1]|0);};
 
-// ライン達成率計算（計画稼働時間ベース）
-// 達成率 = Σ(実績数 × 計画CT分/個) / 計画稼働時間(分) × 100
+// ライン達成率計算（現時点案分方式）
+// 現在時刻までに「着手済みまたは開始時刻を過ぎた品番」のみ対象
+// 達成率 = Σ(実績数 × 計画CT) / 現時点の計画稼働時間 × 100
 function calcLineRate(l){
   const jobs=(l.jobs||[]).filter(j=>j.plan>0&&j.start&&j.end&&!j.history);
   if(!jobs.length) return null;
-  // 計画稼働時間：最早開始〜最終終了（休憩除く）
-  const starts=jobs.map(j=>timeToMin(j.start)).filter(v=>v!==null);
-  const ends=jobs.map(j=>timeToMin(j.end)).filter(v=>v!==null);
-  if(!starts.length||!ends.length) return null;
-  const planStart=Math.min(...starts);
-  const planEnd=Math.max(...ends);
-  const planNet=netMins(planStart,planEnd);
-  if(planNet<=0) return null;
-  // Σ(実績数 × 計画CT)
-  let valueSum=0; let hasSomeActual=false;
-  jobs.forEach(function(j){
-    const jAct=j.part===l.part?(l.actual||0):(j.actualCount||0);
-    if(jAct<=0) return;
-    hasSomeActual=true;
-    const planMinJ=timeToMin(j.end)-timeToMin(j.start);
-    const planCT=planMinJ>0?planMinJ/j.plan:0; // 分/個
-    valueSum+=jAct*planCT;
+  const nowMin=new Date().getHours()*60+new Date().getMinutes();
+
+  // 対象品番：開始時刻が現在時刻以前のもの（着手済み or 着手すべきもの）
+  const activeJobs=jobs.filter(j=>{
+    const sm=timeToMin(j.start);
+    return sm!==null&&sm<=nowMin;
   });
-  if(!hasSomeActual) return null;
-  return Math.round(valueSum/planNet*100);
+  if(!activeJobs.length) return null;
+
+  // 現時点の計画稼働時間：
+  // 対象品番の最早開始〜各品番の「現時点での案分終了時刻」の合計
+  let planTimeSum=0;
+  let valueSum=0;
+  let hasSomeActual=false;
+
+  activeJobs.forEach(function(j){
+    const sm=timeToMin(j.start);
+    const em=timeToMin(j.end);
+    if(sm===null||em===null) return;
+    const planMinJ=em-sm; // 計画時間（休憩含む生）
+    const planNetJ=netMins(sm,em); // 計画正味時間
+    if(planNetJ<=0) return;
+    const planCT=planNetJ/j.plan; // 分/個（計画CT）
+
+    // 現時点でこの品番に使えた時間
+    const effectiveEnd=Math.min(em,nowMin);
+    const elapsedNet=netMins(sm,effectiveEnd);
+    planTimeSum+=elapsedNet;
+
+    // 実績
+    const jAct=j.part===l.part?(l.actual||0):(j.actualCount||0);
+    if(jAct>0){
+      hasSomeActual=true;
+      valueSum+=jAct*planCT;
+    }
+  });
+
+  if(!hasSomeActual||planTimeSum<=0) return null;
+  return Math.round(valueSum/planTimeSum*100);
 }
 // 休憩時間帯（分単位）
 const BREAKS=[[600,610],[730,770],[890,900],[1020,1030]]; // 10:00-10:10, 12:10-12:50, 14:50-15:00, 17:00-17:10
