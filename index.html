@@ -351,7 +351,9 @@ const timeToMin=t=>{if(!t||t==='')return null;const p=t.split(':');return +p[0]*
 function calcLineRate(l){
   const jobs=(l.jobs||[]).filter(j=>j.plan>0&&j.start&&j.end&&!j.history);
   if(!jobs.length) return null;
-  const nowMin=new Date().getHours()*60+new Date().getMinutes();
+  // 入力時点（updatedAt）を基準に計算、未入力なら現在時刻
+  const updT=l.updatedAt>0?new Date(l.updatedAt):new Date();
+  const nowMin=updT.getHours()*60+updT.getMinutes();
 
   // 対象品番：開始時刻が現在時刻以前のもの（着手済み or 着手すべきもの）
   const activeJobs=jobs.filter(j=>{
@@ -413,7 +415,9 @@ function netMins(startM,endM){
 
 function getProRata(l){
   const jobs=(l.jobs||[]).filter(j=>j.plan>0&&j.start&&j.end&&j.part===l.part);
-  const nowMin=new Date().getHours()*60+new Date().getMinutes();
+  // 入力時点（updatedAt）を基準に計算、未入力なら現在時刻
+  const updT=l.updatedAt>0?new Date(l.updatedAt):new Date();
+  const nowMin=updT.getHours()*60+updT.getMinutes();
   if(!jobs.length) return null;
   const j=jobs[0];
   const sm=timeToMin(j.start),em=timeToMin(j.end);
@@ -514,14 +518,28 @@ function renderBoard(){
     if(partRate2===null&&pv>0&&partActual>0) partRate2=Math.round(partActual/pv*100);
     const proRateDisp=partRate2!==null?partRate2+'%':'-';
     const barW=l.status==='setup'?100:(pv>0?Math.min(Math.round(partActual/pv*100),100):0);
-    // 遅れ分数
+    // 遅れ分数：実績入力時点（updatedAt）で計算・固定
     let delayDisp='';
-    // 作業終了済みなら遅れ分数は表示しない
-    if(partActual>0&&pv>0&&partActual<pv&&!(l.workEnd&&l.workEnd!=='')){
+    if(partActual>0&&!(l.workEnd&&l.workEnd!=='')){
       const cjD=(l.jobs||[]).find(j=>j.part===l.part&&j.plan>0&&j.start&&j.end);
-      if(cjD){const sm2=timeToMin(cjD.start),em2=timeToMin(cjD.end);
-        if(sm2&&em2&&em2>sm2){const dMin=Math.round((pv-partActual)*(em2-sm2)/cjD.plan);
-          delayDisp='<div style="font-size:10px;color:#c0392b;font-weight:700;margin-top:2px;">⏱ '+dMin+'分遅れ（'+(pv-partActual).toLocaleString()+'個不足）</div>';}}
+      if(cjD){
+        const sm2=timeToMin(cjD.start),em2=timeToMin(cjD.end);
+        if(sm2&&em2&&em2>sm2){
+          const updM=l.updatedAt>0?(function(){const ut=new Date(l.updatedAt);return ut.getHours()*60+ut.getMinutes();})():null;
+          if(updM){
+            const planNetD=netMins(sm2,em2);
+            const planCTD=planNetD>0?planNetD/cjD.plan:0;
+            const wsM_d=timeToMin(l.workStart||cjD.start);
+            const elapsedD=wsM_d?netMins(wsM_d,Math.min(updM,em2)):0;
+            const targetAtUpd=planCTD>0?Math.round(elapsedD/planCTD):0;
+            const shortage=targetAtUpd-partActual;
+            if(shortage>0){
+              const dMin=Math.round(shortage*planCTD);
+              delayDisp='<div style="font-size:10px;color:#c0392b;font-weight:700;margin-top:2px;">⏱ '+dMin+'分遅れ（'+shortage.toLocaleString()+'個不足）</div>';
+            }
+          }
+        }
+      }
     }
     // 3種類ペース
     const cjP=(l.jobs||[]).find(j=>j.part===l.part&&j.plan>0&&j.start&&j.end);
@@ -607,6 +625,16 @@ function renderBoard(){
         if(jSetupMin>0) tParts.push('段取'+jSetupMin+'分');
         if(jWS) tParts.push('開'+jWS);
         if(jWE) tParts.push('終'+jWE);
+        // 入力履歴スナップショット
+        const snapH=j.snapHistory||[];
+        let snapDisp='';
+        if(snapH.length>0){
+          const entries=snapH.map(s=>{
+            const rc2=s.r>=95?'#27ae60':s.r>=80?'#e67e22':'#c0392b';
+            return '<span style="color:'+rc2+';font-weight:700;">'+s.t+' '+s.a.toLocaleString()+'個('+s.r+'%)</span>';
+          }).join(' → ');
+          snapDisp='<div style="font-size:9px;color:#888;margin-top:2px;line-height:1.6;">📋 '+entries+'</div>';
+        }
         // 終了済み品番のペース表示
         let jpStr='';
         if(j.paceInfo&&j.status==='done'){
@@ -623,7 +651,9 @@ function renderBoard(){
           (jAct>0?'<span class="sa '+rc+'">'+jAct.toLocaleString()+'個</span><span class="sa '+rc+'">'+(jR||0)+'%</span>':'<span class="sa none">-</span><span class="sa none">-</span>')+
           '<span class="st2">'+(j.start&&j.end?j.start+'〜'+j.end:'-')+'</span>'+
           (tParts.length?'<span style="font-size:9px;color:#888;">'+tParts.join(' ')+'</span>':'')+
-          jpStr+'</div>';
+          jpStr+
+          snapDisp+
+          '</div>';
       });
       sched+='</div>';
     }
@@ -960,6 +990,35 @@ window.doSub=function(){
           paceInfo={pace,planPace:planPaceJ};
         }
       }
+      // 入力履歴（達成率スナップショット）を追加
+      const snapHistory=[...(j.snapHistory||[])];
+      if(actVal>0){
+        // 入力時点の達成率を計算
+        const snapNow=Date.now();
+        const snapT=new Date(snapNow);
+        const snapMin=snapT.getHours()*60+snapT.getMinutes();
+        const smSnap=timeToMin(j.start||''),emSnap=timeToMin(j.end||'');
+        const wsSnap=timeToMin(ws||j.actualStart||'');
+        let snapRate=null;
+        if(smSnap&&emSnap&&wsSnap&&smSnap<emSnap){
+          const planNetSnap=netMins(smSnap,emSnap);
+          const planCTSnap=planNetSnap>0?planNetSnap/j.plan:0;
+          const elapsedSnap=netMins(wsSnap,Math.min(snapMin,emSnap));
+          const targetSnap=planCTSnap>0?Math.round(elapsedSnap/planCTSnap):0;
+          snapRate=targetSnap>0?Math.round(actVal/targetSnap*100):Math.round(actVal/j.plan*100);
+        } else {
+          snapRate=Math.round(actVal/j.plan*100);
+        }
+        const timeStr=snapT.getHours().toString().padStart(2,'0')+':'+snapT.getMinutes().toString().padStart(2,'0');
+        // 同じ時刻の重複は上書き、違う時刻は追加（最大10件）
+        const lastSnap=snapHistory[snapHistory.length-1];
+        if(lastSnap&&lastSnap.t===timeStr){
+          snapHistory[snapHistory.length-1]={t:timeStr,a:actVal,r:snapRate};
+        } else {
+          snapHistory.push({t:timeStr,a:actVal,r:snapRate});
+          if(snapHistory.length>10) snapHistory.shift();
+        }
+      }
       curJobs[selJi]={...j,
         setupStartTime:ss,
         setupEndTime:se,
@@ -968,6 +1027,7 @@ window.doSub=function(){
         actualCount:actVal,
         setupActualMin:setupMin!==null?setupMin:(j.setupActualMin||0),
         paceInfo,
+        snapHistory,
         status:we&&we!==''?'done':'running'
       };
       // lineレベルに反映する値を一時保存（upd宣言後に設定）
