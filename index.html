@@ -502,20 +502,24 @@ function renderBoard(){
     })||(l.jobs||[]).find(j=>j.part===l.part&&j.plan>0);
     const partActual=_curJob2?((_curJob2.actualCount)||0):(l.actual||0);
     const proRataDisp=pv>0?pv.toLocaleString()+'個':'';
-    // CT達成率（メインボックス）
+    // 達成率（入力時点の目標CT個数比・全て統一）
     let partRate2=null;
     const cjCT=(l.jobs||[]).find(j=>j.part===l.part&&j.plan>0&&j.start&&j.end);
     if(cjCT&&partActual>0){
-      const planMinCT=timeToMin(cjCT.end)-timeToMin(cjCT.start);
-      const planCTmain=planMinCT>0?planMinCT/cjCT.plan:0;
+      const smCT=timeToMin(cjCT.start),emCT=timeToMin(cjCT.end);
+      const planNetCT=netMins(smCT,emCT);
+      const planCTmain=planNetCT>0?planNetCT/cjCT.plan:0;
       const wsMainM=timeToMin(l.workStart||cjCT.start);
-      // 終了済みはworkEndで確定、未終了は現在時刻
-      const weMainM=l.workEnd&&l.workEnd!==''?timeToMin(l.workEnd):(new Date().getHours()*60+new Date().getMinutes());
-      const actMinMain=wsMainM&&weMainM?netMins(wsMainM,weMainM):0;
-      const actCTmain=actMinMain>0&&partActual>0?actMinMain/partActual:0;
-      if(planCTmain>0&&actCTmain>0) partRate2=Math.round(planCTmain/actCTmain*100);
+      // 入力時点（updatedAt）を基準に固定
+      const updMT=l.updatedAt>0?(function(){const ut=new Date(l.updatedAt);return ut.getHours()*60+ut.getMinutes();})():null;
+      const weMainM=l.workEnd&&l.workEnd!==''?timeToMin(l.workEnd):updMT;
+      if(wsMainM&&weMainM){
+        const actMinMain=netMins(wsMainM,Math.min(weMainM,emCT));
+        const targetMain=planCTmain>0?Math.round(actMinMain/planCTmain):0;
+        if(targetMain>0) partRate2=Math.round(partActual/targetMain*100);
+      }
     }
-    if(partRate2===null&&pv>0&&partActual>0) partRate2=Math.round(partActual/pv*100);
+    if(partRate2===null&&partActual>0&&cjCT) partRate2=Math.round(partActual/cjCT.plan*100);
     const proRateDisp=partRate2!==null?partRate2+'%':'-';
     const barW=l.status==='setup'?100:(pv>0?Math.min(Math.round(partActual/pv*100),100):0);
     // 遅れ分数：実績入力時点（updatedAt）で計算・固定
@@ -591,7 +595,7 @@ function renderBoard(){
             '<span class="sn" style="color:#bbb;">-</span>'+
             '<span class="sp" style="color:#aaa;text-decoration:line-through;">'+j.part+'</span>'+
             '<span class="sq" style="color:#bbb;">'+j.plan.toLocaleString()+'個</span>'+
-            (jAct>0?'<span class="sa '+rc+'">'+jAct.toLocaleString()+'個</span><span class="sa '+rc+'">'+(jR||0)+'%</span>':'<span class="sa none">-</span><span class="sa none">-</span>')+
+            (jAct>0?'<span class="sa '+rc+'">'+jAct.toLocaleString()+'個</span>':'<span class="sa none">-</span>')+
             '<span class="st2" style="color:#bbb;font-size:9px;">履歴</span>'+
             '</div>';
           return;
@@ -648,7 +652,7 @@ function renderBoard(){
           '<span class="sn">'+j.seq+'</span>'+
           '<span class="sp">'+(cur?'▶ ':'')+j.part+'</span>'+
           '<span class="sq">'+j.plan.toLocaleString()+'個</span>'+
-          (jAct>0?'<span class="sa '+rc+'">'+jAct.toLocaleString()+'個</span><span class="sa '+rc+'">'+(jR||0)+'%</span>':'<span class="sa none">-</span><span class="sa none">-</span>')+
+          (jAct>0?'<span class="sa '+rc+'">'+jAct.toLocaleString()+'個</span>':'<span class="sa none">-</span>')+
           '<span class="st2">'+(j.start&&j.end?j.start+'〜'+j.end:'-')+'</span>'+
           (tParts.length?'<span style="font-size:9px;color:#888;">'+tParts.join(' ')+'</span>':'')+
           jpStr+
