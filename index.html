@@ -351,50 +351,45 @@ const timeToMin=t=>{if(!t||t==='')return null;const p=t.split(':');return +p[0]*
 function calcLineRate(l){
   const jobs=(l.jobs||[]).filter(j=>j.plan>0&&j.start&&j.end&&!j.history);
   if(!jobs.length) return null;
-  // 入力時点（updatedAt）を基準に計算、未入力なら現在時刻
+
   const updT=l.updatedAt>0?new Date(l.updatedAt):new Date();
-  const nowMin=updT.getHours()*60+updT.getMinutes();
+  const updMin=updT.getHours()*60+updT.getMinutes();
 
-  // 対象品番：開始時刻が現在時刻以前のもの（着手済み or 着手すべきもの）
-  const activeJobs=jobs.filter(j=>{
-    const sm=timeToMin(j.start);
-    return sm!==null&&sm<=nowMin;
-  });
-  if(!activeJobs.length) return null;
+  let ctRateSum=0, ctRateCnt=0;
+  let actualValueSum=0, planValueSum=0;
 
-  // 現時点の計画稼働時間：
-  // 対象品番の最早開始〜各品番の「現時点での案分終了時刻」の合計
-  let planTimeSum=0;
-  let valueSum=0;
-  let hasSomeActual=false;
-
-  activeJobs.forEach(function(j){
+  jobs.forEach(function(j){
     const sm=timeToMin(j.start);
     const em=timeToMin(j.end);
     if(sm===null||em===null) return;
-    const planMinJ=em-sm; // 計画時間（休憩含む生）
-    const planNetJ=netMins(sm,em); // 計画正味時間
+    const planNetJ=netMins(sm,em);
     if(planNetJ<=0) return;
-    const planCT=planNetJ/j.plan; // 分/個（計画CT）
+    const planCT=planNetJ/j.plan;
 
-    // 現時点でこの品番に使えた時間
-    const effectiveEnd=Math.min(em,nowMin);
-    const elapsedNet=netMins(sm,effectiveEnd);
-    planTimeSum+=elapsedNet;
-
-    // 実績：jobレベルのactualCountを優先、なければlineレベルのactual
-    // （現在稼働中jobはactualCountに最新値が入っていない場合があるのでl.actualも参照）
     const jActCount=j.actualCount||0;
     const isCurrentJob=(j.part===l.part&&(l.workStart?j.actualStart===l.workStart:true));
     const jAct=isCurrentJob&&(l.actual||0)>jActCount?(l.actual||0):jActCount;
-    if(jAct>0){
-      hasSomeActual=true;
-      valueSum+=jAct*planCT;
+
+    planValueSum+=planNetJ;
+
+    if(jAct<=0) return;
+
+    const wsJ=timeToMin(isCurrentJob?(l.workStart||j.actualStart||j.start):(j.actualStart||j.start));
+    const weJ=isCurrentJob
+      ?(l.workEnd&&l.workEnd!==''?timeToMin(l.workEnd):updMin)
+      :(j.actualEnd&&j.actualEnd!==''?timeToMin(j.actualEnd):updMin);
+    const actualNetJ=wsJ&&weJ?netMins(wsJ,weJ):0;
+    if(actualNetJ>0){
+      ctRateSum+=jAct*planCT/actualNetJ;
+      ctRateCnt++;
     }
+    actualValueSum+=jAct*planCT;
   });
 
-  if(!hasSomeActual||planTimeSum<=0) return null;
-  return Math.round(valueSum/planTimeSum*100);
+  const ctRate=ctRateCnt>0?Math.round(ctRateSum/ctRateCnt*100):null;
+  const planRate=planValueSum>0?Math.round(actualValueSum/planValueSum*100):null;
+  if(ctRate===null&&planRate===null) return null;
+  return {ctRate, planRate};
 }
 // 休憩時間帯（分単位）
 const BREAKS=[[600,610],[730,770],[890,900],[1020,1030]]; // 10:00-10:10, 12:10-12:50, 14:50-15:00, 17:00-17:10
@@ -671,28 +666,29 @@ function renderBoard(){
         '</div>'+
         '<span class="bdg '+s.bdg+'">'+s.lbl+'</span>'+
       '</div>'+
-      // 達成率バナー：計画稼働時間ベース
+      // 達成率バナー：CT達成率 + 計画達成率の2指標
       (function(){
-        var lineRate=calcLineRate(l);
-        if(lineRate===null) return '';
-        var rCls=lineRate>=95?'ok':lineRate>=80?'wn':'ng';
-        var barCol=lineRate>=95?'#27ae60':lineRate>=80?'#e67e22':'#e74c3c';
-        var details=[];
-        var allJobs2=(l.jobs||[]).filter(function(j){return j.plan>0&&j.start&&j.end&&!j.history;});
-        allJobs2.forEach(function(j){
-          var jActB=j.actualCount||0;
-          var isCurB=(j.part===l.part&&(l.workStart?j.actualStart===l.workStart:true));
-          var jAct=isCurB&&(l.actual||0)>jActB?(l.actual||0):jActB;
-          if(jAct<=0) return;
-          details.push(j.part.split('-').slice(-1)[0]+'：'+jAct.toLocaleString()+'個');
-        });
-        return '<div class="rate-banner '+rCls+'">'+
-          '<div class="rate-num '+rCls+'">'+lineRate+'%</div>'+
-          '<div class="rate-info">'+
-            '<div style="font-size:11px;font-weight:700;color:#555;">ライン達成率</div>'+
-            '<div class="rate-bar-bg"><div class="rate-bar-fill" style="width:'+Math.min(lineRate,100)+'%;background:'+barCol+';"></div></div>'+
-            '<div style="font-size:10px;color:#888;margin-top:2px;">'+details.join('　')+'</div>'+
-          '</div></div>';
+        var lr=calcLineRate(l);
+        if(!lr) return '';
+        var ctR=lr.ctRate, planR=lr.planRate;
+        if(ctR===null&&planR===null) return '';
+        function rateBox(label, val, sub){
+          if(val===null) return '';
+          var col=val>=95?'#27ae60':val>=80?'#e67e22':'#e74c3c';
+          var barW=Math.min(val,100);
+          return '<div style="flex:1;background:rgba(0,0,0,0.04);border-radius:6px;padding:6px 8px;">'+
+            '<div style="font-size:9px;color:#888;margin-bottom:2px;">'+label+'</div>'+
+            '<div style="font-size:18px;font-weight:700;color:'+col+';">'+val+'%</div>'+
+            '<div style="height:4px;background:rgba(0,0,0,0.08);border-radius:2px;margin:3px 0;">'+
+              '<div style="height:100%;width:'+barW+'%;background:'+col+';border-radius:2px;"></div>'+
+            '</div>'+
+            '<div style="font-size:9px;color:#888;">'+sub+'</div>'+
+          '</div>';
+        }
+        return '<div style="display:flex;gap:6px;margin-bottom:8px;">'+
+          rateBox('CT達成率（作業効率）', ctR, '速く作れているか')+
+          rateBox('計画達成率（計画数比）', planR, '計画数に対して今どこか')+
+        '</div>';
       })()+
       '<div class="pb"><div class="pb-f '+s.bar+'" style="width:'+barW+'%"></div></div>'+
       // 数値ボックス：稼働中のみ表示（未開始・完了・計画時間外は非表示）
@@ -724,12 +720,12 @@ function renderSum(){
     return pr&&pr.proRata>0&&Math.round(l.actual/pr.proRata*100)<80;
   }).length;
   const sc=IDS.filter(id=>lines[id]?.status==='setup').length;
-  // 全体達成率：calcLineRateの平均
+  // 全体達成率：CT達成率の平均
   var totalRateSum=0, totalRateCnt=0;
   IDS.forEach(function(id){
     var l=lines[id]; if(!l) return;
     var lr=calcLineRate(l);
-    if(lr!==null){totalRateSum+=lr; totalRateCnt++;}
+    if(lr&&lr.ctRate!==null){totalRateSum+=lr.ctRate; totalRateCnt++;}
   });
   var r=totalRateCnt>0?Math.round(totalRateSum/totalRateCnt):0;  document.getElementById('s0').textContent=active;
   const d=document.getElementById('s1');d.textContent=delays;d.className='sc-val '+(delays>0?'red':'green');
