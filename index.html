@@ -367,7 +367,14 @@ function calcLineRate(l){
     const planCT=planNetJ/j.plan;
 
     const jActCount=j.actualCount||0;
-    const isCurrentJob=(j.part===l.part&&(l.workStart?j.actualStart===l.workStart:true));
+    // workStartとseqで現在稼働中jobを正確に判定
+    const curActiveJob=(function(){
+      let ci=jobs.findIndex(jj=>jj.part===l.part&&l.workStart&&jj.actualStart===l.workStart);
+      if(ci<0) ci=jobs.findIndex(jj=>jj.part===l.part&&jj.status==='running');
+      if(ci<0) ci=jobs.findIndex(jj=>jj.part===l.part&&jj.plan>0);
+      return ci>=0?jobs[ci]:null;
+    })();
+    const isCurrentJob=curActiveJob&&(j.seq?j.seq===curActiveJob.seq:j===curActiveJob);
     const jAct=isCurrentJob&&(l.actual||0)>jActCount?(l.actual||0):jActCount;
 
     planValueSum+=planNetJ;
@@ -1030,8 +1037,10 @@ window.doSub=function(){
         snapHistory,
         status:we&&we!==''?'done':'running'
       };
-      // lineレベルに反映する値を一時保存（upd宣言後に設定）
-      _syncActual=actVal; _syncWS=ws; _syncWE=we; _syncSS=ss; _syncSE=se;
+      // lineレベルに反映：現在稼働中job（curJi）と一致する場合のみ
+      if(selJi===curJi){
+        _syncActual=actVal; _syncWS=ws; _syncWE=we; _syncSS=ss; _syncSE=se;
+      }
     }
 
     // lineレベルの更新
@@ -1064,10 +1073,7 @@ window.doSub=function(){
       }
     }
 
-    // デバッグ表示
-    const dbgInfo='selJi='+selJi+' curJi='+curJi+' selStart='+selStart+' part='+part+' actual='+actual+' ws='+ws;
-    console.log('doSub debug:', dbgInfo, 'upd:', JSON.stringify({actual:upd.actual,workStart:upd.workStart,jobs:(upd.jobs||[]).map(j=>({p:j.part,s:j.start,ac:j.actualCount,as:j.actualStart}))}));
-    m.textContent='送信中... '+dbgInfo;
+    m.textContent='送信中...';
     update(ref(db,'lines/'+id),upd).then(()=>{
       m.style.color='#27ae60';
       m.textContent='✓ 更新しました（'+new Date().toLocaleTimeString('ja-JP')+'）';
