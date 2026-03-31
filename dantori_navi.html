@@ -1,0 +1,1296 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>段取りナビゲーション｜橋本工業</title>
+<style>
+/* ===== RESET & BASE ===== */
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Hiragino Sans','Meiryo',sans-serif;background:#f5f5f3;color:#1a1a1a;font-size:14px;}
+
+/* ===== LAYOUT ===== */
+.app{max-width:900px;margin:0 auto;display:flex;flex-direction:column;min-height:100vh;}
+.header{background:#1a1a1a;color:white;padding:10px 18px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+.header-left{display:flex;align-items:center;gap:10px;}
+.logo{width:30px;height:30px;background:white;border-radius:5px;display:flex;align-items:center;justify-content:center;}
+.logo svg{width:18px;height:18px;}
+.htitle{font-size:14px;font-weight:600;letter-spacing:0.02em;}
+.hsub{font-size:10px;color:#aaa;margin-top:1px;}
+.clock{font-size:13px;color:#ccc;font-variant-numeric:tabular-nums;}
+
+.tabs{background:white;display:flex;border-bottom:1px solid #e5e5e5;position:sticky;top:52px;z-index:99;}
+.tab{padding:11px 20px;font-size:13px;cursor:pointer;color:#888;border-bottom:2px solid transparent;transition:all 0.15s;white-space:nowrap;}
+.tab.active{color:#1a1a1a;border-bottom-color:#1a1a1a;font-weight:600;}
+.tab:hover:not(.active){color:#1a1a1a;background:#fafafa;}
+
+.content{padding:16px;display:none;}
+.content.active{display:block;}
+
+/* ===== SEARCH TAB ===== */
+.search-wrap{position:relative;margin-bottom:14px;}
+.search-input-row{display:flex;gap:8px;}
+.search-input-row input{
+  flex:1;padding:11px 14px;border:1px solid #ddd;border-radius:8px;
+  font-size:15px;background:white;color:#1a1a1a;
+  transition:border-color 0.15s;
+}
+.search-input-row input:focus{outline:none;border-color:#1a1a1a;box-shadow:0 0 0 3px rgba(0,0,0,0.06);}
+.btn{padding:11px 16px;border:1px solid #ddd;border-radius:8px;font-size:13px;cursor:pointer;background:white;color:#1a1a1a;transition:all 0.1s;white-space:nowrap;}
+.btn:hover{background:#f5f5f3;}
+.btn.primary{background:#1a1a1a;color:white;border-color:#1a1a1a;}
+.btn.primary:hover{background:#333;}
+
+/* 予測検索ドロップダウン */
+.autocomplete-list{
+  position:absolute;top:100%;left:0;right:0;background:white;
+  border:1px solid #ddd;border-top:none;border-radius:0 0 8px 8px;
+  max-height:280px;overflow-y:auto;z-index:200;box-shadow:0 4px 12px rgba(0,0,0,0.1);
+}
+.ac-item{padding:10px 14px;cursor:pointer;border-bottom:1px solid #f0f0f0;transition:background 0.1s;}
+.ac-item:last-child{border-bottom:none;}
+.ac-item:hover,.ac-item.focused{background:#f5f5f3;}
+.ac-partno{font-size:14px;font-weight:600;color:#1a1a1a;}
+.ac-partno span{color:#2563eb;}
+.ac-name{font-size:11px;color:#888;margin-top:2px;}
+.ac-line{display:inline-block;margin-top:3px;padding:1px 7px;background:#e8f0fe;color:#1d4ed8;border-radius:10px;font-size:10px;}
+
+/* よく使う品番 */
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;}
+.chip-label{font-size:11px;color:#888;padding:5px 0;align-self:center;}
+.chip{padding:5px 12px;border:1px solid #e0e0e0;border-radius:20px;font-size:12px;cursor:pointer;color:#555;transition:all 0.1s;background:white;}
+.chip:hover{border-color:#1a1a1a;color:#1a1a1a;}
+.chip.sel{background:#1a1a1a;color:white;border-color:#1a1a1a;}
+
+/* 結果カード */
+.result-card{background:white;border:1px solid #e5e5e5;border-radius:12px;overflow:hidden;}
+.result-header{padding:13px 16px;background:#f9f9f7;border-bottom:1px solid #e5e5e5;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+.result-partno{font-size:17px;font-weight:700;color:#1a1a1a;letter-spacing:0.03em;}
+.result-name{font-size:12px;color:#666;margin-top:3px;}
+.line-badge{padding:5px 12px;background:#1a1a1a;color:white;border-radius:20px;font-size:12px;font-weight:600;white-space:nowrap;flex-shrink:0;}
+
+.cond-grid{display:grid;grid-template-columns:repeat(3,1fr);}
+.cond-cell{padding:13px 16px;border-right:1px solid #f0f0f0;border-bottom:1px solid #f0f0f0;}
+.cond-cell:nth-child(3n){border-right:none;}
+.cond-cell:nth-last-child(-n+3){border-bottom:none;}
+.cond-label{font-size:10px;color:#999;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.05em;}
+.cond-value{font-size:20px;font-weight:700;color:#1a1a1a;}
+.cond-unit{font-size:11px;color:#999;margin-left:3px;font-weight:400;}
+.cond-value.sm{font-size:14px;}
+
+.doc-section{padding:12px 16px;border-top:1px solid #f0f0f0;display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.doc-section-label{font-size:11px;color:#999;margin-right:4px;}
+.doc-btn{display:flex;align-items:center;gap:5px;padding:7px 12px;border:1px solid #e0e0e0;border-radius:6px;font-size:12px;cursor:pointer;background:white;color:#1a1a1a;transition:all 0.1s;}
+.doc-btn:hover{background:#f5f5f3;border-color:#1a1a1a;}
+.doc-btn svg{width:13px;height:13px;flex-shrink:0;}
+.doc-btn.pdf{color:#dc2626;}
+.doc-btn.pdf:hover{background:#fff5f5;border-color:#dc2626;}
+
+/* ローディング・エラー */
+.loading{text-align:center;padding:30px;color:#888;}
+.loading-spin{display:inline-block;width:20px;height:20px;border:2px solid #ddd;border-top-color:#1a1a1a;border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:8px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.placeholder{text-align:center;padding:40px 20px;color:#aaa;font-size:13px;}
+.error-msg{background:#fff5f5;border:1px solid #fecaca;border-radius:8px;padding:12px 16px;color:#dc2626;font-size:13px;margin-bottom:12px;}
+
+/* kintone設定バナー */
+.config-banner{background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:12px 16px;margin-bottom:14px;font-size:13px;color:#92400e;}
+.config-banner strong{display:block;margin-bottom:4px;}
+.config-banner a{color:#1d4ed8;text-decoration:underline;cursor:pointer;}
+
+/* ===== FACTORY TAB ===== */
+.factory-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.legend{display:flex;gap:10px;flex-wrap:wrap;}
+.li{display:flex;align-items:center;gap:4px;font-size:11px;color:#666;}
+.ld{width:10px;height:10px;border-radius:2px;}
+.refresh-btn{padding:5px 10px;border:1px solid #ddd;border-radius:6px;font-size:11px;cursor:pointer;background:white;color:#666;}
+.refresh-btn:hover{background:#f5f5f3;}
+.fwrap{border:1px solid #e5e5e5;border-radius:12px;overflow:hidden;background:#fafafa;padding:12px;}
+.firebase-status{margin-top:8px;font-size:11px;color:#888;display:flex;align-items:center;gap:5px;}
+.status-dot{width:7px;height:7px;border-radius:50%;background:#aaa;}
+.status-dot.connected{background:#16a34a;}
+
+/* ===== DANTORI TAB ===== */
+.dantori-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.dantori-list{display:flex;flex-direction:column;gap:10px;}
+.dantori-card{background:white;border:1px solid #e5e5e5;border-radius:10px;overflow:hidden;}
+.dantori-card.active-card{border-color:#1a1a1a;box-shadow:0 2px 8px rgba(0,0,0,0.08);}
+.dc-header{padding:10px 14px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f0f0f0;}
+.dc-time{font-size:14px;font-weight:600;}
+.dc-info{font-size:11px;color:#888;margin-top:2px;}
+.status-badge{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;}
+.s-now{background:#fef3c7;color:#92400e;}
+.s-next{background:#f3f4f6;color:#6b7280;}
+.s-done{background:#dcfce7;color:#166534;}
+.dc-roles{padding:10px 14px;display:flex;flex-direction:column;gap:6px;}
+.role-row{display:flex;align-items:center;gap:8px;}
+.role-label{font-size:11px;color:#999;width:70px;flex-shrink:0;}
+.person-tags{display:flex;gap:5px;flex-wrap:wrap;}
+.ptag{padding:3px 9px;background:#f5f5f3;border:1px solid #e5e5e5;border-radius:20px;font-size:12px;color:#1a1a1a;}
+.ptag.main{background:#1a1a1a;color:white;border-color:#1a1a1a;}
+
+.slack-section{margin-top:12px;}
+.slack-btn{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;padding:10px 16px;border:1px solid #e5e5e5;border-radius:8px;font-size:13px;cursor:pointer;background:white;color:#1a1a1a;transition:all 0.1s;}
+.slack-btn:hover{background:#f5f5f3;border-color:#1a1a1a;}
+.slack-btn svg{width:15px;height:15px;}
+
+/* ===== 設定モーダル ===== */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:500;display:flex;align-items:center;justify-content:center;padding:20px;}
+.modal{background:white;border-radius:12px;padding:20px;width:100%;max-width:480px;max-height:80vh;overflow-y:auto;}
+.modal h3{font-size:15px;font-weight:600;margin-bottom:16px;}
+.form-group{margin-bottom:14px;}
+.form-group label{display:block;font-size:12px;color:#666;margin-bottom:5px;font-weight:600;}
+.form-group input{width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:monospace;}
+.form-group input:focus{outline:none;border-color:#1a1a1a;}
+.form-hint{font-size:11px;color:#aaa;margin-top:3px;}
+.modal-btns{display:flex;gap:8px;margin-top:16px;}
+.modal-btns button{flex:1;padding:9px;border-radius:6px;font-size:13px;cursor:pointer;border:1px solid #ddd;}
+.modal-btns .save-btn{background:#1a1a1a;color:white;border-color:#1a1a1a;}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+<!-- ヘッダー -->
+<div class="header">
+  <div class="header-left">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="#1a1a1a"><path d="M12 2L4 6v6c0 5.5 3.4 10.7 8 12 4.6-1.3 8-6.5 8-12V6L12 2z"/></svg>
+    </div>
+    <div>
+      <div class="htitle">段取りナビゲーション</div>
+      <div class="hsub">橋本工業株式会社</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <div class="clock" id="clockEl">--:--</div>
+    <button class="btn" style="padding:5px 10px;font-size:11px;" onclick="showConfig()">⚙ 設定</button>
+  </div>
+</div>
+
+<!-- タブ -->
+<div class="tabs">
+  <div class="tab active" onclick="switchTab('search')">🔍 品番検索</div>
+  <div class="tab" onclick="switchTab('factory')">🏭 工場レイアウト</div>
+  <div class="tab" onclick="switchTab('dantori')">📋 段取り指示</div>
+</div>
+
+<!-- ===== 品番検索タブ ===== -->
+<div class="content active" id="tab-search">
+
+  <div id="config-banner" class="config-banner" style="display:none;">
+    <strong>⚠ kintone未設定</strong>
+    <a onclick="showConfig()">設定画面を開く</a>からAPIトークンとドメインを入力してください。現在はデモデータで動作中です。
+  </div>
+
+  <div class="search-wrap">
+    <div class="search-input-row">
+      <input type="text" id="searchInput"
+        placeholder="品番を入力（例：80U50）またはバーコードスキャン..."
+        oninput="onSearchInput()"
+        onkeydown="onSearchKeydown(event)"
+        autocomplete="off"
+      />
+      <button class="btn primary" onclick="doSearch()">検索</button>
+    </div>
+    <div class="autocomplete-list" id="acList" style="display:none;"></div>
+  </div>
+
+  <div class="chips">
+    <span class="chip-label">よく使う：</span>
+    <div class="chip" onclick="selectPart('80U50-0000')">80U50-0000</div>
+    <div class="chip" onclick="selectPart('18120-6Y0-0000')">18120-6Y0</div>
+    <div class="chip" onclick="selectPart('MLC-PLATE-A')">MLC PLATE A</div>
+    <div class="chip" onclick="selectPart('COVER-HM-001')">COVER HM</div>
+  </div>
+
+  <div id="searchResult">
+    <div class="placeholder">
+      品番を入力またはバーコードをスキャンしてください<br>
+      <span style="font-size:12px;margin-top:6px;display:block;">製造条件・作業標準書・品質チェックシートをすぐに表示します</span>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 工場レイアウトタブ ===== -->
+<div class="content" id="tab-factory">
+  <div class="factory-header">
+    <div class="legend">
+      <div class="li"><div class="ld" style="background:#1a1a1a;"></div>段取り中</div>
+      <div class="li"><div class="ld" style="background:#1d4ed8;"></div>稼働中</div>
+      <div class="li"><div class="ld" style="background:#16a34a;"></div>待機中</div>
+      <div class="li"><div class="ld" style="background:#dc2626;"></div>停止</div>
+      <div class="li"><div class="ld" style="background:#d97706;"></div>リフト</div>
+    </div>
+    <button class="refresh-btn" onclick="refreshFactory()">↻ 更新</button>
+  </div>
+  <div class="fwrap">
+    <svg id="factorySvg" viewBox="0 0 620 400" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">
+
+      <!-- 外壁上部 -->
+      <rect x="8" y="8" width="600" height="268" rx="5" fill="none" stroke="#bbb" stroke-width="1.5"/>
+      <!-- 下部エリア -->
+      <rect x="8" y="282" width="600" height="110" rx="5" fill="none" stroke="#bbb" stroke-width="1.5"/>
+
+      <!-- プレスA -->
+      <g id="press-A" onclick="clickPress('A')">
+        <rect x="16" y="16" width="105" height="110" rx="5" fill="#dbeafe" stroke="#3b82f6" stroke-width="1" style="cursor:pointer;"/>
+        <text x="68" y="37" text-anchor="middle" font-size="12" font-weight="700" fill="#1e3a8a">プレスA</text>
+        <text x="68" y="51" text-anchor="middle" font-size="9" fill="#3b82f6">PRG・コイルカット</text>
+        <text x="68" y="63" text-anchor="middle" font-size="9" fill="#3b82f6">100〜150t</text>
+        <rect x="22" y="72" width="40" height="16" rx="3" fill="#3b82f6"/><text x="42" y="83" text-anchor="middle" font-size="8" fill="white">レベラー100</text>
+        <rect x="68" y="72" width="40" height="16" rx="3" fill="#3b82f6"/><text x="88" y="83" text-anchor="middle" font-size="8" fill="white">レベラー150</text>
+        <rect id="badge-A" x="24" y="96" width="60" height="16" rx="8" fill="#1a1a1a"/>
+        <text id="badge-A-text" x="54" y="107" text-anchor="middle" font-size="8" fill="white">段取り中</text>
+      </g>
+
+      <!-- プレスB -->
+      <g id="press-B" onclick="clickPress('B')">
+        <rect x="128" y="16" width="128" height="200" rx="5" fill="#dcfce7" stroke="#16a34a" stroke-width="1" style="cursor:pointer;"/>
+        <text x="192" y="37" text-anchor="middle" font-size="12" font-weight="700" fill="#14532d">プレスB</text>
+        <text x="192" y="50" text-anchor="middle" font-size="9" fill="#16a34a">PRG(300t)・タンデム</text>
+        <text x="192" y="62" text-anchor="middle" font-size="9" fill="#16a34a">100〜300t</text>
+        <rect x="134" y="72" width="38" height="16" rx="3" fill="#16a34a"/><text x="153" y="83" text-anchor="middle" font-size="8" fill="white">レベラー300</text>
+        <rect x="178" y="72" width="30" height="16" rx="3" fill="#16a34a"/><text x="193" y="83" text-anchor="middle" font-size="8" fill="white">150t</text>
+        <rect x="214" y="72" width="30" height="16" rx="3" fill="#16a34a"/><text x="229" y="83" text-anchor="middle" font-size="8" fill="white">200t</text>
+        <rect x="132" y="100" width="22" height="104" rx="3" fill="#16a34a"/>
+        <text x="143" y="152" text-anchor="middle" font-size="8" fill="white" transform="rotate(-90,143,152)">レベラー300</text>
+        <rect x="160" y="100" width="38" height="36" rx="3" fill="#86efac"/><text x="179" y="122" text-anchor="middle" font-size="9" fill="#14532d">300t</text>
+        <rect x="204" y="100" width="38" height="36" rx="3" fill="#86efac"/><text x="223" y="122" text-anchor="middle" font-size="9" fill="#14532d">200t</text>
+        <rect x="182" y="142" width="38" height="32" rx="3" fill="#86efac"/><text x="201" y="162" text-anchor="middle" font-size="9" fill="#14532d">100t</text>
+        <rect id="badge-B" x="140" y="186" width="60" height="16" rx="8" fill="#16a34a"/>
+        <text id="badge-B-text" x="170" y="197" text-anchor="middle" font-size="8" fill="white">稼働中</text>
+      </g>
+
+      <!-- プレスC -->
+      <g id="press-C" onclick="clickPress('C')">
+        <rect x="264" y="16" width="296" height="100" rx="5" fill="#fef3c7" stroke="#d97706" stroke-width="1" style="cursor:pointer;"/>
+        <text x="412" y="35" text-anchor="middle" font-size="12" font-weight="700" fill="#78350f">プレスC　タンデムライン（55〜150t）</text>
+        <rect x="270" y="44" width="28" height="22" rx="2" fill="#f59e0b"/><text x="284" y="58" text-anchor="middle" font-size="8" fill="white">150t</text>
+        <rect x="302" y="44" width="28" height="22" rx="2" fill="#f59e0b"/><text x="316" y="58" text-anchor="middle" font-size="8" fill="white">150t</text>
+        <rect x="334" y="44" width="28" height="22" rx="2" fill="#f59e0b"/><text x="348" y="58" text-anchor="middle" font-size="8" fill="white">150t</text>
+        <rect x="366" y="44" width="24" height="22" rx="2" fill="#f59e0b"/><text x="378" y="58" text-anchor="middle" font-size="8" fill="white">110t</text>
+        <rect x="394" y="44" width="24" height="22" rx="2" fill="#f59e0b"/><text x="406" y="58" text-anchor="middle" font-size="8" fill="white">110t</text>
+        <rect x="422" y="44" width="22" height="22" rx="2" fill="#f59e0b"/><text x="433" y="58" text-anchor="middle" font-size="8" fill="white">100t</text>
+        <rect x="448" y="44" width="22" height="22" rx="2" fill="#f59e0b"/><text x="459" y="58" text-anchor="middle" font-size="8" fill="white">100t</text>
+        <rect x="474" y="44" width="18" height="22" rx="2" fill="#f59e0b"/><text x="483" y="58" text-anchor="middle" font-size="8" fill="white">55t</text>
+        <rect x="496" y="44" width="18" height="22" rx="2" fill="#f59e0b"/><text x="505" y="58" text-anchor="middle" font-size="8" fill="white">55t</text>
+        <rect x="518" y="44" width="16" height="22" rx="2" fill="#f59e0b"/><text x="526" y="58" text-anchor="middle" font-size="8" fill="white">75t</text>
+        <rect x="538" y="44" width="16" height="22" rx="2" fill="#f59e0b"/><text x="546" y="58" text-anchor="middle" font-size="8" fill="white">75t</text>
+        <rect x="540" y="72" width="28" height="14" rx="3" fill="#d97706"/><text x="554" y="82" text-anchor="middle" font-size="8" fill="white">レベラー100</text>
+        <rect id="badge-C" x="372" y="88" width="60" height="16" rx="8" fill="#16a34a"/>
+        <text id="badge-C-text" x="402" y="99" text-anchor="middle" font-size="8" fill="white">稼働中</text>
+      </g>
+
+      <!-- プレスD -->
+      <g id="press-D" onclick="clickPress('D')">
+        <rect x="264" y="124" width="180" height="90" rx="5" fill="#fef9c3" stroke="#ca8a04" stroke-width="1" style="cursor:pointer;"/>
+        <text x="354" y="143" text-anchor="middle" font-size="12" font-weight="700" fill="#713f12">プレスD　ロボットライン</text>
+        <text x="354" y="156" text-anchor="middle" font-size="9" fill="#a16207">100〜150t</text>
+        <rect x="270" y="163" width="30" height="22" rx="2" fill="#eab308"/><text x="285" y="177" text-anchor="middle" font-size="8" fill="white">150t</text>
+        <rect x="306" y="163" width="30" height="22" rx="2" fill="#eab308"/><text x="321" y="177" text-anchor="middle" font-size="8" fill="white">150t</text>
+        <rect x="342" y="163" width="30" height="22" rx="2" fill="#eab308"/><text x="357" y="177" text-anchor="middle" font-size="8" fill="white">150t</text>
+        <rect x="378" y="163" width="28" height="22" rx="2" fill="#eab308"/><text x="392" y="177" text-anchor="middle" font-size="8" fill="white">100t</text>
+        <rect id="badge-D" x="290" y="193" width="60" height="16" rx="8" fill="#16a34a"/>
+        <text id="badge-D-text" x="320" y="204" text-anchor="middle" font-size="8" fill="white">稼働中</text>
+      </g>
+
+      <!-- 組立（右側） -->
+      <rect x="560" y="16" width="42" height="152" rx="5" fill="#fce7f3" stroke="#ec4899" stroke-width="1"/>
+      <text x="581" y="96" text-anchor="middle" font-size="10" font-weight="700" fill="#831843" transform="rotate(-90,581,96)">組　立</text>
+      <rect x="565" y="26" width="14" height="10" rx="2" fill="#ec4899"/><text x="572" y="34" text-anchor="middle" font-size="7" fill="white">SP</text>
+      <rect x="565" y="72" width="14" height="10" rx="2" fill="#ec4899"/><text x="572" y="80" text-anchor="middle" font-size="7" fill="white">SP</text>
+      <rect x="581" y="72" width="14" height="10" rx="2" fill="#ec4899"/><text x="588" y="80" text-anchor="middle" font-size="7" fill="white">SP</text>
+      <rect x="565" y="86" width="14" height="10" rx="2" fill="#ec4899"/><text x="572" y="94" text-anchor="middle" font-size="7" fill="white">SP</text>
+      <rect x="581" y="86" width="14" height="10" rx="2" fill="#ec4899"/><text x="588" y="94" text-anchor="middle" font-size="7" fill="white">SP</text>
+
+      <!-- 組立下部 -->
+      <rect x="264" y="290" width="140" height="56" rx="5" fill="#fce7f3" stroke="#ec4899" stroke-width="1"/>
+      <text x="334" y="310" text-anchor="middle" font-size="10" font-weight="700" fill="#831843">組立（SP / MAG溶接）</text>
+      <rect x="272" y="318" width="18" height="12" rx="2" fill="#ec4899"/><text x="281" y="327" text-anchor="middle" font-size="7" fill="white">SP</text>
+      <rect x="296" y="318" width="18" height="12" rx="2" fill="#ec4899"/><text x="305" y="327" text-anchor="middle" font-size="7" fill="white">SP</text>
+      <rect x="320" y="318" width="18" height="12" rx="2" fill="#ec4899"/><text x="329" y="327" text-anchor="middle" font-size="7" fill="white">SP</text>
+
+      <!-- 溶接 -->
+      <rect x="158" y="290" width="100" height="56" rx="5" fill="#d1fae5" stroke="#059669" stroke-width="1"/>
+      <text x="208" y="308" text-anchor="middle" font-size="10" font-weight="700" fill="#064e3b">溶接（We）</text>
+      <rect x="164" y="316" width="22" height="12" rx="2" fill="#059669"/><text x="175" y="325" text-anchor="middle" font-size="8" fill="white">We</text>
+      <rect x="192" y="316" width="22" height="12" rx="2" fill="#059669"/><text x="203" y="325" text-anchor="middle" font-size="8" fill="white">We</text>
+      <rect x="220" y="316" width="22" height="12" rx="2" fill="#059669"/><text x="231" y="325" text-anchor="middle" font-size="8" fill="white">We</text>
+
+      <!-- 事務所 -->
+      <rect x="16" y="200" width="88" height="62" rx="5" fill="#f3f4f6" stroke="#9ca3af" stroke-width="1"/>
+      <text x="60" y="236" text-anchor="middle" font-size="10" fill="#374151">事務所</text>
+
+      <!-- 技術 -->
+      <rect x="16" y="290" width="130" height="92" rx="5" fill="#e5e7eb" stroke="#9ca3af" stroke-width="1"/>
+      <text x="81" y="308" text-anchor="middle" font-size="10" font-weight="700" fill="#1f2937">技術</text>
+      <rect x="22" y="316" width="30" height="18" rx="2" fill="#6b7280"/><text x="37" y="328" text-anchor="middle" font-size="8" fill="white">150t</text>
+      <rect x="58" y="316" width="36" height="18" rx="2" fill="#4b5563"/><text x="76" y="325" text-anchor="middle" font-size="8" fill="white">NIPPEI</text><text x="76" y="333" text-anchor="middle" font-size="7" fill="white">レーザー</text>
+      <rect x="100" y="316" width="38" height="18" rx="2" fill="#4b5563"/><text x="119" y="325" text-anchor="middle" font-size="8" fill="white">三菱</text><text x="119" y="333" text-anchor="middle" font-size="7" fill="white">ワイヤカット</text>
+      <rect x="22" y="340" width="36" height="32" rx="2" fill="#4b5563"/><text x="40" y="356" text-anchor="middle" font-size="8" fill="white">OKUMA</text><text x="40" y="366" text-anchor="middle" font-size="7" fill="white">MILLAC</text>
+      <rect x="64" y="340" width="36" height="32" rx="2" fill="#4b5563"/><text x="82" y="356" text-anchor="middle" font-size="8" fill="white">OKUMA</text><text x="82" y="366" text-anchor="middle" font-size="7" fill="white">MX-55</text>
+
+      <!-- リフト -->
+      <rect id="liftIcon" x="120" y="218" width="54" height="28" rx="14" fill="#d97706"/>
+      <text id="liftText" x="147" y="230" text-anchor="middle" font-size="9" font-weight="700" fill="white">リフト</text>
+      <text id="liftArea" x="147" y="241" text-anchor="middle" font-size="8" fill="#fef3c7">B付近</text>
+
+      <!-- 通路 -->
+      <line x1="124" y1="128" x2="124" y2="275" stroke="#ddd" stroke-width="1" stroke-dasharray="4,3"/>
+      <line x1="264" y1="222" x2="556" y2="222" stroke="#ddd" stroke-width="1" stroke-dasharray="4,3"/>
+
+      <!-- 搬入口 -->
+      <rect x="490" y="368" width="52" height="16" rx="4" fill="#9ca3af"/>
+      <text x="516" y="379" text-anchor="middle" font-size="9" fill="white">搬入口</text>
+    </svg>
+  </div>
+  <div class="firebase-status">
+    <div class="status-dot" id="fbDot"></div>
+    <span id="fbStatus">Firebase未接続（デモ表示）</span>
+  </div>
+</div>
+
+<!-- ===== 段取り指示タブ ===== -->
+<div class="content" id="tab-dantori">
+  <div class="dantori-header">
+    <div style="font-size:12px;color:#888;">本日の段取り予定</div>
+    <button class="btn" style="padding:5px 10px;font-size:11px;" onclick="refreshDantori()">↻ 更新</button>
+  </div>
+  <div class="dantori-list" id="dantoriList">
+    <!-- JS生成 -->
+  </div>
+  <div class="slack-section">
+    <button class="slack-btn" onclick="postToSlack()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.8a19.79 19.79 0 01-3.07-8.67A2 2 0 012 .84h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 8.18a16 16 0 006.29 6.29l1.42-1.42a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/>
+      </svg>
+      段取り指示をSlackに投稿 ↗
+    </button>
+  </div>
+</div>
+
+</div><!-- /app -->
+
+<!-- ===== 設定モーダル ===== -->
+<div class="modal-overlay" id="configModal" style="display:none;" onclick="closeConfigIfBg(event)">
+  <div class="modal">
+    <h3>⚙ システム設定</h3>
+    <div class="form-group">
+      <label>kintone サブドメイン</label>
+      <input type="text" id="cfg-domain" placeholder="例：hashimoto-kogyo"/>
+      <div class="form-hint">https://[サブドメイン].cybozu.com</div>
+    </div>
+    <div class="form-group">
+      <label>kintone 部品マスタ アプリID</label>
+      <input type="text" id="cfg-appid" placeholder="例：7"/>
+    </div>
+    <div class="form-group">
+      <label>kintone APIトークン</label>
+      <input type="text" id="cfg-token" placeholder="APIトークンを入力"/>
+    </div>
+
+    <!-- フィールドマッピング -->
+    <div style="border-top:1px solid #f0f0f0;margin:14px 0;padding-top:14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <div style="font-size:12px;font-weight:600;color:#666;">kintone フィールドコード対応</div>
+        <div style="display:flex;gap:6px;">
+          <button onclick="testKintoneConnection()" style="padding:4px 10px;border:1px solid #1d4ed8;border-radius:5px;font-size:11px;cursor:pointer;background:#eff6ff;color:#1d4ed8;">接続テスト</button>
+          <button onclick="autoDetectFields()" style="padding:4px 10px;border:1px solid #ddd;border-radius:5px;font-size:11px;cursor:pointer;background:white;">自動検出</button>
+        </div>
+      </div>
+      <div id="fieldDetectMsg" style="font-size:11px;margin-bottom:8px;"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+        <div class="form-group" style="margin:0;">
+          <label style="font-size:10px;">品番フィールドコード</label>
+          <input type="text" id="fld-partNo" placeholder="品番"/>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label style="font-size:10px;">品名フィールドコード</label>
+          <input type="text" id="fld-name" placeholder="品名"/>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label style="font-size:10px;">取引先フィールドコード</label>
+          <input type="text" id="fld-customer" placeholder="取引先"/>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label style="font-size:10px;">ラインフィールドコード</label>
+          <input type="text" id="fld-line" placeholder="ライン"/>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label style="font-size:10px;">作業標準書（添付ファイル）</label>
+          <input type="text" id="fld-standardWork" placeholder="作業標準書"/>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label style="font-size:10px;">品質チェックシート（添付ファイル）</label>
+          <input type="text" id="fld-qualitySheet" placeholder="品質チェックシート"/>
+        </div>
+      </div>
+      <div style="margin-top:8px;padding:8px;background:#fffbeb;border-radius:6px;font-size:11px;color:#92400e;">
+        フィールドコードはkintone「アプリの設定」→「フォーム」→各フィールドの歯車アイコンで確認できます
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Firebase データベースURL</label>
+      <input type="text" id="cfg-firebase" placeholder="https://xxx.firebaseio.com"/>
+    </div>
+    <div class="form-group">
+      <label>品質チェックシート GAS URL</label>
+      <input type="text" id="cfg-gas" placeholder="GASのウェブアプリURL"/>
+    </div>
+    <div class="modal-btns">
+      <button onclick="closeConfig()">キャンセル</button>
+      <button class="save-btn" onclick="saveConfig()">保存して接続</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== 設定管理 =====
+const CFG_KEY = 'hk_navi_config';
+const DEFAULT_CONFIG = {
+  domain: 'hashimoto-kogyo',
+  appId: '7',
+  token: 'v5hyHr5zzvlnRcQQ7dii5gPJdYgf2pGc6tDhQSmn',
+  firebaseUrl: '',
+  gasUrl: '',
+};
+let config = Object.assign({}, DEFAULT_CONFIG, JSON.parse(localStorage.getItem(CFG_KEY) || '{}'));
+
+function showConfig(){
+  document.getElementById('cfg-domain').value   = config.domain || '';
+  document.getElementById('cfg-appid').value    = config.appId  || '';
+  document.getElementById('cfg-token').value    = config.token  || '';
+  document.getElementById('cfg-firebase').value = config.firebaseUrl || '';
+  document.getElementById('cfg-gas').value      = config.gasUrl || '';
+  document.getElementById('fld-partNo').value       = FIELD_MAP.partNo       || '品番';
+  document.getElementById('fld-name').value         = FIELD_MAP.name         || '品名';
+  document.getElementById('fld-customer').value     = FIELD_MAP.customer     || '取引先';
+  document.getElementById('fld-line').value         = FIELD_MAP.line         || 'ライン';
+  document.getElementById('fld-standardWork').value = FIELD_MAP.standardWork || '作業標準書';
+  document.getElementById('fld-qualitySheet').value = FIELD_MAP.qualitySheet || '品質チェックシート';
+  document.getElementById('fieldDetectMsg').textContent = '';
+  document.getElementById('configModal').style.display = 'flex';
+}
+function closeConfig(){ document.getElementById('configModal').style.display='none'; }
+function closeConfigIfBg(e){ if(e.target===document.getElementById('configModal')) closeConfig(); }
+function saveConfig(){
+  config = {
+    domain:      document.getElementById('cfg-domain').value.trim(),
+    appId:       document.getElementById('cfg-appid').value.trim(),
+    token:       document.getElementById('cfg-token').value.trim(),
+    firebaseUrl: document.getElementById('cfg-firebase').value.trim(),
+    gasUrl:      document.getElementById('cfg-gas').value.trim(),
+  };
+  FIELD_MAP = Object.assign(FIELD_MAP, {
+    partNo:       document.getElementById('fld-partNo').value.trim()       || '品番',
+    name:         document.getElementById('fld-name').value.trim()         || '品名',
+    customer:     document.getElementById('fld-customer').value.trim()     || '取引先',
+    line:         document.getElementById('fld-line').value.trim()         || 'ライン',
+    standardWork: document.getElementById('fld-standardWork').value.trim() || '作業標準書',
+    qualitySheet: document.getElementById('fld-qualitySheet').value.trim() || '品質チェックシート',
+  });
+  localStorage.setItem(CFG_KEY, JSON.stringify(config));
+  localStorage.setItem('hk_navi_fields', JSON.stringify(FIELD_MAP));
+  closeConfig();
+  checkConfig();
+  connectFirebase();
+  alert('設定を保存しました');
+}
+
+// kintone接続テスト
+async function testKintoneConnection(){
+  const domain = document.getElementById('cfg-domain').value.trim() || config.domain;
+  const appId  = document.getElementById('cfg-appid').value.trim()  || config.appId;
+  const token  = document.getElementById('cfg-token').value.trim()  || config.token;
+  const gasUrl = document.getElementById('cfg-gas').value.trim()    || config.gasUrl;
+  const partNoField = document.getElementById('fld-partNo').value.trim() || FIELD_MAP.partNo;
+  const msg = document.getElementById('fieldDetectMsg');
+
+  msg.innerHTML = '<span style="color:#888;">接続テスト中...</span>';
+
+  // GASプロキシ経由でテスト（JSONP）
+  if(gasUrl){
+    const partNoField = document.getElementById('fld-partNo').value.trim() || FIELD_MAP.partNo;
+    msg.innerHTML = '<span style="color:#888;">GASプロキシ接続テスト中...</span>';
+    try {
+      const records = await new Promise((resolve) => {
+        const cbName = 'test_cb_' + Date.now();
+        const url = gasUrl + '?callback=' + cbName
+          + '&query=limit+3'
+          + '&fields=' + encodeURIComponent(partNoField);
+        const timer = setTimeout(() => { delete window[cbName]; resolve(null); }, 8000);
+        window[cbName] = (data) => {
+          clearTimeout(timer);
+          delete window[cbName];
+          resolve(data && data.records ? data.records : null);
+        };
+        const s = document.createElement('script');
+        s.src = url;
+        s.onerror = () => { clearTimeout(timer); delete window[cbName]; resolve(null); };
+        document.head.appendChild(s);
+      });
+      if(records){
+        const samples = records.map(r => r[partNoField] ? r[partNoField].value : '?').join('、');
+        msg.innerHTML = `<span style="color:#16a34a;font-weight:600;">✓ GASプロキシ（JSONP）接続成功！</span><br>
+          取得サンプル：${samples||'（レコードなし）'}`;
+      } else {
+        msg.innerHTML = `<span style="color:#dc2626;">✗ GASプロキシ接続失敗</span><br>
+          <span style="color:#888;font-size:10px;">GASを再デプロイ（新バージョン）してください</span>`;
+      }
+    } catch(e) {
+      msg.innerHTML = `<span style="color:#dc2626;">✗ エラー：${e.message}</span>`;
+    }
+    return;
+  }
+
+  // GAS URLなし：直接接続テスト
+  if(!domain || !token){ msg.innerHTML='<span style="color:#dc2626;">ドメインとAPIトークンを入力してください</span>'; return; }
+  const url = `https://${domain}.cybozu.com/k/v1/records.json?app=${appId}&query=limit+3&fields[0]=${encodeURIComponent(partNoField)}`;
+  try {
+    const res = await fetch(url, {headers:{'X-Cybozu-API-Token': token}});
+    if(res.ok){
+      const data = await res.json();
+      const samples = data.records.map(r=>r[partNoField]?.value||'?').join('、');
+      msg.innerHTML = `<span style="color:#16a34a;font-weight:600;">✓ kintone直接接続成功！</span><br>取得サンプル：${samples||'（データなし）'}`;
+    } else {
+      const err = await res.json().catch(()=>({}));
+      msg.innerHTML = `<span style="color:#dc2626;">✗ エラー：${err.code||res.status}</span>`;
+    }
+  } catch(e){
+    msg.innerHTML = `<span style="color:#dc2626;">✗ CORSエラー</span><br>
+      <span style="color:#888;font-size:10px;">GAS URLを設定してプロキシ経由で接続してください</span>`;
+  }
+}
+
+// kintoneフィールド自動検出
+async function autoDetectFields(){
+  const domain = document.getElementById('cfg-domain').value.trim() || config.domain;
+  const appId  = document.getElementById('cfg-appid').value.trim()  || config.appId;
+  const token  = document.getElementById('cfg-token').value.trim()  || config.token;
+  const msg = document.getElementById('fieldDetectMsg');
+  if(!domain || !token){ msg.innerHTML='<span style="color:#dc2626;">ドメインとAPIトークンを先に入力してください</span>'; return; }
+  msg.textContent = '検出中...';
+  const url = `https://${domain}.cybozu.com/k/v1/app/form/fields.json?app=${appId}`;
+  try {
+    const res = await fetch(url, {headers:{'X-Cybozu-API-Token':token}});
+    if(!res.ok){ throw new Error('HTTP '+res.status); }
+    const data = await res.json();
+    const props = data.properties;
+    const fields = Object.entries(props).map(([code,f])=>`${code}（${f.label||''}）`);
+    msg.innerHTML = `<span style="color:#16a34a;font-weight:600;">✓ ${fields.length}件検出</span>：${fields.slice(0,15).join('、')}${fields.length>15?'…':''}`;
+    const findCode = (...kws) => {
+      for(const kw of kws){
+        const f = Object.entries(props).find(([c,p])=>c.includes(kw)||(p.label||'').includes(kw));
+        if(f) return f[0];
+      }
+      return null;
+    };
+    const map = {
+      partNo:       findCode('品番','partNo','part'),
+      name:         findCode('品名','name','名称'),
+      customer:     findCode('取引先','customer','得意先'),
+      line:         findCode('ライン','line','プレス'),
+      standardWork: findCode('作業標準書','標準書','standard'),
+      qualitySheet: findCode('品質チェック','チェックシート','quality'),
+    };
+    if(map.partNo)       document.getElementById('fld-partNo').value       = map.partNo;
+    if(map.name)         document.getElementById('fld-name').value         = map.name;
+    if(map.customer)     document.getElementById('fld-customer').value     = map.customer;
+    if(map.line)         document.getElementById('fld-line').value         = map.line;
+    if(map.standardWork) document.getElementById('fld-standardWork').value = map.standardWork;
+    if(map.qualitySheet) document.getElementById('fld-qualitySheet').value = map.qualitySheet;
+  } catch(e){
+    msg.innerHTML = `<span style="color:#dc2626;">✗ 自動検出失敗（CORSエラー）</span><br><span style="color:#888;font-size:10px;">フィールドコードは手動で入力してください</span>`;
+  }
+}
+function checkConfig(){
+  const banner = document.getElementById('config-banner');
+  // GAS URLがあればプロキシ経由で動作するのでバナー不要
+  if(!config.gasUrl && (!config.domain || !config.token)){
+    banner.style.display = 'block';
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
+// ===== 時計 =====
+function updateClock(){
+  const n = new Date();
+  document.getElementById('clockEl').textContent =
+    n.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+}
+setInterval(updateClock,1000); updateClock();
+
+// ===== タブ切替 =====
+function switchTab(name){
+  document.querySelectorAll('.content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  const tabs = ['search','factory','dantori'];
+  document.querySelectorAll('.tab')[tabs.indexOf(name)].classList.add('active');
+}
+
+// ===== デモデータ =====
+const DEMO_PARTS = [
+  {partNo:'80U50-0000', name:'コンバーター取付部品', customer:'ユタカ技研', line:'プレスA', dieHeight:'187.5', cushionPins:'8', cushionPressure:'12.5', material:'SPCC t1.2', strokeCount:'150', docs:['作業標準書','品質チェックシート','金型図面']},
+  {partNo:'18120-6Y0-0000', name:'COVER CONVERTER HM', customer:'ユタカ技研', line:'プレスB', dieHeight:'205.0', cushionPins:'12', cushionPressure:'15.0', material:'SPCC t1.6', strokeCount:'200', docs:['作業標準書','品質チェックシート','検査基準書']},
+  {partNo:'MLC-PLATE-A', name:'MLC PLATE A', customer:'三恵', line:'プレスC', dieHeight:'162.0', cushionPins:'6', cushionPressure:'10.0', material:'SPC780 t1.4', strokeCount:'120', docs:['作業標準書','品質チェックシート']},
+  {partNo:'COVER-HM-001', name:'COVER HM', customer:'八木工業', line:'プレスD', dieHeight:'178.5', cushionPins:'10', cushionPressure:'13.5', material:'SPCC t1.0', strokeCount:'180', docs:['作業標準書','品質チェックシート','金型図面','検査基準書']},
+  {partNo:'80U50-0010', name:'コンバーター取付部品B', customer:'ユタカ技研', line:'プレスA', dieHeight:'190.0', cushionPins:'8', cushionPressure:'12.5', material:'SPCC t1.2', strokeCount:'150', docs:['作業標準書','品質チェックシート']},
+  {partNo:'18120-7A0-0000', name:'COVER CONVERTER HM-A', customer:'ユタカ技研', line:'プレスB', dieHeight:'208.0', cushionPins:'12', cushionPressure:'15.0', material:'SPCC t1.6', strokeCount:'200', docs:['作業標準書','品質チェックシート']},
+];
+
+// ===== フィールドマッピング（kintoneのフィールドコードに合わせて変更） =====
+// 設定画面の「フィールド確認」ボタンで自動検出できます
+let FIELD_MAP = Object.assign({
+  partNo:          '文字列_1行_3',
+  name:            '文字列_1行_1',
+  customer:        '文字列_1行_2',
+  line:            'ライン',
+  dieHeight:       'ダイハイト',
+  cushionPins:     'クッションピン',
+  cushionPressure: 'クッション圧',
+  material:        '材料',
+  strokeCount:     'ストローク数',
+  standardWork:    '作業標準書',
+  qualitySheet:    '品質チェックシート',
+}, JSON.parse(localStorage.getItem('hk_navi_fields') || '{}'));
+
+// ===== kintone API呼び出し =====
+// GASプロキシ経由（CORSを回避）またはkintone直接アクセス
+
+async function fetchKintone(query, fields){
+  if(!config.domain || !config.token) return null;
+
+  const fieldKeys = fields || [
+    FIELD_MAP.partNo, FIELD_MAP.name, FIELD_MAP.customer, FIELD_MAP.line,
+    FIELD_MAP.standardWork, FIELD_MAP.qualitySheet,
+  ];
+
+  // GAS URLが設定されている場合はプロキシ経由
+  if(config.gasUrl){
+    return await fetchViaGasProxy(query, fieldKeys);
+  }
+  // GAS URLなしの場合はkintone直接アクセス（同一ドメイン時のみ成功）
+  return await fetchKintoneDirect(query, fieldKeys);
+}
+
+// GASプロキシ経由（JSONP方式でCORSを回避）
+async function fetchViaGasProxy(query, fieldKeys){
+  return new Promise((resolve) => {
+    const cbName = 'kintone_cb_' + Date.now();
+    const proxyUrl = config.gasUrl
+      + '?callback=' + cbName
+      + '&query=' + encodeURIComponent(query)
+      + '&fields=' + encodeURIComponent(fieldKeys.join(','));
+
+    // タイムアウト設定（10秒）
+    const timer = setTimeout(() => {
+      delete window[cbName];
+      if(script.parentNode) script.parentNode.removeChild(script);
+      console.warn('GAS proxy timeout');
+      resolve(null);
+    }, 10000);
+
+    window[cbName] = function(data) {
+      clearTimeout(timer);
+      delete window[cbName];
+      if(script.parentNode) script.parentNode.removeChild(script);
+      if(data && Array.isArray(data.records)) resolve(data.records);
+      else if(data && data.error){ console.warn('kintone error:', data.error); resolve(null); }
+      else resolve(null);
+    };
+
+    const script = document.createElement('script');
+    script.src = proxyUrl;
+    script.onerror = () => {
+      clearTimeout(timer);
+      delete window[cbName];
+      console.warn('GAS JSONP script error');
+      resolve(null);
+    };
+    document.head.appendChild(script);
+  });
+}
+
+// kintone直接アクセス
+async function fetchKintoneDirect(query, fieldKeys){
+  const fieldParams = fieldKeys.map((f,i)=>`fields[${i}]=${encodeURIComponent(f)}`).join('&');
+  const url = `https://${config.domain}.cybozu.com/k/v1/records.json?app=${config.appId}&query=${encodeURIComponent(query)}&${fieldParams}`;
+  try {
+    const res = await fetch(url, {
+      headers:{'X-Cybozu-API-Token': config.token}
+    });
+    if(!res.ok) return null;
+    const data = await res.json();
+    return data.records;
+  } catch(e){
+    console.warn('kintone direct error:', e.message);
+    return null;
+  }
+}
+
+// フィールド一覧を取得して自動検出
+async function detectKintoneFields(){
+  if(!config.domain || !config.token) return null;
+  const url = `https://${config.domain}.cybozu.com/k/v1/app/form/fields.json?app=${config.appId}`;
+  try {
+    const res = await fetch(url, {headers:{'X-Cybozu-API-Token': config.token}});
+    if(!res.ok) return null;
+    const data = await res.json();
+    return data.properties;
+  } catch(e){ return null; }
+}
+
+// フィールドから値を安全に取得
+function getFieldValue(record, fieldCode){
+  const f = record[fieldCode];
+  if(!f) return '-';
+  if(f.type === 'FILE') return f.value || [];
+  return f.value || '-';
+}
+
+// ===== 予測検索 =====
+let acIndex = -1;
+let acResults = [];
+let searchTimer = null;
+
+async function onSearchInput(){
+  const val = document.getElementById('searchInput').value.trim();
+  clearTimeout(searchTimer);
+  if(val.length < 1){ hideAC(); return; }
+
+  searchTimer = setTimeout(async ()=>{
+    // kintone検索（GAS URLまたは直接接続）
+    if(config.gasUrl || (config.domain && config.token)){
+      // kintoneクエリ：文字列フィールドはlike演算子を使用
+      // フィールドコードにアンダースコアや数字が含まれる場合はそのまま使用可能
+      const query = `${FIELD_MAP.partNo} like "${val}" limit 10`;
+      const recs = await fetchKintone(query);
+      if(recs && recs.length > 0){
+        acResults = recs.map(r=>({
+          partNo: getFieldValue(r, FIELD_MAP.partNo),
+          name:   getFieldValue(r, FIELD_MAP.name),
+          line:   getFieldValue(r, FIELD_MAP.line),
+        })).filter(p=>p.partNo && p.partNo!=='-');
+        if(acResults.length > 0){
+          showAC(val, acResults);
+          return;
+        }
+      }
+    }
+    // デモフォールバック
+    const q = val.toUpperCase();
+    acResults = DEMO_PARTS.filter(p =>
+      p.partNo.toUpperCase().includes(q) || p.name.toUpperCase().includes(q)
+    );
+    showAC(val, acResults);
+  }, 200);
+}
+
+function showAC(query, results){
+  const list = document.getElementById('acList');
+  if(!results.length){ list.style.display='none'; return; }
+  const q = query.toUpperCase();
+  list.innerHTML = results.map((p,i)=>{
+    const hi = p.partNo.toUpperCase().replace(q, `<span>${p.partNo.substring(p.partNo.toUpperCase().indexOf(q), p.partNo.toUpperCase().indexOf(q)+q.length)}</span>`);
+    return `<div class="ac-item" onclick="selectPart('${p.partNo}')" data-i="${i}">
+      <div class="ac-partno">${p.partNo}</div>
+      <div class="ac-name">${p.name} <span class="ac-line">${p.line||''}</span></div>
+    </div>`;
+  }).join('');
+  list.style.display='block';
+  acIndex = -1;
+}
+
+function hideAC(){ document.getElementById('acList').style.display='none'; acIndex=-1; }
+
+function onSearchKeydown(e){
+  const items = document.querySelectorAll('.ac-item');
+  if(e.key==='ArrowDown'){ e.preventDefault(); acIndex=Math.min(acIndex+1,items.length-1); highlightAC(items); }
+  else if(e.key==='ArrowUp'){ e.preventDefault(); acIndex=Math.max(acIndex-1,0); highlightAC(items); }
+  else if(e.key==='Enter'){
+    if(acIndex>=0 && items[acIndex]){ items[acIndex].click(); }
+    else { doSearch(); }
+    hideAC();
+  } else if(e.key==='Escape'){ hideAC(); }
+}
+
+function highlightAC(items){
+  items.forEach((el,i)=>el.classList.toggle('focused',i===acIndex));
+  if(items[acIndex]) document.getElementById('searchInput').value = acResults[acIndex].partNo;
+}
+
+document.addEventListener('click', e=>{
+  if(!e.target.closest('.search-wrap')) hideAC();
+});
+
+// ===== 品番選択・検索 =====
+function selectPart(code){
+  document.getElementById('searchInput').value = code;
+  document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('sel', c.textContent.trim()===code));
+  hideAC();
+  doSearch();
+}
+
+async function doSearch(){
+  const val = document.getElementById('searchInput').value.trim();
+  const el = document.getElementById('searchResult');
+  if(!val){ el.innerHTML='<div class="placeholder">品番を入力してください</div>'; return; }
+
+  el.innerHTML = `<div class="loading"><div class="loading-spin"></div><div>検索中...</div></div>`;
+
+  let part = null;
+
+  // kintone検索（GAS URLまたは直接接続）
+  if(config.gasUrl || (config.domain && config.token)){
+    const recs = await fetchKintone(`${FIELD_MAP.partNo} = "${val}"`);
+    if(recs && recs.length > 0){
+      const r = recs[0];
+      const swFiles = getFieldValue(r, FIELD_MAP.standardWork);
+      const qsFiles = getFieldValue(r, FIELD_MAP.qualitySheet);
+      const toDocList = (files, label) =>
+        Array.isArray(files)
+          ? files.map(f=>({name: f.name || label, key: f.fileKey, type: label}))
+          : [];
+      part = {
+        partNo:          val,
+        name:            getFieldValue(r, FIELD_MAP.name),
+        customer:        getFieldValue(r, FIELD_MAP.customer),
+        line:            getFieldValue(r, FIELD_MAP.line),
+        dieHeight:       getFieldValue(r, FIELD_MAP.dieHeight),
+        cushionPins:     getFieldValue(r, FIELD_MAP.cushionPins),
+        cushionPressure: getFieldValue(r, FIELD_MAP.cushionPressure),
+        material:        getFieldValue(r, FIELD_MAP.material),
+        strokeCount:     getFieldValue(r, FIELD_MAP.strokeCount),
+        standardWork:    toDocList(swFiles, '作業標準書'),
+        qualitySheet:    toDocList(qsFiles, '品質チェックシート'),
+        fromKintone:     true,
+      };
+    }
+  }
+
+  // デモフォールバック
+  if(!part){
+    part = DEMO_PARTS.find(p=>p.partNo.toUpperCase()===val.toUpperCase());
+    if(part) part = {...part, fromKintone:false};
+  }
+
+  if(!part){
+    el.innerHTML=`<div class="placeholder">「${val}」は見つかりませんでした<br><span style="font-size:12px;">品番を確認してください</span></div>`;
+    return;
+  }
+
+  renderResult(part);
+}
+
+function renderResult(part){
+  const el = document.getElementById('searchResult');
+  const source = part.fromKintone
+    ? '<span style="font-size:11px;color:#16a34a;background:#dcfce7;padding:2px 7px;border-radius:10px;margin-left:8px;">kintone連携</span>'
+    : '<span style="font-size:11px;color:#888;background:#f3f4f6;padding:2px 7px;border-radius:10px;margin-left:8px;">デモデータ</span>';
+
+  // 作業標準書ボタン群
+  const swDocs = part.standardWork || (part.docs ? part.docs.filter(d=>(d.type||d.name||'').includes('作業標準書')) : []);
+  const qsDocs = part.qualitySheet || (part.docs ? part.docs.filter(d=>(d.type||d.name||'').includes('品質')) : []);
+  // デモ時はdocsをそのまま使用
+  const allDocs = part.docs && !part.fromKintone ? part.docs : null;
+
+  const makeBtn = (d, colorClass) => {
+    const name = typeof d === 'string' ? d : d.name;
+    const key  = typeof d === 'object' ? (d.key||'') : '';
+    const pno  = part.partNo;
+    return `<button class="doc-btn ${colorClass}" onclick="openDoc('${name}','${key}','${pno}')">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" style="width:13px;height:13px;">
+        <rect x="3" y="1" width="10" height="14" rx="1.5"/>
+        <line x1="5.5" y1="5" x2="10.5" y2="5"/>
+        <line x1="5.5" y1="8" x2="10.5" y2="8"/>
+        <line x1="5.5" y1="11" x2="8.5" y2="11"/>
+      </svg>${name}</button>`;
+  };
+
+  let docSectionHtml = '';
+  if(allDocs){
+    // デモデータ：まとめて表示
+    docSectionHtml = `
+    <div class="doc-section">
+      <span class="doc-section-label">帳票：</span>
+      ${allDocs.map(d=>makeBtn(d,'pdf')).join('')}
+    </div>`;
+  } else {
+    // kintone：作業標準書・品質チェックシートを分けて表示
+    const swHtml = swDocs.length
+      ? swDocs.map(d=>makeBtn(d,'pdf')).join('')
+      : '<span style="font-size:12px;color:#aaa;">未登録</span>';
+    const qsHtml = qsDocs.length
+      ? qsDocs.map(d=>makeBtn(d,'pdf')).join('')
+      : '<span style="font-size:12px;color:#aaa;">未登録</span>';
+    docSectionHtml = `
+    <div class="doc-section" style="flex-direction:column;gap:8px;">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span class="doc-section-label" style="width:100px;flex-shrink:0;">📋 作業標準書</span>
+        ${swHtml}
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid #f0f0f0;padding-top:8px;">
+        <span class="doc-section-label" style="width:100px;flex-shrink:0;">✅ 品質チェックシート</span>
+        ${qsHtml}
+      </div>
+    </div>`;
+  }
+
+  // 製造条件（kintone未入力の場合は「—」表示）
+  const condHtml = [
+    {label:'ダイハイト',    val:part.dieHeight,       unit:'mm'},
+    {label:'クッションピン', val:part.cushionPins,      unit:'本'},
+    {label:'クッション圧',  val:part.cushionPressure,  unit:'MPa'},
+    {label:'材料',         val:part.material,         unit:'',  sm:true},
+    {label:'ストローク数',  val:part.strokeCount,      unit:'回'},
+  ].map(c=>`
+    <div class="cond-cell">
+      <div class="cond-label">${c.label}</div>
+      <div class="cond-value${c.sm?' sm':''}">${c.val||'—'}<span class="cond-unit">${c.val&&c.val!=='-'?c.unit:''}</span></div>
+    </div>`).join('');
+
+  el.innerHTML = `
+  <div class="result-card">
+    <div class="result-header">
+      <div>
+        <div class="result-partno">${part.partNo}${source}</div>
+        <div class="result-name">${part.name||''}　${part.customer?`<span style="color:#888;">（${part.customer}）</span>`:''}</div>
+      </div>
+      <div class="line-badge">${part.line||'—'}</div>
+    </div>
+    <div class="cond-grid">${condHtml}</div>
+    ${docSectionHtml}
+  </div>`;
+}
+
+// ===== kintoneファイルDL =====
+async function openDoc(docName, fileKey, partNo){
+  if(fileKey && config.domain && config.token){
+    const url = `https://${config.domain}.cybozu.com/k/v1/file.json?fileKey=${fileKey}`;
+    try {
+      const res = await fetch(url, {headers:{'X-Cybozu-API-Token': config.token}});
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${partNo}_${docName}.pdf`;
+      a.click();
+      return;
+    } catch(e){}
+  }
+  alert(`【${partNo}】${docName}\nkintone APIを設定するとPDFが直接表示されます\n（設定画面からAPIトークンを入力してください）`);
+}
+
+// ===== 品質チェックシート連携 =====
+function openQualitySheet(partNo){
+  if(config.gasUrl){
+    const url = `${config.gasUrl}?partNo=${encodeURIComponent(partNo)}`;
+    window.open(url, '_blank');
+  } else {
+    alert(`品質チェックシートシステムを開きます（品番：${partNo}）\n設定画面からGAS URLを入力してください`);
+  }
+}
+
+// ===== Firebase連携 =====
+// Firebaseのパス構造：lines/{A1,A2,B1,B2,BP2,CP3}
+// 各ライン：name / part / plan / actual / status / jobs[]
+const FIREBASE_URL = 'https://hashimoto-press-default-rtdb.asia-southeast1.firebasedatabase.app';
+
+// ラインIDとSVG要素のマッピング
+// プレスA→A1/A2、プレスB→B1/B2/BP2、プレスC→CP3
+const LINE_PRESS_MAP = {
+  A1:'A', A2:'A', B1:'B', B2:'B', BP2:'B', CP3:'C'
+};
+const LINE_LABEL = {
+  A1:'A1', A2:'A2', B1:'B1', B2:'B2', BP2:'B-P2', CP3:'C-P3'
+};
+
+const STATUS_CFG = {
+  setup:   {stroke:'#1a1a1a', fill:'#f0f0ee', badge:'段取り中', badgeFill:'#1a1a1a'},
+  running: {stroke:'#1d4ed8', fill:'#dbeafe', badge:'稼働中',   badgeFill:'#16a34a'},
+  waiting: {stroke:'#16a34a', fill:'#dcfce7', badge:'待機中',   badgeFill:'#16a34a'},
+  stop:    {stroke:'#dc2626', fill:'#fee2e2', badge:'停止中',   badgeFill:'#dc2626'},
+};
+
+// Firebaseから取得したlinesデータを保持
+let linesData = {};
+
+// SVGにラインカード（小パネル）を描画
+function updateFactoryView(lines){
+  linesData = lines || {};
+
+  // プレスA：A1/A2を縦に表示
+  updatePressGroup('A', ['A1','A2']);
+  // プレスB：B1/B2/BP2
+  updatePressGroup('B', ['B1','B2','BP2']);
+  // プレスC：CP3
+  updatePressGroup('C', ['CP3']);
+}
+
+// 各プレスグループ内にラインの状況テキストを更新
+function updatePressGroup(pressId, lineIds){
+  const g = document.getElementById('press-'+pressId);
+  if(!g) return;
+
+  // 既存の動的テキストを削除
+  g.querySelectorAll('.dynamic').forEach(el=>el.remove());
+
+  // プレス全体の色（最悪ステータスで決める）
+  let worstStatus = 'waiting';
+  lineIds.forEach(id=>{
+    const l = linesData[id];
+    if(!l) return;
+    if(l.status==='stop') worstStatus='stop';
+    else if(l.status==='setup' && worstStatus!=='stop') worstStatus='setup';
+    else if(l.status==='running' && worstStatus==='waiting') worstStatus='running';
+  });
+  const scfg = STATUS_CFG[worstStatus] || STATUS_CFG.waiting;
+  const rect = g.querySelector('rect');
+  if(rect){
+    rect.setAttribute('fill', scfg.fill);
+    rect.setAttribute('stroke', scfg.stroke);
+  }
+
+  // ライン別ミニ情報をSVGテキストで追加
+  // 位置はプレスごとに異なるため、bbox取得で動的配置
+  const bbox = rect ? {
+    x: parseFloat(rect.getAttribute('x')),
+    y: parseFloat(rect.getAttribute('y')),
+    w: parseFloat(rect.getAttribute('width')),
+    h: parseFloat(rect.getAttribute('height')),
+  } : null;
+  if(!bbox) return;
+
+  let yOffset = bbox.y + bbox.h - (lineIds.length * 22) - 4;
+
+  lineIds.forEach((id, idx)=>{
+    const l = linesData[id];
+    const lcfg = STATUS_CFG[(l && l.status) || 'waiting'];
+    const partText = l ? (l.part || '--') : '--';
+    const rate = (l && l.plan > 0) ? Math.round(l.actual / l.plan * 100) : null;
+    const rateText = rate !== null ? `${rate}%` : '--';
+    const actualText = l ? `${(l.actual||0).toLocaleString()} / ${(l.plan||0).toLocaleString()}` : '';
+
+    // ライン名バッジ
+    const badge = document.createElementNS('http://www.w3.org/2000/svg','rect');
+    badge.setAttribute('x', bbox.x + 6);
+    badge.setAttribute('y', yOffset + idx*22);
+    badge.setAttribute('width', bbox.w - 12);
+    badge.setAttribute('height', 18);
+    badge.setAttribute('rx', '3');
+    badge.setAttribute('fill', lcfg.badgeFill);
+    badge.setAttribute('opacity', '0.85');
+    badge.classList.add('dynamic');
+    g.appendChild(badge);
+
+    // ライン名
+    const tLine = document.createElementNS('http://www.w3.org/2000/svg','text');
+    tLine.setAttribute('x', bbox.x + 12);
+    tLine.setAttribute('y', yOffset + idx*22 + 12);
+    tLine.setAttribute('font-size', '8');
+    tLine.setAttribute('fill', 'white');
+    tLine.setAttribute('font-weight', '700');
+    tLine.textContent = LINE_LABEL[id];
+    tLine.classList.add('dynamic');
+    g.appendChild(tLine);
+
+    // 品番（短縮）
+    const tPart = document.createElementNS('http://www.w3.org/2000/svg','text');
+    tPart.setAttribute('x', bbox.x + 38);
+    tPart.setAttribute('y', yOffset + idx*22 + 12);
+    tPart.setAttribute('font-size', '8');
+    tPart.setAttribute('fill', 'white');
+    tPart.textContent = partText.length > 12 ? partText.slice(0,12)+'…' : partText;
+    tPart.classList.add('dynamic');
+    g.appendChild(tPart);
+
+    // 達成率
+    const tRate = document.createElementNS('http://www.w3.org/2000/svg','text');
+    tRate.setAttribute('x', bbox.x + bbox.w - 8);
+    tRate.setAttribute('y', yOffset + idx*22 + 12);
+    tRate.setAttribute('text-anchor', 'end');
+    tRate.setAttribute('font-size', '8');
+    tRate.setAttribute('font-weight', '700');
+    tRate.setAttribute('fill', rate !== null && rate < 75 ? '#fcd34d' : 'white');
+    tRate.textContent = rateText;
+    tRate.classList.add('dynamic');
+    g.appendChild(tRate);
+  });
+}
+
+// Firebase REST APIでリアルタイムポーリング（10秒間隔）
+let fbInterval = null;
+async function fetchFirebaseLines(){
+  const fbUrl = config.firebaseUrl || FIREBASE_URL;
+  try{
+    const res = await fetch(`${fbUrl}/lines.json`);
+    if(!res.ok) return;
+    const data = await res.json();
+    if(data){
+      updateFactoryView(data);
+      document.getElementById('fbDot').classList.add('connected');
+      document.getElementById('fbStatus').textContent =
+        `Firebase接続中（${new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})} 更新）`;
+      // 段取り指示も更新
+      buildDantoriFromFirebase(data);
+    }
+  } catch(e){
+    document.getElementById('fbStatus').textContent = 'Firebase接続エラー（デモ表示）';
+  }
+}
+
+function connectFirebase(){
+  fetchFirebaseLines();
+  if(fbInterval) clearInterval(fbInterval);
+  fbInterval = setInterval(fetchFirebaseLines, 10000);
+}
+
+function refreshFactory(){
+  fetchFirebaseLines();
+}
+
+function clickPress(pressId){
+  // クリックされたプレスの現在品番を検索タブで表示
+  const lineIds = Object.entries(LINE_PRESS_MAP)
+    .filter(([,p])=>p===pressId)
+    .map(([id])=>id);
+  const running = lineIds.find(id=> linesData[id] && linesData[id].part);
+  if(running && linesData[running].part){
+    switchTab('search');
+    selectPart(linesData[running].part);
+  }
+}
+
+// ===== 段取り指示（Firebaseから生成） =====
+let dantoriFromFirebase = [];
+
+function buildDantoriFromFirebase(lines){
+  const result = [];
+  Object.entries(lines).forEach(([id, line])=>{
+    if(!line) return;
+    if(line.status === 'setup'){
+      result.push({
+        lineId: id,
+        press: LINE_LABEL[id] || id,
+        partNo: line.part || '--',
+        status: 'now',
+        actual: line.actual || 0,
+        plan: line.plan || 0,
+      });
+    }
+  });
+  dantoriFromFirebase = result;
+  renderDantori();
+}
+
+function renderDantori(){
+  const list = document.getElementById('dantoriList');
+
+  // Firebaseデータがあれば使用、なければデモ
+  if(dantoriFromFirebase.length > 0){
+    list.innerHTML = dantoriFromFirebase.map(d=>`
+      <div class="dantori-card active-card">
+        <div class="dc-header">
+          <div>
+            <div class="dc-time">${d.press}ライン　段取り中</div>
+            <div class="dc-info">品番：${d.partNo}</div>
+          </div>
+          <div class="status-badge s-now">実施中</div>
+        </div>
+        <div class="dc-roles">
+          <div class="role-row">
+            <div class="role-label">条件設定</div>
+            <div class="person-tags"><span class="ptag main">条件設定担当</span></div>
+          </div>
+          <div class="role-row">
+            <div class="role-label">金型取付</div>
+            <div class="person-tags"><span class="ptag">取付担当</span></div>
+          </div>
+          <div class="role-row">
+            <div class="role-label">リフト</div>
+            <div class="person-tags"><span class="ptag">リフト担当</span></div>
+          </div>
+        </div>
+        <div style="padding:8px 14px;border-top:1px solid #f0f0f0;">
+          <button class="doc-btn" style="font-size:12px;" onclick="switchTab('search');selectPart('${d.partNo}')">
+            📄 ${d.partNo} の製造条件・標準書を確認
+          </button>
+        </div>
+      </div>`).join('');
+    return;
+  }
+
+  // デモデータ
+  const DEMO = [
+    {time:'08:00', press:'B1', partNo:'18120-6Y0-0000', status:'done'},
+    {time:'10:30', press:'A1', partNo:'80U50-0000',     status:'now',
+     roles:{条件設定:['田中'], 金型取付:['山田','遠藤'], リフト:['鈴木']}},
+    {time:'13:00', press:'B2', partNo:'COVER-HM-001',   status:'next',
+     roles:{条件設定:['田中'], 金型取付:['見原','大石'], リフト:['鈴木']}},
+  ];
+  const statusLabel = {now:'実施中', next:'次の段取り', done:'完了'};
+  const statusClass = {now:'s-now', next:'s-next', done:'s-done'};
+  list.innerHTML = DEMO.map(d=>{
+    const rolesHtml = d.roles ? `
+      <div class="dc-roles">
+        ${Object.entries(d.roles).map(([role,persons])=>`
+          <div class="role-row">
+            <div class="role-label">${role}</div>
+            <div class="person-tags">
+              ${persons.map((p,i)=>`<span class="ptag${i===0&&role==='条件設定'?' main':''}">${p}</span>`).join('')}
+            </div>
+          </div>`).join('')}
+        <div style="padding:4px 0 0;">
+          <button class="doc-btn" style="font-size:12px;" onclick="switchTab('search');selectPart('${d.partNo}')">
+            📄 ${d.partNo} の製造条件・標準書を確認
+          </button>
+        </div>
+      </div>` : '';
+    return `
+      <div class="dantori-card${d.status==='now'?' active-card':''}">
+        <div class="dc-header">
+          <div>
+            <div class="dc-time">${d.time}〜　${d.press}ライン</div>
+            <div class="dc-info">品番：${d.partNo}</div>
+          </div>
+          <div class="status-badge ${statusClass[d.status]}">${statusLabel[d.status]}</div>
+        </div>
+        ${rolesHtml}
+      </div>`;
+  }).join('');
+}
+
+function refreshDantori(){ fetchFirebaseLines(); }
+
+function postToSlack(){
+  const fbUrl = config.firebaseUrl || FIREBASE_URL;
+  const setups = Object.entries(linesData)
+    .filter(([,l])=>l && l.status==='setup')
+    .map(([id,l])=>`${LINE_LABEL[id]}：${l.part||'--'}`);
+  const running = Object.entries(linesData)
+    .filter(([,l])=>l && l.status==='running')
+    .map(([id,l])=>{
+      const rate = l.plan>0 ? Math.round(l.actual/l.plan*100) : '--';
+      return `${LINE_LABEL[id]}：${l.part||'--'} ${l.actual||0}/${l.plan||0}個（${rate}%）`;
+    });
+  const date = new Date().toLocaleDateString('ja-JP',{month:'numeric',day:'numeric'});
+  const time = new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+  let msg = `【段取り・進捗報告】${date} ${time}\n`;
+  if(setups.length) msg += `\n🔧 段取り中\n${setups.join('\n')}\n`;
+  if(running.length) msg += `\n▶ 稼働中\n${running.join('\n')}`;
+  if(!setups.length && !running.length) msg += '\n（Firebaseに接続してください）';
+  if(!confirm('Slackに投稿しますか？\n\n' + msg)) return;
+  alert('投稿内容：\n\n' + msg + '\n\n（本番環境ではSlack Webhook URLを設定画面に入力してください）');
+}
+
+// ===== 初期化 =====
+checkConfig();
+renderDantori();
+connectFirebase();
+</script>
+</body>
+</html>
