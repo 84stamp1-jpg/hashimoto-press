@@ -794,12 +794,8 @@ async function onSearchInput(){
         }
       }
     }
-    // デモフォールバック
-    const q = val.toUpperCase();
-    acResults = DEMO_PARTS.filter(p =>
-      p.partNo.toUpperCase().includes(q) || p.name.toUpperCase().includes(q)
-    );
-    showAC(val, acResults);
+    // kintone未接続時は何も表示しない
+    hideAC();
   }, 200);
 }
 
@@ -885,11 +881,7 @@ async function doSearch(){
     }
   }
 
-  // デモフォールバック
-  if(!part){
-    part = DEMO_PARTS.find(p=>p.partNo.toUpperCase()===val.toUpperCase());
-    if(part) part = {...part, fromKintone:false};
-  }
+  // kintone未接続時はデモデータを使わない
 
   if(!part){
     el.innerHTML=`<div class="placeholder">「${val}」は見つかりませんでした<br><span style="font-size:12px;">品番を確認してください</span></div>`;
