@@ -197,12 +197,10 @@ body{font-family:'Hiragino Sans','Meiryo',sans-serif;background:#f5f5f3;color:#1
     <div class="autocomplete-list" id="acList" style="display:none;"></div>
   </div>
 
-  <div class="chips">
+  <div class="chips" id="chipsArea">
     <span class="chip-label">よく使う：</span>
-    <div class="chip" onclick="selectPart('80U50-0000')">80U50-0000</div>
-    <div class="chip" onclick="selectPart('18120-6Y0-0000')">18120-6Y0</div>
-    <div class="chip" onclick="selectPart('MLC-PLATE-A')">MLC PLATE A</div>
-    <div class="chip" onclick="selectPart('COVER-HM-001')">COVER HM</div>
+    <span id="chipsContent" style="display:flex;flex-wrap:wrap;gap:5px;"></span>
+    <span style="font-size:11px;color:#aaa;cursor:pointer;padding:5px;" onclick="showConfig()">＋設定</span>
   </div>
 
   <div id="searchResult">
@@ -433,6 +431,12 @@ body{font-family:'Hiragino Sans','Meiryo',sans-serif;background:#f5f5f3;color:#1
     </div>
 
     <div class="form-group">
+      <label>よく使う品番（カンマ区切りで入力）</label>
+      <input type="text" id="cfg-favorites" placeholder="例：80U50-0000,18120-6Y0-0000,MLC-PLATE-A"/>
+      <div class="form-hint">品番検索画面に表示するショートカット品番</div>
+    </div>
+
+    <div class="form-group">
       <label>Firebase データベースURL</label>
       <input type="text" id="cfg-firebase" placeholder="https://xxx.firebaseio.com"/>
     </div>
@@ -465,9 +469,10 @@ function showConfig(){
   document.getElementById('cfg-token').value    = config.token  || '';
   document.getElementById('cfg-firebase').value = config.firebaseUrl || '';
   document.getElementById('cfg-gas').value      = config.gasUrl || '';
-  document.getElementById('fld-partNo').value       = FIELD_MAP.partNo       || '品番';
-  document.getElementById('fld-name').value         = FIELD_MAP.name         || '品名';
-  document.getElementById('fld-customer').value     = FIELD_MAP.customer     || '取引先';
+  document.getElementById('cfg-favorites').value = (config.favorites || []).join(',');
+  document.getElementById('fld-partNo').value       = FIELD_MAP.partNo       || '文字列__1行__3';
+  document.getElementById('fld-name').value         = FIELD_MAP.name         || '文字列__1行__1';
+  document.getElementById('fld-customer').value     = FIELD_MAP.customer     || '文字列__1行__2';
   document.getElementById('fld-line').value         = FIELD_MAP.line         || 'ライン';
   document.getElementById('fld-standardWork').value = FIELD_MAP.standardWork || '作業標準書';
   document.getElementById('fld-qualitySheet').value = FIELD_MAP.qualitySheet || '品質チェックシート';
@@ -477,17 +482,19 @@ function showConfig(){
 function closeConfig(){ document.getElementById('configModal').style.display='none'; }
 function closeConfigIfBg(e){ if(e.target===document.getElementById('configModal')) closeConfig(); }
 function saveConfig(){
+  const favStr = document.getElementById('cfg-favorites').value.trim();
   config = {
     domain:      document.getElementById('cfg-domain').value.trim(),
     appId:       document.getElementById('cfg-appid').value.trim(),
     token:       document.getElementById('cfg-token').value.trim(),
     firebaseUrl: document.getElementById('cfg-firebase').value.trim(),
     gasUrl:      document.getElementById('cfg-gas').value.trim(),
+    favorites:   favStr ? favStr.split(',').map(s=>s.trim()).filter(Boolean) : [],
   };
   FIELD_MAP = Object.assign(FIELD_MAP, {
-    partNo:       document.getElementById('fld-partNo').value.trim()       || '品番',
-    name:         document.getElementById('fld-name').value.trim()         || '品名',
-    customer:     document.getElementById('fld-customer').value.trim()     || '取引先',
+    partNo:       document.getElementById('fld-partNo').value.trim()       || '文字列__1行__3',
+    name:         document.getElementById('fld-name').value.trim()         || '文字列__1行__1',
+    customer:     document.getElementById('fld-customer').value.trim()     || '文字列__1行__2',
     line:         document.getElementById('fld-line').value.trim()         || 'ライン',
     standardWork: document.getElementById('fld-standardWork').value.trim() || '作業標準書',
     qualitySheet: document.getElementById('fld-qualitySheet').value.trim() || '品質チェックシート',
@@ -496,8 +503,23 @@ function saveConfig(){
   localStorage.setItem('hk_navi_fields', JSON.stringify(FIELD_MAP));
   closeConfig();
   checkConfig();
+  renderChips();
   connectFirebase();
   alert('設定を保存しました');
+}
+
+// よく使う品番を描画
+function renderChips(){
+  const area = document.getElementById('chipsContent');
+  if(!area) return;
+  const favs = config.favorites || [];
+  if(favs.length === 0){
+    area.innerHTML = '<span style="font-size:12px;color:#aaa;">（設定から追加できます）</span>';
+    return;
+  }
+  area.innerHTML = favs.map(p =>
+    `<div class="chip" onclick="selectPart('${p}')">${p}</div>`
+  ).join('');
 }
 
 // kintone接続テスト
@@ -775,11 +797,9 @@ async function onSearchInput(){
   clearTimeout(searchTimer);
   if(val.length < 1){ hideAC(); return; }
 
+  // 検索結果が表示中（ローディング中でない）の場合は予測検索のみ動かす
   searchTimer = setTimeout(async ()=>{
-    // kintone検索（GAS URLまたは直接接続）
     if(config.gasUrl || (config.domain && config.token)){
-      // kintoneクエリ：文字列フィールドはlike演算子を使用
-      // フィールドコードにアンダースコアや数字が含まれる場合はそのまま使用可能
       const query = `${FIELD_MAP.partNo} like "${val}" limit 10`;
       const recs = await fetchKintone(query);
       if(recs && recs.length > 0){
@@ -796,7 +816,7 @@ async function onSearchInput(){
     }
     // kintone未接続時は何も表示しない
     hideAC();
-  }, 200);
+  }, 400); // 400msに延長して連打を防ぐ
 }
 
 function showAC(query, results){
@@ -1288,6 +1308,7 @@ function postToSlack(){
 
 // ===== 初期化 =====
 checkConfig();
+renderChips();
 renderDantori();
 connectFirebase();
 </script>
