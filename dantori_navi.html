@@ -646,9 +646,9 @@ const DEMO_PARTS = [
 // ===== フィールドマッピング（kintoneのフィールドコードに合わせて変更） =====
 // 設定画面の「フィールド確認」ボタンで自動検出できます
 let FIELD_MAP = Object.assign({
-  partNo:          '文字列_1行_3',
-  name:            '文字列_1行_1',
-  customer:        '文字列_1行_2',
+  partNo:          '文字列__1行__3',
+  name:            '文字列__1行__1',
+  customer:        '文字列__1行__2',
   line:            'ライン',
   dieHeight:       'ダイハイト',
   cushionPins:     'クッションピン',
@@ -688,28 +688,39 @@ async function fetchViaGasProxy(query, fieldKeys){
       + '&query=' + encodeURIComponent(query)
       + '&fields=' + encodeURIComponent(fieldKeys.join(','));
 
-    // タイムアウト設定（10秒）
-    const timer = setTimeout(() => {
+    let script = null;
+    let resolved = false;
+
+    const cleanup = () => {
+      if(script && script.parentNode) script.parentNode.removeChild(script);
       delete window[cbName];
-      if(script.parentNode) script.parentNode.removeChild(script);
+    };
+
+    const timer = setTimeout(() => {
+      if(resolved) return;
+      resolved = true;
+      cleanup();
       console.warn('GAS proxy timeout');
       resolve(null);
-    }, 10000);
+    }, 20000);
 
     window[cbName] = function(data) {
+      if(resolved) return;
+      resolved = true;
       clearTimeout(timer);
-      delete window[cbName];
-      if(script.parentNode) script.parentNode.removeChild(script);
+      setTimeout(cleanup, 100);
       if(data && Array.isArray(data.records)) resolve(data.records);
       else if(data && data.error){ console.warn('kintone error:', data.error); resolve(null); }
       else resolve(null);
     };
 
-    const script = document.createElement('script');
+    script = document.createElement('script');
     script.src = proxyUrl;
     script.onerror = () => {
+      if(resolved) return;
+      resolved = true;
       clearTimeout(timer);
-      delete window[cbName];
+      cleanup();
       console.warn('GAS JSONP script error');
       resolve(null);
     };
