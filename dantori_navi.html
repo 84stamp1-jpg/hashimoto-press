@@ -663,18 +663,19 @@ let FIELD_MAP = Object.assign({
 // GASプロキシ経由（CORSを回避）またはkintone直接アクセス
 
 async function fetchKintone(query, fields){
-  if(!config.domain || !config.token) return null;
+  // GAS URLまたはkintone直接接続のどちらかが必要
+  if(!config.gasUrl && (!config.domain || !config.token)) return null;
 
   const fieldKeys = fields || [
     FIELD_MAP.partNo, FIELD_MAP.name, FIELD_MAP.customer, FIELD_MAP.line,
     FIELD_MAP.standardWork, FIELD_MAP.qualitySheet,
   ];
 
-  // GAS URLが設定されている場合はプロキシ経由
+  // GAS URLが設定されている場合はプロキシ経由（優先）
   if(config.gasUrl){
     return await fetchViaGasProxy(query, fieldKeys);
   }
-  // GAS URLなしの場合はkintone直接アクセス（同一ドメイン時のみ成功）
+  // GAS URLなしの場合はkintone直接アクセス
   return await fetchKintoneDirect(query, fieldKeys);
 }
 
@@ -968,21 +969,16 @@ function renderResult(part){
   </div>`;
 }
 
-// ===== kintoneファイルDL =====
-async function openDoc(docName, fileKey, partNo){
-  if(fileKey && config.domain && config.token){
-    const url = `https://${config.domain}.cybozu.com/k/v1/file.json?fileKey=${fileKey}`;
-    try {
-      const res = await fetch(url, {headers:{'X-Cybozu-API-Token': config.token}});
-      const blob = await res.blob();
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = `${partNo}_${docName}.pdf`;
-      a.click();
-      return;
-    } catch(e){}
+// ===== kintoneファイル表示 =====
+function openDoc(docName, fileKey, partNo){
+  if(!fileKey){
+    alert(`【${partNo}】${docName}\nkintoneにPDFが登録されていません`);
+    return;
   }
-  alert(`【${partNo}】${docName}\nkintone APIを設定するとPDFが直接表示されます\n（設定画面からAPIトークンを入力してください）`);
+  // kintoneのファイルダウンロードURLを直接開く
+  // kintoneにログイン済みのブラウザであれば直接表示できる
+  const url = `https://${config.domain}.cybozu.com/k/v1/file.json?fileKey=${fileKey}`;
+  window.open(url, '_blank');
 }
 
 // ===== 品質チェックシート連携 =====
