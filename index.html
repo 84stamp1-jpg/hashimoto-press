@@ -81,11 +81,11 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 
 /* 品番スケジュール */
 .sched{border-top:0.5px solid #f0efe8;padding-top:5px;margin-top:5px;}
-.sr{display:grid;grid-template-columns:16px 140px 64px 1fr;align-items:start;gap:4px;padding:5px 0;border-bottom:0.5px solid #f8f7f2;font-size:12px;}
+.sr{display:grid;grid-template-columns:18px 140px 1fr;gap:2px 4px;padding:4px 0;border-bottom:0.5px solid #f8f7f2;font-size:12px;align-items:baseline;}
 .sr:last-child{border-bottom:none;}
 .sr.cur{background:#fffbf0;margin:0 -2px;padding:3px 2px;border-radius:3px;border-bottom:none;}
 .sn{color:#ccc;min-width:12px;font-size:9px;}
-.sp{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;}
+.sp{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;width:140px;flex-shrink:0;}
 .sr.cur .sp{font-weight:700;color:#1a1a1a;}
 .sq{color:#888;min-width:50px;text-align:right;}
 .st2{color:#aaa;min-width:76px;text-align:right;font-size:10px;}
@@ -635,12 +635,12 @@ function renderBoard(){
         const snapH=j.snapHistory||[];
         let snapDisp='';
         if(snapH.length>0){
-          snapDisp='<div style="font-size:9px;padding-left:20px;line-height:1.9;display:flex;flex-wrap:wrap;gap:0 4px;">'+
-            snapH.map(s=>{
-              const rc2=s.r>=95?'#27ae60':s.r>=80?'#e67e22':'#c0392b';
-              return '<span style="color:'+rc2+';font-weight:700;white-space:nowrap;">'+s.t+'('+s.r+'%)</span>';
-            }).join('<span style="color:#ddd;">→</span>')+
-          '</div>';
+          // 履歴：全件を→でつないでインライン表示
+          const snapParts2=snapH.map(s=>{
+            const rc2=s.r>=95?'#27ae60':s.r>=80?'#e67e22':'#c0392b';
+            return '<span style="color:'+rc2+';font-weight:700;white-space:nowrap;">'+s.t+'('+s.r+'%)</span>';
+          });
+          snapDisp='<span style="font-size:9px;color:#ddd;"> ▎ </span>'+snapParts2.join('<span style="color:#ddd;">→</span>');
         }
         // 終了済み品番のペース表示
         let jpStr='';
@@ -651,15 +651,22 @@ function renderBoard(){
           const pl=(pd>=0?'+':'')+pd.toLocaleString()+'個/h';
           jpStr='<br><span style="font-size:9px;color:#555;">⚡'+pi.pace.toLocaleString()+'個/h <span style="color:'+pc+'">('+pl+')</span></span>';
         }
-        // grid: 連番 | 品番(固定140px) | 実績 | 時間+その他
-          const timeInfo=(j.start&&j.end?j.start+'〜'+j.end:'-')+(tParts.length?' '+tParts.join(' '):'');
+        // grid 3列: 連番(18px) | 品番(140px) | 残り(数量・時間・段取り)
+          // 2行目: 空 | 空 | 履歴
+          const timeInfo=(j.start&&j.end?j.start+'〜'+j.end:'-');
+          const tStr=tParts.length?'<span style="font-size:9px;color:#999;">'+tParts.join(' ')+'</span>':'';
+          const col3='<span class="sq">'+j.plan.toLocaleString()+'個</span>'+
+            (jAct>0?'<span class="sa '+rc+'">'+jAct.toLocaleString()+'個</span>':'<span class="sa none">-</span>')+
+            '<span style="font-size:10px;color:#aaa;white-space:nowrap;">'+timeInfo+'</span>'+
+            tStr+jpStr;
           sched+='<div class="sr'+(cur?' cur':'')+'">'+
             '<span class="sn">'+j.seq+'</span>'+
             '<span class="sp">'+(cur?'▶ ':'')+j.part+'</span>'+
-            '<span class="sq">'+j.plan.toLocaleString()+'個</span>'+
-            '<span style="font-size:10px;color:#aaa;">'+timeInfo+'</span>'+
-            (jAct>0?'<div style="grid-column:1/-1;padding-left:20px;font-size:10px;"><span class="sa '+rc+'">'+jAct.toLocaleString()+'個</span>'+jpStr+'</div>':'<span style="grid-column:4;font-size:10px;color:#ccc;">-</span>')+
-            snapDisp+
+            '<span style="display:flex;flex-wrap:wrap;align-items:baseline;gap:3px;">'+col3+'</span>'+
+            (snapDisp?
+              '<span></span>'+'<span></span>'+
+              '<span style="font-size:9px;line-height:1.8;">'+snapDisp+'</span>'
+            :'')+
           '</div>';
       });
       sched+='</div>';
