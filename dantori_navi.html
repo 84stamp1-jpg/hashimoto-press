@@ -1409,6 +1409,29 @@ function postToSlack(){
 }
 
 // ===== 初期化 =====
+// localStorage の設定を正しいデフォルト値で上書き（URLが壊れている場合の修正）
+(function(){
+  const saved = JSON.parse(localStorage.getItem(CFG_KEY) || '{}');
+  // FirebaseURLとGAS URLが正しくない場合はデフォルトで上書き
+  let needSave = false;
+  if(!saved.firebaseUrl || !saved.firebaseUrl.startsWith('https://hashimoto-press')){
+    saved.firebaseUrl = DEFAULT_CONFIG.firebaseUrl;
+    needSave = true;
+  }
+  if(!saved.gasUrl || !saved.gasUrl.startsWith('https://script.google.com/macros/s/AKfycbxfOZT1')){
+    saved.gasUrl = DEFAULT_CONFIG.gasUrl;
+    needSave = true;
+  }
+  if(!saved.domain){ saved.domain = DEFAULT_CONFIG.domain; needSave = true; }
+  if(!saved.appId){  saved.appId  = DEFAULT_CONFIG.appId;  needSave = true; }
+  if(!saved.token){  saved.token  = DEFAULT_CONFIG.token;  needSave = true; }
+  if(needSave){
+    localStorage.setItem(CFG_KEY, JSON.stringify(saved));
+  }
+  // configを再ロード
+  Object.assign(config, saved);
+})();
+
 checkConfig();
 renderChips();
 renderDantori();
