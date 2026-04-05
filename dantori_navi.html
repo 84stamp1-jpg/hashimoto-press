@@ -7,7 +7,16 @@
 <style>
 /* ===== RESET & BASE ===== */
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Hiragino Sans','Meiryo',sans-serif;background:#f5f5f3;color:#1a1a1a;font-size:14px;}
+/* kintoneのiframe内でのレイアウト崩れ防止 */
+html, body {
+  font-family:'Hiragino Sans','Meiryo',sans-serif;
+  background:#f5f5f3;
+  color:#1a1a1a;
+  font-size:14px;
+  min-width:0 !important;
+  max-width:100% !important;
+  overflow-x:hidden;
+}
 
 /* ===== LAYOUT ===== */
 .app{max-width:900px;margin:0 auto;display:flex;flex-direction:column;min-height:100vh;}
@@ -682,22 +691,37 @@ let FIELD_MAP = Object.assign({
 }, JSON.parse(localStorage.getItem('hk_navi_fields') || '{}'));
 
 // ===== kintone API呼び出し =====
-// GASプロキシ経由（CORSを回避）またはkintone直接アクセス
-
 async function fetchKintone(query, fields){
-  // GAS URLまたはkintone直接接続のどちらかが必要
-  if(!config.gasUrl && (!config.domain || !config.token)) return null;
-
   const fieldKeys = fields || [
     FIELD_MAP.partNo, FIELD_MAP.name, FIELD_MAP.customer, FIELD_MAP.line,
     FIELD_MAP.standardWork, FIELD_MAP.qualitySheet,
   ];
 
-  // GAS URLが設定されている場合はプロキシ経由（優先）
+  // ① kintone内（ポータル等）で動いている場合はkintone.api()を直接使用
+  // → CORSなし・GASプロキシ不要・高速
+  if(typeof kintone !== 'undefined' && kintone.api){
+    try {
+      const params = { app: config.appId, query: query };
+      fieldKeys.forEach((f, i) => { params[`fields[${i}]`] = f; });
+      // kintone.api はPromise対応
+      const data = await kintone.api(
+        kintone.api.url('/k/v1/records', true),
+        'GET',
+        { app: config.appId, query: query, fields: fieldKeys }
+      );
+      return data.records;
+    } catch(e) {
+      console.warn('kintone.api error:', e);
+      return null;
+    }
+  }
+
+  // ② GAS URLが設定されている場合はプロキシ経由
   if(config.gasUrl){
     return await fetchViaGasProxy(query, fieldKeys);
   }
-  // GAS URLなしの場合はkintone直接アクセス
+
+  // ③ 直接アクセス（同一ドメイン時のみ成功）
   return await fetchKintoneDirect(query, fieldKeys);
 }
 
