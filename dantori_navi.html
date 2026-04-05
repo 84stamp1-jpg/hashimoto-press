@@ -19,8 +19,8 @@ html, body {
 }
 
 /* ===== LAYOUT ===== */
-.app{max-width:900px;margin:0 auto;display:flex;flex-direction:column;min-height:100vh;}
-.header{background:#1a1a1a;color:white;padding:10px 18px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+.app{max-width:100%;margin:0;display:flex;flex-direction:column;min-height:100vh;}
+.header{background:#1a1a1a;color:white;padding:7px 12px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
 .header-left{display:flex;align-items:center;gap:10px;}
 .logo{width:30px;height:30px;background:white;border-radius:5px;display:flex;align-items:center;justify-content:center;}
 .logo svg{width:18px;height:18px;}
@@ -29,18 +29,18 @@ html, body {
 .clock{font-size:13px;color:#ccc;font-variant-numeric:tabular-nums;}
 
 .tabs{background:white;display:flex;border-bottom:1px solid #e5e5e5;position:sticky;top:52px;z-index:99;}
-.tab{padding:11px 20px;font-size:13px;cursor:pointer;color:#888;border-bottom:2px solid transparent;transition:all 0.15s;white-space:nowrap;}
+.tab{padding:8px 14px;font-size:12px;cursor:pointer;color:#888;border-bottom:2px solid transparent;transition:all 0.15s;white-space:nowrap;}
 .tab.active{color:#1a1a1a;border-bottom-color:#1a1a1a;font-weight:600;}
 .tab:hover:not(.active){color:#1a1a1a;background:#fafafa;}
 
-.content{padding:16px;display:none;}
+.content{padding:8px;display:none;}
 .content.active{display:block;}
 
 /* ===== SEARCH TAB ===== */
 .search-wrap{position:relative;margin-bottom:14px;}
 .search-input-row{display:flex;gap:8px;}
 .search-input-row input{
-  flex:1;padding:11px 14px;border:1px solid #ddd;border-radius:8px;
+  flex:1;padding:8px 12px;border:1px solid #ddd;border-radius:8px;
   font-size:15px;background:white;color:#1a1a1a;
   transition:border-color 0.15s;
 }
@@ -114,7 +114,7 @@ html, body {
 .ld{width:10px;height:10px;border-radius:2px;}
 .refresh-btn{padding:5px 10px;border:1px solid #ddd;border-radius:6px;font-size:11px;cursor:pointer;background:white;color:#666;}
 .refresh-btn:hover{background:#f5f5f3;}
-.fwrap{border:1px solid #e5e5e5;border-radius:12px;overflow:hidden;background:#fafafa;padding:12px;}
+.fwrap{border:1px solid #e5e5e5;border-radius:12px;overflow:auto;background:#fafafa;padding:8px;}
 .firebase-status{margin-top:8px;font-size:11px;color:#888;display:flex;align-items:center;gap:5px;}
 .status-dot{width:7px;height:7px;border-radius:50%;background:#aaa;}
 .status-dot.connected{background:#16a34a;}
@@ -233,7 +233,7 @@ html, body {
     <button class="refresh-btn" onclick="refreshFactory()">↻ 更新</button>
   </div>
   <div class="fwrap">
-    <svg id="factorySvg" viewBox="0 0 900 480" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">
+    <svg id="factorySvg" viewBox="0 0 900 480" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:100%;height:auto;display:block;">
   <rect x="0" y="0" width="900" height="480" fill="#dcdcd8" rx="6"/>
 
   <!-- ===== メイン工場外壁 ===== -->
@@ -701,18 +701,20 @@ async function fetchKintone(query, fields){
   // → CORSなし・GASプロキシ不要・高速
   if(typeof kintone !== 'undefined' && kintone.api){
     try {
-      const params = { app: config.appId, query: query };
-      fieldKeys.forEach((f, i) => { params[`fields[${i}]`] = f; });
-      // kintone.api はPromise対応
-      const data = await kintone.api(
-        kintone.api.url('/k/v1/records', true),
-        'GET',
-        { app: config.appId, query: query, fields: fieldKeys }
-      );
+      const appId = parseInt(config.appId) || config.appId;
+      const data = await new Promise((resolve, reject) => {
+        kintone.api(
+          kintone.api.url('/k/v1/records', true),
+          'GET',
+          { app: appId, query: query, fields: fieldKeys },
+          function(resp){ resolve(resp); },
+          function(err){ reject(err); }
+        );
+      });
       return data.records;
     } catch(e) {
       console.warn('kintone.api error:', e);
-      return null;
+      // kintone.api失敗時はGASプロキシにフォールバック
     }
   }
 
