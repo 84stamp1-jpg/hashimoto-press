@@ -690,42 +690,58 @@ let FIELD_MAP = Object.assign({
   qualitySheet:    '品質チェックシート',
 }, JSON.parse(localStorage.getItem('hk_navi_fields') || '{}'));
 
-// ===== kintone API呼び出し =====
-async function fetchKintone(query, fields){
-  const fieldKeys = fields || [
-    FIELD_MAP.partNo, FIELD_MAP.name, FIELD_MAP.customer, FIELD_MAP.line,
-    FIELD_MAP.standardWork, FIELD_MAP.qualitySheet,
-  ];
+// ===== Firebase 部品マスタ検索 =====
+// GASでkintone→Firebaseに同期済みのデータを使用
+// CORSなし・高速・確実
 
-  // ① kintone内（ポータル等）で動いている場合はkintone.api()を直接使用
-  // → CORSなし・GASプロキシ不要・高速
-  if(typeof kintone !== 'undefined' && kintone.api){
-    try {
-      const appId = parseInt(config.appId) || config.appId;
-      const data = await new Promise((resolve, reject) => {
-        kintone.api(
-          kintone.api.url('/k/v1/records', true),
-          'GET',
-          { app: appId, query: query, fields: fieldKeys },
-          function(resp){ resolve(resp); },
-          function(err){ reject(err); }
-        );
-      });
-      return data.records;
-    } catch(e) {
-      console.warn('kintone.api error:', e);
-      // kintone.api失敗時はGASプロキシにフォールバック
-    }
+let partsCache = null;  // メモリキャッシュ
+let partsCacheTime = 0;
+const PARTS_CACHE_MS = 5 * 60 * 1000; // 5分キャッシュ
+
+async function loadPartsFromFirebase(){
+  const fbUrl = (config.firebaseUrl || FIREBASE_URL) + '/parts.json';
+  try {
+    const res = await fetch(fbUrl);
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if(!data) return {};
+    return data;
+  } catch(e){
+    console.warn('Firebase parts load error:', e.message);
+    return {};
   }
-
-  // ② GAS URLが設定されている場合はプロキシ経由
-  if(config.gasUrl){
-    return await fetchViaGasProxy(query, fieldKeys);
-  }
-
-  // ③ 直接アクセス（同一ドメイン時のみ成功）
-  return await fetchKintoneDirect(query, fieldKeys);
 }
+
+async function getPartsCache(){
+  const now = Date.now();
+  if(partsCache && now - partsCacheTime < PARTS_CACHE_MS){
+    return partsCache;
+  }
+  partsCache = await loadPartsFromFirebase();
+  partsCacheTime = now;
+  return partsCache;
+}
+
+// 品番で検索（部分一致）
+async function searchPartsByNo(query){
+  const parts = await getPartsCache();
+  const q = query.toUpperCase();
+  return Object.values(parts).filter(p =>
+    p.partNo && p.partNo.toUpperCase().includes(q)
+  ).slice(0, 10);
+}
+
+// 品番で完全一致検索
+async function findPartByNo(partNo){
+  const parts = await getPartsCache();
+  const q = partNo.toUpperCase();
+  return Object.values(parts).find(p =>
+    p.partNo && p.partNo.toUpperCase() === q
+  ) || null;
+}
+
+// 後方互換：旧fetchKintone（使わなくなるが残しておく）
+async function fetchKintone(query, fields){ return null; }
 
 // GASプロキシ経由（JSONP方式でCORSを回避）
 async function fetchViaGasProxy(query, fieldKeys){
@@ -823,26 +839,19 @@ async function onSearchInput(){
   clearTimeout(searchTimer);
   if(val.length < 1){ hideAC(); return; }
 
-  // 検索結果が表示中（ローディング中でない）の場合は予測検索のみ動かす
   searchTimer = setTimeout(async ()=>{
-    if(config.gasUrl || (config.domain && config.token)){
-      const query = `${FIELD_MAP.partNo} like "${val}" limit 10`;
-      const recs = await fetchKintone(query);
-      if(recs && recs.length > 0){
-        acResults = recs.map(r=>({
-          partNo: getFieldValue(r, FIELD_MAP.partNo),
-          name:   getFieldValue(r, FIELD_MAP.name),
-          line:   getFieldValue(r, FIELD_MAP.line),
-        })).filter(p=>p.partNo && p.partNo!=='-');
-        if(acResults.length > 0){
-          showAC(val, acResults);
-          return;
-        }
-      }
+    const results = await searchPartsByNo(val);
+    if(results.length > 0){
+      acResults = results.map(p=>({
+        partNo: p.partNo,
+        name:   p.name   || '',
+        line:   p.line   || '',
+      }));
+      showAC(val, acResults);
+    } else {
+      hideAC();
     }
-    // kintone未接続時は何も表示しない
-    hideAC();
-  }, 400); // 400msに延長して連打を防ぐ
+  }, 200);
 }
 
 function showAC(query, results){
@@ -895,46 +904,32 @@ async function doSearch(){
   const el = document.getElementById('searchResult');
   if(!val){ el.innerHTML='<div class="placeholder">品番を入力してください</div>'; return; }
 
-  el.innerHTML = `<div class="loading"><div class="loading-spin"></div><div>検索中...</div></div>`;
+  el.innerHTML = '<div class="loading"><div class="loading-spin"></div><div>検索中...</div></div>';
 
-  let part = null;
-
-  // kintone検索（GAS URLまたは直接接続）
-  if(config.gasUrl || (config.domain && config.token)){
-    const recs = await fetchKintone(`${FIELD_MAP.partNo} = "${val}"`);
-    if(recs && recs.length > 0){
-      const r = recs[0];
-      const swFiles = getFieldValue(r, FIELD_MAP.standardWork);
-      const qsFiles = getFieldValue(r, FIELD_MAP.qualitySheet);
-      const toDocList = (files, label) =>
-        Array.isArray(files)
-          ? files.map(f=>({name: f.name || label, key: f.fileKey, type: label}))
-          : [];
-      part = {
-        partNo:          val,
-        name:            getFieldValue(r, FIELD_MAP.name),
-        customer:        getFieldValue(r, FIELD_MAP.customer),
-        line:            getFieldValue(r, FIELD_MAP.line),
-        dieHeight:       getFieldValue(r, FIELD_MAP.dieHeight),
-        cushionPins:     getFieldValue(r, FIELD_MAP.cushionPins),
-        cushionPressure: getFieldValue(r, FIELD_MAP.cushionPressure),
-        material:        getFieldValue(r, FIELD_MAP.material),
-        strokeCount:     getFieldValue(r, FIELD_MAP.strokeCount),
-        standardWork:    toDocList(swFiles, '作業標準書'),
-        qualitySheet:    toDocList(qsFiles, '品質チェックシート'),
-        fromKintone:     true,
-      };
-    }
-  }
-
-  // kintone未接続時はデモデータを使わない
+  // Firebaseから検索（高速・CORSなし）
+  const part = await findPartByNo(val);
 
   if(!part){
-    el.innerHTML=`<div class="placeholder">「${val}」は見つかりませんでした<br><span style="font-size:12px;">品番を確認してください</span></div>`;
+    el.innerHTML='<div class="placeholder">「' + val + '」は見つかりませんでした<br><span style="font-size:12px;">GASで同期後に再度お試しください</span></div>';
     return;
   }
 
-  renderResult(part);
+  const renderPart = {
+    partNo:       part.partNo,
+    name:         part.name         || '',
+    customer:     part.customer     || '',
+    line:         part.line         || '',
+    dieHeight:    part.dieHeight    || '—',
+    cushionPins:  part.cushionPins  || '—',
+    cushionPressure: part.cushionPressure || '—',
+    material:     part.material     || '—',
+    strokeCount:  part.strokeCount  || '—',
+    standardWork:  Array.isArray(part.standardWork)  ? part.standardWork.map(f=>({name:f.name,key:f.fileKey,type:'作業標準書'}))  : [],
+    qualitySheet:  Array.isArray(part.qualitySheet)  ? part.qualitySheet.map(f=>({name:f.name,key:f.fileKey,type:'品質チェックシート'}))  : [],
+    dantoStandard: Array.isArray(part.dantoStandard) ? part.dantoStandard.map(f=>({name:f.name,key:f.fileKey,type:'段取標準書'})) : [],
+    fromKintone:  true,
+  };
+  renderResult(renderPart);
 }
 
 function renderResult(part){
