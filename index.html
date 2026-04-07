@@ -463,9 +463,19 @@ function getStatus(l){
       }
       return{lbl:'完了',bdg:'ok',card:'s-ok',bar:'c-ok',pr};
     }
+    // before/over：l.status==='running'かつworkStartがあれば稼働中として評価継続
+    if(pr.phase==='before'&&!(l.status==='running'&&l.workStart&&l.workStart!=='')){
+      return{lbl:'待機中',bdg:'wt',card:'s-wt',bar:'c-wt',pr};
+    }
+    // overで稼働中でなければ終了済み扱い
+    if(pr.phase==='over'&&!(l.status==='running'&&l.workStart&&l.workStart!=='')){
+      return{lbl:'完了',bdg:'ok',card:'s-ok',bar:'c-ok',pr};
+    }
+    // 稼働中なのに計画時間外→そのまま評価継続（fall through）
+  }
+  if(!pv&&!(l.status==='running'&&l.workStart&&l.workStart!=='')){
     return{lbl:'待機中',bdg:'wt',card:'s-wt',bar:'c-wt',pr};
   }
-  if(!pv) return{lbl:'待機中',bdg:'wt',card:'s-wt',bar:'c-wt',pr};
   // CT達成率で状態判定
   let r=0;
   const cjSt=(l.jobs||[]).find(j=>j.part===l.part&&j.plan>0&&j.start&&j.end);
@@ -725,7 +735,7 @@ function renderBoard(){
 function renderSum(){
   const active=IDS.filter(id=>{
     const l=lines[id];
-    return l&&l.status==='running'&&l.plan>0&&l.workStart&&l.workStart!=='';
+    return l&&l.status==='running'&&l.plan>0;
   }).length;
   const delays=IDS.filter(id=>{
     const l=lines[id];
@@ -974,6 +984,7 @@ window.doSub=function(){
     const curJobs=[...(lines[id]?.jobs||[])];
     // job更新からlineレベルへの同期用一時変数
     let _syncActual=null,_syncWS=null,_syncWE=null,_syncSS=null,_syncSE=null;
+    let _restorePart=null,_restoreWS=null;
 
     // seqで選択したjobを特定（同名品番対応）
     const selJi=selSeq>0
@@ -1034,6 +1045,8 @@ window.doSub=function(){
           if(snapHistory.length>10) snapHistory.shift();
         }
       }
+      // weが空欄＝作業終了取り消し→runningに戻す
+      const newStatus=we&&we!==''?'done':(ws&&ws!==''?'running':'waiting');
       curJobs[selJi]={...j,
         setupStartTime:ss,
         setupEndTime:se,
@@ -1043,11 +1056,16 @@ window.doSub=function(){
         setupActualMin:setupMin!==null?setupMin:(j.setupActualMin||0),
         paceInfo,
         snapHistory,
-        status:we&&we!==''?'done':'running'
+        status:newStatus
       };
       // lineレベルに反映：現在稼働中job（curJi）と一致する場合のみ
       if(selJi===curJi){
         _syncActual=actVal; _syncWS=ws; _syncWE=we; _syncSS=ss; _syncSE=se;
+      }
+      // weが空で再保存＝作業終了取り消し：l.partをこのjobに戻す
+      if((!we||we==='')&&newStatus==='running'){
+        _restorePart=curJobs[selJi].part;
+        _restoreWS=ws;
       }
     }
 
@@ -1055,6 +1073,13 @@ window.doSub=function(){
     const upd={status:stat,note,updatedAt:Date.now(),jobs:curJobs};
     // job更新で保存した値をupdに反映
     if(_syncActual!==null){upd.actual=_syncActual;upd.workStart=_syncWS;upd.workEnd=_syncWE;upd.setupStartTime=_syncSS;upd.setupEndTime=_syncSE;}
+    // 作業終了取り消し：l.partをこのjobに戻す
+    if(_restorePart!==null){
+      upd.part=_restorePart;
+      upd.workStart=_restoreWS;
+      upd.workEnd='';
+      upd.actual=actVal||0;
+    }
     if(prevT>0){upd.prevActual=prevA;upd.prevUpdatedAt=prevT;upd.prev2Actual=prev2A;upd.prev2UpdatedAt=prev2T;}
     if(!isNaN(plan))upd.plan=plan;
     if(setupMin!==null)upd.setupMin=setupMin;
