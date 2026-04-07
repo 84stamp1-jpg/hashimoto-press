@@ -469,6 +469,12 @@ html, body {
 <script>
 // ===== 設定管理 =====
 const CFG_KEY = 'hk_navi_config';
+
+// ?reset=1 でlocalStorageを強制クリア
+if(new URLSearchParams(location.search).get('reset') === '1'){
+  localStorage.clear();
+  location.replace(location.pathname); // パラメータなしにリダイレクト
+}
 // ★ 固定設定（HTMLに直接埋め込み・どのPCでも同じ値を使用）
 const FIXED_CONFIG = {
   domain:      'hashimoto-kogyo',
@@ -1257,7 +1263,7 @@ let fbInterval = null;
 async function fetchFirebaseLines(){
   const fbUrl = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/, '');
   try{
-    const res = await fetch(`${fbUrl}.json?shallow=false`);
+    const res = await fetch(`${fbUrl}/.json?shallow=false`);
     if(!res.ok) return;
     const data = await res.json();
     if(data && data.lines){
