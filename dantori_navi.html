@@ -504,7 +504,7 @@ function saveConfig(){
     domain:      document.getElementById('cfg-domain').value.trim(),
     appId:       document.getElementById('cfg-appid').value.trim(),
     token:       document.getElementById('cfg-token').value.trim(),
-    firebaseUrl: document.getElementById('cfg-firebase').value.trim(),
+    firebaseUrl: document.getElementById('cfg-firebase').value.trim().replace(/\/+$/, ''),
     gasUrl:      document.getElementById('cfg-gas').value.trim(),
     proxyUrl:    document.getElementById('cfg-proxy').value.trim(),
     favorites:   favStr ? favStr.split(',').map(s=>s.trim()).filter(Boolean) : [],
@@ -708,7 +708,7 @@ let partsCacheTime = 0;
 const PARTS_CACHE_MS = 5 * 60 * 1000; // 5分キャッシュ
 
 async function loadPartsFromFirebase(){
-  const fbUrl = (config.firebaseUrl || FIREBASE_URL) + '/parts.json';
+  const fbUrl = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/, '') + '/parts.json';
   try {
     const res = await fetch(fbUrl);
     if(!res.ok) throw new Error('HTTP ' + res.status);
@@ -1236,7 +1236,7 @@ function updateFactoryView(lines){
 // Firebase REST APIでリアルタイムポーリング（10秒間隔）
 let fbInterval = null;
 async function fetchFirebaseLines(){
-  const fbUrl = config.firebaseUrl || FIREBASE_URL;
+  const fbUrl = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/, '');
   try{
     const res = await fetch(`${fbUrl}.json?shallow=false`);
     if(!res.ok) return;
@@ -1415,26 +1415,39 @@ function postToSlack(){
 }
 
 // ===== 初期化 =====
-// localStorage の設定を正しいデフォルト値で上書き（URLが壊れている場合の修正）
+// localStorage の設定を検証・自動修復
 (function(){
-  const saved = JSON.parse(localStorage.getItem(CFG_KEY) || '{}');
-  // FirebaseURLとGAS URLが正しくない場合はデフォルトで上書き
+  let saved = {};
+  try {
+    saved = JSON.parse(localStorage.getItem(CFG_KEY) || '{}');
+  } catch(e) {
+    saved = {};
+  }
   let needSave = false;
-  if(!saved.firebaseUrl || !saved.firebaseUrl.startsWith('https://hashimoto-press')){
+
+  // FirebaseURLの検証（完全なURLかチェック）
+  const fbUrl = saved.firebaseUrl || '';
+  if(!fbUrl || fbUrl.length < 30 || !fbUrl.startsWith('https://') || fbUrl.includes('--on') || !fbUrl.includes('firebasedatabase')){
     saved.firebaseUrl = DEFAULT_CONFIG.firebaseUrl;
     needSave = true;
   }
-  if(!saved.gasUrl || !saved.gasUrl.startsWith('https://script.google.com/macros/s/AKfycbxfOZT1')){
+
+  // GAS URLの検証
+  const gasUrl = saved.gasUrl || '';
+  if(!gasUrl || gasUrl.length < 50 || !gasUrl.startsWith('https://script.google.com')){
     saved.gasUrl = DEFAULT_CONFIG.gasUrl;
     needSave = true;
   }
+
+  // 基本設定の補完
   if(!saved.domain){ saved.domain = DEFAULT_CONFIG.domain; needSave = true; }
   if(!saved.appId){  saved.appId  = DEFAULT_CONFIG.appId;  needSave = true; }
   if(!saved.token){  saved.token  = DEFAULT_CONFIG.token;  needSave = true; }
+
   if(needSave){
     localStorage.setItem(CFG_KEY, JSON.stringify(saved));
+    console.log('設定を自動修復しました');
   }
-  // configを再ロード
   Object.assign(config, saved);
 })();
 
