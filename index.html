@@ -1058,8 +1058,9 @@ window.doSub=function(){
         snapHistory,
         status:newStatus
       };
-      // lineレベルに反映：現在稼働中job（curJi）と一致する場合のみ
-      if(selJi===curJi){
+      // lineレベルに反映
+      // 選択jobが現在品番と同じ、またはweが空（終了取り消し）の場合は常に同期
+      if(selJi===curJi||curJobs[selJi].part===curLinePart){
         _syncActual=actVal; _syncWS=ws; _syncWE=we; _syncSS=ss; _syncSE=se;
       }
       // weが空で再保存＝作業終了取り消し：l.partをこのjobに戻す
@@ -1078,7 +1079,7 @@ window.doSub=function(){
       upd.part=_restorePart;
       upd.workStart=_restoreWS;
       upd.workEnd='';
-      upd.actual=actVal||0;
+      upd.actual=isNaN(actual)?0:actual;
     }
     if(prevT>0){upd.prevActual=prevA;upd.prevUpdatedAt=prevT;upd.prev2Actual=prev2A;upd.prev2UpdatedAt=prev2T;}
     if(!isNaN(plan))upd.plan=plan;
