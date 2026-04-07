@@ -451,7 +451,13 @@ html, body {
     </div>
     <div class="form-group">
       <label>品質チェックシート GAS URL</label>
-      <input type="text" id="cfg-gas" placeholder="GASのウェブアプリURL"/>
+      <input type="text" id="cfg-gas" placeholder="GASのウェブアプリURL（品質チェックシート記録用）"/>
+      <div class="form-hint">コード.gsのデプロイURL</div>
+    </div>
+    <div class="form-group">
+      <label>PDF表示用 GAS URL（KintoneProxy）</label>
+      <input type="text" id="cfg-proxy" placeholder="KintoneProxy.gsのデプロイURL"/>
+      <div class="form-hint">KintoneProxy.gsのデプロイURL（PDFファイル表示用）</div>
     </div>
     <div class="modal-btns">
       <button onclick="closeConfig()">キャンセル</button>
@@ -469,6 +475,7 @@ const DEFAULT_CONFIG = {
   token: 'v5hyHr5zzvlnRcQQ7dii5gPJdYgf2pGc6tDhQSmn',
   firebaseUrl: 'https://hashimoto-press-default-rtdb.asia-southeast1.firebasedatabase.app',
   gasUrl: 'https://script.google.com/macros/s/AKfycbxfOZT1_gW25RZRyOF8RPV8tJXbPcqLKK2hm9TXZ5n6cSv2povL3kbAwWWueV9MbTY5/exec',
+  proxyUrl: '', // KintoneProxy.gsのURL（PDF表示用）
 };
 let config = Object.assign({}, DEFAULT_CONFIG, JSON.parse(localStorage.getItem(CFG_KEY) || '{}'));
 
@@ -478,6 +485,7 @@ function showConfig(){
   document.getElementById('cfg-token').value    = config.token  || '';
   document.getElementById('cfg-firebase').value = config.firebaseUrl || '';
   document.getElementById('cfg-gas').value      = config.gasUrl || '';
+  document.getElementById('cfg-proxy').value    = config.proxyUrl || '';
   document.getElementById('cfg-favorites').value = (config.favorites || []).join(',');
   document.getElementById('fld-partNo').value       = FIELD_MAP.partNo       || '文字列__1行__3';
   document.getElementById('fld-name').value         = FIELD_MAP.name         || '文字列__1行__1';
@@ -498,6 +506,7 @@ function saveConfig(){
     token:       document.getElementById('cfg-token').value.trim(),
     firebaseUrl: document.getElementById('cfg-firebase').value.trim(),
     gasUrl:      document.getElementById('cfg-gas').value.trim(),
+    proxyUrl:    document.getElementById('cfg-proxy').value.trim(),
     favorites:   favStr ? favStr.split(',').map(s=>s.trim()).filter(Boolean) : [],
   };
   FIELD_MAP = Object.assign(FIELD_MAP, {
@@ -1020,14 +1029,16 @@ function openDoc(docName, fileKey, partNo){
     return;
   }
 
-  if(!config.gasUrl){
-    alert('設定画面でGAS URLを入力してください');
+  // proxyUrl（KintoneProxy専用）があればそちらを優先、なければgasUrlを使用
+  const pdfGasUrl = config.proxyUrl || config.gasUrl;
+  if(!pdfGasUrl){
+    alert('設定画面でPDF表示用GAS URLを入力してください');
     return;
   }
 
   // GASプロキシ経由でbase64取得してPDF表示
   const cbName = 'file_cb_' + Date.now();
-  const url = config.gasUrl
+  const url = pdfGasUrl
     + '?action=file'
     + '&fileKey=' + encodeURIComponent(fileKey)
     + '&callback=' + cbName;
