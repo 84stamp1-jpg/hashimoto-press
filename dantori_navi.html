@@ -33,7 +33,7 @@ html, body {
 .tab.active{color:#1a1a1a;border-bottom-color:#1a1a1a;font-weight:600;}
 .tab:hover:not(.active){color:#1a1a1a;background:#fafafa;}
 
-.content{padding:8px;display:none;}
+.content{padding:4px;display:none;}
 .content.active{display:block;}
 
 /* ===== SEARCH TAB ===== */
@@ -108,14 +108,14 @@ html, body {
 .config-banner a{color:#1d4ed8;text-decoration:underline;cursor:pointer;}
 
 /* ===== FACTORY TAB ===== */
-.factory-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+.factory-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
 .legend{display:flex;gap:10px;flex-wrap:wrap;}
 .li{display:flex;align-items:center;gap:4px;font-size:11px;color:#666;}
 .ld{width:10px;height:10px;border-radius:2px;}
 .refresh-btn{padding:5px 10px;border:1px solid #ddd;border-radius:6px;font-size:11px;cursor:pointer;background:white;color:#666;}
 .refresh-btn:hover{background:#f5f5f3;}
-.fwrap{border:1px solid #e5e5e5;border-radius:12px;overflow:auto;background:#fafafa;padding:8px;}
-.firebase-status{margin-top:8px;font-size:11px;color:#888;display:flex;align-items:center;gap:5px;}
+.fwrap{border:1px solid #d1d5db;border-radius:10px;overflow:hidden;background:#9ca3af;padding:3px;}
+.firebase-status{margin-top:4px;font-size:11px;color:#888;display:flex;align-items:center;gap:5px;}
 .status-dot{width:7px;height:7px;border-radius:50%;background:#aaa;}
 .status-dot.connected{background:#16a34a;}
 
@@ -226,9 +226,9 @@ html, body {
     <button class="refresh-btn" onclick="refreshFactory()">↻ 更新</button>
   </div>
   <div class="fwrap">
-    <svg id="factorySvg" viewBox="0 0 900 480" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:100%;height:auto;display:block;">
-  <!-- 背景 -->
-  <rect x="0" y="0" width="900" height="480" fill="#f1f5f9" rx="6"/>
+    <svg id="factorySvg" viewBox="0 0 900 480" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;max-height:calc(100vh - 165px);display:block;">
+  <!-- 背景：建物外はグレー -->
+  <rect x="0" y="0" width="900" height="480" fill="#9ca3af" rx="6"/>
 
   <!-- ===== 工場外壁 ===== -->
   <rect x="104" y="8" width="788" height="336" rx="5" fill="#f8fafc" stroke="#cbd5e1" stroke-width="2"/>
@@ -1265,14 +1265,7 @@ function updateBeacons(beacons){
       g.appendChild(dtext);
     }
 
-    // 名前ラベル（下）
-    const label = document.createElementNS('http://www.w3.org/2000/svg','text');
-    label.setAttribute('x', cx); label.setAttribute('y', cy+28);
-    label.setAttribute('text-anchor','middle');
-    label.setAttribute('font-size','8'); label.setAttribute('fill', color);
-    label.setAttribute('font-weight','700');
-    label.textContent = b.name || id;
-    g.appendChild(label);
+    // 名前ラベルは円内のみ（外部テキスト削除）
 
     // ツールチップ
     const title = document.createElementNS('http://www.w3.org/2000/svg','title');
@@ -1318,14 +1311,7 @@ function updateBeacons(beacons){
     t1.textContent = (lift.name || 'リフト') + (isMoving ? '🔴' : '');
     g.appendChild(t1);
 
-    const t2 = document.createElementNS('http://www.w3.org/2000/svg','text');
-    t2.setAttribute('x', pos.x + 1 + ox);
-    t2.setAttribute('y', pos.y + 40);
-    t2.setAttribute('text-anchor', 'middle');
-    t2.setAttribute('font-size', '7');
-    t2.setAttribute('fill', '#fef3c7');
-    t2.textContent = lift.area || '--';
-    g.appendChild(t2);
+    // リフト下エリア名テキストは削除
 
     if(liftGroup) liftGroup.appendChild(g);
   });
