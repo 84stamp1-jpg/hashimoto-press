@@ -1192,19 +1192,49 @@ function updateBeacons(beacons){
     group.appendChild(g);
   });
 
-  // リフト位置更新
-  const lift = Object.values(beacons).find(b=>b && b.type==='lift');
-  if(lift){
-    const pos = AREA_POSITIONS[lift.area] || {x:288, y:200};
-    const liftIcon = document.getElementById('liftIcon');
-    const liftText = document.getElementById('liftText');
-    const liftArea = document.getElementById('liftArea');
-    if(liftIcon){
-      liftIcon.setAttribute('x', pos.x-28); liftIcon.setAttribute('y', pos.y-20);
-    }
-    if(liftText){ liftText.setAttribute('x',pos.x); liftText.setAttribute('y',pos.y-8); }
-    if(liftArea){ liftArea.setAttribute('x',pos.x); liftArea.setAttribute('y',pos.y+4); liftArea.textContent = lift.area||'移動中'; }
-  }
+  // リフト位置更新（複数台対応）
+  const liftGroup = document.getElementById('beacon-lift');
+  if(liftGroup) liftGroup.innerHTML = ''; // 既存のリフトアイコンをクリア
+
+  const lifts = Object.entries(beacons).filter(([,b])=>b && b.type==='lift');
+  lifts.forEach(([id, lift], idx) => {
+    const pos = AREA_POSITIONS[lift.area] || {x:260, y:180};
+    const offsetX = idx * 64; // 複数台は横にずらして表示
+
+    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.id = 'lift-icon-' + idx;
+
+    const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+    rect.setAttribute('x', pos.x - 28 + offsetX);
+    rect.setAttribute('y', pos.y - 20);
+    rect.setAttribute('width', '58');
+    rect.setAttribute('height', '26');
+    rect.setAttribute('rx', '13');
+    rect.setAttribute('fill', '#d97706');
+    rect.setAttribute('opacity', '0.9');
+    g.appendChild(rect);
+
+    const t1 = document.createElementNS('http://www.w3.org/2000/svg','text');
+    t1.setAttribute('x', pos.x + 1 + offsetX);
+    t1.setAttribute('y', pos.y - 8);
+    t1.setAttribute('text-anchor', 'middle');
+    t1.setAttribute('font-size', '8');
+    t1.setAttribute('font-weight', '700');
+    t1.setAttribute('fill', 'white');
+    t1.textContent = lift.name || 'リフト';
+    g.appendChild(t1);
+
+    const t2 = document.createElementNS('http://www.w3.org/2000/svg','text');
+    t2.setAttribute('x', pos.x + 1 + offsetX);
+    t2.setAttribute('y', pos.y + 4);
+    t2.setAttribute('text-anchor', 'middle');
+    t2.setAttribute('font-size', '7');
+    t2.setAttribute('fill', '#fef3c7');
+    t2.textContent = lift.area || '移動中';
+    g.appendChild(t2);
+
+    if(liftGroup) liftGroup.appendChild(g);
+  });
 }
 
 // Firebaseから取得したlinesデータを保持
