@@ -1,0 +1,1931 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>金型製作原価管理システム | 橋本工業</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --bg2: #0f1525;
+    --bg3: #161d32;
+    --border: #1e2d4a;
+    --border2: #243356;
+    --accent: #0ea5e9;
+    --accent2: #38bdf8;
+    --accent-dim: rgba(14,165,233,0.15);
+    --accent-glow: rgba(14,165,233,0.4);
+    --green: #10b981;
+    --green-dim: rgba(16,185,129,0.15);
+    --yellow: #f59e0b;
+    --yellow-dim: rgba(245,158,11,0.15);
+    --red: #ef4444;
+    --red-dim: rgba(239,68,68,0.15);
+    --text: #e2e8f0;
+    --text2: #94a3b8;
+    --text3: #64748b;
+    --mono: 'Share Tech Mono', monospace;
+    --sans: 'Noto Sans JP', sans-serif;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 13px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── GRID BACKGROUND ── */
+  body::before {
+    content:'';
+    position:fixed;
+    inset:0;
+    background-image:
+      linear-gradient(rgba(14,165,233,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(14,165,233,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events:none;
+    z-index:0;
+  }
+
+  /* ── HEADER ── */
+  header {
+    position: sticky; top:0; z-index:100;
+    background: rgba(10,14,26,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border2);
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    height: 56px;
+  }
+
+  .logo {
+    display:flex; align-items:center; gap:12px;
+  }
+  .logo-mark {
+    width:32px; height:32px;
+    background: var(--accent);
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    display:flex; align-items:center; justify-content:center;
+    font-family: var(--mono); font-size:14px; color:#fff; font-weight:700;
+  }
+  .logo-text { font-size:15px; font-weight:700; letter-spacing:0.05em; }
+  .logo-sub  { font-size:11px; color:var(--text3); font-family:var(--mono); }
+
+  .header-right { margin-left:auto; display:flex; align-items:center; gap:12px; }
+
+  .firebase-status {
+    display:flex; align-items:center; gap:6px;
+    font-family:var(--mono); font-size:11px; color:var(--text3);
+  }
+  .status-dot {
+    width:7px; height:7px; border-radius:50%; background:var(--text3);
+    transition: background 0.4s;
+  }
+  .status-dot.online { background:var(--green); box-shadow:0 0 6px var(--green); }
+  .status-dot.offline { background:var(--red); }
+
+  /* ── NAV TABS ── */
+  nav {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display:flex; gap:4px;
+    position: sticky; top:56px; z-index:90;
+  }
+
+  .tab {
+    padding: 12px 18px;
+    font-size:12px; font-weight:500; letter-spacing:0.06em;
+    color: var(--text3);
+    cursor:pointer; border:none; background:none;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    position:relative; top:1px;
+  }
+  .tab:hover { color:var(--text2); }
+  .tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+
+  /* ── MAIN ── */
+  main {
+    position:relative; z-index:1;
+    padding: 24px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  .page { display:none; }
+  .page.active { display:block; animation: fadeIn 0.25s ease; }
+
+  @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+
+  /* ── SECTION TITLE ── */
+  .section-title {
+    font-size:18px; font-weight:700;
+    margin-bottom:20px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .section-title::before {
+    content:'';
+    display:inline-block;
+    width:3px; height:20px;
+    background: var(--accent);
+    border-radius:2px;
+  }
+
+  /* ── STATS GRID ── */
+  .stats-grid {
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px,1fr));
+    gap:12px;
+    margin-bottom:24px;
+  }
+
+  .stat-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius:8px;
+    padding:16px;
+    position:relative;
+    overflow:hidden;
+    transition: border-color 0.2s;
+  }
+  .stat-card:hover { border-color:var(--border2); }
+  .stat-card::before {
+    content:'';
+    position:absolute; top:0; left:0; right:0; height:2px;
+  }
+  .stat-card.blue::before  { background:var(--accent); }
+  .stat-card.green::before { background:var(--green); }
+  .stat-card.yellow::before{ background:var(--yellow); }
+  .stat-card.red::before   { background:var(--red); }
+
+  .stat-label { font-size:11px; color:var(--text3); margin-bottom:6px; letter-spacing:0.05em; }
+  .stat-value { font-size:22px; font-weight:700; font-family:var(--mono); }
+  .stat-value.blue   { color:var(--accent2); }
+  .stat-value.green  { color:var(--green); }
+  .stat-value.yellow { color:var(--yellow); }
+  .stat-value.red    { color:var(--red); }
+  .stat-sub { font-size:11px; color:var(--text3); margin-top:4px; }
+
+  /* ── TABLE ── */
+  .table-wrap {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius:8px;
+    overflow:hidden;
+  }
+
+  .table-header {
+    padding:14px 16px;
+    display:flex; align-items:center; gap:10px;
+    border-bottom:1px solid var(--border);
+    background:var(--bg3);
+  }
+  .table-title { font-size:13px; font-weight:600; }
+  .table-count { font-family:var(--mono); font-size:11px; color:var(--text3); }
+  .table-actions { margin-left:auto; display:flex; gap:8px; }
+
+  table {
+    width:100%; border-collapse:collapse;
+  }
+  thead th {
+    padding:9px 12px;
+    text-align:left; font-size:11px; font-weight:600;
+    color:var(--text3); letter-spacing:0.06em; text-transform:uppercase;
+    background:var(--bg3);
+    border-bottom:1px solid var(--border);
+    white-space:nowrap;
+  }
+  tbody tr {
+    border-bottom:1px solid var(--border);
+    transition: background 0.15s;
+    cursor:pointer;
+  }
+  tbody tr:hover { background:rgba(14,165,233,0.04); }
+  tbody tr:last-child { border-bottom:none; }
+  td {
+    padding:9px 12px;
+    font-size:12px;
+    vertical-align:middle;
+  }
+  td.mono { font-family:var(--mono); }
+
+  /* ── BADGE ── */
+  .badge {
+    display:inline-flex; align-items:center;
+    padding:2px 8px; border-radius:4px;
+    font-size:10px; font-weight:600; letter-spacing:0.04em;
+  }
+  .badge-blue   { background:var(--accent-dim);  color:var(--accent2); }
+  .badge-green  { background:var(--green-dim);   color:var(--green); }
+  .badge-yellow { background:var(--yellow-dim);  color:var(--yellow); }
+  .badge-red    { background:var(--red-dim);      color:var(--red); }
+  .badge-gray   { background:rgba(100,116,139,0.15); color:var(--text3); }
+
+  /* ── PROGRESS BAR ── */
+  .progress-wrap { display:flex; align-items:center; gap:8px; }
+  .progress-bar {
+    flex:1; height:5px; background:var(--border);
+    border-radius:3px; overflow:hidden; min-width:60px;
+  }
+  .progress-fill {
+    height:100%; border-radius:3px;
+    transition: width 0.6s ease;
+  }
+  .progress-fill.green  { background:var(--green); }
+  .progress-fill.yellow { background:var(--yellow); }
+  .progress-fill.red    { background:var(--red); }
+  .progress-fill.blue   { background:var(--accent); }
+  .progress-pct { font-family:var(--mono); font-size:11px; color:var(--text2); min-width:32px; }
+
+  /* ── COST BREAKDOWN BAR ── */
+  .cost-bar {
+    display:flex; height:6px; border-radius:3px; overflow:hidden; gap:1px;
+    min-width:100px;
+  }
+  .cost-bar-seg { height:100%; transition:flex 0.5s; }
+
+  /* ── BUTTONS ── */
+  .btn {
+    padding:7px 14px; border-radius:5px; border:none;
+    font-size:12px; font-weight:600; cursor:pointer;
+    display:inline-flex; align-items:center; gap:6px;
+    transition:all 0.2s; font-family:var(--sans);
+  }
+  .btn-primary { background:var(--accent); color:#fff; }
+  .btn-primary:hover { background:var(--accent2); }
+  .btn-secondary { background:var(--bg3); color:var(--text2); border:1px solid var(--border2); }
+  .btn-secondary:hover { border-color:var(--accent); color:var(--accent); }
+  .btn-sm { padding:5px 10px; font-size:11px; }
+  .btn-danger { background:var(--red-dim); color:var(--red); border:1px solid var(--red-dim); }
+  .btn-danger:hover { background:var(--red); color:#fff; }
+
+  /* ── FORM ── */
+  .form-grid {
+    display:grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px,1fr));
+    gap:14px;
+    margin-bottom:16px;
+  }
+  .form-group { display:flex; flex-direction:column; gap:6px; }
+  .form-label { font-size:11px; color:var(--text3); font-weight:500; letter-spacing:0.05em; }
+  .form-input, .form-select {
+    background:var(--bg3); border:1px solid var(--border2);
+    color:var(--text); border-radius:5px; padding:8px 10px;
+    font-size:12px; font-family:var(--sans);
+    transition:border-color 0.2s;
+    outline:none;
+  }
+  .form-input:focus, .form-select:focus { border-color:var(--accent); }
+  .form-select option { background:var(--bg3); }
+
+  /* ── MODAL ── */
+  .modal-overlay {
+    position:fixed; inset:0; z-index:500;
+    background:rgba(0,0,0,0.7);
+    backdrop-filter:blur(4px);
+    display:flex; align-items:center; justify-content:center;
+    opacity:0; pointer-events:none;
+    transition:opacity 0.2s;
+  }
+  .modal-overlay.open { opacity:1; pointer-events:all; }
+
+  .modal {
+    background:var(--bg2);
+    border:1px solid var(--border2);
+    border-radius:10px;
+    width:min(680px,95vw);
+    max-height:85vh;
+    overflow-y:auto;
+    transform:scale(0.95);
+    transition:transform 0.2s;
+    box-shadow:0 20px 60px rgba(0,0,0,0.5);
+  }
+  .modal-overlay.open .modal { transform:scale(1); }
+
+  .modal-head {
+    padding:18px 20px;
+    border-bottom:1px solid var(--border);
+    display:flex; align-items:center; justify-content:space-between;
+    position:sticky; top:0; background:var(--bg2); z-index:1;
+  }
+  .modal-title { font-size:14px; font-weight:700; }
+  .modal-body  { padding:20px; }
+  .modal-foot  {
+    padding:14px 20px;
+    border-top:1px solid var(--border);
+    display:flex; justify-content:flex-end; gap:8px;
+  }
+
+  .close-btn {
+    width:28px; height:28px; border-radius:5px;
+    background:var(--bg3); border:1px solid var(--border);
+    color:var(--text2); cursor:pointer; font-size:16px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .close-btn:hover { background:var(--red-dim); color:var(--red); }
+
+  /* ── DETAIL PANEL ── */
+  .detail-grid {
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+    margin-bottom:16px;
+  }
+  .detail-item { display:flex; flex-direction:column; gap:4px; }
+  .detail-label { font-size:11px; color:var(--text3); }
+  .detail-value { font-size:13px; font-weight:600; }
+
+  .cost-table-mini td { padding:6px 10px; font-size:12px; }
+  .cost-table-mini tr:last-child { font-weight:700; border-top:1px solid var(--border2); }
+
+  /* ── SEARCH / FILTER ── */
+  .filter-bar {
+    display:flex; gap:10px; align-items:center;
+    margin-bottom:16px; flex-wrap:wrap;
+  }
+  .search-input {
+    background:var(--bg2); border:1px solid var(--border2);
+    color:var(--text); border-radius:5px; padding:7px 12px;
+    font-size:12px; font-family:var(--sans);
+    outline:none; width:220px;
+    transition:border-color 0.2s;
+  }
+  .search-input:focus { border-color:var(--accent); }
+
+  .filter-select {
+    background:var(--bg2); border:1px solid var(--border2);
+    color:var(--text2); border-radius:5px; padding:7px 10px;
+    font-size:12px; cursor:pointer; outline:none;
+    font-family:var(--sans);
+  }
+
+  /* ── TIMELINE ── */
+  .timeline { position:relative; padding-left:20px; }
+  .timeline::before {
+    content:''; position:absolute; left:6px; top:4px; bottom:4px;
+    width:1px; background:var(--border2);
+  }
+  .timeline-item {
+    position:relative; margin-bottom:14px;
+    padding-left:16px;
+  }
+  .timeline-item::before {
+    content:''; position:absolute; left:-14px; top:5px;
+    width:7px; height:7px; border-radius:50%;
+    background:var(--accent); border:2px solid var(--bg2);
+  }
+  .timeline-date { font-family:var(--mono); font-size:10px; color:var(--text3); }
+  .timeline-text { font-size:12px; margin-top:2px; }
+
+  /* ── TOAST ── */
+  #toast {
+    position:fixed; bottom:24px; right:24px; z-index:999;
+    background:var(--bg3); border:1px solid var(--border2);
+    border-radius:8px; padding:12px 18px;
+    font-size:12px; box-shadow:0 8px 24px rgba(0,0,0,0.4);
+    transform:translateX(120%); transition:transform 0.3s ease;
+    max-width:280px;
+  }
+  #toast.show { transform:translateX(0); }
+  #toast.success { border-color:var(--green); color:var(--green); }
+  #toast.error   { border-color:var(--red);   color:var(--red); }
+
+  /* ── LOADING ── */
+  .loading {
+    display:flex; align-items:center; justify-content:center;
+    padding:40px; color:var(--text3); gap:10px;
+    font-family:var(--mono); font-size:12px;
+  }
+  .spin {
+    width:16px; height:16px; border:2px solid var(--border2);
+    border-top-color:var(--accent); border-radius:50%;
+    animation:spin 0.8s linear infinite;
+  }
+  @keyframes spin { to{transform:rotate(360deg)} }
+
+  /* ── GAUGE ── */
+  .gauge-wrap { display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .gauge-ring {
+    width:70px; height:70px; border-radius:50%;
+    background:conic-gradient(var(--accent) 0%, var(--accent) var(--pct, 0%), var(--border) var(--pct, 0%));
+    display:flex; align-items:center; justify-content:center;
+    position:relative;
+  }
+  .gauge-ring::before {
+    content:''; position:absolute; inset:8px;
+    background:var(--bg2); border-radius:50%;
+  }
+  .gauge-val {
+    position:relative; z-index:1;
+    font-family:var(--mono); font-size:13px; font-weight:700;
+  }
+
+  /* ── EMPTY STATE ── */
+  .empty {
+    padding:48px; text-align:center; color:var(--text3);
+    font-size:13px;
+  }
+  .empty-icon { font-size:36px; margin-bottom:12px; opacity:0.4; }
+
+  /* ── CONFIG ── */
+  .config-box {
+    background:var(--bg3); border:1px solid var(--border2);
+    border-radius:8px; padding:20px; margin-bottom:16px;
+  }
+  .config-title { font-size:13px; font-weight:600; margin-bottom:14px; color:var(--accent2); }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width:6px; height:6px; }
+  ::-webkit-scrollbar-track { background:var(--bg); }
+  ::-webkit-scrollbar-thumb { background:var(--border2); border-radius:3px; }
+
+  .divider { border:none; border-top:1px solid var(--border); margin:16px 0; }
+
+  .chip {
+    display:inline-flex; align-items:center; gap:4px;
+    background:var(--bg3); border:1px solid var(--border);
+    border-radius:20px; padding:3px 10px;
+    font-size:11px; color:var(--text2);
+  }
+
+  /* ── KINTONE IMPORT STATUS ── */
+  .import-box {
+    background: var(--bg3);
+    border: 1px dashed var(--border2);
+    border-radius:8px; padding:20px;
+    text-align:center; cursor:pointer;
+    transition: border-color 0.2s;
+    margin-bottom:16px;
+  }
+  .import-box:hover { border-color:var(--accent); }
+  .import-icon { font-size:28px; margin-bottom:8px; }
+  .import-label { font-size:12px; color:var(--text2); }
+  .import-sub   { font-size:11px; color:var(--text3); margin-top:4px; }
+
+  input[type=file] { display:none; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <div class="logo-mark">H</div>
+    <div>
+      <div class="logo-text">金型製作原価管理</div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="firebase-status">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">接続中...</span>
+    </div>
+    <button class="btn btn-secondary btn-sm" onclick="showPage('settings')">⚙ 設定</button>
+  </div>
+</header>
+
+<!-- NAV -->
+<nav>
+  <button class="tab active" onclick="showPage('dashboard')">ダッシュボード</button>
+  <button class="tab" onclick="showPage('molds')">金型一覧</button>
+  <button class="tab" onclick="showPage('materials')">材料費</button>
+  <button class="tab" onclick="showPage('outsource')">外注費</button>
+  <button class="tab" onclick="showPage('purchase')">購入品費</button>
+  <button class="tab" onclick="showPage('labor')">加工費</button>
+  <button class="tab" onclick="showPage('import')">データ取込</button>
+  <button class="tab" onclick="showPage('settings')">設定</button>
+</nav>
+
+<main>
+
+  <!-- ═══ DASHBOARD ═══ -->
+  <div id="page-dashboard" class="page active">
+    <div class="section-title">ダッシュボード</div>
+
+    <div class="stats-grid" id="dashStats">
+      <div class="stat-card blue">
+        <div class="stat-label">製作中金型</div>
+        <div class="stat-value blue" id="statActive">—</div>
+        <div class="stat-sub">件</div>
+      </div>
+      <div class="stat-card green">
+        <div class="stat-label">今期総見積金額</div>
+        <div class="stat-value green" id="statEstimate">—</div>
+        <div class="stat-sub">円</div>
+      </div>
+      <div class="stat-card yellow">
+        <div class="stat-label">今期総原価</div>
+        <div class="stat-value yellow" id="statCost">—</div>
+        <div class="stat-sub">円</div>
+      </div>
+      <div class="stat-card red">
+        <div class="stat-label">予算超過件数</div>
+        <div class="stat-value red" id="statOver">—</div>
+        <div class="stat-sub">件</div>
+      </div>
+    </div>
+
+    <!-- 原価進捗 上位10件 -->
+    <div class="table-wrap">
+      <div class="table-header">
+        <div class="table-title">原価進捗 — 製作中金型</div>
+        <div class="table-count" id="dashTableCount"></div>
+        <div class="table-actions">
+          <button class="btn btn-secondary btn-sm" onclick="showPage('molds')">全件表示 →</button>
+        </div>
+      </div>
+      <div id="dashTableBody">
+        <div class="loading"><div class="spin"></div>データ読込中...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ 金型一覧 ═══ -->
+  <div id="page-molds" class="page">
+    <div class="section-title">金型一覧</div>
+
+    <div class="filter-bar">
+      <input class="search-input" type="text" placeholder="管理NO・部品番号・部品名で検索..." id="moldSearch" oninput="renderMolds()">
+      <select class="filter-select" id="moldStatusFilter" onchange="renderMolds()">
+        <option value="">全ステータス</option>
+        <option value="製作中">製作中</option>
+        <option value="完成">完成</option>
+        <option value="検収済">検収済</option>
+      </select>
+      <select class="filter-select" id="moldClientFilter" onchange="renderMolds()">
+        <option value="">全得意先</option>
+      </select>
+      <button class="btn btn-primary btn-sm" onclick="openMoldModal()">＋ 新規登録</button>
+    </div>
+
+    <div class="table-wrap">
+      <div class="table-header">
+        <div class="table-title">金型リスト</div>
+        <div class="table-count" id="moldCount"></div>
+      </div>
+      <div id="moldTableBody">
+        <div class="loading"><div class="spin"></div>データ読込中...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ 材料費 ═══ -->
+  <div id="page-materials" class="page">
+    <div class="section-title">材料費</div>
+    <div class="filter-bar">
+      <input class="search-input" type="text" placeholder="品番・部品名で検索..." id="matSearch" oninput="renderMaterials()">
+      <button class="btn btn-primary btn-sm" onclick="openMatModal()">＋ 材料費入力</button>
+    </div>
+    <div class="table-wrap">
+      <div class="table-header">
+        <div class="table-title">鋼材手配一覧</div>
+        <div class="table-count" id="matCount"></div>
+      </div>
+      <div id="matTableBody"><div class="loading"><div class="spin"></div></div></div>
+    </div>
+  </div>
+
+  <!-- ═══ 外注費 ═══ -->
+  <div id="page-outsource" class="page">
+    <div class="section-title">外注費</div>
+    <div class="filter-bar">
+      <input class="search-input" type="text" placeholder="品番・仕入先で検索..." id="outSearch" oninput="renderOutsource()">
+      <select class="filter-select" id="outMonthFilter" onchange="renderOutsource()">
+        <option value="">全月</option>
+      </select>
+      <button class="btn btn-primary btn-sm" onclick="openOutModal()">＋ 外注費入力</button>
+    </div>
+    <div class="table-wrap">
+      <div class="table-header">
+        <div class="table-title">外注費一覧</div>
+        <div class="table-count" id="outCount"></div>
+      </div>
+      <div id="outTableBody"><div class="loading"><div class="spin"></div></div></div>
+    </div>
+  </div>
+
+  <!-- ═══ 購入品費 ═══ -->
+  <div id="page-purchase" class="page">
+    <div class="section-title">購入品費</div>
+    <div class="filter-bar">
+      <input class="search-input" type="text" placeholder="品番・品名で検索..." id="purSearch" oninput="renderPurchase()">
+      <select class="filter-select" id="purMonthFilter" onchange="renderPurchase()">
+        <option value="">全月</option>
+      </select>
+      <button class="btn btn-primary btn-sm" onclick="openPurModal()">＋ 購入品費入力</button>
+      <button class="btn btn-secondary btn-sm" onclick="document.getElementById('csvFile').click()">📥 CSV取込</button>
+      <input type="file" id="csvFile" accept=".csv" onchange="importCSV(event)">
+    </div>
+    <div class="table-wrap">
+      <div class="table-header">
+        <div class="table-title">購入品一覧</div>
+        <div class="table-count" id="purCount"></div>
+      </div>
+      <div id="purTableBody"><div class="loading"><div class="spin"></div></div></div>
+    </div>
+  </div>
+
+  <!-- ═══ 加工費 ═══ -->
+  <div id="page-labor" class="page">
+    <div class="section-title">加工費（kintone連携）</div>
+    <div class="filter-bar">
+      <input class="search-input" type="text" placeholder="管理コード・部品番号で検索..." id="labSearch" oninput="renderLabor()">
+      <select class="filter-select" id="labMonthFilter" onchange="renderLabor()">
+        <option value="">全月</option>
+      </select>
+    </div>
+    <div class="table-wrap">
+      <div class="table-header">
+        <div class="table-title">作業実績一覧</div>
+        <div class="table-count" id="labCount"></div>
+        <div class="table-actions">
+          <button class="btn btn-secondary btn-sm" onclick="showPage('import')">kintone取込 →</button>
+        </div>
+      </div>
+      <div id="labTableBody"><div class="loading"><div class="spin"></div></div></div>
+    </div>
+  </div>
+
+  <!-- ═══ データ取込 ═══ -->
+  <div id="page-import" class="page">
+    <div class="section-title">データ取込</div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+      <!-- kintone -->
+      <div class="config-box">
+        <div class="config-title">🔗 kintone 作業実績取込</div>
+        <p style="font-size:12px;color:var(--text3);margin-bottom:14px;">kintoneから作業実績CSVをエクスポートし、ここに取り込みます。月次で実行してください。</p>
+        <div class="import-box" onclick="document.getElementById('kintoneCSV').click()">
+          <div class="import-icon">📊</div>
+          <div class="import-label">kintone作業実績CSV</div>
+          <div class="import-sub">クリックしてファイルを選択</div>
+        </div>
+        <input type="file" id="kintoneCSV" accept=".csv" onchange="importKintoneCSV(event)">
+        <div id="kintoneImportLog" style="font-size:11px;color:var(--text3);font-family:var(--mono);max-height:100px;overflow-y:auto;"></div>
+      </div>
+
+      <!-- 購入品CSV -->
+      <div class="config-box">
+        <div class="config-title">🛒 購入品CSV取込（ミスミ等）</div>
+        <p style="font-size:12px;color:var(--text3);margin-bottom:14px;">ミスミ・パンチ工業等からダウンロードしたCSVをそのまま取り込めます。</p>
+        <div class="import-box" onclick="document.getElementById('purchaseCSV2').click()">
+          <div class="import-icon">🛍️</div>
+          <div class="import-label">購入品CSV（汎用）</div>
+          <div class="import-sub">品番・品名・数量・単価・合計の列が必要</div>
+        </div>
+        <input type="file" id="purchaseCSV2" accept=".csv" onchange="importCSV(event)">
+        <div id="purchaseImportLog" style="font-size:11px;color:var(--text3);font-family:var(--mono);max-height:100px;overflow-y:auto;"></div>
+      </div>
+    </div>
+
+    <!-- 取込履歴 -->
+    <div class="table-wrap">
+      <div class="table-header">
+        <div class="table-title">取込履歴</div>
+      </div>
+      <div id="importHistory">
+        <div class="empty"><div class="empty-icon">📂</div>取込履歴はありません</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ 設定 ═══ -->
+  <div id="page-settings" class="page">
+    <div class="section-title">設定</div>
+
+    <div class="config-box">
+      <div class="config-title">🔥 Firebase 接続設定</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">PROJECT ID</label>
+          <input class="form-input" id="cfgProjectId" placeholder="hashimoto-press-default-rtdb">
+        </div>
+        <div class="form-group">
+          <label class="form-label">DATABASE URL</label>
+          <input class="form-input" id="cfgDbUrl" placeholder="https://xxx.asia-southeast1.firebasedatabase.app">
+        </div>
+        <div class="form-group">
+          <label class="form-label">API KEY</label>
+          <input class="form-input" id="cfgApiKey" type="password" placeholder="AIzaSy...">
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="saveFirebaseConfig()">💾 保存して接続</button>
+    </div>
+
+    <div class="config-box">
+      <div class="config-title">🏭 kintone 設定</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">ドメイン</label>
+          <input class="form-input" id="cfgKtDomain" placeholder="hashimoto-kogyo.cybozu.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label">作業実績 App ID</label>
+          <input class="form-input" id="cfgKtApp" placeholder="例: 12">
+        </div>
+        <div class="form-group">
+          <label class="form-label">API Token</label>
+          <input class="form-input" id="cfgKtToken" type="password" placeholder="kintone APIトークン">
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:6px;margin-bottom:12px;">
+        ※ kintoneはCORSの制限があるため、GAS経由でFirebaseに同期する方法を推奨します
+      </div>
+      <button class="btn btn-primary" onclick="saveKintoneConfig()">💾 保存</button>
+    </div>
+
+    <div class="config-box">
+      <div class="config-title">💾 データ管理</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn btn-secondary" onclick="exportAllData()">📤 全データエクスポート（JSON）</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('importJson').click()">📥 JSONインポート</button>
+        <input type="file" id="importJson" accept=".json" onchange="importJsonData(event)" style="display:none">
+        <button class="btn btn-danger" onclick="confirmClear()">🗑 全データ削除</button>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ═══ MODAL: 金型登録 ═══ -->
+<div class="modal-overlay" id="moldModal">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="moldModalTitle">金型 新規登録</div>
+      <button class="close-btn" onclick="closeModal('moldModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">管理NO.</label>
+          <input class="form-input" id="mf_no" placeholder="例: 71-A">
+        </div>
+        <div class="form-group">
+          <label class="form-label">得意先</label>
+          <input class="form-input" id="mf_client" placeholder="例: ㈱ユタカ技研">
+        </div>
+        <div class="form-group">
+          <label class="form-label">受注日付</label>
+          <input class="form-input" id="mf_orderDate" type="date">
+        </div>
+        <div class="form-group">
+          <label class="form-label">完成予定</label>
+          <input class="form-input" id="mf_dueDate" placeholder="例: 2026/06">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">部品番号</label>
+          <input class="form-input" id="mf_partNo" placeholder="例: 11250-85U01">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">部品名称</label>
+          <input class="form-input" id="mf_partName" placeholder="例: COVER, BD">
+        </div>
+        <div class="form-group">
+          <label class="form-label">分類</label>
+          <select class="form-select" id="mf_type">
+            <option value="新規">新規</option>
+            <option value="更新">更新</option>
+            <option value="改修">改修</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">見積金額（円）</label>
+          <input class="form-input" id="mf_estimate" type="number" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">ステータス</label>
+          <select class="form-select" id="mf_status">
+            <option value="製作中">製作中</option>
+            <option value="完成">完成</option>
+            <option value="検収済">検収済</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">備考</label>
+          <input class="form-input" id="mf_note" placeholder="備考">
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeModal('moldModal')">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveMold()">💾 保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: 金型詳細 ═══ -->
+<div class="modal-overlay" id="moldDetailModal">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="detailTitle">金型詳細</div>
+      <button class="close-btn" onclick="closeModal('moldDetailModal')">×</button>
+    </div>
+    <div class="modal-body" id="moldDetailBody"></div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: 材料費 ═══ -->
+<div class="modal-overlay" id="matModal">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">材料費 入力</div>
+      <button class="close-btn" onclick="closeModal('matModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">仕入月</label>
+          <input class="form-input" id="matf_month" type="month">
+        </div>
+        <div class="form-group">
+          <label class="form-label">管理NO.</label>
+          <input class="form-input" id="matf_moldNo" placeholder="例: 71-A">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">品番</label>
+          <input class="form-input" id="matf_partNo" placeholder="例: 18307-TTCA-0230">
+        </div>
+        <div class="form-group">
+          <label class="form-label">品名 (NAME)</label>
+          <input class="form-input" id="matf_name" placeholder="例: DIESET UPR">
+        </div>
+        <div class="form-group">
+          <label class="form-label">材質</label>
+          <input class="form-input" id="matf_material" placeholder="SS400, S50C...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">サイズ (幅×奥×厚)</label>
+          <input class="form-input" id="matf_size" placeholder="700×460×30">
+        </div>
+        <div class="form-group">
+          <label class="form-label">仕上</label>
+          <input class="form-input" id="matf_finish" placeholder="4F, 6F...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">重量 (kg)</label>
+          <input class="form-input" id="matf_weight" type="number" step="0.001">
+        </div>
+        <div class="form-group">
+          <label class="form-label">仕入金額（円）</label>
+          <input class="form-input" id="matf_amount" type="number">
+        </div>
+        <div class="form-group">
+          <label class="form-label">手配先</label>
+          <input class="form-input" id="matf_supplier" placeholder="大同, 東海鋼鉄...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">備考</label>
+          <input class="form-input" id="matf_note">
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeModal('matModal')">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveMaterial()">💾 保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: 外注費 ═══ -->
+<div class="modal-overlay" id="outModal">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">外注費 入力</div>
+      <button class="close-btn" onclick="closeModal('outModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">仕入月</label>
+          <input class="form-input" id="outf_month" type="month">
+        </div>
+        <div class="form-group">
+          <label class="form-label">管理NO.</label>
+          <input class="form-input" id="outf_moldNo" placeholder="例: 71-A">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">品番</label>
+          <input class="form-input" id="outf_partNo" placeholder="例: 18220-T7D">
+        </div>
+        <div class="form-group">
+          <label class="form-label">仕入先</label>
+          <input class="form-input" id="outf_supplier" placeholder="DOWA, 大同...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">工程</label>
+          <input class="form-input" id="outf_process" placeholder="TD処理, 焼入れ...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">内容</label>
+          <input class="form-input" id="outf_detail" placeholder="作業内容詳細">
+        </div>
+        <div class="form-group">
+          <label class="form-label">数量</label>
+          <input class="form-input" id="outf_qty" type="number" step="0.1" value="1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">単価（円）</label>
+          <input class="form-input" id="outf_unit" type="number" oninput="calcOutTotal()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">合計金額（円）</label>
+          <input class="form-input" id="outf_total" type="number">
+        </div>
+        <div class="form-group">
+          <label class="form-label">備考</label>
+          <input class="form-input" id="outf_note">
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeModal('outModal')">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveOutsource()">💾 保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: 購入品 ═══ -->
+<div class="modal-overlay" id="purModal">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">購入品費 入力</div>
+      <button class="close-btn" onclick="closeModal('purModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">仕入月</label>
+          <input class="form-input" id="purf_month" type="month">
+        </div>
+        <div class="form-group">
+          <label class="form-label">管理NO.</label>
+          <input class="form-input" id="purf_moldNo" placeholder="例: 71-A">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">品番</label>
+          <input class="form-input" id="purf_partNo" placeholder="例: A16381C7LV">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">品名</label>
+          <input class="form-input" id="purf_name" placeholder="例: 丸線コイルスプリング [WWW10-30]">
+        </div>
+        <div class="form-group">
+          <label class="form-label">メーカー/仕入先</label>
+          <input class="form-input" id="purf_supplier" placeholder="ミスミ, パンチ工業...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">数量</label>
+          <input class="form-input" id="purf_qty" type="number" value="1" oninput="calcPurTotal()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">単価（円）</label>
+          <input class="form-input" id="purf_unit" type="number" oninput="calcPurTotal()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">合計金額（円）</label>
+          <input class="form-input" id="purf_total" type="number">
+        </div>
+        <div class="form-group">
+          <label class="form-label">備考</label>
+          <input class="form-input" id="purf_note">
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeModal('purModal')">キャンセル</button>
+      <button class="btn btn-primary" onclick="savePurchase()">💾 保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════
+// CONFIG & STATE
+// ═══════════════════════════════════════════════
+const CFG_KEY = 'hk_mold_config';
+
+let cfg = {
+  projectId: 'hashimoto-press',
+  dbUrl: 'https://hashimoto-press-default-rtdb.asia-southeast1.firebasedatabase.app',
+  apiKey: '',
+  appId: '',
+  ktDomain: 'hashimoto-kogyo.cybozu.com',
+  ktApp: '',
+  ktToken: ''
+};
+
+let db = null;
+let DB = {
+  molds: {},
+  materials: {},
+  outsource: {},
+  purchase: {},
+  labor: {},
+  importLog: []
+};
+
+let editingMoldKey = null;
+
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+  loadConfig();
+  initFirebase();
+  setDefaultDates();
+});
+
+function loadConfig() {
+  const saved = localStorage.getItem(CFG_KEY);
+  if (saved) {
+    try { Object.assign(cfg, JSON.parse(saved)); } catch(e) {}
+  }
+  document.getElementById('cfgProjectId').value = cfg.projectId || '';
+  document.getElementById('cfgDbUrl').value = cfg.dbUrl || '';
+  document.getElementById('cfgApiKey').value = cfg.apiKey || '';
+  document.getElementById('cfgKtDomain').value = cfg.ktDomain || '';
+  document.getElementById('cfgKtApp').value = cfg.ktApp || '';
+  document.getElementById('cfgKtToken').value = cfg.ktToken || '';
+}
+
+function initFirebase() {
+  if (!cfg.dbUrl || !cfg.apiKey) {
+    setStatus(false, 'Firebase未設定');
+    loadLocalData();
+    return;
+  }
+  try {
+    const firebaseConfig = {
+      apiKey: cfg.apiKey,
+      databaseURL: cfg.dbUrl,
+      projectId: cfg.projectId,
+    };
+    const app = firebase.apps.length
+      ? firebase.app()
+      : firebase.initializeApp(firebaseConfig);
+    db = firebase.database(app);
+
+    // Listen
+    db.ref('/moldCostSystem').on('value', snap => {
+      const data = snap.val() || {};
+      DB.molds     = data.molds     || {};
+      DB.materials = data.materials || {};
+      DB.outsource = data.outsource || {};
+      DB.purchase  = data.purchase  || {};
+      DB.labor     = data.labor     || {};
+      DB.importLog = data.importLog || [];
+      setStatus(true, 'Firebase接続済');
+      refreshAll();
+    }, err => {
+      setStatus(false, 'エラー: ' + err.code);
+      loadLocalData();
+    });
+  } catch(e) {
+    setStatus(false, '初期化エラー');
+    loadLocalData();
+  }
+}
+
+function loadLocalData() {
+  const saved = localStorage.getItem('hk_mold_data');
+  if (saved) {
+    try { Object.assign(DB, JSON.parse(saved)); } catch(e) {}
+  } else {
+    loadSampleData();
+  }
+  refreshAll();
+}
+
+function saveLocal() {
+  localStorage.setItem('hk_mold_data', JSON.stringify(DB));
+}
+
+async function writeToFirebase(path, data) {
+  if (db) {
+    await db.ref('/moldCostSystem/' + path).set(data);
+  } else {
+    saveLocal();
+  }
+}
+
+function setStatus(online, msg) {
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  dot.className = 'status-dot ' + (online ? 'online' : 'offline');
+  txt.textContent = msg;
+}
+
+function setDefaultDates() {
+  const now = new Date();
+  const ym = now.toISOString().slice(0,7);
+  ['matf_month','outf_month','purf_month'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = ym;
+  });
+}
+
+// ═══════════════════════════════════════════════
+// SAMPLE DATA
+// ═══════════════════════════════════════════════
+function loadSampleData() {
+  DB.molds = {
+    'm001': { no:'69-Q', client:'㈱ユタカ技研', partNo:'11250-85U01', partName:'COVER', type:'新規', estimate:2800000, status:'製作中', orderDate:'2024-09-21', dueDate:'2024-10-07', note:'' },
+    'm002': { no:'70-A', client:'八木工業', partNo:'BLG-3310A', partName:'BRACKET SIDE', type:'新規', estimate:3500000, status:'製作中', orderDate:'2025-01-15', dueDate:'2025-04-30', note:'' },
+    'm003': { no:'70-B', client:'㈱ユタカ技研', partNo:'11250-92K01', partName:'STAY FR', type:'更新', estimate:1200000, status:'完成', orderDate:'2025-02-01', dueDate:'2025-03-31', note:'2025年4月検収予定' },
+    'm004': { no:'71-A', client:'八木工業', partNo:'YG-4421C', partName:'PANEL INNER', type:'新規', estimate:4200000, status:'製作中', orderDate:'2025-10-01', dueDate:'2026-03-31', note:'' },
+    'm005': { no:'71-B', client:'協栄製作所', partNo:'KY-2201', partName:'COVER CONVERTER', type:'改修', estimate:850000, status:'製作中', orderDate:'2025-11-15', dueDate:'2026-02-28', note:'' },
+  };
+  DB.materials = {
+    'mat001': { month:'2025-10', moldNo:'71-A', partNo:'YG-4421C', name:'DIESET UPR', material:'SS400', size:'700×460×30', finish:'4F', weight:75.8, amount:28680, supplier:'大同', note:'' },
+    'mat002': { month:'2025-10', moldNo:'71-A', partNo:'YG-4421C', name:'PUNCH HOLDER', material:'SS400', size:'470×300×75', finish:'6F', weight:83.0, amount:30250, supplier:'大同', note:'' },
+    'mat003': { month:'2025-11', moldNo:'71-B', partNo:'KY-2201', name:'STRIPPER', material:'S50C', size:'460×160×25', finish:'6F', weight:14.4, amount:6800, supplier:'東海鋼鉄', note:'' },
+  };
+  DB.outsource = {
+    'out001': { month:'2025-10', moldNo:'71-A', partNo:'YG-4421C', supplier:'DOWA', process:'TD処理', detail:'TD処理', qty:4, unit:3600, total:14400, note:'1個' },
+    'out002': { month:'2025-11', moldNo:'71-A', partNo:'YG-4421C', supplier:'大同', process:'焼入れ', detail:'DCMX焼入れ', qty:9.5, unit:350, total:3325, note:'' },
+    'out003': { month:'2025-11', moldNo:'71-B', partNo:'KY-2201', supplier:'DOWA', process:'TD処理', detail:'TD処理', qty:61.9, unit:3000, total:185700, note:'' },
+  };
+  DB.purchase = {
+    'pur001': { month:'2025-10', moldNo:'71-A', partNo:'YG-4421C', name:'丸線コイルスプリング [WWW10-30]', supplier:'パンチ工業', qty:10, unit:72, total:720, note:'' },
+    'pur002': { month:'2025-10', moldNo:'71-A', partNo:'YG-4421C', name:'リフタピン [JLP6-15]', supplier:'ミスミ', qty:4, unit:600, total:2400, note:'' },
+    'pur003': { month:'2025-11', moldNo:'71-B', partNo:'KY-2201', name:'MOLDINO [ESHT5-M8-1.25-TH]', supplier:'守屋工機', qty:1, unit:9425, total:9425, note:'' },
+  };
+  DB.labor = {
+    'lab001': { month:'2025-10', moldNo:'69-Q', partNo:'11250-85U01', process:'DR', worker:'大石辰祥', workType:'M/C (自動)', charge:3000, time:17, amount:51000 },
+    'lab002': { month:'2025-10', moldNo:'69-Q', partNo:'11250-85U01', process:'BE/RST', worker:'根間慎也', workType:'M/C (段取)', charge:5000, time:0.75, amount:3750 },
+    'lab003': { month:'2025-11', moldNo:'71-A', partNo:'YG-4421C', process:'DR', worker:'大石辰祥', workType:'M/C (自動)', charge:3000, time:12, amount:36000 },
+  };
+  saveLocal();
+}
+
+// ═══════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.querySelectorAll('.tab').forEach(t => {
+    if (t.textContent.includes(pageLabel(name))) t.classList.add('active');
+  });
+
+  const renders = {
+    dashboard: renderDashboard,
+    molds: renderMolds,
+    materials: renderMaterials,
+    outsource: renderOutsource,
+    purchase: renderPurchase,
+    labor: renderLabor,
+    import: renderImport,
+    settings: () => {}
+  };
+  if (renders[name]) renders[name]();
+}
+
+function pageLabel(n) {
+  return {dashboard:'ダッシュボード',molds:'金型一覧',materials:'材料費',outsource:'外注費',purchase:'購入品費',labor:'加工費',import:'データ取込',settings:'設定'}[n] || n;
+}
+
+function refreshAll() {
+  const active = document.querySelector('.page.active');
+  if (!active) return;
+  const id = active.id.replace('page-', '');
+  showPage(id);
+}
+
+// ═══════════════════════════════════════════════
+// COST HELPERS
+// ═══════════════════════════════════════════════
+function getCosts(moldNo) {
+  const mat = Object.values(DB.materials).filter(r => r.moldNo === moldNo).reduce((s,r) => s + (r.amount||0), 0);
+  const out = Object.values(DB.outsource).filter(r => r.moldNo === moldNo).reduce((s,r) => s + (r.total||0), 0);
+  const pur = Object.values(DB.purchase ).filter(r => r.moldNo === moldNo).reduce((s,r) => s + (r.total||0), 0);
+  const lab = Object.values(DB.labor    ).filter(r => r.moldNo === moldNo).reduce((s,r) => s + (r.amount||0), 0);
+  const total = mat + out + pur + lab;
+  return { mat, out, pur, lab, total };
+}
+
+function pct(cost, estimate) {
+  if (!estimate) return 0;
+  return Math.min(Math.round(cost / estimate * 100), 999);
+}
+
+function fmt(n) {
+  if (n === undefined || n === null || isNaN(n)) return '—';
+  return Number(n).toLocaleString('ja-JP');
+}
+
+function fmtM(n) {
+  if (!n) return '—';
+  if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
+  if (n >= 1000) return (n/1000).toFixed(0) + 'K';
+  return String(n);
+}
+
+function progressColor(p) {
+  if (p >= 100) return 'red';
+  if (p >= 80) return 'yellow';
+  return 'green';
+}
+
+function progressHTML(cost, estimate) {
+  const p = pct(cost, estimate);
+  const c = progressColor(p);
+  return `<div class="progress-wrap">
+    <div class="progress-bar"><div class="progress-fill ${c}" style="width:${Math.min(p,100)}%"></div></div>
+    <span class="progress-pct">${p}%</span>
+  </div>`;
+}
+
+function statusBadge(s) {
+  const m = {製作中:'badge-blue', 完成:'badge-green', 検収済:'badge-gray'};
+  return `<span class="badge ${m[s]||'badge-gray'}">${s||''}</span>`;
+}
+
+function typeBadge(t) {
+  const m = {新規:'badge-yellow', 更新:'badge-blue', 改修:'badge-gray'};
+  return `<span class="badge ${m[t]||'badge-gray'}">${t||''}</span>`;
+}
+
+function costBarHTML(costs) {
+  const t = costs.total || 1;
+  const segs = [
+    {v:costs.mat, c:'#0ea5e9'},
+    {v:costs.out, c:'#f59e0b'},
+    {v:costs.pur, c:'#10b981'},
+    {v:costs.lab, c:'#a78bfa'},
+  ];
+  return `<div class="cost-bar">${segs.map(s=>
+    `<div class="cost-bar-seg" style="flex:${s.v};background:${s.c}"></div>`
+  ).join('')}</div>`;
+}
+
+// ═══════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════
+function renderDashboard() {
+  const molds = Object.entries(DB.molds);
+  const active = molds.filter(([,m]) => m.status === '製作中');
+  const totalEst = molds.reduce((s,[,m]) => s + (m.estimate||0), 0);
+  const allCosts = molds.map(([,m]) => getCosts(m.no).total);
+  const totalCost = allCosts.reduce((a,b) => a+b, 0);
+  const overCount = molds.filter(([,m]) => {
+    const c = getCosts(m.no).total;
+    return c > (m.estimate||Infinity) && m.estimate > 0;
+  }).length;
+
+  document.getElementById('statActive').textContent   = active.length;
+  document.getElementById('statEstimate').textContent = fmtM(totalEst);
+  document.getElementById('statCost').textContent     = fmtM(totalCost);
+  document.getElementById('statOver').textContent     = overCount;
+
+  const rows = active.slice(0,10);
+  document.getElementById('dashTableCount').textContent = `${active.length}件`;
+
+  if (rows.length === 0) {
+    document.getElementById('dashTableBody').innerHTML = '<div class="empty"><div class="empty-icon">📋</div>製作中の金型がありません</div>';
+    return;
+  }
+
+  document.getElementById('dashTableBody').innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>管理NO.</th><th>得意先</th><th>部品名</th>
+          <th>見積金額</th><th>現在原価</th><th>原価構成</th><th>進捗</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map(([,m]) => {
+          const c = getCosts(m.no);
+          return `<tr onclick="openMoldDetail('${m.no}')">
+            <td class="mono">${m.no}</td>
+            <td>${m.client||''}</td>
+            <td>${m.partName||''}</td>
+            <td class="mono">¥${fmt(m.estimate)}</td>
+            <td class="mono">¥${fmt(c.total)}</td>
+            <td>${costBarHTML(c)}</td>
+            <td>${progressHTML(c.total, m.estimate)}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+}
+
+// ═══════════════════════════════════════════════
+// MOLDS
+// ═══════════════════════════════════════════════
+function renderMolds() {
+  const search = (document.getElementById('moldSearch')?.value||'').toLowerCase();
+  const sts    = document.getElementById('moldStatusFilter')?.value || '';
+  const cli    = document.getElementById('moldClientFilter')?.value || '';
+
+  // populate client filter
+  const clients = [...new Set(Object.values(DB.molds).map(m=>m.client).filter(Boolean))];
+  const cSel = document.getElementById('moldClientFilter');
+  const cCur = cSel?.value;
+  if (cSel) {
+    cSel.innerHTML = '<option value="">全得意先</option>' + clients.map(c=>`<option value="${c}"${c===cCur?' selected':''}>${c}</option>`).join('');
+  }
+
+  let entries = Object.entries(DB.molds);
+  if (search) entries = entries.filter(([,m]) =>
+    (m.no||'').toLowerCase().includes(search) ||
+    (m.partNo||'').toLowerCase().includes(search) ||
+    (m.partName||'').toLowerCase().includes(search)
+  );
+  if (sts) entries = entries.filter(([,m]) => m.status === sts);
+  if (cli) entries = entries.filter(([,m]) => m.client === cli);
+
+  document.getElementById('moldCount').textContent = entries.length + '件';
+
+  if (entries.length === 0) {
+    document.getElementById('moldTableBody').innerHTML = '<div class="empty"><div class="empty-icon">🔍</div>該当なし</div>';
+    return;
+  }
+
+  document.getElementById('moldTableBody').innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>管理NO.</th><th>得意先</th><th>部品番号</th><th>部品名</th>
+          <th>分類</th><th>ステータス</th><th>見積金額</th>
+          <th>材料費</th><th>外注費</th><th>購入品費</th><th>加工費</th><th>合計原価</th><th>進捗</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${entries.map(([key,m]) => {
+          const c = getCosts(m.no);
+          return `<tr onclick="openMoldDetail('${m.no}')">
+            <td class="mono">${m.no}</td>
+            <td>${m.client||''}</td>
+            <td class="mono" style="font-size:11px">${m.partNo||''}</td>
+            <td>${m.partName||''}</td>
+            <td>${typeBadge(m.type)}</td>
+            <td>${statusBadge(m.status)}</td>
+            <td class="mono">¥${fmt(m.estimate)}</td>
+            <td class="mono">¥${fmt(c.mat)}</td>
+            <td class="mono">¥${fmt(c.out)}</td>
+            <td class="mono">¥${fmt(c.pur)}</td>
+            <td class="mono">¥${fmt(c.lab)}</td>
+            <td class="mono"><b>¥${fmt(c.total)}</b></td>
+            <td>${progressHTML(c.total, m.estimate)}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+}
+
+function openMoldDetail(no) {
+  const m = Object.values(DB.molds).find(m => m.no === no);
+  if (!m) return;
+  const c = getCosts(no);
+  const p = pct(c.total, m.estimate);
+  const col = progressColor(p);
+
+  // 外注費明細
+  const outs = Object.values(DB.outsource).filter(r => r.moldNo === no);
+  const purs = Object.values(DB.purchase ).filter(r => r.moldNo === no);
+  const mats = Object.values(DB.materials).filter(r => r.moldNo === no);
+  const labs = Object.values(DB.labor    ).filter(r => r.moldNo === no);
+
+  document.getElementById('detailTitle').textContent = `${no} — ${m.partName}`;
+  document.getElementById('moldDetailBody').innerHTML = `
+    <div class="detail-grid">
+      <div class="detail-item"><div class="detail-label">管理NO.</div><div class="detail-value mono">${no}</div></div>
+      <div class="detail-item"><div class="detail-label">得意先</div><div class="detail-value">${m.client||'—'}</div></div>
+      <div class="detail-item"><div class="detail-label">部品番号</div><div class="detail-value mono">${m.partNo||'—'}</div></div>
+      <div class="detail-item"><div class="detail-label">部品名称</div><div class="detail-value">${m.partName||'—'}</div></div>
+      <div class="detail-item"><div class="detail-label">分類</div><div class="detail-value">${typeBadge(m.type)}</div></div>
+      <div class="detail-item"><div class="detail-label">ステータス</div><div class="detail-value">${statusBadge(m.status)}</div></div>
+      <div class="detail-item"><div class="detail-label">受注日</div><div class="detail-value">${m.orderDate||'—'}</div></div>
+      <div class="detail-item"><div class="detail-label">完成予定</div><div class="detail-value">${m.dueDate||'—'}</div></div>
+    </div>
+
+    <hr class="divider">
+    <div style="font-size:12px;font-weight:600;margin-bottom:10px;">原価サマリー</div>
+    <table class="cost-table-mini">
+      <tr><td>材料費</td><td class="mono">¥${fmt(c.mat)}</td><td>${mats.length}件</td></tr>
+      <tr><td>外注費</td><td class="mono">¥${fmt(c.out)}</td><td>${outs.length}件</td></tr>
+      <tr><td>購入品費</td><td class="mono">¥${fmt(c.pur)}</td><td>${purs.length}件</td></tr>
+      <tr><td>加工費</td><td class="mono">¥${fmt(c.lab)}</td><td>${labs.length}件</td></tr>
+      <tr>
+        <td>合計原価</td>
+        <td class="mono" style="color:var(--${col})">¥${fmt(c.total)}</td>
+        <td class="mono">${p}%</td>
+      </tr>
+      <tr><td>見積金額</td><td class="mono">¥${fmt(m.estimate)}</td><td></td></tr>
+    </table>
+    <div style="margin:12px 0">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">原価進捗 ${p}%</div>
+      <div class="progress-bar" style="height:8px"><div class="progress-fill ${col}" style="width:${Math.min(p,100)}%"></div></div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:6px">原価内訳</div>
+    ${costBarHTML(c)}
+    <div style="display:flex;gap:12px;margin-top:6px;font-size:11px;color:var(--text3)">
+      <span style="color:#0ea5e9">■ 材料費</span>
+      <span style="color:#f59e0b">■ 外注費</span>
+      <span style="color:#10b981">■ 購入品費</span>
+      <span style="color:#a78bfa">■ 加工費</span>
+    </div>
+
+    ${outs.length > 0 ? `
+    <hr class="divider">
+    <div style="font-size:12px;font-weight:600;margin-bottom:8px;">外注費明細</div>
+    <table class="cost-table-mini">
+      <thead><tr style="border-bottom:1px solid var(--border)"><th style="padding:4px 8px;text-align:left;font-size:10px;color:var(--text3)">仕入先</th><th style="padding:4px 8px;text-align:left;font-size:10px;color:var(--text3)">内容</th><th style="padding:4px 8px;text-align:right;font-size:10px;color:var(--text3)">金額</th></tr></thead>
+      <tbody>${outs.map(r=>`<tr><td>${r.supplier}</td><td>${r.detail}</td><td class="mono" style="text-align:right">¥${fmt(r.total)}</td></tr>`).join('')}</tbody>
+    </table>` : ''}
+
+    ${m.note ? `<hr class="divider"><div style="font-size:12px;color:var(--text2)">備考: ${m.note}</div>` : ''}
+  `;
+
+  document.getElementById('moldDetailModal').classList.add('open');
+}
+
+// ═══════════════════════════════════════════════
+// MATERIALS
+// ═══════════════════════════════════════════════
+function renderMaterials() {
+  const search = (document.getElementById('matSearch')?.value||'').toLowerCase();
+  let entries = Object.entries(DB.materials);
+  if (search) entries = entries.filter(([,r]) =>
+    (r.partNo||'').toLowerCase().includes(search) ||
+    (r.name||'').toLowerCase().includes(search) ||
+    (r.moldNo||'').toLowerCase().includes(search)
+  );
+  document.getElementById('matCount').textContent = entries.length + '件';
+  if (!entries.length) { document.getElementById('matTableBody').innerHTML = '<div class="empty"><div class="empty-icon">🔩</div>データなし</div>'; return; }
+  document.getElementById('matTableBody').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>仕入月</th><th>管理NO.</th><th>品番</th><th>品名</th>
+        <th>材質</th><th>サイズ</th><th>仕上</th><th>重量(kg)</th><th>仕入金額</th><th>手配先</th>
+      </tr></thead>
+      <tbody>${entries.map(([k,r])=>`
+        <tr>
+          <td class="mono">${r.month||''}</td>
+          <td class="mono">${r.moldNo||''}</td>
+          <td class="mono" style="font-size:11px">${r.partNo||''}</td>
+          <td>${r.name||''}</td>
+          <td class="mono">${r.material||''}</td>
+          <td class="mono" style="font-size:11px">${r.size||''}</td>
+          <td>${r.finish||''}</td>
+          <td class="mono">${r.weight||''}</td>
+          <td class="mono">¥${fmt(r.amount)}</td>
+          <td>${r.supplier||''}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+// ═══════════════════════════════════════════════
+// OUTSOURCE
+// ═══════════════════════════════════════════════
+function renderOutsource() {
+  const search = (document.getElementById('outSearch')?.value||'').toLowerCase();
+  const month  = document.getElementById('outMonthFilter')?.value || '';
+  const months = [...new Set(Object.values(DB.outsource).map(r=>r.month).filter(Boolean))].sort().reverse();
+  const mSel = document.getElementById('outMonthFilter');
+  const mCur = mSel?.value;
+  if (mSel) mSel.innerHTML = '<option value="">全月</option>' + months.map(m=>`<option value="${m}"${m===mCur?' selected':''}>${m}</option>`).join('');
+
+  let entries = Object.entries(DB.outsource);
+  if (search) entries = entries.filter(([,r]) =>
+    (r.partNo||'').toLowerCase().includes(search) ||
+    (r.supplier||'').toLowerCase().includes(search) ||
+    (r.moldNo||'').toLowerCase().includes(search)
+  );
+  if (month) entries = entries.filter(([,r]) => r.month === month);
+  document.getElementById('outCount').textContent = entries.length + '件 / ¥' + fmt(entries.reduce((s,[,r])=>s+(r.total||0),0));
+  if (!entries.length) { document.getElementById('outTableBody').innerHTML = '<div class="empty"><div class="empty-icon">🏭</div>データなし</div>'; return; }
+  document.getElementById('outTableBody').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>仕入月</th><th>管理NO.</th><th>品番</th><th>仕入先</th>
+        <th>工程</th><th>内容</th><th>数量</th><th>単価</th><th>合計金額</th>
+      </tr></thead>
+      <tbody>${entries.map(([k,r])=>`
+        <tr>
+          <td class="mono">${r.month||''}</td>
+          <td class="mono">${r.moldNo||''}</td>
+          <td class="mono" style="font-size:11px">${r.partNo||''}</td>
+          <td>${r.supplier||''}</td>
+          <td><span class="chip">${r.process||''}</span></td>
+          <td>${r.detail||''}</td>
+          <td class="mono">${r.qty||''}</td>
+          <td class="mono">¥${fmt(r.unit)}</td>
+          <td class="mono"><b>¥${fmt(r.total)}</b></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+// ═══════════════════════════════════════════════
+// PURCHASE
+// ═══════════════════════════════════════════════
+function renderPurchase() {
+  const search = (document.getElementById('purSearch')?.value||'').toLowerCase();
+  const month  = document.getElementById('purMonthFilter')?.value || '';
+  const months = [...new Set(Object.values(DB.purchase).map(r=>r.month).filter(Boolean))].sort().reverse();
+  const mSel = document.getElementById('purMonthFilter');
+  const mCur = mSel?.value;
+  if (mSel) mSel.innerHTML = '<option value="">全月</option>' + months.map(m=>`<option value="${m}"${m===mCur?' selected':''}>${m}</option>`).join('');
+
+  let entries = Object.entries(DB.purchase);
+  if (search) entries = entries.filter(([,r]) =>
+    (r.partNo||'').toLowerCase().includes(search) ||
+    (r.name||'').toLowerCase().includes(search) ||
+    (r.moldNo||'').toLowerCase().includes(search)
+  );
+  if (month) entries = entries.filter(([,r]) => r.month === month);
+  document.getElementById('purCount').textContent = entries.length + '件 / ¥' + fmt(entries.reduce((s,[,r])=>s+(r.total||0),0));
+  if (!entries.length) { document.getElementById('purTableBody').innerHTML = '<div class="empty"><div class="empty-icon">🛒</div>データなし</div>'; return; }
+  document.getElementById('purTableBody').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>仕入月</th><th>管理NO.</th><th>品番</th><th>品名</th>
+        <th>仕入先</th><th>数量</th><th>単価</th><th>合計金額</th>
+      </tr></thead>
+      <tbody>${entries.map(([k,r])=>`
+        <tr>
+          <td class="mono">${r.month||''}</td>
+          <td class="mono">${r.moldNo||''}</td>
+          <td class="mono" style="font-size:11px">${r.partNo||''}</td>
+          <td style="font-size:11px">${r.name||''}</td>
+          <td>${r.supplier||''}</td>
+          <td class="mono">${r.qty||''}</td>
+          <td class="mono">¥${fmt(r.unit)}</td>
+          <td class="mono"><b>¥${fmt(r.total)}</b></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+// ═══════════════════════════════════════════════
+// LABOR
+// ═══════════════════════════════════════════════
+function renderLabor() {
+  const search = (document.getElementById('labSearch')?.value||'').toLowerCase();
+  const month  = document.getElementById('labMonthFilter')?.value || '';
+  const months = [...new Set(Object.values(DB.labor).map(r=>r.month).filter(Boolean))].sort().reverse();
+  const mSel = document.getElementById('labMonthFilter');
+  const mCur = mSel?.value;
+  if (mSel) mSel.innerHTML = '<option value="">全月</option>' + months.map(m=>`<option value="${m}"${m===mCur?' selected':''}>${m}</option>`).join('');
+
+  let entries = Object.entries(DB.labor);
+  if (search) entries = entries.filter(([,r]) =>
+    (r.moldNo||'').toLowerCase().includes(search) ||
+    (r.partNo||'').toLowerCase().includes(search) ||
+    (r.worker||'').toLowerCase().includes(search)
+  );
+  if (month) entries = entries.filter(([,r]) => r.month === month);
+  document.getElementById('labCount').textContent = entries.length + '件 / ¥' + fmt(entries.reduce((s,[,r])=>s+(r.amount||0),0));
+  if (!entries.length) { document.getElementById('labTableBody').innerHTML = '<div class="empty"><div class="empty-icon">⚙️</div>データなし（データ取込タブからkintone CSVを取り込んでください）</div>'; return; }
+  document.getElementById('labTableBody').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>月</th><th>管理NO.</th><th>部品番号</th><th>工程</th>
+        <th>作業員</th><th>作業内容</th><th>チャージ</th><th>時間</th><th>金額</th>
+      </tr></thead>
+      <tbody>${entries.map(([k,r])=>`
+        <tr>
+          <td class="mono">${r.month||''}</td>
+          <td class="mono">${r.moldNo||''}</td>
+          <td class="mono" style="font-size:11px">${r.partNo||''}</td>
+          <td><span class="chip">${r.process||''}</span></td>
+          <td>${r.worker||''}</td>
+          <td>${r.workType||''}</td>
+          <td class="mono">¥${fmt(r.charge)}</td>
+          <td class="mono">${r.time}h</td>
+          <td class="mono"><b>¥${fmt(r.amount)}</b></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+// ═══════════════════════════════════════════════
+// IMPORT
+// ═══════════════════════════════════════════════
+function renderImport() {
+  const log = DB.importLog || [];
+  if (!log.length) return;
+  document.getElementById('importHistory').innerHTML = `
+    <table>
+      <thead><tr><th>日時</th><th>種別</th><th>件数</th><th>結果</th></tr></thead>
+      <tbody>${log.slice(-20).reverse().map(l=>`
+        <tr>
+          <td class="mono">${l.date||''}</td>
+          <td>${l.type||''}</td>
+          <td class="mono">${l.count||0}件</td>
+          <td><span class="badge badge-green">成功</span></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+// ── kintone CSV import ──
+function importKintoneCSV(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async ev => {
+    const lines = ev.target.result.split('\n');
+    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g,''));
+    let count = 0;
+    for (let i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      const vals = parseCSVLine(lines[i]);
+      const row = {};
+      headers.forEach((h,j) => row[h] = vals[j]);
+
+      // kintoneの列名マッピング（実際のkintoneフィールド名に合わせて調整）
+      const moldNo  = row['管理コード'] || row['moldNo'] || '';
+      const partNo  = row['部品番号']   || row['partNo'] || '';
+      const process = row['工程']       || row['process'] || '';
+      const worker  = row['作業員']     || row['worker'] || '';
+      const workType= row['作業内容']   || row['workType'] || '';
+      const charge  = parseFloat(row['チャージ'] || row['charge'] || '0');
+      const time    = parseFloat(row['時間']     || row['time'] || '0');
+      const amount  = parseFloat(row['金額']     || row['amount'] || '0') || (charge * time);
+      const dateStr = row['日付'] || row['date'] || '';
+      const month   = dateStr ? dateStr.slice(0,7) : new Date().toISOString().slice(0,7);
+
+      if (!moldNo && !partNo) continue;
+
+      const key = 'lab_' + Date.now() + '_' + i;
+      DB.labor[key] = { month, moldNo, partNo, process, worker, workType, charge, time, amount };
+      count++;
+    }
+    logImport('kintone作業実績', count);
+    await writeToFirebase('labor', DB.labor);
+    toast(`${count}件の作業実績を取込しました`, 'success');
+    document.getElementById('kintoneImportLog').textContent = `✅ ${count}件取込完了 (${new Date().toLocaleString('ja-JP')})`;
+    e.target.value = '';
+    renderLabor();
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+// ── 購入品CSV import ──
+async function importCSV(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async ev => {
+    const lines = ev.target.result.split('\n');
+    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g,''));
+    let count = 0;
+    for (let i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue;
+      const vals = parseCSVLine(lines[i]);
+      const row = {};
+      headers.forEach((h,j) => row[h] = vals[j]);
+
+      const moldNo   = row['管理NO.'] || row['注番'] || row['moldNo'] || '';
+      const partNo   = row['品番'] || row['partNo'] || '';
+      const name     = row['品名'] || row['name'] || '';
+      const supplier = row['仕入先'] || row['メーカー'] || row['supplier'] || '';
+      const qty      = parseFloat(row['数量'] || row['qty'] || '0');
+      const unit     = parseFloat(row['単価'] || row['unit'] || '0');
+      const total    = parseFloat(row['合計金額'] || row['合計'] || row['total'] || '0') || qty*unit;
+      const month    = row['仕入月'] || row['month'] || new Date().toISOString().slice(0,7);
+
+      if (!partNo && !name) continue;
+
+      const key = 'pur_' + Date.now() + '_' + i;
+      DB.purchase[key] = { month, moldNo, partNo, name, supplier, qty, unit, total, note:'' };
+      count++;
+    }
+    logImport('購入品CSV', count);
+    await writeToFirebase('purchase', DB.purchase);
+    toast(`${count}件の購入品を取込しました`, 'success');
+    document.getElementById('purchaseImportLog').textContent = `✅ ${count}件取込完了 (${new Date().toLocaleString('ja-JP')})`;
+    e.target.value = '';
+    renderPurchase();
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function parseCSVLine(line) {
+  const result = []; let cur = ''; let inQ = false;
+  for (let c of line) {
+    if (c === '"') { inQ = !inQ; }
+    else if (c === ',' && !inQ) { result.push(cur.trim()); cur = ''; }
+    else { cur += c; }
+  }
+  result.push(cur.trim());
+  return result;
+}
+
+function logImport(type, count) {
+  if (!DB.importLog) DB.importLog = [];
+  DB.importLog.push({ date: new Date().toLocaleString('ja-JP'), type, count });
+  writeToFirebase('importLog', DB.importLog);
+  renderImport();
+}
+
+// ═══════════════════════════════════════════════
+// MODALS & FORMS
+// ═══════════════════════════════════════════════
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+function openMoldModal() {
+  editingMoldKey = null;
+  document.getElementById('moldModalTitle').textContent = '金型 新規登録';
+  ['mf_no','mf_client','mf_orderDate','mf_dueDate','mf_partNo','mf_partName','mf_note'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('mf_estimate').value = '';
+  document.getElementById('mf_type').value   = '新規';
+  document.getElementById('mf_status').value = '製作中';
+  document.getElementById('moldModal').classList.add('open');
+}
+
+async function saveMold() {
+  const no = document.getElementById('mf_no').value.trim();
+  if (!no) { toast('管理NO.を入力してください', 'error'); return; }
+  const data = {
+    no, client:document.getElementById('mf_client').value.trim(),
+    orderDate:document.getElementById('mf_orderDate').value,
+    dueDate:document.getElementById('mf_dueDate').value,
+    partNo:document.getElementById('mf_partNo').value.trim(),
+    partName:document.getElementById('mf_partName').value.trim(),
+    type:document.getElementById('mf_type').value,
+    estimate:parseFloat(document.getElementById('mf_estimate').value)||0,
+    status:document.getElementById('mf_status').value,
+    note:document.getElementById('mf_note').value.trim()
+  };
+  const key = editingMoldKey || ('m_' + Date.now());
+  DB.molds[key] = data;
+  await writeToFirebase('molds', DB.molds);
+  closeModal('moldModal');
+  toast('金型情報を保存しました', 'success');
+  renderMolds();
+}
+
+function openMatModal() { document.getElementById('matModal').classList.add('open'); }
+async function saveMaterial() {
+  const data = {
+    month:document.getElementById('matf_month').value,
+    moldNo:document.getElementById('matf_moldNo').value.trim(),
+    partNo:document.getElementById('matf_partNo').value.trim(),
+    name:document.getElementById('matf_name').value.trim(),
+    material:document.getElementById('matf_material').value.trim(),
+    size:document.getElementById('matf_size').value.trim(),
+    finish:document.getElementById('matf_finish').value.trim(),
+    weight:parseFloat(document.getElementById('matf_weight').value)||0,
+    amount:parseFloat(document.getElementById('matf_amount').value)||0,
+    supplier:document.getElementById('matf_supplier').value.trim(),
+    note:document.getElementById('matf_note').value.trim()
+  };
+  DB.materials['mat_'+Date.now()] = data;
+  await writeToFirebase('materials', DB.materials);
+  closeModal('matModal');
+  toast('材料費を保存しました', 'success');
+  renderMaterials();
+}
+
+function openOutModal() { document.getElementById('outModal').classList.add('open'); }
+function calcOutTotal() {
+  const u = parseFloat(document.getElementById('outf_unit').value)||0;
+  const q = parseFloat(document.getElementById('outf_qty' ).value)||1;
+  document.getElementById('outf_total').value = u*q;
+}
+async function saveOutsource() {
+  const data = {
+    month:document.getElementById('outf_month').value,
+    moldNo:document.getElementById('outf_moldNo').value.trim(),
+    partNo:document.getElementById('outf_partNo').value.trim(),
+    supplier:document.getElementById('outf_supplier').value.trim(),
+    process:document.getElementById('outf_process').value.trim(),
+    detail:document.getElementById('outf_detail').value.trim(),
+    qty:parseFloat(document.getElementById('outf_qty').value)||1,
+    unit:parseFloat(document.getElementById('outf_unit').value)||0,
+    total:parseFloat(document.getElementById('outf_total').value)||0,
+    note:document.getElementById('outf_note').value.trim()
+  };
+  DB.outsource['out_'+Date.now()] = data;
+  await writeToFirebase('outsource', DB.outsource);
+  closeModal('outModal');
+  toast('外注費を保存しました', 'success');
+  renderOutsource();
+}
+
+function openPurModal() { document.getElementById('purModal').classList.add('open'); }
+function calcPurTotal() {
+  const u = parseFloat(document.getElementById('purf_unit').value)||0;
+  const q = parseFloat(document.getElementById('purf_qty' ).value)||1;
+  document.getElementById('purf_total').value = u*q;
+}
+async function savePurchase() {
+  const data = {
+    month:document.getElementById('purf_month').value,
+    moldNo:document.getElementById('purf_moldNo').value.trim(),
+    partNo:document.getElementById('purf_partNo').value.trim(),
+    name:document.getElementById('purf_name').value.trim(),
+    supplier:document.getElementById('purf_supplier').value.trim(),
+    qty:parseFloat(document.getElementById('purf_qty').value)||1,
+    unit:parseFloat(document.getElementById('purf_unit').value)||0,
+    total:parseFloat(document.getElementById('purf_total').value)||0,
+    note:document.getElementById('purf_note').value.trim()
+  };
+  DB.purchase['pur_'+Date.now()] = data;
+  await writeToFirebase('purchase', DB.purchase);
+  closeModal('purModal');
+  toast('購入品費を保存しました', 'success');
+  renderPurchase();
+}
+
+// ═══════════════════════════════════════════════
+// SETTINGS
+// ═══════════════════════════════════════════════
+function saveFirebaseConfig() {
+  cfg.projectId = document.getElementById('cfgProjectId').value.trim();
+  cfg.dbUrl      = document.getElementById('cfgDbUrl').value.trim();
+  cfg.apiKey     = document.getElementById('cfgApiKey').value.trim();
+  localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
+  firebase.apps.forEach(app => app.delete());
+  db = null;
+  initFirebase();
+  toast('Firebase設定を保存しました', 'success');
+}
+
+function saveKintoneConfig() {
+  cfg.ktDomain = document.getElementById('cfgKtDomain').value.trim();
+  cfg.ktApp    = document.getElementById('cfgKtApp').value.trim();
+  cfg.ktToken  = document.getElementById('cfgKtToken').value.trim();
+  localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
+  toast('kintone設定を保存しました', 'success');
+}
+
+function exportAllData() {
+  const blob = new Blob([JSON.stringify(DB, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `mold_cost_backup_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  toast('エクスポートしました', 'success');
+}
+
+function importJsonData(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async ev => {
+    try {
+      const data = JSON.parse(ev.target.result);
+      Object.assign(DB, data);
+      await writeToFirebase('', DB);
+      toast('インポートしました', 'success');
+      refreshAll();
+    } catch(err) {
+      toast('JSONファイルの読み込みに失敗しました', 'error');
+    }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+function confirmClear() {
+  if (confirm('全データを削除します。この操作は元に戻せません。よろしいですか？')) {
+    DB = { molds:{}, materials:{}, outsource:{}, purchase:{}, labor:{}, importLog:[] };
+    writeToFirebase('', DB);
+    refreshAll();
+    toast('全データを削除しました', 'success');
+  }
+}
+
+// ═══════════════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════════════
+let toastTimer;
+function toast(msg, type='success') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `show ${type}`;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = ''; }, 3000);
+}
+
+// ── Close modal on overlay click ──
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => {
+    if (e.target === el) el.classList.remove('open');
+  });
+});
+</script>
+</body>
+</html>
