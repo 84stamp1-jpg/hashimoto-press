@@ -370,9 +370,9 @@ html, body {
     <circle cx="16" cy="62" r="8" fill="#e11d48" opacity="0.9"/>
     <text x="16" y="66" text-anchor="middle" font-size="6" font-weight="700" fill="white">見</text>
     <text x="30" y="66" font-size="8" fill="#374151">リーダー（名前2文字）</text>
-    <rect x="130" y="54" width="40" height="16" rx="8" fill="#d97706" opacity="0.9"/>
-    <text x="150" y="66" text-anchor="middle" font-size="7" font-weight="700" fill="white">リフト</text>
-    <text x="178" y="66" font-size="8" fill="#374151">移動中は点滅</text>
+    <circle cx="140" cy="63" r="8" fill="#d97706" opacity="0.9"/>
+    <text x="140" y="67" text-anchor="middle" font-size="6" font-weight="700" fill="white">リ</text>
+    <text x="154" y="67" font-size="8" fill="#374151">リフト　移動中は点滅</text>
     <text x="10" y="80" font-size="7" fill="#94a3b8">※ビーコン位置は5秒ごとに自動更新</text>
   </g>
 </svg>
@@ -1155,22 +1155,26 @@ function openQualitySheet(partNo){
 // ビーコン：beacons/{id}: { name, area, type:'leader'/'lift' }
 const FIREBASE_URL = 'https://hashimoto-press-default-rtdb.asia-southeast1.firebasedatabase.app';
 // Firebaseのbeacons/{id}パス: { name, area, x, y, type:'leader'/'lift' }
-// エリアごとのビーコン表示位置（各エリア枠の内側・右下寄り）
-// SVG座標: エリアrect(x,y,w,h) → ビーコン表示位置(x+w-20, y+h-20)
+// ===== ビーコン表示位置 =====
+// エリア名テキストの右横に表示
+// 複数人は右へ34pxずつずらす
 const AREA_POSITIONS = {
-  'プレスA':   {x:192, y:168},  // A枠内側右下(108+104-20, 12+190-14)
-  'プレスB':   {x:336, y:310},  // B枠内側右下(216+140-20, 12+328-30)
-  'プレスC':   {x:720, y:105},  // C枠内側右下(360+400-40, 12+120-27)
-  'プレスD':   {x:520, y:220},  // D枠内側右下(360+200-40, 136+120-36)
-  '組立':      {x:860, y:185},  // 組立枠内側右下(764+124-28, 12+210-37)
-  '完成品置場':{x:860, y:305},  // 完成品枠内側右下(764+124-28, 226+118-39)
-  '技術':      {x:336, y:435},  // 技術枠内側右下(216+140-20, 348+124-37)
-  '事務所':    {x:80,  y:230},  // 事務所枠内側右下(8+92-20, 122+140-32)
-  '溶接':      {x:430, y:315},  // 溶接枠内側右下(360+100-30, 260+80-25)
-  '組立SP':    {x:530, y:315},  // 組立SP枠内側右下(464+96-30, 260+80-25)
-  '金型置場':  {x:80,  y:90},   // 金型枠内側右下(8+92-20, 8+110-28)
-  '通路':      {x:650, y:290},
+  'プレスA':   {x:200, y:28},   // エリア名「プレスA」(160,30)の右横
+  'プレスB':   {x:326, y:28},   // エリア名「プレスB」(286,30)の右横
+  'プレスC':   {x:730, y:28},   // エリア名「プレスC」右端
+  'プレスD':   {x:540, y:150},  // エリア名「プレスD」(460,154)の右横
+  '組立':      {x:810, y:152},  // 組立エリア名下
+  '完成品置場':{x:810, y:274},  // 完成品置場エリア名下
+  '技術':      {x:326, y:413},  // 技術エリア名(286,415)の右横
+  '事務所':    {x:52,  y:174},  // 事務所エリア名(54,196)の上
+  '溶接':      {x:390, y:278},  // 溶接エリア名(410,298)の上
+  '組立SP':    {x:490, y:278},  // 組立SPエリア名(512,298)の上
+  '金型置場':  {x:52,  y:38},   // 金型置場エリア名(54,58)の上
+  '通路':      {x:600, y:200},
 };
+function getBeaconPos(area) {
+  return AREA_POSITIONS[area] || {x:400, y:200};
+}
 
 const PERSON_COLORS = ['#e11d48','#dc2626','#b91c1c','#9f1239','#be123c','#f43f5e'];
 
@@ -1217,11 +1221,11 @@ function updateBeacons(beacons){
   // リーダー表示
   const leaders = Object.entries(displayData).filter(([,b])=>b && b.type!=='lift');
   leaders.forEach(([id, b], idx) => {
-    const pos = AREA_POSITIONS[b.area] || {x:400, y:260};
+    const pos = getBeaconPos(b.area);
     const color = PERSON_COLORS[idx % PERSON_COLORS.length];
-    // 同エリア複数人はずらす
+    // 同エリア複数人：右へ34pxずつずらす
     const sameArea = leaders.slice(0,idx).filter(([,ob])=>ob.area===b.area).length;
-    const cx = pos.x - sameArea * 34;
+    const cx = pos.x + sameArea * 34;
     const cy = pos.y;
 
     const isMoving = b.moving === true || b.status === '移動中';
@@ -1293,11 +1297,16 @@ function updateBeacons(beacons){
 
   const lifts = Object.entries(displayData).filter(([,b])=>b && b.type==='lift');
   lifts.forEach(([id, lift], idx) => {
-    const pos   = AREA_POSITIONS[lift.area] || {x:260, y:180};
-    const ox    = idx * 68;
+    const pos   = getBeaconPos(lift.area);
     const isMoving = lift.moving === true || lift.status === '移動中';
     const isLost   = lift.isLost === true;
     const blink    = isMoving || isLost;
+
+    // リフトも同エリアに複数いる場合は横へずらす
+    const sameLiftArea = lifts.slice(0,idx).filter(([,ol])=>ol.area===lift.area).length;
+    const lcx = pos.x + sameLiftArea * 34;
+    const lcy = pos.y;
+    const liftColor = isLost ? '#94a3b8' : isMoving ? '#ef4444' : '#d97706';
 
     const g = document.createElementNS('http://www.w3.org/2000/svg','g');
     g.id = 'lift-icon-' + idx;
@@ -1306,25 +1315,51 @@ function updateBeacons(beacons){
       g.setAttribute('style', `animation: beacon-blink ${speed} ease-in-out infinite;`);
     }
 
-    const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
-    rect.setAttribute('x', pos.x - 30 + ox);
-    rect.setAttribute('y', pos.y - 12);
-    rect.setAttribute('width', '62');
-    rect.setAttribute('height', '22');
-    rect.setAttribute('rx', '11');
-    rect.setAttribute('fill', isLost ? '#94a3b8' : isMoving ? '#ef4444' : '#d97706');
-    rect.setAttribute('opacity', isLost ? '0.6' : '0.95');
-    g.appendChild(rect);
+    // 外枠リング
+    const ring = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    ring.setAttribute('cx', lcx); ring.setAttribute('cy', lcy);
+    ring.setAttribute('r', '16'); ring.setAttribute('fill', 'white');
+    ring.setAttribute('stroke', liftColor);
+    ring.setAttribute('stroke-width', isLost ? '1.5' : '2');
+    ring.setAttribute('stroke-dasharray', isLost ? '3,2' : 'none');
+    ring.setAttribute('opacity', '0.95');
+    g.appendChild(ring);
 
-    const t1 = document.createElementNS('http://www.w3.org/2000/svg','text');
-    t1.setAttribute('x', pos.x + 1 + ox);
-    t1.setAttribute('y', pos.y + 1);
-    t1.setAttribute('text-anchor', 'middle');
-    t1.setAttribute('font-size', '8');
-    t1.setAttribute('font-weight', '700');
-    t1.setAttribute('fill', 'white');
-    t1.textContent = lift.name || 'リフト';
-    g.appendChild(t1);
+    // 本体円
+    const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    circle.setAttribute('cx', lcx); circle.setAttribute('cy', lcy);
+    circle.setAttribute('r', '14'); circle.setAttribute('fill', liftColor);
+    circle.setAttribute('opacity', isLost ? '0.6' : '0.95');
+    g.appendChild(circle);
+
+    // 「リ」文字（リフトを示す）
+    const ltext = document.createElementNS('http://www.w3.org/2000/svg','text');
+    ltext.setAttribute('x', lcx); ltext.setAttribute('y', lcy+4);
+    ltext.setAttribute('text-anchor','middle');
+    ltext.setAttribute('font-size','9'); ltext.setAttribute('fill','white');
+    ltext.setAttribute('font-weight','700');
+    ltext.textContent = 'リ';
+    g.appendChild(ltext);
+
+    // 移動中バッジ
+    if (isMoving && !isLost) {
+      const dot = document.createElementNS('http://www.w3.org/2000/svg','circle');
+      dot.setAttribute('cx', lcx+11); dot.setAttribute('cy', lcy-11);
+      dot.setAttribute('r', '5'); dot.setAttribute('fill', '#1d4ed8');
+      g.appendChild(dot);
+      const dtext = document.createElementNS('http://www.w3.org/2000/svg','text');
+      dtext.setAttribute('x', lcx+11); dtext.setAttribute('y', lcy-8);
+      dtext.setAttribute('text-anchor','middle');
+      dtext.setAttribute('font-size','6'); dtext.setAttribute('fill','white');
+      dtext.setAttribute('font-weight','700');
+      dtext.textContent = '動';
+      g.appendChild(dtext);
+    }
+
+    // ツールチップ
+    const ltitle = document.createElementNS('http://www.w3.org/2000/svg','title');
+    ltitle.textContent = (lift.name||'リフト') + '（' + (lift.area||'不明') + '）' + (isLost?'移動中（位置不明）':isMoving?'移動中':'停止中');
+    g.appendChild(ltitle);
 
     if(liftGroup) liftGroup.appendChild(g);
   });
