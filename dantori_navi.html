@@ -250,14 +250,14 @@ html, body {
   <text x="460" y="154" text-anchor="middle" font-size="10" font-weight="700" fill="#713f12">プレスD　ロボットライン</text>
 
   <!-- ===== 溶接We ===== -->
-  <rect x="360" y="260" width="100" height="80" rx="4" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.5"/>
-  <text x="410" y="298" text-anchor="middle" font-size="10" font-weight="700" fill="#14532d">溶接</text>
-  <text x="410" y="313" text-anchor="middle" font-size="9" fill="#16a34a">（We）</text>
+  <rect x="360" y="260" width="100" height="80" rx="4" fill="#fdf2f8" stroke="#ec4899" stroke-width="1.5"/>
+  <text x="410" y="298" text-anchor="middle" font-size="10" font-weight="700" fill="#9d174d">溶接</text>
+  <text x="410" y="313" text-anchor="middle" font-size="9" fill="#ec4899">（We）</text>
 
   <!-- ===== 組立SP ===== -->
-  <rect x="464" y="260" width="96" height="80" rx="4" fill="#fdf4ff" stroke="#a855f7" stroke-width="1.5"/>
-  <text x="512" y="298" text-anchor="middle" font-size="10" font-weight="700" fill="#6b21a8">組立</text>
-  <text x="512" y="313" text-anchor="middle" font-size="9" fill="#a855f7">（SP）</text>
+  <rect x="464" y="260" width="96" height="80" rx="4" fill="#fdf2f8" stroke="#ec4899" stroke-width="1.5"/>
+  <text x="512" y="298" text-anchor="middle" font-size="10" font-weight="700" fill="#9d174d">組立</text>
+  <text x="512" y="313" text-anchor="middle" font-size="9" fill="#ec4899">（SP）</text>
 
   <!-- ===== 組立エリア（右側上） ===== -->
   <rect x="764" y="12" width="124" height="210" rx="4" fill="#fdf2f8" stroke="#ec4899" stroke-width="1.5"/>
@@ -270,8 +270,8 @@ html, body {
   <text x="826" y="295" text-anchor="middle" font-size="10" font-weight="700" fill="#0c4a6e">置場</text>
 
   <!-- ===== 金型置場 ===== -->
-  <rect x="8" y="8" width="92" height="110" rx="4" fill="#faf5ff" stroke="#8b5cf6" stroke-width="1.5"/>
-  <text x="54" y="58" text-anchor="middle" font-size="9" font-weight="700" fill="#5b21b6">金型置場</text>
+  <rect x="8" y="8" width="92" height="110" rx="4" fill="#fafafa" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="54" y="58" text-anchor="middle" font-size="9" font-weight="700" fill="#1f2937">金型置場</text>
 
   <!-- ===== 事務所 ===== -->
   <rect x="8" y="122" width="92" height="140" rx="4" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
@@ -1156,20 +1156,45 @@ function openQualitySheet(partNo){
 const FIREBASE_URL = 'https://hashimoto-press-default-rtdb.asia-southeast1.firebasedatabase.app';
 // Firebaseのbeacons/{id}パス: { name, area, x, y, type:'leader'/'lift' }
 // ===== ビーコン表示位置 =====
-// 各エリアの中央上部に配置（どのエリアか一目でわかるよう）
-// 同エリア複数人は右へ34pxずつずらす
+// 稼働カードと重ならない空きスペースに配置
+// 同エリア複数は右へ34pxずつずらす
 const AREA_POSITIONS = {
-  'プレスA':   {x:142, y:50},   // Aエリア中央上部(rect中央x=160, 枠内上部)
-  'プレスB':   {x:252, y:50},   // Bエリア中央上部(rect中央x=286, 枠内左寄り)
-  'プレスC':   {x:420, y:50},   // Cエリア左上部
-  'プレスD':   {x:400, y:175},  // Dエリア左上部
-  '組立':      {x:790, y:155},  // 組立エリア上部
-  '完成品置場':{x:790, y:268},  // 完成品置場上部
-  '技術':      {x:240, y:388},  // 技術エリア上部
-  '事務所':    {x:22,  y:165},  // 事務所上部
-  '溶接':      {x:373, y:290},  // 溶接エリア内
-  '組立SP':    {x:475, y:290},  // 組立SPエリア内
-  '金型置場':  {x:22,  y:50},   // 金型置場内
+  // プレスA: カードA1(x=110-210,y=40-100) A2(y=112-172) → 枠右端には空きなし
+  //          → A2カード下の空きスペース y=180付近
+  'プレスA':   {x:142, y:182},
+
+  // プレスB: カードB2(x=218-354,y=40-100) BP2(y=148-208)
+  //          → B2とBP2の間の空き y=118付近
+  'プレスB':   {x:252, y:120},
+
+  // プレスC: カードCP3(x=362-558,y=38-98) CP3_2(x=562-758,y=38-98)
+  //          → 両カードの下 y=108付近（枠下端）
+  'プレスC':   {x:420, y:108},
+
+  // プレスD: 稼働カードなし → 枠内左上
+  'プレスD':   {x:390, y:170},
+
+  // 組立エリア: rect(764,12,124,210) → カードなし → 中央
+  '組立':      {x:790, y:160},
+
+  // 完成品置場: rect(764,226,124,118) → カードなし → 中央
+  '完成品置場':{x:790, y:270},
+
+  // 技術: rect(216,348,140,124) → カードなし → 上部
+  '技術':      {x:240, y:385},
+
+  // 事務所: rect(8,122,92,140) → カードなし → 中央
+  '事務所':    {x:30,  y:200},
+
+  // 溶接: rect(360,260,100,80) → カードなし → 中央
+  '溶接':      {x:373, y:295},
+
+  // 組立SP: rect(464,260,96,80) → カードなし → 中央
+  '組立SP':    {x:475, y:295},
+
+  // 金型置場: rect(8,8,92,110) → カードなし → 中央
+  '金型置場':  {x:30,  y:60},
+
   '通路':      {x:600, y:200},
 };
 function getBeaconPos(area) {
