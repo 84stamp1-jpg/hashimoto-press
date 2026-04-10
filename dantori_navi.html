@@ -372,7 +372,7 @@ html, body {
     <text x="30" y="66" font-size="8" fill="#374151">リーダー（名前2文字）</text>
     <circle cx="140" cy="63" r="8" fill="#d97706" opacity="0.9"/>
     <text x="140" y="67" text-anchor="middle" font-size="6" font-weight="700" fill="white">リ</text>
-    <text x="154" y="67" font-size="8" fill="#374151">リフト　移動中は点滅</text>
+    <text x="154" y="67" font-size="8" fill="#374151">リフト　グレー=位置不明</text>
     <text x="10" y="80" font-size="7" fill="#94a3b8">※ビーコン位置は5秒ごとに自動更新</text>
   </g>
 </svg>
@@ -1204,22 +1204,38 @@ function getBeaconPos(area) {
 const PERSON_COLORS = ['#e11d48','#dc2626','#b91c1c','#9f1239','#be123c','#f43f5e'];
 
 // ===== ビーコン位置解決ロジック =====
+// scanners形式: beacons/{id}/scanners/{scannerId} = {area,rssi,updatedAt}
+// meta形式:     beacons/{id}/meta = {name, type}
+// 旧形式:       beacons/{id} = {area,rssi,name,type,...}
 function resolveBeaconArea(beaconData) {
   if (!beaconData) return null;
+  const now = Date.now();
+  const STALE_MS = 30000; // 30秒以上古いスキャナーデータは無視
+
   if (beaconData.scanners) {
-    const now = Date.now();
+    // 新形式: 複数PCのRSSIを比較して最強のエリアを選択
     let best = null;
-    Object.values(beaconData.scanners).forEach(s => {
-      if (!s || !s.area || !s.rssi) return;
-      if (s.updatedAt && now - s.updatedAt > 30000) return;
-      if (!best || s.rssi > best.rssi) best = s;
+    Object.entries(beaconData.scanners).forEach(([scId, s]) => {
+      if (!s || !s.area || s.rssi == null) return;
+      if (s.updatedAt && now - s.updatedAt > STALE_MS) return;
+      if (!best || s.rssi > best.rssi) best = { ...s, scannerId: scId };
     });
-    return best ? { ...beaconData, area: best.area, rssi: best.rssi } : beaconData;
+    if (!best) return null; // 有効なスキャナーデータなし → ロスト
+    const meta = beaconData.meta || {};
+    return {
+      name:    meta.name || beaconData.name || '不明',
+      type:    meta.type || beaconData.type || 'leader',
+      area:    best.area,
+      rssi:    best.rssi,
+      moving:  best.moving || false,
+      status:  best.status || '停止中',
+    };
   }
+  // 旧形式: そのまま使用
   return beaconData;
 }
 
-// ロスト状態を記憶（Firebaseから削除されても画面上は点滅で残す）
+// ロスト状態を記憶（Firebaseから削除されても画面上はグレーで残す）
 const beaconLastKnown = {};  // { id: {name, area, type, ...} }
 
 function updateBeacons(beacons){
@@ -1229,16 +1245,22 @@ function updateBeacons(beacons){
   // Firebaseのデータで既知情報を更新
   if (beacons) {
     Object.entries(beacons).forEach(([id, b]) => {
-      if (b) beaconLastKnown[id] = resolveBeaconArea(b);
+      if (!b) return;
+      const resolved = resolveBeaconArea(b);
+      if (resolved) beaconLastKnown[id] = resolved;
     });
   }
 
-  // 表示に使うデータ：Firebaseにあれば通常表示、なければロスト（点滅）で最後の位置に表示
+  // 表示データ: 有効データがあれば通常、なければロスト（グレー）
   const displayData = {};
   Object.entries(beaconLastKnown).forEach(([id, b]) => {
     if (!b) return;
+    // Firebase上にデータがあり、かつresolveが成功しているか確認
     const inFirebase = beacons && beacons[id];
-    displayData[id] = { ...b, isLost: !inFirebase };
+    const resolved   = inFirebase ? resolveBeaconArea(inFirebase) : null;
+    displayData[id]  = resolved
+      ? { ...resolved, isLost: false }
+      : { ...b,        isLost: true  };
   });
 
   group.querySelectorAll('.beacon-leader').forEach(el=>el.remove());
@@ -1248,10 +1270,10 @@ function updateBeacons(beacons){
   leaders.forEach(([id, b], idx) => {
     const pos = getBeaconPos(b.area);
     const color = PERSON_COLORS[idx % PERSON_COLORS.length];
-    // 同エリア複数人：右へ34pxずつずらす
+    // 同エリア複数人：交互に右・下へずらして重ならないよう配置
     const sameArea = leaders.slice(0,idx).filter(([,ob])=>ob.area===b.area).length;
-    const cx = pos.x + sameArea * 34;
-    const cy = pos.y;
+    const cx = pos.x + (sameArea % 2) * 36;
+    const cy = pos.y + Math.floor(sameArea / 2) * 36;
 
     const isMoving = b.moving === true || b.status === '移動中';
     const isLost   = b.isLost === true;
@@ -1327,10 +1349,11 @@ function updateBeacons(beacons){
     // 移動中のみ点滅・ロスト時は点滅なし（グレー表示）
     const blink    = isMoving && !isLost;
 
-    // リフトも同エリアに複数いる場合は横へずらす
-    const sameLiftArea = lifts.slice(0,idx).filter(([,ol])=>ol.area===lift.area).length;
-    const lcx = pos.x + sameLiftArea * 34;
-    const lcy = pos.y;
+    // リフト・リーダー両方含めた同エリア全アイコン数でずらす
+    const allSameArea = [...leaders, ...lifts].slice(0, leaders.length + idx)
+      .filter(([,o]) => o && o.area === lift.area).length;
+    const lcx = pos.x + (allSameArea % 2) * 36;
+    const lcy = pos.y + Math.floor(allSameArea / 2) * 36;
     const liftColor = isLost ? '#94a3b8' : isMoving ? '#ef4444' : '#d97706';
 
     const g = document.createElementNS('http://www.w3.org/2000/svg','g');
