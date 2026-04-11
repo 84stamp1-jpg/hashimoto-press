@@ -1448,10 +1448,14 @@ function saveLocal() {
 }
 
 async function writeToFirebase(path, data) {
+  // ローカルDBは常に最新を保持
+  saveLocal();
   if (db) {
-    await db.ref('/moldCostSystem/' + path).set(data);
-  } else {
-    saveLocal();
+    try {
+      await db.ref('/moldCostSystem/' + path).set(data);
+    } catch(e) {
+      console.warn('Firebase write error:', e);
+    }
   }
 }
 
@@ -1903,9 +1907,14 @@ function renderOutsource() {
 // PURCHASE
 // ═══════════════════════════════════════════════
 function renderPurchase() {
+  if (!DB.purchase) DB.purchase = {};
   const search = (document.getElementById('purSearch')?.value||'').toLowerCase();
   const month  = document.getElementById('purMonthFilter')?.value || '';
-  const months = [...new Set(Object.values(DB.purchase).map(r=>r.month).filter(Boolean))].sort().reverse();
+  // 月フォーマットを正規化してから集計
+  const months = [...new Set(Object.values(DB.purchase).map(r=>{
+    const m = r.month||'';
+    return m.replace(/\//g,'-').slice(0,7);
+  }).filter(Boolean))].sort().reverse();
   const mSel = document.getElementById('purMonthFilter');
   const mCur = mSel?.value;
   if (mSel) mSel.innerHTML = '<option value="">全月</option>' + months.map(m=>`<option value="${m}"${m===mCur?' selected':''}>${m}</option>`).join('');
@@ -1915,7 +1924,7 @@ function renderPurchase() {
     (r.name||'').toLowerCase().includes(search) ||
     (r.moldNo||'').toLowerCase().includes(search)
   );
-  if (month) entries = entries.filter(([,r]) => r.month === month);
+  if (month) entries = entries.filter(([,r]) => (r.month||'').replace(/\//g,'-').slice(0,7) === month);
   document.getElementById('purCount').textContent = entries.length + '件 / ¥' + fmt(entries.reduce((s,[,r])=>s+(r.total||0),0));
   if (!entries.length) { document.getElementById('purTableBody').innerHTML = '<div class="empty"><div class="empty-icon">🛒</div>データなし</div>'; return; }
   document.getElementById('purTableBody').innerHTML = `
@@ -2129,7 +2138,12 @@ async function importCSV(e) {
       if (!name && !partNo) continue;
 
       // 月を受注日から取得（あれば）
-      const recMonth = orderDate ? orderDate.slice(0, 7).replace('/', '-') : month;
+      // 月を正規化（2026/03/17 → 2026-03、2026-03-17 → 2026-03）
+      let recMonth = month;
+      if (orderDate) {
+        const d = orderDate.replace(/\//g, '-');
+        recMonth = d.slice(0, 7);
+      }
 
       const key = 'pur_' + Date.now() + '_' + i;
       if (!DB.purchase) DB.purchase = {};
@@ -2600,7 +2614,7 @@ function parseMaterialExcel(buf) {
   e.target.value = '';
 }
 
-// ── 見積依頼書 印刷（各社ごとにページ生成） ──
+// ── 見積依頼書 印刷（各社ごとにページ生成・A4対応） ──
 function generateQuotePrint() {
   if (!quoteItems.length) { toast('品目を追加してください', 'error'); return; }
   const suppliers = getSuppliers();
@@ -2609,89 +2623,95 @@ function generateQuotePrint() {
 
   const date   = document.getElementById('qf_date').value || new Date().toISOString().slice(0,10);
   const staff  = document.getElementById('qf_staff').value || '担当';
-  const dateJa = new Date(date).toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
+  const dateJa = new Date(date).toLocaleDateString('ja-JP', {year:'numeric', month:'long', day:'numeric'});
 
+  // 各社ごとのページHTML生成
   const pages = toList.map(sup => {
-    const itemRows = quoteItems.map((r,i) => {
-      const mat = convertMaterial(r.material, sup.id);
-      // 仕上げ記号の▽表示
-      const fDisp = finishLabel(r.finish);  // 仕上欄は 2F/4F/6F のみ表示
-      return `<tr>
-        <td style="text-align:center;border:1px solid #aaa;padding:4px">${i+1}</td>
-        <td style="border:1px solid #aaa;padding:4px">${r.dwgNo||''}</td>
-        <td style="border:1px solid #aaa;padding:4px">${r.name||''}</td>
-        <td style="text-align:center;border:1px solid #aaa;padding:4px">${r.qty||1}</td>
-        <td style="border:1px solid #aaa;padding:4px">${mat}</td>
-        <td style="text-align:right;border:1px solid #aaa;padding:4px">${r.sizeX||''}${r.fX?'<span style=\"color:#1a6b3c;font-size:8pt;margin-left:2px;\">▽▽</span>':''}</td>
-        <td style="text-align:center;border:1px solid #aaa;padding:4px">${r.sizeY||''}${r.fY?'<span style=\"color:#1a6b3c;font-size:8pt;margin-left:2px;\">▽▽</span>':''}</td>
-        <td style="text-align:right;border:1px solid #aaa;padding:4px">${r.sizeZ||''}${r.fZ?'<span style=\"color:#1a6b3c;font-size:8pt;margin-left:2px;\">▽▽</span>':''}</td>
-        <td style="text-align:center;border:1px solid #aaa;padding:4px">${fDisp}</td>
-        <td style="border:1px solid #aaa;padding:4px"></td>
-        <td style="border:1px solid #aaa;padding:4px"></td>
-        <td style="border:1px solid #aaa;padding:4px">${r.note||''}</td>
-      </tr>`;
+    const items = quoteItems.map(r => ({
+      ...r,
+      material: convertMaterial(r.material, sup.id)
+    }));
+
+    const itemRows = items.map((r, i) => {
+      // 仕上げ表示：2F/4F/6Fのみ
+      const finish = finishLabel(r.finish);
+      // X/Y/Zそれぞれの▽▽表示（チェックされた面のみ）
+      const xMark = r.fX ? '<div style="font-size:7pt;color:#1a7a3c;text-align:center;line-height:1;">▽▽</div>' : '<div style="font-size:7pt;color:transparent;">▽▽</div>';
+      const yMark = r.fY ? '<div style="font-size:7pt;color:#1a7a3c;text-align:center;line-height:1;">▽▽</div>' : '<div style="font-size:7pt;color:transparent;">▽▽</div>';
+      const zMark = r.fZ ? '<div style="font-size:7pt;color:#1a7a3c;text-align:center;line-height:1;">▽▽</div>' : '<div style="font-size:7pt;color:transparent;">▽▽</div>';
+      return '<tr>' +
+        '<td style="text-align:center;border:1px solid #bbb;padding:3px 4px">' + (i+1) + '</td>' +
+        '<td style="text-align:center;border:1px solid #bbb;padding:3px 4px;font-family:monospace">' + (r.moldNo||'') + '</td>' +
+        '<td style="border:1px solid #bbb;padding:3px 6px">' + (r.name||'') + '</td>' +
+        '<td style="text-align:center;border:1px solid #bbb;padding:3px 4px">' + (r.qty||1) + '</td>' +
+        '<td style="border:1px solid #bbb;padding:3px 4px">' + (r.material||'') + '</td>' +
+        '<td style="border:1px solid #bbb;padding:0;text-align:center">' + xMark + '<div style="padding:2px 4px">' + (r.sizeX||'') + '</div></td>' +
+        '<td style="border:1px solid #bbb;padding:0;text-align:center">' + yMark + '<div style="padding:2px 4px">' + (r.sizeY||'') + '</div></td>' +
+        '<td style="border:1px solid #bbb;padding:0;text-align:center">' + zMark + '<div style="padding:2px 4px">' + (r.sizeZ||'') + '</div></td>' +
+        '<td style="text-align:center;border:1px solid #bbb;padding:3px 4px;font-weight:600">' + finish + '</td>' +
+        '<td style="border:1px solid #bbb;padding:3px 4px;font-size:8pt">' + (r.note||'') + '</td>' +
+        '</tr>';
     }).join('');
 
-    return `<div style="page-break-after:always;padding:15mm;font-family:'Noto Sans JP',sans-serif;font-size:10pt;">
-      <div style="display:flex;justify-content:space-between;margin-bottom:12px;">
-        <div>
-          <div style="font-size:11pt;font-weight:bold">${sup.name}</div>
-          <div>${sup.person}</div>
-          ${sup.fax ? `<div style="font-size:9pt;color:#555">FAX: ${sup.fax}</div>` : ''}
-          ${sup.email ? `<div style="font-size:9pt;color:#555">E-mail: ${sup.email}</div>` : ''}
-        </div>
-        <div style="text-align:right">
-          <div style="font-size:16pt;font-weight:bold;border-bottom:2px solid #000;padding-bottom:4px;margin-bottom:6px">見 積 依 頼 書</div>
-          <div style="font-size:9pt">${dateJa}</div>
-          <div style="font-size:9pt">橋本工業㈱　${staff}</div>
-        </div>
-      </div>
-      <div style="margin-bottom:10px;line-height:1.8;font-size:10pt">
-        いつもお世話になります。<br>下記の見積りをお願い致します。
-      </div>
-      <table style="width:100%;border-collapse:collapse;font-size:9pt;">
-        <thead><tr style="background:#f0f0f0">
-          <th style="border:1px solid #aaa;padding:5px;width:28px">No.</th>
-          <th style="border:1px solid #aaa;padding:5px">DWG.NO</th>
-          <th style="border:1px solid #aaa;padding:5px">名　称</th>
-          <th style="border:1px solid #aaa;padding:5px;width:36px">数量</th>
-          <th style="border:1px solid #aaa;padding:5px">材質</th>
-          <th style="border:1px solid #aaa;padding:5px;width:60px">長さ(X)</th>
-          <th style="border:1px solid #aaa;padding:5px;width:60px">幅(Y)</th>
-          <th style="border:1px solid #aaa;padding:5px;width:60px">材厚(Z)</th>
-          <th style="border:1px solid #aaa;padding:5px;width:50px">仕上</th>
-          <th style="border:1px solid #aaa;padding:5px;width:70px">見積単価</th>
-          <th style="border:1px solid #aaa;padding:5px;width:60px">㎏単価</th>
-          <th style="border:1px solid #aaa;padding:5px">備考</th>
-        </tr></thead>
-        <tbody>${itemRows}</tbody>
-      </table>
-      <div style="margin-top:20px;font-size:9pt;color:#555">
-        ご回答はFAXまたはメールにてお願いいたします。
-      </div>
-    </div>`;
+    return '<div class="page-break">' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:10px;">' +
+        '<div style="font-size:10pt;">' +
+          '<div style="font-size:11pt;font-weight:bold;margin-bottom:2px;">' + sup.name + '</div>' +
+          '<div>' + sup.person + '</div>' +
+          (sup.fax   ? '<div style="font-size:9pt;color:#555;">FAX: ' + sup.fax + '</div>' : '') +
+          (sup.email ? '<div style="font-size:9pt;color:#555;">E-mail: ' + sup.email + '</div>' : '') +
+        '</div>' +
+        '<div style="text-align:right;">' +
+          '<div style="font-size:18pt;font-weight:bold;letter-spacing:2px;border-bottom:2px solid #000;padding-bottom:4px;margin-bottom:6px;">見 積 依 頼 書</div>' +
+          '<div style="font-size:9pt;">' + dateJa + '</div>' +
+          '<div style="font-size:9pt;">橋本工業㈱　' + staff + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div style="margin-bottom:10px;font-size:10pt;line-height:1.8;">いつもお世話になります。<br>下記の見積りをお願い致します。</div>' +
+      '<table style="width:100%;border-collapse:collapse;font-size:9pt;">' +
+        '<thead>' +
+          '<tr style="background:#f0f0f0;">' +
+            '<th style="border:1px solid #bbb;padding:5px 4px;width:24px">No.</th>' +
+            '<th style="border:1px solid #bbb;padding:5px 4px;width:52px">管理NO.</th>' +
+            '<th style="border:1px solid #bbb;padding:5px 6px;">名　　称</th>' +
+            '<th style="border:1px solid #bbb;padding:5px 4px;width:30px">数量</th>' +
+            '<th style="border:1px solid #bbb;padding:5px 4px;width:60px">材質</th>' +
+            '<th style="border:1px solid #bbb;padding:5px 4px;width:64px">長さ(X)</th>' +
+            '<th style="border:1px solid #bbb;padding:5px 4px;width:64px">幅(Y)</th>' +
+            '<th style="border:1px solid #bbb;padding:5px 4px;width:64px">材厚(Z)</th>' +
+            '<th style="border:1px solid #bbb;padding:5px 4px;width:36px">仕上</th>' +
+            '<th style="border:1px solid #bbb;padding:5px 4px;">備考</th>' +
+          '</tr>' +
+        '</thead>' +
+        '<tbody>' + itemRows + '</tbody>' +
+      '</table>' +
+      '<div style="margin-top:16px;font-size:9pt;color:#555;">ご回答はFAXまたはメールにてお願いいたします。</div>' +
+    '</div>';
   }).join('');
 
   const win = window.open('', '_blank');
-  win.document.write(`<!DOCTYPE html><html><head>
-    <meta charset="UTF-8"><title>見積依頼書</title>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
-    <style>
-      body{margin:0;font-family:'Noto Sans JP',sans-serif;}
-      @media print{.no-print{display:none!important}}
-      .no-print{position:fixed;top:16px;right:16px;display:flex;gap:8px;z-index:99}
-      button{padding:8px 16px;cursor:pointer;border:none;border-radius:4px;font-size:13px}
-      .bp{background:#0369a1;color:#fff}.bc{background:#e2e8f0;color:#333}
-    </style>
-  </head><body>
-    <div class="no-print">
-      <button class="bp" onclick="window.print()">🖨 印刷・PDF保存</button>
-      <button class="bc" onclick="window.close()">閉じる</button>
-    </div>
-    ${pages}
-  </body></html>`);
+  win.document.write('<!DOCTYPE html><html><head>' +
+    '<meta charset="UTF-8"><title>見積依頼書</title>' +
+    '<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">' +
+    '<style>' +
+      'body{margin:0;font-family:"Noto Sans JP",sans-serif;font-size:10pt;background:#fff;}' +
+      '.page-break{width:190mm;min-height:267mm;margin:0 auto;padding:10mm 10mm 8mm;box-sizing:border-box;page-break-after:always;}' +
+      '.page-break:last-child{page-break-after:auto;}' +
+      '.no-print{position:fixed;top:12px;right:12px;display:flex;gap:8px;z-index:99;}' +
+      'button{padding:8px 16px;cursor:pointer;border:none;border-radius:4px;font-size:13px;}' +
+      '.bp{background:#0369a1;color:#fff;}.bc{background:#e2e8f0;color:#333;}' +
+      '@media print{.no-print{display:none!important}@page{size:A4;margin:0}}' +
+    '</style>' +
+    '</head><body>' +
+    '<div class="no-print">' +
+      '<button class="bp" onclick="window.print()">🖨 印刷・PDF保存</button>' +
+      '<button class="bc" onclick="window.close()">閉じる</button>' +
+    '</div>' +
+    pages +
+    '</body></html>');
   win.document.close();
 }
+
 
 // ── 見積待ちとして保存 ──
 async function saveQuoteRequest() {
