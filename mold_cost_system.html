@@ -580,15 +580,14 @@
 
 <!-- NAV -->
 <nav>
-  <button class="tab active" onclick="showPage('dashboard')">ダッシュボード</button>
-  <button class="tab" onclick="showPage('molds')">金型一覧</button>
-  <button class="tab" onclick="showPage('quote')">📋 見積依頼</button>
-  <button class="tab" onclick="showPage('materials')">材料費</button>
-  <button class="tab" onclick="showPage('outsource')">外注費</button>
-  <button class="tab" onclick="showPage('purchase')">購入品費</button>
-  <button class="tab" onclick="showPage('labor')">加工費</button>
-  <button class="tab" onclick="showPage('import')">データ取込</button>
-  <button class="tab" onclick="showPage('settings')">設定</button>
+  <button class="tab active" id="nav-dashboard" onclick="showPage('dashboard')">ダッシュボード</button>
+  <button class="tab" id="nav-molds" onclick="showPage('molds')">金型一覧</button>
+  <button class="tab" id="nav-quote" onclick="showPage('quote')">📋 材料見積・手配</button>
+  <button class="tab" id="nav-outsource" onclick="showPage('outsource')">外注費</button>
+  <button class="tab" id="nav-purchase" onclick="showPage('purchase')">購入品費</button>
+  <button class="tab" id="nav-labor" onclick="showPage('labor')">加工費</button>
+  <button class="tab" id="nav-import" onclick="showPage('import')">データ取込</button>
+  <button class="tab" id="nav-settings" onclick="showPage('settings')">設定</button>
 </nav>
 
 <main>
@@ -666,178 +665,154 @@
 
   <!-- ═══ 見積依頼 ═══ -->
   <div id="page-quote" class="page">
-    <div class="section-title">見積依頼書 作成</div>
-
-    <!-- 見積依頼リスト -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
-      <div class="config-box">
-        <div class="config-title">📝 依頼内容入力</div>
-        <div class="form-grid" style="grid-template-columns:1fr 1fr;">
-          <div class="form-group">
-            <label class="form-label">依頼日</label>
-            <input class="form-input" id="qf_date" type="date">
-          </div>
-          <div class="form-group">
-            <label class="form-label">管理NO.</label>
-            <input class="form-input" id="qf_moldNo" placeholder="例: 71-A">
-          </div>
-          <div class="form-group" style="grid-column:1/-1">
-            <label class="form-label">品番</label>
-            <input class="form-input" id="qf_partNo" placeholder="例: YG-4421C">
-          </div>
-          <div class="form-group" style="grid-column:1/-1">
-            <label class="form-label">品名 (NAME)</label>
-            <input class="form-input" id="qf_name" placeholder="例: DIESET UPR">
-          </div>
-          <div class="form-group">
-            <label class="form-label">数量</label>
-            <input class="form-input" id="qf_qty" type="number" value="1">
-          </div>
-          <div class="form-group">
-            <label class="form-label">材質</label>
-            <input class="form-input" id="qf_material" placeholder="SS400, S50C...">
-          </div>
-          <div class="form-group">
-            <label class="form-label">サイズ (幅×奥×厚)</label>
-            <input class="form-input" id="qf_size" placeholder="700×460×30">
-          </div>
-          <div class="form-group">
-            <label class="form-label">仕上</label>
-            <input class="form-input" id="qf_finish" placeholder="4F, 6F...">
-          </div>
-          <div class="form-group" style="grid-column:1/-1">
-            <label class="form-label">備考・特記事項</label>
-            <input class="form-input" id="qf_note" placeholder="形切・吊りボルト加工まで 等">
-          </div>
-        </div>
-        <div style="display:flex;gap:8px;margin-top:4px;">
-          <button class="btn btn-secondary btn-sm" onclick="addQuoteItem()">＋ 品目追加</button>
-          <button class="btn btn-primary" onclick="generateQuotePDF()">📄 見積依頼書を作成・印刷</button>
-        </div>
-      </div>
-
-      <!-- 送付先設定 -->
-      <div class="config-box">
-        <div class="config-title">📮 送付先</div>
-        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
-          <label style="font-size:12px;display:flex;align-items:center;gap:8px;cursor:pointer;">
-            <input type="checkbox" id="qto_daido" checked> 大同DMソリューション㈱（増田様）
-          </label>
-          <label style="font-size:12px;display:flex;align-items:center;gap:8px;cursor:pointer;">
-            <input type="checkbox" id="qto_tokai"> 東海鋼鉄㈱（担当者様）
-          </label>
-          <label style="font-size:12px;display:flex;align-items:center;gap:8px;cursor:pointer;">
-            <input type="checkbox" id="qto_steel"> ㈱スチールポリッシュ（高山様）
-          </label>
-          <label style="font-size:12px;display:flex;align-items:center;gap:8px;cursor:pointer;">
-            <input type="checkbox" id="qto_neo"> ㈱ネオスチール（岩崎様）
-          </label>
-          <label style="font-size:12px;display:flex;align-items:center;gap:8px;cursor:pointer;">
-            <input type="checkbox" id="qto_green"> グリーンスチール㈱（三石様）
-          </label>
-        </div>
-        <div class="form-group">
-          <label class="form-label">FAX番号メモ / メールアドレス</label>
-          <input class="form-input" id="qf_faxNote" placeholder="FAX: 0544-xx-xxxx 等">
-        </div>
-        <hr class="divider">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">自社情報</div>
-        <div style="font-size:12px;color:var(--text2);">
-          橋本工業㈱<br>
-          担当: <input class="form-input" id="qf_staff" placeholder="松本" style="width:80px;display:inline-block;padding:3px 6px;">
-        </div>
-      </div>
-    </div>
-
-    <!-- 品目リスト -->
-    <div class="table-wrap">
-      <div class="table-header">
-        <div class="table-title">見積依頼 品目一覧</div>
-        <div class="table-count" id="quoteItemCount">0件</div>
-        <div class="table-actions">
-          <button class="btn btn-secondary btn-sm" onclick="clearQuoteItems()">🗑 クリア</button>
-        </div>
-      </div>
-      <div id="quoteItemTable">
-        <div class="empty"><div class="empty-icon">📋</div>品目を追加してください</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ═══ 材料費 ═══ -->
-  <div id="page-materials" class="page">
-    <div class="section-title">材料費</div>
-
+    <div class="section-title">材料見積・手配管理</div>
     <div class="subtab-bar">
-      <button class="subtab active" id="matTab-list" onclick="showMatSubTab('list')">📋 手配一覧</button>
-      <button class="subtab" id="matTab-quote" onclick="showMatSubTab('quote')">📄 見積依頼書</button>
+      <button class="subtab active" id="qtab-request" onclick="showQuoteTab('request')">① 見積依頼書 作成</button>
+      <button class="subtab" id="qtab-compare" onclick="showQuoteTab('compare')">② 見積比較・手配決定</button>
+      <button class="subtab" id="qtab-history" onclick="showQuoteTab('history')">③ 手配履歴</button>
     </div>
 
-    <!-- 手配一覧 -->
-    <div id="subpage-list" class="subpage active">
-      <div class="filter-bar">
-        <input class="search-input" type="text" placeholder="品番・部品名・管理NOで検索..." id="matSearch" oninput="renderMaterials()">
-        <select class="filter-select" id="matMoldFilter" onchange="renderMaterials()"><option value="">全金型</option></select>
-        <button class="btn btn-primary btn-sm" onclick="openMatModal()">＋ 材料費入力</button>
-        <button class="btn btn-secondary btn-sm" onclick="showMatSubTab('quote')">📄 見積依頼書を作成</button>
+    <!-- ① 見積依頼書 作成 -->
+    <div id="qpage-request" class="subpage active">
+      <div style="display:grid;grid-template-columns:1fr 320px;gap:16px;margin-bottom:16px;">
+        <div class="config-box">
+          <div class="config-title">📝 依頼品目の入力</div>
+          <div class="form-grid" style="grid-template-columns:repeat(4,1fr)">
+            <div class="form-group">
+              <label class="form-label">依頼日</label>
+              <input class="form-input" id="qf_date" type="date">
+            </div>
+            <div class="form-group">
+              <label class="form-label">管理NO.</label>
+              <input class="form-input" id="qf_moldNo" placeholder="例: 71-A">
+            </div>
+            <div class="form-group" style="grid-column:span 2">
+              <label class="form-label">品番 (DWG.NO)</label>
+              <input class="form-input" id="qf_partNo" placeholder="例: 71-C201">
+            </div>
+            <div class="form-group" style="grid-column:span 2">
+              <label class="form-label">品名 (NAME)</label>
+              <input class="form-input" id="qf_name" placeholder="例: DIESET UPR">
+            </div>
+            <div class="form-group">
+              <label class="form-label">数量</label>
+              <input class="form-input" id="qf_qty" type="number" value="1" min="1">
+            </div>
+            <div class="form-group">
+              <label class="form-label">材質</label>
+              <input class="form-input" id="qf_material" placeholder="SS400, S50C, DCMX...">
+            </div>
+            <div class="form-group" style="grid-column:span 2">
+              <label class="form-label">サイズ（W × D × T）mm</label>
+              <div style="display:grid;grid-template-columns:1fr 14px 1fr 14px 1fr;gap:4px;align-items:center">
+                <input class="form-input" id="qf_sizeW" placeholder="幅" type="number">
+                <span style="text-align:center;color:var(--text3);font-size:12px">×</span>
+                <input class="form-input" id="qf_sizeD" placeholder="奥行" type="number">
+                <span style="text-align:center;color:var(--text3);font-size:12px">×</span>
+                <input class="form-input" id="qf_sizeT" placeholder="厚み" type="number">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">仕上記号</label>
+              <select class="form-select" id="qf_finish">
+                <option value="">（選択）</option>
+                <option value="▽（1F）">▽（1F）</option>
+                <option value="▽▽（2F）">▽▽（2F）</option>
+                <option value="▽▽▽（3F）">▽▽▽（3F）</option>
+                <option value="▽▽▽▽（4F）">▽▽▽▽（4F）　4F</option>
+                <option value="▽▽▽▽▽（5F）">▽▽▽▽▽（5F）</option>
+                <option value="▽▽▽▽▽▽（6F）" selected>▽▽▽▽▽▽（6F）　6F</option>
+                <option value="黒皮">黒皮</option>
+                <option value="研磨">研磨</option>
+              </select>
+            </div>
+            <div class="form-group" style="grid-column:span 3">
+              <label class="form-label">備考・特記事項</label>
+              <input class="form-input" id="qf_note" placeholder="形切・吊りボルト加工まで 等">
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button class="btn btn-primary btn-sm" onclick="addQuoteRequestItem()">＋ 品目を追加</button>
+            <button class="btn btn-secondary btn-sm" onclick="clearQuoteItems()">🗑 クリア</button>
+          </div>
+        </div>
+        <div class="config-box">
+          <div class="config-title">📮 送付先（FAX / メール）</div>
+          <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px">
+            <label style="font-size:12px;display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="qto_daido" checked>
+              <div><div style="font-weight:600">大同DMソリューション㈱</div><div style="font-size:11px;color:var(--text3)">増田 様</div></div>
+            </label>
+            <label style="font-size:12px;display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="qto_polish">
+              <div><div style="font-weight:600">㈱スチールポリッシュ</div><div style="font-size:11px;color:var(--text3)">高山 様　FAX: 46123</div></div>
+            </label>
+            <label style="font-size:12px;display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="qto_tokai">
+              <div><div style="font-weight:600">東海鋼鉄㈱</div><div style="font-size:11px;color:var(--text3)">担当者 様　FAX: 0544-66-3020</div></div>
+            </label>
+            <label style="font-size:12px;display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="qto_neo">
+              <div><div style="font-weight:600">㈱ネオスチール</div><div style="font-size:11px;color:var(--text3)">岩崎 様</div></div>
+            </label>
+            <label style="font-size:12px;display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="qto_green">
+              <div><div style="font-weight:600">グリーンスチール㈱</div><div style="font-size:11px;color:var(--text3)">三石 様　FAX: 0277-46-8204</div></div>
+            </label>
+          </div>
+          <div class="form-group" style="margin-bottom:10px">
+            <label class="form-label">担当者名</label>
+            <input class="form-input" id="qf_staff" value="松本">
+          </div>
+          <hr class="divider">
+          <button class="btn btn-primary" style="width:100%;margin-bottom:6px" onclick="generateQuotePrint()">🖨 見積依頼書を印刷・PDF</button>
+          <button class="btn btn-secondary btn-sm" style="width:100%;margin-bottom:6px" onclick="copyQuoteEmail()">📋 メール用テキストコピー</button>
+          <button class="btn btn-primary btn-sm" style="width:100%;background:var(--green);border-color:var(--green)" onclick="saveQuoteRequest()">💾 依頼を保存して②へ</button>
+        </div>
       </div>
       <div class="table-wrap">
         <div class="table-header">
-          <div class="table-title">鋼材手配一覧</div>
-          <div class="table-count" id="matCount"></div>
-          <div class="table-actions">
-            <button class="btn btn-secondary btn-sm" onclick="copyTableToClipboard('matTableBody','材料費')">📋 全行コピー</button>
-          </div>
+          <div class="table-title">依頼品目一覧</div>
+          <div class="table-count" id="quoteItemCount">0件</div>
         </div>
-        <div id="matTableBody"><div class="loading"><div class="spin"></div></div></div>
+        <div id="quoteItemTable">
+          <div class="empty"><div class="empty-icon">📋</div>品目を追加してください</div>
+        </div>
       </div>
     </div>
 
-    <!-- 見積依頼書 -->
-    <div id="subpage-quote" class="subpage">
-      <div style="display:grid;grid-template-columns:310px 1fr;gap:20px;align-items:start;">
-        <div>
-          <div class="config-box">
-            <div class="config-title">📄 見積依頼書 設定</div>
-            <div class="form-group" style="margin-bottom:10px">
-              <label class="form-label">宛先（材料メーカー）</label>
-              <input class="form-input" id="q_to" placeholder="例: 大同DMソリューション㈱ 増田 様">
-            </div>
-            <div class="form-group" style="margin-bottom:10px">
-              <label class="form-label">FAX番号</label>
-              <input class="form-input" id="q_fax" placeholder="例: 052-XXX-XXXX">
-            </div>
-            <div class="form-group" style="margin-bottom:10px">
-              <label class="form-label">件名（空欄で自動生成）</label>
-              <input class="form-input" id="q_subject" placeholder="鋼材のお見積りについて">
-            </div>
-            <div class="form-group" style="margin-bottom:10px">
-              <label class="form-label">納入希望日</label>
-              <input class="form-input" id="q_dueDate" type="date">
-            </div>
-            <div class="form-group" style="margin-bottom:14px">
-              <label class="form-label">備考</label>
-              <input class="form-input" id="q_note" placeholder="形切・吊りボルト加工まで 等">
-            </div>
-            <div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text2)">依頼品目</div>
-            <div id="quoteItemsWrap"></div>
-            <button class="btn btn-secondary btn-sm" style="width:100%;margin-top:8px" onclick="addQuoteItem()">＋ 品目を追加</button>
-            <hr style="margin:14px 0;border-color:var(--border)">
-            <button class="btn btn-primary" style="width:100%;margin-bottom:6px" onclick="renderQuotePreview()">👁 プレビュー更新</button>
-            <button class="btn btn-secondary" style="width:100%" onclick="loadMaterialsToQuote()">📥 手配一覧から読込</button>
+    <!-- ② 見積比較・手配決定 -->
+    <div id="qpage-compare" class="subpage">
+      <div class="filter-bar">
+        <select class="filter-select" id="cmpMoldFilter" onchange="renderCompare()"><option value="">全金型</option></select>
+        <select class="filter-select" id="cmpStatusFilter" onchange="renderCompare()">
+          <option value="">全ステータス</option>
+          <option value="見積待ち">見積待ち</option>
+          <option value="回答済み">回答済み</option>
+          <option value="発注済み">発注済み</option>
+        </select>
+        <div style="font-size:12px;color:var(--text2)">各社の回答金額を入力 → 発注先を確定してください</div>
+      </div>
+      <div id="compareTableWrap">
+        <div class="empty"><div class="empty-icon">📊</div>①で見積依頼を保存してください</div>
+      </div>
+    </div>
+
+    <!-- ③ 手配履歴 -->
+    <div id="qpage-history" class="subpage">
+      <div class="filter-bar">
+        <input class="search-input" type="text" placeholder="管理NO・品名で検索..." id="histSearch" oninput="renderQuoteHistory()">
+      </div>
+      <div class="table-wrap">
+        <div class="table-header">
+          <div class="table-title">発注済み一覧</div>
+          <div class="table-count" id="histCount"></div>
+          <div class="table-actions">
+            <button class="btn btn-secondary btn-sm" onclick="copyTableToClipboard('histTableBody','手配履歴')">📋 全行コピー</button>
           </div>
         </div>
-        <div>
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-            <div style="font-size:13px;font-weight:600;">プレビュー</div>
-            <div style="display:flex;gap:8px;">
-              <button class="btn btn-secondary btn-sm" onclick="window.print()">🖨 印刷・PDF保存</button>
-              <button class="btn btn-primary btn-sm" onclick="copyQuoteText()">📋 テキストコピー（メール用）</button>
-            </div>
-          </div>
-          <div id="quotePreview" class="quote-preview">
-            <div style="color:#94a3b8;text-align:center;padding:40px;font-size:12px;">左の設定を入力し「プレビュー更新」を押してください</div>
-          </div>
+        <div id="histTableBody">
+          <div class="empty"><div class="empty-icon">📦</div>発注済みデータがありません</div>
         </div>
       </div>
     </div>
@@ -1338,12 +1313,13 @@ function initFirebase() {
     // Listen
     db.ref('/moldCostSystem').on('value', snap => {
       const data = snap.val() || {};
-      DB.molds     = data.molds     || {};
-      DB.materials = data.materials || {};
-      DB.outsource = data.outsource || {};
-      DB.purchase  = data.purchase  || {};
-      DB.labor     = data.labor     || {};
-      DB.importLog = data.importLog || [];
+      DB.molds         = data.molds         || {};
+      DB.materials     = data.materials     || {};
+      DB.outsource     = data.outsource     || {};
+      DB.purchase      = data.purchase      || {};
+      DB.labor         = data.labor         || {};
+      DB.quoteRequests = data.quoteRequests || {};
+      DB.importLog     = data.importLog     || [];
       setStatus(true, 'Firebase接続済');
       refreshAll();
     }, err => {
@@ -1434,16 +1410,14 @@ function loadSampleData() {
 function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.getElementById('page-' + name).classList.add('active');
-  document.querySelectorAll('.tab').forEach(t => {
-    if (t.textContent.includes(pageLabel(name))) t.classList.add('active');
-  });
-
+  const page = document.getElementById('page-' + name);
+  if (page) page.classList.add('active');
+  const tab = document.getElementById('nav-' + name);
+  if (tab) tab.classList.add('active');
   const renders = {
     dashboard: renderDashboard,
     molds: renderMolds,
     quote: renderQuote,
-    materials: renderMaterials,
     outsource: renderOutsource,
     purchase: renderPurchase,
     labor: renderLabor,
@@ -2152,157 +2126,480 @@ async function savePurchase() {
 let quoteItems = [];
 
 function renderQuote() {
-  // 今日の日付をデフォルトセット
   const dateEl = document.getElementById('qf_date');
   if (dateEl && !dateEl.value) dateEl.value = new Date().toISOString().slice(0,10);
-  renderQuoteTable();
+  renderSupplierChecks();
+  renderQuoteItemTable();
+  showQuoteTab('request');
 }
 
-function addQuoteItem() {
+// ── サブタブ切替 ──
+function showQuoteTab(name) {
+  ['request','compare','history'].forEach(n => {
+    document.getElementById('qpage-' + n)?.classList.toggle('active', n === name);
+    document.getElementById('qtab-' + n)?.classList.toggle('active', n === name);
+  });
+  if (name === 'compare') renderCompare();
+  if (name === 'history') renderQuoteHistory();
+}
+
+// ── 見積先マスタ ──
+const SUPPLIERS_MASTER = [
+  { id:'daido',   name:'大同DMソリューション㈱', person:'増田 様',   fax:'052-XXX-XXXX' },
+  { id:'tokai',   name:'東海鋼鉄㈱',             person:'担当者 様', fax:'0544-66-3020' },
+  { id:'polish',  name:'㈱スチールポリッシュ',    person:'高山 様',   fax:'' },
+  { id:'neo',     name:'㈱ネオスチール',           person:'岩崎 様',   fax:'' },
+  { id:'green',   name:'グリーンスチール㈱',       person:'三石 様',   fax:'0277-46-8204' },
+];
+
+function renderSupplierChecks() {
+  const wrap = document.getElementById('supplierChecks');
+  if (!wrap) return;
+  wrap.innerHTML = SUPPLIERS_MASTER.map(s => `
+    <label style="font-size:12px;display:flex;align-items:center;gap:8px;cursor:pointer;">
+      <input type="checkbox" id="qto_${s.id}" checked>
+      <span>${s.name}　${s.person}</span>
+      ${s.fax ? `<span style="color:var(--text3);font-size:10px;">FAX:${s.fax}</span>` : ''}
+    </label>`).join('');
+}
+
+// ── 品目リスト管理 ──
+let quoteItems = [];
+
+function addQuoteRequestItem() {
   const moldNo   = document.getElementById('qf_moldNo').value.trim();
   const partNo   = document.getElementById('qf_partNo').value.trim();
+  const dwgNo    = document.getElementById('qf_dwgNo').value.trim();
   const name     = document.getElementById('qf_name').value.trim();
-  const qty      = document.getElementById('qf_qty').value || '1';
+  const qty      = parseInt(document.getElementById('qf_qty').value) || 1;
   const material = document.getElementById('qf_material').value.trim();
-  const size     = document.getElementById('qf_size').value.trim();
-  const finish   = document.getElementById('qf_finish').value.trim();
+  const sizeW    = document.getElementById('qf_sizeW').value.trim();
+  const sizeD    = document.getElementById('qf_sizeD').value.trim();
+  const sizeT    = document.getElementById('qf_sizeT').value.trim();
+  const finish   = document.getElementById('qf_finish').value;
   const note     = document.getElementById('qf_note').value.trim();
 
-  if (!partNo && !name) { toast('品番または品名を入力してください', 'error'); return; }
+  if (!dwgNo && !name) { toast('DWG.NO または NAME を入力してください', 'error'); return; }
 
-  quoteItems.push({ moldNo, partNo, name, qty, material, size, finish, note });
-  renderQuoteTable();
+  const size = [sizeW, sizeD, sizeT].filter(Boolean).join(' × ');
+  quoteItems.push({ moldNo, partNo, dwgNo, name, qty, material, size, sizeW, sizeD, sizeT, finish, note });
+  renderQuoteItemTable();
 
-  // 品目フィールドをクリア（管理NO・品番は残す）
-  ['qf_name','qf_qty','qf_material','qf_size','qf_finish','qf_note'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.value = id === 'qf_qty' ? '1' : '';
+  // クリア（管理NO・品番は残す）
+  ['qf_dwgNo','qf_name','qf_material','qf_sizeW','qf_sizeD','qf_sizeT','qf_note'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
   });
+  document.getElementById('qf_qty').value = '1';
+  document.getElementById('qf_finish').value = '6F';
   toast('品目を追加しました', 'success');
 }
 
-function renderQuoteTable() {
+function removeQuoteItem(i) {
+  quoteItems.splice(i, 1);
+  renderQuoteItemTable();
+}
+
+function clearQuoteItems() {
+  if (quoteItems.length && !confirm('品目リストをクリアしますか？')) return;
+  quoteItems = [];
+  renderQuoteItemTable();
+}
+
+// 仕上記号の表示変換
+function finishLabel(f) {
+  const map = { '6F':'▽▽▽ 6F', '4F':'▽▽▽ 4F', '▽▽':'▽▽', '▽':'▽', '黒皮':'黒皮' };
+  return map[f] || f || '—';
+}
+
+function renderQuoteItemTable() {
   document.getElementById('quoteItemCount').textContent = quoteItems.length + '件';
   if (!quoteItems.length) {
-    document.getElementById('quoteItemTable').innerHTML = '<div class="empty"><div class="empty-icon">📋</div>品目を追加してください</div>';
+    document.getElementById('quoteItemTable').innerHTML =
+      '<div class="empty"><div class="empty-icon">📋</div>品目を追加してください</div>';
     return;
   }
   document.getElementById('quoteItemTable').innerHTML = `
     <table>
       <thead><tr>
-        <th>No.</th><th>管理NO.</th><th>品番</th><th>品名</th>
-        <th>数量</th><th>材質</th><th>サイズ</th><th>仕上</th><th>備考</th><th></th>
+        <th>No.</th><th>管理NO.</th><th>DWG.NO</th><th>NAME</th>
+        <th>数量</th><th>材質</th><th>サイズ（W×D×T）</th><th>仕上</th><th>備考</th><th></th>
       </tr></thead>
-      <tbody>${quoteItems.map((r,i)=>`
+      <tbody>${quoteItems.map((r,i) => `
         <tr>
           <td class="mono">${i+1}</td>
           <td class="mono">${r.moldNo||''}</td>
-          <td class="mono">${r.partNo||''}</td>
+          <td class="mono">${r.dwgNo||''}</td>
           <td>${r.name||''}</td>
           <td class="mono">${r.qty||1}</td>
           <td class="mono">${r.material||''}</td>
           <td class="mono">${r.size||''}</td>
-          <td>${r.finish||''}</td>
-          <td>${r.note||''}</td>
+          <td>${finishLabel(r.finish)}</td>
+          <td style="font-size:11px">${r.note||''}</td>
           <td><button class="btn btn-danger btn-sm" onclick="removeQuoteItem(${i})">×</button></td>
         </tr>`).join('')}
       </tbody>
     </table>`;
 }
 
-function removeQuoteItem(i) {
-  quoteItems.splice(i, 1);
-  renderQuoteTable();
-}
-
-function clearQuoteItems() {
-  if (quoteItems.length && !confirm('品目リストをクリアしますか？')) return;
-  quoteItems = [];
-  renderQuoteTable();
-}
-
-function generateQuotePDF() {
+// ── 見積依頼書 印刷 ──
+function generateQuotePrint() {
   if (!quoteItems.length) { toast('品目を追加してください', 'error'); return; }
-
-  const date    = document.getElementById('qf_date').value || new Date().toISOString().slice(0,10);
-  const staff   = document.getElementById('qf_staff').value || '担当';
-  const faxNote = document.getElementById('qf_faxNote').value;
-
-  // 送付先リスト
-  const toList = [
-    { id:'qto_daido',  name:'大同DMソリューション㈱', person:'増田 様' },
-    { id:'qto_tokai',  name:'東海鋼鉄㈱',             person:'担当者 様' },
-    { id:'qto_steel',  name:'㈱スチールポリッシュ',    person:'高山 様' },
-    { id:'qto_neo',    name:'㈱ネオスチール',           person:'岩崎 様' },
-    { id:'qto_green',  name:'グリーンスチール㈱',       person:'三石 様' },
-  ].filter(t => document.getElementById(t.id)?.checked);
-
+  const toList = SUPPLIERS_MASTER.filter(s => document.getElementById('qto_' + s.id)?.checked);
   if (!toList.length) { toast('送付先を1社以上選択してください', 'error'); return; }
 
-  // 送付先ごとにページを生成
+  const date  = document.getElementById('qf_date').value || new Date().toISOString().slice(0,10);
+  const staff = document.getElementById('qf_staff').value || '担当';
+  const dateJa = new Date(date).toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
+
+  const itemRows = quoteItems.map((r,i) => `
+    <tr>
+      <td style="text-align:center">${i+1}</td>
+      <td>${r.dwgNo||''}</td>
+      <td>${r.name||''}</td>
+      <td style="text-align:center">${r.qty||1}</td>
+      <td>${r.material||''}</td>
+      <td style="text-align:center">${r.size||''}</td>
+      <td style="text-align:center">${finishLabel(r.finish)}</td>
+      <td></td>
+      <td></td>
+      <td>${r.note||''}</td>
+    </tr>`).join('');
+
   const pages = toList.map(to => `
-    <div class="print-page">
-      <div class="print-header" style="display:flex;justify-content:space-between;align-items:flex-end;">
+    <div class="print-page" style="page-break-after:always;padding:20mm;font-family:'Noto Sans JP',sans-serif;font-size:10pt;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
         <div>
-          <div style="font-size:9pt;margin-bottom:4px;">${to.name}<br>${to.person}</div>
-          ${faxNote ? `<div style="font-size:8pt;color:#666;">${faxNote}</div>` : ''}
+          <div style="font-size:11pt;font-weight:bold;margin-bottom:4px;">${to.name}</div>
+          <div style="font-size:10pt;">${to.person}</div>
+          ${to.fax ? `<div style="font-size:9pt;color:#555;">FAX: ${to.fax}</div>` : ''}
         </div>
         <div style="text-align:right;">
-          <div class="print-title">見積依頼書</div>
-          <div style="font-size:9pt;margin-top:4px;">${date}</div>
+          <div style="font-size:16pt;font-weight:bold;border-bottom:2px solid #000;padding-bottom:4px;margin-bottom:6px;">見 積 依 頼 書</div>
+          <div style="font-size:9pt;">${dateJa}</div>
+          <div style="font-size:9pt;">橋本工業㈱　${staff}</div>
         </div>
       </div>
-
-      <div style="margin:12px 0;font-size:10pt;">
-        いつもお世話になっております。<br>
+      <div style="margin-bottom:12px;line-height:1.8;">
+        いつもお世話になります。<br>
         下記の見積りをお願い致します。
       </div>
-
-      <table class="print-table">
+      <table style="width:100%;border-collapse:collapse;font-size:9pt;">
         <thead>
-          <tr>
-            <th style="width:30px;">No.</th>
-            <th style="width:60px;">管理NO.</th>
-            <th>品番 / 品名</th>
-            <th style="width:35px;">数量</th>
-            <th style="width:50px;">材質</th>
-            <th style="width:110px;">サイズ (W×D×T)</th>
-            <th style="width:35px;">仕上</th>
-            <th>備考・特記</th>
-            <th style="width:70px;">見積単価</th>
+          <tr style="background:#f0f0f0;">
+            <th style="border:1px solid #aaa;padding:5px;width:24px">No.</th>
+            <th style="border:1px solid #aaa;padding:5px;">DWG.NO</th>
+            <th style="border:1px solid #aaa;padding:5px;">NAME</th>
+            <th style="border:1px solid #aaa;padding:5px;width:36px">数量</th>
+            <th style="border:1px solid #aaa;padding:5px;">材質</th>
+            <th style="border:1px solid #aaa;padding:5px;">サイズ（W×D×T）</th>
+            <th style="border:1px solid #aaa;padding:5px;width:50px">仕上</th>
+            <th style="border:1px solid #aaa;padding:5px;width:70px">見積単価</th>
+            <th style="border:1px solid #aaa;padding:5px;width:70px">㎏単価</th>
+            <th style="border:1px solid #aaa;padding:5px;">備考</th>
           </tr>
         </thead>
-        <tbody>
-          ${quoteItems.map((r,i)=>`
-          <tr>
-            <td style="text-align:center;">${i+1}</td>
-            <td style="text-align:center;">${r.moldNo||''}</td>
-            <td>${r.partNo||''}<br><span style="font-size:8pt;color:#333;">${r.name||''}</span></td>
-            <td style="text-align:center;">${r.qty||1}</td>
-            <td style="text-align:center;">${r.material||''}</td>
-            <td style="text-align:center;">${r.size||''}</td>
-            <td style="text-align:center;">${r.finish||''}</td>
-            <td>${r.note||''}</td>
-            <td></td>
-          </tr>`).join('')}
-          ${Array(Math.max(0, 8-quoteItems.length)).fill('<tr><td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>').join('')}
-        </tbody>
+        <tbody>${itemRows}</tbody>
       </table>
-
-      <div style="margin-top:20px;font-size:9pt;">
-        ご回答の程、よろしくお願い致します。
+      <div style="margin-top:30px;font-size:9pt;color:#555;">
+        ご回答は　FAX または メールにてお願いいたします。
       </div>
+    </div>`).join('');
 
-      <div style="margin-top:30px;text-align:right;font-size:9pt;border-top:1px solid #ccc;padding-top:10px;">
-        橋本工業㈱　担当: ${staff}
-      </div>
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html><html><head>
+    <meta charset="UTF-8">
+    <title>見積依頼書</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+      body { margin:0; font-family:'Noto Sans JP',sans-serif; }
+      @media print { .no-print { display:none; } }
+      .no-print { position:fixed;top:16px;right:16px;display:flex;gap:8px; }
+      button { padding:8px 16px;cursor:pointer;border:none;border-radius:4px;font-size:13px; }
+      .btn-print { background:#0369a1;color:#fff; }
+      .btn-close { background:#e2e8f0;color:#333; }
+    </style>
+  </head><body>
+    <div class="no-print">
+      <button class="btn-print" onclick="window.print()">🖨 印刷・PDF保存</button>
+      <button class="btn-close" onclick="window.close()">閉じる</button>
     </div>
-  `).join('');
+    ${pages}
+  </body></html>`);
+  win.document.close();
+}
 
-  document.getElementById('print-quote').innerHTML = pages;
-  window.print();
-  // 印刷後にクリア
-  setTimeout(() => { document.getElementById('print-quote').innerHTML = ''; }, 1000);
+
+// メール用テキストコピー
+function copyQuoteEmail() {
+  if (!quoteItems.length) { toast('品目を追加してください', 'error'); return; }
+  const toList = SUPPLIERS_MASTER.filter(s => document.getElementById('qto_' + s.id)?.checked);
+  if (!toList.length) { toast('送付先を選択してください', 'error'); return; }
+  const staff = document.getElementById('qf_staff').value || '担当';
+  const date  = document.getElementById('qf_date').value || new Date().toISOString().slice(0,10);
+  const itemLines = quoteItems.map((r,i) =>
+    `  ${i+1}. ${r.partNo||r.dwgNo||''} / ${r.name||''} / ${r.material||''} / ${r.size||''} / 仕上:${r.finish||''} / 数量:${r.qty||1}${r.note?' / '+r.note:''}`
+  ).join('
+');
+  const toNames = toList.map(s=>s.name).join('、');
+  const text = `【見積依頼】${date}
+
+${toNames} 御担当者様
+
+いつもお世話になっております。
+橋本工業㈱ ${staff} です。
+
+下記の鋼材につきまして、お見積りをお願い申し上げます。
+
+${itemLines}
+
+以上、よろしくお願いいたします。`;
+  navigator.clipboard.writeText(text).then(() => toast('メール用テキストをコピーしました', 'success'));
+}
+
+// ── 見積待ちとして保存 ──
+async function saveQuoteRequest() {
+  if (!quoteItems.length) { toast('品目を追加してください', 'error'); return; }
+  const date     = document.getElementById('qf_date').value || new Date().toISOString().slice(0,10);
+  const moldNo   = document.getElementById('qf_moldNo').value.trim();
+  const partNo   = document.getElementById('qf_partNo').value.trim();
+  const toList   = SUPPLIERS_MASTER.filter(s => document.getElementById('qto_' + s.id)?.checked).map(s=>s.id);
+
+  const key = 'qr_' + Date.now();
+  const record = {
+    date, moldNo, partNo, items: [...quoteItems],
+    suppliers: toList, status: '見積待ち',
+    quotes: {},   // { supplierId: { unitPrice, kgPrice } }
+    decided: null // 決定仕入先ID
+  };
+
+  if (!DB.quoteRequests) DB.quoteRequests = {};
+  DB.quoteRequests[key] = record;
+  await writeToFirebase('quoteRequests', DB.quoteRequests);
+
+  toast('見積依頼を保存しました', 'success');
+  quoteItems = [];
+  renderQuoteItemTable();
+  showQuoteTab('compare');
+}
+
+// ── ② 見積比較・回答入力 ──
+function renderCompare() {
+  const moldFil   = document.getElementById('cmpMoldFilter')?.value || '';
+  const statusFil = document.getElementById('cmpStatusFilter')?.value || '';
+
+  if (!DB.quoteRequests) DB.quoteRequests = {};
+  const entries = Object.entries(DB.quoteRequests);
+
+  // フィルター更新
+  const moldNos = [...new Set(entries.map(([,r])=>r.moldNo).filter(Boolean))].sort();
+  const mSel = document.getElementById('cmpMoldFilter');
+  if (mSel) {
+    const cur = mSel.value;
+    mSel.innerHTML = '<option value="">全金型</option>' + moldNos.map(n=>`<option value="${n}"${n===cur?' selected':''}>${n}</option>`).join('');
+  }
+
+  let filtered = entries;
+  if (moldFil)   filtered = filtered.filter(([,r]) => r.moldNo === moldFil);
+  if (statusFil) filtered = filtered.filter(([,r]) => r.status === statusFil);
+
+  if (!filtered.length) {
+    document.getElementById('compareTableWrap').innerHTML =
+      '<div class="empty"><div class="empty-icon">📊</div>該当する見積依頼がありません。①で依頼を保存してください</div>';
+    return;
+  }
+
+  document.getElementById('compareTableWrap').innerHTML = filtered.map(([key, rec]) => {
+    const supplierNames = { daido:'大同', tokai:'東海鋼鉄', polish:'スチールポリッシュ', neo:'ネオスチール', green:'グリーンスチール' };
+
+    const itemRows = rec.items.map((item, i) => {
+      const supCols = rec.suppliers.map(sid => {
+        const q = rec.quotes[`${key}_${i}_${sid}`] || {};
+        return `
+          <td style="padding:4px;min-width:90px;">
+            <input class="form-input" style="padding:4px 6px;font-size:11px;width:85px"
+              type="number" placeholder="見積額"
+              value="${q.unitPrice||''}"
+              onchange="updateQuote('${key}',${i},'${sid}','unitPrice',this.value)"
+              title="${supplierNames[sid]||sid} 見積単価">
+          </td>
+          <td style="padding:4px;min-width:75px;">
+            <input class="form-input" style="padding:4px 6px;font-size:11px;width:70px;background:${rec.decided===sid&&i===0?'var(--green-dim)':''}"
+              type="number" placeholder="㎏単価" step="0.01"
+              value="${q.kgPrice||''}"
+              onchange="updateQuote('${key}',${i},'${sid}','kgPrice',this.value)"
+              title="${supplierNames[sid]||sid} ㎏単価">
+          </td>`;
+      }).join('');
+
+      // 見積比較
+      const prices = rec.suppliers.map(sid => parseFloat(rec.quotes[`${key}_${i}_${sid}`]?.unitPrice||0)).filter(p=>p>0);
+      const minPrice = prices.length ? Math.min(...prices) : 0;
+      const maxPrice = prices.length ? Math.max(...prices) : 0;
+      const diff = maxPrice - minPrice;
+
+      return `
+        <tr style="border-bottom:1px solid var(--border)">
+          <td class="mono" style="padding:6px 8px;font-size:11px">${item.dwgNo||''}</td>
+          <td style="padding:6px 8px">${item.name||''}</td>
+          <td class="mono" style="padding:6px 8px;text-align:center">${item.qty||1}</td>
+          <td class="mono" style="padding:6px 8px">${item.material||''}</td>
+          <td class="mono" style="padding:6px 8px;font-size:11px">${item.size||''}</td>
+          <td style="padding:6px 8px;font-size:11px">${finishLabel(item.finish)}</td>
+          ${supCols}
+          <td style="padding:6px 8px;font-size:11px;color:var(--green);font-weight:600">
+            ${minPrice ? '¥'+fmt(minPrice) : '—'}
+          </td>
+          <td style="padding:6px 8px;font-size:11px;color:var(--red)">
+            ${diff ? '▼¥'+fmt(diff) : '—'}
+          </td>
+        </tr>`;
+    }).join('');
+
+    const supHeaders = rec.suppliers.map(sid =>
+      `<th colspan="2" style="text-align:center;background:var(--accent-dim);color:var(--accent)">${supplierNames[sid]||sid}<br><span style="font-size:9px;font-weight:400">見積額 / ㎏単価</span></th>`
+    ).join('');
+
+    const statusBg = { '見積待ち':'badge-yellow','回答済み':'badge-blue','発注済み':'badge-green' };
+
+    return `
+      <div class="table-wrap" style="margin-bottom:16px;">
+        <div class="table-header">
+          <div class="table-title">
+            <span class="mono">${rec.moldNo||'—'}</span>
+            ${rec.partNo ? `<span style="color:var(--text3);font-size:11px;margin-left:8px">${rec.partNo}</span>` : ''}
+          </div>
+          <span class="badge ${statusBg[rec.status]||'badge-gray'} ">${rec.status}</span>
+          <span style="font-size:11px;color:var(--text3);margin-left:8px">${rec.date||''}</span>
+          <div class="table-actions">
+            ${rec.status !== '発注済み' ? `
+              <select class="filter-select" id="decide_${key}" style="font-size:11px">
+                <option value="">発注先を選択</option>
+                ${rec.suppliers.map(sid=>`<option value="${sid}"${rec.decided===sid?' selected':''}>${supplierNames[sid]||sid}</option>`).join('')}
+              </select>
+              <button class="btn btn-primary btn-sm" onclick="decideOrder('${key}')">✅ 発注確定</button>
+            ` : `<span style="color:var(--green);font-weight:600;font-size:12px">✅ 発注先: ${supplierNames[rec.decided]||rec.decided||'—'}</span>`}
+          </div>
+        </div>
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:12px;">
+            <thead>
+              <tr style="background:var(--bg3)">
+                <th style="padding:8px;text-align:left">DWG.NO</th>
+                <th style="padding:8px;text-align:left">NAME</th>
+                <th style="padding:8px">数量</th>
+                <th style="padding:8px">材質</th>
+                <th style="padding:8px">サイズ</th>
+                <th style="padding:8px">仕上</th>
+                ${supHeaders}
+                <th style="padding:8px;color:var(--green)">最安値</th>
+                <th style="padding:8px;color:var(--red)">差額</th>
+              </tr>
+            </thead>
+            <tbody>${itemRows}</tbody>
+          </table>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function updateQuote(reqKey, itemIdx, supId, field, value) {
+  if (!DB.quoteRequests) return;
+  const rec = DB.quoteRequests[reqKey];
+  if (!rec) return;
+  const qkey = `${reqKey}_${itemIdx}_${supId}`;
+  if (!rec.quotes) rec.quotes = {};
+  if (!rec.quotes[qkey]) rec.quotes[qkey] = {};
+  rec.quotes[qkey][field] = parseFloat(value) || 0;
+  rec.status = '回答済み';
+  await writeToFirebase('quoteRequests', DB.quoteRequests);
+}
+
+async function decideOrder(reqKey) {
+  const rec = DB.quoteRequests[reqKey];
+  if (!rec) return;
+  const decided = document.getElementById('decide_' + reqKey)?.value;
+  if (!decided) { toast('発注先を選択してください', 'error'); return; }
+
+  const supplierNames = { daido:'大同DMソリューション㈱', tokai:'東海鋼鉄㈱', polish:'㈱スチールポリッシュ', neo:'㈱ネオスチール', green:'グリーンスチール㈱' };
+
+  rec.decided = decided;
+  rec.status  = '発注済み';
+
+  // 材料費DBへ自動登録
+  const month = new Date().toISOString().slice(0,7);
+  rec.items.forEach((item, i) => {
+    const qkey    = `${reqKey}_${i}_${decided}`;
+    const q       = rec.quotes[qkey] || {};
+    const matKey  = 'mat_' + reqKey + '_' + i;
+    if (!DB.materials) DB.materials = {};
+    DB.materials[matKey] = {
+      month,
+      moldNo:   rec.moldNo   || '',
+      partNo:   rec.partNo   || '',
+      name:     item.name    || '',
+      material: item.material|| '',
+      size:     item.size    || '',
+      finish:   item.finish  || '',
+      weight:   0,
+      amount:   parseFloat(q.unitPrice || 0) * (item.qty || 1),
+      supplier: supplierNames[decided] || decided,
+      note:     item.note    || '',
+      quoteKey: reqKey
+    };
+  });
+
+  await writeToFirebase('quoteRequests', DB.quoteRequests);
+  await writeToFirebase('materials', DB.materials);
+
+  toast('発注確定しました。材料費に自動登録されました', 'success');
+  renderCompare();
+}
+
+// ── ③ 発注履歴 ──
+function renderQuoteHistory() {
+  const search = (document.getElementById('histSearch')?.value||'').toLowerCase();
+  if (!DB.quoteRequests) DB.quoteRequests = {};
+  const supplierNames = { daido:'大同', tokai:'東海鋼鉄', polish:'ポリッシュ', neo:'ネオスチール', green:'グリーンスチール' };
+
+  let entries = Object.entries(DB.quoteRequests).filter(([,r]) => r.status === '発注済み');
+  if (search) entries = entries.filter(([,r]) =>
+    (r.moldNo||'').toLowerCase().includes(search) ||
+    (r.partNo||'').toLowerCase().includes(search) ||
+    r.items?.some(it => (it.name||'').toLowerCase().includes(search))
+  );
+  document.getElementById('histCount').textContent = entries.length + '件';
+  if (!entries.length) {
+    document.getElementById('histTableBody').innerHTML =
+      '<div class="empty"><div class="empty-icon">📦</div>発注済みデータがありません</div>';
+    return;
+  }
+  const rows = entries.flatMap(([key,rec]) =>
+    rec.items.map((item,i) => {
+      const q = rec.quotes?.[`${key}_${i}_${rec.decided}`] || {};
+      return `<tr>
+        <td class="mono">${rec.date||''}</td>
+        <td class="mono">${rec.moldNo||''}</td>
+        <td class="mono">${item.dwgNo||''}</td>
+        <td>${item.name||''}</td>
+        <td class="mono">${item.material||''}</td>
+        <td class="mono">${item.size||''}</td>
+        <td>${finishLabel(item.finish)}</td>
+        <td>${supplierNames[rec.decided]||rec.decided||'—'}</td>
+        <td class="mono">¥${fmt(q.unitPrice||0)}</td>
+        <td class="mono">${q.kgPrice||'—'}</td>
+        <td style="font-size:11px">${item.note||''}</td>
+      </tr>`;
+    })
+  ).join('');
+
+  document.getElementById('histTableBody').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>発注日</th><th>管理NO.</th><th>DWG.NO</th><th>NAME</th>
+        <th>材質</th><th>サイズ</th><th>仕上</th><th>発注先</th><th>決定単価</th><th>㎏単価</th><th>備考</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
 }
 
 // 見積依頼から材料費入力画面を開く
@@ -2386,7 +2683,7 @@ function importJsonData(e) {
 
 function confirmClear() {
   if (confirm('全データを削除します。この操作は元に戻せません。よろしいですか？')) {
-    DB = { molds:{}, materials:{}, outsource:{}, purchase:{}, labor:{}, importLog:[] };
+    DB = { molds:{}, materials:{}, outsource:{}, purchase:{}, labor:{}, quoteRequests:{}, importLog:[] };
     writeToFirebase('', DB);
     refreshAll();
     toast('全データを削除しました', 'success');
