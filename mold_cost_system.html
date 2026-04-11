@@ -447,6 +447,42 @@
   }
   .config-title { font-size:13px; font-weight:600; margin-bottom:14px; color:var(--accent2); }
 
+  /* ── MOLD COMBO ── */
+  .mold-combo-wrap { position:relative; }
+  .mold-combo-input {
+    background:var(--bg3); border:1px solid var(--border2);
+    color:var(--text); border-radius:5px; padding:8px 32px 8px 10px;
+    font-size:12px; font-family:var(--sans); width:100%;
+    transition:border-color 0.2s; outline:none; cursor:pointer;
+  }
+  .mold-combo-input:focus { border-color:var(--accent); }
+  .mold-combo-input.filled { background:var(--accent-dim); border-color:var(--accent); color:var(--accent); font-weight:600; }
+  .mold-combo-arrow {
+    position:absolute; right:8px; top:50%; transform:translateY(-50%);
+    font-size:10px; color:var(--text3); pointer-events:none;
+  }
+  .mold-combo-dropdown {
+    position:absolute; top:calc(100% + 2px); left:0; right:0; z-index:200;
+    background:#fff; border:1px solid var(--border2); border-radius:6px;
+    box-shadow:0 8px 24px rgba(0,0,0,0.12); max-height:220px; overflow-y:auto;
+    display:none;
+  }
+  .mold-combo-dropdown.open { display:block; }
+  .mold-combo-item {
+    padding:8px 12px; cursor:pointer; font-size:12px;
+    display:flex; flex-direction:column; gap:2px;
+    border-bottom:1px solid var(--border);
+    transition:background 0.1s;
+  }
+  .mold-combo-item:last-child { border-bottom:none; }
+  .mold-combo-item:hover { background:var(--accent-dim); }
+  .mold-combo-item .ci-no { font-weight:700; color:var(--accent); font-family:var(--mono); }
+  .mold-combo-item .ci-name { font-size:11px; color:var(--text2); }
+  .mold-combo-item .ci-part { font-size:10px; color:var(--text3); font-family:var(--mono); }
+  .mold-combo-item.selected { background:var(--accent-dim); }
+  .mold-combo-new { padding:8px 12px; font-size:11px; color:var(--text3); font-style:italic; cursor:pointer; }
+  .mold-combo-new:hover { background:var(--bg3); }
+
   /* ── SCROLLBAR ── */
   ::-webkit-scrollbar { width:6px; height:6px; }
   ::-webkit-scrollbar-track { background: #f1f5f9; }
@@ -685,22 +721,26 @@
               </label>
             </div>
             <!-- 固定行：依頼日・管理NO・品番 -->
-            <div style="display:grid;grid-template-columns:130px 130px 1fr 1fr;gap:8px;margin-bottom:8px;">
+            <div style="display:grid;grid-template-columns:130px 1fr 1fr;gap:8px;margin-bottom:8px;">
               <div class="form-group">
                 <label class="form-label">依頼日</label>
                 <input class="form-input" id="qf_date" type="date">
               </div>
               <div class="form-group">
                 <label class="form-label">管理NO. <button type="button" onclick="autoMoldNo()" style="border:none;background:var(--accent-dim);color:var(--accent);border-radius:3px;padding:1px 5px;font-size:10px;cursor:pointer;margin-left:4px;">自動</button></label>
-                <input class="form-input" id="qf_moldNo" placeholder="例: 71-A">
+                <div id="qf_moldNo_wrap" class="mold-combo-wrap">
+                  <input class="mold-combo-input" id="qf_moldNo" placeholder="管理NO.を選択または入力" autocomplete="off"
+                    oninput="openMoldCombo('qf_moldNo_dd',this.value,'qf_moldNo','qf_partNo','qf_partNoDisp')"
+                    onfocus="openMoldCombo('qf_moldNo_dd',this.value,'qf_moldNo','qf_partNo','qf_partNoDisp')"
+                    onblur="setTimeout(()=>closeMoldCombo('qf_moldNo_dd'),200)">
+                  <span class="mold-combo-arrow">▼</span>
+                  <div class="mold-combo-dropdown" id="qf_moldNo_dd"></div>
+                </div>
               </div>
               <div class="form-group">
-                <label class="form-label">品番</label>
-                <input class="form-input" id="qf_partNo" placeholder="例: 18185-MLZA">
-              </div>
-              <div class="form-group">
-                <label class="form-label">DWG.NO</label>
-                <input class="form-input" id="qf_dwgNo" placeholder="例: P-1">
+                <label class="form-label">品番 <span id="qf_partNoDisp" style="font-size:10px;color:var(--accent);font-family:var(--mono);margin-left:4px;"></span></label>
+                <input class="form-input" id="qf_partNo" placeholder="管理NOを選択すると自動入力" readonly
+                  style="background:var(--bg3);color:var(--text2);cursor:default;" title="管理NOを選択すると自動入力されます">
               </div>
             </div>
             <!-- 品名・材質 -->
@@ -720,14 +760,14 @@
             </div>
             <!-- サイズ＋仕上チェック（メイン） -->
             <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:8px;">
-              <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:8px;">📐 材料寸法 ＆ 仕上記号（▽チェックした面が仕上対象）</div>
+              <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:8px;">📐 材料寸法 ＆ 仕上記号（▽▽ チェックした面が仕上対象 / チェック数で F数自動計算）</div>
               <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end;">
                 <!-- X -->
                 <div>
                   <label style="font-size:11px;font-weight:600;color:var(--text2);display:flex;align-items:center;gap:6px;margin-bottom:4px;">
                     長さ X (mm)
                     <label style="display:flex;align-items:center;gap:3px;font-size:11px;cursor:pointer;color:var(--accent);font-weight:700;">
-                      <input type="checkbox" id="qf_fX" onchange="onFinishCheckChange()"> ▽
+                      <input type="checkbox" id="qf_fX" onchange="onFinishCheckChange()"> ▽▽
                     </label>
                   </label>
                   <input class="form-input" id="qf_sizeX" type="number" placeholder="長さ" oninput="">
@@ -737,7 +777,7 @@
                   <label style="font-size:11px;font-weight:600;color:var(--text2);display:flex;align-items:center;gap:6px;margin-bottom:4px;">
                     幅 Y (mm)
                     <label style="display:flex;align-items:center;gap:3px;font-size:11px;cursor:pointer;color:var(--accent);font-weight:700;">
-                      <input type="checkbox" id="qf_fY" onchange="onFinishCheckChange()"> ▽
+                      <input type="checkbox" id="qf_fY" onchange="onFinishCheckChange()"> ▽▽
                     </label>
                   </label>
                   <input class="form-input" id="qf_sizeY" type="number" placeholder="幅">
@@ -747,7 +787,7 @@
                   <label style="font-size:11px;font-weight:600;color:var(--text2);display:flex;align-items:center;gap:6px;margin-bottom:4px;">
                     材厚 Z (mm)
                     <label style="display:flex;align-items:center;gap:3px;font-size:11px;cursor:pointer;color:var(--accent);font-weight:700;">
-                      <input type="checkbox" id="qf_fZ" onchange="onFinishCheckChange()"> ▽
+                      <input type="checkbox" id="qf_fZ" onchange="onFinishCheckChange()"> ▽▽
                     </label>
                   </label>
                   <input class="form-input" id="qf_sizeZ" type="number" placeholder="厚み">
@@ -756,9 +796,9 @@
                 <div>
                   <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px;">仕上記号</label>
                   <select class="form-select" id="qf_finish" onchange="onFinishSelectChange()" style="font-weight:700;color:var(--accent);">
-                    <option value="6F">▽▽▽ 6F</option>
-                    <option value="4F">▽▽ 4F</option>
-                    <option value="2F">▽ 2F</option>
+                    <option value="6F">6F</option>
+                    <option value="4F">4F</option>
+                    <option value="2F">2F</option>
                     <option value="黒皮">黒皮</option>
                   </select>
                   <div id="qf_finish_hint" style="font-size:10px;color:var(--text3);margin-top:3px;">X・Y・Z全面</div>
@@ -1115,11 +1155,19 @@
         </div>
         <div class="form-group">
           <label class="form-label">管理NO.</label>
-          <input class="form-input" id="matf_moldNo" placeholder="例: 71-A">
+          <div class="mold-combo-wrap">
+            <input class="mold-combo-input" id="matf_moldNo" placeholder="選択または入力" autocomplete="off"
+              oninput="openMoldCombo('matf_moldNo_dd',this.value,'matf_moldNo','matf_partNo','matf_partNoDisp')"
+              onfocus="openMoldCombo('matf_moldNo_dd',this.value,'matf_moldNo','matf_partNo','matf_partNoDisp')"
+              onblur="setTimeout(()=>closeMoldCombo('matf_moldNo_dd'),200)">
+            <span class="mold-combo-arrow">▼</span>
+            <div class="mold-combo-dropdown" id="matf_moldNo_dd"></div>
+          </div>
         </div>
         <div class="form-group" style="grid-column:1/-1">
-          <label class="form-label">品番</label>
-          <input class="form-input" id="matf_partNo" placeholder="例: 18307-TTCA-0230">
+          <label class="form-label">品番 <span id="matf_partNoDisp" style="font-size:10px;color:var(--accent);font-family:var(--mono);margin-left:4px;"></span></label>
+          <input class="form-input" id="matf_partNo" placeholder="管理NOを選択すると自動入力" readonly
+            style="background:var(--bg3);color:var(--text2);" title="管理NOを選択すると自動入力">
         </div>
         <div class="form-group">
           <label class="form-label">品名 (NAME)</label>
@@ -1177,11 +1225,19 @@
         </div>
         <div class="form-group">
           <label class="form-label">管理NO.</label>
-          <input class="form-input" id="outf_moldNo" placeholder="例: 71-A">
+          <div class="mold-combo-wrap">
+            <input class="mold-combo-input" id="outf_moldNo" placeholder="選択または入力" autocomplete="off"
+              oninput="openMoldCombo('outf_moldNo_dd',this.value,'outf_moldNo','outf_partNo','outf_partNoDisp')"
+              onfocus="openMoldCombo('outf_moldNo_dd',this.value,'outf_moldNo','outf_partNo','outf_partNoDisp')"
+              onblur="setTimeout(()=>closeMoldCombo('outf_moldNo_dd'),200)">
+            <span class="mold-combo-arrow">▼</span>
+            <div class="mold-combo-dropdown" id="outf_moldNo_dd"></div>
+          </div>
         </div>
         <div class="form-group" style="grid-column:1/-1">
-          <label class="form-label">品番</label>
-          <input class="form-input" id="outf_partNo" placeholder="例: 18220-T7D">
+          <label class="form-label">品番 <span id="outf_partNoDisp" style="font-size:10px;color:var(--accent);font-family:var(--mono);margin-left:4px;"></span></label>
+          <input class="form-input" id="outf_partNo" placeholder="管理NOを選択すると自動入力" readonly
+            style="background:var(--bg3);color:var(--text2);" title="管理NOを選択すると自動入力">
         </div>
         <div class="form-group">
           <label class="form-label">仕入先</label>
@@ -1235,11 +1291,19 @@
         </div>
         <div class="form-group">
           <label class="form-label">管理NO.</label>
-          <input class="form-input" id="purf_moldNo" placeholder="例: 71-A">
+          <div class="mold-combo-wrap">
+            <input class="mold-combo-input" id="purf_moldNo" placeholder="選択または入力" autocomplete="off"
+              oninput="openMoldCombo('purf_moldNo_dd',this.value,'purf_moldNo','purf_partNo','purf_partNoDisp')"
+              onfocus="openMoldCombo('purf_moldNo_dd',this.value,'purf_moldNo','purf_partNo','purf_partNoDisp')"
+              onblur="setTimeout(()=>closeMoldCombo('purf_moldNo_dd'),200)">
+            <span class="mold-combo-arrow">▼</span>
+            <div class="mold-combo-dropdown" id="purf_moldNo_dd"></div>
+          </div>
         </div>
         <div class="form-group" style="grid-column:1/-1">
-          <label class="form-label">品番</label>
-          <input class="form-input" id="purf_partNo" placeholder="例: A16381C7LV">
+          <label class="form-label">品番 <span id="purf_partNoDisp" style="font-size:10px;color:var(--accent);font-family:var(--mono);margin-left:4px;"></span></label>
+          <input class="form-input" id="purf_partNo" placeholder="管理NOを選択すると自動入力" readonly
+            style="background:var(--bg3);color:var(--text2);" title="管理NOを選択すると自動入力">
         </div>
         <div class="form-group" style="grid-column:1/-1">
           <label class="form-label">品名</label>
@@ -1989,43 +2053,101 @@ function importKintoneCSV(e) {
   reader.readAsText(file, 'UTF-8');
 }
 
-// ── 購入品CSV import ──
+// ── 購入品CSV import（ミスミ order.csv / その他 汎用 対応）──
 async function importCSV(e) {
   const file = e.target.files[0]; if (!file) return;
   const reader = new FileReader();
   reader.onload = async ev => {
-    const lines = ev.target.result.split('\n');
-    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g,''));
+    // Shift-JIS/CP932 対応：TextDecoderで再デコード
+    const buf = ev.target.result;
+    let text = '';
+    try { text = new TextDecoder('shift-jis').decode(buf); }
+    catch(_) { text = new TextDecoder('utf-8').decode(buf); }
+
+    const lines = text.split(/\r?\n/);
+    if (!lines.length) return;
+    const headers = parseCSVLine(lines[0]);
     let count = 0;
+    const month = new Date().toISOString().slice(0, 7);
+
+    // ── フォーマット判定 ──
+    const isMisumi = headers.some(h => h.includes('商品型番') || h.includes('ストーク') || h.includes('お客さま注文番号'));
+    const isAlt    = headers.some(h => h.includes('お客様注番') || h.includes('商品名') && headers.some(h2 => h2.includes('出荷日')));
+
     for (let i = 1; i < lines.length; i++) {
       if (!lines[i].trim()) continue;
       const vals = parseCSVLine(lines[i]);
+      if (vals.length < 3) continue;
       const row = {};
-      headers.forEach((h,j) => row[h] = vals[j]);
+      headers.forEach((h, j) => { row[h.trim()] = (vals[j] || '').trim(); });
 
-      const moldNo   = row['管理NO.'] || row['注番'] || row['moldNo'] || '';
-      const partNo   = row['品番'] || row['partNo'] || '';
-      const name     = row['品名'] || row['name'] || '';
-      const supplier = row['仕入先'] || row['メーカー'] || row['supplier'] || '';
-      const qty      = parseFloat(row['数量'] || row['qty'] || '0');
-      const unit     = parseFloat(row['単価'] || row['unit'] || '0');
-      const total    = parseFloat(row['合計金額'] || row['合計'] || row['total'] || '0') || qty*unit;
-      const month    = row['仕入月'] || row['month'] || new Date().toISOString().slice(0,7);
+      let moldNo = '', partNo = '', name = '', supplier = 'ミスミ', qty = 1, unit = 0, total = 0, orderDate = '';
 
-      if (!partNo && !name) continue;
+      if (isMisumi) {
+        // ── ミスミ order.csv フォーマット ──
+        // ヘッダー: 通し番号,お客さまコード,受注日,...,お客さま注文番号,...,商品型番,数量,単価(税別),...,金額(税別),...,商品名称,...
+        const orderNo = row['お客さま注文番号'] || '';
+        // 注番から品番と工程を分離（例: "18185-MLZA / TRM"）
+        const orderParts = orderNo.split('/').map(s => s.trim());
+        partNo  = orderParts[0] || '';
+        moldNo  = '';  // 注番からは直接管理NOは取得不可
+        name    = row['商品名称'] || row['商品型番'] || '';
+        qty     = parseInt(row['数量']) || 1;
+        unit    = parseFloat(row['単価(税別)']) || 0;
+        total   = parseFloat(row['金額(税別)']) || qty * unit;
+        orderDate = row['受注日'] || '';
+        supplier = 'ミスミ';
+        // 品番コードを品名として追加
+        const code = row['商品型番'] || '';
+        if (code && name !== code) name = name ? name + ' [' + code + ']' : code;
+
+      } else if (isAlt) {
+        // ── 別サプライヤー（お客様注番形式）──
+        // ヘッダー: お客様注番,お客様管理No.1,商品(ｶﾀﾛｸﾞ)コード,商品名,数量,単価,金額,出荷日
+        partNo   = row['お客様注番'] || row['お客様注番'] || '';
+        moldNo   = row['お客様管理No.1'] || '';
+        const code = row['商品(ｶﾀﾛｸﾞ)コード'] || row['商品(ｶﾀﾛｸﾞ)ｺｰﾄﾞ'] || '';
+        name     = row['商品名'] || '';
+        if (code && name !== code) name = name ? name + ' [' + code + ']' : code;
+        qty      = parseInt(row['数量']) || 1;
+        unit     = parseFloat(row['単価']) || 0;
+        total    = parseFloat(row['金額']) || qty * unit;
+        orderDate= row['出荷日'] || '';
+        supplier = 'パンチ工業';
+
+      } else {
+        // ── 汎用フォーマット ──
+        moldNo   = row['管理NO.'] || row['注番'] || row['moldNo'] || '';
+        partNo   = row['品番'] || row['partNo'] || '';
+        name     = row['品名'] || row['商品名'] || row['name'] || '';
+        supplier = row['仕入先'] || row['メーカー'] || row['supplier'] || '';
+        qty      = parseFloat(row['数量'] || row['qty'] || '1') || 1;
+        unit     = parseFloat(row['単価'] || row['unit'] || '0');
+        total    = parseFloat(row['合計金額'] || row['合計'] || row['total'] || '0') || qty * unit;
+      }
+
+      if (!name && !partNo) continue;
+
+      // 月を受注日から取得（あれば）
+      const recMonth = orderDate ? orderDate.slice(0, 7).replace('/', '-') : month;
 
       const key = 'pur_' + Date.now() + '_' + i;
-      DB.purchase[key] = { month, moldNo, partNo, name, supplier, qty, unit, total, note:'' };
+      if (!DB.purchase) DB.purchase = {};
+      // 管理NOの突合チェック
+      const moldCheck = validateMoldNo(moldNo);
+      const flagNote  = moldCheck.ok ? '' : '⚠️未登録管理NO';
+      DB.purchase[key] = { month: recMonth, moldNo, partNo, name, supplier, qty, unit, total, note: flagNote };
       count++;
     }
     logImport('購入品CSV', count);
     await writeToFirebase('purchase', DB.purchase);
-    toast(`${count}件の購入品を取込しました`, 'success');
-    document.getElementById('purchaseImportLog').textContent = `✅ ${count}件取込完了 (${new Date().toLocaleString('ja-JP')})`;
+    toast(count + '件の購入品を取込しました', 'success');
+    const logEl = document.getElementById('purchaseImportLog');
+    if (logEl) logEl.textContent = '✅ ' + count + '件取込完了 (' + new Date().toLocaleString('ja-JP') + ')';
     e.target.value = '';
     renderPurchase();
   };
-  reader.readAsText(file, 'UTF-8');
+  reader.readAsArrayBuffer(file);  // バイナリで読んでTextDecoderで変換
 }
 
 function parseCSVLine(line) {
@@ -2085,7 +2207,10 @@ async function saveMold() {
   renderMolds();
 }
 
-function openMatModal() { document.getElementById('matModal').classList.add('open'); }
+function openMatModal() {
+  initMoldComboField('matf_moldNo','matf_partNo','matf_partNoDisp');
+  document.getElementById('matModal').classList.add('open');
+}
 async function saveMaterial() {
   const data = {
     month:document.getElementById('matf_month').value,
@@ -2107,7 +2232,10 @@ async function saveMaterial() {
   renderMaterials();
 }
 
-function openOutModal() { document.getElementById('outModal').classList.add('open'); }
+function openOutModal() {
+  initMoldComboField('outf_moldNo','outf_partNo','outf_partNoDisp');
+  document.getElementById('outModal').classList.add('open');
+}
 function calcOutTotal() {
   const u = parseFloat(document.getElementById('outf_unit').value)||0;
   const q = parseFloat(document.getElementById('outf_qty' ).value)||1;
@@ -2133,7 +2261,10 @@ async function saveOutsource() {
   renderOutsource();
 }
 
-function openPurModal() { document.getElementById('purModal').classList.add('open'); }
+function openPurModal() {
+  initMoldComboField('purf_moldNo','purf_partNo','purf_partNoDisp');
+  document.getElementById('purModal').classList.add('open');
+}
 function calcPurTotal() {
   const u = parseFloat(document.getElementById('purf_unit').value)||0;
   const q = parseFloat(document.getElementById('purf_qty' ).value)||1;
@@ -2263,7 +2394,7 @@ function calcFinish(xF, yF, zF, explicitFinish) {
 function addQuoteRequestItem() {
   const moldNo   = document.getElementById('qf_moldNo').value.trim();
   const partNo   = document.getElementById('qf_partNo').value.trim();
-  const dwgNo    = document.getElementById('qf_dwgNo').value.trim();
+  const dwgNo    = '';  // DWG.NO廃止
   const name     = document.getElementById('qf_name').value.trim();
   const qty      = parseInt(document.getElementById('qf_qty').value) || 1;
   const material = document.getElementById('qf_material').value.trim();
@@ -2278,7 +2409,7 @@ function addQuoteRequestItem() {
   const tsuri    = document.getElementById('qf_tsuri').checked;
   const noteExtra= document.getElementById('qf_noteExtra').value.trim();
 
-  if (!dwgNo && !name) { toast('DWG.NO または 名称 を入力してください', 'error'); return; }
+  if (!name) { toast('名称（NAME）を入力してください', 'error'); return; }
 
   const noteParts = [];
   if (katakiri) noteParts.push('形切');
@@ -2297,7 +2428,7 @@ function addQuoteRequestItem() {
   const continuous = document.getElementById('qf_continuous')?.checked;
   if (continuous) {
     // DWG.NO・名称・数量のみクリア
-    ['qf_dwgNo','qf_name','qf_noteExtra'].forEach(id => {
+    ['qf_name','qf_noteExtra'].forEach(id => {
       const el = document.getElementById(id); if (el) el.value = '';
     });
     document.getElementById('qf_qty').value = '1';
@@ -2307,7 +2438,7 @@ function addQuoteRequestItem() {
     autoIncrementDwgNo();
   } else {
     // 通常モード：材質以降も含めてクリア
-    ['qf_dwgNo','qf_name','qf_material','qf_sizeX','qf_sizeY','qf_sizeZ','qf_noteExtra'].forEach(id => {
+    ['qf_name','qf_material','qf_sizeX','qf_sizeY','qf_sizeZ','qf_noteExtra'].forEach(id => {
       const el = document.getElementById(id); if (el) el.value = '';
     });
     document.getElementById('qf_qty').value = '1';
@@ -2343,24 +2474,40 @@ function renderQuoteItemTable() {
   document.getElementById('quoteItemTable').innerHTML = `
     <table>
       <thead><tr>
-        <th>No.</th><th>管理NO.</th><th>DWG.NO</th><th>名称</th>
-        <th>数量</th><th>材質</th><th>X(mm)</th><th>Y(mm)</th><th>Z(mm)</th><th>仕上</th><th>備考</th><th></th>
+        <th>No.</th>
+        <th>管理NO.</th>
+        <th>名称</th>
+        <th>数量</th>
+        <th>材質</th>
+        <th>長さ X(mm)</th>
+        <th>幅 Y(mm)</th>
+        <th>材厚 Z(mm)</th>
+        <th>仕上</th>
+        <th>備考</th>
+        <th></th>
       </tr></thead>
-      <tbody>${quoteItems.map((r,i) => `
-        <tr>
-          <td class="mono">${i+1}</td>
-          <td class="mono">${r.moldNo||''}</td>
-          <td class="mono">${r.dwgNo||''}</td>
-          <td>${r.name||''}</td>
-          <td class="mono">${r.qty||1}</td>
-          <td class="mono">${r.material||''}</td>
-          <td class="mono">${r.sizeX||''}</td>
-          <td class="mono">${r.sizeY||''}</td>
-          <td class="mono">${r.sizeZ||''}</td>
-          <td><span class="chip">${finishLabel(r.finish)}</span></td>
-          <td style="font-size:11px">${r.note||''}</td>
-          <td><button class="btn btn-danger btn-sm" onclick="removeQuoteItem(${i})">×</button></td>
-        </tr>`).join('')}
+      <tbody>${quoteItems.map((r,i) => {
+        const fxMark = r.fX ? ' <span style="color:var(--green);font-size:9px;font-weight:700;">▽▽</span>' : '';
+        const fyMark = r.fY ? ' <span style="color:var(--green);font-size:9px;font-weight:700;">▽▽</span>' : '';
+        const fzMark = r.fZ ? ' <span style="color:var(--green);font-size:9px;font-weight:700;">▽▽</span>' : '';
+        const moldOk = Object.values(DB.molds||{}).some(m => m.no === r.moldNo);
+        const moldStyle = moldOk ? 'color:var(--accent);font-weight:700;' : (r.moldNo ? 'color:var(--yellow);font-weight:700;' : 'color:var(--text3);');
+        const warnIcon = moldOk ? '' : (r.moldNo ? ' ⚠' : '');
+        const warnTitle = moldOk ? '登録済み金型' : '⚠未登録または未選択';
+        return '<tr>' +
+          '<td class="mono">' + (i+1) + '</td>' +
+          '<td class="mono" style="' + moldStyle + '" title="' + warnTitle + '">' + (r.moldNo||'—') + warnIcon + '</td>' +
+          '<td>' + (r.name||'') + '</td>' +
+          '<td class="mono">' + (r.qty||1) + '</td>' +
+          '<td class="mono">' + (r.material||'') + '</td>' +
+          '<td class="mono" style="font-size:11px">' + (r.sizeX||'') + fxMark + '</td>' +
+          '<td class="mono" style="font-size:11px">' + (r.sizeY||'') + fyMark + '</td>' +
+          '<td class="mono" style="font-size:11px">' + (r.sizeZ||'') + fzMark + '</td>' +
+          '<td><span class="chip">' + finishLabel(r.finish) + '</span></td>' +
+          '<td style="font-size:11px">' + (r.note||'') + '</td>' +
+          '<td><button class="btn btn-danger btn-sm" onclick="removeQuoteItem(' + i + ')">×</button></td>' +
+          '</tr>';
+      }).join('')}
       </tbody>
     </table>`;
 }
@@ -2468,16 +2615,16 @@ function generateQuotePrint() {
     const itemRows = quoteItems.map((r,i) => {
       const mat = convertMaterial(r.material, sup.id);
       // 仕上げ記号の▽表示
-      const fDisp = finishLabel(r.finish).replace('6F','▽▽▽').replace('4F','▽▽').replace('2F','▽');
+      const fDisp = finishLabel(r.finish);  // 仕上欄は 2F/4F/6F のみ表示
       return `<tr>
         <td style="text-align:center;border:1px solid #aaa;padding:4px">${i+1}</td>
         <td style="border:1px solid #aaa;padding:4px">${r.dwgNo||''}</td>
         <td style="border:1px solid #aaa;padding:4px">${r.name||''}</td>
         <td style="text-align:center;border:1px solid #aaa;padding:4px">${r.qty||1}</td>
         <td style="border:1px solid #aaa;padding:4px">${mat}</td>
-        <td style="text-align:right;border:1px solid #aaa;padding:4px">${r.sizeX||''}</td>
-        <td style="text-align:center;border:1px solid #aaa;padding:4px">${r.sizeY||''}</td>
-        <td style="text-align:right;border:1px solid #aaa;padding:4px">${r.sizeZ||''}</td>
+        <td style="text-align:right;border:1px solid #aaa;padding:4px">${r.sizeX||''}${r.fX?'<span style=\"color:#1a6b3c;font-size:8pt;margin-left:2px;\">▽▽</span>':''}</td>
+        <td style="text-align:center;border:1px solid #aaa;padding:4px">${r.sizeY||''}${r.fY?'<span style=\"color:#1a6b3c;font-size:8pt;margin-left:2px;\">▽▽</span>':''}</td>
+        <td style="text-align:right;border:1px solid #aaa;padding:4px">${r.sizeZ||''}${r.fZ?'<span style=\"color:#1a6b3c;font-size:8pt;margin-left:2px;\">▽▽</span>':''}</td>
         <td style="text-align:center;border:1px solid #aaa;padding:4px">${fDisp}</td>
         <td style="border:1px solid #aaa;padding:4px"></td>
         <td style="border:1px solid #aaa;padding:4px"></td>
@@ -3246,7 +3393,7 @@ function updateFinishHint() {
   if (faces.length === 3 || faces.length === 0) {
     hint.textContent = '全面仕上げ'; hint.style.color='var(--green)';
   } else {
-    hint.textContent = faces.join('・') + '面仕上げ'; hint.style.color='var(--accent)';
+    hint.textContent = faces.join('・') + '▽▽ 面仕上げ'; hint.style.color='var(--accent)';
   }
 }
 
@@ -3310,6 +3457,97 @@ function nextAlpha(str) {
     arr[i] = 'A'; i--;
   }
   return 'A' + arr.join('');
+}
+
+
+// ═══════════════════════════════════════════════
+// 管理NO. コンボボックス（予測検索 + 品番自動補完）
+// ═══════════════════════════════════════════════
+
+function openMoldCombo(ddId, query, moldInputId, partNoInputId, partNoDispId) {
+  const dd = document.getElementById(ddId);
+  if (!dd) return;
+
+  // 金型マスタから候補を取得
+  const molds = Object.values(DB.molds || {});
+  const q = (query || '').toLowerCase();
+
+  const filtered = molds.filter(m =>
+    !q ||
+    (m.no   || '').toLowerCase().includes(q) ||
+    (m.partNo   || '').toLowerCase().includes(q) ||
+    (m.partName || '').toLowerCase().includes(q) ||
+    (m.client   || '').toLowerCase().includes(q)
+  ).slice(0, 20);
+
+  if (!filtered.length && !q) {
+    dd.innerHTML = '<div class="mold-combo-new">金型一覧タブで金型を登録してください</div>';
+  } else if (!filtered.length) {
+    dd.innerHTML = `<div class="mold-combo-new">「${query}」は未登録 — このまま新規入力として使用</div>`;
+  } else {
+    dd.innerHTML = filtered.map(m => `
+      <div class="mold-combo-item" onmousedown="selectMoldCombo(event,'${ddId}','${(m.no||'').replace(/'/g,"\\\\'")}','${(m.partNo||'').replace(/'/g,"\\\\'")}','${(m.partName||'').replace(/'/g,"\\\\'")}','${moldInputId}','${partNoInputId}','${partNoDispId}')">
+        <div class="ci-no">${m.no || '—'}</div>
+        <div class="ci-name">${m.partName || ''}</div>
+        <div class="ci-part">${m.partNo || ''} ／ ${m.client || ''}</div>
+      </div>`).join('');
+  }
+  dd.classList.add('open');
+}
+
+function selectMoldCombo(e, ddId, moldNo, partNo, partName, moldInputId, partNoInputId, partNoDispId) {
+  e.preventDefault();
+  // 入力欄に値をセット
+  const moldEl   = document.getElementById(moldInputId);
+  const partEl   = document.getElementById(partNoInputId);
+  const dispEl   = document.getElementById(partNoDispId);
+  if (moldEl) { moldEl.value = moldNo; moldEl.classList.add('filled'); }
+  if (partEl) partEl.value = partNo;
+  if (dispEl) dispEl.textContent = partName ? '(' + partName + ')' : '';
+  closeMoldCombo(ddId);
+}
+
+function closeMoldCombo(ddId) {
+  const dd = document.getElementById(ddId);
+  if (dd) dd.classList.remove('open');
+}
+
+// CSV取込後に管理NO・品番を突合してリンク（外部からも呼べるように）
+function linkMoldNoToPartNo(moldNo, partNoInputId, partNoDispId) {
+  const mold = Object.values(DB.molds || {}).find(m => m.no === moldNo);
+  if (!mold) return;
+  const partEl = document.getElementById(partNoInputId);
+  const dispEl = document.getElementById(partNoDispId);
+  if (partEl) partEl.value = mold.partNo || '';
+  if (dispEl) dispEl.textContent = mold.partName ? '(' + mold.partName + ')' : '';
+}
+
+// モーダルを開いたとき管理NOコンボを初期化
+function initMoldComboField(moldInputId, partNoInputId, partNoDispId) {
+  const moldEl = document.getElementById(moldInputId);
+  if (moldEl) {
+    moldEl.value = '';
+    moldEl.classList.remove('filled');
+  }
+  const partEl = document.getElementById(partNoInputId);
+  if (partEl) partEl.value = '';
+  const dispEl = document.getElementById(partNoDispId);
+  if (dispEl) dispEl.textContent = '';
+}
+
+// ドキュメントクリックでコンボを閉じる
+document.addEventListener('click', e => {
+  if (!e.target.closest('.mold-combo-wrap')) {
+    document.querySelectorAll('.mold-combo-dropdown').forEach(dd => dd.classList.remove('open'));
+  }
+});
+
+// ── CSVインポートでの管理NO突合チェック ──
+function validateMoldNo(moldNo) {
+  if (!moldNo) return { ok: false, msg: '管理NOが未設定' };
+  const mold = Object.values(DB.molds || {}).find(m => m.no === moldNo);
+  if (!mold) return { ok: false, msg: `管理NO「${moldNo}」は金型一覧に未登録` };
+  return { ok: true, mold };
 }
 
 // ── Close modal on overlay click ──
