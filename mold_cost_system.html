@@ -1065,19 +1065,21 @@
 
 <!-- ═══ MODAL: 金型登録 ═══ -->
 <div class="modal-overlay" id="moldModal">
-  <div class="modal">
+  <div class="modal" style="width:min(780px,96vw)">
     <div class="modal-head">
       <div class="modal-title" id="moldModalTitle">金型 新規登録</div>
       <button class="close-btn" onclick="closeModal('moldModal')">×</button>
     </div>
     <div class="modal-body">
-      <div class="form-grid">
+      <!-- 基本情報 -->
+      <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">基本情報</div>
+      <div class="form-grid" style="margin-bottom:14px;">
         <div class="form-group">
           <label class="form-label">管理NO.</label>
           <input class="form-input" id="mf_no" placeholder="例: 71-A">
         </div>
         <div class="form-group">
-          <label class="form-label">得意先</label>
+          <label class="form-label">得意先（客先）</label>
           <input class="form-input" id="mf_client" placeholder="例: ㈱ユタカ技研">
         </div>
         <div class="form-group">
@@ -1085,15 +1087,15 @@
           <input class="form-input" id="mf_orderDate" type="date">
         </div>
         <div class="form-group">
-          <label class="form-label">完成予定</label>
-          <input class="form-input" id="mf_dueDate" placeholder="例: 2026/06">
+          <label class="form-label">客先納期</label>
+          <input class="form-input" id="mf_dueDate" type="date">
         </div>
         <div class="form-group" style="grid-column:1/-1">
-          <label class="form-label">部品番号</label>
+          <label class="form-label">部品番号（品番）</label>
           <input class="form-input" id="mf_partNo" placeholder="例: 11250-85U01">
         </div>
         <div class="form-group" style="grid-column:1/-1">
-          <label class="form-label">部品名称</label>
+          <label class="form-label">部品名称（品名）</label>
           <input class="form-input" id="mf_partName" placeholder="例: COVER, BD">
         </div>
         <div class="form-group">
@@ -1119,6 +1121,37 @@
         <div class="form-group">
           <label class="form-label">備考</label>
           <input class="form-input" id="mf_note" placeholder="備考">
+        </div>
+      </div>
+      <!-- kintone連携情報 -->
+      <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">
+        kintone 連携情報
+        <span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:8px">※ kintone「新規物件（工程別作業実績）」と同じ値を入力</span>
+      </div>
+      <div class="form-grid" style="margin-bottom:14px;">
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">管理コード（kintone）</label>
+          <input class="form-input" id="mf_ktCode" placeholder="例: 71-A（kintoneの管理コードと一致させる）">
+        </div>
+      </div>
+      <!-- 工程リスト -->
+      <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">
+        工程リスト
+        <span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:8px">加工費の集計に使います。kintoneの工程名と一致させてください</span>
+      </div>
+      <div id="mf_processWrap" style="margin-bottom:8px;"></div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:4px;">
+        <button class="btn btn-secondary btn-sm" onclick="addMfProcess()">＋ 工程追加</button>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;" id="mf_processPresets">
+          <button class="btn btn-secondary btn-sm" style="font-size:10px" onclick="addMfProcessName('BL')">BL</button>
+          <button class="btn btn-secondary btn-sm" style="font-size:10px" onclick="addMfProcessName('DR')">DR</button>
+          <button class="btn btn-secondary btn-sm" style="font-size:10px" onclick="addMfProcessName('TRM')">TRM</button>
+          <button class="btn btn-secondary btn-sm" style="font-size:10px" onclick="addMfProcessName('BE/RST')">BE/RST</button>
+          <button class="btn btn-secondary btn-sm" style="font-size:10px" onclick="addMfProcessName('PC')">PC</button>
+          <button class="btn btn-secondary btn-sm" style="font-size:10px" onclick="addMfProcessName('TOX')">TOX</button>
+          <button class="btn btn-secondary btn-sm" style="font-size:10px" onclick="addMfProcessName('SLIT')">SLIT</button>
+          <button class="btn btn-secondary btn-sm" style="font-size:10px" onclick="addMfProcessName('FO')">FO</button>
+          <button class="btn btn-secondary btn-sm" style="font-size:10px" onclick="addMfProcessName('PRG')">PRG</button>
         </div>
       </div>
     </div>
@@ -1563,10 +1596,14 @@ function refreshAll() {
 // COST HELPERS
 // ═══════════════════════════════════════════════
 function getCosts(moldNo) {
-  const mat = Object.values(DB.materials).filter(r => r.moldNo === moldNo).reduce((s,r) => s + (r.amount||0), 0);
-  const out = Object.values(DB.outsource).filter(r => r.moldNo === moldNo).reduce((s,r) => s + (r.total||0), 0);
-  const pur = Object.values(DB.purchase ).filter(r => r.moldNo === moldNo).reduce((s,r) => s + (r.total||0), 0);
-  const lab = Object.values(DB.labor    ).filter(r => r.moldNo === moldNo).reduce((s,r) => s + (r.amount||0), 0);
+  // 管理NOまたは品番で紐付け
+  const mold = Object.values(DB.molds||{}).find(m => m.no === moldNo);
+  const partNo = mold?.partNo || '';
+  const match = r => r.moldNo === moldNo || (partNo && r.partNo === partNo);
+  const mat = Object.values(DB.materials).filter(match).reduce((s,r) => s + (r.amount||0), 0);
+  const out = Object.values(DB.outsource).filter(match).reduce((s,r) => s + (r.total||0), 0);
+  const pur = Object.values(DB.purchase ).filter(match).reduce((s,r) => s + (r.total||0), 0);
+  const lab = Object.values(DB.labor    ).filter(r => r.moldNo === moldNo || (partNo && r.partNo === partNo)).reduce((s,r) => s + (r.amount||0), 0);
   const total = mat + out + pur + lab;
   return { mat, out, pur, lab, total };
 }
@@ -1658,7 +1695,7 @@ function renderDashboard() {
       <thead>
         <tr>
           <th>管理NO.</th><th>得意先</th><th>部品名</th>
-          <th>見積金額</th><th>現在原価</th><th>原価構成</th><th>進捗</th>
+          <th>見積金額</th><th>現在原価</th><th>原価構成</th><th>進捗</th><th></th>
         </tr>
       </thead>
       <tbody>
@@ -1672,6 +1709,7 @@ function renderDashboard() {
             <td class="mono">¥${fmt(c.total)}</td>
             <td>${costBarHTML(c)}</td>
             <td>${progressHTML(c.total, m.estimate)}</td>
+            <td><button class="btn btn-secondary btn-sm" style="padding:3px 8px;font-size:11px" onclick="editMold('${key}')">編集</button></td>
           </tr>`;
         }).join('')}
       </tbody>
@@ -1716,7 +1754,7 @@ function renderMolds() {
         <tr>
           <th>管理NO.</th><th>得意先</th><th>部品番号</th><th>部品名</th>
           <th>分類</th><th>ステータス</th><th>見積金額</th>
-          <th>材料費</th><th>外注費</th><th>購入品費</th><th>加工費</th><th>合計原価</th><th>進捗</th>
+          <th>材料費</th><th>外注費</th><th>購入品費</th><th>加工費</th><th>合計原価</th><th>進捗</th><th></th>
         </tr>
       </thead>
       <tbody>
@@ -1736,6 +1774,7 @@ function renderMolds() {
             <td class="mono">¥${fmt(c.lab)}</td>
             <td class="mono"><b>¥${fmt(c.total)}</b></td>
             <td>${progressHTML(c.total, m.estimate)}</td>
+            <td><button class="btn btn-secondary btn-sm" style="padding:3px 8px;font-size:11px" onclick="editMold('${key}')">編集</button></td>
           </tr>`;
         }).join('')}
       </tbody>
@@ -2219,7 +2258,10 @@ function closeModal(id) {
 function openMoldModal() {
   editingMoldKey = null;
   document.getElementById('moldModalTitle').textContent = '金型 新規登録';
-  ['mf_no','mf_client','mf_orderDate','mf_dueDate','mf_partNo','mf_partName','mf_note'].forEach(id => document.getElementById(id).value = '');
+  ['mf_no','mf_client','mf_orderDate','mf_dueDate','mf_partNo','mf_partName','mf_note','mf_ktCode'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = '';
+  });
+  initMfProcesses([]);
   document.getElementById('mf_estimate').value = '';
   document.getElementById('mf_type').value   = '新規';
   document.getElementById('mf_status').value = '製作中';
@@ -2229,6 +2271,9 @@ function openMoldModal() {
 async function saveMold() {
   const no = document.getElementById('mf_no').value.trim();
   if (!no) { toast('管理NO.を入力してください', 'error'); return; }
+  // 工程リスト取得
+  const processInputs = document.querySelectorAll('.mf-process-input');
+  const processes = [...processInputs].map(el=>el.value.trim()).filter(Boolean);
   const data = {
     no, client:document.getElementById('mf_client').value.trim(),
     orderDate:document.getElementById('mf_orderDate').value,
@@ -2238,7 +2283,9 @@ async function saveMold() {
     type:document.getElementById('mf_type').value,
     estimate:parseFloat(document.getElementById('mf_estimate').value)||0,
     status:document.getElementById('mf_status').value,
-    note:document.getElementById('mf_note').value.trim()
+    note:document.getElementById('mf_note').value.trim(),
+    ktCode: document.getElementById('mf_ktCode').value.trim(),
+    processes,
   };
   const key = editingMoldKey || ('m_' + Date.now());
   DB.molds[key] = data;
@@ -2736,7 +2783,7 @@ function generateQuotePrint() {
     '<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;700;900&display=swap" rel="stylesheet">' +
     '<style>' +
       'body{margin:0;font-family:"Noto Sans JP",sans-serif;font-size:10pt;background:#fff;color:#000;}' +
-      '.page-break{width:197mm;margin:0 auto;padding:5mm 7mm 4mm;box-sizing:border-box;page-break-after:always;}' +
+      '.page-break{width:100%;margin:0;padding:4mm 5mm 3mm;box-sizing:border-box;page-break-after:always;}' +
       '.page-break:last-child{page-break-after:auto;}' +
       '.no-print{position:fixed;top:12px;right:12px;display:flex;gap:8px;z-index:99;}' +
       'button{padding:8px 16px;cursor:pointer;border:none;border-radius:4px;font-size:13px;}' +
@@ -2744,7 +2791,7 @@ function generateQuotePrint() {
       'th{background:#c8c8c8;font-weight:800;font-size:10pt;}' +
       'td,th{font-size:10pt;line-height:1.3;}' +
       'tr:nth-child(even) td{background:#f8f8f8;}' +
-      '@media print{.no-print{display:none!important}@page{size:A4 portrait;margin:3mm 4mm}}' +
+      '@media print{.no-print{display:none!important}@page{size:A4 portrait;margin:2mm 3mm}}' +
     '</style>' +
     '</head><body>' +
     '<div class="no-print">' +
@@ -2792,12 +2839,13 @@ function renderCompare() {
   const statusFil = document.getElementById('cmpStatusFilter')?.value || '';
   if (!DB.quoteRequests) DB.quoteRequests = {};
 
-  const suppliers    = getSuppliers();
-  const supNameMap   = Object.fromEntries(suppliers.map(s => [s.id, s.name.replace('㈱','').replace('株式会社','').trim()]));
+  const suppliers  = getSuppliers();
+  const supMap     = Object.fromEntries(suppliers.map(s => [s.id, s]));
+  const supShort   = Object.fromEntries(suppliers.map(s => [s.id, s.name.replace('㈱','').replace('株式会社','').replace('DMソリューション','DM').trim()]));
 
   const entries = Object.entries(DB.quoteRequests);
   const moldNos = [...new Set(entries.map(([,r])=>r.moldNo).filter(Boolean))].sort();
-  const mSel    = document.getElementById('cmpMoldFilter');
+  const mSel = document.getElementById('cmpMoldFilter');
   if (mSel) {
     const cur = mSel.value;
     mSel.innerHTML = '<option value="">全金型</option>' + moldNos.map(n=>`<option value="${n}"${n===cur?' selected':''}>${n}</option>`).join('');
@@ -2809,89 +2857,110 @@ function renderCompare() {
 
   if (!filtered.length) {
     document.getElementById('compareTableWrap').innerHTML =
-      '<div class="empty"><div class="empty-icon">📊</div>該当する見積依頼がありません。①で依頼を保存してください</div>';
+      '<div class="empty"><div class="empty-icon">📊</div>該当する見積依頼がありません。①で保存してください</div>';
     return;
   }
 
   document.getElementById('compareTableWrap').innerHTML = filtered.map(([key, rec]) => {
-    const recSupNames = (rec.suppliers||[]).map(id => supNameMap[id]||id);
+    const sups = rec.suppliers || [];
+    const statusBg = {'見積待ち':'badge-yellow','回答済み':'badge-blue','発注済み':'badge-green'};
 
+    // 明細ごとの行を生成
     const itemRows = rec.items.map((item, i) => {
-      const supCols = (rec.suppliers||[]).map(sid => {
+      // 各社の見積単価・kg単価
+      const prices = sups.map(sid => {
+        const q = rec.quotes?.[key+'_'+i+'_'+sid] || {};
+        return parseFloat(q.unitPrice||0);
+      }).filter(p => p > 0);
+      const minPrice = prices.length ? Math.min(...prices) : 0;
+      const maxPrice = prices.length ? Math.max(...prices) : 0;
+      const diff     = prices.length > 1 ? maxPrice - minPrice : 0;
+
+      // 現在の決定仕入先（明細ごと）
+      const itemDecided = (rec.itemDecided||{})[i] || rec.decided || '';
+
+      const supInputs = sups.map(sid => {
         const qkey = key+'_'+i+'_'+sid;
         const q    = rec.quotes?.[qkey] || {};
         const mat  = convertMaterial(item.material, sid);
-        return `<td style="padding:4px;min-width:100px;">
-          <div style="font-size:10px;color:var(--text3);margin-bottom:2px">${supNameMap[sid]||sid}${mat !== item.material ? ' ('+mat+')' : ''}</div>
-          <input class="form-input" style="padding:4px 6px;font-size:11px;width:95px" type="number" placeholder="見積単価"
+        const up   = parseFloat(q.unitPrice||0);
+        const isMin = up > 0 && up === minPrice;
+        const kgCalc = calcKgPrice(up, item.sizeX, item.sizeY, item.sizeZ, item.material, item.qty);
+        return `<td style="padding:3px 6px;min-width:110px;background:${isMin?'var(--green-dim)':''};border-right:1px solid var(--border)">
+          ${mat !== item.material ? `<div style="font-size:9px;color:var(--yellow)">→${mat}</div>` : ''}
+          <input class="form-input" style="padding:3px 6px;font-size:11px;width:100px;margin-bottom:2px"
+            type="number" placeholder="見積単価(円)"
             value="${q.unitPrice||''}"
             onchange="updateQuote('${key}',${i},'${sid}','unitPrice',this.value)">
-          <input class="form-input" style="padding:4px 6px;font-size:10px;width:95px;margin-top:2px" type="number" placeholder="㎏単価" step="0.01"
-            value="${q.kgPrice||''}"
-            onchange="updateQuote('${key}',${i},'${sid}','kgPrice',this.value)">
+          <div style="font-size:10px;color:var(--text3)">㎏単価: ${kgCalc ? fmt(kgCalc) : '—'}</div>
         </td>`;
       }).join('');
 
-      const prices = (rec.suppliers||[]).map(sid => parseFloat(rec.quotes?.[key+'_'+i+'_'+sid]?.unitPrice||0)).filter(p=>p>0);
-      const minPrice = prices.length ? Math.min(...prices) : 0;
-      const diff     = prices.length > 1 ? Math.max(...prices) - minPrice : 0;
+      const decidedName = itemDecided ? (supShort[itemDecided]||itemDecided) : '—';
+      const decidedOpts = ['<option value="">選択</option>',
+        ...sups.map(sid => `<option value="${sid}"${itemDecided===sid?' selected':''}>${supShort[sid]||sid}</option>`)
+      ].join('');
 
       return `<tr style="border-bottom:1px solid var(--border)">
-        <td class="mono" style="padding:6px 8px;font-size:11px">${item.dwgNo||''}</td>
-        <td style="padding:6px 8px">${item.name||''}</td>
-        <td class="mono" style="padding:6px 8px;text-align:center">${item.qty||1}</td>
-        <td class="mono" style="padding:6px 8px">${item.material||''}</td>
-        <td class="mono" style="padding:6px 8px;font-size:11px">${item.sizeX||''}×${item.sizeY||''}×${item.sizeZ||''}</td>
-        <td style="padding:6px 8px;font-size:11px">${finishLabel(item.finish)}</td>
-        ${supCols}
-        <td style="padding:6px 8px;font-size:11px;color:var(--green);font-weight:600">${minPrice ? '¥'+fmt(minPrice) : '—'}</td>
-        <td style="padding:6px 8px;font-size:11px;color:var(--red)">${diff ? '▼¥'+fmt(diff) : '—'}</td>
+        <td class="mono" style="padding:5px 8px;font-weight:600;color:var(--accent)">${item.moldNo||rec.moldNo||'—'}</td>
+        <td style="padding:5px 8px;font-size:12px">${item.name||''}</td>
+        <td class="mono" style="padding:5px 6px;text-align:center">${item.qty||1}</td>
+        <td class="mono" style="padding:5px 6px">${item.material||''}</td>
+        <td class="mono" style="padding:5px 6px;font-size:11px">${[item.sizeX,item.sizeY,item.sizeZ].filter(Boolean).join('×')}</td>
+        <td style="padding:5px 4px;text-align:center;font-weight:700">${finishLabel(item.finish)}</td>
+        ${supInputs}
+        <td class="mono" style="padding:5px 6px;color:var(--green);font-weight:700">${minPrice?'¥'+fmt(minPrice):'—'}</td>
+        <td class="mono" style="padding:5px 6px;color:var(--red)">${diff?'▼¥'+fmt(diff):'—'}</td>
+        <td style="padding:4px 6px;min-width:110px">
+          <select class="filter-select" style="font-size:11px;width:105px;padding:4px 6px"
+            onchange="setItemDecided('${key}',${i},this.value)">${decidedOpts}</select>
+        </td>
       </tr>`;
     }).join('');
 
-    const supHeaders = (rec.suppliers||[]).map(sid =>
-      `<th style="text-align:center;background:var(--accent-dim);color:var(--accent);padding:7px">${supNameMap[sid]||sid}<br><span style="font-size:9px;font-weight:400">単価 / ㎏単価</span></th>`
+    // ヘッダー列
+    const supHeaders = sups.map(sid =>
+      `<th style="padding:6px 8px;text-align:center;background:var(--accent-dim);color:var(--accent);border-right:1px solid var(--border)">${supShort[sid]||sid}</th>`
     ).join('');
 
-    const statusBg = {'見積待ち':'badge-yellow','回答済み':'badge-blue','発注済み':'badge-green'};
-    return `
-      <div class="table-wrap" style="margin-bottom:16px;">
-        <div class="table-header">
-          <div class="table-title">
-            <span class="mono">${rec.moldNo||'—'}</span>
-            ${rec.partNo ? `<span style="color:var(--text3);font-size:11px;margin-left:8px">${rec.partNo}</span>` : ''}
-            <span style="color:var(--text3);font-size:11px;margin-left:8px">${rec.date||''}</span>
-          </div>
-          <span class="badge ${statusBg[rec.status]||'badge-gray'}">${rec.status}</span>
-          <div class="table-actions">
-            ${rec.status !== '発注済み' ? `
-              <select class="filter-select" id="decide_${key}" style="font-size:11px">
-                <option value="">発注先を選択</option>
-                ${(rec.suppliers||[]).map(sid=>`<option value="${sid}"${rec.decided===sid?' selected':''}>${supNameMap[sid]||sid}</option>`).join('')}
-              </select>
-              <button class="btn btn-primary btn-sm" onclick="decideOrder('${key}')">✅ 発注確定</button>
-            ` : `<span style="color:var(--green);font-weight:600;font-size:12px">✅ 発注先: ${supNameMap[rec.decided]||rec.decided||'—'}</span>`}
-          </div>
+    const allDecided = rec.items.every((_,i) => (rec.itemDecided||{})[i] || rec.decided);
+
+    return `<div class="table-wrap" style="margin-bottom:20px;">
+      <div class="table-header">
+        <div class="table-title">
+          <span class="mono" style="font-weight:700;color:var(--accent)">${rec.moldNo||'—'}</span>
+          <span style="color:var(--text3);font-size:11px;margin-left:8px">${rec.partNo||''}</span>
         </div>
-        <div style="overflow-x:auto">
-          <table style="width:100%;border-collapse:collapse;font-size:12px">
-            <thead><tr style="background:var(--bg3)">
-              <th style="padding:8px;text-align:left">DWG.NO</th>
-              <th style="padding:8px;text-align:left">名称</th>
-              <th style="padding:8px">数量</th>
-              <th style="padding:8px">材質</th>
-              <th style="padding:8px">サイズ(X×Y×Z)</th>
-              <th style="padding:8px">仕上</th>
+        <span class="badge ${statusBg[rec.status]||'badge-gray'}">${rec.status}</span>
+        <span style="font-size:11px;color:var(--text3);margin-left:8px">${rec.date||''}</span>
+        <div class="table-actions">
+          <button class="btn btn-primary btn-sm" onclick="confirmAllDecided('${key}')">✅ 全明細を発注確定</button>
+          <button class="btn btn-secondary btn-sm" onclick="reopenQuote('${key}')">🔄 再編集</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead>
+            <tr style="background:var(--bg3)">
+              <th style="padding:7px 8px;text-align:left">管理NO.</th>
+              <th style="padding:7px 8px;text-align:left">名称</th>
+              <th style="padding:7px 6px;text-align:center">数量</th>
+              <th style="padding:7px 6px">材質</th>
+              <th style="padding:7px 6px">サイズ</th>
+              <th style="padding:7px 4px;text-align:center">仕上</th>
               ${supHeaders}
-              <th style="padding:8px;color:var(--green)">最安値</th>
-              <th style="padding:8px;color:var(--red)">差額</th>
-            </tr></thead>
-            <tbody>${itemRows}</tbody>
-          </table>
-        </div>
-      </div>`;
+              <th style="padding:7px 6px;color:var(--green)">最安値</th>
+              <th style="padding:7px 6px;color:var(--red)">差額</th>
+              <th style="padding:7px 6px">発注先</th>
+            </tr>
+          </thead>
+          <tbody>${itemRows}</tbody>
+        </table>
+      </div>
+    </div>`;
   }).join('');
 }
+
 
 async function updateQuote(reqKey, itemIdx, supId, field, value) {
   if (!DB.quoteRequests?.[reqKey]) return;
@@ -2900,47 +2969,97 @@ async function updateQuote(reqKey, itemIdx, supId, field, value) {
   if (!rec.quotes) rec.quotes = {};
   if (!rec.quotes[qkey]) rec.quotes[qkey] = {};
   rec.quotes[qkey][field] = parseFloat(value)||0;
-  rec.status = '回答済み';
+  if (rec.status === '見積待ち') rec.status = '回答済み';
   await writeToFirebase('quoteRequests', DB.quoteRequests);
-  // 差額表示だけ更新（全再描画は重いので）
+  renderCompare();
 }
 
-async function decideOrder(reqKey) {
-  const rec     = DB.quoteRequests?.[reqKey];
-  if (!rec)     return;
-  const decided = document.getElementById('decide_' + reqKey)?.value;
-  if (!decided) { toast('発注先を選択してください', 'error'); return; }
+// 明細ごとに発注先をセット
+async function setItemDecided(reqKey, itemIdx, supId) {
+  if (!DB.quoteRequests?.[reqKey]) return;
+  const rec = DB.quoteRequests[reqKey];
+  if (!rec.itemDecided) rec.itemDecided = {};
+  if (supId) rec.itemDecided[itemIdx] = supId;
+  else delete rec.itemDecided[itemIdx];
+  await writeToFirebase('quoteRequests', DB.quoteRequests);
+  renderCompare();
+}
 
-  const suppliers  = getSuppliers();
-  const supNameMap = Object.fromEntries(suppliers.map(s=>[s.id, s.name]));
+// 全明細を発注確定（明細ごとの発注先で材料費に登録）
+async function confirmAllDecided(reqKey) {
+  const rec = DB.quoteRequests?.[reqKey];
+  if (!rec) return;
 
-  rec.decided = decided;
-  rec.status  = '発注済み';
+  // 明細ごとの発注先チェック
+  const unset = rec.items.filter((_,i) => !(rec.itemDecided||{})[i]).length;
+  if (unset > 0) {
+    if (!confirm(`${unset}件の明細で発注先が未選択です。それ以外を確定しますか？`)) return;
+  }
 
+  const suppliers = getSuppliers();
+  const supNameMap = Object.fromEntries(suppliers.map(s => [s.id, s.name]));
   const month = new Date().toISOString().slice(0,7);
-  if (!DB.materials) DB.materials = {};
+
   rec.items.forEach((item, i) => {
-    const qkey = reqKey+'_'+i+'_'+decided;
+    const sid  = (rec.itemDecided||{})[i];
+    if (!sid) return;
+    const qkey = reqKey+'_'+i+'_'+sid;
     const q    = rec.quotes?.[qkey] || {};
-    const mat  = convertMaterial(item.material, decided);
-    DB.materials['mat_'+reqKey+'_'+i] = {
-      month, moldNo: rec.moldNo||'', partNo: rec.partNo||'',
-      name:     item.name||'',
+    const mat  = convertMaterial(item.material, sid);
+    const matKey = 'mat_'+reqKey+'_'+i;
+    if (!DB.materials) DB.materials = {};
+    DB.materials[matKey] = {
+      month,
+      moldNo:   item.moldNo   || rec.moldNo || '',
+      partNo:   item.partNo   || rec.partNo || '',
+      name:     item.name     || '',
       material: mat,
-      size:     (item.sizeX||'')+' × '+(item.sizeY||'')+' × '+(item.sizeZ||''),
-      finish:   item.finish||'',
+      size:     [item.sizeX,item.sizeY,item.sizeZ].filter(Boolean).join(' × '),
+      finish:   item.finish   || '',
       weight:   0,
       amount:   (parseFloat(q.unitPrice||0)) * (item.qty||1),
-      supplier: supNameMap[decided]||decided,
-      note:     item.note||'',
+      supplier: supNameMap[sid] || sid,
+      note:     item.note || '',
+      quoteKey: reqKey
     };
   });
 
+  rec.status  = '発注済み';
+  rec.decided = Object.values(rec.itemDecided||{})[0] || '';
+
   await writeToFirebase('quoteRequests', DB.quoteRequests);
-  await writeToFirebase('materials',     DB.materials);
-  toast('発注確定しました。材料費に自動登録されました', 'success');
+  await writeToFirebase('materials', DB.materials);
+  toast('発注を確定しました。材料費に登録しました', 'success');
   renderCompare();
 }
+
+// 発注確定後に再編集可能にする
+async function reopenQuote(reqKey) {
+  if (!DB.quoteRequests?.[reqKey]) return;
+  DB.quoteRequests[reqKey].status = '回答済み';
+  await writeToFirebase('quoteRequests', DB.quoteRequests);
+  toast('再編集モードにしました', 'success');
+  renderCompare();
+}
+
+// ㎏単価の自動計算（重量 = X×Y×Z×比重 / 1000000）
+function calcKgPrice(unitPrice, sizeX, sizeY, sizeZ, material, qty) {
+  if (!unitPrice || !sizeX || !sizeY || !sizeZ) return 0;
+  const x = parseFloat(sizeX)||0, y = parseFloat(sizeY)||0, z = parseFloat(sizeZ)||0;
+  if (!x||!y||!z) return 0;
+  // 材質別比重
+  const density = {
+    'SS400':7.85,'S50C':7.85,'S45C':7.85,'SK3':7.85,'SKD11':7.7,
+    'DCMX':7.7,'SLD-M':7.7,'GO5':7.7,'SKH51':8.1,'SUS304':7.93
+  };
+  const mat = (material||'').toUpperCase().replace(/[\s-]/g,'');
+  const d = density[mat] || density[Object.keys(density).find(k=>mat.includes(k))||''] || 7.85;
+  const weight = (x * y * z * d) / 1000000;  // cm³ × g/cm³ = g → kg
+  if (!weight) return 0;
+  const totalPrice = unitPrice * (qty||1);
+  return Math.round(totalPrice / weight);
+}
+
 
 // ── ③ 発注履歴 ──
 function renderQuoteHistory() {
@@ -3631,6 +3750,55 @@ function toggleItemInclude(i, checked) {
     quoteItems[i].include = checked;
     renderQuoteItemTable();
   }
+}
+
+
+// ═══════════════════════════════════════════════
+// 金型モーダル：工程リスト管理
+// ═══════════════════════════════════════════════
+function initMfProcesses(processes) {
+  const wrap = document.getElementById('mf_processWrap');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  (processes.length ? processes : []).forEach(p => addMfProcess(p));
+}
+
+function addMfProcess(name) {
+  const wrap = document.getElementById('mf_processWrap');
+  if (!wrap) return;
+  const div = document.createElement('div');
+  div.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:6px;';
+  div.innerHTML = `<input class="form-input mf-process-input" value="${name||''}"
+    placeholder="工程名 例: DR" style="width:160px;padding:5px 8px;">
+    <input class="form-input" placeholder="加工予算(円)" style="width:120px;padding:5px 8px;"
+      oninput="this.dataset.budget=this.value" data-budget="">
+    <button class="btn btn-danger btn-sm" style="padding:3px 8px" onclick="this.parentElement.remove()">×</button>`;
+  wrap.appendChild(div);
+}
+
+function addMfProcessName(name) {
+  // 既に同じ工程がなければ追加
+  const existing = [...document.querySelectorAll('.mf-process-input')].map(el=>el.value);
+  if (!existing.includes(name)) addMfProcess(name);
+}
+
+// openMoldModal で既存データを読み込む際の工程設定
+const _origOpenMoldForEdit = openMoldModal;
+
+// 金型一覧から編集ボタンで開く（工程データ読込）
+function editMold(key) {
+  const mold = DB.molds[key];
+  if (!mold) return;
+  editingMoldKey = key;
+  document.getElementById('moldModalTitle').textContent = '金型 編集';
+  const fields = ['no','client','orderDate','dueDate','partNo','partName','note','ktCode'];
+  const ids    = ['mf_no','mf_client','mf_orderDate','mf_dueDate','mf_partNo','mf_partName','mf_note','mf_ktCode'];
+  fields.forEach((f,i) => { const el = document.getElementById(ids[i]); if(el) el.value = mold[f]||''; });
+  document.getElementById('mf_type').value     = mold.type     || '新規';
+  document.getElementById('mf_estimate').value = mold.estimate || '';
+  document.getElementById('mf_status').value   = mold.status   || '製作中';
+  initMfProcesses(mold.processes || []);
+  document.getElementById('moldModal').classList.add('open');
 }
 
 // ── Close modal on overlay click ──
