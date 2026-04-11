@@ -1840,7 +1840,8 @@ function renderMaterials() {
       </tr></thead>
       <tbody>${entries.map(([k,r])=>`
         <tr>
-          <td><button class="copy-btn" onclick="copyRowTSV(this,[
+          <td style="white-space:nowrap">
+            <button class="copy-btn" onclick="copyRowTSV(this,[
             '${(r.month||'').replace(/'/g,"\\'")}',
             '${(r.moldNo||'').replace(/'/g,"\\'")}',
             '${(r.partNo||'').replace(/'/g,"\\'")}',
@@ -1850,7 +1851,9 @@ function renderMaterials() {
             '${(r.finish||'').replace(/'/g,"\\'")}',
             '${r.weight||''}',
             '${r.amount||''}',
-            '${(r.supplier||'').replace(/'/g,"\\'")}'])">📋 コピー</button></td>
+            '${(r.supplier||'').replace(/'/g,"\\'")}'])">📋</button>
+            <button class="btn btn-danger btn-sm" style="padding:3px 6px;font-size:11px" onclick="deleteRecord('materials','${k}')">×</button>
+          </td>
           <td class="mono">${r.month||''}</td>
           <td class="mono">${r.moldNo||''}</td>
           <td class="mono" style="font-size:11px">${r.partNo||''}</td>
@@ -1894,7 +1897,8 @@ function renderOutsource() {
       </tr></thead>
       <tbody>${entries.map(([k,r])=>`
         <tr>
-          <td><button class="copy-btn" onclick="copyRowTSV(this,[
+          <td style="white-space:nowrap">
+            <button class="copy-btn" onclick="copyRowTSV(this,[
             '${(r.month||'').replace(/'/g,"\\'")}',
             '${(r.moldNo||'').replace(/'/g,"\\'")}',
             '${(r.partNo||'').replace(/'/g,"\\'")}',
@@ -1903,7 +1907,9 @@ function renderOutsource() {
             '${(r.detail||'').replace(/'/g,"\\'")}',
             '${r.qty||''}',
             '${r.unit||''}',
-            '${r.total||''}'])">📋 コピー</button></td>
+            '${r.total||''}'])">📋</button>
+            <button class="btn btn-danger btn-sm" style="padding:3px 6px;font-size:11px" onclick="deleteRecord('outsource','${k}')">×</button>
+          </td>
           <td class="mono">${r.month||''}</td>
           <td class="mono">${r.moldNo||''}</td>
           <td class="mono" style="font-size:11px">${r.partNo||''}</td>
@@ -1951,7 +1957,8 @@ function renderPurchase() {
       </tr></thead>
       <tbody>${entries.map(([k,r])=>`
         <tr>
-          <td><button class="copy-btn" onclick="copyRowTSV(this,[
+          <td style="white-space:nowrap">
+            <button class="copy-btn" onclick="copyRowTSV(this,[
             '${(r.month||'').replace(/'/g,"\\'")}',
             '${(r.moldNo||'').replace(/'/g,"\\'")}',
             '${(r.partNo||'').replace(/'/g,"\\'")}',
@@ -1959,7 +1966,9 @@ function renderPurchase() {
             '${(r.supplier||'').replace(/'/g,"\\'")}',
             '${r.qty||''}',
             '${r.unit||''}',
-            '${r.total||''}'])">📋 コピー</button></td>
+            '${r.total||''}'])">📋</button>
+            <button class="btn btn-danger btn-sm" style="padding:3px 6px;font-size:11px" onclick="deleteRecord('purchase','${k}')">×</button>
+          </td>
           <td class="mono">${r.month||''}</td>
           <td class="mono">${r.moldNo||''}</td>
           <td class="mono" style="font-size:11px">${r.partNo||''}</td>
@@ -2503,6 +2512,7 @@ function renderQuoteItemTable() {
   document.getElementById('quoteItemTable').innerHTML = `
     <table>
       <thead><tr>
+        <th style="width:36px" title="依頼書に含める">含</th>
         <th>No.</th>
         <th>管理NO.</th>
         <th>名称</th>
@@ -2523,7 +2533,10 @@ function renderQuoteItemTable() {
         const moldStyle = moldOk ? 'color:var(--accent);font-weight:700;' : (r.moldNo ? 'color:var(--yellow);font-weight:700;' : 'color:var(--text3);');
         const warnIcon = moldOk ? '' : (r.moldNo ? ' ⚠' : '');
         const warnTitle = moldOk ? '登録済み金型' : '⚠未登録または未選択';
-        return '<tr>' +
+        const included = r.include !== false;  // デフォルトtrue
+        return '<tr style="' + (included ? '' : 'opacity:0.45;') + '">' +
+          '<td style="text-align:center"><input type="checkbox"' + (included ? ' checked' : '') +
+            ' onchange="toggleItemInclude(' + i + ',this.checked)" title="依頼書に含める"></td>' +
           '<td class="mono">' + (i+1) + '</td>' +
           '<td class="mono" style="' + moldStyle + '" title="' + warnTitle + '">' + (r.moldNo||'—') + warnIcon + '</td>' +
           '<td>' + (r.name||'') + '</td>' +
@@ -2646,10 +2659,14 @@ function generateQuotePrint() {
 
   // 各社ごとのページHTML生成
   const pages = toList.map(sup => {
-    const items = quoteItems.map(r => ({
-      ...r,
-      material: convertMaterial(r.material, sup.id)
-    }));
+    // include===false の品目を除外（依頼書に含めないチェックを外したもの）
+    const items = quoteItems
+      .filter(r => r.include !== false)
+      .map(r => ({
+        ...r,
+        material: convertMaterial(r.material, sup.id)
+      }));
+    if (!items.length) return '';  // この会社向けは全除外なら空ページ不要
 
     const B = 'border:1.5px solid #333;';
     const itemRows = items.map((r, i) => {
@@ -2675,7 +2692,7 @@ function generateQuotePrint() {
         '<td style="text-align:center;' + B + 'padding:4px 2px;font-weight:800;font-size:10.5pt">' + finish + '</td>' +
         '<td style="' + B + 'padding:4px 8px;font-size:9.5pt;min-width:80px">' + (r.note||'') + '</td>' +
         '</tr>';
-    }).join('');
+    }).filter(Boolean).join('');
 
     return '<div class="page-break">' +
       '<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:8px;">' +
@@ -2719,7 +2736,7 @@ function generateQuotePrint() {
     '<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;700;900&display=swap" rel="stylesheet">' +
     '<style>' +
       'body{margin:0;font-family:"Noto Sans JP",sans-serif;font-size:10pt;background:#fff;color:#000;}' +
-      '.page-break{width:100%;margin:0;padding:5mm 6mm 4mm;box-sizing:border-box;page-break-after:always;}' +
+      '.page-break{width:197mm;margin:0 auto;padding:5mm 7mm 4mm;box-sizing:border-box;page-break-after:always;}' +
       '.page-break:last-child{page-break-after:auto;}' +
       '.no-print{position:fixed;top:12px;right:12px;display:flex;gap:8px;z-index:99;}' +
       'button{padding:8px 16px;cursor:pointer;border:none;border-radius:4px;font-size:13px;}' +
@@ -2727,7 +2744,7 @@ function generateQuotePrint() {
       'th{background:#c8c8c8;font-weight:800;font-size:10pt;}' +
       'td,th{font-size:10pt;line-height:1.3;}' +
       'tr:nth-child(even) td{background:#f8f8f8;}' +
-      '@media print{.no-print{display:none!important}@page{size:A4 portrait;margin:4mm}}' +
+      '@media print{.no-print{display:none!important}@page{size:A4 portrait;margin:3mm 4mm}}' +
     '</style>' +
     '</head><body>' +
     '<div class="no-print">' +
@@ -3143,12 +3160,6 @@ function toast(msg, type='success') {
 
 
 
-
-
-function removeQuoteItem(i) {
-  quoteItems.splice(i, 1);
-  renderQuoteItems();
-}
 
 
 
@@ -3595,6 +3606,31 @@ function validateMoldNo(moldNo) {
   const mold = Object.values(DB.molds || {}).find(m => m.no === moldNo);
   if (!mold) return { ok: false, msg: `管理NO「${moldNo}」は金型一覧に未登録` };
   return { ok: true, mold };
+}
+
+
+// ═══════════════════════════════════════════════
+// レコード削除（材料費・外注費・購入品費共通）
+// ═══════════════════════════════════════════════
+async function deleteRecord(dbName, key) {
+  if (!confirm('この行を削除しますか？')) return;
+  if (!DB[dbName]) return;
+  delete DB[dbName][key];
+  await writeToFirebase(dbName, DB[dbName]);
+  toast('削除しました', 'success');
+  // 現在のページを再描画
+  const renders = { materials: renderMaterials, outsource: renderOutsource, purchase: renderPurchase };
+  if (renders[dbName]) renders[dbName]();
+}
+
+// ═══════════════════════════════════════════════
+// 見積品目の「依頼書に含める」トグル
+// ═══════════════════════════════════════════════
+function toggleItemInclude(i, checked) {
+  if (quoteItems[i]) {
+    quoteItems[i].include = checked;
+    renderQuoteItemTable();
+  }
 }
 
 // ── Close modal on overlay click ──
