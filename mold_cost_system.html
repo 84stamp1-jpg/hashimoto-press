@@ -475,6 +475,87 @@
   .import-sub   { font-size:11px; color:var(--text3); margin-top:4px; }
 
   input[type=file] { display:none; }
+
+  /* ── PRINT (見積依頼書) ── */
+  @media print {
+    header, nav, .filter-bar, .table-actions, .btn, #toast, .modal-overlay { display:none !important; }
+    body { background:#fff !important; color:#000 !important; font-size:11pt; }
+    body::before { display:none; }
+    main { padding:0; max-width:100%; }
+    .page { display:none !important; }
+    #print-quote { display:block !important; }
+    .print-page { page-break-after:always; padding:20mm; }
+    .print-header { border-bottom:2px solid #000; padding-bottom:8px; margin-bottom:16px; }
+    .print-title  { font-size:18pt; font-weight:700; }
+    .print-table  { width:100%; border-collapse:collapse; margin-top:12px; }
+    .print-table th, .print-table td { border:1px solid #999; padding:5px 8px; font-size:9pt; }
+    .print-table th { background:#f0f0f0; font-weight:600; }
+  }
+
+  /* ── COPY FLASH ── */
+  .row-copy-flash { animation: copyFlash 0.4s ease; }
+  @keyframes copyFlash {
+    0%   { background: rgba(5,150,105,0.25); }
+    100% { background: transparent; }
+  }
+  .copy-btn-cell { width:32px; text-align:center; }
+  .copy-row-btn {
+    width:24px; height:24px; border-radius:4px;
+    background:transparent; border:1px solid var(--border);
+    color:var(--text3); cursor:pointer; font-size:12px;
+    display:inline-flex; align-items:center; justify-content:center;
+    transition:all 0.15s;
+  }
+  .copy-row-btn:hover { background:var(--accent-dim); color:var(--accent); border-color:var(--accent); }
+
+  /* ── SUBTABS ── */
+  .subtab-bar {
+    display:flex; gap:2px; margin-bottom:16px;
+    background:var(--bg3); border:1px solid var(--border);
+    border-radius:7px; padding:3px; width:fit-content;
+  }
+  .subtab {
+    padding:6px 16px; border-radius:5px; border:none;
+    font-size:12px; font-weight:500; cursor:pointer;
+    background:none; color:var(--text3); transition:all 0.15s;
+    font-family:var(--sans);
+  }
+  .subtab.active { background:#fff; color:var(--accent); box-shadow:0 1px 3px rgba(0,0,0,0.1); font-weight:600; }
+  .subtab:hover:not(.active) { color:var(--text2); }
+  .subpage { display:none; }
+  .subpage.active { display:block; }
+
+  /* ── COPY BTN ── */
+  .copy-btn {
+    padding:3px 8px; border-radius:4px; border:1px solid var(--border2);
+    background:var(--bg3); color:var(--text3); cursor:pointer;
+    font-size:10px; font-family:var(--mono);
+    transition:all 0.15s; white-space:nowrap;
+  }
+  .copy-btn:hover { background:var(--accent-dim); color:var(--accent); border-color:var(--accent); }
+  .copy-btn.copied { background:var(--green-dim); color:var(--green); border-color:var(--green); }
+
+  /* ── QUOTE PREVIEW ── */
+  .quote-preview {
+    background:#fff; border:2px solid var(--border2);
+    border-radius:8px; padding:28px 36px;
+    max-width:740px; font-size:13px; line-height:1.8;
+  }
+  .quote-preview h2 { font-size:18px; font-weight:700; margin-bottom:2px; }
+  .quote-preview .q-meta { font-size:11px; color:var(--text3); margin-bottom:20px; }
+  .quote-table { width:100%; border-collapse:collapse; font-size:12px; margin:12px 0 20px; }
+  .quote-table th { background:#f1f5f9; padding:7px 10px; text-align:left; border:1px solid #e2e8f0; font-weight:600; }
+  .quote-table td { padding:7px 10px; border:1px solid #e2e8f0; }
+  .quote-table tr:nth-child(even) td { background:#f8fafc; }
+  .q-sign { margin-top:20px; font-size:12px; color:var(--text2); border-top:1px solid var(--border); padding-top:12px; }
+
+  @media print {
+    header,nav,.filter-bar,.subtab-bar,.table-actions,.btn,.copy-btn,#toast { display:none !important; }
+    .quote-preview { border:none; padding:0; max-width:100%; }
+    body { background:#fff; }
+    #subpage-list { display:none !important; }
+    #subpage-quote { display:block !important; }
+  }
 </style>
 </head>
 <body>
@@ -501,6 +582,7 @@
 <nav>
   <button class="tab active" onclick="showPage('dashboard')">ダッシュボード</button>
   <button class="tab" onclick="showPage('molds')">金型一覧</button>
+  <button class="tab" onclick="showPage('quote')">📋 見積依頼</button>
   <button class="tab" onclick="showPage('materials')">材料費</button>
   <button class="tab" onclick="showPage('outsource')">外注費</button>
   <button class="tab" onclick="showPage('purchase')">購入品費</button>
@@ -582,19 +664,182 @@
     </div>
   </div>
 
+  <!-- ═══ 見積依頼 ═══ -->
+  <div id="page-quote" class="page">
+    <div class="section-title">見積依頼書 作成</div>
+
+    <!-- 見積依頼リスト -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;">
+      <div class="config-box">
+        <div class="config-title">📝 依頼内容入力</div>
+        <div class="form-grid" style="grid-template-columns:1fr 1fr;">
+          <div class="form-group">
+            <label class="form-label">依頼日</label>
+            <input class="form-input" id="qf_date" type="date">
+          </div>
+          <div class="form-group">
+            <label class="form-label">管理NO.</label>
+            <input class="form-input" id="qf_moldNo" placeholder="例: 71-A">
+          </div>
+          <div class="form-group" style="grid-column:1/-1">
+            <label class="form-label">品番</label>
+            <input class="form-input" id="qf_partNo" placeholder="例: YG-4421C">
+          </div>
+          <div class="form-group" style="grid-column:1/-1">
+            <label class="form-label">品名 (NAME)</label>
+            <input class="form-input" id="qf_name" placeholder="例: DIESET UPR">
+          </div>
+          <div class="form-group">
+            <label class="form-label">数量</label>
+            <input class="form-input" id="qf_qty" type="number" value="1">
+          </div>
+          <div class="form-group">
+            <label class="form-label">材質</label>
+            <input class="form-input" id="qf_material" placeholder="SS400, S50C...">
+          </div>
+          <div class="form-group">
+            <label class="form-label">サイズ (幅×奥×厚)</label>
+            <input class="form-input" id="qf_size" placeholder="700×460×30">
+          </div>
+          <div class="form-group">
+            <label class="form-label">仕上</label>
+            <input class="form-input" id="qf_finish" placeholder="4F, 6F...">
+          </div>
+          <div class="form-group" style="grid-column:1/-1">
+            <label class="form-label">備考・特記事項</label>
+            <input class="form-input" id="qf_note" placeholder="形切・吊りボルト加工まで 等">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:4px;">
+          <button class="btn btn-secondary btn-sm" onclick="addQuoteItem()">＋ 品目追加</button>
+          <button class="btn btn-primary" onclick="generateQuotePDF()">📄 見積依頼書を作成・印刷</button>
+        </div>
+      </div>
+
+      <!-- 送付先設定 -->
+      <div class="config-box">
+        <div class="config-title">📮 送付先</div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+          <label style="font-size:12px;display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox" id="qto_daido" checked> 大同DMソリューション㈱（増田様）
+          </label>
+          <label style="font-size:12px;display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox" id="qto_tokai"> 東海鋼鉄㈱（担当者様）
+          </label>
+          <label style="font-size:12px;display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox" id="qto_steel"> ㈱スチールポリッシュ（高山様）
+          </label>
+          <label style="font-size:12px;display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox" id="qto_neo"> ㈱ネオスチール（岩崎様）
+          </label>
+          <label style="font-size:12px;display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox" id="qto_green"> グリーンスチール㈱（三石様）
+          </label>
+        </div>
+        <div class="form-group">
+          <label class="form-label">FAX番号メモ / メールアドレス</label>
+          <input class="form-input" id="qf_faxNote" placeholder="FAX: 0544-xx-xxxx 等">
+        </div>
+        <hr class="divider">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">自社情報</div>
+        <div style="font-size:12px;color:var(--text2);">
+          橋本工業㈱<br>
+          担当: <input class="form-input" id="qf_staff" placeholder="松本" style="width:80px;display:inline-block;padding:3px 6px;">
+        </div>
+      </div>
+    </div>
+
+    <!-- 品目リスト -->
+    <div class="table-wrap">
+      <div class="table-header">
+        <div class="table-title">見積依頼 品目一覧</div>
+        <div class="table-count" id="quoteItemCount">0件</div>
+        <div class="table-actions">
+          <button class="btn btn-secondary btn-sm" onclick="clearQuoteItems()">🗑 クリア</button>
+        </div>
+      </div>
+      <div id="quoteItemTable">
+        <div class="empty"><div class="empty-icon">📋</div>品目を追加してください</div>
+      </div>
+    </div>
+  </div>
+
   <!-- ═══ 材料費 ═══ -->
   <div id="page-materials" class="page">
     <div class="section-title">材料費</div>
-    <div class="filter-bar">
-      <input class="search-input" type="text" placeholder="品番・部品名で検索..." id="matSearch" oninput="renderMaterials()">
-      <button class="btn btn-primary btn-sm" onclick="openMatModal()">＋ 材料費入力</button>
+
+    <div class="subtab-bar">
+      <button class="subtab active" id="matTab-list" onclick="showMatSubTab('list')">📋 手配一覧</button>
+      <button class="subtab" id="matTab-quote" onclick="showMatSubTab('quote')">📄 見積依頼書</button>
     </div>
-    <div class="table-wrap">
-      <div class="table-header">
-        <div class="table-title">鋼材手配一覧</div>
-        <div class="table-count" id="matCount"></div>
+
+    <!-- 手配一覧 -->
+    <div id="subpage-list" class="subpage active">
+      <div class="filter-bar">
+        <input class="search-input" type="text" placeholder="品番・部品名・管理NOで検索..." id="matSearch" oninput="renderMaterials()">
+        <select class="filter-select" id="matMoldFilter" onchange="renderMaterials()"><option value="">全金型</option></select>
+        <button class="btn btn-primary btn-sm" onclick="openMatModal()">＋ 材料費入力</button>
+        <button class="btn btn-secondary btn-sm" onclick="showMatSubTab('quote')">📄 見積依頼書を作成</button>
       </div>
-      <div id="matTableBody"><div class="loading"><div class="spin"></div></div></div>
+      <div class="table-wrap">
+        <div class="table-header">
+          <div class="table-title">鋼材手配一覧</div>
+          <div class="table-count" id="matCount"></div>
+          <div class="table-actions">
+            <button class="btn btn-secondary btn-sm" onclick="copyTableToClipboard('matTableBody','材料費')">📋 全行コピー</button>
+          </div>
+        </div>
+        <div id="matTableBody"><div class="loading"><div class="spin"></div></div></div>
+      </div>
+    </div>
+
+    <!-- 見積依頼書 -->
+    <div id="subpage-quote" class="subpage">
+      <div style="display:grid;grid-template-columns:310px 1fr;gap:20px;align-items:start;">
+        <div>
+          <div class="config-box">
+            <div class="config-title">📄 見積依頼書 設定</div>
+            <div class="form-group" style="margin-bottom:10px">
+              <label class="form-label">宛先（材料メーカー）</label>
+              <input class="form-input" id="q_to" placeholder="例: 大同DMソリューション㈱ 増田 様">
+            </div>
+            <div class="form-group" style="margin-bottom:10px">
+              <label class="form-label">FAX番号</label>
+              <input class="form-input" id="q_fax" placeholder="例: 052-XXX-XXXX">
+            </div>
+            <div class="form-group" style="margin-bottom:10px">
+              <label class="form-label">件名（空欄で自動生成）</label>
+              <input class="form-input" id="q_subject" placeholder="鋼材のお見積りについて">
+            </div>
+            <div class="form-group" style="margin-bottom:10px">
+              <label class="form-label">納入希望日</label>
+              <input class="form-input" id="q_dueDate" type="date">
+            </div>
+            <div class="form-group" style="margin-bottom:14px">
+              <label class="form-label">備考</label>
+              <input class="form-input" id="q_note" placeholder="形切・吊りボルト加工まで 等">
+            </div>
+            <div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text2)">依頼品目</div>
+            <div id="quoteItemsWrap"></div>
+            <button class="btn btn-secondary btn-sm" style="width:100%;margin-top:8px" onclick="addQuoteItem()">＋ 品目を追加</button>
+            <hr style="margin:14px 0;border-color:var(--border)">
+            <button class="btn btn-primary" style="width:100%;margin-bottom:6px" onclick="renderQuotePreview()">👁 プレビュー更新</button>
+            <button class="btn btn-secondary" style="width:100%" onclick="loadMaterialsToQuote()">📥 手配一覧から読込</button>
+          </div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <div style="font-size:13px;font-weight:600;">プレビュー</div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-secondary btn-sm" onclick="window.print()">🖨 印刷・PDF保存</button>
+              <button class="btn btn-primary btn-sm" onclick="copyQuoteText()">📋 テキストコピー（メール用）</button>
+            </div>
+          </div>
+          <div id="quotePreview" class="quote-preview">
+            <div style="color:#94a3b8;text-align:center;padding:40px;font-size:12px;">左の設定を入力し「プレビュー更新」を押してください</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -612,6 +857,9 @@
       <div class="table-header">
         <div class="table-title">外注費一覧</div>
         <div class="table-count" id="outCount"></div>
+        <div class="table-actions">
+          <button class="btn btn-secondary btn-sm" onclick="copyTableToClipboard('outTableBody','外注費')">📋 全行コピー</button>
+        </div>
       </div>
       <div id="outTableBody"><div class="loading"><div class="spin"></div></div></div>
     </div>
@@ -633,6 +881,9 @@
       <div class="table-header">
         <div class="table-title">購入品一覧</div>
         <div class="table-count" id="purCount"></div>
+        <div class="table-actions">
+          <button class="btn btn-secondary btn-sm" onclick="copyTableToClipboard('purTableBody','購入品費')">📋 全行コピー</button>
+        </div>
       </div>
       <div id="purTableBody"><div class="loading"><div class="spin"></div></div></div>
     </div>
@@ -1011,6 +1262,9 @@
   </div>
 </div>
 
+<!-- PRINT AREA (非表示、印刷時のみ表示) -->
+<div id="print-quote" style="display:none;"></div>
+
 <!-- TOAST -->
 <div id="toast"></div>
 
@@ -1188,6 +1442,7 @@ function showPage(name) {
   const renders = {
     dashboard: renderDashboard,
     molds: renderMolds,
+    quote: renderQuote,
     materials: renderMaterials,
     outsource: renderOutsource,
     purchase: renderPurchase,
@@ -1199,7 +1454,7 @@ function showPage(name) {
 }
 
 function pageLabel(n) {
-  return {dashboard:'ダッシュボード',molds:'金型一覧',materials:'材料費',outsource:'外注費',purchase:'購入品費',labor:'加工費',import:'データ取込',settings:'設定'}[n] || n;
+  return {dashboard:'ダッシュボード',molds:'金型一覧',quote:'見積依頼',materials:'材料費',outsource:'外注費',purchase:'購入品費',labor:'加工費',import:'データ取込',settings:'設定'}[n] || n;
 }
 
 function refreshAll() {
@@ -1463,23 +1718,44 @@ function openMoldDetail(no) {
 // MATERIALS
 // ═══════════════════════════════════════════════
 function renderMaterials() {
-  const search = (document.getElementById('matSearch')?.value||'').toLowerCase();
+  const search  = (document.getElementById('matSearch')?.value||'').toLowerCase();
+  const moldFil = document.getElementById('matMoldFilter')?.value || '';
+  const moldNos = [...new Set(Object.values(DB.materials).map(r=>r.moldNo).filter(Boolean))].sort();
+  const mSel = document.getElementById('matMoldFilter');
+  if (mSel) {
+    const cur = mSel.value;
+    mSel.innerHTML = '<option value="">全金型</option>' + moldNos.map(n=>`<option value="${n}"${n===cur?' selected':''}>${n}</option>`).join('');
+  }
   let entries = Object.entries(DB.materials);
-  if (search) entries = entries.filter(([,r]) =>
+  if (search)  entries = entries.filter(([,r]) =>
     (r.partNo||'').toLowerCase().includes(search) ||
     (r.name||'').toLowerCase().includes(search) ||
     (r.moldNo||'').toLowerCase().includes(search)
   );
-  document.getElementById('matCount').textContent = entries.length + '件';
+  if (moldFil) entries = entries.filter(([,r]) => r.moldNo === moldFil);
+  const total = entries.reduce((s,[,r])=>s+(r.amount||0),0);
+  document.getElementById('matCount').textContent = entries.length + '件 / ¥' + fmt(total);
   if (!entries.length) { document.getElementById('matTableBody').innerHTML = '<div class="empty"><div class="empty-icon">🔩</div>データなし</div>'; return; }
   document.getElementById('matTableBody').innerHTML = `
     <table>
       <thead><tr>
+        <th style="width:50px"></th>
         <th>仕入月</th><th>管理NO.</th><th>品番</th><th>品名</th>
         <th>材質</th><th>サイズ</th><th>仕上</th><th>重量(kg)</th><th>仕入金額</th><th>手配先</th>
       </tr></thead>
       <tbody>${entries.map(([k,r])=>`
         <tr>
+          <td><button class="copy-btn" onclick="copyRowTSV(this,[
+            '${(r.month||'').replace(/'/g,"\\'")}',
+            '${(r.moldNo||'').replace(/'/g,"\\'")}',
+            '${(r.partNo||'').replace(/'/g,"\\'")}',
+            '${(r.name||'').replace(/'/g,"\\'")}',
+            '${(r.material||'').replace(/'/g,"\\'")}',
+            '${(r.size||'').replace(/'/g,"\\'")}',
+            '${(r.finish||'').replace(/'/g,"\\'")}',
+            '${r.weight||''}',
+            '${r.amount||''}',
+            '${(r.supplier||'').replace(/'/g,"\\'")}'])">📋 コピー</button></td>
           <td class="mono">${r.month||''}</td>
           <td class="mono">${r.moldNo||''}</td>
           <td class="mono" style="font-size:11px">${r.partNo||''}</td>
@@ -1505,7 +1781,6 @@ function renderOutsource() {
   const mSel = document.getElementById('outMonthFilter');
   const mCur = mSel?.value;
   if (mSel) mSel.innerHTML = '<option value="">全月</option>' + months.map(m=>`<option value="${m}"${m===mCur?' selected':''}>${m}</option>`).join('');
-
   let entries = Object.entries(DB.outsource);
   if (search) entries = entries.filter(([,r]) =>
     (r.partNo||'').toLowerCase().includes(search) ||
@@ -1518,11 +1793,22 @@ function renderOutsource() {
   document.getElementById('outTableBody').innerHTML = `
     <table>
       <thead><tr>
+        <th style="width:50px"></th>
         <th>仕入月</th><th>管理NO.</th><th>品番</th><th>仕入先</th>
         <th>工程</th><th>内容</th><th>数量</th><th>単価</th><th>合計金額</th>
       </tr></thead>
       <tbody>${entries.map(([k,r])=>`
         <tr>
+          <td><button class="copy-btn" onclick="copyRowTSV(this,[
+            '${(r.month||'').replace(/'/g,"\\'")}',
+            '${(r.moldNo||'').replace(/'/g,"\\'")}',
+            '${(r.partNo||'').replace(/'/g,"\\'")}',
+            '${(r.supplier||'').replace(/'/g,"\\'")}',
+            '${(r.process||'').replace(/'/g,"\\'")}',
+            '${(r.detail||'').replace(/'/g,"\\'")}',
+            '${r.qty||''}',
+            '${r.unit||''}',
+            '${r.total||''}'])">📋 コピー</button></td>
           <td class="mono">${r.month||''}</td>
           <td class="mono">${r.moldNo||''}</td>
           <td class="mono" style="font-size:11px">${r.partNo||''}</td>
@@ -1547,7 +1833,6 @@ function renderPurchase() {
   const mSel = document.getElementById('purMonthFilter');
   const mCur = mSel?.value;
   if (mSel) mSel.innerHTML = '<option value="">全月</option>' + months.map(m=>`<option value="${m}"${m===mCur?' selected':''}>${m}</option>`).join('');
-
   let entries = Object.entries(DB.purchase);
   if (search) entries = entries.filter(([,r]) =>
     (r.partNo||'').toLowerCase().includes(search) ||
@@ -1560,11 +1845,21 @@ function renderPurchase() {
   document.getElementById('purTableBody').innerHTML = `
     <table>
       <thead><tr>
+        <th style="width:50px"></th>
         <th>仕入月</th><th>管理NO.</th><th>品番</th><th>品名</th>
         <th>仕入先</th><th>数量</th><th>単価</th><th>合計金額</th>
       </tr></thead>
       <tbody>${entries.map(([k,r])=>`
         <tr>
+          <td><button class="copy-btn" onclick="copyRowTSV(this,[
+            '${(r.month||'').replace(/'/g,"\\'")}',
+            '${(r.moldNo||'').replace(/'/g,"\\'")}',
+            '${(r.partNo||'').replace(/'/g,"\\'")}',
+            '${(r.name||'').replace(/'/g,"\\'")}',
+            '${(r.supplier||'').replace(/'/g,"\\'")}',
+            '${r.qty||''}',
+            '${r.unit||''}',
+            '${r.total||''}'])">📋 コピー</button></td>
           <td class="mono">${r.month||''}</td>
           <td class="mono">${r.moldNo||''}</td>
           <td class="mono" style="font-size:11px">${r.partNo||''}</td>
@@ -1852,6 +2147,195 @@ async function savePurchase() {
 }
 
 // ═══════════════════════════════════════════════
+// 見積依頼
+// ═══════════════════════════════════════════════
+let quoteItems = [];
+
+function renderQuote() {
+  // 今日の日付をデフォルトセット
+  const dateEl = document.getElementById('qf_date');
+  if (dateEl && !dateEl.value) dateEl.value = new Date().toISOString().slice(0,10);
+  renderQuoteTable();
+}
+
+function addQuoteItem() {
+  const moldNo   = document.getElementById('qf_moldNo').value.trim();
+  const partNo   = document.getElementById('qf_partNo').value.trim();
+  const name     = document.getElementById('qf_name').value.trim();
+  const qty      = document.getElementById('qf_qty').value || '1';
+  const material = document.getElementById('qf_material').value.trim();
+  const size     = document.getElementById('qf_size').value.trim();
+  const finish   = document.getElementById('qf_finish').value.trim();
+  const note     = document.getElementById('qf_note').value.trim();
+
+  if (!partNo && !name) { toast('品番または品名を入力してください', 'error'); return; }
+
+  quoteItems.push({ moldNo, partNo, name, qty, material, size, finish, note });
+  renderQuoteTable();
+
+  // 品目フィールドをクリア（管理NO・品番は残す）
+  ['qf_name','qf_qty','qf_material','qf_size','qf_finish','qf_note'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = id === 'qf_qty' ? '1' : '';
+  });
+  toast('品目を追加しました', 'success');
+}
+
+function renderQuoteTable() {
+  document.getElementById('quoteItemCount').textContent = quoteItems.length + '件';
+  if (!quoteItems.length) {
+    document.getElementById('quoteItemTable').innerHTML = '<div class="empty"><div class="empty-icon">📋</div>品目を追加してください</div>';
+    return;
+  }
+  document.getElementById('quoteItemTable').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>No.</th><th>管理NO.</th><th>品番</th><th>品名</th>
+        <th>数量</th><th>材質</th><th>サイズ</th><th>仕上</th><th>備考</th><th></th>
+      </tr></thead>
+      <tbody>${quoteItems.map((r,i)=>`
+        <tr>
+          <td class="mono">${i+1}</td>
+          <td class="mono">${r.moldNo||''}</td>
+          <td class="mono">${r.partNo||''}</td>
+          <td>${r.name||''}</td>
+          <td class="mono">${r.qty||1}</td>
+          <td class="mono">${r.material||''}</td>
+          <td class="mono">${r.size||''}</td>
+          <td>${r.finish||''}</td>
+          <td>${r.note||''}</td>
+          <td><button class="btn btn-danger btn-sm" onclick="removeQuoteItem(${i})">×</button></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+function removeQuoteItem(i) {
+  quoteItems.splice(i, 1);
+  renderQuoteTable();
+}
+
+function clearQuoteItems() {
+  if (quoteItems.length && !confirm('品目リストをクリアしますか？')) return;
+  quoteItems = [];
+  renderQuoteTable();
+}
+
+function generateQuotePDF() {
+  if (!quoteItems.length) { toast('品目を追加してください', 'error'); return; }
+
+  const date    = document.getElementById('qf_date').value || new Date().toISOString().slice(0,10);
+  const staff   = document.getElementById('qf_staff').value || '担当';
+  const faxNote = document.getElementById('qf_faxNote').value;
+
+  // 送付先リスト
+  const toList = [
+    { id:'qto_daido',  name:'大同DMソリューション㈱', person:'増田 様' },
+    { id:'qto_tokai',  name:'東海鋼鉄㈱',             person:'担当者 様' },
+    { id:'qto_steel',  name:'㈱スチールポリッシュ',    person:'高山 様' },
+    { id:'qto_neo',    name:'㈱ネオスチール',           person:'岩崎 様' },
+    { id:'qto_green',  name:'グリーンスチール㈱',       person:'三石 様' },
+  ].filter(t => document.getElementById(t.id)?.checked);
+
+  if (!toList.length) { toast('送付先を1社以上選択してください', 'error'); return; }
+
+  // 送付先ごとにページを生成
+  const pages = toList.map(to => `
+    <div class="print-page">
+      <div class="print-header" style="display:flex;justify-content:space-between;align-items:flex-end;">
+        <div>
+          <div style="font-size:9pt;margin-bottom:4px;">${to.name}<br>${to.person}</div>
+          ${faxNote ? `<div style="font-size:8pt;color:#666;">${faxNote}</div>` : ''}
+        </div>
+        <div style="text-align:right;">
+          <div class="print-title">見積依頼書</div>
+          <div style="font-size:9pt;margin-top:4px;">${date}</div>
+        </div>
+      </div>
+
+      <div style="margin:12px 0;font-size:10pt;">
+        いつもお世話になっております。<br>
+        下記の見積りをお願い致します。
+      </div>
+
+      <table class="print-table">
+        <thead>
+          <tr>
+            <th style="width:30px;">No.</th>
+            <th style="width:60px;">管理NO.</th>
+            <th>品番 / 品名</th>
+            <th style="width:35px;">数量</th>
+            <th style="width:50px;">材質</th>
+            <th style="width:110px;">サイズ (W×D×T)</th>
+            <th style="width:35px;">仕上</th>
+            <th>備考・特記</th>
+            <th style="width:70px;">見積単価</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${quoteItems.map((r,i)=>`
+          <tr>
+            <td style="text-align:center;">${i+1}</td>
+            <td style="text-align:center;">${r.moldNo||''}</td>
+            <td>${r.partNo||''}<br><span style="font-size:8pt;color:#333;">${r.name||''}</span></td>
+            <td style="text-align:center;">${r.qty||1}</td>
+            <td style="text-align:center;">${r.material||''}</td>
+            <td style="text-align:center;">${r.size||''}</td>
+            <td style="text-align:center;">${r.finish||''}</td>
+            <td>${r.note||''}</td>
+            <td></td>
+          </tr>`).join('')}
+          ${Array(Math.max(0, 8-quoteItems.length)).fill('<tr><td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>').join('')}
+        </tbody>
+      </table>
+
+      <div style="margin-top:20px;font-size:9pt;">
+        ご回答の程、よろしくお願い致します。
+      </div>
+
+      <div style="margin-top:30px;text-align:right;font-size:9pt;border-top:1px solid #ccc;padding-top:10px;">
+        橋本工業㈱　担当: ${staff}
+      </div>
+    </div>
+  `).join('');
+
+  document.getElementById('print-quote').innerHTML = pages;
+  window.print();
+  // 印刷後にクリア
+  setTimeout(() => { document.getElementById('print-quote').innerHTML = ''; }, 1000);
+}
+
+// 見積依頼から材料費入力画面を開く
+function openMatModalFromQuote() {
+  showPage('materials');
+  openMatModal();
+}
+
+// ═══════════════════════════════════════════════
+// 行コピー機能
+// ═══════════════════════════════════════════════
+function copyRow(rowId, values) {
+  const text = values.join('\t');
+  navigator.clipboard.writeText(text).then(() => {
+    const row = document.getElementById(rowId);
+    if (row) {
+      row.classList.add('row-copy-flash');
+      setTimeout(() => row.classList.remove('row-copy-flash'), 400);
+    }
+    toast('行データをコピーしました（Excelに貼付け可能）', 'success');
+  }).catch(() => {
+    // フォールバック
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    toast('行データをコピーしました', 'success');
+  });
+}
+
+// ═══════════════════════════════════════════════
 // SETTINGS
 // ═══════════════════════════════════════════════
 function saveFirebaseConfig() {
@@ -1919,6 +2403,256 @@ function toast(msg, type='success') {
   el.className = `show ${type}`;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { el.className = ''; }, 3000);
+}
+
+
+// ═══════════════════════════════════════════════
+// MATERIALS SUBTAB
+// ═══════════════════════════════════════════════
+function showMatSubTab(name) {
+  ['list','quote'].forEach(n => {
+    document.getElementById('subpage-' + n)?.classList.toggle('active', n === name);
+    document.getElementById('matTab-' + n)?.classList.toggle('active', n === name);
+  });
+  if (name === 'list') renderMaterials();
+  if (name === 'quote') initQuoteItems();
+}
+
+// ═══════════════════════════════════════════════
+// 見積依頼書
+// ═══════════════════════════════════════════════
+let quoteItems = [];
+
+function initQuoteItems() {
+  if (quoteItems.length === 0) addQuoteItem();
+  renderQuoteItems();
+  // 日付デフォルト（2週間後）
+  if (!document.getElementById('q_dueDate').value) {
+    const d = new Date(); d.setDate(d.getDate() + 14);
+    document.getElementById('q_dueDate').value = d.toISOString().slice(0,10);
+  }
+}
+
+function addQuoteItem(item) {
+  quoteItems.push(item || { dwgNo:'', name:'', qty:1, material:'', sizeW:'', sizeD:'', sizeT:'', finish:'', note:'' });
+  renderQuoteItems();
+}
+
+function removeQuoteItem(i) {
+  quoteItems.splice(i, 1);
+  renderQuoteItems();
+}
+
+function renderQuoteItems() {
+  const wrap = document.getElementById('quoteItemsWrap');
+  if (!wrap) return;
+  wrap.innerHTML = quoteItems.map((item, i) => `
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:11px;color:var(--text3);font-weight:600;">品目 ${i+1}</span>
+        <button class="copy-btn" onclick="removeQuoteItem(${i})">✕ 削除</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+        <div class="form-group">
+          <label class="form-label">DWG.NO</label>
+          <input class="form-input" style="padding:5px 8px" value="${item.dwgNo||''}" oninput="quoteItems[${i}].dwgNo=this.value">
+        </div>
+        <div class="form-group">
+          <label class="form-label">NAME</label>
+          <input class="form-input" style="padding:5px 8px" value="${item.name||''}" oninput="quoteItems[${i}].name=this.value">
+        </div>
+        <div class="form-group">
+          <label class="form-label">材質</label>
+          <input class="form-input" style="padding:5px 8px" value="${item.material||''}" oninput="quoteItems[${i}].material=this.value" placeholder="SS400, S50C...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">仕上</label>
+          <input class="form-input" style="padding:5px 8px" value="${item.finish||''}" oninput="quoteItems[${i}].finish=this.value" placeholder="4F, 6F...">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">サイズ (W × D × T)</label>
+          <div style="display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:4px;align-items:center;">
+            <input class="form-input" style="padding:5px 8px;text-align:center" value="${item.sizeW||''}" oninput="quoteItems[${i}].sizeW=this.value" placeholder="幅">
+            <span style="color:var(--text3);font-size:12px">×</span>
+            <input class="form-input" style="padding:5px 8px;text-align:center" value="${item.sizeD||''}" oninput="quoteItems[${i}].sizeD=this.value" placeholder="奥行">
+            <span style="color:var(--text3);font-size:12px">×</span>
+            <input class="form-input" style="padding:5px 8px;text-align:center" value="${item.sizeT||''}" oninput="quoteItems[${i}].sizeT=this.value" placeholder="厚み">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">数量</label>
+          <input class="form-input" style="padding:5px 8px" type="number" value="${item.qty||1}" oninput="quoteItems[${i}].qty=this.value">
+        </div>
+        <div class="form-group">
+          <label class="form-label">備考</label>
+          <input class="form-input" style="padding:5px 8px" value="${item.note||''}" oninput="quoteItems[${i}].note=this.value">
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function loadMaterialsToQuote() {
+  const mats = Object.values(DB.materials);
+  if (!mats.length) { toast('材料費データがありません', 'error'); return; }
+  quoteItems = mats.map(r => ({
+    dwgNo: r.partNo || '',
+    name: r.name || '',
+    qty: 1,
+    material: r.material || '',
+    sizeW: r.size ? r.size.split('×')[0]?.trim() : '',
+    sizeD: r.size ? r.size.split('×')[1]?.trim() : '',
+    sizeT: r.size ? r.size.split('×')[2]?.trim() : '',
+    finish: r.finish || '',
+    note: r.note || ''
+  }));
+  renderQuoteItems();
+  toast(mats.length + '件を読み込みました', 'success');
+}
+
+function renderQuotePreview() {
+  const to      = document.getElementById('q_to').value || '（宛先未入力）';
+  const fax     = document.getElementById('q_fax').value;
+  const subject = document.getElementById('q_subject').value || '鋼材のお見積りについて';
+  const dueDate = document.getElementById('q_dueDate').value;
+  const note    = document.getElementById('q_note').value;
+  const today   = new Date().toLocaleDateString('ja-JP', {year:'numeric',month:'long',day:'numeric'});
+  const dueFmt  = dueDate ? new Date(dueDate).toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'}) : '要相談';
+
+  const rows = quoteItems.map((item,i) => `
+    <tr>
+      <td style="text-align:center">${i+1}</td>
+      <td>${item.dwgNo||''}</td>
+      <td>${item.name||''}</td>
+      <td style="text-align:center">${item.qty||1}</td>
+      <td>${item.material||''}</td>
+      <td style="text-align:center">${[item.sizeW,item.sizeD,item.sizeT].filter(Boolean).join(' × ')||''}</td>
+      <td style="text-align:center">${item.finish||''}</td>
+      <td></td>
+      <td>${item.note||''}</td>
+    </tr>`).join('');
+
+  document.getElementById('quotePreview').innerHTML = `
+    <h2>お見積依頼書</h2>
+    <div class="q-meta">${today}${fax ? '　FAX: ' + fax : ''}</div>
+    <p style="margin-bottom:16px">${to.replace(/\n/g,'<br>')} 御中</p>
+    <p style="margin-bottom:8px">いつもお世話になっております。</p>
+    <p style="margin-bottom:16px">下記の件につきまして、お見積りをお願い申し上げます。</p>
+    <p style="margin-bottom:4px"><strong>件名：</strong>${subject}</p>
+    <p style="margin-bottom:16px"><strong>納入希望日：</strong>${dueFmt}</p>
+    <table class="quote-table">
+      <thead>
+        <tr>
+          <th style="width:30px">No.</th>
+          <th>DWG.NO</th>
+          <th>品　名</th>
+          <th style="width:40px">数量</th>
+          <th>材　質</th>
+          <th>サイズ（W×D×T）</th>
+          <th style="width:50px">仕上</th>
+          <th>単価（円）</th>
+          <th>備　考</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+    ${note ? `<p style="margin-bottom:16px"><strong>備考：</strong>${note}</p>` : ''}
+    <p>以上、よろしくお願いいたします。</p>
+    <div class="q-sign">
+      橋本工業株式会社　技術部<br>
+      〒XXX-XXXX　静岡県XXX<br>
+      TEL: XXX-XXXX-XXXX　FAX: XXX-XXXX-XXXX
+    </div>
+  `;
+}
+
+function copyQuoteText() {
+  const to      = document.getElementById('q_to').value || '';
+  const subject = document.getElementById('q_subject').value || '鋼材のお見積りについて';
+  const dueDate = document.getElementById('q_dueDate').value;
+  const note    = document.getElementById('q_note').value;
+  const today   = new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
+  const dueFmt  = dueDate ? new Date(dueDate).toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'}) : '要相談';
+
+  const itemLines = quoteItems.map((item,i) =>
+    `  ${i+1}. ${item.dwgNo} / ${item.name} / ${item.material} / ${[item.sizeW,item.sizeD,item.sizeT].filter(Boolean).join('×')} / 仕上:${item.finish} / 数量:${item.qty}${item.note?' / '+item.note:''}`
+  ).join('\n');
+
+  const text = `件名：${subject}
+
+${to} 様
+
+いつもお世話になっております。
+橋本工業㈱ 技術部でございます。
+
+下記の鋼材につきまして、お見積りをお願い申し上げます。
+
+【納入希望日】${dueFmt}
+
+【依頼品目】
+${itemLines}
+${note ? '\n【備考】\n' + note : ''}
+
+以上、よろしくお願いいたします。
+
+───────────────────────
+橋本工業株式会社
+`;
+
+  navigator.clipboard.writeText(text).then(() => {
+    toast('メール用テキストをコピーしました', 'success');
+  });
+}
+
+// ═══════════════════════════════════════════════
+// 行コピー機能（全テーブル共通）
+// ═══════════════════════════════════════════════
+function copyTableToClipboard(tableBodyId, label) {
+  const wrap = document.getElementById(tableBodyId);
+  if (!wrap) return;
+  const table = wrap.querySelector('table');
+  if (!table) { toast('データがありません', 'error'); return; }
+
+  const headers = [...table.querySelectorAll('thead th')]
+    .map(th => th.textContent.trim())
+    .filter(h => h !== 'コピー');
+
+  const rows = [...table.querySelectorAll('tbody tr')].map(tr =>
+    [...tr.querySelectorAll('td')]
+      .slice(0, headers.length)
+      .map(td => td.textContent.trim())
+      .join('\t')
+  );
+
+  const tsv = headers.join('\t') + '\n' + rows.join('\n');
+  navigator.clipboard.writeText(tsv).then(() => {
+    toast(label + ' ' + rows.length + '行をコピーしました（Excelに貼り付け可能）', 'success');
+  }).catch(() => {
+    // フォールバック
+    const ta = document.createElement('textarea');
+    ta.value = tsv; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+    toast(label + ' ' + rows.length + '行をコピーしました', 'success');
+  });
+}
+
+// 各行の個別コピー（TSV形式）
+function copyRowTSV(btn, values) {
+  const tsv = values.join('\t');
+  navigator.clipboard.writeText(tsv).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = '✓ コピー済';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 2000);
+  }).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = tsv; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+    btn.textContent = '✓ コピー済'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = '📋 コピー'; btn.classList.remove('copied'); }, 2000);
+  });
 }
 
 // ── Close modal on overlay click ──
