@@ -1413,15 +1413,30 @@ function initFirebase() {
 
     // Listen
     db.ref('/moldCostSystem').on('value', snap => {
+      if (window._fbWriting) return;  // 書き込み中は上書きしない
       const data = snap.val() || {};
-      DB.molds         = data.molds         || {};
-      DB.materials     = data.materials     || {};
-      DB.outsource     = data.outsource     || {};
-      DB.purchase      = data.purchase      || {};
-      DB.labor         = data.labor         || {};
-      DB.quoteRequests = data.quoteRequests || {};
-      DB.importLog     = data.importLog     || [];
+
+      // ローカルDBとFirebaseデータをマージ（件数が多い方を優先）
+      const merge = (fbData, localData) => {
+        const fb = fbData || {};
+        const lc = localData || {};
+        // Firebaseの件数がローカルより少ない場合はローカルを優先
+        const fbCount = Object.keys(fb).length;
+        const lcCount = Object.keys(lc).length;
+        if (lcCount > fbCount) return lc;
+        return Object.assign({}, lc, fb);
+      };
+
+      DB.molds         = merge(data.molds,         DB.molds);
+      DB.materials     = merge(data.materials,     DB.materials);
+      DB.outsource     = merge(data.outsource,     DB.outsource);
+      DB.purchase      = merge(data.purchase,      DB.purchase);
+      DB.labor         = merge(data.labor,         DB.labor);
+      DB.quoteRequests = merge(data.quoteRequests, DB.quoteRequests);
+      DB.importLog     = data.importLog || DB.importLog || [];
+
       setStatus(true, 'Firebase接続済');
+      saveLocal();  // マージ結果をローカルにも保存
       refreshAll();
     }, err => {
       setStatus(false, 'エラー: ' + err.code);
@@ -1451,10 +1466,14 @@ async function writeToFirebase(path, data) {
   // ローカルDBは常に最新を保持
   saveLocal();
   if (db) {
+    window._fbWriting = true;  // リスナーによる上書きを防ぐ
     try {
       await db.ref('/moldCostSystem/' + path).set(data);
     } catch(e) {
       console.warn('Firebase write error:', e);
+    } finally {
+      // 書き込み完了から2秒後にフラグ解除
+      setTimeout(() => { window._fbWriting = false; }, 2000);
     }
   }
 }
@@ -1496,11 +1515,7 @@ function loadSampleData() {
     'out002': { month:'2025-11', moldNo:'71-A', partNo:'YG-4421C', supplier:'大同', process:'焼入れ', detail:'DCMX焼入れ', qty:9.5, unit:350, total:3325, note:'' },
     'out003': { month:'2025-11', moldNo:'71-B', partNo:'KY-2201', supplier:'DOWA', process:'TD処理', detail:'TD処理', qty:61.9, unit:3000, total:185700, note:'' },
   };
-  DB.purchase = {
-    'pur001': { month:'2025-10', moldNo:'71-A', partNo:'YG-4421C', name:'丸線コイルスプリング [WWW10-30]', supplier:'パンチ工業', qty:10, unit:72, total:720, note:'' },
-    'pur002': { month:'2025-10', moldNo:'71-A', partNo:'YG-4421C', name:'リフタピン [JLP6-15]', supplier:'ミスミ', qty:4, unit:600, total:2400, note:'' },
-    'pur003': { month:'2025-11', moldNo:'71-B', partNo:'KY-2201', name:'MOLDINO [ESHT5-M8-1.25-TH]', supplier:'守屋工機', qty:1, unit:9425, total:9425, note:'' },
-  };
+  DB.purchase = {};  // サンプルデータなし（CSV取込で追加）
   DB.labor = {
     'lab001': { month:'2025-10', moldNo:'69-Q', partNo:'11250-85U01', process:'DR', worker:'大石辰祥', workType:'M/C (自動)', charge:3000, time:17, amount:51000 },
     'lab002': { month:'2025-10', moldNo:'69-Q', partNo:'11250-85U01', process:'BE/RST', worker:'根間慎也', workType:'M/C (段取)', charge:5000, time:0.75, amount:3750 },
@@ -2160,6 +2175,8 @@ async function importCSV(e) {
     const logEl = document.getElementById('purchaseImportLog');
     if (logEl) logEl.textContent = '✅ ' + count + '件取込完了 (' + new Date().toLocaleString('ja-JP') + ')';
     e.target.value = '';
+    // 購入品タブへ移動して確実に表示
+    showPage('purchase');
     renderPurchase();
   };
   reader.readAsArrayBuffer(file);  // バイナリで読んでTextDecoderで変換
@@ -2634,75 +2651,83 @@ function generateQuotePrint() {
       material: convertMaterial(r.material, sup.id)
     }));
 
+    const B = 'border:1.5px solid #333;';
     const itemRows = items.map((r, i) => {
-      // 仕上げ表示：2F/4F/6Fのみ
       const finish = finishLabel(r.finish);
-      // X/Y/Zそれぞれの▽▽表示（チェックされた面のみ）
-      const xMark = r.fX ? '<div style="font-size:7pt;color:#1a7a3c;text-align:center;line-height:1;">▽▽</div>' : '<div style="font-size:7pt;color:transparent;">▽▽</div>';
-      const yMark = r.fY ? '<div style="font-size:7pt;color:#1a7a3c;text-align:center;line-height:1;">▽▽</div>' : '<div style="font-size:7pt;color:transparent;">▽▽</div>';
-      const zMark = r.fZ ? '<div style="font-size:7pt;color:#1a7a3c;text-align:center;line-height:1;">▽▽</div>' : '<div style="font-size:7pt;color:transparent;">▽▽</div>';
+      // ▽▽マーク：太く濃く、FAXでもつぶれにくい
+      const mk = '<div style="font-size:10pt;color:#000;font-weight:900;text-align:center;line-height:1.2;letter-spacing:0px;-webkit-text-stroke:0.3px #000;">▽▽</div>';
+      const sp = '<div style="height:16px;"></div>';
+      const xMark = r.fX ? mk : sp;
+      const yMark = r.fY ? mk : sp;
+      const zMark = r.fZ ? mk : sp;
+      const sX = String(r.sizeX||'').replace(/\.00$/,'');
+      const sY = String(r.sizeY||'').replace(/\.00$/,'');
+      const sZ = String(r.sizeZ||'').replace(/\.00$/,'');
       return '<tr>' +
-        '<td style="text-align:center;border:1px solid #bbb;padding:3px 4px">' + (i+1) + '</td>' +
-        '<td style="text-align:center;border:1px solid #bbb;padding:3px 4px;font-family:monospace">' + (r.moldNo||'') + '</td>' +
-        '<td style="border:1px solid #bbb;padding:3px 6px">' + (r.name||'') + '</td>' +
-        '<td style="text-align:center;border:1px solid #bbb;padding:3px 4px">' + (r.qty||1) + '</td>' +
-        '<td style="border:1px solid #bbb;padding:3px 4px">' + (r.material||'') + '</td>' +
-        '<td style="border:1px solid #bbb;padding:0;text-align:center">' + xMark + '<div style="padding:2px 4px">' + (r.sizeX||'') + '</div></td>' +
-        '<td style="border:1px solid #bbb;padding:0;text-align:center">' + yMark + '<div style="padding:2px 4px">' + (r.sizeY||'') + '</div></td>' +
-        '<td style="border:1px solid #bbb;padding:0;text-align:center">' + zMark + '<div style="padding:2px 4px">' + (r.sizeZ||'') + '</div></td>' +
-        '<td style="text-align:center;border:1px solid #bbb;padding:3px 4px;font-weight:600">' + finish + '</td>' +
-        '<td style="border:1px solid #bbb;padding:3px 4px;font-size:8pt">' + (r.note||'') + '</td>' +
+        '<td style="text-align:center;' + B + 'padding:4px 2px">' + (i+1) + '</td>' +
+        '<td style="text-align:center;' + B + 'padding:4px 3px;font-family:monospace;font-size:9.5pt">' + (r.moldNo||'') + '</td>' +
+        '<td style="' + B + 'padding:4px 6px">' + (r.name||'') + '</td>' +
+        '<td style="text-align:center;' + B + 'padding:4px 2px">' + (r.qty||1) + '</td>' +
+        '<td style="' + B + 'padding:4px 3px">' + (r.material||'') + '</td>' +
+        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + xMark + '<div style="padding:2px 3px;border-top:1px solid #555;font-size:10.5pt;font-weight:600">' + sX + '</div></td>' +
+        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + yMark + '<div style="padding:2px 3px;border-top:1px solid #555;font-size:10.5pt;font-weight:600">' + sY + '</div></td>' +
+        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + zMark + '<div style="padding:2px 3px;border-top:1px solid #555;font-size:10.5pt;font-weight:600">' + sZ + '</div></td>' +
+        '<td style="text-align:center;' + B + 'padding:4px 2px;font-weight:800;font-size:10.5pt">' + finish + '</td>' +
+        '<td style="' + B + 'padding:4px 8px;font-size:9.5pt;min-width:80px">' + (r.note||'') + '</td>' +
         '</tr>';
     }).join('');
 
     return '<div class="page-break">' +
-      '<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:10px;">' +
-        '<div style="font-size:10pt;">' +
-          '<div style="font-size:11pt;font-weight:bold;margin-bottom:2px;">' + sup.name + '</div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:8px;">' +
+        '<div style="font-size:10pt;line-height:1.7">' +
+          '<div style="font-size:11pt;font-weight:bold">' + sup.name + '</div>' +
           '<div>' + sup.person + '</div>' +
-          (sup.fax   ? '<div style="font-size:9pt;color:#555;">FAX: ' + sup.fax + '</div>' : '') +
-          (sup.email ? '<div style="font-size:9pt;color:#555;">E-mail: ' + sup.email + '</div>' : '') +
+          (sup.fax   ? '<div style="font-size:9pt">FAX: ' + sup.fax + '</div>' : '') +
+          (sup.email ? '<div style="font-size:9pt">E-mail: ' + sup.email + '</div>' : '') +
         '</div>' +
-        '<div style="text-align:right;">' +
-          '<div style="font-size:18pt;font-weight:bold;letter-spacing:2px;border-bottom:2px solid #000;padding-bottom:4px;margin-bottom:6px;">見 積 依 頼 書</div>' +
-          '<div style="font-size:9pt;">' + dateJa + '</div>' +
-          '<div style="font-size:9pt;">橋本工業㈱　' + staff + '</div>' +
+        '<div style="text-align:right">' +
+          '<div style="font-size:20pt;font-weight:900;letter-spacing:3px;border-bottom:2.5px solid #000;padding-bottom:4px;margin-bottom:4px">見 積 依 頼 書</div>' +
+          '<div style="font-size:9pt">' + dateJa + '</div>' +
+          '<div style="font-size:9pt">橋本工業㈱　' + staff + '</div>' +
         '</div>' +
       '</div>' +
-      '<div style="margin-bottom:10px;font-size:10pt;line-height:1.8;">いつもお世話になります。<br>下記の見積りをお願い致します。</div>' +
-      '<table style="width:100%;border-collapse:collapse;font-size:9pt;">' +
+      '<div style="margin-bottom:7px;font-size:10pt;line-height:1.8">いつもお世話になります。<br>下記の見積りをお願い致します。</div>' +
+      '<table style="width:100%;border-collapse:collapse;font-size:10pt">' +
         '<thead>' +
-          '<tr style="background:#f0f0f0;">' +
-            '<th style="border:1px solid #bbb;padding:5px 4px;width:24px">No.</th>' +
-            '<th style="border:1px solid #bbb;padding:5px 4px;width:52px">管理NO.</th>' +
-            '<th style="border:1px solid #bbb;padding:5px 6px;">名　　称</th>' +
-            '<th style="border:1px solid #bbb;padding:5px 4px;width:30px">数量</th>' +
-            '<th style="border:1px solid #bbb;padding:5px 4px;width:60px">材質</th>' +
-            '<th style="border:1px solid #bbb;padding:5px 4px;width:64px">長さ(X)</th>' +
-            '<th style="border:1px solid #bbb;padding:5px 4px;width:64px">幅(Y)</th>' +
-            '<th style="border:1px solid #bbb;padding:5px 4px;width:64px">材厚(Z)</th>' +
-            '<th style="border:1px solid #bbb;padding:5px 4px;width:36px">仕上</th>' +
-            '<th style="border:1px solid #bbb;padding:5px 4px;">備考</th>' +
+          '<tr style="background:#d0d0d0">' +
+            '<th style="' + B + 'padding:5px 2px;text-align:center;width:20px">No.</th>' +
+            '<th style="' + B + 'padding:5px 3px;text-align:center;width:46px">管理NO.</th>' +
+            '<th style="' + B + 'padding:5px 6px">名　　称</th>' +
+            '<th style="' + B + 'padding:5px 2px;text-align:center;width:22px">数量</th>' +
+            '<th style="' + B + 'padding:5px 3px;text-align:center;width:48px">材質</th>' +
+            '<th style="' + B + 'padding:5px 3px;text-align:center;width:60px">長さ(X)</th>' +
+            '<th style="' + B + 'padding:5px 3px;text-align:center;width:60px">幅(Y)</th>' +
+            '<th style="' + B + 'padding:5px 3px;text-align:center;width:60px">材厚(Z)</th>' +
+            '<th style="' + B + 'padding:5px 2px;text-align:center;width:28px">仕上</th>' +
+            '<th style="' + B + 'padding:5px 8px">備　　考</th>' +
           '</tr>' +
         '</thead>' +
         '<tbody>' + itemRows + '</tbody>' +
       '</table>' +
-      '<div style="margin-top:16px;font-size:9pt;color:#555;">ご回答はFAXまたはメールにてお願いいたします。</div>' +
+      '<div style="margin-top:12px;font-size:9pt;color:#444">ご回答はFAXまたはメールにてお願いいたします。</div>' +
     '</div>';
   }).join('');
 
   const win = window.open('', '_blank');
   win.document.write('<!DOCTYPE html><html><head>' +
     '<meta charset="UTF-8"><title>見積依頼書</title>' +
-    '<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">' +
+    '<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;700;900&display=swap" rel="stylesheet">' +
     '<style>' +
-      'body{margin:0;font-family:"Noto Sans JP",sans-serif;font-size:10pt;background:#fff;}' +
-      '.page-break{width:190mm;min-height:267mm;margin:0 auto;padding:10mm 10mm 8mm;box-sizing:border-box;page-break-after:always;}' +
+      'body{margin:0;font-family:"Noto Sans JP",sans-serif;font-size:10pt;background:#fff;color:#000;}' +
+      '.page-break{width:100%;margin:0;padding:5mm 6mm 4mm;box-sizing:border-box;page-break-after:always;}' +
       '.page-break:last-child{page-break-after:auto;}' +
       '.no-print{position:fixed;top:12px;right:12px;display:flex;gap:8px;z-index:99;}' +
       'button{padding:8px 16px;cursor:pointer;border:none;border-radius:4px;font-size:13px;}' +
       '.bp{background:#0369a1;color:#fff;}.bc{background:#e2e8f0;color:#333;}' +
-      '@media print{.no-print{display:none!important}@page{size:A4;margin:0}}' +
+      'th{background:#c8c8c8;font-weight:800;font-size:10pt;}' +
+      'td,th{font-size:10pt;line-height:1.3;}' +
+      'tr:nth-child(even) td{background:#f8f8f8;}' +
+      '@media print{.no-print{display:none!important}@page{size:A4 portrait;margin:4mm}}' +
     '</style>' +
     '</head><body>' +
     '<div class="no-print">' +
