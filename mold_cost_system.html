@@ -2999,6 +2999,7 @@ function renderCompare() {
         <div class="table-actions">
           <button class="btn btn-primary btn-sm" onclick="confirmAllDecided('${key}')">✅ 全明細を発注確定</button>
           <button class="btn btn-secondary btn-sm" onclick="reopenQuote('${key}')">🔄 再編集</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteQuoteRequest('${key}')">🗑 削除</button>
         </div>
       </div>
       <div style="overflow-x:auto;">
@@ -3033,8 +3034,34 @@ async function updateQuote(reqKey, itemIdx, supId, field, value) {
   if (!rec.quotes[qkey]) rec.quotes[qkey] = {};
   rec.quotes[qkey][field] = parseFloat(value)||0;
   if (rec.status === '見積待ち') rec.status = '回答済み';
+
+  // 見積単価が入力されたら最安値サプライヤーを自動で発注先にセット
+  if (field === 'unitPrice') {
+    autoSetCheapestSupplier(rec, reqKey, itemIdx);
+  }
   await writeToFirebase('quoteRequests', DB.quoteRequests);
   renderCompare();
+}
+
+// 最安値のサプライヤーを発注先に自動セット
+function autoSetCheapestSupplier(rec, reqKey, itemIdx) {
+  const sups = rec.suppliers || [];
+  let minPrice = Infinity, minSup = '';
+  for (const sid of sups) {
+    const up = parseFloat(rec.quotes?.[reqKey+'_'+itemIdx+'_'+sid]?.unitPrice || 0);
+    if (up > 0 && up < minPrice) { minPrice = up; minSup = sid; }
+  }
+  if (minSup) {
+    if (!rec.itemDecided) rec.itemDecided = {};
+    // すでに手動選択済みなら上書きしない（手動 > 自動）
+    if (!rec.itemDecided[itemIdx]) {
+      rec.itemDecided[itemIdx] = minSup;
+    } else {
+      // 全社の値が揃ったら最安値に更新
+      const allFilled = sups.every(sid => parseFloat(rec.quotes?.[reqKey+'_'+itemIdx+'_'+sid]?.unitPrice||0) > 0);
+      if (allFilled) rec.itemDecided[itemIdx] = minSup;
+    }
+  }
 }
 
 // 明細ごとに発注先をセット
@@ -3105,6 +3132,19 @@ async function reopenQuote(reqKey) {
   renderCompare();
 }
 
+// 見積依頼を削除
+async function deleteQuoteRequest(reqKey) {
+  if (!confirm('この見積依頼を削除しますか？（材料費に登録済みのデータは残ります）')) return;
+  delete DB.quoteRequests[reqKey];
+  await writeToFirebase('quoteRequests', DB.quoteRequests);
+  toast('削除しました', 'success');
+  // 現在のタブを再描画
+  const active = document.querySelector('.subtab.active[id^="qtab-"]');
+  if (active?.id === 'qtab-compare') renderCompare();
+  else if (active?.id === 'qtab-history') renderQuoteHistory();
+  else renderCompare();
+}
+
 // ㎏単価の自動計算（重量 = X×Y×Z×比重 / 1000000）
 function calcKgPrice(unitPrice, sizeX, sizeY, sizeZ, material, qty) {
   if (!unitPrice || !sizeX || !sizeY || !sizeZ) return 0;
@@ -3128,8 +3168,8 @@ function calcKgPrice(unitPrice, sizeX, sizeY, sizeZ, material, qty) {
 function renderQuoteHistory() {
   const search = (document.getElementById('histSearch')?.value||'').toLowerCase();
   if (!DB.quoteRequests) DB.quoteRequests = {};
-  const suppliers  = getSuppliers();
-  const supNameMap = Object.fromEntries(suppliers.map(s=>[s.id, s.name.replace('㈱','').trim()]));
+  const suppliers = getSuppliers();
+  const supNameMap = Object.fromEntries(suppliers.map(s => [s.id, s.name.replace('㈱','').replace('株式会社','').replace('DMソリューション','DM').trim()]));
 
   let entries = Object.entries(DB.quoteRequests);
   if (search) entries = entries.filter(([,r]) =>
@@ -3137,7 +3177,6 @@ function renderQuoteHistory() {
     (r.partNo||'').toLowerCase().includes(search) ||
     r.items?.some(it => (it.name||'').toLowerCase().includes(search))
   );
-
   document.getElementById('histCount').textContent = entries.length + '件';
   if (!entries.length) {
     document.getElementById('histTableBody').innerHTML =
@@ -3145,38 +3184,53 @@ function renderQuoteHistory() {
     return;
   }
 
-  const statusBg = {'見積待ち':'badge-yellow','回答済み':'badge-blue','発注済み':'badge-green'};
-  const rows = entries.flatMap(([key,rec]) =>
-    rec.items.map((item, i) => {
-      const q = rec.quotes?.[key+'_'+i+'_'+(rec.decided||'')] || {};
-      const mat = convertMaterial(item.material, rec.decided||'');
-      return `<tr>
-        <td class="mono">${rec.date||''}</td>
-        <td class="mono">${rec.moldNo||''}</td>
-        <td class="mono">${item.dwgNo||''}</td>
-        <td>${item.name||''}</td>
-        <td class="mono">${mat||item.material||''}</td>
-        <td class="mono" style="font-size:11px">${item.sizeX||''}×${item.sizeY||''}×${item.sizeZ||''}</td>
+  const rows = entries.flatMap(([key,rec]) => {
+    return rec.items.map((item,i) => {
+      const itemDecidedSup = (rec.itemDecided||{})[i] || rec.decided || '';
+      const q = rec.quotes?.[`${key}_${i}_${itemDecidedSup}`] || {};
+      const supName = supNameMap[itemDecidedSup] || itemDecidedSup || '—';
+      const isFirst = i === 0;
+      return `<tr style="border-bottom:1px solid var(--border)">
+        <td class="mono" style="font-size:11px">${isFirst ? (rec.date||'') : ''}</td>
+        <td class="mono" style="font-weight:600;color:var(--accent)">${item.moldNo||rec.moldNo||''}</td>
+        <td style="font-size:12px">${item.name||''}</td>
+        <td class="mono" style="font-size:11px">${item.material||''}</td>
+        <td class="mono" style="font-size:11px">${[item.sizeX,item.sizeY,item.sizeZ].filter(Boolean).join('×')}</td>
         <td style="font-size:11px">${finishLabel(item.finish)}</td>
-        <td>${supNameMap[rec.decided]||rec.decided||'—'}</td>
+        <td style="font-size:11px">${supName}</td>
         <td class="mono">¥${fmt(q.unitPrice||0)}</td>
-        <td class="mono">${q.kgPrice||'—'}</td>
-        <td>${statusBadge(rec.status)}</td>
         <td style="font-size:11px">${item.note||''}</td>
+        ${isFirst ? `<td rowspan="${rec.items.length}" style="text-align:center;vertical-align:middle;padding:4px;white-space:nowrap">
+          ${statusBadge(rec.status)}
+          <div style="margin-top:4px;display:flex;flex-direction:column;gap:4px;">
+            <button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:10px"
+              onclick="showPage('quote');showQuoteTab('compare')">比較へ</button>
+            <button class="btn btn-danger btn-sm" style="padding:2px 8px;font-size:10px"
+              onclick="deleteQuoteRequest('${key}')">🗑 削除</button>
+          </div>
+        </td>` : ''}
       </tr>`;
-    })
-  ).join('');
+    });
+  }).join('');
 
   document.getElementById('histTableBody').innerHTML = `
     <table>
       <thead><tr>
-        <th>依頼日</th><th>管理NO.</th><th>DWG.NO</th><th>名称</th>
-        <th>材質</th><th>サイズ</th><th>仕上</th><th>発注先</th>
-        <th>決定単価</th><th>㎏単価</th><th>状態</th><th>備考</th>
+        <th style="width:80px">依頼日</th>
+        <th>管理NO.</th>
+        <th>名称</th>
+        <th>材質</th>
+        <th>サイズ</th>
+        <th>仕上</th>
+        <th>発注先</th>
+        <th>決定単価</th>
+        <th>備考</th>
+        <th>操作</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
 }
+
 
 // ── 仕入先設定 ──
 function renderSupplierSettingList() {
@@ -3898,7 +3952,10 @@ async function fetchKintoneApp(appId, query) {
   if (query) url += '&query=' + encodeURIComponent(query);
   url += '&limit=500';
   const res = await fetch(url);
-  if (!res.ok) throw new Error('HTTP ' + res.status + ' - GASプロキシエラー');
+  if (!res.ok) {
+    const body = await res.text().catch(()=>'');
+    throw new Error('HTTP ' + res.status + ' ' + body.slice(0,100));
+  }
   return await res.json();
 }
 
@@ -3906,12 +3963,16 @@ async function fetchKintoneApp(appId, query) {
 function ktVal(rec, ...fields) {
   for (const f of fields) {
     const v = rec[f];
-    if (!v) continue;
+    if (v === null || v === undefined) continue;
     if (typeof v === 'string') return v;
-    if (v.value !== undefined) return String(v.value || '');
+    if (typeof v === 'number') return String(v);
+    // kintone形式: {type: "SINGLE_LINE_TEXT", value: "..."}
+    if (v.value !== undefined && v.value !== null) return String(v.value);
   }
   return '';
 }
+
+
 
 // ステータスを正規化
 function ktStatus(raw) {
@@ -3930,12 +3991,50 @@ async function fetchKintoneForPreview() {
   setLog('kintoneから取得中...');
 
   try {
-    // 検収済以外を取得（GASプロキシがqueryパラメータ対応している場合）
-    const data = await fetchKintoneApp(appId, '');
-    const records = data.records || (Array.isArray(data) ? data : []);
+    // GASプロキシ呼び出し（app パラメータなし・ありの両方を試みる）
+    const gasUrl = cfg.gasUrl || document.getElementById('cfgGasUrl')?.value.trim();
+    if (!gasUrl) throw new Error('GASプロキシURLを設定してください');
+
+    // まずapp指定なしで既定のエンドポイントを呼ぶ
+    let data = null;
+    const urls = [
+      gasUrl + '?app=' + appId + '&limit=500',
+      gasUrl + '?limit=500',
+      gasUrl,
+    ];
+    for (const url of urls) {
+      try {
+        setLog('接続中: ' + url.slice(0, 80) + '...');
+        const res = await fetch(url);
+        if (!res.ok) continue;
+        const raw = await res.text();
+        // デバッグ：最初の200文字をログ表示
+        setLog('応答: ' + raw.slice(0, 150));
+        data = JSON.parse(raw);
+        break;
+      } catch(e) { continue; }
+    }
+
+    if (!data) throw new Error('GASプロキシからデータを取得できませんでした');
+
+    // 応答形式の自動判定
+    let records = [];
+    if (Array.isArray(data)) {
+      records = data;
+    } else if (data.records && Array.isArray(data.records)) {
+      records = data.records;
+    } else if (typeof data === 'object') {
+      // {key: record} 形式
+      records = Object.values(data).filter(v => typeof v === 'object');
+    }
 
     if (!records.length) {
-      setLog('レコードが0件でした。App IDとGAS URLを確認してください。');
+      setLog('⚠ レコード0件。GAS応答: ' + JSON.stringify(data).slice(0,200));
+      // デバッグ用：実際の応答をプレビューに表示
+      document.getElementById('ktPreviewTable').innerHTML =
+        '<div style="padding:16px;font-family:monospace;font-size:11px;white-space:pre-wrap;color:var(--red)">' +
+        'GASプロキシの応答: ' + JSON.stringify(data).slice(0, 1000) + '</div>';
+      document.getElementById('ktPreviewModal').classList.add('open');
       return;
     }
 
