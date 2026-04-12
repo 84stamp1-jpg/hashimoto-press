@@ -1009,43 +1009,70 @@
 
     <div class="config-box">
       <div class="config-title">🏭 kintone 連携設定</div>
-      <div class="form-grid">
-        <div class="form-group" style="grid-column:1/-1">
+      <!-- 取得方法の選択 -->
+      <div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;font-weight:600;">
+          <input type="radio" name="ktFetchMethod" value="gas" id="ktMethodGas" checked onchange="toggleKtMethod()"> GASプロキシ経由
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;font-weight:600;">
+          <input type="radio" name="ktFetchMethod" value="direct" id="ktMethodDirect" onchange="toggleKtMethod()"> kintone API直接（要トークン）
+        </label>
+      </div>
+
+      <!-- GASプロキシ設定 -->
+      <div id="ktGasSection">
+        <div class="form-group" style="margin-bottom:10px;">
           <label class="form-label">GAS プロキシ URL</label>
-          <input class="form-input" id="cfgGasUrl" placeholder="https://script.google.com/macros/s/AKfycby.../exec">
-          <div style="font-size:10px;color:var(--text3);margin-top:3px;">既存の AKfycbyqF12... のURLをそのまま使えます</div>
+          <input class="form-input" id="cfgGasUrl" placeholder="https://script.google.com/macros/s/.../exec">
         </div>
+        <div style="background:var(--yellow-dim,#fffbeb);border:1px solid var(--yellow,#f59e0b);border-radius:6px;padding:10px;margin-bottom:10px;font-size:11px;line-height:1.7;">
+          ⚠ <b>既存GASプロキシはApp IDを無視</b>します。正しく動かすには下のGASスクリプトを新しくデプロイしてください。<br>
+          <button class="btn btn-secondary btn-sm" style="margin-top:6px" onclick="showGasScript()">📋 新しいGASスクリプトを表示</button>
+          <div id="gasScriptBox" style="display:none;margin-top:8px;">
+            <pre id="gasScriptContent" style="font-size:9px;overflow-x:auto;white-space:pre-wrap;max-height:150px;overflow-y:auto;background:var(--bg3);padding:8px;border-radius:4px;border:1px solid var(--border);"></pre>
+            <button class="btn btn-secondary btn-sm" style="margin-top:4px" onclick="copyGasScript()">📋 スクリプトをコピー</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- kintone直接設定 -->
+      <div id="ktDirectSection" style="display:none;">
+        <div class="form-grid" style="margin-bottom:10px;">
+          <div class="form-group">
+            <label class="form-label">ドメイン</label>
+            <input class="form-input" id="cfgKtDomain" placeholder="hashimoto-kogyo.cybozu.com" value="hashimoto-kogyo.cybozu.com">
+          </div>
+          <div class="form-group">
+            <label class="form-label">★新規物件 API Token</label>
+            <input class="form-input" id="cfgKtToken" type="password" placeholder="★新規物件アプリのAPIトークン">
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.6;">
+          kintone管理画面 → アプリ設定 → APIトークン でトークンを取得してください。<br>
+          ★新規物件（App ID: 61）の「レコード閲覧」権限が必要です。
+        </div>
+      </div>
+
+      <hr class="divider">
+      <div class="form-grid" style="margin-bottom:10px;">
         <div class="form-group">
           <label class="form-label">★新規物件 App ID</label>
-          <input class="form-input" id="cfgKtMoldApp" placeholder="例: 7" value="7">
-          <div style="font-size:10px;color:var(--text3);margin-top:3px;">★新規物件（工程別作業実績）のApp ID</div>
+          <input class="form-input" id="cfgKtMoldApp" value="61">
         </div>
         <div class="form-group">
           <label class="form-label">作業実績 App ID</label>
-          <input class="form-input" id="cfgKtApp" placeholder="例: 12">
-        </div>
-        <div class="form-group">
-          <label class="form-label">API Token</label>
-          <input class="form-input" id="cfgKtToken" type="password" placeholder="kintone APIトークン">
-        </div>
-        <div class="form-group">
-          <label class="form-label">ドメイン</label>
-          <input class="form-input" id="cfgKtDomain" placeholder="hashimoto-kogyo.cybozu.com">
+          <input class="form-input" id="cfgKtApp" placeholder="例: 61">
         </div>
       </div>
-      <hr class="divider">
-      <div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text2)">
-        金型一覧への取込
-      </div>
+      <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--text2)">金型一覧への取込</div>
       <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.6;">
-        ★新規物件アプリから<b>製作中・完成</b>の案件を取込みます。<br>
-        取込前に一覧が表示されるので、連携する・しないを選択できます。
+        ★新規物件から<b>製作中・完成</b>の案件を取込みます。検収済は除外されます。
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn btn-primary" onclick="saveKintoneConfig()">💾 設定保存</button>
-        <button class="btn btn-secondary" onclick="fetchKintoneForPreview()">📥 kintone から取込プレビュー</button>
+        <button class="btn btn-secondary" onclick="fetchKintoneForPreview()">📥 取込プレビュー</button>
       </div>
-      <div id="ktSyncLog" style="font-size:11px;color:var(--text3);margin-top:8px;font-family:monospace;max-height:60px;overflow-y:auto;"></div>
+      <div id="ktSyncLog" style="font-size:11px;color:var(--text3);margin-top:8px;font-family:monospace;max-height:80px;overflow-y:auto;white-space:pre-wrap;"></div>
     </div>
 
     <div class="config-box">
@@ -3984,38 +4011,56 @@ function ktStatus(raw) {
 
 // ── プレビュー取込 ──
 async function fetchKintoneForPreview() {
-  const appId  = cfg.ktMoldApp || document.getElementById('cfgKtMoldApp')?.value.trim() || '7';
+  const appId  = cfg.ktMoldApp || document.getElementById('cfgKtMoldApp')?.value.trim() || '61';
   const logEl  = document.getElementById('ktSyncLog');
   const setLog = (msg) => { if (logEl) logEl.textContent = msg; };
 
-  setLog('kintoneから取得中...');
+  const method = document.querySelector('input[name="ktFetchMethod"]:checked')?.value || 'gas';
+  setLog('kintoneから取得中 (method=' + method + ')...');
 
   try {
-    // GASプロキシ呼び出し（app パラメータなし・ありの両方を試みる）
-    const gasUrl = cfg.gasUrl || document.getElementById('cfgGasUrl')?.value.trim();
-    if (!gasUrl) throw new Error('GASプロキシURLを設定してください');
-
-    // まずapp指定なしで既定のエンドポイントを呼ぶ
     let data = null;
-    const urls = [
-      gasUrl + '?app=' + appId + '&limit=500',
-      gasUrl + '?limit=500',
-      gasUrl,
-    ];
-    for (const url of urls) {
-      try {
-        setLog('接続中: ' + url.slice(0, 80) + '...');
-        const res = await fetch(url);
-        if (!res.ok) continue;
-        const raw = await res.text();
-        // デバッグ：最初の200文字をログ表示
-        setLog('応答: ' + raw.slice(0, 150));
-        data = JSON.parse(raw);
-        break;
-      } catch(e) { continue; }
-    }
 
-    if (!data) throw new Error('GASプロキシからデータを取得できませんでした');
+    if (method === 'direct') {
+      // ── kintone API 直接呼び出し ──
+      const domain = document.getElementById('cfgKtDomain')?.value.trim() || cfg.ktDomain || 'hashimoto-kogyo.cybozu.com';
+      const token  = document.getElementById('cfgKtToken')?.value.trim()  || cfg.ktToken  || '';
+      if (!token) throw new Error('APIトークンを入力してください');
+      const url = 'https://' + domain + '/k/v1/records.json?app=' + appId + '&query=' + encodeURIComponent('limit 500 offset 0');
+      setLog('kintone API直接呼び出し中...');
+      const res = await fetch(url, {
+        headers: { 'X-Cybozu-API-Token': token, 'Content-Type': 'application/json' }
+      });
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error('kintone API エラー ' + res.status + ': ' + body.slice(0,100));
+      }
+      data = await res.json();
+      setLog('応答: ' + JSON.stringify(data).slice(0,120));
+
+    } else {
+      // ── GASプロキシ経由 ──
+      const gasUrl = cfg.gasUrl || document.getElementById('cfgGasUrl')?.value.trim();
+      if (!gasUrl) throw new Error('GASプロキシURLを設定してください');
+
+      const urls = [
+        gasUrl + '?app=' + appId + '&limit=500',
+        gasUrl + '?limit=500',
+        gasUrl,
+      ];
+      for (const url of urls) {
+        try {
+          setLog('接続中: ' + url.slice(0, 80) + '...');
+          const res = await fetch(url);
+          if (!res.ok) continue;
+          const raw = await res.text();
+          setLog('GAS応答: ' + raw.slice(0, 120));
+          data = JSON.parse(raw);
+          break;
+        } catch(e) { continue; }
+      }
+      if (!data) throw new Error('GASプロキシからデータを取得できませんでした');
+    }
 
     // 応答形式の自動判定
     let records = [];
@@ -4224,6 +4269,51 @@ async function deleteMold(key) {
   renderMolds();
 }
 
+
+// ── GAS プロキシスクリプト ──
+const GAS_PROXY_SCRIPT = `function doGet(e) {
+  const p = e ? e.parameter : {};
+  const appId = p.app || '61';
+  const props = PropertiesService.getScriptProperties();
+  const domain = props.getProperty('KT_DOMAIN') || 'hashimoto-kogyo.cybozu.com';
+  const token  = props.getProperty('KT_TOKEN_' + appId) || props.getProperty('KT_TOKEN') || p.token || '';
+  const query  = (p.query || '') + ' limit 500 offset 0';
+  const url = 'https://' + domain + '/k/v1/records.json?app=' + appId + '&query=' + encodeURIComponent(query);
+  try {
+    const res = UrlFetchApp.fetch(url, {
+      headers: { 'X-Cybozu-API-Token': token },
+      muteHttpExceptions: true
+    });
+    const data = JSON.parse(res.getContentText());
+    return ContentService.createTextOutput(JSON.stringify({ records: data.records || [], error: data.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch(err) {
+    return ContentService.createTextOutput(JSON.stringify({ error: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}`;
+
+function showGasScript() {
+  const box = document.getElementById('gasScriptBox');
+  const pre = document.getElementById('gasScriptContent');
+  if (!box || !pre) return;
+  pre.textContent = GAS_PROXY_SCRIPT;
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+}
+
+function copyGasScript() {
+  navigator.clipboard.writeText(GAS_PROXY_SCRIPT).then(() => {
+    toast('GASスクリプトをコピーしました', 'success');
+  });
+}
+
+
+// ── kintone 取得方法切替 ──
+function toggleKtMethod() {
+  const method = document.querySelector('input[name="ktFetchMethod"]:checked')?.value || 'gas';
+  document.getElementById('ktGasSection').style.display   = method === 'gas'    ? '' : 'none';
+  document.getElementById('ktDirectSection').style.display = method === 'direct' ? '' : 'none';
+}
 
 // ── Close modal on overlay click ──
 document.querySelectorAll('.modal-overlay').forEach(el => {
