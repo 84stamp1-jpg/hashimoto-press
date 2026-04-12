@@ -1008,11 +1008,17 @@
     </div>
 
     <div class="config-box">
-      <div class="config-title">🏭 kintone 設定</div>
+      <div class="config-title">🏭 kintone 連携設定</div>
       <div class="form-grid">
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">GAS プロキシ URL</label>
+          <input class="form-input" id="cfgGasUrl" placeholder="https://script.google.com/macros/s/AKfycby.../exec">
+          <div style="font-size:10px;color:var(--text3);margin-top:3px;">既存の AKfycbyqF12... のURLをそのまま使えます</div>
+        </div>
         <div class="form-group">
-          <label class="form-label">ドメイン</label>
-          <input class="form-input" id="cfgKtDomain" placeholder="hashimoto-kogyo.cybozu.com">
+          <label class="form-label">★新規物件 App ID</label>
+          <input class="form-input" id="cfgKtMoldApp" placeholder="例: 7" value="7">
+          <div style="font-size:10px;color:var(--text3);margin-top:3px;">★新規物件（工程別作業実績）のApp ID</div>
         </div>
         <div class="form-group">
           <label class="form-label">作業実績 App ID</label>
@@ -1022,11 +1028,24 @@
           <label class="form-label">API Token</label>
           <input class="form-input" id="cfgKtToken" type="password" placeholder="kintone APIトークン">
         </div>
+        <div class="form-group">
+          <label class="form-label">ドメイン</label>
+          <input class="form-input" id="cfgKtDomain" placeholder="hashimoto-kogyo.cybozu.com">
+        </div>
       </div>
-      <div style="font-size:11px;color:var(--text3);margin-top:6px;margin-bottom:12px;">
-        ※ kintoneはCORSの制限があるため、GAS経由でFirebaseに同期する方法を推奨します
+      <hr class="divider">
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text2)">
+        金型一覧への取込
       </div>
-      <button class="btn btn-primary" onclick="saveKintoneConfig()">💾 保存</button>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.6;">
+        ★新規物件アプリから<b>製作中・完成</b>の案件を取込みます。<br>
+        取込前に一覧が表示されるので、連携する・しないを選択できます。
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="saveKintoneConfig()">💾 設定保存</button>
+        <button class="btn btn-secondary" onclick="fetchKintoneForPreview()">📥 kintone から取込プレビュー</button>
+      </div>
+      <div id="ktSyncLog" style="font-size:11px;color:var(--text3);margin-top:8px;font-family:monospace;max-height:60px;overflow-y:auto;"></div>
     </div>
 
     <div class="config-box">
@@ -1374,6 +1393,38 @@
 <!-- PRINT AREA (非表示、印刷時のみ表示) -->
 <div id="print-quote" style="display:none;"></div>
 
+<!-- kintone 取込プレビューモーダル -->
+<div class="modal-overlay" id="ktPreviewModal">
+  <div class="modal" style="width:min(900px,96vw);max-height:88vh;">
+    <div class="modal-head">
+      <div class="modal-title">📥 kintone 取込プレビュー</div>
+      <button class="close-btn" onclick="closeModal('ktPreviewModal')">×</button>
+    </div>
+    <div class="modal-body" style="padding:16px;">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <span>取込したい案件にチェックを入れてください。</span>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;">
+          <input type="checkbox" id="ktSelectAll" onchange="ktToggleAll(this.checked)"> 全選択/解除
+        </label>
+        <select class="filter-select" id="ktStatusFilter" onchange="renderKtPreview()" style="font-size:11px;">
+          <option value="">全ステータス（検収済除く）</option>
+          <option value="製作中">製作中のみ</option>
+          <option value="完成">完成のみ</option>
+          <option value="検収済">検収済も表示</option>
+        </select>
+        <span id="ktPreviewCount" style="color:var(--accent);font-weight:600;"></span>
+      </div>
+      <div id="ktPreviewTable" style="overflow-y:auto;max-height:480px;">
+        <div class="loading"><div class="spin"></div>読込中...</div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeModal('ktPreviewModal')">キャンセル</button>
+      <button class="btn btn-primary" onclick="importCheckedKtRecords()">✅ チェックした案件を取込</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div id="toast"></div>
 
@@ -1422,9 +1473,15 @@ function loadConfig() {
   document.getElementById('cfgProjectId').value = cfg.projectId || '';
   document.getElementById('cfgDbUrl').value = cfg.dbUrl || '';
   document.getElementById('cfgApiKey').value = cfg.apiKey || '';
-  document.getElementById('cfgKtDomain').value = cfg.ktDomain || '';
-  document.getElementById('cfgKtApp').value = cfg.ktApp || '';
-  document.getElementById('cfgKtToken').value = cfg.ktToken || '';
+  document.getElementById('cfgKtDomain').value    = cfg.ktDomain    || '';
+  document.getElementById('cfgKtApp').value       = cfg.ktApp       || '';
+  document.getElementById('cfgKtToken').value     = cfg.ktToken     || '';
+  const gasEl = document.getElementById('cfgGasUrl');
+  if (gasEl) gasEl.value = cfg.gasUrl || 'https://script.google.com/macros/s/AKfycbyqF12RGTVluOgQrGuwCpPMeuLIHOJVSKhF0L-rpyYTQQBr3NeVOiQs5CJww5bwa1ld/exec';
+  const maEl = document.getElementById('cfgKtMasterApp');
+  if (maEl) maEl.value = cfg.ktMasterApp || '7';
+  const moldAppEl = document.getElementById('cfgKtMoldApp');
+  if (moldAppEl) moldAppEl.value = cfg.ktMoldApp || '7';
 }
 
 function initFirebase() {
@@ -1709,7 +1766,10 @@ function renderDashboard() {
             <td class="mono">¥${fmt(c.total)}</td>
             <td>${costBarHTML(c)}</td>
             <td>${progressHTML(c.total, m.estimate)}</td>
-            <td><button class="btn btn-secondary btn-sm" style="padding:3px 8px;font-size:11px" onclick="editMold('${key}')">編集</button></td>
+            <td style="white-space:nowrap">
+              <button class="btn btn-secondary btn-sm" style="padding:3px 8px;font-size:11px;margin-right:4px" onclick="editMold('${key}')">編集</button>
+              <button class="btn btn-danger btn-sm" style="padding:3px 8px;font-size:11px" onclick="deleteMold('${key}')">×</button>
+            </td>
           </tr>`;
         }).join('')}
       </tbody>
@@ -1774,7 +1834,10 @@ function renderMolds() {
             <td class="mono">¥${fmt(c.lab)}</td>
             <td class="mono"><b>¥${fmt(c.total)}</b></td>
             <td>${progressHTML(c.total, m.estimate)}</td>
-            <td><button class="btn btn-secondary btn-sm" style="padding:3px 8px;font-size:11px" onclick="editMold('${key}')">編集</button></td>
+            <td style="white-space:nowrap">
+              <button class="btn btn-secondary btn-sm" style="padding:3px 8px;font-size:11px;margin-right:4px" onclick="editMold('${key}')">編集</button>
+              <button class="btn btn-danger btn-sm" style="padding:3px 8px;font-size:11px" onclick="deleteMold('${key}')">×</button>
+            </td>
           </tr>`;
         }).join('')}
       </tbody>
@@ -2719,7 +2782,7 @@ function generateQuotePrint() {
     const itemRows = items.map((r, i) => {
       const finish = finishLabel(r.finish);
       // ▽▽マーク：太く濃く、FAXでもつぶれにくい
-      const mk = '<div style="font-size:10pt;color:#000;font-weight:900;text-align:center;line-height:1.2;letter-spacing:0px;-webkit-text-stroke:0.3px #000;">▽▽</div>';
+      const mk = '<div style="font-size:15pt;color:#000;font-weight:900;text-align:center;line-height:1.2;letter-spacing:0px;-webkit-text-stroke:0.3px #000;">▽▽</div>';
       const sp = '<div style="height:16px;"></div>';
       const xMark = r.fX ? mk : sp;
       const yMark = r.fY ? mk : sp;
@@ -2729,34 +2792,34 @@ function generateQuotePrint() {
       const sZ = String(r.sizeZ||'').replace(/\.00$/,'');
       return '<tr>' +
         '<td style="text-align:center;' + B + 'padding:4px 2px">' + (i+1) + '</td>' +
-        '<td style="text-align:center;' + B + 'padding:4px 3px;font-family:monospace;font-size:9.5pt">' + (r.moldNo||'') + '</td>' +
+        '<td style="text-align:center;' + B + 'padding:4px 3px;font-family:monospace;font-size:14.2pt">' + (r.moldNo||'') + '</td>' +
         '<td style="' + B + 'padding:4px 6px">' + (r.name||'') + '</td>' +
         '<td style="text-align:center;' + B + 'padding:4px 2px">' + (r.qty||1) + '</td>' +
         '<td style="' + B + 'padding:4px 3px">' + (r.material||'') + '</td>' +
-        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + xMark + '<div style="padding:2px 3px;border-top:1px solid #555;font-size:10.5pt;font-weight:600">' + sX + '</div></td>' +
-        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + yMark + '<div style="padding:2px 3px;border-top:1px solid #555;font-size:10.5pt;font-weight:600">' + sY + '</div></td>' +
-        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + zMark + '<div style="padding:2px 3px;border-top:1px solid #555;font-size:10.5pt;font-weight:600">' + sZ + '</div></td>' +
-        '<td style="text-align:center;' + B + 'padding:4px 2px;font-weight:800;font-size:10.5pt">' + finish + '</td>' +
-        '<td style="' + B + 'padding:4px 8px;font-size:9.5pt;min-width:80px">' + (r.note||'') + '</td>' +
+        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + xMark + '<div style="padding:2px 3px;border-top:1px solid #555;font-size:15.8pt;font-weight:600">' + sX + '</div></td>' +
+        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + yMark + '<div style="padding:2px 3px;border-top:1px solid #555;font-size:15.8pt;font-weight:600">' + sY + '</div></td>' +
+        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + zMark + '<div style="padding:2px 3px;border-top:1px solid #555;font-size:15.8pt;font-weight:600">' + sZ + '</div></td>' +
+        '<td style="text-align:center;' + B + 'padding:4px 2px;font-weight:800;font-size:15.8pt">' + finish + '</td>' +
+        '<td style="' + B + 'padding:4px 8px;font-size:14.2pt;min-width:80px">' + (r.note||'') + '</td>' +
         '</tr>';
     }).filter(Boolean).join('');
 
     return '<div class="page-break">' +
       '<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:8px;">' +
-        '<div style="font-size:10pt;line-height:1.7">' +
-          '<div style="font-size:11pt;font-weight:bold">' + sup.name + '</div>' +
+        '<div style="font-size:15pt;line-height:1.7">' +
+          '<div style="font-size:16.5pt;font-weight:bold">' + sup.name + '</div>' +
           '<div>' + sup.person + '</div>' +
-          (sup.fax   ? '<div style="font-size:9pt">FAX: ' + sup.fax + '</div>' : '') +
-          (sup.email ? '<div style="font-size:9pt">E-mail: ' + sup.email + '</div>' : '') +
+          (sup.fax   ? '<div style="font-size:13.5pt">FAX: ' + sup.fax + '</div>' : '') +
+          (sup.email ? '<div style="font-size:13.5pt">E-mail: ' + sup.email + '</div>' : '') +
         '</div>' +
         '<div style="text-align:right">' +
-          '<div style="font-size:20pt;font-weight:900;letter-spacing:3px;border-bottom:2.5px solid #000;padding-bottom:4px;margin-bottom:4px">見 積 依 頼 書</div>' +
-          '<div style="font-size:9pt">' + dateJa + '</div>' +
-          '<div style="font-size:9pt">橋本工業㈱　' + staff + '</div>' +
+          '<div style="font-size:30pt;font-weight:900;letter-spacing:3px;border-bottom:2.5px solid #000;padding-bottom:4px;margin-bottom:4px">見 積 依 頼 書</div>' +
+          '<div style="font-size:13.5pt">' + dateJa + '</div>' +
+          '<div style="font-size:13.5pt">橋本工業㈱　' + staff + '</div>' +
         '</div>' +
       '</div>' +
-      '<div style="margin-bottom:7px;font-size:10pt;line-height:1.8">いつもお世話になります。<br>下記の見積りをお願い致します。</div>' +
-      '<table style="width:100%;border-collapse:collapse;font-size:10pt">' +
+      '<div style="margin-bottom:7px;font-size:15pt;line-height:1.8">いつもお世話になります。<br>下記の見積りをお願い致します。</div>' +
+      '<table style="width:100%;border-collapse:collapse;font-size:15pt">' +
         '<thead>' +
           '<tr style="background:#d0d0d0">' +
             '<th style="' + B + 'padding:5px 2px;text-align:center;width:20px">No.</th>' +
@@ -2773,7 +2836,7 @@ function generateQuotePrint() {
         '</thead>' +
         '<tbody>' + itemRows + '</tbody>' +
       '</table>' +
-      '<div style="margin-top:12px;font-size:9pt;color:#444">ご回答はFAXまたはメールにてお願いいたします。</div>' +
+      '<div style="margin-top:12px;font-size:13.5pt;color:#444">ご回答はFAXまたはメールにてお願いいたします。</div>' +
     '</div>';
   }).join('');
 
@@ -2782,14 +2845,14 @@ function generateQuotePrint() {
     '<meta charset="UTF-8"><title>見積依頼書</title>' +
     '<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;700;900&display=swap" rel="stylesheet">' +
     '<style>' +
-      'body{margin:0;font-family:"Noto Sans JP",sans-serif;font-size:10pt;background:#fff;color:#000;}' +
+      'body{margin:0;font-family:"Noto Sans JP",sans-serif;font-size:15pt;background:#fff;color:#000;}' +
       '.page-break{width:100%;margin:0;padding:4mm 5mm 3mm;box-sizing:border-box;page-break-after:always;}' +
       '.page-break:last-child{page-break-after:auto;}' +
       '.no-print{position:fixed;top:12px;right:12px;display:flex;gap:8px;z-index:99;}' +
       'button{padding:8px 16px;cursor:pointer;border:none;border-radius:4px;font-size:13px;}' +
       '.bp{background:#0369a1;color:#fff;}.bc{background:#e2e8f0;color:#333;}' +
-      'th{background:#c8c8c8;font-weight:800;font-size:10pt;}' +
-      'td,th{font-size:10pt;line-height:1.3;}' +
+      'th{background:#c8c8c8;font-weight:800;font-size:15pt;}' +
+      'td,th{font-size:15pt;line-height:1.3;}' +
       'tr:nth-child(even) td{background:#f8f8f8;}' +
       '@media print{.no-print{display:none!important}@page{size:A4 portrait;margin:2mm 3mm}}' +
     '</style>' +
@@ -3214,9 +3277,11 @@ function saveFirebaseConfig() {
 }
 
 function saveKintoneConfig() {
-  cfg.ktDomain = document.getElementById('cfgKtDomain').value.trim();
-  cfg.ktApp    = document.getElementById('cfgKtApp').value.trim();
-  cfg.ktToken  = document.getElementById('cfgKtToken').value.trim();
+  cfg.ktDomain    = document.getElementById('cfgKtDomain').value.trim();
+  cfg.ktApp       = document.getElementById('cfgKtApp').value.trim();
+  cfg.ktToken     = document.getElementById('cfgKtToken').value.trim();
+  cfg.gasUrl      = document.getElementById('cfgGasUrl').value.trim();
+  cfg.ktMasterApp = document.getElementById('cfgKtMasterApp').value.trim() || '7';
   localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
   toast('kintone設定を保存しました', 'success');
 }
@@ -3800,6 +3865,253 @@ function editMold(key) {
   initMfProcesses(mold.processes || []);
   document.getElementById('moldModal').classList.add('open');
 }
+
+
+// ═══════════════════════════════════════════════
+// kintone → 金型一覧 同期
+// ═══════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════
+// kintone → 金型一覧 連携（★新規物件アプリ）
+// ═══════════════════════════════════════════════
+
+let _ktPreviewRecords = [];  // プレビュー用データ
+
+// saveKintoneConfig に cfgKtMoldApp を追加
+// （既存のsaveKintoneConfigを上書き）
+function saveKintoneConfig() {
+  cfg.ktDomain    = document.getElementById('cfgKtDomain')?.value.trim()   || '';
+  cfg.ktApp       = document.getElementById('cfgKtApp')?.value.trim()       || '';
+  cfg.ktToken     = document.getElementById('cfgKtToken')?.value.trim()     || '';
+  cfg.gasUrl      = document.getElementById('cfgGasUrl')?.value.trim()      || '';
+  cfg.ktMasterApp = document.getElementById('cfgKtMasterApp')?.value.trim() || '7';
+  cfg.ktMoldApp   = document.getElementById('cfgKtMoldApp')?.value.trim()   || '7';
+  localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
+  toast('kintone設定を保存しました', 'success');
+}
+
+// GASプロキシ経由でkintone取得
+async function fetchKintoneApp(appId, query) {
+  const gasUrl = cfg.gasUrl || document.getElementById('cfgGasUrl')?.value.trim();
+  if (!gasUrl) throw new Error('GASプロキシURLが未設定です');
+  let url = gasUrl + '?app=' + appId;
+  if (query) url += '&query=' + encodeURIComponent(query);
+  url += '&limit=500';
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('HTTP ' + res.status + ' - GASプロキシエラー');
+  return await res.json();
+}
+
+// フィールド値を安全に取得
+function ktVal(rec, ...fields) {
+  for (const f of fields) {
+    const v = rec[f];
+    if (!v) continue;
+    if (typeof v === 'string') return v;
+    if (v.value !== undefined) return String(v.value || '');
+  }
+  return '';
+}
+
+// ステータスを正規化
+function ktStatus(raw) {
+  if (!raw) return '製作中';
+  if (raw.includes('検収')) return '検収済';
+  if (raw.includes('完')) return '完成';
+  return '製作中';
+}
+
+// ── プレビュー取込 ──
+async function fetchKintoneForPreview() {
+  const appId  = cfg.ktMoldApp || document.getElementById('cfgKtMoldApp')?.value.trim() || '7';
+  const logEl  = document.getElementById('ktSyncLog');
+  const setLog = (msg) => { if (logEl) logEl.textContent = msg; };
+
+  setLog('kintoneから取得中...');
+
+  try {
+    // 検収済以外を取得（GASプロキシがqueryパラメータ対応している場合）
+    const data = await fetchKintoneApp(appId, '');
+    const records = data.records || (Array.isArray(data) ? data : []);
+
+    if (!records.length) {
+      setLog('レコードが0件でした。App IDとGAS URLを確認してください。');
+      return;
+    }
+
+    // kintone★新規物件フィールドマッピング
+    // 実際のフィールドコードに対応（作業実績CSVから確認）
+    _ktPreviewRecords = records.map((rec, idx) => {
+      const moldNo   = ktVal(rec, '管理コード', '管理NO', '管理NO.', 'moldNo');
+      const partNo   = ktVal(rec, '部品番号', '品番', 'partNo');
+      const partName = ktVal(rec, '品名', '部品名称', 'partName');
+      const client   = ktVal(rec, '客先', '得意先', 'client');
+      const status   = ktStatus(ktVal(rec, '製作状況', 'status', 'ステータス'));
+      const dueDate  = ktVal(rec, '客先納期', '納期', 'dueDate');
+      const orderDate= ktVal(rec, '受注日付', '受注日', 'orderDate');
+      const estimate = parseFloat(ktVal(rec, '見積金額', '見積額', 'estimate') || '0');
+      const ktCode   = ktVal(rec, '管理コード', '$id');
+      // 工程リスト（複数行テキストなどから）
+      const processRaw = ktVal(rec, '見積工程', '工程', '実工程');
+      const processes  = processRaw
+        ? processRaw.split(/[\n,・\/]/).map(s=>s.trim()).filter(Boolean)
+        : [];
+
+      return { _idx: idx, moldNo, partNo, partName, client, status, dueDate, orderDate, estimate, ktCode, processes, _raw: rec };
+    });
+
+    setLog(`✅ ${records.length}件取得。プレビューを確認してください。`);
+    document.getElementById('ktStatusFilter').value = '';
+    renderKtPreview();
+    document.getElementById('ktPreviewModal').classList.add('open');
+
+  } catch(err) {
+    setLog('❌ ' + err.message);
+    toast('取得エラー: ' + err.message, 'error');
+    console.error(err);
+  }
+}
+
+// プレビューテーブルを描画
+function renderKtPreview() {
+  const statusFil = document.getElementById('ktStatusFilter')?.value || '';
+  const countEl   = document.getElementById('ktPreviewCount');
+
+  let list = _ktPreviewRecords;
+  // デフォルトは検収済を除外
+  if (statusFil === '') {
+    list = list.filter(r => r.status !== '検収済');
+  } else if (statusFil !== '検収済') {
+    list = list.filter(r => r.status === statusFil);
+  }
+
+  if (countEl) countEl.textContent = list.length + '件';
+
+  if (!list.length) {
+    document.getElementById('ktPreviewTable').innerHTML =
+      '<div class="empty"><div class="empty-icon">📋</div>該当レコードがありません</div>';
+    return;
+  }
+
+  // 既存金型との照合
+  const existingNos = new Set(Object.values(DB.molds||{}).map(m=>m.no));
+  const existingParts = new Set(Object.values(DB.molds||{}).map(m=>m.partNo));
+
+  document.getElementById('ktPreviewTable').innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:12px;">
+      <thead>
+        <tr style="background:var(--bg3);position:sticky;top:0;z-index:1;">
+          <th style="padding:8px 6px;width:32px;text-align:center">取込</th>
+          <th style="padding:8px 6px;">管理NO.</th>
+          <th style="padding:8px 6px;">品番</th>
+          <th style="padding:8px 6px;">品名</th>
+          <th style="padding:8px 6px;">客先</th>
+          <th style="padding:8px 6px;">ステータス</th>
+          <th style="padding:8px 6px;">客先納期</th>
+          <th style="padding:8px 6px;">工程</th>
+          <th style="padding:8px 6px;">状態</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${list.map((r,i) => {
+          const isExist = existingNos.has(r.moldNo) || existingParts.has(r.partNo);
+          const stBadge = r.status === '検収済' ? 'badge-gray' :
+                          r.status === '完成'   ? 'badge-green' : 'badge-blue';
+          return `<tr style="border-bottom:1px solid var(--border);${r.status==='検収済'?'opacity:0.5;':''}">
+            <td style="text-align:center;padding:6px;">
+              <input type="checkbox" class="kt-check" data-idx="${r._idx}"
+                ${r.status !== '検収済' ? 'checked' : ''}>
+            </td>
+            <td class="mono" style="padding:6px;font-weight:600;color:var(--accent)">${r.moldNo||'—'}</td>
+            <td class="mono" style="padding:6px;font-size:11px">${r.partNo||''}</td>
+            <td style="padding:6px">${r.partName||''}</td>
+            <td style="padding:6px">${r.client||''}</td>
+            <td style="padding:6px"><span class="badge ${stBadge}">${r.status}</span></td>
+            <td class="mono" style="padding:6px;font-size:11px">${r.dueDate||''}</td>
+            <td style="padding:6px;font-size:11px">${r.processes.join('→')||''}</td>
+            <td style="padding:6px;font-size:11px;color:${isExist?'var(--yellow)':'var(--green)'}">
+              ${isExist ? '⚠ 更新' : '✚ 新規'}
+            </td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+}
+
+// 全選択/解除
+function ktToggleAll(checked) {
+  document.querySelectorAll('.kt-check').forEach(cb => cb.checked = checked);
+}
+
+// チェックされた案件を取込
+async function importCheckedKtRecords() {
+  const checked = [...document.querySelectorAll('.kt-check:checked')];
+  if (!checked.length) { toast('取込する案件を選択してください', 'error'); return; }
+
+  let added = 0, updated = 0;
+
+  checked.forEach(cb => {
+    const idx = parseInt(cb.dataset.idx);
+    const r = _ktPreviewRecords.find(x => x._idx === idx);
+    if (!r) return;
+
+    // 既存チェック
+    const existKey = Object.keys(DB.molds||{}).find(k => {
+      const m = DB.molds[k];
+      return m.no === r.moldNo || m.ktCode === r.ktCode || (r.partNo && m.partNo === r.partNo);
+    });
+
+    const moldData = {
+      no:        r.moldNo   || r.partNo || 'KT_' + r._idx,
+      partNo:    r.partNo,
+      partName:  r.partName,
+      client:    r.client,
+      ktCode:    r.ktCode,
+      dueDate:   r.dueDate,
+      orderDate: r.orderDate,
+      estimate:  r.estimate || 0,
+      status:    r.status,
+      type:      '新規',
+      note:      '',
+      processes: r.processes,
+    };
+
+    if (existKey) {
+      // 既存を更新（工程・見積は保持）
+      const existing = DB.molds[existKey];
+      DB.molds[existKey] = Object.assign({}, existing, {
+        partNo:   r.partNo   || existing.partNo,
+        partName: r.partName || existing.partName,
+        client:   r.client   || existing.client,
+        ktCode:   r.ktCode,
+        dueDate:  r.dueDate  || existing.dueDate,
+        status:   r.status,
+        processes: r.processes.length ? r.processes : (existing.processes || []),
+      });
+      updated++;
+    } else {
+      DB.molds['m_kt_' + Date.now() + '_' + idx] = moldData;
+      added++;
+    }
+  });
+
+  await writeToFirebase('molds', DB.molds);
+  closeModal('ktPreviewModal');
+  toast(`取込完了: 新規${added}件 / 更新${updated}件`, 'success');
+  document.getElementById('ktSyncLog').textContent =
+    `✅ 新規${added}件 更新${updated}件 (${new Date().toLocaleTimeString('ja-JP')})`;
+  renderMolds();
+}
+
+// 金型一覧から手動削除（検収済など不要なものを除去）
+async function deleteMold(key) {
+  if (!confirm('この金型を一覧から削除しますか？\n（材料費・外注費・購入品費のデータは削除されません）')) return;
+  delete DB.molds[key];
+  await writeToFirebase('molds', DB.molds);
+  toast('削除しました', 'success');
+  renderMolds();
+}
+
 
 // ── Close modal on overlay click ──
 document.querySelectorAll('.modal-overlay').forEach(el => {
