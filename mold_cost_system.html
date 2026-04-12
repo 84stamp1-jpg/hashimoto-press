@@ -1009,15 +1009,7 @@
 
     <div class="config-box">
       <div class="config-title">🏭 kintone 連携設定</div>
-      <!-- 取得方法の選択 -->
-      <div style="display:flex;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
-        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;font-weight:600;">
-          <input type="radio" name="ktFetchMethod" value="gas" id="ktMethodGas" checked onchange="toggleKtMethod()"> GASプロキシ経由
-        </label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;font-weight:600;">
-          <input type="radio" name="ktFetchMethod" value="direct" id="ktMethodDirect" onchange="toggleKtMethod()"> kintone API直接（要トークン）
-        </label>
-      </div>
+      <!-- kintoneはCORSでブラウザから直接アクセス不可 → GAS必須 -->
 
       <!-- GASプロキシ設定 -->
       <div id="ktGasSection">
@@ -1025,32 +1017,26 @@
           <label class="form-label">GAS プロキシ URL</label>
           <input class="form-input" id="cfgGasUrl" placeholder="https://script.google.com/macros/s/.../exec">
         </div>
-        <div style="background:var(--yellow-dim,#fffbeb);border:1px solid var(--yellow,#f59e0b);border-radius:6px;padding:10px;margin-bottom:10px;font-size:11px;line-height:1.7;">
-          ⚠ <b>既存GASプロキシはApp IDを無視</b>します。正しく動かすには下のGASスクリプトを新しくデプロイしてください。<br>
-          <button class="btn btn-secondary btn-sm" style="margin-top:6px" onclick="showGasScript()">📋 新しいGASスクリプトを表示</button>
+        <div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:6px;padding:10px;margin-bottom:10px;font-size:11px;line-height:1.8;">
+          <b>⚠ 既存GASの修正が必要です</b><br>
+          既存プロキシはApp IDを無視するため、下のスクリプトで<b>doGet関数を上書き</b>してください。<br>
+          スクリプトプロパティに <code style="background:#f1f5f9;padding:1px 4px;border-radius:3px;">KT_TOKEN_61</code>（★新規物件のAPIトークン）を追加してください。
+          <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-secondary btn-sm" onclick="showGasScript()">📋 修正スクリプトを表示</button>
+            <a href="https://script.google.com" target="_blank" class="btn btn-secondary btn-sm">🔗 GASを開く</a>
+          </div>
           <div id="gasScriptBox" style="display:none;margin-top:8px;">
-            <pre id="gasScriptContent" style="font-size:9px;overflow-x:auto;white-space:pre-wrap;max-height:150px;overflow-y:auto;background:var(--bg3);padding:8px;border-radius:4px;border:1px solid var(--border);"></pre>
-            <button class="btn btn-secondary btn-sm" style="margin-top:4px" onclick="copyGasScript()">📋 スクリプトをコピー</button>
+            <div style="font-size:10px;color:#666;margin-bottom:4px;">既存のdoGet関数をこのコードで上書きして再デプロイしてください</div>
+            <pre id="gasScriptContent" style="font-size:9px;overflow-x:auto;white-space:pre-wrap;max-height:200px;overflow-y:auto;background:#f8fafc;padding:8px;border-radius:4px;border:1px solid #e2e8f0;"></pre>
+            <button class="btn btn-primary btn-sm" style="margin-top:6px" onclick="copyGasScript()">📋 コピー</button>
           </div>
         </div>
       </div>
 
-      <!-- kintone直接設定 -->
+      <!-- kintone直接設定（非表示・CORSのため使用不可） -->
       <div id="ktDirectSection" style="display:none;">
-        <div class="form-grid" style="margin-bottom:10px;">
-          <div class="form-group">
-            <label class="form-label">ドメイン</label>
-            <input class="form-input" id="cfgKtDomain" placeholder="hashimoto-kogyo.cybozu.com" value="hashimoto-kogyo.cybozu.com">
-          </div>
-          <div class="form-group">
-            <label class="form-label">★新規物件 API Token</label>
-            <input class="form-input" id="cfgKtToken" type="password" placeholder="★新規物件アプリのAPIトークン">
-          </div>
-        </div>
-        <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.6;">
-          kintone管理画面 → アプリ設定 → APIトークン でトークンを取得してください。<br>
-          ★新規物件（App ID: 61）の「レコード閲覧」権限が必要です。
-        </div>
+        <input class="form-input" id="cfgKtDomain" style="display:none">
+        <input class="form-input" id="cfgKtToken" type="password" style="display:none">
       </div>
 
       <hr class="divider">
@@ -4015,52 +4001,38 @@ async function fetchKintoneForPreview() {
   const logEl  = document.getElementById('ktSyncLog');
   const setLog = (msg) => { if (logEl) logEl.textContent = msg; };
 
-  const method = document.querySelector('input[name="ktFetchMethod"]:checked')?.value || 'gas';
-  setLog('kintoneから取得中 (method=' + method + ')...');
+  setLog('kintoneから取得中...');
 
   try {
     let data = null;
 
-    if (method === 'direct') {
-      // ── kintone API 直接呼び出し ──
-      const domain = document.getElementById('cfgKtDomain')?.value.trim() || cfg.ktDomain || 'hashimoto-kogyo.cybozu.com';
-      const token  = document.getElementById('cfgKtToken')?.value.trim()  || cfg.ktToken  || '';
-      if (!token) throw new Error('APIトークンを入力してください');
-      const url = 'https://' + domain + '/k/v1/records.json?app=' + appId + '&query=' + encodeURIComponent('limit 500 offset 0');
-      setLog('kintone API直接呼び出し中...');
-      const res = await fetch(url, {
-        headers: { 'X-Cybozu-API-Token': token, 'Content-Type': 'application/json' }
-      });
-      if (!res.ok) {
-        const body = await res.text();
-        throw new Error('kintone API エラー ' + res.status + ': ' + body.slice(0,100));
-      }
-      data = await res.json();
-      setLog('応答: ' + JSON.stringify(data).slice(0,120));
+    // GASプロキシ経由（kintoneはCORSで直接アクセス不可）
+    const gasUrl = cfg.gasUrl || document.getElementById('cfgGasUrl')?.value.trim();
+    if (!gasUrl) throw new Error('GASプロキシURLを設定してください（設定タブ参照）');
 
-    } else {
-      // ── GASプロキシ経由 ──
-      const gasUrl = cfg.gasUrl || document.getElementById('cfgGasUrl')?.value.trim();
-      if (!gasUrl) throw new Error('GASプロキシURLを設定してください');
-
-      const urls = [
-        gasUrl + '?app=' + appId + '&limit=500',
-        gasUrl + '?limit=500',
-        gasUrl,
-      ];
-      for (const url of urls) {
-        try {
-          setLog('接続中: ' + url.slice(0, 80) + '...');
-          const res = await fetch(url);
-          if (!res.ok) continue;
-          const raw = await res.text();
-          setLog('GAS応答: ' + raw.slice(0, 120));
-          data = JSON.parse(raw);
-          break;
-        } catch(e) { continue; }
-      }
-      if (!data) throw new Error('GASプロキシからデータを取得できませんでした');
+    // app指定あり → なし の順で試みる（既存GASの互換性）
+    const urls = [
+      gasUrl + '?app=' + appId + '&limit=500',
+      gasUrl + '?limit=500',
+      gasUrl,
+    ];
+    for (const url of urls) {
+      try {
+        setLog('接続中...');
+        const res = await fetch(url);
+        if (!res.ok) { setLog('HTTP ' + res.status); continue; }
+        const raw = await res.text();
+        setLog('応答受信: ' + raw.slice(0, 80) + '...');
+        const parsed = JSON.parse(raw);
+        // エラーレスポンスでなければ採用
+        if (!parsed.error) { data = parsed; break; }
+        setLog('GASエラー: ' + parsed.error);
+        // エラーでも一旦保持して次を試す
+        if (!data) data = parsed;
+      } catch(e) { setLog('接続失敗: ' + e.message); continue; }
     }
+    if (!data) throw new Error('GASプロキシからデータを取得できませんでした');
+    if (data.error) throw new Error('GASエラー: ' + data.error);
 
     // 応答形式の自動判定
     let records = [];
@@ -4271,27 +4243,79 @@ async function deleteMold(key) {
 
 
 // ── GAS プロキシスクリプト ──
-const GAS_PROXY_SCRIPT = `function doGet(e) {
-  const p = e ? e.parameter : {};
-  const appId = p.app || '61';
-  const props = PropertiesService.getScriptProperties();
-  const domain = props.getProperty('KT_DOMAIN') || 'hashimoto-kogyo.cybozu.com';
-  const token  = props.getProperty('KT_TOKEN_' + appId) || props.getProperty('KT_TOKEN') || p.token || '';
-  const query  = (p.query || '') + ' limit 500 offset 0';
-  const url = 'https://' + domain + '/k/v1/records.json?app=' + appId + '&query=' + encodeURIComponent(query);
+const GAS_PROXY_SCRIPT = `/**
+ * kintone 汎用プロキシ GAS スクリプト
+ * 
+ * ■ セットアップ手順
+ * 1. このコードを既存のGASプロジェクトに貼り付ける（doGet関数を上書き）
+ * 2. スクリプトプロパティ（歯車→スクリプトのプロパティ）に以下を設定：
+ *    KT_DOMAIN  → hashimoto-kogyo.cybozu.com
+ *    KT_TOKEN_61 → ★新規物件（App61）のAPIトークン
+ *    KT_TOKEN_7  → 品番マスタ（App7）のAPIトークン  ※すでに動いている場合は既存トークン
+ * 3. デプロイ → 新しいデプロイ → ウェブアプリ
+ *    実行ユーザー：自分、アクセス：全員
+ * 4. デプロイURLをシステムのGASプロキシURLに設定して保存
+ */
+
+function doGet(e) {
+  const p      = e ? (e.parameter || {}) : {};
+  const appId  = p.app   || '7';
+  const limit  = parseInt(p.limit || '500');
+  const offset = parseInt(p.offset || '0');
+  const query  = p.query || '';
+
+  // スクリプトプロパティからドメイン・トークン取得
+  var props  = PropertiesService.getScriptProperties();
+  var domain = props.getProperty('KT_DOMAIN') || 'hashimoto-kogyo.cybozu.com';
+  var token  = props.getProperty('KT_TOKEN_' + appId)   // アプリ別トークン
+             || props.getProperty('KT_TOKEN')             // 共通トークン
+             || p.token                                    // URLパラメータ（テスト用）
+             || '';
+
+  if (!token) {
+    return jsonResponse({ error: 'APIトークン未設定。スクリプトプロパティにKT_TOKEN_' + appId + 'を設定してください' });
+  }
+
+  // kintone REST API URL
+  var finalQuery = query
+    ? query + ' limit ' + limit + ' offset ' + offset
+    : 'limit ' + limit + ' offset ' + offset;
+
+  var url = 'https://' + domain + '/k/v1/records.json'
+    + '?app=' + appId
+    + '&query=' + encodeURIComponent(finalQuery);
+
   try {
-    const res = UrlFetchApp.fetch(url, {
-      headers: { 'X-Cybozu-API-Token': token },
+    var res = UrlFetchApp.fetch(url, {
+      method: 'get',
+      headers: {
+        'X-Cybozu-API-Token': token,
+        'Content-Type': 'application/json'
+      },
       muteHttpExceptions: true
     });
-    const data = JSON.parse(res.getContentText());
-    return ContentService.createTextOutput(JSON.stringify({ records: data.records || [], error: data.message }))
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch(err) {
-    return ContentService.createTextOutput(JSON.stringify({ error: err.message }))
-      .setMimeType(ContentService.MimeType.JSON);
+
+    var code = res.getResponseCode();
+    var body = res.getContentText();
+
+    if (code !== 200) {
+      return jsonResponse({ error: 'kintone API エラー HTTP ' + code, detail: body.slice(0, 300), app: appId });
+    }
+
+    var data = JSON.parse(body);
+    return jsonResponse({ records: data.records || [], totalCount: data.totalCount, app: appId });
+
+  } catch (err) {
+    return jsonResponse({ error: err.message, app: appId });
   }
-}`;
+}
+
+function jsonResponse(obj) {
+  return ContentService
+    .createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+`;
 
 function showGasScript() {
   const box = document.getElementById('gasScriptBox');
