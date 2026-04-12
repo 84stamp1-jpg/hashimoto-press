@@ -4038,28 +4038,34 @@ async function fetchKintoneForPreview() {
       return;
     }
 
-    // kintone★新規物件フィールドマッピング
-    // 実際のフィールドコードに対応（作業実績CSVから確認）
+    // kintone★新規物件フィールドマッピング（フレキシブル検出）
+    if (records.length > 0) {
+      const k0 = Object.keys(records[0]);
+      console.log('[kintone] フィールドキー:', k0);
+      console.log('[kintone] 1件目:', JSON.stringify(records[0]).slice(0, 400));
+      setLog('フィールドキー: ' + k0.slice(0, 6).join(', ') + ' ...(F12コンソール参照)');
+    }
     _ktPreviewRecords = records.map((rec, idx) => {
-      const moldNo   = ktVal(rec, '管理コード', '管理NO', '管理NO.', 'moldNo');
-      const partNo   = ktVal(rec, '部品番号', '品番', 'partNo');
-      const partName = ktVal(rec, '品名', '部品名称', 'partName');
-      const client   = ktVal(rec, '客先', '得意先', 'client');
-      const status   = ktStatus(ktVal(rec, '製作状況', 'status', 'ステータス'));
-      const dueDate  = ktVal(rec, '客先納期', '納期', 'dueDate');
-      const orderDate= ktVal(rec, '受注日付', '受注日', 'orderDate');
-      const estimate = parseFloat(ktVal(rec, '見積金額', '見積額', 'estimate') || '0');
-      const ktCode   = ktVal(rec, '管理コード', '$id');
-      // 工程リスト（複数行テキストなどから）
-      const processRaw = ktVal(rec, '見積工程', '工程', '実工程');
+      const ak = Object.keys(rec);
+      const findKey = (...words) => ak.find(k => words.some(w => k.includes(w))) || '';
+      const moldNo   = ktVal(rec, '管理コード', findKey('管理コード','管理NO'), 'moldNo');
+      const partNo   = ktVal(rec, '部品番号', findKey('品番','部品番号'), 'partNo');
+      const partName = ktVal(rec, '品名', findKey('品名','部品名'), 'partName');
+      const client   = ktVal(rec, '客先', findKey('客先','得意先'), 'client');
+      const statusRaw= ktVal(rec, '製作状況', findKey('状況','ステータス'), 'status');
+      const status   = ktStatus(statusRaw || '製作中');
+      const dueDate  = ktVal(rec, '客先納期', findKey('納期'), 'dueDate');
+      const orderDate= ktVal(rec, '受注日付', findKey('受注'), 'orderDate');
+      const estimate = parseFloat(ktVal(rec, '見積金額', findKey('見積金'), 'estimate') || '0');
+      const ktCode   = ktVal(rec, '管理コード', '$id', findKey('管理コード'));
+      const processRaw = ktVal(rec, '見積工程', '工程', '実工程', findKey('工程'));
       const processes  = processRaw
-        ? processRaw.split(/[\n,・\/]/).map(s=>s.trim()).filter(Boolean)
+        ? processRaw.split(/[\n\r,・]/).map(s=>s.replace(/^\d+\.?[-\.]/,'').trim()).filter(Boolean)
         : [];
-
       return { _idx: idx, moldNo, partNo, partName, client, status, dueDate, orderDate, estimate, ktCode, processes, _raw: rec };
     });
-
-    setLog(`✅ ${records.length}件取得。プレビューを確認してください。`);
+    if (_ktPreviewRecords.length > 0) console.log('[kintone] 変換後1件目:', _ktPreviewRecords[0]);
+    setLog('✅ ' + records.length + '件取得。プレビューを確認してください。');
     document.getElementById('ktStatusFilter').value = '';
     renderKtPreview();
     document.getElementById('ktPreviewModal').classList.add('open');
@@ -4077,18 +4083,25 @@ function renderKtPreview() {
   const countEl   = document.getElementById('ktPreviewCount');
 
   let list = _ktPreviewRecords;
-  // デフォルトは検収済を除外
+  // デフォルトは検収済を除外（空文字='全ステータス検収済除く'）
   if (statusFil === '') {
     list = list.filter(r => r.status !== '検収済');
-  } else if (statusFil !== '検収済') {
+  } else if (statusFil === '検収済') {
+    // 全件表示（検収済も含む）
+    list = _ktPreviewRecords;
+  } else {
     list = list.filter(r => r.status === statusFil);
   }
+  console.log('[kintone] renderKtPreview: statusFil=' + statusFil + ', list=' + list.length + '件 (全' + _ktPreviewRecords.length + '件)');
 
   if (countEl) countEl.textContent = list.length + '件';
+  console.log('[renderKtPreview] list.length=' + list.length, list.slice(0,2));
 
   if (!list.length) {
     document.getElementById('ktPreviewTable').innerHTML =
-      '<div class="empty"><div class="empty-icon">📋</div>該当レコードがありません</div>';
+      '<div class="empty"><div class="empty-icon">📋</div>' +
+      '該当レコードがありません（全' + _ktPreviewRecords.length + '件取得済み）' +
+      '<br><small style="color:var(--text3)">ステータスフィルタを「検収済も表示」に変えてみてください</small></div>';
     return;
   }
 
@@ -4121,7 +4134,7 @@ function renderKtPreview() {
               <input type="checkbox" class="kt-check" data-idx="${r._idx}"
                 ${r.status !== '検収済' ? 'checked' : ''}>
             </td>
-            <td class="mono" style="padding:6px;font-weight:600;color:var(--accent)">${r.moldNo||'—'}</td>
+            <td class="mono" style="padding:6px;font-weight:600;color:var(--accent)">${r.moldNo||('['+r._idx+']')}</td>
             <td class="mono" style="padding:6px;font-size:11px">${r.partNo||''}</td>
             <td style="padding:6px">${r.partName||''}</td>
             <td style="padding:6px">${r.client||''}</td>
