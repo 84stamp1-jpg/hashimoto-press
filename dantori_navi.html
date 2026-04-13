@@ -1207,31 +1207,77 @@ const PERSON_COLORS = ['#e11d48','#dc2626','#b91c1c','#9f1239','#be123c','#f43f5
 // scanners形式: beacons/{id}/scanners/{scannerId} = {area,rssi,updatedAt}
 // meta形式:     beacons/{id}/meta = {name, type}
 // 旧形式:       beacons/{id} = {area,rssi,name,type,...}
-function resolveBeaconArea(beaconData) {
+
+const RSSI_MARGIN   = 10;   // 現在エリアより10dBm以上強くないと切り替えない
+const STALE_MS      = 30000; // 30秒以上古いデータは無視
+const CONFIRM_COUNT = 3;     // 同じエリアが3回連続で最強になったら切り替え
+
+// エリア安定化用の状態管理
+const areaCandidate = {}; // { beaconId: { area, count } }
+const areaConfirmed = {}; // { beaconId: confirmedArea }
+
+function resolveBeaconArea(beaconId, beaconData) {
   if (!beaconData) return null;
   const now = Date.now();
-  const STALE_MS = 30000; // 30秒以上古いスキャナーデータは無視
 
   if (beaconData.scanners) {
-    // 新形式: 複数PCのRSSIを比較して最強のエリアを選択
-    let best = null;
+    // 有効なスキャナーだけ収集
+    const valid = [];
     Object.entries(beaconData.scanners).forEach(([scId, s]) => {
       if (!s || !s.area || s.rssi == null) return;
       if (s.updatedAt && now - s.updatedAt > STALE_MS) return;
-      if (!best || s.rssi > best.rssi) best = { ...s, scannerId: scId };
+      valid.push({ ...s, scannerId: scId });
     });
-    if (!best) return null; // 有効なスキャナーデータなし → ロスト
+    if (valid.length === 0) return null;
+
+    // 最強RSSIのスキャナーを選ぶ
+    valid.sort((a, b) => b.rssi - a.rssi);
+    const strongest = valid[0];
+
+    // ===== 安定化ロジック =====
+    const currentArea = areaConfirmed[beaconId] || null;
+
+    if (currentArea === strongest.area) {
+      // 現在のエリアが最強 → そのまま維持・カウンタリセット
+      areaCandidate[beaconId] = { area: strongest.area, count: 0 };
+    } else {
+      // 別エリアが最強の場合
+      // 現在エリアのRSSIと比較（マージンチェック）
+      const currentScanner = valid.find(s => s.area === currentArea);
+      const currentRssi    = currentScanner ? currentScanner.rssi : -999;
+      const diff = strongest.rssi - currentRssi;
+
+      if (currentArea === null || diff >= RSSI_MARGIN) {
+        // 初回 or 十分な差がある → 候補をカウント
+        const cand = areaCandidate[beaconId] || { area: '', count: 0 };
+        if (cand.area === strongest.area) {
+          areaCandidate[beaconId] = { area: strongest.area, count: cand.count + 1 };
+        } else {
+          areaCandidate[beaconId] = { area: strongest.area, count: 1 };
+        }
+        // CONFIRM_COUNT回連続で同じエリアが最強になったら切り替え
+        if (areaCandidate[beaconId].count >= CONFIRM_COUNT) {
+          areaConfirmed[beaconId] = strongest.area;
+          areaCandidate[beaconId] = { area: strongest.area, count: 0 };
+        }
+      }
+      // 差が足りない場合は現在のエリアを維持
+    }
+
+    const resolvedArea = areaConfirmed[beaconId] || strongest.area;
+    // resolvedAreaのスキャナーデータを取得
+    const areaScanner = valid.find(s => s.area === resolvedArea) || strongest;
     const meta = beaconData.meta || {};
     return {
       name:    meta.name || beaconData.name || '不明',
       type:    meta.type || beaconData.type || 'leader',
-      area:    best.area,
-      rssi:    best.rssi,
-      moving:  best.moving || false,
-      status:  best.status || '停止中',
+      area:    resolvedArea,
+      rssi:    areaScanner.rssi,
+      moving:  areaScanner.moving || false,
+      status:  areaScanner.status || '停止中',
     };
   }
-  // 旧形式: そのまま使用
+  // 旧形式
   return beaconData;
 }
 
@@ -1246,7 +1292,7 @@ function updateBeacons(beacons){
   if (beacons) {
     Object.entries(beacons).forEach(([id, b]) => {
       if (!b) return;
-      const resolved = resolveBeaconArea(b);
+      const resolved = resolveBeaconArea(id, b);
       if (resolved) beaconLastKnown[id] = resolved;
     });
   }
@@ -1255,9 +1301,8 @@ function updateBeacons(beacons){
   const displayData = {};
   Object.entries(beaconLastKnown).forEach(([id, b]) => {
     if (!b) return;
-    // Firebase上にデータがあり、かつresolveが成功しているか確認
     const inFirebase = beacons && beacons[id];
-    const resolved   = inFirebase ? resolveBeaconArea(inFirebase) : null;
+    const resolved   = inFirebase ? resolveBeaconArea(id, inFirebase) : null;
     displayData[id]  = resolved
       ? { ...resolved, isLost: false }
       : { ...b,        isLost: true  };
