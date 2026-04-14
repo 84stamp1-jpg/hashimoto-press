@@ -1050,6 +1050,63 @@
           <input class="form-input" id="cfgKtApp" placeholder="例: 61">
         </div>
       </div>
+      <!-- フィールドコード設定 -->
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px;color:var(--text2);display:flex;align-items:center;gap:10px;">
+        フィールドコード設定
+        <span style="font-size:10px;font-weight:400;color:var(--text3)">kintoneのフィールドコードが変わったときはここを修正</span>
+        <button class="btn btn-secondary btn-sm" style="font-size:10px;padding:2px 8px" onclick="toggleFieldCodeSettings()">▼ 開く/閉じる</button>
+      </div>
+      <div id="fieldCodeSettings" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px;margin-bottom:10px;">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">
+          kintone管理画面 → アプリ設定 → フォーム でフィールドコードを確認できます
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div class="form-group">
+            <label class="form-label">管理コード フィールドコード</label>
+            <input class="form-input" id="cfgKtF_moldNo" placeholder="例: 文字列__1行__6">
+          </div>
+          <div class="form-group">
+            <label class="form-label">品番 フィールドコード</label>
+            <input class="form-input" id="cfgKtF_partNo" placeholder="例: ルックアップ">
+          </div>
+          <div class="form-group">
+            <label class="form-label">品名 フィールドコード</label>
+            <input class="form-input" id="cfgKtF_partName" placeholder="例: 文字列__1行__5">
+          </div>
+          <div class="form-group">
+            <label class="form-label">客先 フィールドコード</label>
+            <input class="form-input" id="cfgKtF_client" placeholder="例: 文字列__1行__8">
+          </div>
+          <div class="form-group">
+            <label class="form-label">製作状況 フィールドコード</label>
+            <input class="form-input" id="cfgKtF_status" placeholder="例: ラジオボタン">
+          </div>
+          <div class="form-group">
+            <label class="form-label">客先納期 フィールドコード</label>
+            <input class="form-input" id="cfgKtF_dueDate" placeholder="例: 客先納期">
+          </div>
+          <div class="form-group">
+            <label class="form-label">工程 フィールドコード</label>
+            <input class="form-input" id="cfgKtF_process" placeholder="例: 文字列__1行__9">
+          </div>
+          <div class="form-group">
+            <label class="form-label">見積金額 フィールドコード</label>
+            <input class="form-input" id="cfgKtF_estimate" placeholder="例: 計算">
+          </div>
+          <div class="form-group">
+            <label class="form-label">製作中 の値（ステータス）</label>
+            <input class="form-input" id="cfgKtV_inProgress" placeholder="例: 製作中">
+          </div>
+          <div class="form-group">
+            <label class="form-label">完成 の値（ステータス）</label>
+            <input class="form-input" id="cfgKtV_done" placeholder="例: 完成">
+          </div>
+          <div class="form-group">
+            <label class="form-label">検収済 の値（ステータス）</label>
+            <input class="form-input" id="cfgKtV_accepted" placeholder="例: 検収済">
+          </div>
+        </div>
+      </div>
       <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--text2)">金型一覧への取込</div>
       <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.6;">
         ★新規物件から<b>製作中・完成</b>の案件を取込みます。検収済は除外されます。
@@ -1494,7 +1551,22 @@ function loadConfig() {
   const maEl = document.getElementById('cfgKtMasterApp');
   if (maEl) maEl.value = cfg.ktMasterApp || '7';
   const moldAppEl = document.getElementById('cfgKtMoldApp');
-  if (moldAppEl) moldAppEl.value = cfg.ktMoldApp || '7';
+  if (moldAppEl) moldAppEl.value = cfg.ktMoldApp || '61';
+  // フィールドコード設定を読込
+  const ktF = cfg.ktF || {};
+  const ktV = cfg.ktV || {};
+  const setF = (id, val, def) => { const el = document.getElementById(id); if(el) el.value = val || def; };
+  setF('cfgKtF_moldNo',     ktF.moldNo,     '文字列__1行__6');
+  setF('cfgKtF_partNo',     ktF.partNo,     'ルックアップ');
+  setF('cfgKtF_partName',   ktF.partName,   '文字列__1行__5');
+  setF('cfgKtF_client',     ktF.client,     '文字列__1行__8');
+  setF('cfgKtF_status',     ktF.status,     'ラジオボタン');
+  setF('cfgKtF_dueDate',    ktF.dueDate,    '客先納期');
+  setF('cfgKtF_process',    ktF.process,    '文字列__1行__9');
+  setF('cfgKtF_estimate',   ktF.estimate,   '計算');
+  setF('cfgKtV_inProgress', ktV.inProgress, '製作中');
+  setF('cfgKtV_done',       ktV.done,       '完成');
+  setF('cfgKtV_accepted',   ktV.accepted,   '検収済');
 }
 
 function initFirebase() {
@@ -3952,9 +4024,30 @@ function saveKintoneConfig() {
   cfg.ktToken     = document.getElementById('cfgKtToken')?.value.trim()     || '';
   cfg.gasUrl      = document.getElementById('cfgGasUrl')?.value.trim()      || '';
   cfg.ktMasterApp = document.getElementById('cfgKtMasterApp')?.value.trim() || '7';
-  cfg.ktMoldApp   = document.getElementById('cfgKtMoldApp')?.value.trim()   || '7';
+  cfg.ktMoldApp   = document.getElementById('cfgKtMoldApp')?.value.trim()   || '61';
+  // フィールドコード設定を保存
+  cfg.ktF = {
+    moldNo:     document.getElementById('cfgKtF_moldNo')?.value.trim()     || '文字列__1行__6',
+    partNo:     document.getElementById('cfgKtF_partNo')?.value.trim()     || 'ルックアップ',
+    partName:   document.getElementById('cfgKtF_partName')?.value.trim()   || '文字列__1行__5',
+    client:     document.getElementById('cfgKtF_client')?.value.trim()     || '文字列__1行__8',
+    status:     document.getElementById('cfgKtF_status')?.value.trim()     || 'ラジオボタン',
+    dueDate:    document.getElementById('cfgKtF_dueDate')?.value.trim()    || '客先納期',
+    process:    document.getElementById('cfgKtF_process')?.value.trim()    || '文字列__1行__9',
+    estimate:   document.getElementById('cfgKtF_estimate')?.value.trim()   || '計算',
+  };
+  cfg.ktV = {
+    inProgress: document.getElementById('cfgKtV_inProgress')?.value.trim() || '製作中',
+    done:       document.getElementById('cfgKtV_done')?.value.trim()       || '完成',
+    accepted:   document.getElementById('cfgKtV_accepted')?.value.trim()   || '検収済',
+  };
   localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
   toast('kintone設定を保存しました', 'success');
+}
+
+function toggleFieldCodeSettings() {
+  const el = document.getElementById('fieldCodeSettings');
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
 // GASプロキシ経由でkintone取得
@@ -4057,25 +4150,27 @@ async function fetchKintoneForPreview() {
 
     // kintone★新規物件フィールドマッピング（フレキシブル検出）
     _ktPreviewRecords = records.map((rec, idx) => {
-      // ★新規物件(App61) 実際のフィールドコード（2026/04/14確認）
-      // 管理コード=文字列__1行__6, 品番=ルックアップ, 品名=文字列__1行__5
-      // 客先=文字列__1行__8, 工程=文字列__1行__9, 製作状況=ラジオボタン
-      // 客先納期=客先納期, 見積金額=計算
-      const moldNo    = ktVal(rec, '文字列__1行__6');
-      const partNo    = ktVal(rec, 'ルックアップ');
-      const partName  = ktVal(rec, '文字列__1行__5');
-      const client    = ktVal(rec, '文字列__1行__8');
-      const statusRaw = ktVal(rec, 'ラジオボタン');
-      const status    = ktStatus(statusRaw || '製作中');
-      const dueDate   = ktVal(rec, '客先納期');
+      // フィールドコードは設定タブから変更可能
+      const F = cfg.ktF || {};
+      const V = cfg.ktV || {};
+      const moldNo    = ktVal(rec, F.moldNo   || '文字列__1行__6');
+      const partNo    = ktVal(rec, F.partNo   || 'ルックアップ');
+      const partName  = ktVal(rec, F.partName || '文字列__1行__5');
+      const client    = ktVal(rec, F.client   || '文字列__1行__8');
+      const statusRaw = ktVal(rec, F.status   || 'ラジオボタン');
+      const dueDate   = ktVal(rec, F.dueDate  || '客先納期');
       const orderDate = ktVal(rec, '作成日時');
-      const estimate  = parseFloat(ktVal(rec, '計算', 'budget') || '0');
-      const ktCode    = ktVal(rec, '文字列__1行__6') || ktVal(rec, '$id');
-      // 工程: 文字列__1行__9（カンマ区切り）または 文字列__複数行_（改行区切り）
-      const processRaw1 = ktVal(rec, '文字列__1行__9');
-      const processRaw2 = ktVal(rec, '文字列__複数行_');
-      const processRaw  = processRaw1 || processRaw2;
-      const processes   = processRaw
+      const estimate  = parseFloat(ktVal(rec, F.estimate || '計算', 'budget') || '0');
+      const ktCode    = moldNo || ktVal(rec, '$id');
+      // ステータス正規化（設定した値で判定）
+      const vAccepted = V.accepted || '検収済';
+      const vDone     = V.done     || '完成';
+      const status    = statusRaw.includes(vAccepted) ? '検収済'
+                      : statusRaw.includes(vDone)     ? '完成'
+                      : '製作中';
+      // 工程フィールド（カンマ・改行区切り）
+      const processRaw = ktVal(rec, F.process || '文字列__1行__9', '文字列__複数行_');
+      const processes  = processRaw
         ? processRaw.split(/[\n\r,、・]/).map(s => s.replace(/^\s*\d+\.?\s*/, '').trim()).filter(Boolean)
         : [];
       return { _idx: idx, moldNo, partNo, partName, client, status, dueDate, orderDate, estimate, ktCode, processes, _raw: rec };
