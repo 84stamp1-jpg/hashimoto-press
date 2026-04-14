@@ -4056,32 +4056,31 @@ async function fetchKintoneForPreview() {
     }
 
     // kintone★新規物件フィールドマッピング（フレキシブル検出）
-    if (records.length > 0) {
-      const k0 = Object.keys(records[0]);
-      console.log('[kintone] フィールドキー:', k0);
-      console.log('[kintone] 1件目:', JSON.stringify(records[0]).slice(0, 400));
-      setLog('フィールドキー: ' + k0.slice(0, 6).join(', ') + ' ...(F12コンソール参照)');
-    }
     _ktPreviewRecords = records.map((rec, idx) => {
-      const ak = Object.keys(rec);
-      const findKey = (...words) => ak.find(k => words.some(w => k.includes(w))) || '';
-      const moldNo   = ktVal(rec, '管理コード', findKey('管理コード','管理NO'), 'moldNo');
-      const partNo   = ktVal(rec, '部品番号', findKey('品番','部品番号'), 'partNo');
-      const partName = ktVal(rec, '品名', findKey('品名','部品名'), 'partName');
-      const client   = ktVal(rec, '客先', findKey('客先','得意先'), 'client');
-      const statusRaw= ktVal(rec, '製作状況', findKey('状況','ステータス'), 'status');
-      const status   = ktStatus(statusRaw || '製作中');
-      const dueDate  = ktVal(rec, '客先納期', findKey('納期'), 'dueDate');
-      const orderDate= ktVal(rec, '受注日付', findKey('受注'), 'orderDate');
-      const estimate = parseFloat(ktVal(rec, '見積金額', findKey('見積金'), 'estimate') || '0');
-      const ktCode   = ktVal(rec, '管理コード', '$id', findKey('管理コード'));
-      const processRaw = ktVal(rec, '見積工程', '工程', '実工程', findKey('工程'));
-      const processes  = processRaw
-        ? processRaw.split(/[\n\r,・]/).map(s=>s.replace(/^\d+\.?[-\.]/,'').trim()).filter(Boolean)
+      // ★新規物件(App61) 実際のフィールドコード（2026/04/14確認）
+      // 管理コード=文字列__1行__6, 品番=ルックアップ, 品名=文字列__1行__5
+      // 客先=文字列__1行__8, 工程=文字列__1行__9, 製作状況=ラジオボタン
+      // 客先納期=客先納期, 見積金額=計算
+      const moldNo    = ktVal(rec, '文字列__1行__6');
+      const partNo    = ktVal(rec, 'ルックアップ');
+      const partName  = ktVal(rec, '文字列__1行__5');
+      const client    = ktVal(rec, '文字列__1行__8');
+      const statusRaw = ktVal(rec, 'ラジオボタン');
+      const status    = ktStatus(statusRaw || '製作中');
+      const dueDate   = ktVal(rec, '客先納期');
+      const orderDate = ktVal(rec, '作成日時');
+      const estimate  = parseFloat(ktVal(rec, '計算', 'budget') || '0');
+      const ktCode    = ktVal(rec, '文字列__1行__6') || ktVal(rec, '$id');
+      // 工程: 文字列__1行__9（カンマ区切り）または 文字列__複数行_（改行区切り）
+      const processRaw1 = ktVal(rec, '文字列__1行__9');
+      const processRaw2 = ktVal(rec, '文字列__複数行_');
+      const processRaw  = processRaw1 || processRaw2;
+      const processes   = processRaw
+        ? processRaw.split(/[\n\r,、・]/).map(s => s.replace(/^\s*\d+\.?\s*/, '').trim()).filter(Boolean)
         : [];
       return { _idx: idx, moldNo, partNo, partName, client, status, dueDate, orderDate, estimate, ktCode, processes, _raw: rec };
     });
-    if (_ktPreviewRecords.length > 0) console.log('[kintone] 変換後1件目:', _ktPreviewRecords[0]);
+    console.log('[kintone] 変換後1件目:', _ktPreviewRecords[0]);
     setLog('✅ ' + records.length + '件取得。プレビューを確認してください。');
     document.getElementById('ktStatusFilter').value = '';
     renderKtPreview();
