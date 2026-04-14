@@ -1181,23 +1181,34 @@ const FIREBASE_URL = 'https://hashimoto-press-default-rtdb.asia-southeast1.fireb
 // Firebaseのbeacons/{id}パス: { name, area, x, y, type:'leader'/'lift' }
 // ===== ビーコン表示位置（v11レイアウト対応） =====
 // エリアのビーコン表示起点座標
-// 複数人は起点から右→下に展開（34px刻み）
-// プレスD: rect(362,144,188,120) テキストy=210 → 上部に表示
-// 現場事務所: rect(558,144,96,116) → 中央
+// 各エリアのテキストと干渉しない位置に設定
+// 複数人は右→下に折り返し
 const AREA_POSITIONS = {
-  'プレスA':    {x:152, y:195},  // A2カード下
-  'プレスB':    {x:248, y:112},  // B2とBP2の間
-  'プレスC':    {x:400, y:115},  // C-P3_2カード下
-  'プレスD':    {x:380, y:168},  // Dエリア上部左（テキストy=210と干渉しない）
-  '組立':       {x:745, y:168},  // 組立エリア上部
-  '完成品置場': {x:745, y:312},  // 完成品置場
-  '技術':       {x:175, y:400},  // 技術エリア内
-  '事務所':     {x:32,  y:215},  // 事務所内
-  '溶接':       {x:388, y:310},  // 溶接エリア内
-  '組立SP':     {x:484, y:310},  // 組立SPエリア内
-  '金型置場':   {x:32,  y:65},   // 金型置場（左）内
-  '現場事務所': {x:590, y:185},  // 現場事務所内（rect中央上部）
-  '通路':       {x:456, y:210},
+  // プレスA: rect(100,8,104,238) テキストy=28 → カードの間の空きy=190
+  'プレスA':    {x:135, y:190},
+  // プレスB: rect(208,8,148,354) B2(y=36-92) BP2(y=148-204) → 間の空きy=110
+  'プレスB':    {x:240, y:110},
+  // プレスC: rect(362,8,188,132) カード2枚 → 右端上部
+  'プレスC':    {x:520, y:25},
+  // プレスD: rect(362,144,188,120) テキストx=456,y=210 → 右端上部(テキストより上)
+  'プレスD':    {x:520, y:162},
+  // 組立: rect(706,8,110,260) テキストなし → 左上
+  '組立':       {x:720, y:25},
+  // 完成品置場右端: rect(706,272,110,90)
+  '完成品置場': {x:720, y:288},
+  // 技術: rect(98,370,260,68)
+  '技術':       {x:150, y:390},
+  // 事務所: rect(8,132,88,226)
+  '事務所':     {x:25,  y:200},
+  // 溶接: rect(362,268,92,94)
+  '溶接':       {x:375, y:285},
+  // 組立SP: rect(458,268,92,94)
+  '組立SP':     {x:470, y:285},
+  // 金型置場左: rect(8,8,88,120)
+  '金型置場':   {x:25,  y:55},
+  // 現場事務所: rect(558,144,96,116) → 中央
+  '現場事務所': {x:572, y:165},
+  '通路':       {x:450, y:195},
 };
 function getBeaconPos(area) {
   return AREA_POSITIONS[area] || {x:400, y:200};
@@ -1211,7 +1222,7 @@ const PERSON_COLORS = ['#e11d48','#dc2626','#b91c1c','#9f1239','#be123c','#f43f5
 // 旧形式:       beacons/{id} = {area,rssi,name,type,...}
 
 const RSSI_MARGIN   = 10;   // 現在エリアより10dBm以上強くないと切り替えない
-const STALE_MS      = 30000; // 30秒以上古いデータは無視
+const STALE_MS      = 60000; // 60秒以上古いデータは無視
 const CONFIRM_COUNT = 3;     // 同じエリアが3回連続で最強になったら切り替え
 
 // エリア安定化用の状態管理
@@ -1288,7 +1299,11 @@ function resolveBeaconArea(beaconId, beaconData) {
     const meta = beaconData.meta || {};
     // nameの検証：2文字以下の英数字のみ（"ac","pc"等）は無効
     const rawName = meta.name || beaconData.name || '';
-    const isInvalidName = !rawName || (rawName.length <= 2 && /^[a-zA-Z0-9]+$/.test(rawName));
+    // 無効名の判定: 空、または3文字以下の英小文字のみ（ac, pc等）
+    const isInvalidName = !rawName
+      || rawName.trim() === ''
+      || rawName === '...'
+      || (rawName.length <= 3 && /^[a-z]+$/.test(rawName));
     const validName = isInvalidName ? '...' : rawName;
     return {
       name:    validName,
@@ -1337,9 +1352,12 @@ function updateBeacons(beacons){
     if (!b) return;
     const inFirebase = beacons && beacons[id];
     const resolved   = inFirebase ? resolveBeaconArea(id, inFirebase) : null;
-    displayData[id]  = resolved
-      ? { ...resolved, isLost: false }
-      : { ...b,        isLost: true  };
+    if (resolved) {
+      displayData[id] = { ...resolved, isLost: false };
+    } else {
+      // Firebaseにデータがない → ロスト（グレー点滅）
+      displayData[id] = { ...b, isLost: true };
+    }
   });
 
   group.querySelectorAll('.beacon-leader').forEach(el=>el.remove());
@@ -1351,13 +1369,19 @@ function updateBeacons(beacons){
     const color = PERSON_COLORS[idx % PERSON_COLORS.length];
     // 同エリア複数人：エリア幅に応じて折り返し
     const sameArea = leaders.slice(0,idx).filter(([,ob])=>ob.area===b.area).length;
+    // エリアごとに展開方向を設定
+    // 右端起点エリアは左方向(-34)、それ以外は右方向(+34)
+    const AREA_DIRECTION = {
+      'プレスD': -1, 'プレスC': -1, '組立': 1, '完成品置場': 1,
+    };
+    const dir = AREA_DIRECTION[b.area] !== undefined ? AREA_DIRECTION[b.area] : 1;
     const AREA_MAX_COL = {
-      'プレスD': 3, 'プレスC': 5, 'プレスA': 2, 'プレスB': 3,
+      'プレスD': 3, 'プレスC': 4, 'プレスA': 2, 'プレスB': 3,
       '現場事務所': 2, '溶接': 1, '組立SP': 1, '技術': 4,
       '組立': 2, '完成品置場': 2,
     };
     const maxCol = AREA_MAX_COL[b.area] || 3;
-    const cx = pos.x + (sameArea % maxCol) * 34;
+    const cx = pos.x + (sameArea % maxCol) * 34 * dir;
     const cy = pos.y + Math.floor(sameArea / maxCol) * 34;
 
     const isMoving = b.moving === true || b.status === '移動中';
@@ -1437,8 +1461,10 @@ function updateBeacons(beacons){
     // リフト・リーダー両方含めた同エリア全アイコン数でずらす
     const allSameArea = [...leaders, ...lifts].slice(0, leaders.length + idx)
       .filter(([,o]) => o && o.area === lift.area).length;
-    const lcx = pos.x + (allSameArea % 2) * 36;
-    const lcy = pos.y + Math.floor(allSameArea / 2) * 36;
+    const ldir = (lift.area === 'プレスD' || lift.area === 'プレスC') ? -1 : 1;
+    const lMaxCol = 3;
+    const lcx = pos.x + (allSameArea % lMaxCol) * 34 * ldir;
+    const lcy = pos.y + Math.floor(allSameArea / lMaxCol) * 34;
     const liftColor = isLost ? '#94a3b8' : isMoving ? '#ef4444' : '#d97706';
 
     const g = document.createElementNS('http://www.w3.org/2000/svg','g');
