@@ -1079,7 +1079,8 @@
           </div>
           <div class="form-group">
             <label class="form-label">製作状況 フィールドコード</label>
-            <input class="form-input" id="cfgKtF_status" placeholder="例: ラジオボタン">
+            <input class="form-input" id="cfgKtF_status" placeholder="例: ラジオボタン（任意）">
+            <div style="font-size:10px;color:var(--text3);margin-top:2px;">★新規物件は検収区分チェックボックスで自動判定</div>
           </div>
           <div class="form-group">
             <label class="form-label">客先納期 フィールドコード</label>
@@ -1087,7 +1088,8 @@
           </div>
           <div class="form-group">
             <label class="form-label">工程 フィールドコード</label>
-            <input class="form-input" id="cfgKtF_process" placeholder="例: 文字列__1行__9">
+            <input class="form-input" id="cfgKtF_process" placeholder="例: 文字列_複数行_">
+            <div style="font-size:10px;color:var(--text3);margin-top:2px;">空欄の場合「文字列_複数行_」を自動使用</div>
           </div>
           <div class="form-group">
             <label class="form-label">見積金額 フィールドコード</label>
@@ -4173,19 +4175,25 @@ async function fetchKintoneForPreview() {
       const partNo    = ktVal(rec, F.partNo   || '文字列_1行_7');
       const partName  = ktVal(rec, F.partName || '文字列_1行_5');
       const client    = ktVal(rec, F.client   || 'ルックアップ');
-      const statusRaw = F.status ? ktVal(rec, F.status) : '';
       const dueDate   = ktVal(rec, F.dueDate  || '日付');
       const orderDate = ktVal(rec, '作成日時');
       const estimate  = parseFloat(ktVal(rec, F.estimate || '見積金額', 'budget') || '0');
       const ktCode    = moldNo || ktVal(rec, '$id');
-      // ステータス正規化
-      const vAccepted = V.accepted || '';
-      const vDone     = V.done     || '';
-      const status    = (vAccepted && statusRaw.includes(vAccepted)) ? '検収済'
-                      : (vDone     && statusRaw.includes(vDone))     ? '完成'
-                      : '製作中';
-      // 工程フィールド（設定されている場合のみ）
-      const processRaw = F.process ? ktVal(rec, F.process) : '';
+
+      // 検収区分チェックボックス（["検収済"] or []）
+      const cbAccept  = rec['チェックボックス'];
+      const cbAccept0 = rec['チェックボックス_0'];
+      const isAccepted = (Array.isArray(cbAccept?.value)  && cbAccept.value.length  > 0) ||
+                         (Array.isArray(cbAccept0?.value) && cbAccept0.value.length > 0);
+      // 完了区分（ドロップダウン）
+      const kanryoRaw = ktVal(rec, '完了区分', 'ドロップダウン_0');
+      const isDone    = kanryoRaw.includes('完了') || kanryoRaw.includes('完成');
+      const status    = isAccepted ? '検収済' : isDone ? '完成' : '製作中';
+
+      // 見積工程（文字列_複数行_ から取得）
+      const processRaw = F.process
+        ? ktVal(rec, F.process)
+        : ktVal(rec, '文字列_複数行_', '見積工程');
       const processes  = processRaw
         ? processRaw.split(/[\n\r,、・]/).map(s => s.replace(/^\s*\d+\.?\s*/, '').trim()).filter(Boolean)
         : [];
@@ -4210,13 +4218,14 @@ function renderKtPreview() {
   const countEl   = document.getElementById('ktPreviewCount');
 
   let list = _ktPreviewRecords;
-  // ステータスフィルタ（「新規物件」アプリはステータスなしのため全件表示がデフォルト）
-  if (statusFil === '製作中' || statusFil === '完成') {
-    list = list.filter(r => r.status === statusFil);
+  // デフォルト = 検収済を除外（チェックボックスで自動判定）
+  if (statusFil === '') {
+    list = list.filter(r => r.status !== '検収済');
   } else if (statusFil === '検収済') {
     list = _ktPreviewRecords;  // 全件（検収済も含む）
+  } else {
+    list = list.filter(r => r.status === statusFil);
   }
-  // 空文字(デフォルト) = 全件表示
 
   if (countEl) countEl.textContent = list.length + '件';
   console.log('[renderKtPreview] list.length=' + list.length, list.slice(0,2));
