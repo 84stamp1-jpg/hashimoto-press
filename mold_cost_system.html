@@ -1116,6 +1116,10 @@
         <button class="btn btn-secondary" onclick="fetchKintoneForPreview()">📥 取込プレビュー</button>
       </div>
       <div id="ktSyncLog" style="font-size:11px;color:var(--text3);margin-top:8px;font-family:monospace;max-height:80px;overflow-y:auto;white-space:pre-wrap;"></div>
+      <div style="margin-top:8px;">
+        <button class="btn btn-secondary btn-sm" style="font-size:10px" onclick="openDebugUrl()">🔍 フィールドコード確認（debug=1）</button>
+        <span style="font-size:10px;color:var(--text3);margin-left:6px;">新しいアプリのフィールドコードを確認できます</span>
+      </div>
     </div>
 
     <div class="config-box">
@@ -1477,10 +1481,10 @@
           <input type="checkbox" id="ktSelectAll" onchange="ktToggleAll(this.checked)"> 全選択/解除
         </label>
         <select class="filter-select" id="ktStatusFilter" onchange="renderKtPreview()" style="font-size:11px;">
-          <option value="">全ステータス（検収済除く）</option>
+          <option value="">全件表示</option>
           <option value="製作中">製作中のみ</option>
           <option value="完成">完成のみ</option>
-          <option value="検収済">検収済も表示</option>
+          <option value="検収済">検収済も含む（全件）</option>
         </select>
         <span id="ktPreviewCount" style="color:var(--accent);font-weight:600;"></span>
       </div>
@@ -1556,17 +1560,19 @@ function loadConfig() {
   const ktF = cfg.ktF || {};
   const ktV = cfg.ktV || {};
   const setF = (id, val, def) => { const el = document.getElementById(id); if(el) el.value = val || def; };
+  // デフォルトは「工程別作業実績(App61)」のフィールドコード
+  // 「新規物件」アプリに変更する場合はdebug=1で確認して設定保存してください
   setF('cfgKtF_moldNo',     ktF.moldNo,     '文字列__1行__6');
   setF('cfgKtF_partNo',     ktF.partNo,     'ルックアップ');
   setF('cfgKtF_partName',   ktF.partName,   '文字列__1行__5');
   setF('cfgKtF_client',     ktF.client,     '文字列__1行__8');
-  setF('cfgKtF_status',     ktF.status,     'ラジオボタン');
+  setF('cfgKtF_status',     ktF.status,     '');
   setF('cfgKtF_dueDate',    ktF.dueDate,    '客先納期');
-  setF('cfgKtF_process',    ktF.process,    '文字列__1行__9');
+  setF('cfgKtF_process',    ktF.process,    '');
   setF('cfgKtF_estimate',   ktF.estimate,   '計算');
-  setF('cfgKtV_inProgress', ktV.inProgress, '製作中');
-  setF('cfgKtV_done',       ktV.done,       '完成');
-  setF('cfgKtV_accepted',   ktV.accepted,   '検収済');
+  setF('cfgKtV_inProgress', ktV.inProgress, '');
+  setF('cfgKtV_done',       ktV.done,       '');
+  setF('cfgKtV_accepted',   ktV.accepted,   '');
 }
 
 function initFirebase() {
@@ -1841,7 +1847,7 @@ function renderDashboard() {
         </tr>
       </thead>
       <tbody>
-        ${rows.map(([,m]) => {
+        ${rows.map(([key,m]) => {
           const c = getCosts(m.no);
           return `<tr onclick="openMoldDetail('${m.no}')">
             <td class="mono">${m.no}</td>
@@ -1852,8 +1858,8 @@ function renderDashboard() {
             <td>${costBarHTML(c)}</td>
             <td>${progressHTML(c.total, m.estimate)}</td>
             <td style="white-space:nowrap">
-              <button class="btn btn-secondary btn-sm" style="padding:3px 8px;font-size:11px;margin-right:4px" onclick="editMold('${key}')">編集</button>
-              <button class="btn btn-danger btn-sm" style="padding:3px 8px;font-size:11px" onclick="deleteMold('${key}')">×</button>
+              <button class="btn btn-secondary btn-sm" style="padding:3px 8px;font-size:11px;margin-right:4px" onclick="event.stopPropagation();editMold('${key}')">編集</button>
+              <button class="btn btn-danger btn-sm" style="padding:3px 8px;font-size:11px" onclick="event.stopPropagation();deleteMold('${key}')">×</button>
             </td>
           </tr>`;
         }).join('')}
@@ -4205,16 +4211,13 @@ function renderKtPreview() {
   const countEl   = document.getElementById('ktPreviewCount');
 
   let list = _ktPreviewRecords;
-  // デフォルトは検収済を除外（空文字='全ステータス検収済除く'）
-  if (statusFil === '') {
-    list = list.filter(r => r.status !== '検収済');
-  } else if (statusFil === '検収済') {
-    // 全件表示（検収済も含む）
-    list = _ktPreviewRecords;
-  } else {
+  // ステータスフィルタ（「新規物件」アプリはステータスなしのため全件表示がデフォルト）
+  if (statusFil === '製作中' || statusFil === '完成') {
     list = list.filter(r => r.status === statusFil);
+  } else if (statusFil === '検収済') {
+    list = _ktPreviewRecords;  // 全件（検収済も含む）
   }
-  console.log('[kintone] renderKtPreview: statusFil=' + statusFil + ', list=' + list.length + '件 (全' + _ktPreviewRecords.length + '件)');
+  // 空文字(デフォルト) = 全件表示
 
   if (countEl) countEl.textContent = list.length + '件';
   console.log('[renderKtPreview] list.length=' + list.length, list.slice(0,2));
@@ -4442,6 +4445,16 @@ function toggleKtMethod() {
   const method = document.querySelector('input[name="ktFetchMethod"]:checked')?.value || 'gas';
   document.getElementById('ktGasSection').style.display   = method === 'gas'    ? '' : 'none';
   document.getElementById('ktDirectSection').style.display = method === 'direct' ? '' : 'none';
+}
+
+
+// フィールドコード確認用 debug URL を開く
+function openDebugUrl() {
+  const gasUrl = cfg.gasUrl || document.getElementById('cfgGasUrl')?.value.trim();
+  const appId  = document.getElementById('cfgKtMoldApp')?.value.trim() || cfg.ktMoldApp || '61';
+  if (!gasUrl) { toast('GASプロキシURLを設定してください', 'error'); return; }
+  const url = gasUrl + '?app=' + appId + '&debug=1';
+  window.open(url, '_blank');
 }
 
 // ── Close modal on overlay click ──
