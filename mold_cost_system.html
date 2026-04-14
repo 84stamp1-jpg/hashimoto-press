@@ -1043,7 +1043,7 @@
       <div class="form-grid" style="margin-bottom:10px;">
         <div class="form-group">
           <label class="form-label">★新規物件 App ID</label>
-          <input class="form-input" id="cfgKtMoldApp" value="61">
+          <input class="form-input" id="cfgKtMoldApp" value="39">
         </div>
         <div class="form-group">
           <label class="form-label">作業実績 App ID</label>
@@ -1555,21 +1555,20 @@ function loadConfig() {
   const maEl = document.getElementById('cfgKtMasterApp');
   if (maEl) maEl.value = cfg.ktMasterApp || '7';
   const moldAppEl = document.getElementById('cfgKtMoldApp');
-  if (moldAppEl) moldAppEl.value = cfg.ktMoldApp || '61';
+  if (moldAppEl) moldAppEl.value = cfg.ktMoldApp || '39';
   // フィールドコード設定を読込
   const ktF = cfg.ktF || {};
   const ktV = cfg.ktV || {};
   const setF = (id, val, def) => { const el = document.getElementById(id); if(el) el.value = val || def; };
-  // デフォルトは「工程別作業実績(App61)」のフィールドコード
-  // 「新規物件」アプリに変更する場合はdebug=1で確認して設定保存してください
-  setF('cfgKtF_moldNo',     ktF.moldNo,     '文字列__1行__6');
-  setF('cfgKtF_partNo',     ktF.partNo,     'ルックアップ');
-  setF('cfgKtF_partName',   ktF.partName,   '文字列__1行__5');
-  setF('cfgKtF_client',     ktF.client,     '文字列__1行__8');
+  // デフォルトは「新規物件(App39)」のフィールドコード（2026/04/14確認）
+  setF('cfgKtF_moldNo',     ktF.moldNo,     '文字列_1行_6');
+  setF('cfgKtF_partNo',     ktF.partNo,     '文字列_1行_7');
+  setF('cfgKtF_partName',   ktF.partName,   '文字列_1行_5');
+  setF('cfgKtF_client',     ktF.client,     'ルックアップ');
   setF('cfgKtF_status',     ktF.status,     '');
-  setF('cfgKtF_dueDate',    ktF.dueDate,    '客先納期');
+  setF('cfgKtF_dueDate',    ktF.dueDate,    '日付');
   setF('cfgKtF_process',    ktF.process,    '');
-  setF('cfgKtF_estimate',   ktF.estimate,   '計算');
+  setF('cfgKtF_estimate',   ktF.estimate,   '見積金額');
   setF('cfgKtV_inProgress', ktV.inProgress, '');
   setF('cfgKtV_done',       ktV.done,       '');
   setF('cfgKtV_accepted',   ktV.accepted,   '');
@@ -4022,17 +4021,17 @@ function saveKintoneConfig() {
   cfg.ktToken     = document.getElementById('cfgKtToken')?.value.trim()     || '';
   cfg.gasUrl      = document.getElementById('cfgGasUrl')?.value.trim()      || '';
   cfg.ktMasterApp = document.getElementById('cfgKtMasterApp')?.value.trim() || '7';
-  cfg.ktMoldApp   = document.getElementById('cfgKtMoldApp')?.value.trim()   || '61';
+  cfg.ktMoldApp   = document.getElementById('cfgKtMoldApp')?.value.trim()   || '39';
   // フィールドコード設定を保存
   cfg.ktF = {
-    moldNo:     document.getElementById('cfgKtF_moldNo')?.value.trim()     || '文字列__1行__6',
-    partNo:     document.getElementById('cfgKtF_partNo')?.value.trim()     || 'ルックアップ',
-    partName:   document.getElementById('cfgKtF_partName')?.value.trim()   || '文字列__1行__5',
-    client:     document.getElementById('cfgKtF_client')?.value.trim()     || '文字列__1行__8',
-    status:     document.getElementById('cfgKtF_status')?.value.trim()     || 'ラジオボタン',
-    dueDate:    document.getElementById('cfgKtF_dueDate')?.value.trim()    || '客先納期',
-    process:    document.getElementById('cfgKtF_process')?.value.trim()    || '文字列__1行__9',
-    estimate:   document.getElementById('cfgKtF_estimate')?.value.trim()   || '計算',
+    moldNo:     document.getElementById('cfgKtF_moldNo')?.value.trim()     || '文字列_1行_6',
+    partNo:     document.getElementById('cfgKtF_partNo')?.value.trim()     || '文字列_1行_7',
+    partName:   document.getElementById('cfgKtF_partName')?.value.trim()   || '文字列_1行_5',
+    client:     document.getElementById('cfgKtF_client')?.value.trim()     || 'ルックアップ',
+    status:     document.getElementById('cfgKtF_status')?.value.trim()     || '',
+    dueDate:    document.getElementById('cfgKtF_dueDate')?.value.trim()    || '日付',
+    process:    document.getElementById('cfgKtF_process')?.value.trim()    || '',
+    estimate:   document.getElementById('cfgKtF_estimate')?.value.trim()   || '見積金額',
   };
   cfg.ktV = {
     inProgress: document.getElementById('cfgKtV_inProgress')?.value.trim() || '製作中',
@@ -4089,17 +4088,17 @@ function ktStatus(raw) {
 // ── プレビュー取込 ──
 async function fetchKintoneForPreview() {
   // 画面の入力値を優先（保存前でも反映）
-  const appId  = document.getElementById('cfgKtMoldApp')?.value.trim() || cfg.ktMoldApp || '61';
+  const appId  = document.getElementById('cfgKtMoldApp')?.value.trim() || cfg.ktMoldApp || '39';
   // フィールドコードも画面の最新値で上書き
   const liveF = {
-    moldNo:   document.getElementById('cfgKtF_moldNo')?.value.trim()   || cfg.ktF?.moldNo   || '文字列__1行__6',
-    partNo:   document.getElementById('cfgKtF_partNo')?.value.trim()   || cfg.ktF?.partNo   || 'ルックアップ',
-    partName: document.getElementById('cfgKtF_partName')?.value.trim() || cfg.ktF?.partName || '文字列__1行__5',
-    client:   document.getElementById('cfgKtF_client')?.value.trim()   || cfg.ktF?.client   || '文字列__1行__8',
-    status:   document.getElementById('cfgKtF_status')?.value.trim()   || cfg.ktF?.status   || 'ラジオボタン',
-    dueDate:  document.getElementById('cfgKtF_dueDate')?.value.trim()  || cfg.ktF?.dueDate  || '客先納期',
-    process:  document.getElementById('cfgKtF_process')?.value.trim()  || cfg.ktF?.process  || '文字列__1行__9',
-    estimate: document.getElementById('cfgKtF_estimate')?.value.trim() || cfg.ktF?.estimate || '計算',
+    moldNo:   document.getElementById('cfgKtF_moldNo')?.value.trim()   || cfg.ktF?.moldNo   || '文字列_1行_6',
+    partNo:   document.getElementById('cfgKtF_partNo')?.value.trim()   || cfg.ktF?.partNo   || '文字列_1行_7',
+    partName: document.getElementById('cfgKtF_partName')?.value.trim() || cfg.ktF?.partName || '文字列_1行_5',
+    client:   document.getElementById('cfgKtF_client')?.value.trim()   || cfg.ktF?.client   || 'ルックアップ',
+    status:   document.getElementById('cfgKtF_status')?.value.trim()   || cfg.ktF?.status   || '',
+    dueDate:  document.getElementById('cfgKtF_dueDate')?.value.trim()  || cfg.ktF?.dueDate  || '日付',
+    process:  document.getElementById('cfgKtF_process')?.value.trim()  || cfg.ktF?.process  || '',
+    estimate: document.getElementById('cfgKtF_estimate')?.value.trim() || cfg.ktF?.estimate || '見積金額',
   };
   const liveV = {
     inProgress: document.getElementById('cfgKtV_inProgress')?.value.trim() || cfg.ktV?.inProgress || '製作中',
@@ -4170,23 +4169,23 @@ async function fetchKintoneForPreview() {
       // フィールドコードは設定タブから変更可能（liveF/liveVは取込ボタン押下時に最新化）
       const F = liveF || cfg.ktF || {};
       const V = liveV || cfg.ktV || {};
-      const moldNo    = ktVal(rec, F.moldNo   || '文字列__1行__6');
-      const partNo    = ktVal(rec, F.partNo   || 'ルックアップ');
-      const partName  = ktVal(rec, F.partName || '文字列__1行__5');
-      const client    = ktVal(rec, F.client   || '文字列__1行__8');
-      const statusRaw = ktVal(rec, F.status   || 'ラジオボタン');
-      const dueDate   = ktVal(rec, F.dueDate  || '客先納期');
+      const moldNo    = ktVal(rec, F.moldNo   || '文字列_1行_6');
+      const partNo    = ktVal(rec, F.partNo   || '文字列_1行_7');
+      const partName  = ktVal(rec, F.partName || '文字列_1行_5');
+      const client    = ktVal(rec, F.client   || 'ルックアップ');
+      const statusRaw = F.status ? ktVal(rec, F.status) : '';
+      const dueDate   = ktVal(rec, F.dueDate  || '日付');
       const orderDate = ktVal(rec, '作成日時');
-      const estimate  = parseFloat(ktVal(rec, F.estimate || '計算', 'budget') || '0');
+      const estimate  = parseFloat(ktVal(rec, F.estimate || '見積金額', 'budget') || '0');
       const ktCode    = moldNo || ktVal(rec, '$id');
-      // ステータス正規化（設定した値で判定）
-      const vAccepted = V.accepted || '検収済';
-      const vDone     = V.done     || '完成';
-      const status    = statusRaw.includes(vAccepted) ? '検収済'
-                      : statusRaw.includes(vDone)     ? '完成'
+      // ステータス正規化
+      const vAccepted = V.accepted || '';
+      const vDone     = V.done     || '';
+      const status    = (vAccepted && statusRaw.includes(vAccepted)) ? '検収済'
+                      : (vDone     && statusRaw.includes(vDone))     ? '完成'
                       : '製作中';
-      // 工程フィールド（カンマ・改行区切り）
-      const processRaw = ktVal(rec, F.process || '文字列__1行__9', '文字列__複数行_');
+      // 工程フィールド（設定されている場合のみ）
+      const processRaw = F.process ? ktVal(rec, F.process) : '';
       const processes  = processRaw
         ? processRaw.split(/[\n\r,、・]/).map(s => s.replace(/^\s*\d+\.?\s*/, '').trim()).filter(Boolean)
         : [];
@@ -4451,7 +4450,7 @@ function toggleKtMethod() {
 // フィールドコード確認用 debug URL を開く
 function openDebugUrl() {
   const gasUrl = cfg.gasUrl || document.getElementById('cfgGasUrl')?.value.trim();
-  const appId  = document.getElementById('cfgKtMoldApp')?.value.trim() || cfg.ktMoldApp || '61';
+  const appId  = document.getElementById('cfgKtMoldApp')?.value.trim() || cfg.ktMoldApp || '39';
   if (!gasUrl) { toast('GASプロキシURLを設定してください', 'error'); return; }
   const url = gasUrl + '?app=' + appId + '&debug=1';
   window.open(url, '_blank');
