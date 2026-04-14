@@ -720,17 +720,19 @@
                 連続入力モード（材質以降を保持）
               </label>
             </div>
-            <!-- 固定行：依頼日・管理NO・品番 -->
-            <div style="display:grid;grid-template-columns:130px 1fr 1fr;gap:8px;margin-bottom:8px;">
+            <!-- 固定行：依頼日・金型NO・工程番号・品番 -->
+            <div style="display:grid;grid-template-columns:130px 1fr 80px 1fr;gap:8px;margin-bottom:8px;">
               <div class="form-group">
                 <label class="form-label">依頼日</label>
                 <input class="form-input" id="qf_date" type="date">
               </div>
               <div class="form-group">
-                <label class="form-label">管理NO. <button type="button" onclick="autoMoldNo()" style="border:none;background:var(--accent-dim);color:var(--accent);border-radius:3px;padding:1px 5px;font-size:10px;cursor:pointer;margin-left:4px;">自動</button></label>
+                <label class="form-label">金型NO.
+                  <button type="button" onclick="autoMoldNo()" style="border:none;background:var(--accent-dim);color:var(--accent);border-radius:3px;padding:1px 5px;font-size:10px;cursor:pointer;margin-left:4px;">自動</button>
+                </label>
                 <div id="qf_moldNo_wrap" class="mold-combo-wrap">
-                  <input class="mold-combo-input" id="qf_moldNo" placeholder="管理NO.を選択または入力" autocomplete="off"
-                    oninput="openMoldCombo('qf_moldNo_dd',this.value,'qf_moldNo','qf_partNo','qf_partNoDisp')"
+                  <input class="mold-combo-input" id="qf_moldNo" placeholder="例: 71-A" autocomplete="off"
+                    oninput="openMoldCombo('qf_moldNo_dd',this.value,'qf_moldNo','qf_partNo','qf_partNoDisp');genMatNo()"
                     onfocus="openMoldCombo('qf_moldNo_dd',this.value,'qf_moldNo','qf_partNo','qf_partNoDisp')"
                     onblur="setTimeout(()=>closeMoldCombo('qf_moldNo_dd'),200)">
                   <span class="mold-combo-arrow">▼</span>
@@ -738,9 +740,20 @@
                 </div>
               </div>
               <div class="form-group">
-                <label class="form-label">品番 <span id="qf_partNoDisp" style="font-size:10px;color:var(--accent);font-family:var(--mono);margin-left:4px;"></span></label>
-                <input class="form-input" id="qf_partNo" placeholder="管理NOを選択すると自動入力" readonly
-                  style="background:var(--bg3);color:var(--text2);cursor:default;" title="管理NOを選択すると自動入力されます">
+                <label class="form-label">工程番号
+                  <span style="font-size:9px;color:var(--text3);">数字</span>
+                </label>
+                <input class="form-input" id="qf_processNo" placeholder="例: 1"
+                  style="font-family:var(--mono);font-weight:600;"
+                  oninput="genMatNo()" maxlength="2">
+              </div>
+              <div class="form-group">
+                <label class="form-label">
+                  材料管理NO.
+                  <span id="qf_matNoPreview" style="font-size:10px;color:var(--accent);font-family:var(--mono);margin-left:4px;font-weight:700;"></span>
+                </label>
+                <input class="form-input" id="qf_partNo" placeholder="金型NO+工程番号で自動生成" readonly
+                  style="background:var(--bg3);color:var(--text2);cursor:default;">
               </div>
             </div>
             <!-- 品名・材質 -->
@@ -1282,20 +1295,28 @@
           <input class="form-input" id="matf_month" type="month">
         </div>
         <div class="form-group">
-          <label class="form-label">管理NO.</label>
+          <label class="form-label">金型NO.</label>
           <div class="mold-combo-wrap">
             <input class="mold-combo-input" id="matf_moldNo" placeholder="選択または入力" autocomplete="off"
-              oninput="openMoldCombo('matf_moldNo_dd',this.value,'matf_moldNo','matf_partNo','matf_partNoDisp')"
-              onfocus="openMoldCombo('matf_moldNo_dd',this.value,'matf_moldNo','matf_partNo','matf_partNoDisp')"
+              oninput="openMoldCombo('matf_moldNo_dd',this.value,'matf_moldNo','matf_partNoDisp','matf_partNoDisp');genModalMatNo('matf')"
+              onfocus="openMoldCombo('matf_moldNo_dd',this.value,'matf_moldNo','matf_partNoDisp','matf_partNoDisp')"
               onblur="setTimeout(()=>closeMoldCombo('matf_moldNo_dd'),200)">
             <span class="mold-combo-arrow">▼</span>
             <div class="mold-combo-dropdown" id="matf_moldNo_dd"></div>
           </div>
         </div>
+        <div class="form-group">
+          <label class="form-label">工程番号 <span style="font-size:9px;color:var(--text3);">数字</span></label>
+          <input class="form-input" id="matf_processNo" placeholder="例: 1" maxlength="2"
+            style="font-family:var(--mono);font-weight:600;"
+            oninput="genModalMatNo('matf')">
+        </div>
         <div class="form-group" style="grid-column:1/-1">
-          <label class="form-label">品番 <span id="matf_partNoDisp" style="font-size:10px;color:var(--accent);font-family:var(--mono);margin-left:4px;"></span></label>
-          <input class="form-input" id="matf_partNo" placeholder="管理NOを選択すると自動入力" readonly
-            style="background:var(--bg3);color:var(--text2);" title="管理NOを選択すると自動入力">
+          <label class="form-label">材料管理NO.
+            <span id="matf_partNoDisp" style="font-size:10px;color:var(--accent);font-family:var(--mono);margin-left:4px;font-weight:700;"></span>
+          </label>
+          <input class="form-input" id="matf_partNo" placeholder="金型NO+工程番号で自動生成" readonly
+            style="background:var(--bg3);color:var(--text2);">
         </div>
         <div class="form-group">
           <label class="form-label">品名 (NAME)</label>
@@ -1352,20 +1373,28 @@
           <input class="form-input" id="outf_month" type="month">
         </div>
         <div class="form-group">
-          <label class="form-label">管理NO.</label>
+          <label class="form-label">金型NO.</label>
           <div class="mold-combo-wrap">
             <input class="mold-combo-input" id="outf_moldNo" placeholder="選択または入力" autocomplete="off"
-              oninput="openMoldCombo('outf_moldNo_dd',this.value,'outf_moldNo','outf_partNo','outf_partNoDisp')"
-              onfocus="openMoldCombo('outf_moldNo_dd',this.value,'outf_moldNo','outf_partNo','outf_partNoDisp')"
+              oninput="openMoldCombo('outf_moldNo_dd',this.value,'outf_moldNo','outf_partNoDisp','outf_partNoDisp');genModalMatNo('outf')"
+              onfocus="openMoldCombo('outf_moldNo_dd',this.value,'outf_moldNo','outf_partNoDisp','outf_partNoDisp')"
               onblur="setTimeout(()=>closeMoldCombo('outf_moldNo_dd'),200)">
             <span class="mold-combo-arrow">▼</span>
             <div class="mold-combo-dropdown" id="outf_moldNo_dd"></div>
           </div>
         </div>
+        <div class="form-group">
+          <label class="form-label">工程番号 <span style="font-size:9px;color:var(--text3);">数字</span></label>
+          <input class="form-input" id="outf_processNo" placeholder="例: 1" maxlength="2"
+            style="font-family:var(--mono);font-weight:600;"
+            oninput="genModalMatNo('outf')">
+        </div>
         <div class="form-group" style="grid-column:1/-1">
-          <label class="form-label">品番 <span id="outf_partNoDisp" style="font-size:10px;color:var(--accent);font-family:var(--mono);margin-left:4px;"></span></label>
-          <input class="form-input" id="outf_partNo" placeholder="管理NOを選択すると自動入力" readonly
-            style="background:var(--bg3);color:var(--text2);" title="管理NOを選択すると自動入力">
+          <label class="form-label">管理NO.
+            <span id="outf_partNoDisp" style="font-size:10px;color:var(--accent);font-family:var(--mono);margin-left:4px;font-weight:700;"></span>
+          </label>
+          <input class="form-input" id="outf_partNo" placeholder="金型NO+工程番号で自動生成" readonly
+            style="background:var(--bg3);color:var(--text2);">
         </div>
         <div class="form-group">
           <label class="form-label">仕入先</label>
@@ -1418,20 +1447,28 @@
           <input class="form-input" id="purf_month" type="month">
         </div>
         <div class="form-group">
-          <label class="form-label">管理NO.</label>
+          <label class="form-label">金型NO.</label>
           <div class="mold-combo-wrap">
             <input class="mold-combo-input" id="purf_moldNo" placeholder="選択または入力" autocomplete="off"
-              oninput="openMoldCombo('purf_moldNo_dd',this.value,'purf_moldNo','purf_partNo','purf_partNoDisp')"
-              onfocus="openMoldCombo('purf_moldNo_dd',this.value,'purf_moldNo','purf_partNo','purf_partNoDisp')"
+              oninput="openMoldCombo('purf_moldNo_dd',this.value,'purf_moldNo','purf_partNoDisp','purf_partNoDisp');genModalMatNo('purf')"
+              onfocus="openMoldCombo('purf_moldNo_dd',this.value,'purf_moldNo','purf_partNoDisp','purf_partNoDisp')"
               onblur="setTimeout(()=>closeMoldCombo('purf_moldNo_dd'),200)">
             <span class="mold-combo-arrow">▼</span>
             <div class="mold-combo-dropdown" id="purf_moldNo_dd"></div>
           </div>
         </div>
+        <div class="form-group">
+          <label class="form-label">工程番号 <span style="font-size:9px;color:var(--text3);">数字</span></label>
+          <input class="form-input" id="purf_processNo" placeholder="例: 1" maxlength="2"
+            style="font-family:var(--mono);font-weight:600;"
+            oninput="genModalMatNo('purf')">
+        </div>
         <div class="form-group" style="grid-column:1/-1">
-          <label class="form-label">品番 <span id="purf_partNoDisp" style="font-size:10px;color:var(--accent);font-family:var(--mono);margin-left:4px;"></span></label>
-          <input class="form-input" id="purf_partNo" placeholder="管理NOを選択すると自動入力" readonly
-            style="background:var(--bg3);color:var(--text2);" title="管理NOを選択すると自動入力">
+          <label class="form-label">管理NO.
+            <span id="purf_partNoDisp" style="font-size:10px;color:var(--accent);font-family:var(--mono);margin-left:4px;font-weight:700;"></span>
+          </label>
+          <input class="form-input" id="purf_partNo" placeholder="金型NO+工程番号で自動生成" readonly
+            style="background:var(--bg3);color:var(--text2);">
         </div>
         <div class="form-group" style="grid-column:1/-1">
           <label class="form-label">品名</label>
@@ -1745,14 +1782,17 @@ function refreshAll() {
 // COST HELPERS
 // ═══════════════════════════════════════════════
 function getCosts(moldNo) {
-  // 管理NOまたは品番で紐付け
-  const mold = Object.values(DB.molds||{}).find(m => m.no === moldNo);
+  // 完全一致 または 前方一致（材料管理NO が 金型NO で始まる）
+  const mold   = Object.values(DB.molds||{}).find(m => m.no === moldNo);
   const partNo = mold?.partNo || '';
-  const match = r => r.moldNo === moldNo || (partNo && r.partNo === partNo);
-  const mat = Object.values(DB.materials).filter(match).reduce((s,r) => s + (r.amount||0), 0);
-  const out = Object.values(DB.outsource).filter(match).reduce((s,r) => s + (r.total||0), 0);
-  const pur = Object.values(DB.purchase ).filter(match).reduce((s,r) => s + (r.total||0), 0);
-  const lab = Object.values(DB.labor    ).filter(r => r.moldNo === moldNo || (partNo && r.partNo === partNo)).reduce((s,r) => s + (r.amount||0), 0);
+  const match  = r =>
+    r.moldNo === moldNo ||                    // 完全一致
+    (r.moldNo||'').startsWith(moldNo) ||       // 前方一致（71-A101 → 71-A）
+    (partNo && r.partNo === partNo);           // 品番一致
+  const mat   = Object.values(DB.materials).filter(match).reduce((s,r) => s + (r.amount||0), 0);
+  const out   = Object.values(DB.outsource).filter(match).reduce((s,r) => s + (r.total||0), 0);
+  const pur   = Object.values(DB.purchase ).filter(match).reduce((s,r) => s + (r.total||0), 0);
+  const lab   = Object.values(DB.labor    ).filter(match).reduce((s,r) => s + (r.amount||0), 0);
   const total = mat + out + pur + lab;
   return { mat, out, pur, lab, total };
 }
@@ -2332,8 +2372,16 @@ async function importCSV(e) {
       } else if (isAlt) {
         // ── 別サプライヤー（お客様注番形式）──
         // ヘッダー: お客様注番,お客様管理No.1,商品(ｶﾀﾛｸﾞ)コード,商品名,数量,単価,金額,出荷日
-        partNo   = row['お客様注番'] || row['お客様注番'] || '';
-        moldNo   = row['お客様管理No.1'] || '';
+        const csvPartNo = row['お客様注番'] || '';
+        const csvProcess= row['お客様管理No.1'] || '';  // 工程名
+        partNo  = csvPartNo;
+        // 材料管理NO: 金型NOが品番マスタと一致する場合に生成
+        const csvMold = findMoldByMatNo && findMoldByMatNo(csvPartNo);
+        if (csvMold && csvProcess) {
+          moldNo = genCsvMatNo(csvMold.no, csvProcess);
+        } else {
+          moldNo = csvPartNo;  // 金型が見つからない場合は品番をそのまま使用
+        }
         const code = row['商品(ｶﾀﾛｸﾞ)コード'] || row['商品(ｶﾀﾛｸﾞ)ｺｰﾄﾞ'] || '';
         name     = row['商品名'] || '';
         if (code && name !== code) name = name ? name + ' [' + code + ']' : code;
@@ -2632,9 +2680,13 @@ function calcFinish(xF, yF, zF, explicitFinish) {
 // let quoteItems = [];
 
 function addQuoteRequestItem() {
-  const moldNo   = document.getElementById('qf_moldNo').value.trim();
-  const partNo   = document.getElementById('qf_partNo').value.trim();
-  const dwgNo    = '';  // DWG.NO廃止
+  const baseMoldNo = document.getElementById('qf_moldNo').value.trim();
+  const processNo  = document.getElementById('qf_processNo')?.value.trim() || '';
+  // 材料管理NO: 金型NO+工程番号+連番（qf_partNoに生成済み）
+  const matNo  = document.getElementById('qf_partNo').value.trim();
+  const moldNo = matNo || baseMoldNo;  // 材料管理NOがあればそれを使用
+  const partNo = matNo;
+  const dwgNo  = '';  // DWG.NO廃止
   const name     = document.getElementById('qf_name').value.trim();
   const qty      = parseInt(document.getElementById('qf_qty').value) || 1;
   const material = document.getElementById('qf_material').value.trim();
@@ -3905,14 +3957,15 @@ function linkMoldNoToPartNo(moldNo, partNoInputId, partNoDispId) {
 // モーダルを開いたとき管理NOコンボを初期化
 function initMoldComboField(moldInputId, partNoInputId, partNoDispId) {
   const moldEl = document.getElementById(moldInputId);
-  if (moldEl) {
-    moldEl.value = '';
-    moldEl.classList.remove('filled');
-  }
+  if (moldEl) { moldEl.value = ''; moldEl.classList.remove('filled'); }
   const partEl = document.getElementById(partNoInputId);
   if (partEl) partEl.value = '';
   const dispEl = document.getElementById(partNoDispId);
   if (dispEl) dispEl.textContent = '';
+  // 工程番号もリセット（プレフィックスから推定）
+  const prefix = moldInputId.replace('_moldNo','');
+  const procEl = document.getElementById(prefix + '_processNo');
+  if (procEl) procEl.value = '';
 }
 
 // ドキュメントクリックでコンボを閉じる
@@ -4463,6 +4516,102 @@ function openDebugUrl() {
   if (!gasUrl) { toast('GASプロキシURLを設定してください', 'error'); return; }
   const url = gasUrl + '?app=' + appId + '&debug=1';
   window.open(url, '_blank');
+}
+
+
+// ═══════════════════════════════════════════════
+// 材料管理NO. 自動生成
+// 形式: 金型NO + 工程番号(数字) + 連番2桁
+// 例: 71-A101, 71-A102, 71-A201
+// CSV取込: 金型NO + - + 工程名 + 連番2桁
+// 例: 71-A-TRM01, 71-A-DR02
+// ═══════════════════════════════════════════════
+
+// 次の連番を取得（同じ金型NO + 工程で最大値+1）
+function nextMatSeq(moldNo, process, dbName) {
+  // 全DB（materials, outsource, purchase, quoteItems）から検索
+  const prefix = moldNo + process;  // 例: "71-A1" or "71-A-TRM"
+  const allNos = [];
+
+  ['materials','outsource','purchase'].forEach(name => {
+    Object.values(DB[name]||{}).forEach(r => {
+      if ((r.moldNo||'').startsWith(prefix)) allNos.push(r.moldNo);
+    });
+  });
+  // quoteItems からも検索
+  (quoteItems||[]).forEach(r => {
+    if ((r.moldNo||'').startsWith(prefix)) allNos.push(r.moldNo);
+  });
+
+  // 末尾2桁の最大値を取得
+  let maxSeq = 0;
+  allNos.forEach(no => {
+    const seq = parseInt(no.slice(prefix.length));
+    if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+  });
+  return String(maxSeq + 1).padStart(2, '0');
+}
+
+// 金型NOと工程番号から材料管理NOを生成（見積依頼フォーム用）
+function genMatNo() {
+  const moldNo    = (document.getElementById('qf_moldNo')?.value || '').trim();
+  const processNo = (document.getElementById('qf_processNo')?.value || '').trim();
+  const preview   = document.getElementById('qf_matNoPreview');
+  const partNoEl  = document.getElementById('qf_partNo');
+
+  if (!moldNo || !processNo) {
+    if (preview) preview.textContent = '';
+    if (partNoEl) partNoEl.value = '';
+    return;
+  }
+
+  // 手動入力: 金型NO + 工程番号(数字) + 連番2桁
+  const seq    = nextMatSeq(moldNo, processNo);
+  const matNo  = moldNo + processNo + seq;
+  if (preview)  preview.textContent  = '→ ' + matNo;
+  if (partNoEl) partNoEl.value = matNo;
+}
+
+// モーダル用（材料費・外注費・購入品費）
+function genModalMatNo(prefix) {
+  const moldNo    = (document.getElementById(prefix + '_moldNo')?.value || '').trim();
+  const processNo = (document.getElementById(prefix + '_processNo')?.value || '').trim();
+  const dispEl    = document.getElementById(prefix + '_partNoDisp');
+  const partNoEl  = document.getElementById(prefix + '_partNo');
+
+  if (!moldNo || !processNo) {
+    if (dispEl)   dispEl.textContent = '';
+    if (partNoEl) partNoEl.value = '';
+    return;
+  }
+
+  const seq   = nextMatSeq(moldNo, processNo);
+  const matNo = moldNo + processNo + seq;
+  if (dispEl)   dispEl.textContent = '→ ' + matNo;
+  if (partNoEl) partNoEl.value = matNo;
+}
+
+// CSV取込用: 金型NO + - + 工程名 + 連番2桁
+// 例: 71-A-TRM01
+function genCsvMatNo(moldNo, processName) {
+  if (!moldNo) return '';
+  if (!processName) return moldNo;
+  // ハイフン付き工程名
+  const processKey = '-' + processName.toUpperCase();
+  const seq = nextMatSeq(moldNo, processKey);
+  return moldNo + processKey + seq;
+}
+
+// 金型NOとの前方一致紐付け（長い順で照合）
+function findMoldByMatNo(matNo) {
+  if (!matNo) return null;
+  const moldNos = Object.values(DB.molds||{})
+    .map(m => m.no)
+    .filter(Boolean)
+    .sort((a,b) => b.length - a.length);  // 長い順
+  const matched = moldNos.find(no => matNo.startsWith(no));
+  if (!matched) return null;
+  return Object.values(DB.molds).find(m => m.no === matched) || null;
 }
 
 // ── Close modal on overlay click ──
