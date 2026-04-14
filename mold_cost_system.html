@@ -3415,15 +3415,7 @@ function saveFirebaseConfig() {
   toast('Firebase設定を保存しました', 'success');
 }
 
-function saveKintoneConfig() {
-  cfg.ktDomain    = document.getElementById('cfgKtDomain').value.trim();
-  cfg.ktApp       = document.getElementById('cfgKtApp').value.trim();
-  cfg.ktToken     = document.getElementById('cfgKtToken').value.trim();
-  cfg.gasUrl      = document.getElementById('cfgGasUrl').value.trim();
-  cfg.ktMasterApp = document.getElementById('cfgKtMasterApp').value.trim() || '7';
-  localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
-  toast('kintone設定を保存しました', 'success');
-}
+// saveKintoneConfig は下部で定義
 
 function exportAllData() {
   const blob = new Blob([JSON.stringify(DB, null, 2)], {type:'application/json'});
@@ -4090,7 +4082,26 @@ function ktStatus(raw) {
 
 // ── プレビュー取込 ──
 async function fetchKintoneForPreview() {
-  const appId  = cfg.ktMoldApp || document.getElementById('cfgKtMoldApp')?.value.trim() || '61';
+  // 画面の入力値を優先（保存前でも反映）
+  const appId  = document.getElementById('cfgKtMoldApp')?.value.trim() || cfg.ktMoldApp || '61';
+  // フィールドコードも画面の最新値で上書き
+  const liveF = {
+    moldNo:   document.getElementById('cfgKtF_moldNo')?.value.trim()   || cfg.ktF?.moldNo   || '文字列__1行__6',
+    partNo:   document.getElementById('cfgKtF_partNo')?.value.trim()   || cfg.ktF?.partNo   || 'ルックアップ',
+    partName: document.getElementById('cfgKtF_partName')?.value.trim() || cfg.ktF?.partName || '文字列__1行__5',
+    client:   document.getElementById('cfgKtF_client')?.value.trim()   || cfg.ktF?.client   || '文字列__1行__8',
+    status:   document.getElementById('cfgKtF_status')?.value.trim()   || cfg.ktF?.status   || 'ラジオボタン',
+    dueDate:  document.getElementById('cfgKtF_dueDate')?.value.trim()  || cfg.ktF?.dueDate  || '客先納期',
+    process:  document.getElementById('cfgKtF_process')?.value.trim()  || cfg.ktF?.process  || '文字列__1行__9',
+    estimate: document.getElementById('cfgKtF_estimate')?.value.trim() || cfg.ktF?.estimate || '計算',
+  };
+  const liveV = {
+    inProgress: document.getElementById('cfgKtV_inProgress')?.value.trim() || cfg.ktV?.inProgress || '製作中',
+    done:       document.getElementById('cfgKtV_done')?.value.trim()       || cfg.ktV?.done       || '完成',
+    accepted:   document.getElementById('cfgKtV_accepted')?.value.trim()   || cfg.ktV?.accepted   || '検収済',
+  };
+  cfg.ktF = liveF;
+  cfg.ktV = liveV;
   const logEl  = document.getElementById('ktSyncLog');
   const setLog = (msg) => { if (logEl) logEl.textContent = msg; };
 
@@ -4150,9 +4161,9 @@ async function fetchKintoneForPreview() {
 
     // kintone★新規物件フィールドマッピング（フレキシブル検出）
     _ktPreviewRecords = records.map((rec, idx) => {
-      // フィールドコードは設定タブから変更可能
-      const F = cfg.ktF || {};
-      const V = cfg.ktV || {};
+      // フィールドコードは設定タブから変更可能（liveF/liveVは取込ボタン押下時に最新化）
+      const F = liveF || cfg.ktF || {};
+      const V = liveV || cfg.ktV || {};
       const moldNo    = ktVal(rec, F.moldNo   || '文字列__1行__6');
       const partNo    = ktVal(rec, F.partNo   || 'ルックアップ');
       const partName  = ktVal(rec, F.partName || '文字列__1行__5');
