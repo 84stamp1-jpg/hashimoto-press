@@ -1297,14 +1297,16 @@ function resolveBeaconArea(beaconId, beaconData) {
     // resolvedAreaのスキャナーデータを取得
     const areaScanner = valid.find(s => s.area === resolvedArea) || strongest;
     const meta = beaconData.meta || {};
-    // nameの検証：2文字以下の英数字のみ（"ac","pc"等）は無効
-    const rawName = meta.name || beaconData.name || '';
+    // meta.nameを最優先（Firebaseのmetaに正しい名前が入っている）
+    const metaName = meta.name || '';
+    const rawName  = metaName || beaconData.name || '';
     // 無効名の判定: 空、または3文字以下の英小文字のみ（ac, pc等）
     const isInvalidName = !rawName
       || rawName.trim() === ''
       || rawName === '...'
-      || (rawName.length <= 3 && /^[a-z]+$/.test(rawName));
-    const validName = isInvalidName ? '...' : rawName;
+      || (rawName.length <= 3 && /^[a-z0-9]+$/.test(rawName));
+    // 無効名の場合はmetaが更新されるまで待つ（'...'で表示）
+    const validName = isInvalidName ? '???' : rawName;
     return {
       name:    validName,
       type:    meta.type || beaconData.type || 'leader',
@@ -1334,8 +1336,9 @@ function updateBeacons(beacons){
       // 有効な名前の場合のみ更新（"..."や無効名で上書きしない）
       const prevName = beaconLastKnown[id] && beaconLastKnown[id].name;
       const newName  = resolved.name;
-      const isValid  = newName && newName !== '...' && !(newName.length <= 2 && /^[a-zA-Z0-9]+$/.test(newName));
-      const prevValid = prevName && prevName !== '...' && !(prevName.length <= 2 && /^[a-zA-Z0-9]+$/.test(prevName));
+      const isInvalid = (n) => !n || n === '...' || n === '???' || (n.length <= 3 && /^[a-z0-9]+$/.test(n));
+      const isValid  = !isInvalid(newName);
+      const prevValid = !isInvalid(prevName);
       // 新しい名前が有効、または既存が無効な場合のみ更新
       if (isValid || !prevValid) {
         beaconLastKnown[id] = resolved;
