@@ -1096,13 +1096,11 @@ function renderResult(part){
 }
 
 // ===== kintoneファイル表示（GASプロキシ経由） =====
-async function openDoc(docName, fileKey, partNo){
+function openDoc(docName, fileKey, partNo){
   if(!fileKey){
     alert(`【${partNo}】${docName}\nkintoneにPDFが登録されていません`);
     return;
   }
-
-  // proxyUrl（KintoneProxy専用）があればそちらを優先、なければgasUrlを使用
   const pdfGasUrl = config.proxyUrl || config.gasUrl;
   if(!pdfGasUrl){
     alert('設定画面でPDF表示用GAS URLを入力してください');
@@ -1116,41 +1114,51 @@ async function openDoc(docName, fileKey, partNo){
   loadingDiv.textContent = `${docName} を読み込み中...`;
   document.body.appendChild(loadingDiv);
 
-  try {
-    const url = pdfGasUrl
-      + '?action=file'
-      + '&fileKey=' + encodeURIComponent(fileKey)
-      + '&fileName=' + encodeURIComponent(partNo + '_' + docName + '.pdf');
+  // JSONP方式（GASのCORS制限を回避）
+  const cbName = 'pdf_cb_' + Date.now();
+  const url = pdfGasUrl
+    + '?action=file'
+    + '&fileKey=' + encodeURIComponent(fileKey)
+    + '&fileName=' + encodeURIComponent(partNo + '_' + docName + '.pdf')
+    + '&callback=' + cbName;
 
-    const res  = await fetch(url);
-    const data = await res.json();
+  const timer = setTimeout(() => {
+    cleanup();
+    alert(`【${partNo}】${docName}\n読み込みタイムアウト（30秒）\nGASを再デプロイしてください`);
+  }, 30000);
 
+  function cleanup(){
+    clearTimeout(timer);
+    delete window[cbName];
+    const s = document.getElementById('pdf_script_' + cbName);
+    if(s) s.remove();
     const ld = document.getElementById('fileLoading');
     if(ld) ld.remove();
+  }
 
-    // GASが返すフィールド名に対応（data or base64）
+  window[cbName] = function(data){
+    cleanup();
     const b64 = data.data || data.base64;
     if(data.status === 'ok' && b64){
-      const binary = atob(b64);
-      const bytes  = new Uint8Array(binary.length);
-      for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      const blob   = new Blob([bytes], {type: data.mimeType || 'application/pdf'});
-      const blobUrl = URL.createObjectURL(blob);
-      window.open(blobUrl, '_blank');
-    } else {
-      const errMsg = data.error || JSON.stringify(data);
-      // HTTP 400エラーの場合はAPIトークンの権限不足を案内
-      if(errMsg.includes('400') || errMsg.includes('CB_IL02')){
-        alert(`【${partNo}】${docName}\nファイルの取得に失敗しました\n\nkintoneのAPIトークンに「ファイルの閲覧」権限が必要です。\n\nkintone → アプリの設定 → APIトークン\n→ 「ファイルの閲覧」にチェックを追加\n→ 保存 → アプリを更新`);
-      } else {
-        alert(`【${partNo}】${docName}\nファイルの取得に失敗しました\n${errMsg}`);
+      try {
+        const binary = atob(b64);
+        const bytes  = new Uint8Array(binary.length);
+        for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const blob   = new Blob([bytes], {type:'application/pdf'});
+        window.open(URL.createObjectURL(blob), '_blank');
+      } catch(e){
+        alert(`【${partNo}】${docName}\nPDF表示エラー: ${e.message}`);
       }
+    } else {
+      alert(`【${partNo}】${docName}\nファイルの取得に失敗しました\n${data.error||''}`);
     }
-  } catch(e) {
-    const ld = document.getElementById('fileLoading');
-    if(ld) ld.remove();
-    alert(`【${partNo}】${docName}\nGAS接続エラー: ${e.message}`);
-  }
+  };
+
+  const script = document.createElement('script');
+  script.id = 'pdf_script_' + cbName;
+  script.onerror = () => { cleanup(); alert(`【${partNo}】${docName}\nGAS接続エラー`); };
+  document.head.appendChild(script);
+  script.src = url;
 }
 
 // ===== 品質チェックシート連携 =====
