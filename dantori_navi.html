@@ -1141,7 +1141,7 @@ async function openDoc(docName, fileKey, partNo){
       const errMsg = data.error || JSON.stringify(data);
       // HTTP 400エラーの場合はAPIトークンの権限不足を案内
       if(errMsg.includes('400') || errMsg.includes('CB_IL02')){
-        alert(`【${partNo}】${docName}\nファイルの取得に失敗しました\n\nkintoneのAPIトークンに「ファイルの閲覧」権限が必要です。\nkintone設定 → APIトークン → ファイル閲覧にチェック`);
+        alert(`【${partNo}】${docName}\nファイルの取得に失敗しました\n\nkintoneのAPIトークンに「ファイルの閲覧」権限が必要です。\n\nkintone → アプリの設定 → APIトークン\n→ 「ファイルの閲覧」にチェックを追加\n→ 保存 → アプリを更新`);
       } else {
         alert(`【${partNo}】${docName}\nファイルの取得に失敗しました\n${errMsg}`);
       }
@@ -1308,8 +1308,8 @@ function resolveBeaconArea(beaconId, beaconData) {
       status:  areaScanner.status || '停止中',
     };
   }
-  // 旧形式
-  return beaconData;
+  // 旧形式（scanners/metaなし）→ エリア不明なのでnullを返す
+  return null;
 }
 
 // ロスト状態を記憶（Firebaseから削除されても画面上はグレーで残す）
@@ -1343,9 +1343,10 @@ function updateBeacons(beacons){
       }
       const prevName  = beaconLastKnown[id] && beaconLastKnown[id].name;
       // 有効名で更新、既存が有効ならエリアのみ更新
-      if (!isInvalidName(resolved.name)) {
+      // area が必須（エリア不明は保存しない）
+      if (!isInvalidName(resolved.name) && resolved.area) {
         beaconLastKnown[id] = resolved;
-      } else if (!isInvalidName(prevName)) {
+      } else if (!isInvalidName(prevName) && resolved.area) {
         beaconLastKnown[id] = { ...resolved, name: prevName };
       }
     });
@@ -1366,13 +1367,13 @@ function updateBeacons(beacons){
     const hasScanners = inFirebase && inFirebase.scanners
       && Object.keys(inFirebase.scanners).length > 0;
     const resolved = inFirebase ? resolveBeaconArea(id, inFirebase) : null;
-    if (resolved && !isInvalidName(resolved.name)) {
+    if (resolved && !isInvalidName(resolved.name) && resolved.area) {
       displayData[id] = { ...resolved, isLost: false };
-    } else if (hasScanners) {
+    } else if (hasScanners && b.area && !isInvalidName(b.name)) {
       // scannersはあるがSTALE → ロスト（グレー）
       displayData[id] = { ...b, isLost: true };
     }
-    // scannersなし（metaのみ）→ 表示しない
+    // scannersなし or area不明 or 無効名 → 表示しない
   });
 
   group.querySelectorAll('.beacon-leader').forEach(el=>el.remove());
