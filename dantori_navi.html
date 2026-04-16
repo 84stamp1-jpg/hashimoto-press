@@ -1138,7 +1138,13 @@ async function openDoc(docName, fileKey, partNo){
       const blobUrl = URL.createObjectURL(blob);
       window.open(blobUrl, '_blank');
     } else {
-      alert(`【${partNo}】${docName}\nファイルの取得に失敗しました\n${data.error||''}`);
+      const errMsg = data.error || JSON.stringify(data);
+      // HTTP 400エラーの場合はAPIトークンの権限不足を案内
+      if(errMsg.includes('400') || errMsg.includes('CB_IL02')){
+        alert(`【${partNo}】${docName}\nファイルの取得に失敗しました\n\nkintoneのAPIトークンに「ファイルの閲覧」権限が必要です。\nkintone設定 → APIトークン → ファイル閲覧にチェック`);
+      } else {
+        alert(`【${partNo}】${docName}\nファイルの取得に失敗しました\n${errMsg}`);
+      }
     }
   } catch(e) {
     const ld = document.getElementById('fileLoading');
@@ -1284,13 +1290,15 @@ function resolveBeaconArea(beaconId, beaconData) {
     // meta.nameを最優先（Firebaseのmetaに正しい名前が入っている）
     const metaName = meta.name || '';
     const rawName  = metaName || beaconData.name || '';
-    // 無効名の判定: 空、または3文字以下の英小文字のみ（ac, pc等）
+    // 無効名の判定: 空、または4文字以下の英小数字のみ（ac, pc, 2.5t等は除く）
     const isInvalidName = !rawName
       || rawName.trim() === ''
       || rawName === '...'
-      || (rawName.length <= 3 && /^[a-z0-9]+$/.test(rawName));
-    // 無効名の場合はmetaが更新されるまで待つ（'...'で表示）
-    const validName = isInvalidName ? '???' : rawName;
+      || rawName === '???'
+      || (rawName.length <= 2 && /^[a-z]+$/.test(rawName));
+    // 無効名の場合は表示しない（非表示扱い）
+    const validName = isInvalidName ? null : rawName;
+    if (validName === null) return null; // 無効名はnullを返してスキップ
     return {
       name:    validName,
       type:    meta.type || beaconData.type || 'leader',
@@ -1306,6 +1314,15 @@ function resolveBeaconArea(beaconId, beaconData) {
 
 // ロスト状態を記憶（Firebaseから削除されても画面上はグレーで残す）
 const beaconLastKnown = {};  // { id: {name, area, type, ...} }
+
+// 5分ごとにbeaconLastKnownをリセット（ACが固まる問題の防止）
+setInterval(() => {
+  Object.keys(beaconLastKnown).forEach(id => {
+    // Firebaseにデータがある場合のみ残す（なければ削除）
+    // 次のfetchFirebaseLines()で再取得される
+    delete beaconLastKnown[id];
+  });
+}, 5 * 60 * 1000);
 
 function updateBeacons(beacons){
   const group = document.getElementById('beaconGroup');
