@@ -1328,40 +1328,51 @@ function updateBeacons(beacons){
   const group = document.getElementById('beaconGroup');
   if(!group) return;
 
+  const isInvalidName = (n) => !n || n === '...' || n === '???'
+    || (n.length <= 2 && /^[a-z]+$/.test(n));  // "ac","pc"等を弾く
+
   // Firebaseのデータで既知情報を更新
   if (beacons) {
     Object.entries(beacons).forEach(([id, b]) => {
       if (!b) return;
       const resolved = resolveBeaconArea(id, b);
-      if (!resolved) return;
-      // 有効な名前の場合のみ更新（"..."や無効名で上書きしない）
-      const prevName = beaconLastKnown[id] && beaconLastKnown[id].name;
-      const newName  = resolved.name;
-      const isInvalid = (n) => !n || n === '...' || n === '???' || (n.length <= 3 && /^[a-z0-9]+$/.test(n));
-      const isValid  = !isInvalid(newName);
-      const prevValid = !isInvalid(prevName);
-      // 新しい名前が有効、または既存が無効な場合のみ更新
-      if (isValid || !prevValid) {
+      // resolvedがnull or 名前が無効なら既存キャッシュを削除
+      if (!resolved || isInvalidName(resolved.name)) {
+        delete beaconLastKnown[id];
+        return;
+      }
+      const prevName  = beaconLastKnown[id] && beaconLastKnown[id].name;
+      // 有効名で更新、既存が有効ならエリアのみ更新
+      if (!isInvalidName(resolved.name)) {
         beaconLastKnown[id] = resolved;
-      } else if (prevValid) {
-        // 既存の有効名を保持しつつエリア等は更新
+      } else if (!isInvalidName(prevName)) {
         beaconLastKnown[id] = { ...resolved, name: prevName };
       }
     });
+    // Firebaseに存在しないIDをbeaconLastKnownから削除
+    Object.keys(beaconLastKnown).forEach(id => {
+      if (!beacons[id]) delete beaconLastKnown[id];
+    });
+  } else {
+    // beaconsがnull = 全ビーコン消去
+    Object.keys(beaconLastKnown).forEach(id => delete beaconLastKnown[id]);
   }
 
-  // 表示データ: 有効データがあれば通常、なければロスト（グレー）
+  // 表示データ: scannersがあるビーコンのみ表示（metaのみはロストにもしない）
   const displayData = {};
   Object.entries(beaconLastKnown).forEach(([id, b]) => {
-    if (!b) return;
+    if (!b || isInvalidName(b.name)) return;
     const inFirebase = beacons && beacons[id];
-    const resolved   = inFirebase ? resolveBeaconArea(id, inFirebase) : null;
-    if (resolved) {
+    const hasScanners = inFirebase && inFirebase.scanners
+      && Object.keys(inFirebase.scanners).length > 0;
+    const resolved = inFirebase ? resolveBeaconArea(id, inFirebase) : null;
+    if (resolved && !isInvalidName(resolved.name)) {
       displayData[id] = { ...resolved, isLost: false };
-    } else {
-      // Firebaseにデータがない → ロスト（グレー点滅）
+    } else if (hasScanners) {
+      // scannersはあるがSTALE → ロスト（グレー）
       displayData[id] = { ...b, isLost: true };
     }
+    // scannersなし（metaのみ）→ 表示しない
   });
 
   group.querySelectorAll('.beacon-leader').forEach(el=>el.remove());
