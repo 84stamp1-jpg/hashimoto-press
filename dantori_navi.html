@@ -1296,9 +1296,8 @@ function resolveBeaconArea(beaconId, beaconData) {
       || rawName === '...'
       || rawName === '???'
       || (rawName.length <= 2 && /^[a-z]+$/.test(rawName));
-    // 無効名の場合は表示しない（非表示扱い）
-    const validName = isInvalidName ? null : rawName;
-    if (validName === null) return null; // 無効名はnullを返してスキップ
+    // 無効名の場合は"???"として返す（スキャナーは正常なのでエリアは表示）
+    const validName = isInvalidName ? '???' : rawName;
     return {
       name:    validName,
       type:    meta.type || beaconData.type || 'leader',
@@ -1336,19 +1335,16 @@ function updateBeacons(beacons){
     Object.entries(beacons).forEach(([id, b]) => {
       if (!b) return;
       const resolved = resolveBeaconArea(id, b);
-      // resolvedがnull or 名前が無効なら既存キャッシュを削除
-      if (!resolved || isInvalidName(resolved.name)) {
-        delete beaconLastKnown[id];
-        return;
-      }
-      const prevName  = beaconLastKnown[id] && beaconLastKnown[id].name;
-      // 有効名で更新、既存が有効ならエリアのみ更新
-      // area が必須（エリア不明は保存しない）
-      if (!isInvalidName(resolved.name) && resolved.area) {
+      if (!resolved) return;
+      const prevName = beaconLastKnown[id] && beaconLastKnown[id].name;
+      if (!isInvalidName(resolved.name)) {
+        // 有効名 → そのまま保存
         beaconLastKnown[id] = resolved;
-      } else if (!isInvalidName(prevName) && resolved.area) {
+      } else if (!isInvalidName(prevName)) {
+        // 名前は無効だが既存に有効名あり → 名前を保持してエリア更新
         beaconLastKnown[id] = { ...resolved, name: prevName };
       }
+      // 両方無効名 → 保存しない（acが固まるのを防ぐ）
     });
     // Firebaseに存在しないIDをbeaconLastKnownから削除
     Object.keys(beaconLastKnown).forEach(id => {
@@ -1368,12 +1364,13 @@ function updateBeacons(beacons){
       && Object.keys(inFirebase.scanners).length > 0;
     const resolved = inFirebase ? resolveBeaconArea(id, inFirebase) : null;
     if (resolved && !isInvalidName(resolved.name) && resolved.area) {
+      // 正常表示
       displayData[id] = { ...resolved, isLost: false };
-    } else if (hasScanners && b.area && !isInvalidName(b.name)) {
-      // scannersはあるがSTALE → ロスト（グレー）
+    } else if (!isInvalidName(b.name) && b.area) {
+      // Firebaseにデータなし or STALE → ロスト（グレー）
       displayData[id] = { ...b, isLost: true };
     }
-    // scannersなし or area不明 or 無効名 → 表示しない
+    // 無効名 or area不明 → 表示しない
   });
 
   group.querySelectorAll('.beacon-leader').forEach(el=>el.remove());
