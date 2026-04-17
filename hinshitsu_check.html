@@ -2,1818 +2,608 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>品質チェックシート記録</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;background:#f0f4f8;min-height:100vh}
-.hdr{background:#1F4E79;color:#fff;padding:14px;text-align:center}
-.hdr h1{font-size:17px;font-weight:700}
-.hdr p{font-size:11px;opacity:.8;margin-top:3px}
-.tabs{display:flex;background:#163d61;position:sticky;top:0;z-index:10}
-.tab{flex:1;padding:12px 4px;text-align:center;font-size:12px;font-weight:700;color:rgba(255,255,255,.5);cursor:pointer;border-bottom:3px solid transparent}
-.tab.active{color:#fff;border-bottom:3px solid #7eb8f7}
-.screen{display:none}.screen.on{display:block}
-.cont{padding:12px;max-width:500px;margin:0 auto}
-.card{background:#fff;border-radius:12px;padding:14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
-.card-title{font-size:12px;font-weight:700;color:#1F4E79;margin-bottom:10px;padding-bottom:7px;border-bottom:1px solid #e8f0f8}
-label{display:block;font-size:12px;font-weight:700;color:#555;margin-bottom:4px}
-.fld{margin-bottom:11px}
-input[type=text],input[type=date],input[type=number],select,textarea{width:100%;padding:10px;font-size:15px;border:1.5px solid #ddd;border-radius:8px;outline:none;font-family:inherit;background:#fff;color:#222}
-input:focus,select:focus,textarea:focus{border-color:#1F4E79}
-textarea{height:55px;resize:none}
-select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23666' d='M6 8L0 0h12z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
-/* 作業選択 */
-#sakuyo-sug{border:1.5px solid #1F4E79;border-radius:8px;max-height:220px;overflow-y:auto;background:#fff;display:none;margin-top:2px;box-shadow:0 2px 8px rgba(0,0,0,.12)}
-.sk-item{padding:10px 12px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:13px}
-.sk-item:active{background:#E6F1FB}
-.sk-hinban{font-weight:700;color:#1F4E79;font-size:13px}
-.sk-detail{font-size:11px;color:#666;margin-top:2px;display:flex;gap:8px;flex-wrap:wrap}
-.sk-badge{background:#f0f4f8;padding:1px 6px;border-radius:4px;font-size:10px}
-#sakuyo-sel{background:#E6F1FB;border-radius:8px;padding:10px 12px;margin-top:6px;display:none}
-.sel-hinban{font-weight:700;color:#1F4E79;font-size:13px;margin-bottom:4px}
-.sel-detail{display:flex;gap:6px;flex-wrap:wrap}
-.sel-badge{background:#1F4E79;color:#fff;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600}
-.sel-badge.green{background:#27825a}
-.sel-badge.amber{background:#854F0B}
-/* 分納進捗 */
-.bunno-info{background:#FAEEDA;border-radius:8px;padding:10px 12px;margin-top:6px;display:none;font-size:12px}
-.bunno-title{font-weight:700;color:#854F0B;margin-bottom:6px}
-.bunno-bar-wrap{background:#fff;border-radius:4px;height:10px;overflow:hidden;margin:4px 0}
-.bunno-bar{background:#854F0B;height:100%;border-radius:4px;transition:width .3s}
-.bunno-nums{display:flex;justify-content:space-between;font-size:11px;color:#666;margin-top:2px}
-/* 数値入力 */
-.num-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.seg{display:flex;border:1.5px solid #ddd;border-radius:8px;overflow:hidden}
-.seg-btn{flex:1;padding:10px 4px;text-align:center;font-size:13px;font-weight:700;cursor:pointer;background:#fff;color:#888;border:none;transition:all .15s}
-.seg-btn.active-blue{background:#1F4E79;color:#fff}
-.seg-btn.active-green{background:#27825a;color:#fff}
-/* 写真 */
-.photo-area{border:2px dashed #bbb;border-radius:10px;padding:14px;background:#fafafa;margin-bottom:8px}
-.photo-area.has-photo{border-color:#1F4E79;background:#f0f6ff}
-.photo-add-btn{width:100%;padding:12px;background:#fff;border:1.5px dashed #1F4E79;border-radius:8px;color:#1F4E79;font-size:13px;font-weight:700;cursor:pointer;text-align:center;margin-top:6px}
-.photo-add-btn:active{background:#E6F1FB}
-.photo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:6px}
-.photo-item{position:relative;border-radius:8px;overflow:hidden;background:#eee;aspect-ratio:1}
-.photo-item img{width:100%;height:100%;object-fit:cover;cursor:pointer}
-.photo-del{position:absolute;top:3px;right:3px;width:22px;height:22px;background:rgba(226,75,74,.9);border:none;border-radius:50%;color:#fff;font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:700}
-.sz-info{font-size:11px;color:#1F4E79;margin-top:4px}
-/* ボタン */
-.btn{width:100%;padding:15px;background:#1F4E79;color:#fff;font-size:16px;font-weight:700;border:none;border-radius:10px;cursor:pointer;margin-top:4px}
-.btn:disabled{background:#aaa}
-.done-wrap{text-align:center;padding:6px 0}
-.done-ic{font-size:44px;margin-bottom:8px}
-.done-t{font-size:18px;font-weight:700;color:#1F4E79;margin-bottom:5px}
-.done-f{font-size:11px;color:#555;background:#f0f4f8;padding:7px;border-radius:8px;margin:7px 0;word-break:break-all}
-.back{width:100%;padding:11px;background:#fff;border:2px solid #1F4E79;color:#1F4E79;font-size:14px;font-weight:700;border-radius:10px;cursor:pointer;margin-top:6px}
-.back2{background:#f0f4f8;border-color:#aaa;color:#555}
-/* 一覧 */
-.date-nav{display:flex;align-items:center;gap:6px;margin-bottom:10px;background:#fff;padding:10px 12px;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
-.date-nav button{background:none;border:1px solid #ddd;border-radius:6px;padding:6px 10px;cursor:pointer;font-size:13px;color:#444}
-.date-label{flex:1;text-align:center;font-size:14px;font-weight:700;color:#1F4E79}
-.filter-row{margin-bottom:8px}
-.filter-row input{width:100%;padding:9px 12px;font-size:13px;border:1.5px solid #ddd;border-radius:8px;outline:none}
-.filter-row input:focus{border-color:#1F4E79}
-.team-hdr{font-size:12px;font-weight:700;color:#555;padding:6px 4px;margin-top:10px;margin-bottom:4px;border-bottom:1px solid #ddd}
-.rec{background:#fff;border-radius:10px;padding:12px 13px;margin-bottom:7px;box-shadow:0 1px 3px rgba(0,0,0,.08);border-left:4px solid #ddd}
-.rec.done{border-left-color:#27825a}
-.rec.pending{border-left-color:#E24B4A}
-.rec-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:3px}
-.rec-no{font-size:13px;font-weight:700;color:#1F4E79}
-.rec-time{font-size:11px;color:#888}
-.rec-name{font-size:12px;color:#333;margin-bottom:4px}
-.rec-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
-.tag{font-size:11px;padding:2px 7px;border-radius:20px;font-weight:600}
-.tag-prod{background:#E6F1FB;color:#185FA5}
-.tag-ng{background:#FCEBEB;color:#A32D2D}
-.tag-kanno{background:#EAF3DE;color:#3B6D11}
-.tag-bunno{background:#FAEEDA;color:#854F0B}
-.tag-zあり{background:#E1F5EE;color:#0F6E56}
-.tag-zなし{background:#f0f4f8;color:#666}
-.tag-sys-done{background:#EAF3DE;color:#3B6D11}
-.tag-sys-pending{background:#FCEBEB;color:#A32D2D}
-.tag-sys-alert{background:#E24B4A;color:#fff;animation:pulse 1.5s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
-.rec.kanno-pending{border-left-color:#E24B4A;background:linear-gradient(to right,#fff9f9,#fff)}
-.rec.chukan{border-left-color:#888;background:#fafafa}
-.tag-chukan{background:#f0f4f8;color:#555}
-.tag-kansei{background:#EAF3DE;color:#3B6D11}
-.tag-seizo{background:#f0f4f8;color:#444}
-.rec-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.rec-link{font-size:12px;color:#1F4E79;text-decoration:none;padding:5px 10px;border:1px solid #1F4E79;border-radius:6px;font-weight:600}
-.mark-btn{font-size:12px;padding:5px 10px;border:1px solid #27825a;border-radius:6px;background:#fff;color:#27825a;cursor:pointer;font-weight:600}
-.edit-btn{font-size:12px;padding:5px 10px;border:1px solid #888;border-radius:6px;background:#fff;color:#555;cursor:pointer;font-weight:600}
-.del-btn{font-size:12px;padding:5px 10px;border:1px solid #E24B4A;border-radius:6px;background:#fff;color:#E24B4A;cursor:pointer;font-weight:600}
-.summary{background:#fff;border-radius:10px;padding:10px 13px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
-.summary-row{display:flex;gap:8px;flex-wrap:wrap}
-.sum-item{background:#f0f4f8;border-radius:8px;padding:6px 10px;text-align:center;min-width:68px}
-.sum-label{font-size:10px;color:#666;margin-bottom:2px}
-.sum-val{font-size:15px;font-weight:700;color:#1F4E79}
-.sum-val.ng{color:#A32D2D}
-.loading{text-align:center;padding:28px;color:#888;font-size:13px}
-.empty{text-align:center;padding:28px;color:#aaa;font-size:13px}
-/* 分納累計パネル */
-.bunno-panel{background:#fff;border-radius:10px;padding:12px 14px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,.08);border-left:4px solid #854F0B}
-.bunno-panel-title{font-size:12px;font-weight:700;color:#854F0B;margin-bottom:8px}
-.bunno-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:4px 0;border-bottom:1px solid #f0f0f0}
-.bunno-row:last-child{border-bottom:none}
-.bunno-comp{color:#27825a;font-weight:700}
-/* モーダル */
-.modal-bg{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);z-index:1000;display:none;align-items:flex-start;justify-content:center;padding-top:20px;overflow-y:auto;pointer-events:none}
-.modal-bg.on{display:flex;pointer-events:auto}
-.modal{background:#fff;border-radius:16px;padding:18px;width:calc(100% - 32px);max-width:460px}
-.modal-title{font-size:15px;font-weight:700;color:#1F4E79;margin-bottom:14px}
-.modal-btn-row{display:flex;gap:8px;margin-top:14px}
-.modal-btn{flex:1;padding:12px;font-size:14px;font-weight:700;border:none;border-radius:8px;cursor:pointer}
-.modal-save{background:#1F4E79;color:#fff}
-.modal-cancel{background:#f0f4f8;color:#555}
-.modal-del{background:#E24B4A;color:#fff}
-#photo-viewer{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.9);z-index:200;display:none;align-items:center;justify-content:center;flex-direction:column}
-#photo-viewer.on{display:flex}
-#photo-viewer img{max-width:95%;max-height:80vh;border-radius:8px;object-fit:contain}
-#photo-viewer-close{color:#fff;font-size:14px;margin-top:14px;padding:8px 24px;border:2px solid #fff;border-radius:8px;cursor:pointer;background:none}
-#photo-viewer-retake{color:#1F4E79;font-size:14px;margin-top:8px;padding:8px 24px;border:2px solid #1F4E79;border-radius:8px;cursor:pointer;background:#fff;font-weight:700}
+body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans',sans-serif;background:#f0f2f5;color:#222;font-size:15px}
+header{background:#1a3a5c;color:#fff;padding:12px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:100}
+header h1{font-size:16px;font-weight:700}
+.tab-bar{display:flex;background:#fff;border-bottom:2px solid #e0e0e0;position:sticky;top:48px;z-index:99}
+.tab{flex:1;padding:10px 4px;text-align:center;font-size:13px;cursor:pointer;color:#888;border-bottom:3px solid transparent;transition:.2s}
+.tab.active{color:#1a3a5c;border-bottom-color:#1a3a5c;font-weight:700}
+.page{display:none;padding:12px}
+.page.active{display:block}
+.card{background:#fff;border-radius:10px;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+.card h3{font-size:13px;color:#666;margin-bottom:10px;font-weight:600}
+label{display:block;font-size:13px;color:#555;margin-bottom:4px;font-weight:500}
+input[type=text],input[type=date],input[type=number],textarea,select{
+  width:100%;padding:10px 12px;border:1.5px solid #d0d0d0;border-radius:8px;
+  font-size:15px;outline:none;background:#fafafa;transition:.2s}
+input:focus,textarea:focus{border-color:#1a3a5c;background:#fff}
+textarea{resize:vertical;min-height:60px}
+.form-row{margin-bottom:12px}
 
-.t-ryohin{background:#E6F1FB;color:#185FA5}
-.t-ng-cum{background:#FCEBEB;color:#A32D2D}
-.t-alert{background:#E24B4A;color:#fff}
-.rec.chukan{border-left-color:#888;background:#fafafa}
-.rec.kanno-pending{border-left-color:#E24B4A}
-.grp-detail{display:none;margin-top:6px}
-.grp-toggle{font-size:11px;color:#1F4E79;cursor:pointer;text-decoration:underline;margin:5px 0;display:block}
-.sub-rec{background:#f8f9fa;border-radius:8px;padding:7px 10px;margin-bottom:5px;font-size:12px}
-.sub-row{display:flex;justify-content:space-between}
-.lbl{font-size:10px;padding:1px 5px;border-radius:3px;font-weight:700;margin-right:4px}
-.lbl-k{background:#EAF3DE;color:#3B6D11}
-.lbl-b{background:#FAEEDA;color:#854F0B}
-.lbl-c{background:#f0f4f8;color:#555}
-.cum-bar-bg{background:#eee;border-radius:4px;height:8px;overflow:hidden;margin:4px 0}
-.cum-bar-fg{background:#854F0B;height:100%;border-radius:4px}
-.cum-nums{display:flex;justify-content:space-between;font-size:10px;color:#666}
+/* 品番検索 */
+#part-search-wrap{position:relative}
+#suggestions{position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid #1a3a5c;
+  border-top:none;border-radius:0 0 8px 8px;max-height:200px;overflow-y:auto;z-index:200;display:none}
+.sug-item{padding:10px 12px;cursor:pointer;border-bottom:1px solid #f0f0f0;display:flex;gap:8px;align-items:center}
+.sug-item:hover,.sug-item:active{background:#e8f0f8}
+.sug-no{font-weight:700;font-size:14px;color:#1a3a5c;min-width:80px}
+.sug-nm{font-size:13px;color:#555}
+.sel-box{background:#e8f4e8;border:1.5px solid #4caf50;border-radius:8px;padding:10px 12px;margin-top:6px;display:none}
+.sel-box .no{font-weight:700;font-size:15px;color:#1a3a5c}
+.sel-box .nm{font-size:13px;color:#555}
 
-.bulk-btn{width:100%;padding:12px;background:#fff;border:2px solid #854F0B;color:#854F0B;font-size:14px;font-weight:700;border-radius:10px;cursor:pointer;margin-top:8px}
-.bulk-btn:active{background:#FAEEDA}
-.alloc-card{background:#fff;border-radius:12px;padding:14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-top:3px solid #854F0B}
-.alloc-title{font-size:13px;font-weight:700;color:#854F0B;margin-bottom:10px}
-.alloc-row{background:#f8f9fa;border-radius:8px;padding:10px 12px;margin-bottom:8px}
-.alloc-row-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px}
-.alloc-seizo{font-size:12px;font-weight:700;color:#1F4E79}
-.alloc-nouki{font-size:11px;color:#E24B4A;font-weight:700}
-.alloc-meta{font-size:11px;color:#555;margin-bottom:6px}
-.alloc-inputs{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.alloc-num{width:100%;padding:8px;font-size:15px;border:1.5px solid #ddd;border-radius:6px;outline:none;text-align:center}
-.alloc-num:focus{border-color:#1F4E79}
-.alloc-sel{width:100%;padding:8px;font-size:13px;border:1.5px solid #ddd;border-radius:6px;outline:none;background:#fff;appearance:none;text-align:center}
-.alloc-total{display:flex;justify-content:space-between;padding:10px 12px;background:#f0f4f8;border-radius:8px;margin-top:4px;font-size:13px;font-weight:700}
-.alloc-total.ok{background:#EAF3DE;color:#3B6D11}
-.alloc-total.ng{background:#FCEBEB;color:#A32D2D}
-.alloc-save-btn{width:100%;padding:14px;background:#1F4E79;color:#fff;font-size:15px;font-weight:700;border:none;border-radius:10px;cursor:pointer;margin-top:8px}
-.alloc-save-btn:disabled{background:#aaa}
-.alloc-back-btn{width:100%;padding:11px;background:#fff;border:2px solid #aaa;color:#555;font-size:13px;font-weight:700;border-radius:10px;cursor:pointer;margin-top:6px}
+/* 実績区分 */
+.toggle-group{display:flex;gap:0;border:1.5px solid #d0d0d0;border-radius:8px;overflow:hidden}
+.toggle-btn{flex:1;padding:10px 4px;text-align:center;font-size:13px;cursor:pointer;
+  background:#f5f5f5;color:#666;border:none;transition:.15s;font-weight:500}
+.toggle-btn.active{background:#1a3a5c;color:#fff;font-weight:700}
+.toggle-btn.active.kanno{background:#4caf50}
+.toggle-btn.active.bunno{background:#ff9800}
+.toggle-btn.active.chuukan{background:#2196f3}
 
-.cam-modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.92);z-index:500;display:none;flex-direction:column;align-items:center;justify-content:center;padding:12px}
-.cam-modal.on{display:flex}
-.cam-title{color:#fff;font-size:14px;font-weight:700;margin-bottom:6px;text-align:center}
-.cam-counter{color:#7eb8f7;font-size:12px;margin-bottom:6px}
-.cam-switch-btn{padding:6px 12px;background:transparent;color:#7eb8f7;font-size:12px;border:1px solid #7eb8f7;border-radius:6px;cursor:pointer;margin-bottom:8px;display:none}
-.cam-video-wrap{position:relative;width:min(90vw,500px);background:#000;border-radius:10px;overflow:hidden}
-#cam-video{width:100%;display:block;max-height:55vh;object-fit:contain}
-.cam-overlay{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
-.cam-cross{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:40px;height:40px;opacity:.5}
-.cam-cross::before,.cam-cross::after{content:"";position:absolute;background:#fff}
-.cam-cross::before{width:100%;height:1px;top:50%;left:0}
-.cam-cross::after{width:1px;height:100%;left:50%;top:0}
-.cam-preview-strip{display:flex;gap:6px;margin:8px 0;min-height:56px;flex-wrap:wrap;justify-content:center}
-.cam-preview-item{position:relative}
-.cam-preview-item img{height:56px;border-radius:6px;border:2px solid #7eb8f7}
-.cam-preview-del{position:absolute;top:-4px;right:-4px;width:18px;height:18px;background:#E24B4A;border:none;border-radius:50%;color:#fff;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
-.cam-btn-row{display:flex;gap:12px;margin-top:8px;align-items:center}
-.cam-shutter{width:64px;height:64px;border-radius:50%;background:#fff;border:4px solid #7eb8f7;cursor:pointer;font-size:26px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.cam-shutter:active{background:#ddd}
-.cam-shutter:disabled{background:#888;border-color:#555;cursor:default}
-.cam-done-btn{padding:12px 20px;background:#1F4E79;color:#fff;font-size:14px;font-weight:700;border:none;border-radius:8px;cursor:pointer}
-.cam-done-btn:disabled{background:#555;cursor:default}
-.cam-cancel-btn{padding:12px 14px;background:transparent;color:#aaa;font-size:13px;border:1px solid #555;border-radius:8px;cursor:pointer}
-.cam-error{color:#E24B4A;font-size:11px;margin:4px 0;text-align:center}
+/* 材料残 */
+.bool-group{display:flex;gap:0;border:1.5px solid #d0d0d0;border-radius:8px;overflow:hidden}
+.bool-btn{flex:1;padding:10px;text-align:center;font-size:14px;cursor:pointer;
+  background:#f5f5f5;color:#666;border:none;transition:.15s;font-weight:500}
+.bool-btn.active-y{background:#4caf50;color:#fff;font-weight:700}
+.bool-btn.active-n{background:#9e9e9e;color:#fff;font-weight:700}
+
+/* 写真エリア */
+.photo-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.photo-thumb{position:relative;aspect-ratio:3/4;background:#f0f0f0;border-radius:8px;overflow:hidden;border:1.5px solid #ddd}
+.photo-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.photo-del{position:absolute;top:4px;right:4px;width:24px;height:24px;background:rgba(220,50,50,.9);
+  color:#fff;border-radius:50%;border:none;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1}
+.photo-add{aspect-ratio:3/4;background:#f8f8f8;border:2px dashed #bbb;border-radius:8px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;color:#999;font-size:12px;gap:4px}
+.photo-add span{font-size:28px}
+.photo-info{font-size:12px;color:#888;margin-bottom:8px}
+#photo-input{display:none}
+
+/* 保存ボタン */
+.btn-submit{width:100%;padding:14px;background:#1a3a5c;color:#fff;border:none;border-radius:10px;
+  font-size:16px;font-weight:700;cursor:pointer;transition:.2s;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn-submit:disabled{background:#aaa;cursor:not-allowed}
+.btn-submit:active:not(:disabled){background:#0d2540}
+
+/* 成功画面 */
+#success-screen{display:none;text-align:center;padding:40px 20px}
+.success-icon{font-size:64px;margin-bottom:16px}
+.success-msg{font-size:18px;font-weight:700;color:#4caf50;margin-bottom:8px}
+.success-sub{font-size:13px;color:#888;margin-bottom:24px}
+.btn-reset{padding:12px 32px;background:#1a3a5c;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer}
+
+/* 記録一覧 */
+.record-item{background:#fff;border-radius:10px;padding:12px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.rec-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.rec-no{font-weight:700;color:#1a3a5c;font-size:14px}
+.rec-date{font-size:12px;color:#888}
+.rec-name{font-size:13px;color:#555;margin-bottom:4px}
+.rec-tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+.tag{padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600}
+.tag-kanno{background:#e8f5e9;color:#388e3c}
+.tag-bunno{background:#fff3e0;color:#f57c00}
+.tag-chuukan{background:#e3f2fd;color:#1565c0}
+.tag-zairyo{background:#fce4ec;color:#c62828}
+.rec-photos{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.rec-photo-link{padding:3px 10px;background:#e8f0f8;color:#1a3a5c;border-radius:6px;font-size:12px;text-decoration:none;font-weight:600}
+.loading{text-align:center;padding:20px;color:#888;font-size:14px}
+.btn-refresh{padding:8px 20px;background:#1a3a5c;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;margin-bottom:12px}
+
+/* ガス設定 */
+.gas-status{font-size:12px;padding:6px 10px;border-radius:6px;margin-top:6px}
+.gas-ok{background:#e8f5e9;color:#388e3c}
+.gas-ng{background:#ffebee;color:#c62828}
 </style>
 </head>
 <body>
-<div class="hdr"><h1>品質チェックシート記録</h1><p>橋本工業株式会社</p></div>
-<div class="tabs">
-  <div class="tab active" id="tab-form" onclick="showTab('form')">📝 記録する</div>
-  <div class="tab" id="tab-list" onclick="showTab('list')">📋 日別一覧</div>
-  <div class="tab" id="tab-search" onclick="showTab('search')">🔍 製造番号</div>
+
+<header>
+  <span style="font-size:22px">📋</span>
+  <h1>品質チェックシート記録</h1>
+</header>
+
+<div class="tab-bar">
+  <div class="tab active" onclick="showTab('tab-input')">📝 入力</div>
+  <div class="tab" onclick="showTab('tab-list');loadList()">📋 記録一覧</div>
+  <div class="tab" onclick="showTab('tab-cfg')">⚙ 設定</div>
 </div>
 
-<!-- 記録フォーム -->
-<div class="screen on" id="screen-form">
-<div id="form-input">
-<div class="cont">
+<!-- ========== 入力タブ ========== -->
+<div id="tab-input" class="page active">
+<div id="form-screen">
+
+  <!-- 部品番号 -->
   <div class="card">
-    <div class="card-title">作業選択（品番で絞り込み）</div>
-    <div class="fld">
-      <label>品番・品名で検索</label>
-      <input type="text" id="sakuyo-search" placeholder="数字または品名を入力　例: 18181" autocomplete="off">
-      <div id="sakuyo-sug"></div>
-      <div id="sakuyo-sel"></div>
-      <div id="bunno-info" class="bunno-info"></div>
+    <h3>🔍 部品番号</h3>
+    <div class="form-row">
+      <div id="part-search-wrap">
+        <input type="text" id="part-search" placeholder="品番または品名で検索..." autocomplete="off" oninput="searchPart(this.value)">
+        <div id="suggestions"></div>
+      </div>
+      <div class="sel-box" id="sel-box">
+        <div class="no" id="sel-no"></div>
+        <div class="nm" id="sel-nm"></div>
+      </div>
     </div>
-    <button onclick="openBulkMode()" style="width:100%;padding:9px;background:#fff;border:1.5px solid #854F0B;color:#854F0B;font-size:12px;font-weight:700;border-radius:8px;cursor:pointer;margin-top:6px">📦 一括振り分けモード</button>
   </div>
 
+  <!-- 基本情報 -->
   <div class="card">
-    <div class="card-title">基本情報</div>
-    <div class="fld"><label>生産日</label><input type="date" id="dt"></div>
-    <div class="fld">
+    <h3>📅 基本情報</h3>
+    <div class="form-row">
+      <label>生産日</label>
+      <input type="date" id="prod-date">
+    </div>
+    <div class="form-row">
       <label>作業者</label>
-      <select id="op">
-        <option value="">-- 選択してください --</option>
-        <optgroup label="プレス">
-          <option>見原　一彦</option><option>仲田　涼真</option>
-          <option>長田　由香倫</option><option>大石　章宏</option>
-          <option>松浦　広治</option><option>吉田　光好</option>
-          <option>柴田　晃宏</option><option>横田川　延広</option>
-        </optgroup>
-        <optgroup label="組立">
-          <option>永丘　克也</option><option>近藤　満</option>
-          <option>大塚　圭汰</option><option>鈴木　里美</option><option>野口　敦子</option>
-        </optgroup>
-        <optgroup label="品管・総務">
-          <option>八木　貴志</option><option>杉山　好美</option><option>登﨑　千春</option>
-        </optgroup>
-      </select>
+      <input type="text" id="operator" placeholder="氏名">
     </div>
   </div>
 
+  <!-- 生産実績 -->
   <div class="card">
-    <div class="card-title">生産実績</div>
-    <div class="num-row">
-      <div class="fld"><label>良品数（個）</label><input type="number" id="prod" min="0" placeholder="0"></div>
-      <div class="fld"><label>不良数（個）</label><input type="number" id="ng" min="0" placeholder="0"></div>
+    <h3>📊 生産実績</h3>
+    <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div>
+        <label>生産数</label>
+        <input type="number" id="prod-count" min="0" placeholder="0">
+      </div>
+      <div>
+        <label>不良数</label>
+        <input type="number" id="ng-count" min="0" placeholder="0">
+      </div>
     </div>
-    <div class="num-row">
-      <div class="fld"><label>保留品（個）</label><input type="number" id="hokyu" min="0" placeholder="0"></div>
-      <div class="fld"><label>その他（個）</label><input type="number" id="sonota" min="0" placeholder="0"></div>
-    </div>
-    <div class="fld"><label>その他メモ</label><input type="text" id="sonota-memo" placeholder="その他の内容（任意）"></div>
-    <div class="fld">
+    <div class="form-row">
       <label>実績区分</label>
-      <div class="seg" id="seg-kanno" style="flex-direction:row">
-        <button class="seg-btn active-blue" onclick="setSeg('kanno','完納',this)" style="font-size:12px">✅ 完納（完成）</button>
-        <button class="seg-btn" onclick="setSeg('kanno','分納',this)" style="font-size:12px">📦 分納</button>
-        <button class="seg-btn" onclick="setSeg('kanno','中間実績',this)" style="font-size:12px">🔄 中間実績</button>
-      </div>
-      <div id="kanno-note" style="margin-top:6px;border-radius:6px;padding:7px 10px;font-size:11px;font-weight:700;display:block;background:#FCEBEB;color:#A32D2D">
-        ⚠️ 完納（完成）はシステム入力待ちとして表示されます
+      <div class="toggle-group">
+        <button class="toggle-btn kanno active" id="btn-kanno" onclick="setKanno('完納')">✅ 完納（完成）</button>
+        <button class="toggle-btn bunno" id="btn-bunno" onclick="setKanno('分納')">📦 分納</button>
+        <button class="toggle-btn chuukan" id="btn-chuukan" onclick="setKanno('中間実績')">🔄 中間実績</button>
       </div>
     </div>
-    <div class="fld">
+    <div class="form-row">
       <label>材料残</label>
-      <div class="seg" id="seg-zairyo">
-        <button class="seg-btn active-green" onclick="setSeg('zairyo','あり',this)">あり</button>
-        <button class="seg-btn" onclick="setSeg('zairyo','なし',this)">なし</button>
+      <div class="bool-group">
+        <button class="bool-btn active-y" id="btn-zairyo-y" onclick="setZairyo(true)">あり</button>
+        <button class="bool-btn" id="btn-zairyo-n" onclick="setZairyo(false)">なし</button>
       </div>
     </div>
-    <div class="fld"><label>メモ（任意）</label><textarea id="mo" placeholder="不良内容・特記事項など"></textarea></div>
   </div>
 
+  <!-- メモ -->
   <div class="card">
-    <div class="card-title">チェックシート写真（複数枚可・自動圧縮）</div>
-    <div class="photo-area" id="photo-area">
-      <div class="photo-grid" id="photo-grid"></div>
-      <div class="sz-info" id="sz-info"></div>
-    </div>
-    <button class="photo-add-btn" onclick="openCamOrFile()">📷 写真を追加（最大5枚）</button>
-    <input type="file" id="pi" accept="image/*" capture="environment" style="display:none">
-  </div>
-  <button class="btn" id="sb" onclick="go()">記録を保存する</button>
-</div>
-</div>
-
-<div id="form-done" style="display:none">
-<div class="cont"><div class="card">
-  <div class="done-wrap">
-    <div class="done-ic">✅</div>
-    <div class="done-t">保存完了</div>
-    <div class="done-f" id="df"></div>
-    <p style="font-size:11px;color:#888">Google Drive に自動保存されました</p>
-    <button class="back" onclick="resetForm()">続けて記録する</button>
-    <button class="back back2" onclick="showTab('list')">日別一覧を見る →</button>
-  </div>
-</div></div>
-</div>
-</div>
-
-<!-- 日別一覧 -->
-<div class="screen" id="screen-list">
-<div class="cont">
-  <div class="date-nav">
-    <button onclick="changeDay(-1)">◀</button>
-    <div class="date-label" id="date-label"></div>
-    <button onclick="changeDay(1)">▶</button>
-    <button onclick="goToday()" style="font-size:11px;padding:5px 8px">今日</button>
-  </div>
-  <div class="filter-row">
-    <input type="text" id="filter" placeholder="部品番号・品名・製造番号で絞り込み" oninput="filterRecords()">
-  </div>
-  <div id="summary-area"></div>
-  <div id="rec-list"><div class="loading">読み込み中...</div></div>
-</div>
-</div>
-
-<!-- 一括振り分け画面 -->
-<div class="screen" id="screen-bulk">
-<div class="cont">
-  <div class="alloc-card">
-    <div class="alloc-title">📦 一括振り分け</div>
-    <div class="fld">
-      <label>品番</label>
-      <div id="bulk-hinban" style="font-size:15px;font-weight:700;color:#1F4E79;padding:8px 0"></div>
-    </div>
-    <div class="fld">
-      <label>当日良品数（個）</label>
-      <input type="number" id="bulk-prod" min="0" placeholder="0" oninput="calcAlloc()">
-    </div>
-    <div class="fld">
-      <label>当日不良数（個）</label>
-      <input type="number" id="bulk-ng" min="0" placeholder="0">
-    </div>
-    <div class="num-row">
-      <div class="fld"><label>保留品（個）</label><input type="number" id="bulk-hokyu" min="0" placeholder="0"></div>
-      <div class="fld"><label>その他（個）</label><input type="number" id="bulk-sonota" min="0" placeholder="0"></div>
-    </div>
-    <div class="fld"><label>その他メモ</label><input type="text" id="bulk-sonota-memo" placeholder="その他の内容（任意）"></div>
-    <div class="fld">
-      <label>作業者</label>
-      <select id="bulk-op">
-        <option value="">-- 選択してください --</option>
-        <optgroup label="プレス">
-          <option>見原　一彦</option><option>仲田　涼真</option>
-          <option>長田　由香倫</option><option>大石　章宏</option>
-          <option>松浦　広治</option><option>吉田　光好</option>
-          <option>柴田　晃宏</option><option>横田川　延広</option>
-        </optgroup>
-        <optgroup label="組立">
-          <option>永丘　克也</option><option>近藤　満</option>
-          <option>大塚　圭汰</option><option>鈴木　里美</option><option>野口　敦子</option>
-        </optgroup>
-        <optgroup label="品管・総務">
-          <option>八木　貴志</option><option>杉山　好美</option><option>登﨑　千春</option>
-        </optgroup>
-      </select>
+    <h3>📝 メモ（任意）</h3>
+    <div class="form-row">
+      <textarea id="memo" placeholder="不良内容・特記事項など"></textarea>
     </div>
   </div>
 
-  <div class="card" id="bulk-photo-card">
-    <div class="card-title">チェックシート写真（納期最遅の製造番号に添付）</div>
-    <div class="pb" id="bulk-pb" onclick="bulkPhotoTap()">
-      <div class="cam">📷</div><p id="bulk-pt">タップして撮影（必須）</p>
-    </div>
-    <input type="file" id="bulk-pi" accept="image/*" capture="environment" style="display:none">
-    <div class="sz" id="bulk-sz"></div>
-    <img id="bulk-prev" style="display:none;width:100%;border-radius:8px;margin-top:8px;cursor:pointer" onclick="openBulkViewer()">
-  </div>
-
-  <div class="alloc-card" id="alloc-list-card" style="display:none">
-    <div class="alloc-title">振り分け確認（納期順）</div>
-    <div id="alloc-rows"></div>
-    <div class="alloc-total" id="alloc-total">合計: 0個 / 入力: 0個</div>
-    <button class="alloc-save-btn" id="alloc-save-btn" onclick="saveAlloc()" disabled>この内容で保存する</button>
-    <button class="alloc-back-btn" onclick="showTab('form')">← 戻る</button>
-  </div>
-
-  <button class="btn" onclick="showAllocList()" style="margin-top:4px">振り分けを確認する</button>
-  <button class="alloc-back-btn" onclick="showTab('form')">← 通常入力に戻る</button>
-</div>
-</div>
-
-<!-- 編集画面 -->
-<div class="screen" id="screen-edit">
-<div class="cont">
+  <!-- 写真 -->
   <div class="card">
-    <div class="card-title">✏️ 記録を修正</div>
-    <div class="fld"><label>生産日</label><input type="date" id="e-dt"></div>
-    <div class="fld"><label>作業者</label>
-      <select id="e-op">
-        <option value="">-- 選択 --</option>
-        <optgroup label="プレス"><option>見原　一彦</option><option>仲田　涼真</option><option>長田　由香倫</option><option>大石　章宏</option><option>松浦　広治</option><option>吉田　光好</option><option>柴田　晃宏</option><option>横田川　延広</option></optgroup>
-        <optgroup label="組立"><option>永丘　克也</option><option>近藤　満</option><option>大塚　圭汰</option><option>鈴木　里美</option><option>野口　敦子</option></optgroup>
-        <optgroup label="品管・総務"><option>八木　貴志</option><option>杉山　好美</option><option>登﨑　千春</option></optgroup>
-      </select>
+    <h3>📸 チェックシート写真（複数枚可・自動圧縮）</h3>
+    <div class="photo-info" id="photo-info"></div>
+    <div class="photo-grid" id="photo-grid">
+      <div class="photo-add" onclick="document.getElementById('photo-input').click()">
+        <span>📷</span>
+        <span>写真を追加<br>（2/5枚）</span>
+      </div>
     </div>
-    <div class="num-row">
-      <div class="fld"><label>良品数</label><input type="number" id="e-prod" min="0"></div>
-      <div class="fld"><label>不良数</label><input type="number" id="e-ng" min="0"></div>
-    </div>
-    <div class="num-row">
-      <div class="fld"><label>保留品</label><input type="number" id="e-hokyu" min="0"></div>
-      <div class="fld"><label>その他</label><input type="number" id="e-sonota" min="0"></div>
-    </div>
-    <div class="fld"><label>その他メモ</label><input type="text" id="e-sonota-memo"></div>
-    <div class="fld"><label>実績区分</label>
-      <select id="e-kanno">
-        <option value="完納">完納</option>
-        <option value="分納">分納</option>
-        <option value="中間実績">中間実績</option>
-      </select>
-    </div>
-    <div class="fld"><label>材料残</label>
-      <select id="e-zairyo"><option>あり</option><option>なし</option></select>
-    </div>
-    <div class="fld"><label>メモ</label><textarea id="e-mo"></textarea></div>
-    <button class="btn" id="e-save-btn" onclick="saveEdit()">保存する</button>
-    <button class="back back2" onclick="backFromEdit()" style="margin-top:8px">← 戻る</button>
+    <input type="file" id="photo-input" accept="image/*" multiple capture="environment" onchange="addPhotos(this)">
   </div>
-</div>
-</div>
 
-<!-- 製造番号検索 -->
-<div class="screen" id="screen-search" onclick="document.getElementById('seizo-sug').style.display='none'">
-<div class="cont">
-  <div class="filter-row" style="position:relative">
-    <input type="text" id="seizo-q" placeholder="製造番号・品番・品名で検索" oninput="onSeizoInput()" autocomplete="off">
-    <div id="seizo-sug" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1.5px solid #1F4E79;border-radius:8px;max-height:200px;overflow-y:auto;z-index:20;box-shadow:0 2px 8px rgba(0,0,0,.12)"></div>
-  </div>
-  <div id="seizo-result"><div class="empty">製造番号または品番を入力してください</div></div>
+  <!-- 保存 -->
+  <button class="btn-submit" id="submit-btn" onclick="submitForm()">
+    📤 記録を保存する
+  </button>
+  <div style="height:20px"></div>
+
+</div><!-- /form-screen -->
+
+<!-- 成功画面 -->
+<div id="success-screen">
+  <div class="success-icon">✅</div>
+  <div class="success-msg">保存完了しました</div>
+  <div class="success-sub" id="success-msg"></div>
+  <button class="btn-reset" onclick="resetForm()">続けて入力する</button>
 </div>
-</div>
-<!-- カメラモーダル -->
-<div class="cam-modal" id="cam-modal">
-  <div class="cam-title" id="cam-title">📷 チェックシートを撮影してください</div>
-  <div class="cam-counter" id="cam-counter">0 / 5枚</div>
-  <button class="cam-switch-btn" id="cam-switch-btn" onclick="switchCamera()">🔄 カメラを切り替え</button>
-  <div class="cam-video-wrap">
-    <video id="cam-video" autoplay playsinline muted></video>
-    <div class="cam-overlay"><div class="cam-cross"></div></div>
-  </div>
-  <div id="cam-error" class="cam-error"></div>
-  <div class="cam-preview-strip" id="cam-preview-strip"></div>
-  <div class="cam-btn-row">
-    <button class="cam-cancel-btn" onclick="closeCamModal()">✕</button>
-    <button class="cam-shutter" id="cam-shutter" onclick="camShutter()">📸</button>
-    <button class="cam-done-btn" id="cam-done-btn" onclick="camDone()" disabled>完了（0枚）</button>
+</div><!-- /tab-input -->
+
+<!-- ========== 記録一覧タブ ========== -->
+<div id="tab-list" class="page">
+  <div style="padding:12px">
+    <button class="btn-refresh" onclick="loadList()">🔄 最新を取得</button>
+    <div id="list-area"><div class="loading">読み込み中...</div></div>
   </div>
 </div>
 
-<!-- 写真ビューア -->
-<div id="photo-viewer">
-  <img id="viewer-img" src="">
-  <div style="display:flex;gap:10px;margin-top:14px">
-    <button id="photo-viewer-retake" onclick="retakePhoto()" style="display:none">📷 撮り直す</button>
-    <button id="bulk-viewer-retake" onclick="bulkRetake()" style="display:none">📷 撮り直す</button>
-    <button id="bulk-viewer-delete" onclick="deleteBulkPhoto()" style="display:none;background:#E24B4A;border-color:#E24B4A;color:#fff">🗑️ 削除</button>
-    <button id="photo-viewer-close" onclick="closeViewer()">✕ 閉じる</button>
+<!-- ========== 設定タブ ========== -->
+<div id="tab-cfg" class="page">
+  <div style="padding:12px">
+    <div class="card">
+      <h3>⚙ GAS URL 設定</h3>
+      <div class="form-row">
+        <label>GAS ウェブアプリURL</label>
+        <input type="text" id="cfg-gas-url" placeholder="https://script.google.com/macros/s/...">
+        <div class="gas-status" id="gas-status"></div>
+      </div>
+      <button onclick="saveCfg()" style="padding:10px 24px;background:#1a3a5c;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;width:100%;margin-top:8px">保存して接続</button>
+    </div>
+    <div class="card">
+      <h3>ℹ 現在の設定</h3>
+      <div id="cfg-info" style="font-size:13px;color:#555;line-height:1.8"></div>
+    </div>
   </div>
-</div>
-<input type="file" id="pi-retake" accept="image/*" capture="environment" style="display:none">
-<input type="file" id="bulk-pi-retake" accept="image/*" capture="environment" style="display:none">
-
-<!-- 編集画面はscreen-editに移行済み -->
-</div>
-
-<!-- 削除確認モーダル -->
-<div class="modal-bg" id="modal-del">
-<div class="modal">
-  <div class="modal-title" style="color:#E24B4A">🗑️ 記録を削除</div>
-  <div id="del-target" style="background:#f0f4f8;border-radius:8px;padding:10px;font-size:13px;color:#555;margin-bottom:6px"></div>
-  <p style="font-size:11px;color:#E24B4A;margin-bottom:3px">※ この操作は取り消せません</p>
-  <p style="font-size:11px;color:#888">※ Drive上の写真ファイルは別途削除が必要です</p>
-  <div class="modal-btn-row">
-    <button class="modal-btn modal-cancel" onclick="closeModal('del')">キャンセル</button>
-    <button class="modal-btn modal-del" id="modal-del-btn" onclick="execDelete()">削除する</button>
-  </div>
-</div>
 </div>
 
 <script>
-// ===== GitHub Pages用 GAS通信ラッパー =====
-var GAS_URL = 'https://script.google.com/macros/s/AKfycbw3zssfr-pWlRcgMT4fhQ40HoOUeJHz7-_yYIcA0b4hxh2BXdWAPe96D2kXPizLzsqI/exec';
-function gasCall(funcName, params, onSuccess, onFailure){
-  var url=GAS_URL+'?func='+encodeURIComponent(funcName);
-  if(params) url+='&params='+encodeURIComponent(JSON.stringify(params));
-  fetch(url).then(function(r){return r.json();}).then(function(d){
-    if(onSuccess) onSuccess(d.result);
-  }).catch(function(e){if(onFailure) onFailure(e);});
-}
-function gasPost(funcName, params, onSuccess, onFailure){
-  fetch(GAS_URL,{method:'POST',mode:'cors',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({func:funcName,params:params})
-  }).then(function(r){return r.json();}).then(function(d){
-    if(onSuccess) onSuccess(d.result);
-  }).catch(function(e){if(onFailure) onFailure(e);});
-}
+// ============================================================
+// GAS URL（直接埋め込み）- ここを更新してください
+// ============================================================
+const GAS_URL_DEFAULT = 'https://script.google.com/macros/s/AKfycbw3zssfr-pWlRcgMT4fhQ40HoOUeJHz7-_yYIcA0b4hxh2BXdWAPe96D2kXPizLzsqI/exec';
+const CFG_KEY = 'hk_hinshitsu_cfg';
 
-var SAKUYO=null, SEL_SAKUYO=null;
-var PHOTOS=[], MAX_PX=1200, QUALITY=0.7, MAX_PHOTOS=5;
-var KANNO='完納', ZAIRYO='あり';
-var viewDate=new Date();
-var ALL_RECORDS=[];
-var editRowNum=null, delRowNum=null, viewerIndex=null;
-
-var TEAM_MAP={
-  'プレス':['見原　一彦','仲田　涼真','長田　由香倫','大石　章宏','松浦　広治','吉田　光好','柴田　晃宏','横田川　延広'],
-  '組立':['永丘　克也','近藤　満','大塚　圭汰','鈴木　里美','野口　敦子'],
-  '品管・総務':['八木　貴志','杉山　好美','登﨑　千春']
-};
-function getTeam(n){for(var t in TEAM_MAP){if(TEAM_MAP[t].indexOf(n)>=0)return t;}return 'その他';}
-
-// 初期化
-(function(){
-  var t=new Date();
-  document.getElementById('dt').value=t.getFullYear()+'-'+('0'+(t.getMonth()+1)).slice(-2)+'-'+('0'+t.getDate()).slice(-2);
-  viewDate=new Date(t.getFullYear(),t.getMonth(),t.getDate());
-  updateDateLabel();
-  renderPhotoGrid();
-  // 起動時にALL_RECORDSを読み込んで完納済みを除外できるようにする
-  gasCall('getRecords',null,function(rows){ALL_RECORDS=rows;},function(){});
+let gasUrl = (() => {
+  try {
+    const s = JSON.parse(localStorage.getItem(CFG_KEY) || '{}');
+    const u = s.gasUrl || '';
+    return (u.length > 50 && u.startsWith('https://script.google.com')) ? u : GAS_URL_DEFAULT;
+  } catch(e) { return GAS_URL_DEFAULT; }
 })();
 
-// 作業予定データ読み込み
-gasCall('getSakuyoData',null,function(d){SAKUYO=d;},function(){SAKUYO=[];});
+// ============================================================
+// 状態変数
+// ============================================================
+let selectedPart = null;
+let kanno = '完納';
+let zaiyoAri = true;
+let photos = []; // {dataUrl, size}
 
-// ===== 作業選択 =====
-document.getElementById('sakuyo-search').addEventListener('input', function(){
-  var q=this.value.trim().toLowerCase();
-  var sug=document.getElementById('sakuyo-sug');
-  SEL_SAKUYO=null;
-  document.getElementById('sakuyo-sel').style.display='none';
-  document.getElementById('bunno-info').style.display='none';
-  if(!SAKUYO||q.length<2){sug.style.display='none';return;}
+// ============================================================
+// タブ切り替え
+// ============================================================
+function showTab(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  const idx = ['tab-input','tab-list','tab-cfg'].indexOf(id);
+  document.querySelectorAll('.tab')[idx].classList.add('active');
+  if (id === 'tab-cfg') loadCfg();
+}
 
-  // 完納の製造番号×工順セットを作成（入力済み未入力に関わらず除外）
-  var doneSeizoSet={};
-  ALL_RECORDS.forEach(function(rec){
-    if(rec[7]==='完納'){
-      var dk=(rec[13]||'')+'_'+(rec[14]||'');
-      doneSeizoSet[dk]=true;
+// ============================================================
+// 品番検索
+// ============================================================
+const PARTS = window.__PARTS__ || [];
+
+async function loadParts() {
+  if (PARTS.length > 0) return;
+  // GASから品番リストを取得
+  try {
+    const res = await fetch(gasUrl + '?action=parts');
+    const d = await res.json();
+    if (d.ok && Array.isArray(d.parts)) {
+      d.parts.forEach(p => PARTS.push(p));
     }
-  });
-  var r=[];
-  for(var i=0;i<SAKUYO.length;i++){
-    var s=SAKUYO[i];
-    // 完納済みは除外
-    var sk=s.seizoNo+'_'+s.junjo;
-    if(doneSeizoSet[sk]) continue;
-    if(s.hinban.toLowerCase().indexOf(q)>=0||s.hinmei.toLowerCase().indexOf(q)>=0||s.seizoNo.toLowerCase().indexOf(q)>=0){
-      r.push(s); if(r.length>=20) break;
-    }
+  } catch(e) {}
+}
+
+function searchPart(q) {
+  const sug = document.getElementById('suggestions');
+  if (!q || q.length < 1) { sug.style.display = 'none'; return; }
+  const lower = q.toLowerCase();
+  const hits = PARTS.filter(p =>
+    p[0].toLowerCase().includes(lower) || p[1].toLowerCase().includes(lower)
+  ).slice(0, 15);
+  if (!hits.length) { sug.style.display = 'none'; return; }
+  sug.innerHTML = hits.map(p =>
+    `<div class="sug-item" onclick="selectPart('${p[0].replace(/'/g,"\\'")}','${p[1].replace(/'/g,"\\'")}')">
+      <span class="sug-no">${p[0]}</span>
+      <span class="sug-nm">${p[1]}</span>
+    </div>`
+  ).join('');
+  sug.style.display = 'block';
+}
+
+function selectPart(no, nm) {
+  selectedPart = {no, nm};
+  document.getElementById('part-search').value = no;
+  document.getElementById('suggestions').style.display = 'none';
+  document.getElementById('sel-no').textContent = no;
+  document.getElementById('sel-nm').textContent = nm;
+  document.getElementById('sel-box').style.display = 'block';
+}
+
+document.addEventListener('click', e => {
+  if (!document.getElementById('part-search-wrap').contains(e.target)) {
+    document.getElementById('suggestions').style.display = 'none';
   }
-  if(!r.length){sug.style.display='none';return;}
-  sug.innerHTML='';
-  r.forEach(function(item){
-    var div=document.createElement('div'); div.className='sk-item';
-    var hb=document.createElement('div'); hb.className='sk-hinban'; hb.textContent=item.hinban;
-    var dt=document.createElement('div'); dt.className='sk-detail';
-    [
-      {l:item.hinmei},
-      {l:'製造番号: '+item.seizoNo, c:'sk-badge'},
-      {l:'工順'+item.junjo, c:'sk-badge'},
-      {l:item.kosei, c:'sk-badge'},
-      {l:'指示数: '+item.shiji+'個', c:'sk-badge'},
-      {l:item['納期']?'納期: '+item['納期']:'', c:'sk-badge'}
-    ].filter(function(b){return b.l;}).forEach(function(b){
-      var sp=document.createElement('span');
-      if(b.c) sp.className=b.c;
-      sp.textContent=b.l; dt.appendChild(sp);
-    });
-    div.appendChild(hb); div.appendChild(dt);
-    div.addEventListener('click',function(){selectSakuyo(item);});
-    sug.appendChild(div);
-  });
-  sug.style.display='block';
 });
 
-function selectSakuyo(item){
-  SEL_SAKUYO=item;
-  document.getElementById('sakuyo-search').value=item.hinban;
-  document.getElementById('sakuyo-sug').style.display='none';
-  var sel=document.getElementById('sakuyo-sel');
-  sel.innerHTML='';
-  var hb=document.createElement('div'); hb.className='sel-hinban';
-  hb.textContent=item.hinban+' 　'+item.hinmei;
-  var dt=document.createElement('div'); dt.className='sel-detail';
-  [{l:'製造番号: '+item.seizoNo},{l:'工順'+item.junjo,c:'green'},{l:item.kosei},{l:'指示数: '+item.shiji+'個',c:'amber'},{l:item['納期']?'納期: '+item['納期']:''}].filter(function(b){return b.l;}).forEach(function(b){
-    var sp=document.createElement('span'); sp.className='sel-badge'+(b.c?' '+b.c:''); sp.textContent=b.l; dt.appendChild(sp);
-  });
-  sel.appendChild(hb); sel.appendChild(dt);
-  sel.style.display='block';
-  // 分納進捗表示
-  showBunnoInfo(item);
+// ============================================================
+// 実績区分 / 材料残
+// ============================================================
+function setKanno(v) {
+  kanno = v;
+  document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+  if (v === '完納')    document.getElementById('btn-kanno').classList.add('active');
+  if (v === '分納')    document.getElementById('btn-bunno').classList.add('active');
+  if (v === '中間実績') document.getElementById('btn-chuukan').classList.add('active');
 }
 
-function showBunnoInfo(item){
-  // ALL_RECORDSから同じ製造番号の記録を集計
-  var panel=document.getElementById('bunno-info');
-  var related=ALL_RECORDS.filter(function(r){return r[13]===item.seizoNo && r[14]==item.junjo;});
-  if(!related.length){panel.style.display='none';return;}
-  var total=related.reduce(function(s,r){return s+(parseInt(r[5])||0);},0);
-  var pct=item.shiji>0?Math.min(100,Math.round(total/item.shiji*100)):0;
-  panel.innerHTML='';
-  panel.className='bunno-info';
-  var title=document.createElement('div'); title.className='bunno-title';
-  title.textContent='分納進捗　同製造番号の累計';
-  var bar=document.createElement('div'); bar.className='bunno-bar-wrap';
-  var inner=document.createElement('div'); inner.className='bunno-bar'; inner.style.width=pct+'%';
-  bar.appendChild(inner);
-  var nums=document.createElement('div'); nums.className='bunno-nums';
-  nums.innerHTML='<span>累計: '+total+'個</span><span>指示: '+item.shiji+'個 ('+pct+'%)</span>';
-  panel.appendChild(title); panel.appendChild(bar); panel.appendChild(nums);
-  if(related.length>1){
-    var rows=document.createElement('div'); rows.style.cssText='margin-top:6px;font-size:11px;color:#666';
-    related.forEach(function(r){
-      var row=document.createElement('div'); row.style.cssText='padding:2px 0;border-bottom:1px solid #f5e8d0';
-      row.textContent=r[1]+' : '+(r[5]||0)+'個　'+(r[7]||'');
-      rows.appendChild(row);
+function setZairyo(v) {
+  zaiyoAri = v;
+  document.getElementById('btn-zairyo-y').className = 'bool-btn' + (v ? ' active-y' : '');
+  document.getElementById('btn-zairyo-n').className = 'bool-btn' + (!v ? ' active-n' : '');
+}
+
+// ============================================================
+// 写真追加（縦向き修正 + 圧縮）
+// ============================================================
+function addPhotos(input) {
+  const files = Array.from(input.files);
+  const remaining = 5 - photos.length;
+  files.slice(0, remaining).forEach(file => {
+    compressWithOrientation(file, 1280, 0.82).then(dataUrl => {
+      const size = Math.round(dataUrl.length * 0.75 / 1024);
+      photos.push({dataUrl, size, origSize: Math.round(file.size / 1024)});
+      renderPhotos();
     });
-    panel.appendChild(rows);
-  }
-  panel.style.display='block';
-}
-
-// ===== 写真処理 =====
-document.getElementById('pi').addEventListener('change',function(){addPhoto(this.files[0]);this.value='';});
-document.getElementById('pi-retake').addEventListener('change',function(){
-  if(this.files[0]&&viewerIndex!==null){
-    compressImage(this.files[0],function(data,ok,ck){
-      PHOTOS[viewerIndex]={data:data,origKB:ok,compKB:ck};
-      renderPhotoGrid();
-      document.getElementById('viewer-img').src=data;
-      closeViewer();
-    });
-  }
-  this.value='';
-});
-
-function addPhoto(file){
-  if(!file) return;
-  if(PHOTOS.length>=MAX_PHOTOS){alert('写真は最大'+MAX_PHOTOS+'枚まです');return;}
-  compressImage(file,function(data,ok,ck){PHOTOS.push({data:data,origKB:ok,compKB:ck});renderPhotoGrid();});
-}
-function compressImage(file,cb){
-  var ok=Math.round(file.size/1024);
-  var reader=new FileReader();
-  reader.onload=function(e){
-    var img=new Image();
-    img.onload=function(){
-      var w=img.width,h=img.height;
-      if(w>MAX_PX||h>MAX_PX){if(w>h){h=Math.round(h*MAX_PX/w);w=MAX_PX;}else{w=Math.round(w*MAX_PX/h);h=MAX_PX;}}
-      var canvas=document.createElement('canvas');
-      canvas.width=w; canvas.height=h;
-      canvas.getContext('2d').drawImage(img,0,0,w,h);
-      var data=canvas.toDataURL('image/jpeg',QUALITY);
-      cb(data,ok,Math.round(data.length*0.75/1024));
-    };
-    img.src=e.target.result;
-  };
-  reader.readAsDataURL(file);
-}
-function renderPhotoGrid(){
-  var grid=document.getElementById('photo-grid');
-  var area=document.getElementById('photo-area');
-  grid.innerHTML='';
-  if(PHOTOS.length>0) area.classList.add('has-photo');
-  else area.classList.remove('has-photo');
-  PHOTOS.forEach(function(p,i){
-    var item=document.createElement('div'); item.className='photo-item';
-    var img=document.createElement('img'); img.src=p.data;
-    img.addEventListener('click',function(){openViewer(i);});
-    var del=document.createElement('button'); del.className='photo-del'; del.textContent='×';
-    del.addEventListener('click',function(e){e.stopPropagation();PHOTOS.splice(i,1);renderPhotoGrid();});
-    item.appendChild(img); item.appendChild(del);
-    grid.appendChild(item);
   });
-  var totalO=0,totalC=0;
-  PHOTOS.forEach(function(p){totalO+=p.origKB;totalC+=p.compKB;});
-  var si=document.getElementById('sz-info');
-  si.textContent=PHOTOS.length>0?PHOTOS.length+'枚　元: '+totalO+'KB → 圧縮後: '+totalC+'KB':'';
-  var addBtn=document.querySelector('.photo-add-btn');
-  addBtn.style.display=PHOTOS.length>=MAX_PHOTOS?'none':'block';
-  addBtn.textContent='📷 写真を追加（'+PHOTOS.length+'/'+MAX_PHOTOS+'枚）';
-}
-function openViewer(i){
-  viewerIndex=i;
-  document.getElementById('viewer-img').src=PHOTOS[i].data;
-  document.getElementById('photo-viewer-retake').style.display='inline-block';
-  document.getElementById('bulk-viewer-retake').style.display='none';
-  document.getElementById('bulk-viewer-delete').style.display='none';
-  document.getElementById('photo-viewer').className='on';
-}
-function closeViewer(){document.getElementById('photo-viewer').className='';viewerIndex=null;}
-function retakePhoto(){document.getElementById('pi-retake').click();}
-
-// ===== タブ =====
-function showTab(tab){
-  // タブボタンの切り替え（form/list/searchのみ）
-  ['form','list','search'].forEach(function(t){
-    var tabEl=document.getElementById('tab-'+t);
-    if(tabEl) tabEl.className='tab'+(t===tab?' active':'');
-  });
-  // 画面の切り替え（bulk含む全て）
-  ['form','list','search','bulk','edit'].forEach(function(t){
-    var scEl=document.getElementById('screen-'+t);
-    if(scEl) scEl.className='screen'+(t===tab?' on':'');
-  });
-  if(tab==='list') loadRecords();
-  if(tab==='search'){if(!ALL_RECORDS.length)loadRecords();else runSeizoSearch();}
+  input.value = '';
 }
 
-// ===== 日付ナビ =====
-function updateDateLabel(){
-  var today=new Date(); today.setHours(0,0,0,0);
-  var diff=Math.round((viewDate-today)/86400000);
-  var label=viewDate.getFullYear()+'/'
-    +('0'+(viewDate.getMonth()+1)).slice(-2)+'/'
-    +('0'+viewDate.getDate()).slice(-2);
-  if(diff===0) label+=' (今日)';
-  else if(diff===-1) label+=' (昨日)';
-  else if(diff===-2) label+=' (一昨日)';
-  document.getElementById('date-label').textContent=label;
-}
-function changeDay(d){viewDate=new Date(viewDate.getTime()+d*86400000);updateDateLabel();filterRecords();}
-function goToday(){var t=new Date();viewDate=new Date(t.getFullYear(),t.getMonth(),t.getDate());updateDateLabel();filterRecords();}
+// EXIF orientation を読んで正しい向きにしてから圧縮
+function compressWithOrientation(file, maxPx, quality) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const buf = e.target.result;
+      const orientation = getOrientation(buf);
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        let w = img.width, h = img.height;
 
-// ===== 記録一覧 =====
-function loadRecords(){
-  document.getElementById('rec-list').innerHTML='<div class="loading">読み込み中...</div>';
-  gasCall('getRecords',null,function(rows){ALL_RECORDS=rows;filterRecords();},function(){document.getElementById('rec-list').innerHTML='<div class="empty">読み込みエラー</div>';});
-}
-function getViewDateStr(){
-  return viewDate.getFullYear()+'/'
-    +('0'+(viewDate.getMonth()+1)).slice(-2)+'/'
-    +('0'+viewDate.getDate()).slice(-2);
-}
-function filterRecords(){
-  var q=document.getElementById('filter').value.trim().toLowerCase();
-  var ds=getViewDateStr();
-  var r=ALL_RECORDS.filter(function(row){
-    var rd=(row[1]||'').replace(/-/g,'/');
-    if(rd.indexOf(ds)!==0) return false;
-    if(q) return (row[2]||'').toLowerCase().indexOf(q)>=0
-                ||(row[3]||'').toLowerCase().indexOf(q)>=0
-                ||(row[13]||'').toLowerCase().indexOf(q)>=0;
-    return true;
-  });
-  renderSummary(r); renderByTeam(r);
-}
-function renderSummary(rows){
-  var sa=document.getElementById('summary-area');
-  if(!rows.length){sa.innerHTML='';return;}
-  var tp=0,tn=0,pend=0;
-  rows.forEach(function(r){
-    tp+=parseInt(r[5]||0)||0;
-    tn+=parseInt(r[6]||0)||0;
-    // 中間実績はシステム入力不要なのでカウントしない
-    if((r[12]||'未')==='未' && (r[7]||'')==='完納') pend++;
-  });
-  var div=document.createElement('div'); div.className='summary';
-  var row=document.createElement('div'); row.className='summary-row';
-  [{l:'件数',v:rows.length+'件',ng:false},
-   {l:'システム入力待ち',v:pend+'件',ng:pend>0}
-  ].forEach(function(item){
-    var s=document.createElement('div'); s.className='sum-item';
-    var l=document.createElement('div'); l.className='sum-label'; l.textContent=item.l;
-    var v=document.createElement('div'); v.className='sum-val'+(item.ng?' ng':''); v.textContent=item.v;
-    s.appendChild(l); s.appendChild(v); row.appendChild(s);
-  });
-  div.appendChild(row); sa.innerHTML=''; sa.appendChild(div);
+        // 回転後の実際のサイズを決定
+        let sw = w, sh = h;
+        if ([5,6,7,8].includes(orientation)) { sw = h; sh = w; }
 
-  // 累計はカード内に表示するため上部パネルなし
-}
+        // maxPxに収まるようスケール
+        const scale = Math.min(1, maxPx / Math.max(sw, sh));
+        canvas.width  = Math.round(sw * scale);
+        canvas.height = Math.round(sh * scale);
 
-function renderByTeam(rows){
-  var el=document.getElementById('rec-list'); el.innerHTML='';
-  if(!rows||!rows.length){el.innerHTML='<div class="empty">この日の記録はありません</div>';return;}
-  var teams=['プレス','組立','品管・総務','その他'];
-  var gmap={},gorder=[];
-  rows.forEach(function(r){
-    // 製造番号でグループ化（工順が違っても同じグループ）
-    var k=(r[13]||r[2]||'');
-    if(!gmap[k]){
-      gmap[k]={recs:[],hinban:r[2],hinmei:r[3],seizoNo:r[13],junjo:r[14],kosei:r[15],shiji:r[16],team:getTeam(r[4]||'')};
-      gorder.push(k);
-    }
-    gmap[k].recs.push(r);
-  });
-  var byTeam={};teams.forEach(function(t){byTeam[t]=[];});
-  gorder.forEach(function(k){byTeam[gmap[k].team].push(k);});
-  teams.forEach(function(team){
-    var ks=byTeam[team];if(!ks.length)return;
-    var hdr=document.createElement('div');hdr.className='team-hdr';
-    hdr.textContent=team+' ('+ks.length+'グループ)';el.appendChild(hdr);
-    ks.forEach(function(k){el.appendChild(makeGroupCard(gmap[k],false));});
-  });
-}
-
-function makeGroupCard(g,allDates){
-  var recs=g.recs;
-  // 同じ製造番号の全工順を集計
-  var allRecs=ALL_RECORDS.filter(function(r){return r[13]===g.seizoNo;});
-  var kannoRecs=allRecs.filter(function(r){return r[7]==='完納';});
-  // 工順別に累計を計算
-  var junjoTotals={};
-  allRecs.forEach(function(r){
-    var j=r[14]||'?';
-    if(!junjoTotals[j]) junjoTotals[j]={ryohin:0,chukan:0,ng:0,hokyu:0,sonota:0,shiji:0};
-    if(r[7]!=='中間実績') junjoTotals[j].ryohin+=parseInt(r[5]||0)||0;
-    else junjoTotals[j].chukan+=parseInt(r[5]||0)||0;
-    junjoTotals[j].ng+=parseInt(r[6]||0)||0;
-    junjoTotals[j].hokyu+=parseInt(r[17]||0)||0;
-    junjoTotals[j].sonota+=parseInt(r[18]||0)||0;
-  });
-  // SAKUYO から工順別指示数を取得
-  if(SAKUYO) SAKUYO.forEach(function(s){
-    if(s.seizoNo===g.seizoNo&&junjoTotals[s.junjo]){
-      junjoTotals[s.junjo].shiji=parseInt(s.shiji)||0;
-    }
-  });
-  // 全工順の合計
-  var ryohinTotal=Object.values(junjoTotals).reduce(function(s,v){return s+v.ryohin;},0);
-  var chukanTotal=Object.values(junjoTotals).reduce(function(s,v){return s+v.chukan;},0);
-  var ngTotal=Object.values(junjoTotals).reduce(function(s,v){return s+v.ng;},0);
-  var hokyuTotal=Object.values(junjoTotals).reduce(function(s,v){return s+v.hokyu;},0);
-  var sonotaTotal=Object.values(junjoTotals).reduce(function(s,v){return s+v.sonota;},0);
-  var ngAllTotal=ngTotal+hokyuTotal+sonotaTotal;
-  var shiji=parseInt(g.shiji||0)||0;
-  if(SAKUYO)SAKUYO.forEach(function(s){if(s.seizoNo===g.seizoNo&&s.junjo==g.junjo)shiji=s.shiji||shiji;});
-  var pct=shiji>0?Math.min(100,Math.round(ryohinTotal/shiji*100)):0;
-  var hasKanno=kannoRecs.length>0;
-  var allDone=hasKanno&&kannoRecs.every(function(r){return (r[12]||'未')==='済';});
-  var isChukan=!hasKanno&&recs.every(function(r){return r[7]==='中間実績';});
-  var div=document.createElement('div');
-  div.className='rec '+(allDone?'done':(hasKanno?'kanno-pending':(isChukan?'chukan':'pending')));
-  // ヘッダ
-  var top=document.createElement('div');top.className='rec-top';
-  var no=document.createElement('div');no.className='rec-no';no.textContent=g.hinban||'（部品番号なし）';
-  var times=recs.map(function(r){return (r[0]||'').slice(11,16);}).filter(Boolean);
-  var tm=document.createElement('div');tm.className='rec-time';
-  tm.textContent=times.length>1?times[0]+'〜'+times[times.length-1]:(times[0]||'');
-  top.appendChild(no);top.appendChild(tm);div.appendChild(top);
-  // 品名・作業者
-  var ops=[].concat.apply([],recs.map(function(r){return r[4]||'';})).filter(Boolean);
-  ops=ops.filter(function(v,i,a){return a.indexOf(v)===i;});
-  var nm=document.createElement('div');nm.className='rec-name';
-  nm.textContent=(g.hinmei||'')+'　';
-  var opsp=document.createElement('span');opsp.style.cssText='color:#666;font-size:11px';
-  opsp.textContent=ops.join('・');nm.appendChild(opsp);div.appendChild(nm);
-  // 製造番号・工順・工程・納期
-  var meta=document.createElement('div');meta.style.cssText='font-size:11px;color:#555;margin-top:3px;display:flex;gap:6px;flex-wrap:wrap';
-  if(g.seizoNo){var m1=document.createElement('span');m1.textContent='製造番号: '+g.seizoNo;meta.appendChild(m1);}
-  // 複数工順がある場合は全工順を表示
-  var junjos=[...new Set(g.recs.map(function(r){return r[14]||'';}))].filter(Boolean).sort();
-  if(junjos.length>0){var m2=document.createElement('span');m2.textContent='工順: '+junjos.join(',');meta.appendChild(m2);}
-  var kosei=[...new Set(g.recs.map(function(r){return r[15]||'';}))].filter(Boolean);
-  if(kosei.length>0){var m3=document.createElement('span');m3.textContent=kosei.join('/');meta.appendChild(m3);}
-  if(shiji){var m4=document.createElement('span');m4.textContent='指示: '+shiji+'個';meta.appendChild(m4);}
-  if(SAKUYO&&g.seizoNo){SAKUYO.forEach(function(s){if(s.seizoNo===g.seizoNo&&s.junjo==g.junjo&&s['納期']){var m5=document.createElement('span');m5.style.cssText='color:#E24B4A;font-weight:700';m5.textContent='納期: '+s['納期'];meta.appendChild(m5);}});}
-  div.appendChild(meta);
-  // 累計タグ
-  var tags=document.createElement('div');tags.className='rec-tags';tags.style.marginTop='6px';
-  var t1=document.createElement('span');t1.className='tag t-ryohin';
-  t1.textContent='良品累計: '+ryohinTotal+'個'+(chukanTotal>0?' (+中間'+chukanTotal+'個)':'');
-  tags.appendChild(t1);
-  if(ngAllTotal>0){
-    var t2=document.createElement('span');t2.className='tag t-ng-cum';
-    var ngDetail='不良累計: '+ngAllTotal+'個';
-    var parts=[];
-    if(ngTotal>0) parts.push('不良'+ngTotal);
-    if(hokyuTotal>0) parts.push('保留'+hokyuTotal);
-    if(sonotaTotal>0) parts.push('その他'+sonotaTotal);
-    if(parts.length>1) ngDetail+=' ('+parts.join('/')+')';
-    t2.textContent=ngDetail;tags.appendChild(t2);
-  }
-  // 当日の実績区分タグを表示（明細を開かなくてもわかるように）
-  var todayKubuns=recs.map(function(r){return r[7]||'';}).filter(function(v,i,a){return v&&a.indexOf(v)===i;});
-  todayKubuns.forEach(function(k){
-    var kt=document.createElement('span');
-    kt.className='tag '+(k==='完納'?'tag-kanno':(k==='分納'?'tag-bunno':'tag-chukan'));
-    kt.textContent=k;tags.appendChild(kt);
-  });
-  if(!allDone&&hasKanno){var t3=document.createElement('span');t3.className='tag t-alert';t3.style.animation='pulse 1.5s infinite';t3.textContent='⚠️ システム入力待ち';tags.appendChild(t3);}
-  div.appendChild(tags);
-  // 工順別累計パネル
-  var junjoKeys=Object.keys(junjoTotals).sort();
-  if(junjoKeys.length>1){
-    junjoKeys.forEach(function(j){
-      var jt=junjoTotals[j];
-      var jDiv=document.createElement('div');
-      jDiv.style.cssText='font-size:11px;color:#555;margin-top:4px;background:#f8f9fa;border-radius:6px;padding:5px 8px;display:flex;justify-content:space-between';
-      var jShiji=jt.shiji;
-      var jPct=jShiji>0?Math.min(100,Math.round(jt.ryohin/jShiji*100)):0;
-      jDiv.innerHTML='<span style="font-weight:700">工順'+j+'</span>'
-        +'<span>良品: '+jt.ryohin+'個'+(jShiji?' / 指示: '+jShiji+'個 ('+jPct+'%)':'')+'</span>';
-      div.appendChild(jDiv);
-    });
-  }
-  // プログレスバー
-  if(shiji>0){
-    var bw=document.createElement('div');bw.className='cum-bar-bg';
-    var bf=document.createElement('div');bf.className='cum-bar-fg';bf.style.width=pct+'%';
-    bw.appendChild(bf);div.appendChild(bw);
-    var bn=document.createElement('div');bn.className='cum-nums';
-    bn.innerHTML='<span>良品累計 '+ryohinTotal+'個</span><span>指示 '+shiji+'個 ('+pct+'%)</span>';
-    div.appendChild(bn);
-  }
-  // 他日付含む注記
-  if(!allDates&&allRecs.length>recs.length){
-    var nt=document.createElement('div');nt.style.cssText='font-size:10px;color:#888;margin-top:3px';
-    nt.textContent='※ 累計は全日付('+allRecs.length+'件)を含む';div.appendChild(nt);
-  }
-  // 折りたたみ明細
-  var toggle=document.createElement('span');toggle.className='grp-toggle';
-  toggle.textContent='▼ 明細'+recs.length+'件を表示';
-  var detail=document.createElement('div');detail.className='grp-detail';
-  toggle.addEventListener('click',function(){
-    var open=detail.style.display==='none'||detail.style.display==='';
-    detail.style.display=open?'block':'none';
-    toggle.textContent=(open?'▲ ':'▼ ')+'明細'+toggleLabel+'件（全日付）を'+(open?'非表示':'表示');
-  });
-  div.appendChild(toggle);
-  // 常に全日付の明細を表示
-  var detailRecs=allDates?recs:allRecs;
-  var toggleLabel=allDates?recs.length:allRecs.length;
-  toggle.textContent='▼ 明細'+toggleLabel+'件を表示（全日付）';
-  detailRecs.forEach(function(r){
-    var sr=document.createElement('div');sr.className='sub-rec';
-    var klass=r[7]==='完納'?'lbl-k':(r[7]==='分納'?'lbl-b':'lbl-c');
-    var sr_top=document.createElement('div');sr_top.className='sub-row';
-    var sr_l=document.createElement('span');
-    sr_l.innerHTML='<span class="lbl '+klass+'">'+(r[7]||'')+'</span>'+(r[4]||'')
-      +'&nbsp;<span style="color:#888;font-size:10px">'+r[1]+' '+(r[0]||'').slice(11,16)+'</span>';
-    var sr_r=document.createElement('span');sr_r.style.fontWeight='700';
-    var ngParts=[];
-    if(parseInt(r[6]||0)>0) ngParts.push('不良:'+r[6]);
-    if(parseInt(r[17]||0)>0) ngParts.push('保留:'+r[17]);
-    if(parseInt(r[18]||0)>0) ngParts.push('その他:'+r[18]);
-    sr_r.textContent='良品:'+(r[5]||0)+(ngParts.length>0?' '+ngParts.join('/'):'');
-    sr_top.appendChild(sr_l);sr_top.appendChild(sr_r);sr.appendChild(sr_top);
-    if(r[9]&&r[9].indexOf('http')!==0){var mo=document.createElement('div');mo.style.cssText='font-size:10px;color:#888;margin-top:2px';mo.textContent=r[9];sr.appendChild(mo);}
-    // アクション
-    var sa=document.createElement('div');sa.style.cssText='display:flex;gap:5px;margin-top:5px;flex-wrap:wrap';
-    var urls=(r[10]||'').split('|').filter(function(u){return u.indexOf('https://drive.google.com/file/d/')===0;});
-    urls.forEach(function(url,i){var a=document.createElement('a');a.className='rec-link';a.style.cssText='font-size:11px;padding:3px 8px';a.href=url;a.target='_blank';a.textContent='📄'+(urls.length>1?(i+1):'');sa.appendChild(a);});
-    var eb=document.createElement('button');eb.className='edit-btn';eb.style.cssText='font-size:11px;padding:3px 8px';eb.textContent='✏️';
-    (function(row){eb.addEventListener('click',function(e){e.stopPropagation();openEditModal(row);});})(r);sa.appendChild(eb);
-    var db=document.createElement('button');db.className='del-btn';db.style.cssText='font-size:11px;padding:3px 8px';db.textContent='🗑️';
-    (function(row){db.addEventListener('click',function(){openDelModal(row);});})(r);sa.appendChild(db);
-    sr.appendChild(sa);detail.appendChild(sr);
-  });
-  div.appendChild(detail);
-  // 入力済みボタン（完納のみ）
-  if(hasKanno&&!allDone){
-    var ga=document.createElement('div');ga.className='rec-actions';
-    var mb=document.createElement('button');mb.className='mark-btn';mb.textContent='✓ 入力済みにする';
-    var krecs=kannoRecs.filter(function(r){return (r[12]||'未')==='未';});
-    (function(kr){
-      mb.addEventListener('click',function(){
-        mb.disabled=true;mb.textContent='更新中...';
-        var done=0;
-        kr.forEach(function(r){
-          gasCall('markAsInputted',{rowNum:parseInt(r[r.length-1])},function(res){
-            done++;if(done===kr.length){if(res.ok)loadRecords();else{alert('エラー');mb.disabled=false;mb.textContent='✓ 入力済みにする';}}
-          },null);
-        });
-      });
-    })(krecs);
-    ga.appendChild(mb);div.appendChild(ga);
-  }
-  return div;
-}
-
-function onSeizoInput(){
-  var q=(document.getElementById('seizo-q').value||'').trim();
-  var sug=document.getElementById('seizo-sug');
-  if(q.length<2){sug.style.display='none';runSeizoSearch();return;}
-  // ALL_RECORDSから候補を生成
-  var seen={};var candidates=[];
-  ALL_RECORDS.forEach(function(r){
-    var ql=q.toLowerCase();
-    var match=(r[13]||'').toLowerCase().indexOf(ql)>=0
-            ||(r[2]||'').toLowerCase().indexOf(ql)>=0
-            ||(r[3]||'').toLowerCase().indexOf(ql)>=0;
-    if(match){
-      var key=r[13]||r[2]||'';
-      if(!seen[key]){
-        seen[key]=true;
-        candidates.push({seizoNo:r[13]||'',hinban:r[2]||'',hinmei:r[3]||''});
-      }
-    }
-  });
-  // SAKUYO からも候補を補完
-  if(SAKUYO){
-    SAKUYO.forEach(function(s){
-      var ql=q.toLowerCase();
-      var match=s.seizoNo.toLowerCase().indexOf(ql)>=0
-              ||s.hinban.toLowerCase().indexOf(ql)>=0
-              ||s.hinmei.toLowerCase().indexOf(ql)>=0;
-      if(match&&!seen[s.seizoNo]){
-        seen[s.seizoNo]=true;
-        candidates.push({seizoNo:s.seizoNo,hinban:s.hinban,hinmei:s.hinmei});
-      }
-    });
-  }
-  if(!candidates.length){sug.style.display='none';runSeizoSearch();return;}
-  sug.innerHTML='';
-  candidates.slice(0,15).forEach(function(c){
-    var div=document.createElement('div');
-    div.style.cssText='padding:9px 12px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:13px';
-    div.addEventListener('mouseover',function(){this.style.background='#E6F1FB';});
-    div.addEventListener('mouseout',function(){this.style.background='';});
-    var top=document.createElement('div');top.style.fontWeight='700';top.style.color='#1F4E79';
-    top.textContent=c.seizoNo||(c.hinban||'');
-    var bot=document.createElement('div');bot.style.cssText='font-size:11px;color:#666;margin-top:2px';
-    bot.textContent=c.hinban+(c.hinmei?' / '+c.hinmei:'');
-    div.appendChild(top);div.appendChild(bot);
-    div.addEventListener('click',function(){
-      document.getElementById('seizo-q').value=c.seizoNo||c.hinban;
-      sug.style.display='none';
-      runSeizoSearch();
-    });
-    sug.appendChild(div);
-  });
-  sug.style.display='block';
-  runSeizoSearch();
-}
-
-function runSeizoSearch(){
-  var q=(document.getElementById('seizo-q').value||'').trim();
-  var el=document.getElementById('seizo-result');
-  if(!q){el.innerHTML='<div class="empty">製造番号を入力してください</div>';return;}
-  if(!ALL_RECORDS.length){
-    el.innerHTML='<div class="loading">読み込み中...</div>';
-    gasCall('getRecords',null,function(rows){ALL_RECORDS=rows;runSeizoSearch();},function(){el.innerHTML='<div class="empty">読み込みエラー</div>';});
-    return;
-  }
-  var ql=q.toLowerCase();
-  var matched=ALL_RECORDS.filter(function(r){
-    return (r[13]||'').toLowerCase().indexOf(ql)>=0
-        || (r[2]||'').toLowerCase().indexOf(ql)>=0
-        || (r[3]||'').toLowerCase().indexOf(ql)>=0;
-  });
-  if(!matched.length){el.innerHTML='<div class="empty">「'+q+'」の記録が見つかりません</div>';return;}
-  el.innerHTML='';
-  var gmap={},gorder=[];
-  matched.forEach(function(r){
-    var k=(r[13]||r[2]||'');
-    if(!gmap[k]){gmap[k]={recs:[],hinban:r[2],hinmei:r[3],seizoNo:r[13],junjo:r[14],kosei:r[15],shiji:r[16],team:getTeam(r[4]||'')};gorder.push(k);}
-    gmap[k].recs.push(r);
-  });
-  var lbl=document.createElement('div');lbl.style.cssText='font-size:11px;color:#888;margin-bottom:8px';
-  lbl.textContent='検索結果: '+gorder.length+'グループ / '+matched.length+'件';el.appendChild(lbl);
-  gorder.forEach(function(k){el.appendChild(makeGroupCard(gmap[k],true));});
-}
-
-function makeRecCard(r){
-  var isDone=(r[12]||'未')==='済';
-  var isKanno=(r[7]||'')==='完納';
-  var isChukan=(r[7]||'')==='中間実績';
-  var recClass='rec '+(isDone?'done':(isKanno?'kanno-pending':(isChukan?'chukan':'pending')));
-  var div=document.createElement('div'); div.className=recClass;
-  var top=document.createElement('div'); top.className='rec-top';
-  var no=document.createElement('div'); no.className='rec-no';
-  no.textContent=(r[2]&&r[2].length>2)?r[2]:'（部品番号なし）';
-  var tm=document.createElement('div'); tm.className='rec-time'; tm.textContent=(r[0]||'').slice(11,16);
-  top.appendChild(no); top.appendChild(tm); div.appendChild(top);
-  var nm=document.createElement('div'); nm.className='rec-name';
-  nm.textContent=(r[3]||'')+'　';
-  var op=document.createElement('span'); op.style.cssText='color:#666;font-size:11px';
-  op.textContent=r[4]||''; nm.appendChild(op); div.appendChild(nm);
-
-  // 製造番号・工順・工程
-  if(r[13]||r[14]||r[15]){
-    var sz=document.createElement('div'); sz.style.cssText='font-size:11px;color:#555;margin-top:3px;display:flex;gap:6px;flex-wrap:wrap';
-    if(r[13]){var s1=document.createElement('span');s1.textContent='製造番号: '+r[13];sz.appendChild(s1);}
-    if(r[14]){var s2=document.createElement('span');s2.textContent='工順'+r[14];sz.appendChild(s2);}
-    if(r[15]){var s3=document.createElement('span');s3.textContent=r[15];sz.appendChild(s3);}
-    if(r[16]){var s4=document.createElement('span');s4.textContent='指示: '+r[16]+'個';sz.appendChild(s4);}
-    if(SAKUYO&&r[13]){SAKUYO.forEach(function(s){if(s.seizoNo===r[13]&&s.junjo==r[14]&&s['納期']){var s5=document.createElement('span');s5.style.cssText='color:#E24B4A;font-weight:700';s5.textContent='納期: '+s['納期'];sz.appendChild(s5);}});}
-    div.appendChild(sz);
-  }
-
-  var tags=document.createElement('div'); tags.className='rec-tags';
-  function addTag(txt,cls){var t=document.createElement('span');t.className='tag '+cls;t.textContent=txt;tags.appendChild(t);}
-  if(r[5]&&r[5]!='0') addTag('良品: '+r[5]+'個','tag-prod');
-  if(r[6]&&r[6]!='0') addTag('不良: '+r[6]+'個','tag-ng');
-  if(r[7]){
-    var kTag=r[7]==='完納'?'tag-kanno':(r[7]==='中間実績'?'tag-chukan':'tag-bunno');
-    addTag(r[7],kTag);
-  }
-  if(r[8]&&r[8].length<5) addTag('材料残: '+r[8],'tag-z'+r[8]);
-  if(isDone){
-    addTag('システム入力済','tag-sys-done');
-  } else if((r[7]||'')==='完納'){
-    addTag('⚠️ システム入力待ち','tag-sys-alert');
-  } else if((r[7]||'')==='中間実績'){
-    // 中間実績はシステム入力不要なのでタグなし
-  } else {
-    addTag('システム未入力','tag-sys-pending');
-  }
-  div.appendChild(tags);
-
-  if(r[9]&&r[9].length>0&&r[9].indexOf('http')!==0){
-    var mo=document.createElement('div');mo.style.cssText='font-size:11px;color:#888;margin-top:5px';mo.textContent=r[9];div.appendChild(mo);
-  }
-  var urls=(r[10]||'').split('|').filter(function(u){return u.indexOf('https://drive.google.com/file/d/')===0;});
-  var actions=document.createElement('div'); actions.className='rec-actions';
-  urls.forEach(function(url,i){
-    var a=document.createElement('a'); a.className='rec-link';
-    a.href=url; a.target='_blank'; a.textContent='📄 写真'+(urls.length>1?(i+1):'');
-    actions.appendChild(a);
-  });
-  var eb=document.createElement('button'); eb.className='edit-btn'; eb.textContent='✏️ 修正';
-  (function(row){eb.addEventListener('click',function(e){e.stopPropagation();openEditModal(row);});})(r);
-  actions.appendChild(eb);
-  var db=document.createElement('button'); db.className='del-btn'; db.textContent='🗑️';
-  (function(row,card){db.addEventListener('click',function(){openDelModal(row,card);});})(r,div);
-  actions.appendChild(db);
-  // 完納のみ「✓ 入力済み」ボタン表示（分納は不要）
-  if(!isDone && (r[7]||'')==='完納'){
-    var mb=document.createElement('button'); mb.className='mark-btn'; mb.textContent='✓ 入力済み';
-    (function(rn,card,tagsEl){
-      mb.addEventListener('click',function(){
-        mb.disabled=true; mb.textContent='更新中...';
-        gasCall('markAsInputted',{rowNum:parseInt(rn)},function(res){
-            if(res.ok){card.className='rec done';var old=tagsEl.querySelector('.tag-sys-alert');if(old){old.className='tag tag-sys-done';old.style.animation='none';old.textContent='システム入力済';}mb.parentNode.removeChild(mb);ALL_RECORDS.forEach(function(r2){if(r2[r2.length-1]===rn)r2[12]='済';});filterRecords();}
-            else{alert('エラー: '+res.err);mb.disabled=false;mb.textContent='✓ 入力済み';}
-          },function(e){alert('エラー: '+e.message);mb.disabled=false;mb.textContent='✓ 入力済み';});
-      });
-    })(r[r.length-1],div,tags);
-    actions.appendChild(mb);
-  }
-  if(actions.children.length) div.appendChild(actions);
-
-  // 完納・未入力のとき：カードのアクション下に累計実績を表示
-  if(!isDone && (r[7]||'')==='完納' && r[13] && ALL_RECORDS.length){
-    var seizoNo=r[13], junjo=r[14];
-    // 完成実績・分納のみ集計（中間実績は除外）
-    var relRecs=ALL_RECORDS.filter(function(x){return x[13]===seizoNo && x[14]==junjo && (x[7]||'')==='完納'||(x[13]===seizoNo && x[14]==junjo && (x[7]||'')==='分納');});
-    var totalProd=relRecs.reduce(function(s,x){return s+(parseInt(x[5]||0)||0);},0);
-    var shiji=0;
-    if(SAKUYO) SAKUYO.forEach(function(s){if(s.seizoNo===seizoNo&&s.junjo==junjo)shiji=s.shiji;});
-    var pct=shiji>0?Math.min(100,Math.round(totalProd/shiji*100)):0;
-    var cumWrap=document.createElement('div');
-    cumWrap.style.cssText='margin-top:8px;background:#FAEEDA;border-radius:8px;padding:8px 10px;font-size:12px';
-    var cumTitle=document.createElement('div');
-    cumTitle.style.cssText='font-weight:700;color:#854F0B;margin-bottom:4px';
-    cumTitle.textContent='この製造番号の実績累計（全日付）';
-    cumWrap.appendChild(cumTitle);
-    // 明細
-    relRecs.forEach(function(x){
-      var row=document.createElement('div');
-      row.style.cssText='display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid #f5e8d0;font-size:11px;color:#555';
-      var ngVal=parseInt(x[6]||0)||0;
-      row.innerHTML='<span>'+x[1]+' 　'+x[4]+'　'+(x[7]||'')+'</span>'
-        +'<span style="font-weight:700;color:#854F0B">'+( parseInt(x[5]||0)||0)+'個'
-        +(ngVal>0?' <span style="color:#A32D2D;font-size:10px">不良:'+ngVal+'個</span>':'')+'</span>';
-      cumWrap.appendChild(row);
-    });
-    // 不良数累計
-    var totalNg=relRecs.reduce(function(s,x){return s+(parseInt(x[6]||0)||0);},0);
-    // 合計行
-    var cumTotal=document.createElement('div');
-    cumTotal.style.cssText='display:flex;justify-content:space-between;margin-top:4px;font-weight:700;font-size:13px';
-    cumTotal.innerHTML='<span style="color:#444">良品数累計</span><span style="color:#854F0B">'+totalProd+'個'+(shiji>0?' / 指示: '+shiji+'個 ('+pct+'%)':'')+'</span>';
-    cumWrap.appendChild(cumTotal);
-    if(totalNg>0){
-      var cumNg=document.createElement('div');
-      cumNg.style.cssText='display:flex;justify-content:space-between;margin-top:3px;font-weight:700;font-size:13px';
-      cumNg.innerHTML='<span style="color:#A32D2D">不良数累計</span><span style="color:#A32D2D">'+totalNg+'個</span>';
-      cumWrap.appendChild(cumNg);
-    }
-    // プログレスバー
-    if(shiji>0){
-      var bw=document.createElement('div'); bw.className='bunno-bar-wrap'; bw.style.marginTop='6px';
-      var bi=document.createElement('div'); bi.className='bunno-bar'; bi.style.width=pct+'%';
-      bw.appendChild(bi); cumWrap.appendChild(bw);
-    }
-    div.appendChild(cumWrap);
-  }
-
-  return div;
-}
-
-// ===== モーダル =====
-var EDIT_FROM_TAB = 'list'; // 編集前のタブを記憶
-
-function openEditModal(r){
-  editRowNum=r[r.length-1];
-  document.getElementById('e-dt').value=(r[1]||'').replace(/\//g,'-').slice(0,10);
-  document.getElementById('e-op').value=r[4]||'';
-  document.getElementById('e-prod').value=r[5]||'0';
-  document.getElementById('e-ng').value=r[6]||'0';
-  document.getElementById('e-hokyu').value=r[17]||'0';
-  document.getElementById('e-sonota').value=r[18]||'0';
-  document.getElementById('e-sonota-memo').value=r[19]||'';
-  var kannoVal=r[7]||'';
-  document.getElementById('e-kanno').value=(kannoVal==='完納'||kannoVal==='分納'||kannoVal==='中間実績')?kannoVal:'完納';
-  document.getElementById('e-zairyo').value=(r[8]==='あり'||r[8]==='なし')?r[8]:'あり';
-  document.getElementById('e-mo').value=r[9]||'';
-  // 現在のタブを記憶してedit画面に移動
-  EDIT_FROM_TAB='list';
-  showTab('edit');
-  window.scrollTo(0,0);
-}
-
-function backFromEdit(){
-  editRowNum=null;
-  showTab(EDIT_FROM_TAB);
-}
-function openDelModal(r,card){
-  delRowNum=r[r.length-1];
-  document.getElementById('del-target').textContent=(r[2]||'部品番号なし')+' / '+(r[3]||'')+'\n生産日: '+(r[1]||'');
-  document.getElementById('modal-del').className='modal-bg on';
-}
-function closeModal(id){
-  var m=document.getElementById('modal-'+id);
-  m.className='modal-bg';
-  m.style.cssText='';
-  if(id==='edit') editRowNum=null;
-  if(id==='del') delRowNum=null;
-}
-function saveEdit(){
-  if(!editRowNum){backFromEdit();return;}
-  var btn=document.getElementById('e-save-btn');
-  btn.disabled=true; btn.textContent='保存中...';
-  gasPost('updateRecord',{rowNum:parseInt(editRowNum),data:{
-      date:document.getElementById('e-dt').value,
-      operator:document.getElementById('e-op').value,
-      prod:document.getElementById('e-prod').value,
-      ng:document.getElementById('e-ng').value,
-      hokyu:document.getElementById('e-hokyu').value||'0',
-      sonota:document.getElementById('e-sonota').value||'0',
-      sonotaMemo:document.getElementById('e-sonota-memo').value||'',
-      kanno:document.getElementById('e-kanno').value,
-      zairyo:document.getElementById('e-zairyo').value,
-      memo:document.getElementById('e-mo').value
-    }},
-    function(res){btn.disabled=false;btn.textContent='保存する';if(res.ok){backFromEdit();loadRecords();}else alert('エラー: '+res.err);},
-    function(e){btn.disabled=false;btn.textContent='保存する';alert('エラー: '+e.message);});
-}
-function execDelete(){
-  if(!delRowNum){closeModal('del');return;}
-  var btn=document.getElementById('modal-del-btn');
-  btn.disabled=true; btn.textContent='削除中...';
-  var rn=delRowNum;
-  gasCall('deleteRecord',{rowNum:parseInt(rn)},
-    function(res){btn.disabled=false;btn.textContent='削除する';if(res.ok){closeModal('del');loadRecords();}else alert('エラー: '+res.err);},
-    function(e){btn.disabled=false;btn.textContent='削除する';alert('エラー: '+e.message);});
-}
-
-// ===== セグメント =====
-function setSeg(key,val,btn){
-  if(key==='kanno') KANNO=val; else ZAIRYO=val;
-  var cls=key==='kanno'?'active-blue':'active-green';
-  Array.from(document.getElementById('seg-'+key).children).forEach(function(b){b.className='seg-btn';});
-  btn.className='seg-btn '+cls;
-  if(key==='kanno'){
-    var note=document.getElementById('kanno-note');
-    if(!note) return;
-    if(val==='完納'){
-      note.style.display='block';
-      note.style.background='#FCEBEB'; note.style.color='#A32D2D';
-      note.textContent='⚠️ 完納（完成）はシステム入力待ちとして表示されます';
-    } else if(val==='中間実績'){
-      note.style.display='block';
-      note.style.background='#f0f4f8'; note.style.color='#555';
-      note.textContent='🔄 中間実績は累計に含まれません。翌日の完成実績と合算されません';
-    } else {
-      note.style.display='none';
-    }
-  }
-}
-
-// ===== 送信 =====
-function go(){
-  if(!SEL_SAKUYO){alert('作業（品番）を選択してください');return;}
-  if(!document.getElementById('op').value){alert('作業者を選択してください');return;}
-  if(PHOTOS.length===0){alert('写真を1枚以上撮影してください');return;}
-  var btn=document.getElementById('sb');
-  btn.disabled=true; btn.textContent='保存中...';
-  gasPost('submitRecord',{
-      date:document.getElementById('dt').value,
-      partNo:SEL_SAKUYO.hinban, partName:SEL_SAKUYO.hinmei,
-      operator:document.getElementById('op').value,
-      prod:document.getElementById('prod').value||'0',
-      ng:document.getElementById('ng').value||'0',
-      hokyu:document.getElementById('hokyu').value||'0',
-      sonota:document.getElementById('sonota').value||'0',
-      sonotaMemo:document.getElementById('sonota-memo').value||'',
-      kanno:KANNO, zairyo:ZAIRYO,
-      memo:document.getElementById('mo').value,
-      seizoNo:SEL_SAKUYO.seizoNo,
-      junjo:SEL_SAKUYO.junjo,
-      kosei:SEL_SAKUYO.kosei,
-      shiji:SEL_SAKUYO.shiji,
-      images:PHOTOS.map(function(p){return p.data;})
-    },
-    function(res){
-      if(res.ok){
-        var msg=res.fileNames;
-        if(KANNO==='完納'&&SEL_SAKUYO){
-          var total=ALL_RECORDS.filter(function(r){return r[13]===SEL_SAKUYO.seizoNo&&r[14]==SEL_SAKUYO.junjo;}).reduce(function(s,r){return s+(parseInt(r[5]||0)||0);},0);
-          var newTotal=total+(parseInt(document.getElementById('prod').value||0)||0);
-          var shiji=SEL_SAKUYO.shiji||0;
-          msg+='\n\n✅ 完納　実績累計: '+newTotal+'個 / 指示数: '+shiji+'個';
-          if(shiji>0) msg+=' ('+Math.round(newTotal/shiji*100)+'%)';
+        // orientation に応じた transform
+        ctx.save();
+        switch(orientation) {
+          case 2: ctx.transform(-1,0,0,1,canvas.width,0); break;
+          case 3: ctx.transform(-1,0,0,-1,canvas.width,canvas.height); break;
+          case 4: ctx.transform(1,0,0,-1,0,canvas.height); break;
+          case 5: ctx.transform(0,1,1,0,0,0); break;
+          case 6: ctx.transform(0,1,-1,0,canvas.height,0); break;
+          case 7: ctx.transform(0,-1,-1,0,canvas.height,canvas.width); break;
+          case 8: ctx.transform(0,-1,1,0,0,canvas.width); break;
         }
-        document.getElementById('df').textContent=msg;
-        document.getElementById('form-input').style.display='none';
-        document.getElementById('form-done').style.display='block';
-        gasCall('getRecords',null,function(rows){ALL_RECORDS=rows;},function(){});
-      } else {alert('エラー: '+res.err);btn.disabled=false;btn.textContent='記録を保存する';}
-    },
-    function(e){alert('エラー: '+e.message);btn.disabled=false;btn.textContent='記録を保存する';});
-}
+        ctx.drawImage(img, 0, 0, w * scale, h * scale);
+        ctx.restore();
 
-// ===== 一括振り分けモード =====
-var BULK_HINBAN = null;
-var BULK_JUNJO = null;
-var BULK_SAKUYO_LIST = [];
-var ALLOC_DATA = [];
-
-function openBulkMode(){
-  // 作業選択から品番を取得
-  if(SEL_SAKUYO){
-    BULK_HINBAN = SEL_SAKUYO.hinban;
-    BULK_JUNJO = SEL_SAKUYO.junjo;
-  } else {
-    var q = prompt('品番を入力してください');
-    if(!q) return;
-    BULK_HINBAN = q.trim();
-    BULK_JUNJO = null;
-  }
-  document.getElementById('bulk-hinban').textContent = BULK_HINBAN + (BULK_JUNJO ? ' 工順'+BULK_JUNJO : '');
-  // 品番全体の進捗を表示（showAllocList実行前なので後でrenderBulkProgress()で更新）
-  document.getElementById('bulk-prod').value = '';
-  document.getElementById('bulk-ng').value = '';
-  document.getElementById('bulk-hokyu').value = '';
-  document.getElementById('bulk-sonota').value = '';
-  document.getElementById('bulk-sonota-memo').value = '';
-  document.getElementById('bulk-op').value = '';
-  BULK_PHOTO = null;
-  document.getElementById('bulk-sz').textContent = '';
-  document.getElementById('bulk-prev').style.display = 'none';
-  document.getElementById('bulk-pt').textContent = 'タップして撮影（必須）';
-  ALLOC_DATA = [];
-  document.getElementById('alloc-list-card').style.display = 'none';
-  // 既存の進捗表示をクリア
-  var existing = document.getElementById('bulk-progress');
-  if(existing) existing.parentNode.removeChild(existing);
-  showTab('bulk');
-  // 作業選択で選んだ製造番号の進捗を表示
-  renderBulkProgress();
-}
-
-function showAllocList(){
-  var prod = parseInt(document.getElementById('bulk-prod').value||0)||0;
-  if(!prod){alert('良品数を入力してください');return;}
-  if(!document.getElementById('bulk-op').value){alert('作業者を選択してください');return;}
-  if(!SAKUYO){alert('作業予定データが読み込まれていません');return;}
-
-  // 同一品番の製造番号を納期順で取得（完納済み除外）
-  var doneSeizoSet={};
-  ALL_RECORDS.forEach(function(r){
-    if(r[7]==='完納'){
-      var dk=(r[13]||'')+'_'+(r[14]||'');
-      doneSeizoSet[dk]=true;
-    }
-  });
-
-  // 品番一致・同一工順のものを抽出
-  var list = SAKUYO.filter(function(s){
-    if(s.hinban !== BULK_HINBAN) return false;
-    if(BULK_JUNJO && String(s.junjo) !== String(BULK_JUNJO)) return false;
-    var k = s.seizoNo+'_'+s.junjo;
-    return !doneSeizoSet[k];
-  });
-
-  // 納期順にソート
-  list.sort(function(a,b){
-    var da = a['納期']||'99/99';
-    var db = b['納期']||'99/99';
-    return da.localeCompare(db);
-  });
-
-  if(!list.length){
-    alert('未完納の製造番号が見つかりません');
-    return;
-  }
-
-  // 残数を計算（指示数 - 過去の完成実績・分納累計）
-  list.forEach(function(s){
-    var done = ALL_RECORDS.filter(function(r){
-      return r[13]===s.seizoNo && String(r[14])===String(s.junjo) && r[7]!=='中間実績';
-    }).reduce(function(sum,r){return sum+(parseInt(r[5]||0)||0);},0);
-    s._done = done;
-    s._remain = Math.max(0, (parseInt(s.shiji)||0) - done);
-  });
-
-  // 自動振り分け（納期順に残数を消し込む）
-  var remain = prod;
-  ALLOC_DATA = list.map(function(s){
-    var alloc = Math.min(remain, s._remain);
-    remain -= alloc;
-    // 正確な区分判定: 振分後の累計が指示数に達したら完納
-    var shijiInt = parseInt(s.shiji)||0;
-    var doneInt = parseInt(s._done)||0;
-    var allocInt = parseInt(alloc)||0;
-    var afterTotal = doneInt + allocInt;
-    var kubun;
-    if(shijiInt <= 0 || allocInt <= 0) kubun = '分納';
-    else if(afterTotal >= shijiInt) kubun = '完納';
-    else kubun = '分納';
-    console.log('区分判定', s.seizoNo, '工順'+s.junjo, 
-      '指示:'+shijiInt, '既実績:'+doneInt, '振分:'+allocInt, 
-      '累計:'+afterTotal, '→', kubun);
-    return {
-      seizoNo: s.seizoNo,
-      junjo: s.junjo,
-      kosei: s.kosei,
-      hinban: s.hinban,
-      hinmei: s.hinmei,
-      shiji: s.shiji,
-      nouki: s['納期']||'',
-      done: s._done,
-      remain: s._remain,
-      alloc: alloc,
-      kubun: kubun
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = URL.createObjectURL(file);
     };
-  }).filter(function(d){ return d.remain > 0 && d.alloc > 0; }); // 残数0・振分数0は非表示
-
-  renderAllocRows();
-  renderBulkProgress();
-  document.getElementById('alloc-list-card').style.display = 'block';
-}
-
-// 一括振り分け用写真
-var BULK_PHOTO = null;
-document.addEventListener('DOMContentLoaded', function(){
-  var pi = document.getElementById('bulk-pi');
-  if(pi) pi.addEventListener('change', function(){
-    addBulkPhoto(this.files[0]); this.value='';
-  });
-  var pir = document.getElementById('bulk-pi-retake');
-  if(pir) pir.addEventListener('change', function(){
-    addBulkPhoto(this.files[0]); this.value=''; closeViewer();
-  });
-});
-function bulkPhotoTap(){
-  if(BULK_PHOTO) openBulkViewer();
-  else openCamModalBulk();
-}
-
-function openBulkViewer(){
-  document.getElementById('viewer-img').src = BULK_PHOTO;
-  document.getElementById('photo-viewer-retake').style.display='none';
-  document.getElementById('bulk-viewer-retake').style.display='inline-block';
-  document.getElementById('bulk-viewer-delete').style.display='inline-block';
-  document.getElementById('photo-viewer').className='on';
-}
-
-function bulkRetake(){
-  document.getElementById('bulk-pi-retake').click();
-}
-
-function deleteBulkPhoto(){
-  BULK_PHOTO = null;
-  document.getElementById('bulk-sz').textContent='';
-  document.getElementById('bulk-prev').style.display='none';
-  document.getElementById('bulk-prev').src='';
-  document.getElementById('bulk-pb').classList.remove('ok');
-  document.getElementById('bulk-pt').textContent='タップして撮影（必須）';
-  closeViewer();
-}
-
-function addBulkPhoto(file){
-  if(!file) return;
-  compressImage(file, function(data, ok, ck){
-    BULK_PHOTO = data;
-    document.getElementById('bulk-sz').textContent = '元: '+ok+'KB → 圧縮後: '+ck+'KB';
-    document.getElementById('bulk-prev').src = data;
-    document.getElementById('bulk-prev').style.display = 'block';
-    document.getElementById('bulk-pb').classList.add('ok');
-    document.getElementById('bulk-pt').textContent = '写真を変更する場合はタップ';
+    reader.readAsArrayBuffer(file);
   });
 }
 
-// ===== Webカメラ機能 =====
-var CAM_STREAM = null;
-var CAM_PHOTOS_TMP = [];
-var CAM_DEVICES = [];
-var CAM_DEVICE_IDX = 0;
-var CAM_TARGET = 'form';
-
-function isMobile(){
-  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-}
-function openCamOrFile(){
-  if(isMobile()){ document.getElementById('pi').click(); }
-  else { CAM_TARGET='form'; openCamModal(); }
-}
-function openCamModalBulk(){
-  if(isMobile()){ document.getElementById('bulk-pi').click(); }
-  else { CAM_TARGET='bulk'; openCamModal(); }
-}
-async function openCamModal(){
-  CAM_PHOTOS_TMP=[];
-  document.getElementById('cam-preview-strip').innerHTML='';
-  document.getElementById('cam-error').textContent='';
-  document.getElementById('cam-shutter').disabled=false;
-  updateCamCounter();
-  document.getElementById('cam-modal').className='cam-modal on';
-  await startCamera();
-}
-async function startCamera(){
-  try{
-    var devices=await navigator.mediaDevices.enumerateDevices();
-    CAM_DEVICES=devices.filter(function(d){return d.kind==='videoinput';});
-    if(CAM_DEVICE_IDX>=CAM_DEVICES.length) CAM_DEVICE_IDX=0;
-    var constraints={video:CAM_DEVICES.length>0
-      ?{deviceId:{exact:CAM_DEVICES[CAM_DEVICE_IDX].deviceId},width:{ideal:1280},height:{ideal:720}}
-      :{width:{ideal:1280},height:{ideal:720}}};
-    if(CAM_STREAM) CAM_STREAM.getTracks().forEach(function(t){t.stop();});
-    CAM_STREAM=await navigator.mediaDevices.getUserMedia(constraints);
-    document.getElementById('cam-video').srcObject=CAM_STREAM;
-    document.getElementById('cam-error').textContent='';
-    document.getElementById('cam-switch-btn').style.display=CAM_DEVICES.length>1?'block':'none';
-  }catch(e){
-    document.getElementById('cam-error').textContent='カメラを起動できませんでした。接続とブラウザの許可設定を確認してください。';
-    document.getElementById('cam-switch-btn').style.display='none';
-  }
-}
-async function switchCamera(){
-  CAM_DEVICE_IDX=(CAM_DEVICE_IDX+1)%Math.max(1,CAM_DEVICES.length);
-  await startCamera();
-}
-function camShutter(){
-  var video=document.getElementById('cam-video');
-  if(!video.srcObject) return;
-  var canvas=document.createElement('canvas');
-  canvas.width=video.videoWidth||1280;
-  canvas.height=video.videoHeight||720;
-  canvas.getContext('2d').drawImage(video,0,0);
-  var dataUrl=canvas.toDataURL('image/jpeg',0.9);
-  var img2=new Image();
-  img2.onload=function(){
-    var w=img2.width,h=img2.height,maxPx=1200;
-    if(w>maxPx||h>maxPx){if(w>h){h=Math.round(h*maxPx/w);w=maxPx;}else{w=Math.round(w*maxPx/h);h=maxPx;}}
-    var c2=document.createElement('canvas');c2.width=w;c2.height=h;
-    c2.getContext('2d').drawImage(img2,0,0,w,h);
-    var compressed=c2.toDataURL('image/jpeg',0.7);
-    var origKB=Math.round(dataUrl.length*0.75/1024);
-    var compKB=Math.round(compressed.length*0.75/1024);
-    CAM_PHOTOS_TMP.push({data:compressed,origKB:origKB,compKB:compKB});
-    updateCamCounter();
-    var strip=document.getElementById('cam-preview-strip');
-    var item=document.createElement('div'); item.className='cam-preview-item';
-    var img3=document.createElement('img'); img3.src=compressed;
-    var del=document.createElement('button'); del.className='cam-preview-del'; del.textContent='×';
-    var idx=CAM_PHOTOS_TMP.length-1;
-    del.addEventListener('click',function(){CAM_PHOTOS_TMP.splice(idx,1);strip.removeChild(item);updateCamCounter();document.getElementById('cam-shutter').disabled=false;});
-    item.appendChild(img3); item.appendChild(del); strip.appendChild(item);
-    if(CAM_PHOTOS_TMP.length>=5) document.getElementById('cam-shutter').disabled=true;
-  };
-  img2.src=dataUrl;
-}
-function updateCamCounter(){
-  var n=CAM_PHOTOS_TMP.length;
-  document.getElementById('cam-counter').textContent=n+' / 5枚撮影済み';
-  var btn=document.getElementById('cam-done-btn');
-  btn.disabled=n===0;
-  btn.textContent='完了（'+n+'枚）';
-}
-function camDone(){
-  if(CAM_TARGET==='bulk'){
-    if(CAM_PHOTOS_TMP.length>0){
-      var p=CAM_PHOTOS_TMP[0];
-      BULK_PHOTO=p.data;
-      document.getElementById('bulk-sz').textContent='圧縮後: '+p.compKB+'KB';
-      document.getElementById('bulk-prev').src=p.data;
-      document.getElementById('bulk-prev').style.display='block';
-      document.getElementById('bulk-pt').textContent='写真を変更する場合はタップ';
+// ArrayBufferからEXIF orientationを取得
+function getOrientation(buf) {
+  const view = new DataView(buf);
+  if (view.getUint16(0, false) !== 0xFFD8) return 1;
+  const len = view.byteLength;
+  let offset = 2;
+  while (offset < len) {
+    if (view.getUint16(offset, false) !== 0xFFE1) {
+      offset += 2 + view.getUint16(offset + 2, false);
+      continue;
     }
-  } else {
-    CAM_PHOTOS_TMP.forEach(function(p){if(PHOTOS.length<5) PHOTOS.push(p);});
-    renderPhotoGrid();
-  }
-  closeCamModal();
-}
-function closeCamModal(){
-  if(CAM_STREAM) CAM_STREAM.getTracks().forEach(function(t){t.stop();});
-  CAM_STREAM=null;
-  document.getElementById('cam-modal').className='cam-modal';
-}
-
-function renderBulkProgress(){
-  if(!BULK_HINBAN) return;
-  // SEL_SAKUYOの製造番号（作業選択で選んだもの）の進捗を表示
-  var seizoNo = SEL_SAKUYO ? SEL_SAKUYO.seizoNo : null;
-  var junjo = SEL_SAKUYO ? SEL_SAKUYO.junjo : BULK_JUNJO;
-  var shiji = SEL_SAKUYO ? (parseInt(SEL_SAKUYO.shiji)||0) : 0;
-  var done = 0;
-  if(seizoNo){
-    ALL_RECORDS.forEach(function(r){
-      if(r[13]===seizoNo && String(r[14])===String(junjo) && r[7]!=='中間実績'){
-        done += parseInt(r[5]||0)||0;
+    if (view.getUint32(offset + 4, false) !== 0x45786966) return 1;
+    const little = view.getUint16(offset + 10, false) === 0x4949;
+    const tags = view.getUint16(offset + 14, little);
+    for (let i = 0; i < tags; i++) {
+      if (view.getUint16(offset + 16 + i * 12, little) === 0x0112) {
+        return view.getUint16(offset + 24 + i * 12, little);
       }
-    });
-  }
-  var remain = Math.max(0, shiji - done);
-  var pct = shiji>0 ? Math.min(100,Math.round(done/shiji*100)) : 0;
-  // 既存の進捗表示を削除して再生成
-  var existing = document.getElementById('bulk-progress');
-  if(existing) existing.parentNode.removeChild(existing);
-  if(!seizoNo) return;
-  var prog = document.createElement('div');
-  prog.id = 'bulk-progress';
-  prog.style.cssText = 'margin-top:8px;background:#FAEEDA;border-radius:8px;padding:8px 10px;font-size:12px';
-  var title = document.createElement('div');
-  title.style.cssText = 'font-size:11px;font-weight:700;color:#854F0B;margin-bottom:4px';
-  title.textContent = '製造番号: '+seizoNo+'　工順'+junjo+' の進捗';
-  prog.appendChild(title);
-  var nums = document.createElement('div');
-  nums.style.cssText = 'display:flex;justify-content:space-between;margin-bottom:4px;font-size:11px;color:#555';
-  nums.innerHTML = '<span>既実績: <b style="color:#854F0B">'+done+'個</b></span>'
-    +'<span>指示: '+shiji+'個　残: '+remain+'個 ('+pct+'%完了)</span>';
-  prog.appendChild(nums);
-  var bw = document.createElement('div');
-  bw.style.cssText = 'background:#ddd;border-radius:4px;height:8px;overflow:hidden';
-  var bf = document.createElement('div');
-  bf.style.cssText = 'background:#854F0B;height:100%;border-radius:4px;width:'+pct+'%';
-  bw.appendChild(bf); prog.appendChild(bw);
-  var hinbanEl = document.getElementById('bulk-hinban');
-  if(hinbanEl && hinbanEl.parentNode) hinbanEl.parentNode.appendChild(prog);
-}
-
-function renderAllocRows(){
-  var prod = parseInt(document.getElementById('bulk-prod').value||0)||0;
-  var el = document.getElementById('alloc-rows');
-  el.innerHTML = '';
-  var visibleData = ALLOC_DATA.filter(function(d){ return d.remain > 0 && d.alloc > 0; });
-  visibleData.forEach(function(d){
-    var origIdx = ALLOC_DATA.indexOf(d);
-    var row = document.createElement('div'); row.className = 'alloc-row';
-    var top = document.createElement('div'); top.className = 'alloc-row-top';
-    var sz = document.createElement('div'); sz.className = 'alloc-seizo';
-    sz.textContent = d.seizoNo + '　工順' + d.junjo; top.appendChild(sz);
-    if(d.nouki){var nk=document.createElement('div');nk.className='alloc-nouki';nk.textContent='納期: '+d.nouki;top.appendChild(nk);}
-    row.appendChild(top);
-    var meta = document.createElement('div'); meta.className = 'alloc-meta';
-    meta.textContent = '指示: '+d.shiji+'個　既実績: '+d.done+'個　残: '+d.remain+'個';
-    row.appendChild(meta);
-    // 進捗バー
-    var shijiN = parseInt(d.shiji)||0;
-    if(shijiN > 0){
-      var pct = Math.min(100, Math.round(d.done / shijiN * 100));
-      var barWrap = document.createElement('div');
-      barWrap.style.cssText = 'background:#eee;border-radius:4px;height:7px;overflow:hidden;margin:4px 0 2px';
-      var barFill = document.createElement('div');
-      barFill.style.cssText = 'background:#1F4E79;height:100%;border-radius:4px;width:'+pct+'%';
-      barWrap.appendChild(barFill); row.appendChild(barWrap);
-      var barNums = document.createElement('div');
-      barNums.style.cssText = 'display:flex;justify-content:space-between;font-size:10px;color:#888;margin-bottom:4px';
-      barNums.innerHTML = '<span>既実績: '+d.done+'個 ('+pct+'%)</span><span>指示: '+shijiN+'個</span>';
-      row.appendChild(barNums);
     }
-    var inputs = document.createElement('div'); inputs.className = 'alloc-inputs';
-    // 振分数入力
-    var nd = document.createElement('div');
-    var nl = document.createElement('label'); nl.style.cssText='font-size:11px;color:#555;margin-bottom:3px;display:block'; nl.textContent='振分数（個）';
-    var ni = document.createElement('input'); ni.type='number'; ni.className='alloc-num'; ni.min='0'; ni.value=d.alloc; ni.setAttribute('data-idx', origIdx);
-    (function(idx){ni.addEventListener('input',function(){onAllocChange(idx,this.value);});})(origIdx);
-    nd.appendChild(nl); nd.appendChild(ni); inputs.appendChild(nd);
-    // 区分select（createElement使用でselectedを確実に反映）
-    var sd = document.createElement('div');
-    var sl = document.createElement('label'); sl.style.cssText='font-size:11px;color:#555;margin-bottom:3px;display:block'; sl.textContent='区分';
-    var sv = document.createElement('select'); sv.className='alloc-sel'; sv.setAttribute('data-idx', origIdx);
-    (function(idx){sv.addEventListener('change',function(){onKubunChange(idx,this.value);});})(origIdx);
-    ['完納','分納','中間実績'].forEach(function(k){
-      var op = document.createElement('option'); op.value=k; op.textContent=k;
-      if(k === d.kubun) op.selected = true;
-      sv.appendChild(op);
-    });
-    sd.appendChild(sl); sd.appendChild(sv); inputs.appendChild(sd);
-    row.appendChild(inputs);
-    el.appendChild(row);
-  });
-  updateAllocTotal(prod);
-}
-function onAllocChange(idx, val){
-  ALLOC_DATA[idx].alloc = parseInt(val)||0;
-  // 区分を自動更新
-  var d = ALLOC_DATA[idx];
-  var allocNum = parseInt(d.alloc)||0;
-  var shijiNum = parseInt(d.shiji)||0;
-  var doneNum = parseInt(d.done)||0;
-  var totalAfterN = doneNum + allocNum;
-  if(shijiNum <= 0) d.kubun = '分納';
-  else if(totalAfterN >= shijiNum) d.kubun = '完納';
-  else d.kubun = '分納';
-  // selectを更新（data-idxで正しい行を特定）
-  var sels = document.querySelectorAll('.alloc-sel');
-  sels.forEach(function(sel){
-    if(parseInt(sel.getAttribute('data-idx'))===idx) sel.value = d.kubun;
-  });
-  var prod = parseInt(document.getElementById('bulk-prod').value||0)||0;
-  updateAllocTotal(prod);
+    return 1;
+  }
+  return 1;
 }
 
-function onKubunChange(idx, val){
-  ALLOC_DATA[idx].kubun = val;
-}
+function renderPhotos() {
+  const grid = document.getElementById('photo-grid');
+  const totalOrig = photos.reduce((s,p) => s + p.origSize, 0);
+  const totalComp = photos.reduce((s,p) => s + p.size, 0);
 
-function calcAlloc(){
-  if(document.getElementById('alloc-list-card').style.display !== 'none'){
-    showAllocList();
+  let html = photos.map((p, i) => `
+    <div class="photo-thumb">
+      <img src="${p.dataUrl}" alt="写真${i+1}">
+      <button class="photo-del" onclick="removePhoto(${i})">×</button>
+    </div>`).join('');
+
+  if (photos.length < 5) {
+    html += `<div class="photo-add" onclick="document.getElementById('photo-input').click()">
+      <span>📷</span>
+      <span>写真を追加<br>(${photos.length}/5枚)</span>
+    </div>`;
+  }
+  grid.innerHTML = html;
+
+  const info = document.getElementById('photo-info');
+  if (photos.length > 0) {
+    info.textContent = `${photos.length}枚　元: ${totalOrig}KB → 圧縮後: ${totalComp}KB`;
+  } else {
+    info.textContent = '';
   }
 }
 
-function updateAllocTotal(prod){
-  var total = ALLOC_DATA.reduce(function(s,d){return s+(d.alloc||0);},0);
-  var el = document.getElementById('alloc-total');
-  el.textContent = '合計: '+total+'個 / 入力: '+prod+'個';
-  var ok = total === prod;
-  el.className = 'alloc-total '+(ok?'ok':'ng');
-  document.getElementById('alloc-save-btn').disabled = !ok;
+function removePhoto(i) {
+  photos.splice(i, 1);
+  renderPhotos();
 }
 
-function saveAlloc(){
-  var prod = parseInt(document.getElementById('bulk-prod').value||0)||0;
-  var ng = parseInt(document.getElementById('bulk-ng').value||0)||0;
-  var op = document.getElementById('bulk-op').value;
-  var date = new Date();
-  var dateStr = date.getFullYear()+'-'+('0'+(date.getMonth()+1)).slice(-2)+'-'+('0'+date.getDate()).slice(-2);
+// ============================================================
+// 初期値設定
+// ============================================================
+window.addEventListener('DOMContentLoaded', () => {
+  // 今日の日付をデフォルト
+  const today = new Date();
+  const y = today.getFullYear();
+  const m = String(today.getMonth() + 1).padStart(2, '0');
+  const d = String(today.getDate()).padStart(2, '0');
+  document.getElementById('prod-date').value = `${y}-${m}-${d}`;
 
-  var hokyu = parseInt(document.getElementById('bulk-hokyu').value||0)||0;
-  var sonota = parseInt(document.getElementById('bulk-sonota').value||0)||0;
-  var sonotaMemo = document.getElementById('bulk-sonota-memo').value||'';
+  renderPhotos();
+  loadParts();
+});
 
-  // 記録するもの（なし以外）
-  if(!BULK_PHOTO){alert('写真を1枚以上撮影してください');return;}
-  var targets = ALLOC_DATA.filter(function(d){return d.alloc > 0;});
-  if(!targets.length){alert('振分数が0の製造番号しかありません');return;}
+// ============================================================
+// 送信
+// ============================================================
+async function submitForm() {
+  if (!selectedPart) { alert('部品番号を選択してください'); return; }
+  if (!document.getElementById('prod-date').value) { alert('生産日を入力してください'); return; }
 
-  // 納期最遅の製造番号を特定（写真添付先）
-  var lastIdx = targets.length - 1;
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.innerHTML = '⏳ 保存中...';
 
-  var btn = document.getElementById('alloc-save-btn');
-  btn.disabled = true; btn.textContent = '保存中...';
+  const data = {
+    date:     document.getElementById('prod-date').value,
+    partNo:   selectedPart.no,
+    partName: selectedPart.nm,
+    operator: document.getElementById('operator').value,
+    prod:     document.getElementById('prod-count').value || '0',
+    ng:       document.getElementById('ng-count').value || '0',
+    kanno:    kanno,
+    zairyo:   zaiyoAri ? 'あり' : 'なし',
+    memo:     document.getElementById('memo').value,
+    images:   photos.map(p => p.dataUrl),
+  };
 
-  var saved = 0;
-  var errors = [];
-
-  targets.forEach(function(d, i){
-    var isLast = (i === lastIdx);
-    // 不良数・保留品・その他・写真は最後の製造番号に添付
-    var ngAlloc = isLast ? ng : 0;
-    var hokyuAlloc = isLast ? hokyu : 0;
-    var sonotaAlloc = isLast ? sonota : 0;
-    var sonotaMemoAlloc = isLast ? sonotaMemo : '';
-    var images = isLast && BULK_PHOTO ? [BULK_PHOTO] : [];
-
-    gasPost('submitRecord',{
-        date: dateStr,
-        partNo: d.hinban,
-        partName: d.hinmei,
-        operator: op,
-        prod: String(d.alloc),
-        ng: String(ngAlloc),
-        hokyu: String(hokyuAlloc),
-        sonota: String(sonotaAlloc),
-        sonotaMemo: sonotaMemoAlloc,
-        kanno: d.kubun,
-        zairyo: 'なし',
-        memo: '',
-        seizoNo: d.seizoNo,
-        junjo: d.junjo,
-        kosei: d.kosei,
-        shiji: d.shiji,
-        images: images
-      });
-  });
+  try {
+    const res = await fetch(gasUrl, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({action: 'submit', data})
+    });
+    const json = await res.json();
+    if (json.ok) {
+      document.getElementById('success-msg').textContent =
+        `${json.fileNames || ''}　${json.count || photos.length}枚保存`;
+      document.getElementById('form-screen').style.display = 'none';
+      document.getElementById('success-screen').style.display = 'block';
+    } else {
+      alert('エラー: ' + (json.err || '不明'));
+      btn.disabled = false;
+      btn.innerHTML = '📤 記録を保存する';
+    }
+  } catch(e) {
+    alert('通信エラー: ' + e.message + '\n\nGAS URLを設定タブで確認してください');
+    btn.disabled = false;
+    btn.innerHTML = '📤 記録を保存する';
+  }
 }
 
-function resetForm(){
-  SEL_SAKUYO=null; PHOTOS=[]; KANNO='完納'; ZAIRYO='あり';
-  document.getElementById('sakuyo-search').value='';
-  document.getElementById('sakuyo-sel').style.display='none';
-  document.getElementById('bunno-info').style.display='none';
-  document.getElementById('op').value='';
-  document.getElementById('prod').value='';
-  document.getElementById('ng').value='';
-  document.getElementById('hokyu').value='';
-  document.getElementById('sonota').value='';
-  document.getElementById('sonota-memo').value='';
-  document.getElementById('mo').value='';
-  renderPhotoGrid();
-  document.getElementById('sb').disabled=false;
-  document.getElementById('sb').textContent='記録を保存する';
-  document.getElementById('form-input').style.display='block';
-  document.getElementById('form-done').style.display='none';
-  var sk=document.getElementById('seg-kanno');
-  Array.from(sk.children).forEach(function(b,i){b.className='seg-btn'+(i===0?' active-blue':'');});
-  var note=document.getElementById('kanno-note');
-  if(note){note.style.display='block';note.style.background='#FCEBEB';note.style.color='#A32D2D';note.textContent='⚠️ 完納（完成）はシステム入力待ちとして表示されます';}
-  var sz=document.getElementById('seg-zairyo');
-  Array.from(sz.children).forEach(function(b,i){b.className='seg-btn'+(i===0?' active-green':'');});
+// ============================================================
+// リセット
+// ============================================================
+function resetForm() {
+  selectedPart = null;
+  kanno = '完納';
+  zaiyoAri = true;
+  photos = [];
+  document.getElementById('part-search').value = '';
+  document.getElementById('sel-box').style.display = 'none';
+  document.getElementById('prod-count').value = '';
+  document.getElementById('ng-count').value = '';
+  document.getElementById('memo').value = '';
+  document.getElementById('operator').value = '';
+  setKanno('完納');
+  setZairyo(true);
+  renderPhotos();
+  document.getElementById('form-screen').style.display = 'block';
+  document.getElementById('success-screen').style.display = 'none';
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = false;
+  btn.innerHTML = '📤 記録を保存する';
+  window.scrollTo(0, 0);
+}
+
+// ============================================================
+// 記録一覧
+// ============================================================
+async function loadList() {
+  const area = document.getElementById('list-area');
+  area.innerHTML = '<div class="loading">読み込み中...</div>';
+  try {
+    const res = await fetch(gasUrl + '?action=list&limit=30');
+    const json = await res.json();
+    if (!json.ok) { area.innerHTML = '<div class="loading">取得失敗: ' + json.err + '</div>'; return; }
+    const rows = json.records;
+    if (!rows.length) { area.innerHTML = '<div class="loading">記録がありません</div>'; return; }
+    area.innerHTML = rows.map(r => {
+      const kanTag = r.kanno === '完納' ? 'tag-kanno' : r.kanno === '分納' ? 'tag-bunno' : 'tag-chuukan';
+      const photos = (r.urls || '').split('|').filter(Boolean);
+      const photoLinks = photos.map((u, i) =>
+        `<a class="rec-photo-link" href="${u}" target="_blank">📄 写真${i+1}</a>`).join('');
+      return `<div class="record-item">
+        <div class="rec-header"><span class="rec-no">${r.partNo}</span><span class="rec-date">${r.date}</span></div>
+        <div class="rec-name">${r.partName}</div>
+        <div class="rec-tags">
+          <span class="tag ${kanTag}">${r.kanno}</span>
+          ${r.zairyo === 'あり' ? '<span class="tag" style="background:#fce4ec;color:#c62828">材料残あり</span>' : ''}
+          ${r.prod ? '<span class="tag" style="background:#f3f3f3;color:#555">生産:'+r.prod+'</span>' : ''}
+          ${r.ng && r.ng !== '0' ? '<span class="tag" style="background:#ffebee;color:#b71c1c">不良:'+r.ng+'</span>' : ''}
+        </div>
+        ${r.memo ? `<div style="font-size:12px;color:#666">${r.memo}</div>` : ''}
+        <div class="rec-photos">${photoLinks}</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    area.innerHTML = '<div class="loading">通信エラー: ' + e.message + '</div>';
+  }
+}
+
+// ============================================================
+// 設定
+// ============================================================
+function loadCfg() {
+  document.getElementById('cfg-gas-url').value = gasUrl;
+  const isDefault = gasUrl === GAS_URL_DEFAULT;
+  const st = document.getElementById('gas-status');
+  st.className = 'gas-status ' + (isDefault ? 'gas-ok' : 'gas-ok');
+  st.textContent = isDefault ? '✅ デフォルトURLを使用中' : '✅ カスタムURLを使用中';
+
+  document.getElementById('cfg-info').innerHTML =
+    `<div>GAS URL: ${gasUrl.substring(0,60)}...</div>`;
+}
+
+function saveCfg() {
+  const url = document.getElementById('cfg-gas-url').value.trim();
+  if (!url.startsWith('https://script.google.com')) {
+    alert('GASのURLを正しく入力してください'); return;
+  }
+  gasUrl = url;
+  localStorage.setItem(CFG_KEY, JSON.stringify({gasUrl: url}));
+  document.getElementById('gas-status').className = 'gas-status gas-ok';
+  document.getElementById('gas-status').textContent = '✅ 保存しました';
+  loadParts();
 }
 </script>
 </body>
