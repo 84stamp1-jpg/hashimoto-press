@@ -12,7 +12,7 @@ header h1{font-size:16px;font-weight:700}
 .tab-bar{display:flex;background:#fff;border-bottom:2px solid #e0e0e0;position:sticky;top:48px;z-index:99}
 .tab{flex:1;padding:10px 4px;text-align:center;font-size:13px;cursor:pointer;color:#888;border-bottom:3px solid transparent;transition:.2s}
 .tab.active{color:#1a3a5c;border-bottom-color:#1a3a5c;font-weight:700}
-.page{display:none;padding:12px}
+.page{display:none;padding:12px;max-width:500px;margin:0 auto}
 .page.active{display:block}
 .card{background:#fff;border-radius:10px;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
 .card h3{font-size:13px;color:#666;margin-bottom:10px;font-weight:600}
@@ -288,14 +288,28 @@ async function loadParts() {
     const d = await res.json();
     if (d.ok && Array.isArray(d.parts)) {
       d.parts.forEach(p => PARTS.push(p));
+      console.log('品番読み込み完了: ' + PARTS.length + '件');
     }
-  } catch(e) {}
+  } catch(e) {
+    console.warn('品番リスト取得失敗:', e.message);
+  }
 }
 
 function searchPart(q) {
   const sug = document.getElementById('suggestions');
   if (!q || q.length < 1) { sug.style.display = 'none'; return; }
   const lower = q.toLowerCase();
+
+  if (PARTS.length === 0) {
+    // 品番リスト未取得時は手入力を候補として表示
+    sug.innerHTML = `<div class="sug-item" onclick="selectPart('${q.replace(/'/g,"\\'")}','')">
+      <span class="sug-no">${q}</span>
+      <span class="sug-nm">（手入力）</span>
+    </div>`;
+    sug.style.display = 'block';
+    return;
+  }
+
   const hits = PARTS.filter(p =>
     p[0].toLowerCase().includes(lower) || p[1].toLowerCase().includes(lower)
   ).slice(0, 15);
@@ -469,7 +483,19 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('prod-date').value = `${y}-${m}-${d}`;
 
   renderPhotos();
-  loadParts();
+
+  // 品番リスト読み込み（ローディング表示付き）
+  const searchInput = document.getElementById('part-search');
+  searchInput.placeholder = '品番読み込み中...';
+  searchInput.disabled = true;
+  loadParts().then(() => {
+    if (PARTS.length > 0) {
+      searchInput.placeholder = `品番または品名で検索... (${PARTS.length}件)`;
+    } else {
+      searchInput.placeholder = '品番または品名で検索...（手入力）';
+    }
+    searchInput.disabled = false;
+  });
 });
 
 // ============================================================
