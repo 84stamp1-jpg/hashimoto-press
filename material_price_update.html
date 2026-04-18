@@ -331,6 +331,13 @@ async function parseKaitePDF(buf) {
   console.log('[DEBUG-PDF] parseKaitePDF called, buf size:', buf.byteLength);
   var pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
   console.log('[DEBUG-PDF] numPages:', pdf.numPages);
+  // ページ1のvp.heightとtransform[5]を確認
+  var pg1 = await pdf.getPage(1);
+  var vp1 = pg1.getViewport({ scale: 1.0 });
+  console.log('[DEBUG-PDF] p1 vp.width:', vp1.width, 'vp.height:', vp1.height);
+  var tc1 = await pg1.getTextContent();
+  var sample5 = tc1.items.filter(function(it){ return it.str.trim().length > 0; }).slice(0, 3);
+  console.log('[DEBUG-PDF] p1 first3 items:', sample5.map(function(it){ return {str: JSON.stringify(it.str), t5: it.transform[5], y_screen: Math.round(vp1.height - it.transform[5])}; }));
   var records = [];
   for (var p = 1; p <= pdf.numPages; p++) {
     var page = await pdf.getPage(p);
@@ -356,12 +363,15 @@ async function parseKaitePDF(buf) {
     }
     if (p === 1) {
       var debugAll = [];
-      for (var di = 0; di < spans.length; di++) {
-        if (spans[di].y >= 180 && spans[di].y <= 200) {
-          debugAll.push({y: spans[di].y, x: spans[di].x, dec: spans[di].dec, code0: spans[di].dec.charCodeAt(0)});
+      var tc_debug = await page.getTextContent();
+      for (var di = 0; di < tc_debug.items.length; di++) {
+        var it = tc_debug.items[di];
+        var y_s = Math.round(vp.height - it.transform[5]);
+        if (y_s >= 180 && y_s <= 200 && it.str.trim()) {
+          debugAll.push({y_screen: y_s, t5: it.transform[5], x: Math.round(it.transform[4]), str_len: it.str.length, code0: it.str.charCodeAt(0), code1: it.str.charCodeAt(1)});
         }
       }
-      console.log('[DEBUG-PDF] p1 y=180-200 spans count:', debugAll.length, 'sample:', JSON.stringify(debugAll.slice(0,3)));
+      console.log('[DEBUG-PDF] p1 y_screen=180-200 count:', debugAll.length, JSON.stringify(debugAll.slice(0,5)));
     }
     var scrapNext = getNumRow(188), scrapCur = getNumRow(254);
     var unitNext = getNumRow(316), unitCur = getNumRow(382);
