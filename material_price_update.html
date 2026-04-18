@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>材料単価改訂システム｜橋本工業</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+:root{
+  --bg:#f0f2f7;--sur:#fff;--sur2:#f5f7fb;--bdr:#dde1ec;
+  --ac:#2563eb;--ok:#16a34a;--wn:#d97706;--ng:#dc2626;
+  --tx:#1e2235;--tx2:#4b5580;--tx3:#9099bb;--hd:#1e2235;
+  --step-inactive:#e2e8f0;--step-active:#2563eb;--step-done:#16a34a;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--tx);font-size:13px}
+
+/* ヘッダー */
+header{background:var(--hd);padding:14px 28px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:200;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.logo{width:34px;height:34px;background:linear-gradient(135deg,#3b82f6,#7c3aed);border-radius:7px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-weight:500;font-size:13px;color:#fff;flex-shrink:0}
+header h1{font-size:14px;font-weight:500;color:#fff;letter-spacing:.04em}
+header small{font-size:11px;color:#8893bb}
+
+/* ステップナビ */
+.step-nav{background:var(--sur);border-bottom:1px solid var(--bdr);padding:0 28px;display:flex;align-items:stretch;gap:0;overflow-x:auto}
+.step-item{display:flex;align-items:center;gap:10px;padding:14px 20px;cursor:pointer;border-bottom:3px solid transparent;transition:all .2s;white-space:nowrap;opacity:.45;pointer-events:none}
+.step-item.active{opacity:1;border-bottom-color:var(--ac);pointer-events:auto}
+.step-item.done{opacity:.8;pointer-events:auto}
+.step-item.done .sn{background:var(--ok)}
+.step-item:hover.active,.step-item:hover.done{background:var(--sur2)}
+.sn{width:24px;height:24px;border-radius:50%;background:var(--step-inactive);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;flex-shrink:0}
+.step-item.active .sn{background:var(--ac)}
+.sl{font-size:12px;font-weight:500;color:var(--tx2)}
+.step-item.active .sl{color:var(--tx);font-weight:700}
+.step-arrow{color:var(--bdr);padding:0 4px;font-size:16px;display:flex;align-items:center}
+
+/* メイン */
+.main{padding:20px 28px;max-width:1400px;margin:0 auto}
+.panel{background:var(--sur);border:1px solid var(--bdr);border-radius:10px;padding:20px 24px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.ptl{font-size:11px;font-weight:700;color:var(--tx3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:14px}
+.page{display:none}.page.active{display:block}
+
+/* ファイルアップロード */
+.upload-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.upload-box{border:1.5px dashed var(--bdr);border-radius:8px;padding:18px;text-align:center;cursor:pointer;transition:all .2s;background:var(--sur2);position:relative}
+.upload-box:hover{border-color:var(--ac);background:#eff6ff}
+.upload-box.loaded{border-color:var(--ok);background:#f0fdf4}
+.upload-box.multi{grid-column:span 2}
+.upload-box input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.upload-box .ic{font-size:24px;margin-bottom:6px;display:block}
+.upload-box p{font-size:12px;color:var(--tx2);margin-bottom:2px;font-weight:500}
+.upload-box small{font-size:10px;color:var(--tx3);font-family:'IBM Plex Mono',monospace}
+.upload-box .file-list{margin-top:8px;text-align:left}
+.upload-box .file-item{font-size:10px;color:var(--ok);font-family:'IBM Plex Mono',monospace;padding:2px 0}
+
+/* ボタン */
+.btn{padding:9px 20px;border-radius:7px;border:none;font-family:'Noto Sans JP',sans-serif;font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.bp{background:var(--ac);color:#fff}.bp:hover{background:#1d4ed8;transform:translateY(-1px)}.bp:disabled{background:#93c5fd;cursor:not-allowed;transform:none}
+.bg{background:var(--ok);color:#fff}.bg:hover{background:#15803d}
+.bs{background:var(--sur2);color:var(--tx2);border:1px solid var(--bdr)}.bs:hover{border-color:var(--ac);color:var(--ac)}
+.br{background:var(--ng);color:#fff}.br:hover{background:#b91c1c}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:16px}
+
+/* プログレスバー */
+.pb{height:4px;background:var(--bdr);border-radius:2px;margin:10px 0;overflow:hidden;display:none}
+.pf{height:100%;background:linear-gradient(90deg,var(--ac),#7c3aed);border-radius:2px;transition:width .3s;width:0%}
+
+/* ガイドボックス */
+.guide-box{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px 18px;margin-bottom:16px}
+.guide-box h3{font-size:12px;font-weight:700;color:#1e40af;margin-bottom:8px}
+.guide-steps{display:flex;flex-direction:column;gap:6px}
+.guide-step{display:flex;align-items:flex-start;gap:10px;font-size:12px;color:#1e40af}
+.guide-step .gn{width:20px;height:20px;border-radius:50%;background:#2563eb;color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.guide-step.current{font-weight:700}
+.guide-step.done-g{color:#166534;opacity:.7}
+.guide-step.done-g .gn{background:var(--ok)}
+.guide-step.pending{opacity:.4}
+
+/* 案内文差額テーブル */
+.notice-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;margin-bottom:14px}
+.notice-card{background:var(--sur2);border:1px solid var(--bdr);border-radius:7px;padding:10px 14px}
+.notice-card .nm{font-size:11px;font-weight:700;color:var(--tx);font-family:'IBM Plex Mono',monospace;margin-bottom:3px}
+.notice-card .nv{font-size:12px;color:var(--tx2)}
+.notice-card .nd{font-weight:700;color:var(--ng)}
+.notice-card .nd.pos{color:var(--ok)}
+
+/* テーブル */
+.tw{border:1px solid var(--bdr);border-radius:9px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+table{width:100%;border-collapse:collapse}
+thead tr{background:var(--sur2);border-bottom:2px solid var(--bdr)}
+th{padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--tx3);letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
+th.r{text-align:right}th.c{text-align:center}
+tbody tr{border-bottom:1px solid var(--bdr);transition:background .1s}
+tbody tr:hover{background:#f8f9ff}
+tbody tr:last-child{border-bottom:none}
+td{padding:7px 10px;font-size:12px;vertical-align:middle}
+td.r{text-align:right;font-family:'IBM Plex Mono',monospace;font-size:11px}
+td.c{text-align:center}
+td.mn{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--tx2)}
+.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:4px;font-size:10px;font-family:'IBM Plex Mono',monospace;font-weight:600}
+.b-ok{background:#dcfce7;color:var(--ok)}.b-ng{background:#fee2e2;color:var(--ng)}
+.b-wn{background:#fef3c7;color:var(--wn)}.b-sk{background:#f1f5f9;color:#64748b}
+.chk{width:16px;height:16px;cursor:pointer;accent-color:var(--ac)}
+
+/* カード統計 */
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.card{background:var(--sur);border:1px solid var(--bdr);border-radius:9px;padding:12px 16px}
+.cl{font-size:10px;color:var(--tx3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px;font-weight:600}
+.cv{font-family:'IBM Plex Mono',monospace;font-size:26px;font-weight:500;line-height:1}
+.cok{color:var(--ok)}.cwn{color:var(--wn)}.cng{color:var(--ng)}.cbl{color:var(--ac)}
+
+/* フィルター */
+.fb-bar{display:flex;gap:7px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.fb{padding:4px 12px;border-radius:14px;border:1px solid var(--bdr);background:var(--sur);color:var(--tx2);font-size:11px;cursor:pointer;transition:all .15s}
+.fb:hover{border-color:var(--ac);color:var(--ac)}
+.fa{background:var(--ac);border-color:var(--ac);color:#fff}
+.fok{background:var(--ok);border-color:var(--ok);color:#fff}
+.fng{background:var(--ng);border-color:var(--ng);color:#fff}
+.fwn{background:var(--wn);border-color:var(--wn);color:#fff}
+
+/* ハイライト手順ボックス */
+.instruction-box{background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:16px 20px;margin-bottom:16px}
+.instruction-box h3{font-size:13px;font-weight:700;color:#92400e;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.instruction-box ol{padding-left:20px;display:flex;flex-direction:column;gap:7px}
+.instruction-box li{font-size:12px;color:#78350f;line-height:1.6}
+.instruction-box li strong{color:#92400e}
+.instruction-box .dl-btn{display:inline-flex;align-items:center;gap:5px;background:#d97706;color:#fff;padding:5px 12px;border-radius:5px;font-size:11px;font-weight:600;border:none;cursor:pointer;margin-top:4px}
+
+/* diff color */
+.diff-p{color:var(--ng);font-weight:600}.diff-n{color:var(--ac);font-weight:600}.diff-z{color:var(--ok)}
+
+/* ステータスバー */
+#status{font-size:11px;color:var(--tx2);padding:6px 0;min-height:18px}
+
+@media(max-width:768px){
+  .upload-grid{grid-template-columns:1fr}
+  .upload-box.multi{grid-column:span 1}
+  .cards{grid-template-columns:repeat(2,1fr)}
+  .main{padding:12px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">HK</div>
+  <div>
+    <h1>材料単価改訂システム</h1>
+    <small>橋本工業株式会社</small>
+  </div>
+</header>
+
+<nav class="step-nav" id="stepNav">
+  <div class="step-item active" data-step="0" onclick="gotoStep(0)">
+    <div class="sn" id="sn0">1</div>
+    <div class="sl">ファイル読み込み</div>
+  </div>
+  <div class="step-arrow">›</div>
+  <div class="step-item" data-step="1" onclick="gotoStep(1)">
+    <div class="sn" id="sn1">2</div>
+    <div class="sl">材料単価の照合</div>
+  </div>
+  <div class="step-arrow">›</div>
+  <div class="step-item" data-step="2" onclick="gotoStep(2)">
+    <div class="sn" id="sn2">3</div>
+    <div class="sl">更新確認・Excel出力</div>
+  </div>
+  <div class="step-arrow">›</div>
+  <div class="step-item" data-step="3" onclick="gotoStep(3)">
+    <div class="sn" id="sn3">4</div>
+    <div class="sl">調達基準表との照合</div>
+  </div>
+</nav>
+
+<div class="main">
+
+<!-- ===== STEP0: ファイル読み込み ===== -->
+<div class="page active" id="page0">
+  <div class="guide-box">
+    <h3>📋 作業の流れ</h3>
+    <div class="guide-steps">
+      <div class="guide-step current"><div class="gn">1</div><div>4種類のファイルを読み込んで照合を開始します</div></div>
+      <div class="guide-step pending"><div class="gn">2</div><div>材料シートの現在単価とPDF現行単価を比較し、差額を確認します</div></div>
+      <div class="guide-step pending"><div class="gn">3</div><div>更新する材質を選択してExcelをダウンロード → Excelを開いて保存します</div></div>
+      <div class="guide-step pending"><div class="gn">4</div><div>再計算済みExcelを読み込んで調達基準表PDFと照合します</div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="ptl">ファイル読み込み</div>
+    <div class="upload-grid">
+      <div class="upload-box" id="box-excel">
+        <input type="file" accept=".xlsx" id="fi-excel" onchange="loadExcel(this)">
+        <span class="ic">📊</span>
+        <p>Excelファイル</p>
+        <small>見積一覧表.xlsx</small>
+        <div class="file-list" id="fl-excel"></div>
+      </div>
+      <div class="upload-box" id="box-kaite">
+        <input type="file" accept=".pdf" id="fi-kaite" onchange="loadPDF(this,'kaite')">
+        <span class="ic">📄</span>
+        <p>原材料支給単価改定表PDF</p>
+        <small>複数可</small>
+        <div class="file-list" id="fl-kaite"></div>
+      </div>
+      <div class="upload-box multi" id="box-annai">
+        <input type="file" accept=".pdf" multiple id="fi-annai" onchange="loadPDF(this,'annai')">
+        <span class="ic">📋</span>
+        <p>案内文PDF（複数可）</p>
+        <small>スクラップ改定案内・ステンレス支給単価改定案内 など</small>
+        <div class="file-list" id="fl-annai"></div>
+      </div>
+      <div class="upload-box multi" id="box-choutatsu">
+        <input type="file" accept=".pdf" multiple id="fi-choutatsu" onchange="loadPDF(this,'choutatsu')">
+        <span class="ic">📑</span>
+        <p>調達基準表PDF（複数可）</p>
+        <small>部品単価通知書 兼 調達基準表</small>
+        <div class="file-list" id="fl-choutatsu"></div>
+      </div>
+    </div>
+    <div class="pb" id="pb0"><div class="pf" id="pf0"></div></div>
+    <div id="status"></div>
+    <div class="btn-row">
+      <button class="btn bp" id="btn-start" onclick="startAnalysis()" disabled>▶ 照合開始</button>
+      <button class="btn bs" onclick="resetAll()">↺ リセット</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== STEP1: 材料単価の照合 ===== -->
+<div class="page" id="page1">
+  <div class="panel">
+    <div class="ptl">案内文から抽出した差額情報</div>
+    <div class="notice-grid" id="notice-grid"></div>
+  </div>
+  <div class="cards" id="cards1"></div>
+  <div class="panel">
+    <div class="ptl">材料グループ別 照合結果</div>
+    <div class="fb-bar">
+      <button class="fb fa" data-f="all" onclick="setF1(this,'all')">すべて</button>
+      <button class="fb" data-f="ok" onclick="setF1(this,'ok')">✅ 条件OK</button>
+      <button class="fb" data-f="warn" onclick="setF1(this,'warn')">⚠ 要確認</button>
+      <button class="fb" data-f="skip" onclick="setF1(this,'skip')">— 改定なし</button>
+    </div>
+    <div class="tw">
+      <table>
+        <thead><tr>
+          <th class="c">更新</th>
+          <th>材質グループ</th>
+          <th class="r">Excel現在<br>支給単価</th>
+          <th class="r">PDF現行<br>支給単価</th>
+          <th class="r">①一致</th>
+          <th class="r">PDF次回<br>支給単価</th>
+          <th class="r">差額<br>（PDF）</th>
+          <th class="r">差額<br>（案内文）</th>
+          <th class="r">②一致</th>
+          <th class="r">Excel現在<br>SC単価</th>
+          <th class="r">PDF現行<br>SC単価</th>
+          <th class="r">次回SC</th>
+          <th>判定</th>
+        </tr></thead>
+        <tbody id="tbody1"></tbody>
+      </table>
+    </div>
+    <div class="btn-row">
+      <button class="btn bp" onclick="gotoStep(2)">次へ：更新確認 →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== STEP2: 更新確認・Excel出力 ===== -->
+<div class="page" id="page2">
+  <div class="panel">
+    <div class="ptl">更新対象の確認（チェックを外すと更新しません）</div>
+    <div class="tw">
+      <table>
+        <thead><tr>
+          <th class="c"><input type="checkbox" id="chk-all" class="chk" onchange="toggleAll(this)" checked></th>
+          <th>材質グループ</th>
+          <th class="r">現在 支給単価</th>
+          <th class="r">→ 次回 支給単価</th>
+          <th class="r">差額（支給）</th>
+          <th class="r">現在 SC単価</th>
+          <th class="r">→ 次回 SC単価</th>
+          <th class="r">差額（SC）</th>
+        </tr></thead>
+        <tbody id="tbody2"></tbody>
+      </table>
+    </div>
+    <div class="btn-row">
+      <button class="btn bg" id="btn-dl" onclick="downloadExcel()">📥 更新済みExcelをダウンロード</button>
+      <button class="btn bs" onclick="gotoStep(1)">← 戻る</button>
+    </div>
+  </div>
+  <div class="instruction-box" id="inst-box" style="display:none">
+    <h3>⚠️ 次のステップへ進む前に必ず行ってください</h3>
+    <ol>
+      <li><strong>上のボタンで更新済みExcelをダウンロード</strong>してください</li>
+      <li>ダウンロードしたExcelファイルを<strong>Excelで開いて</strong>ください（LibreOffice不可）</li>
+      <li>Excelが開いたら<strong>何も変更せずに保存（Ctrl+S）</strong>してください<br>
+        <small>→ この操作でSUMIF・材料費などの数式が再計算されます</small></li>
+      <li>Excelを<strong>閉じてから</strong>STEP4へ進んでください</li>
+    </ol>
+    <div style="margin-top:10px">
+      <button class="btn bp" onclick="gotoStep(3)">STEP4：調達基準表との照合へ →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== STEP3: 調達基準表との照合 ===== -->
+<div class="page" id="page3">
+  <div class="panel">
+    <div class="ptl">再計算済みExcelの読み込み</div>
+    <div class="upload-box" id="box-excel2" style="max-width:400px">
+      <input type="file" accept=".xlsx" id="fi-excel2" onchange="loadExcel2(this)">
+      <span class="ic" id="ic2">📊</span>
+      <p id="ft2">再計算済みExcelを読み込む</p>
+      <small>Excelで開いて保存したファイル</small>
+    </div>
+    <div class="btn-row" style="margin-top:12px">
+      <button class="btn bp" id="btn-match" onclick="runMatch()" disabled>▶ 調達基準表と照合</button>
+    </div>
+    <div class="pb" id="pb3"><div class="pf" id="pf3"></div></div>
+  </div>
+
+  <div id="match-result" style="display:none">
+    <div class="cards" id="cards3"></div>
+    <div class="panel">
+      <div class="ptl">調達基準表 照合結果</div>
+      <div class="fb-bar">
+        <button class="fb fa" data-f="all" onclick="setF3(this,'all')">すべて</button>
+        <button class="fb" data-f="ng" onclick="setF3(this,'ng')">⚠ 差異あり</button>
+        <button class="fb" data-f="ok" onclick="setF3(this,'ok')">✓ 一致</button>
+        <button class="fb" data-f="missing" onclick="setF3(this,'missing')">PDF未記載</button>
+      </div>
+      <div class="tw">
+        <table>
+          <thead><tr>
+            <th>調達NO</th><th>品番</th><th>部品名</th>
+            <th class="r">適用年月日</th>
+            <th class="r">PDF<br>加工単価</th>
+            <th class="r">Excel<br>型レス単価</th>
+            <th class="r">差異</th>
+            <th class="r">差異率</th>
+            <th>判定</th>
+          </tr></thead>
+          <tbody id="tbody3"></tbody>
+        </table>
+      </div>
+      <div class="btn-row">
+        <button class="btn bs" onclick="expCSV3()">📥 CSV出力</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /main -->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ===== 内蔵データ =====
+const MAT_GROUPS = [{"row":17,"code":"(POSCO材あり)","unit":null,"scrap":null},{"row":18,"code":"ALCD-CL60/60","unit":216.2,"scrap":35.9},{"row":19,"code":"APFH60","unit":117.9,"scrap":43.6},{"row":20,"code":"HFS304-S","unit":null,"scrap":null},{"row":21,"code":"HFS409L","unit":283.7,"scrap":53.0},{"row":22,"code":"HFS409L-S","unit":318.7,"scrap":53.0},{"row":23,"code":"HFS409L-T","unit":null,"scrap":null},{"row":24,"code":"HFS409L-TS","unit":222.0,"scrap":43.0},{"row":25,"code":"HFS429M","unit":428.7,"scrap":55.0},{"row":26,"code":"HFS429M-S","unit":335.5,"scrap":31.3},{"row":27,"code":"HFS436L","unit":414.7,"scrap":53.0},{"row":28,"code":"HFS436L-S","unit":449.7,"scrap":53.0},{"row":29,"code":"HSS430CU","unit":388.7,"scrap":53.0},{"row":30,"code":"HSS430CU-S","unit":423.7,"scrap":53.0},{"row":31,"code":"HSS441　(Sコート不可)","unit":null,"scrap":null},{"row":32,"code":"JFE TF1","unit":null,"scrap":null},{"row":33,"code":"JSH270C","unit":129.0,"scrap":38.9},{"row":34,"code":"NGLDD AZ150","unit":199.8,"scrap":35.9},{"row":35,"code":"NSCC FHZ","unit":null,"scrap":null},{"row":36,"code":"SA1D(E)80","unit":240.2,"scrap":44.9},{"row":37,"code":"SA1D80","unit":204.2,"scrap":35.9},{"row":38,"code":"SA1E40","unit":166.7,"scrap":35.8},{"row":39,"code":"SA1E80","unit":212.2,"scrap":35.9},{"row":40,"code":"SUS304-S","unit":592.4,"scrap":100.5},{"row":41,"code":"SUS409L-T","unit":292.1,"scrap":56.0},{"row":42,"code":"SUS409L-TS","unit":212.5,"scrap":37.3},{"row":43,"code":"SUS429M-S","unit":302.0,"scrap":37.3}];
+
+// ===== 状態管理 =====
+let state = {
+  excelBuf: null, excelBuf2: null,
+  kaitePDFs: [], annaiPDFs: [], choutatsuPDFs: [],
+  matGroups: [],      // Excel材料マスタ（読み込み後更新）
+  kaiteParsed: [],    // 改定表PDF解析結果
+  annaiDiffs: [],     // 案内文差額
+  choutatsuParsed:[], // 調達基準表解析結果
+  step1Rows: [],      // STEP1照合結果
+  step2Rows: [],      // STEP2更新対象
+  excelData: [],      // Excelユタカシート品番データ
+  curStep: 0,
+  f1: 'all', f3: 'all',
+};
+
+// ===== ステップ管理 =====
+function gotoStep(n) {
+  document.querySelectorAll('.page').forEach((p,i) => {
+    p.classList.toggle('active', i === n);
+  });
+  document.querySelectorAll('.step-item').forEach((el,i) => {
+    el.classList.remove('active','done');
+    if (i === n) el.classList.add('active');
+    else if (i < n) el.classList.add('done');
+  });
+  document.querySelectorAll('.step-item').forEach((el,i) => {
+    const sn = document.getElementById('sn'+i);
+    if (i < n) sn.innerHTML = '✓';
+    else sn.innerHTML = i+1;
+  });
+  state.curStep = n;
+  window.scrollTo(0,0);
+}
+
+// ===== ファイル読み込み =====
+function loadExcel(input) {
+  const f = input.files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    state.excelBuf = e.target.result;
+    setUploaded('box-excel','fl-excel',[f.name]);
+    checkReady();
+  };
+  reader.readAsArrayBuffer(f);
+}
+
+function loadPDF(input, key) {
+  const files = Array.from(input.files);
+  if (!files.length) return;
+  const promises = files.map(f => new Promise((res,rej) => {
+    const r = new FileReader();
+    r.onload = e => res({name:f.name, buf:e.target.result});
+    r.onerror = rej;
+    r.readAsArrayBuffer(f);
+  }));
+  Promise.all(promises).then(results => {
+    state[key+'PDFs'] = results;
+    setUploaded('box-'+key, 'fl-'+key, files.map(f=>f.name));
+    checkReady();
+  });
+}
+
+function setUploaded(boxId, listId, names) {
+  document.getElementById(boxId).classList.add('loaded');
+  document.getElementById(listId).innerHTML =
+    names.map(n=>`<div class="file-item">✅ ${n}</div>`).join('');
+}
+
+function checkReady() {
+  const ok = state.excelBuf && state.kaitePDFs.length && state.annaiPDFs.length && state.choutatsuPDFs.length;
+  document.getElementById('btn-start').disabled = !ok;
+  if (ok) setSt('ファイルが揃いました。「照合開始」を押してください。');
+}
+
+// ===== PDF解析ユーティリティ =====
+async function getPDFSpans(buf) {
+  const pdf = await pdfjsLib.getDocument({data: new Uint8Array(buf)}).promise;
+  const spans = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const vp = page.getViewport({scale:1.0});
+    const tc = await page.getTextContent();
+    for (const item of tc.items) {
+      const t = item.str.trim();
+      if (t) spans.push({
+        x: Math.round(item.transform[4]),
+        y: Math.round(vp.height - item.transform[5]),
+        text: t, page: p
+      });
+    }
+  }
+  return spans;
+}
+
+// 改定表PDF: カスタムフォントデコード（オフセット29）
+function decode(s, offset=29) {
+  let r = '';
+  for (const c of s) {
+    const code = c.charCodeAt(0);
+    if (code < 256) {
+      const d = code + offset;
+      if (d >= 32 && d <= 126) r += String.fromCharCode(d);
+    } else r += c;
+  }
+  return r;
+}
+
+async function parseKaitePDF(buf) {
+  const pdf = await pdfjsLib.getDocument({data: new Uint8Array(buf)}).promise;
+  const results = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const vp = page.getViewport({scale:1.0});
+    const tc = await page.getTextContent();
+    const spans = [];
+    for (const item of tc.items) {
+      const t = item.str.trim();
+      if (t) spans.push({
+        x: Math.round(item.bbox ? item.bbox[0] : item.transform[4]),
+        y: Math.round(vp.height - item.transform[5]),
+        text: t, dec: decode(t)
+      });
+    }
+    const getNumRow = (ty, tol=8) => {
+      const row = {};
+      for (const s of spans) {
+        if (Math.abs(s.y - ty) <= tol) {
+          const v = parseFloat(s.dec);
+          if (!isNaN(v)) row[s.x] = v;
+        }
+      }
+      return row;
+    };
+    const getTextRow = (ty, tol=12) => {
+      const row = {};
+      for (const s of spans) {
+        if (Math.abs(s.y - ty) <= tol && /[A-Z]{2,}/.test(s.dec)) {
+          row[s.x] = s.dec;
+        }
+      }
+      return row;
+    };
+    const nearest = (d, x, tol=10) => {
+      const cs = Object.entries(d).filter(([k])=>Math.abs(k-x)<=tol);
+      if (!cs.length) return null;
+      return cs.reduce((a,b)=>Math.abs(a[0]-x)<Math.abs(b[0]-x)?a:b)[1];
+    };
+    // 座標は1ページ目のパターンを使用
+    const scrapNext = getNumRow(185);
+    const scrapCur  = getNumRow(250);
+    const unitNext  = getNumRow(316);
+    const unitCur   = getNumRow(382);
+    const matRow    = getTextRow(568);
+    const allX = new Set([...Object.keys(scrapCur),...Object.keys(unitCur),...Object.keys(matRow)].map(Number));
+    for (const x of allX) {
+      const mat = nearest(matRow, x, 15);
+      const scc = nearest(scrapCur, x);
+      const scn = nearest(scrapNext, x);
+      const unc = nearest(unitCur, x);
+      const unn = nearest(unitNext, x);
+      if (mat && (scc || unc)) {
+        results.push({mat, scrap_cur:scc, scrap_next:scn, unit_cur:unc, unit_next:unn});
+      }
+    }
+  }
+  // 材質コードでユニーク化
+  const map = {};
+  for (const r of results) {
+    const k = r.mat;
+    if (!map[k]) map[k] = {mat:k, scrap_cur:null, scrap_next:null, unit_cur:null, unit_next:null};
+    if (r.scrap_cur  != null) map[k].scrap_cur  = r.scrap_cur;
+    if (r.scrap_next != null) map[k].scrap_next = r.scrap_next;
+    if (r.unit_cur   != null) map[k].unit_cur   = r.unit_cur;
+    if (r.unit_next  != null) map[k].unit_next  = r.unit_next;
+  }
+  return Object.values(map);
+}
+
+// 案内文PDF解析：鋼種名と差額を抽出
+async function parseAnnaiPDF(buf) {
+  const spans = await getPDFSpans(buf);
+  const diffs = [];
+  // パターン: 鋼種名 + 差額（+XX.X円/kg or ±XX.X円/kg）
+  const allText = spans.map(s=>s.text).join(' ');
+  // 一般的な案内文パターン
+  const patterns = [
+    {re:/HFS436[LS]?\s*[（(]?SUS436[^)）]*[)）]?\s*([+-][\d.]+)円\/kg/g, name:'HFS436L'},
+    {re:/HFS409L[^)）\s]*\s*[（(]?SUS409[^)）]*[)）]?\s*([+-][\d.]+)円\/kg/g, name:'HFS409L'},
+    {re:/HFS429M[^)）\s]*\s*[（(]?SUS429[^)）]*[)）]?\s*([+-][\d.]+)円\/kg/g, name:'HFS429M'},
+    {re:/SUS304\s*([+-][\d.]+)円\/kg/g, name:'SUS304'},
+    {re:/HSS430CU\s*([+-][\d.]+)円\/kg/g, name:'HSS430CU'},
+    {re:/鋼板[（(]普通鋼[^)）]*[)）]?\s*現行[^¥￥]*[¥￥]([\d.]+)[^¥￥次]*次[^¥￥]*[¥￥]([\d.]+)/g, name:'普通鋼スクラップ'},
+  ];
+  // シンプルなテキスト抽出：+XX.X円/kgのパターンを探す
+  const lineTexts = [];
+  let curLine = [];
+  let prevY = -999;
+  for (const s of spans) {
+    if (Math.abs(s.y - prevY) > 5 && curLine.length) {
+      lineTexts.push(curLine.join(' '));
+      curLine = [];
+    }
+    curLine.push(s.text);
+    prevY = s.y;
+  }
+  if (curLine.length) lineTexts.push(curLine.join(' '));
+
+  for (const line of lineTexts) {
+    // 鋼種 + 差額パターン
+    const m = line.match(/([A-Z][A-Z0-9/-]{2,})\s*\(([^)]+)\)?\s*([+\-±][\d.]+)円\/kg/);
+    if (m) {
+      diffs.push({name: m[1], alias: m[2] || '', diff: parseFloat(m[3].replace('±',''))});
+    }
+    // スクラップ単価パターン（現行→次回）
+    const ms = line.match(/現行[^￥¥]*[￥¥]([\d.]+)[^￥¥次]*次[^￥¥]*[￥¥]([\d.]+)/);
+    if (ms) {
+      const diff = parseFloat(ms[2]) - parseFloat(ms[1]);
+      // 直前の行から鋼種名を取得（簡易）
+    }
+  }
+  return diffs;
+}
+
+// 調達基準表PDF解析（既存ロジック）
+async function parseChoutatsuPDF(buf) {
+  const pdf = await pdfjsLib.getDocument({data: new Uint8Array(buf)}).promise;
+  const results = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const vp = page.getViewport({scale:1.0});
+    const tc = await page.getTextContent();
+    const spans = [];
+    for (const item of tc.items) {
+      const t = item.str.trim();
+      if (t) spans.push({x:Math.round(item.transform[4]), y:Math.round(vp.height-item.transform[5]), text:t});
+    }
+    for (const sp of spans) {
+      if (sp.x>=130&&sp.x<=330&&sp.y>=95&&sp.y<=175&&/^1[0-9A-Z]{3,4}-[A-Z0-9]{2}/.test(sp.text)) {
+        let price = null;
+        for (const s2 of spans) {
+          if (Math.abs(s2.y-sp.y)<=6&&s2.x>=660&&s2.x<=800) {
+            const v = parseFloat(s2.text.replace(/,/g,''));
+            if (!isNaN(v)&&v>5){price=v;break;}
+          }
+        }
+        if (price!=null) results.push({part_no:sp.text.trim(), price});
+      }
+    }
+  }
+  return results;
+}
+
+// Excelから材料シート・ユタカシートデータ読み込み
+function parseExcel(buf) {
+  const wb = XLSX.read(buf, {type:'array', cellStyles:true, cellNF:true});
+
+  // 材料シート
+  const ws = wb.Sheets['材料'];
+  const matGroups = [];
+  for (let r = 17; r <= 43; r++) {
+    const e = ws[XLSX.utils.encode_cell({r:r-1,c:4})];
+    const g = ws[XLSX.utils.encode_cell({r:r-1,c:6})];
+    const h = ws[XLSX.utils.encode_cell({r:r-1,c:7})];
+    if (!e || !e.v) continue;
+    // セルの背景色を確認（水色＝固定値）
+    const gStyle = g ? (g.s || {}) : {};
+    const isFixed = gStyle.bgColor && gStyle.bgColor.rgb &&
+                    gStyle.bgColor.rgb.toUpperCase().includes('ADD8E6');
+    matGroups.push({
+      row: r,
+      code: String(e.v).trim(),
+      unit: g ? (typeof g.v === 'number' ? g.v : null) : null,
+      scrap: h ? (typeof h.v === 'number' ? h.v : null) : null,
+      isFixed: isFixed
+    });
+  }
+
+  // ユタカシート（品番データ）
+  const wsy = wb.Sheets['ユタカ'];
+  const products = [];
+  const lastRow = XLSX.utils.decode_range(wsy['!ref']).e.r + 1;
+  for (let r = 16; r < lastRow; r++) {
+    const c3 = wsy[XLSX.utils.encode_cell({r,c:2})];
+    const c4 = wsy[XLSX.utils.encode_cell({r,c:3})];
+    if (!c3 || !c4) continue;
+    const noC = c3.v;
+    const noD = c4.f ? null : c4.v;
+    // D列が =C{r+1} の数式
+    if (typeof noC !== 'number') continue;
+    const c8 = wsy[XLSX.utils.encode_cell({r,c:7})];
+    if (!c8 || !c8.v || typeof c8.v !== 'string') continue;
+    if (!c8.v.includes('-')) continue;
+
+    // AP列（型レス合計単価）
+    const cap = wsy[XLSX.utils.encode_cell({r+2,c:41})];// 行3のAP列
+    // 実際はAP列=col41
+    const ap_cell = wsy[XLSX.utils.encode_cell({r:r, c:41})];
+    // 管理NO（行6のH列）
+    const h6 = wsy[XLSX.utils.encode_cell({r:r+5, c:7})];
+    // 適用年月日（行3のAR列=col43）
+    const ar3 = wsy[XLSX.utils.encode_cell({r:r+2, c:43})];
+
+    let apVal = null;
+    // 型レス単価はAP列(col41)の行3(r+2)から
+    const apCell = wsy[XLSX.utils.encode_cell({r:r+2, c:41})];
+    if (apCell && typeof apCell.v === 'number') apVal = apCell.v;
+
+    let applDate = '';
+    if (ar3 && ar3.v) {
+      if (ar3.v instanceof Date) {
+        applDate = ar3.v.toLocaleDateString('ja-JP');
+      } else if (typeof ar3.v === 'number') {
+        // Excel日付シリアル値
+        const d = XLSX.SSF.parse_date_code(ar3.v);
+        if (d) applDate = `${d.y}/${String(d.m).padStart(2,'0')}/${String(d.d).padStart(2,'0')}`;
+      }
+    }
+
+    products.push({
+      no: noC,
+      part_no: String(c8.v).trim(),
+      part_name: '',
+      excel_no_mold: apVal,
+      appl_date: applDate,
+      mgmt_nos: h6 && h6.v ? [String(h6.v)] : [],
+    });
+  }
+
+  return {matGroups, products};
+}
+
+// 材質コード正規化
+function normMat(s) {
+  return String(s).toUpperCase().replace(/[-\s]/g,'').replace('CL80','80').replace('CL','');
+}
+
+function findKaite(excelCode, kaiteList) {
+  const ne = normMat(excelCode);
+  let best = null, bestScore = 0;
+  for (const k of kaiteList) {
+    const nk = normMat(k.mat);
+    const score = ne === nk ? 4 : nk.startsWith(ne) || ne.startsWith(nk) ? 3 : 0;
+    if (score > bestScore) { best = k; bestScore = score; }
+  }
+  return best;
+}
+
+// ===== メイン処理 =====
+async function startAnalysis() {
+  document.getElementById('btn-start').disabled = true;
+  document.getElementById('pb0').style.display = 'block';
+  setSt('Excelを解析中...');
+  document.getElementById('pf0').style.width = '10%';
+
+  try {
+    // 1. Excel解析
+    const {matGroups, products} = parseExcel(state.excelBuf);
+    state.matGroups = matGroups;
+    state.excelData = products;
+    document.getElementById('pf0').style.width = '25%';
+
+    // 2. 改定表PDF解析
+    setSt('改定表PDFを解析中...');
+    const kaiteAll = [];
+    for (const pdf of state.kaitePDFs) {
+      const parsed = await parseKaitePDF(pdf.buf);
+      kaiteAll.push(...parsed);
+    }
+    state.kaiteParsed = kaiteAll;
+    document.getElementById('pf0').style.width = '50%';
+
+    // 3. 案内文PDF解析
+    setSt('案内文PDFを解析中...');
+    const annaiAll = [];
+    for (const pdf of state.annaiPDFs) {
+      const parsed = await parseAnnaiPDF(pdf.buf);
+      annaiAll.push(...parsed);
+    }
+    state.annaiDiffs = annaiAll;
+    document.getElementById('pf0').style.width = '65%';
+
+    // 4. 調達基準表PDF解析
+    setSt('調達基準表PDFを解析中...');
+    const choutatsuAll = [];
+    for (const pdf of state.choutatsuPDFs) {
+      const parsed = await parseChoutatsuPDF(pdf.buf);
+      choutatsuAll.push(...parsed);
+    }
+    state.choutatsuParsed = choutatsuAll;
+    document.getElementById('pf0').style.width = '85%';
+
+    // 5. 照合ロジック
+    setSt('照合中...');
+    buildStep1(matGroups, kaiteAll, annaiAll);
+    document.getElementById('pf0').style.width = '100%';
+
+    setTimeout(() => {
+      document.getElementById('pb0').style.display = 'none';
+      gotoStep(1);
+    }, 400);
+
+  } catch(e) {
+    setSt('❌ エラー: ' + e.message);
+    console.error(e);
+    document.getElementById('btn-start').disabled = false;
+  }
+}
+
+// ===== STEP1照合ロジック =====
+function buildStep1(matGroups, kaiteList, annaiDiffs) {
+  // 案内文差額マップ（簡易）
+  const annaiMap = {};
+  for (const d of annaiDiffs) {
+    annaiMap[normMat(d.name)] = d.diff;
+  }
+
+  const rows = [];
+  let nOk=0, nWarn=0, nSkip=0;
+
+  for (const mg of matGroups) {
+    if (!mg.unit && !mg.scrap) continue;
+
+    const k = findKaite(mg.code, kaiteList);
+    if (!k || (k.unit_cur == null && k.scrap_cur == null)) {
+      rows.push({...mg, kaite:null, status:'skip', check1_u:null, check1_s:null, check2_u:null, check2_s:null});
+      nSkip++;
+      continue;
+    }
+
+    // 条件①: Excel現在 ≒ PDF現行
+    const tol = 0.05;
+    const ok1_u = k.unit_cur != null && mg.unit != null ? Math.abs(mg.unit - k.unit_cur) <= tol : null;
+    const ok1_s = k.scrap_cur != null && mg.scrap != null ? Math.abs(mg.scrap - k.scrap_cur) <= tol : null;
+
+    // 条件②: PDF差額 ≒ 案内文差額
+    const pdf_diff_u = (k.unit_next != null && k.unit_cur != null) ? Math.round((k.unit_next - k.unit_cur)*100)/100 : null;
+    const pdf_diff_s = (k.scrap_next != null && k.scrap_cur != null) ? Math.round((k.scrap_next - k.scrap_cur)*100)/100 : null;
+
+    // 案内文差額を探す
+    const ne = normMat(mg.code);
+    let annai_diff_u = null;
+    for (const [key, val] of Object.entries(annaiMap)) {
+      if (ne.includes(key) || key.includes(ne.substring(0,6))) { annai_diff_u = val; break; }
+    }
+    const ok2_u = (pdf_diff_u != null && annai_diff_u != null) ? Math.abs(pdf_diff_u - annai_diff_u) <= tol : null;
+
+    const allOk = (ok1_u !== false && ok1_s !== false) && (ok2_u !== false);
+    const anyWarn = ok1_u === false || ok1_s === false || ok2_u === false;
+
+    const status = (k.unit_cur == null && k.scrap_cur == null) ? 'skip' :
+                   anyWarn ? 'warn' : 'ok';
+    if (status === 'ok') nOk++;
+    else if (status === 'warn') nWarn++;
+    else nSkip++;
+
+    rows.push({...mg, kaite:k, status,
+      ok1_u, ok1_s, ok2_u,
+      pdf_diff_u, pdf_diff_s, annai_diff_u});
+  }
+
+  state.step1Rows = rows;
+
+  // 案内文差額表示
+  renderNoticeGrid(kaiteList);
+  // カード
+  document.getElementById('cards1').innerHTML = `
+    <div class="card"><div class="cl">照合件数</div><div class="cv cbl">${rows.length}</div></div>
+    <div class="card"><div class="cl">✅ 条件OK</div><div class="cv cok">${nOk}</div></div>
+    <div class="card"><div class="cl">⚠ 要確認</div><div class="cv cwn">${nWarn}</div></div>
+    <div class="card"><div class="cl">— 改定なし</div><div class="cv" style="color:#64748b">${nSkip}</div></div>`;
+  renderStep1();
+
+  // STEP2用データ
+  state.step2Rows = rows.filter(r => r.status === 'ok' && r.kaite);
+  renderStep2();
+}
+
+function renderNoticeGrid(kaiteList) {
+  // 改定表から代表的な差額をグループ別に表示
+  const shown = new Set();
+  let html = '';
+  for (const k of kaiteList) {
+    if (shown.has(k.mat)) continue;
+    shown.add(k.mat);
+    const ud = k.unit_cur != null && k.unit_next != null
+      ? Math.round((k.unit_next-k.unit_cur)*100)/100 : null;
+    const sd = k.scrap_cur != null && k.scrap_next != null
+      ? Math.round((k.scrap_next-k.scrap_cur)*100)/100 : null;
+    if (!ud && !sd) continue;
+    const fmt = (v) => v > 0 ? `<span class="nd">+${v}</span>` :
+                       v < 0 ? `<span class="nd pos">${v}</span>` : `<span>${v}</span>`;
+    html += `<div class="notice-card">
+      <div class="nm">${k.mat}</div>
+      <div class="nv">`;
+    if (ud != null) html += `支給: ${k.unit_cur} → ${k.unit_next} （${fmt(ud)}円/kg）<br>`;
+    if (sd != null) html += `SC: ${k.scrap_cur} → ${k.scrap_next} （${fmt(sd)}円/kg）`;
+    html += `</div></div>`;
+  }
+  document.getElementById('notice-grid').innerHTML = html || '<span style="color:var(--tx3)">案内文から差額を自動抽出できませんでした。改定表PDFの値を参照してください。</span>';
+}
+
+function renderStep1() {
+  const q = state.f1;
+  const rows = state.step1Rows.filter(r => q==='all' || r.status===q);
+  const tb = document.getElementById('tbody1');
+  if (!rows.length) { tb.innerHTML='<tr><td colspan="13" style="text-align:center;padding:30px;color:var(--tx3)">該当なし</td></tr>'; return; }
+  const f2 = v => v!=null ? v.toFixed(2) : '—';
+  const chk = v => v===true ? '<span class="badge b-ok">✓</span>' : v===false ? '<span class="badge b-ng">✗</span>' : '—';
+  tb.innerHTML = rows.map(r => {
+    const k = r.kaite;
+    const badge = r.status==='ok' ? '<span class="badge b-ok">✅ OK</span>'
+                : r.status==='warn' ? '<span class="badge b-wn">⚠ 要確認</span>'
+                : '<span class="badge b-sk">— 改定なし</span>';
+    return `<tr>
+      <td class="c">${r.status==='ok'?'<input type="checkbox" class="chk" checked>':''}</td>
+      <td class="mn">${r.code}</td>
+      <td class="r">${f2(r.unit)}</td>
+      <td class="r">${k?f2(k.unit_cur):'—'}</td>
+      <td class="c">${chk(r.ok1_u)}</td>
+      <td class="r">${k?f2(k.unit_next):'—'}</td>
+      <td class="r">${r.pdf_diff_u!=null?(r.pdf_diff_u>=0?'+':'')+r.pdf_diff_u.toFixed(2):'—'}</td>
+      <td class="r">${r.annai_diff_u!=null?(r.annai_diff_u>=0?'+':'')+r.annai_diff_u.toFixed(2):'—'}</td>
+      <td class="c">${chk(r.ok2_u)}</td>
+      <td class="r">${f2(r.scrap)}</td>
+      <td class="r">${k?f2(k.scrap_cur):'—'}</td>
+      <td class="r">${k?f2(k.scrap_next):'—'}</td>
+      <td>${badge}</td>
+    </tr>`;
+  }).join('');
+}
+
+function setF1(btn, f) {
+  state.f1 = f;
+  document.querySelectorAll('#page1 .fb').forEach(b=>b.className='fb');
+  btn.classList.add(f==='all'?'fa':f==='ok'?'fok':f==='warn'?'fwn':'fb');
+  renderStep1();
+}
+
+// ===== STEP2 =====
+function renderStep2() {
+  const rows = state.step2Rows;
+  const f2 = v => v!=null ? v.toFixed(2) : '—';
+  const fmtDiff = v => v!=null ? (v>=0?`<span class="diff-p">+${v.toFixed(2)}</span>`:`<span class="diff-n">${v.toFixed(2)}</span>`) : '—';
+  document.getElementById('tbody2').innerHTML = rows.map((r,i) => {
+    const k = r.kaite;
+    return `<tr>
+      <td class="c"><input type="checkbox" class="chk row-chk" data-i="${i}" checked></td>
+      <td class="mn">${r.code}</td>
+      <td class="r">${f2(r.unit)}</td>
+      <td class="r" style="color:var(--ac);font-weight:600">${k?f2(k.unit_next):'—'}</td>
+      <td class="r">${fmtDiff(r.pdf_diff_u)}</td>
+      <td class="r">${f2(r.scrap)}</td>
+      <td class="r" style="color:var(--ac);font-weight:600">${k?f2(k.scrap_next):'—'}</td>
+      <td class="r">${fmtDiff(r.pdf_diff_s)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function toggleAll(chk) {
+  document.querySelectorAll('.row-chk').forEach(c=>c.checked=chk.checked);
+}
+
+// ===== Excel更新・ダウンロード =====
+async function downloadExcel() {
+  const selected = [];
+  document.querySelectorAll('.row-chk').forEach((c,i)=>{
+    if (c.checked) selected.push(state.step2Rows[i]);
+  });
+  if (!selected.length) { alert('更新する材質を選択してください'); return; }
+
+  const wb = XLSX.read(state.excelBuf, {type:'array', cellStyles:true});
+  const ws = wb.Sheets['材料'];
+
+  for (const r of selected) {
+    if (!r.kaite) continue;
+    // K列（調整分支給）に差額を書き込む: col=10 (0-indexed)
+    if (r.kaite.unit_next != null && r.unit != null) {
+      const diff = Math.round((r.kaite.unit_next - r.unit)*100)/100;
+      const cell = XLSX.utils.encode_cell({r: r.row-1, c: 10});
+      if (!ws[cell]) ws[cell] = {t:'n'};
+      ws[cell].v = diff; ws[cell].t = 'n';
+    }
+    // L列（調整分SC）
+    if (r.kaite.scrap_next != null && r.scrap != null) {
+      const diff = Math.round((r.kaite.scrap_next - r.scrap)*100)/100;
+      const cell = XLSX.utils.encode_cell({r: r.row-1, c: 11});
+      if (!ws[cell]) ws[cell] = {t:'n'};
+      ws[cell].v = diff; ws[cell].t = 'n';
+    }
+  }
+
+  const wbout = XLSX.write(wb, {bookType:'xlsx', type:'array', cellStyles:true});
+  const blob = new Blob([wbout], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `見積一覧表_改訂済み_${new Date().toLocaleDateString('ja-JP').replace(/\//g,'')}.xlsx`;
+  a.click();
+
+  // 手順ガイドを表示
+  document.getElementById('inst-box').style.display = 'block';
+  document.getElementById('inst-box').scrollIntoView({behavior:'smooth'});
+}
+
+// ===== STEP3: 調達基準表との照合 =====
+function loadExcel2(input) {
+  const f = input.files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    state.excelBuf2 = e.target.result;
+    document.getElementById('ic2').textContent = '✅';
+    document.getElementById('ft2').textContent = f.name;
+    document.getElementById('box-excel2').classList.add('loaded');
+    document.getElementById('btn-match').disabled = false;
+  };
+  reader.readAsArrayBuffer(f);
+}
+
+async function runMatch() {
+  document.getElementById('btn-match').disabled = true;
+  document.getElementById('pb3').style.display = 'block';
+  document.getElementById('pf3').style.width = '10%';
+
+  try {
+    const {products} = parseExcel(state.excelBuf2);
+    document.getElementById('pf3').style.width = '50%';
+
+    // 調達基準表のデータを使って照合（既存ロジック流用）
+    const choutatsuMap = {};
+    for (const item of state.choutatsuParsed) {
+      const k = item.part_no.replace(/[\s　]+/g,'').toUpperCase();
+      if (!choutatsuMap[k]) choutatsuMap[k] = [];
+      choutatsuMap[k].push(item);
+    }
+    document.getElementById('pf3').style.width = '80%';
+
+    const tol = 0.5;
+    const rows = [];
+    let nOk=0, nNg=0, nMs=0;
+
+    for (const p of products) {
+      const ek = p.part_no.replace(/[\s　]+/g,'').toUpperCase();
+      let found = choutatsuMap[ek] || null;
+      // 前方一致
+      if (!found) {
+        for (const [k,v] of Object.entries(choutatsuMap)) {
+          if (k.startsWith(ek.substring(0,8)) || ek.startsWith(k.substring(0,8))) { found=v; break; }
+        }
+      }
+      if (!found) { rows.push({...p, pdf_price:null, status:'missing'}); nMs++; continue; }
+      const best = found.reduce((a,b)=>p.excel_no_mold?Math.abs(a.price-p.excel_no_mold)<Math.abs(b.price-p.excel_no_mold)?a:b:a);
+      const diff = p.excel_no_mold != null ? Math.round((best.price - p.excel_no_mold)*100)/100 : null;
+      const dr = p.excel_no_mold ? Math.round(diff/p.excel_no_mold*1000)/10 : null;
+      const status = diff != null && Math.abs(diff) <= tol ? 'ok' : 'ng';
+      if (status === 'ok') nOk++; else nNg++;
+      rows.push({...p, pdf_price:best.price, diff, diff_rate:dr, status});
+    }
+
+    document.getElementById('cards3').innerHTML = `
+      <div class="card"><div class="cl">照合件数</div><div class="cv cbl">${nOk+nNg}</div></div>
+      <div class="card"><div class="cl">✓ 一致</div><div class="cv cok">${nOk}</div></div>
+      <div class="card"><div class="cl">⚠ 差異あり</div><div class="cv cng">${nNg}</div></div>
+      <div class="card"><div class="cl">PDF未記載</div><div class="cv cwn">${nMs}</div></div>`;
+
+    state.matchRows = rows;
+    state.f3 = 'all';
+    renderStep3();
+    document.getElementById('match-result').style.display = 'block';
+    document.getElementById('pf3').style.width = '100%';
+    setTimeout(()=>document.getElementById('pb3').style.display='none', 400);
+
+  } catch(e) {
+    setSt('❌ エラー: ' + e.message);
+    console.error(e);
+    document.getElementById('btn-match').disabled = false;
+  }
+}
+
+function renderStep3() {
+  const f = state.f3;
+  const rows = (state.matchRows||[]).filter(r => f==='all'||r.status===f);
+  const f2 = v => v!=null ? v.toFixed(2) : '—';
+  const tb = document.getElementById('tbody3');
+  if (!rows.length) { tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:30px;color:var(--tx3)">該当なし</td></tr>'; return; }
+  tb.innerHTML = rows.map(r => {
+    const badge = r.status==='ok' ? '<span class="badge b-ok">✓ 一致</span>'
+                : r.status==='ng' ? '<span class="badge b-ng">⚠ 差異</span>'
+                : '<span class="badge b-sk">未記載</span>';
+    const dh = r.diff!=null ? (r.diff>0?`<span class="diff-p">+${r.diff.toFixed(2)}</span>`:r.diff<0?`<span class="diff-n">${r.diff.toFixed(2)}</span>`:`<span class="diff-z">0.00</span>`) : '—';
+    const rh = r.diff_rate!=null ? (r.diff_rate>0?`<span class="diff-p">+${r.diff_rate.toFixed(1)}%</span>`:r.diff_rate<0?`<span class="diff-n">${r.diff_rate.toFixed(1)}%</span>`:`<span class="diff-z">0.0%</span>`) : '—';
+    return `<tr>
+      <td class="mn">${r.no}</td>
+      <td class="mn">${r.part_no}</td>
+      <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.part_name||''}</td>
+      <td class="r mn">${r.appl_date}</td>
+      <td class="r">${f2(r.pdf_price)}</td>
+      <td class="r">${f2(r.excel_no_mold)}</td>
+      <td class="r">${dh}</td>
+      <td class="r">${rh}</td>
+      <td>${badge}</td>
+    </tr>`;
+  }).join('');
+}
+
+function setF3(btn, f) {
+  state.f3 = f;
+  document.querySelectorAll('#page3 .fb').forEach(b=>b.className='fb');
+  btn.classList.add(f==='all'?'fa':f==='ok'?'fok':f==='ng'?'fng':'fwn');
+  renderStep3();
+}
+
+function expCSV3() {
+  const rows = state.matchRows || [];
+  const h = ['調達NO','品番','部品名','適用年月日','PDF加工単価','Excel型レス単価','差異','差異率','判定'];
+  const data = rows.map(r=>[r.no,r.part_no,r.part_name,r.appl_date,
+    r.pdf_price!=null?r.pdf_price.toFixed(2):'',
+    r.excel_no_mold!=null?r.excel_no_mold.toFixed(2):'',
+    r.diff!=null?r.diff.toFixed(2):'',r.diff_rate!=null?r.diff_rate.toFixed(1)+'%':'',
+    r.status==='ok'?'一致':r.status==='ng'?'差異あり':'未記載']);
+  const csv='﻿'+[h,...data].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download=`調達基準表照合_${new Date().toLocaleDateString('ja-JP').replace(/\//g,'')}.csv`;
+  a.click();
+}
+
+function resetAll() {
+  state = {...state, excelBuf:null, kaitePDFs:[], annaiPDFs:[], choutatsuPDFs:[]};
+  ['excel','kaite','annai','choutatsu'].forEach(k=>{
+    document.getElementById('box-'+k).classList.remove('loaded');
+    document.getElementById('fl-'+k).innerHTML='';
+  });
+  document.getElementById('btn-start').disabled = true;
+  gotoStep(0); setSt('');
+}
+
+function setSt(m) { document.getElementById('status').textContent = m; }
+</script>
+</body>
+</html>
