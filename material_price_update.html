@@ -6,101 +6,88 @@
 <title>材料単価改訂システム｜橋本工業</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
-:root{
-  --bg:#f0f2f7;--sur:#fff;--sur2:#f5f7fb;--bdr:#dde1ec;
-  --ac:#2563eb;--ok:#16a34a;--wn:#d97706;--ng:#dc2626;
-  --tx:#1e2235;--tx2:#4b5580;--tx3:#9099bb;--hd:#1e2235;
-}
+:root{--bg:#f0f2f7;--sur:#fff;--sur2:#f5f7fb;--bdr:#dde1ec;--ac:#2563eb;--ok:#16a34a;--wn:#d97706;--ng:#dc2626;--tx:#1e2235;--tx2:#4b5580;--tx3:#9099bb;--hd:#1e2235;}
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--tx);font-size:13px}
 header{background:var(--hd);padding:14px 28px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:200;box-shadow:0 2px 8px rgba(0,0,0,.25)}
 .logo{width:34px;height:34px;background:linear-gradient(135deg,#3b82f6,#7c3aed);border-radius:7px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-weight:500;font-size:13px;color:#fff}
 header h1{font-size:14px;font-weight:500;color:#fff}
 header small{font-size:11px;color:#8893bb}
-.step-nav{background:var(--sur);border-bottom:1px solid var(--bdr);padding:0 28px;display:flex;align-items:stretch;overflow-x:auto}
-.step-item{display:flex;align-items:center;gap:10px;padding:14px 20px;cursor:pointer;border-bottom:3px solid transparent;transition:all .2s;white-space:nowrap;opacity:.4;pointer-events:none}
-.step-item.active{opacity:1;border-bottom-color:var(--ac);pointer-events:auto}
-.step-item.done{opacity:.75;pointer-events:auto}
+.snav{background:var(--sur);border-bottom:1px solid var(--bdr);padding:0 28px;display:flex;overflow-x:auto}
+.si{display:flex;align-items:center;gap:10px;padding:14px 20px;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;opacity:.4;pointer-events:none}
+.si.active{opacity:1;border-bottom-color:var(--ac);pointer-events:auto}
+.si.done{opacity:.75;pointer-events:auto}
 .sn{width:24px;height:24px;border-radius:50%;background:#e2e8f0;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.step-item.active .sn{background:var(--ac)}
-.step-item.done .sn{background:var(--ok)}
-.sl{font-size:12px;font-weight:500;color:var(--tx2)}
-.step-item.active .sl{color:var(--tx);font-weight:700}
-.step-arrow{color:var(--bdr);padding:0 6px;display:flex;align-items:center;font-size:18px}
+.si.active .sn{background:var(--ac)}.si.done .sn{background:var(--ok)}
+.sl{font-size:12px;font-weight:500;color:var(--tx2)}.si.active .sl{color:var(--tx);font-weight:700}
+.sa{color:var(--bdr);padding:0 6px;font-size:18px;display:flex;align-items:center}
 .main{padding:20px 28px;max-width:1500px;margin:0 auto}
 .panel{background:var(--sur);border:1px solid var(--bdr);border-radius:10px;padding:20px 24px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
 .ptl{font-size:11px;font-weight:700;color:var(--tx3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:14px}
 .page{display:none}.page.active{display:block}
-.upload-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.upload-box{border:1.5px dashed var(--bdr);border-radius:8px;padding:20px;text-align:center;cursor:pointer;transition:all .2s;background:var(--sur2);position:relative;min-height:90px}
-.upload-box:hover{border-color:var(--ac);background:#eff6ff}
-.upload-box.loaded{border-color:var(--ok);background:#f0fdf4}
-.upload-box.wide{grid-column:span 2}
-.upload-box input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
-.upload-box .ic{font-size:24px;margin-bottom:5px;display:block}
-.upload-box p{font-size:12px;color:var(--tx2);font-weight:500;margin-bottom:2px}
-.upload-box small{font-size:10px;color:var(--tx3)}
-.file-list{margin-top:8px;text-align:left}
-.file-item{font-size:10px;color:var(--ok);font-family:'IBM Plex Mono',monospace;padding:1px 0}
-.btn{padding:9px 20px;border-radius:7px;border:none;font-family:'Noto Sans JP',sans-serif;font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.ugrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.ubox{border:1.5px dashed var(--bdr);border-radius:8px;padding:20px;text-align:center;cursor:pointer;background:var(--sur2);position:relative;min-height:90px;transition:all .2s}
+.ubox:hover{border-color:var(--ac);background:#eff6ff}
+.ubox.loaded{border-color:var(--ok);background:#f0fdf4}
+.ubox.wide{grid-column:span 2}
+.ubox input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.ubox .ic{font-size:24px;margin-bottom:5px;display:block}
+.ubox p{font-size:12px;color:var(--tx2);font-weight:500;margin-bottom:2px}
+.ubox small{font-size:10px;color:var(--tx3)}
+.flist{margin-top:8px;text-align:left}
+.fi{font-size:10px;color:var(--ok);font-family:'IBM Plex Mono',monospace;padding:1px 0}
+.btn{padding:9px 20px;border-radius:7px;border:none;font-family:'Noto Sans JP',sans-serif;font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:7px;white-space:nowrap;transition:all .15s}
 .bp{background:var(--ac);color:#fff}.bp:hover{background:#1d4ed8}.bp:disabled{background:#93c5fd;cursor:not-allowed}
 .bg{background:var(--ok);color:#fff}.bg:hover{background:#15803d}
 .bs{background:var(--sur2);color:var(--tx2);border:1px solid var(--bdr)}.bs:hover{border-color:var(--ac);color:var(--ac)}
-.btn-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:16px}
+.brow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:16px}
 .pb{height:4px;background:var(--bdr);border-radius:2px;margin:10px 0;overflow:hidden;display:none}
 .pf{height:100%;background:linear-gradient(90deg,var(--ac),#7c3aed);border-radius:2px;transition:width .3s;width:0}
-.guide-box{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px 18px;margin-bottom:16px}
-.guide-box h3{font-size:12px;font-weight:700;color:#1e40af;margin-bottom:8px}
+.gbox{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px 18px;margin-bottom:16px}
+.gbox h3{font-size:12px;font-weight:700;color:#1e40af;margin-bottom:8px}
 .gs{display:flex;align-items:flex-start;gap:10px;font-size:12px;color:#3b82f6;margin-bottom:6px}
-.gs.cur{font-weight:700;color:#1e40af}
-.gs.pnd{opacity:.35}
-.gs.dn{color:#166534;opacity:.7}
+.gs.cur{font-weight:700;color:#1e40af}.gs.pnd{opacity:.35}.gs.dn{color:#166534;opacity:.7}
 .gn{width:20px;height:20px;border-radius:50%;background:var(--ac);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
-.gs.dn .gn{background:var(--ok)}
-.gs.pnd .gn{background:#cbd5e1}
+.gs.dn .gn{background:var(--ok)}.gs.pnd .gn{background:#cbd5e1}
 .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
 .card{background:var(--sur);border:1px solid var(--bdr);border-radius:9px;padding:12px 16px}
 .cl{font-size:10px;color:var(--tx3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px;font-weight:600}
 .cv{font-family:'IBM Plex Mono',monospace;font-size:26px;font-weight:500;line-height:1}
 .cok{color:var(--ok)}.cwn{color:var(--wn)}.cng{color:var(--ng)}.cbl{color:var(--ac)}
-.fb-bar{display:flex;gap:7px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.fbar{display:flex;gap:7px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
 .fb{padding:4px 12px;border-radius:14px;border:1px solid var(--bdr);background:var(--sur);color:var(--tx2);font-size:11px;cursor:pointer;transition:all .15s}
+.fb:hover{border-color:var(--ac);color:var(--ac)}
 .fb.fa{background:var(--ac);border-color:var(--ac);color:#fff}
 .fb.fok{background:var(--ok);border-color:var(--ok);color:#fff}
 .fb.fng{background:var(--ng);border-color:var(--ng);color:#fff}
 .fb.fwn{background:var(--wn);border-color:var(--wn);color:#fff}
-.tw{border:1px solid var(--bdr);border-radius:9px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05);overflow-x:auto}
-table{width:100%;border-collapse:collapse;min-width:900px}
+.tw{border:1px solid var(--bdr);border-radius:9px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+table{width:100%;border-collapse:collapse}
 thead tr{background:var(--sur2);border-bottom:2px solid var(--bdr)}
-th{padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--tx3);letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
+th{padding:7px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--tx3);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
 th.r{text-align:right}th.c{text-align:center}
 tbody tr{border-bottom:1px solid var(--bdr)}
 tbody tr:hover{background:#f8f9ff}
-tbody tr.grp-hd{background:var(--sur2);font-weight:700}
-tbody tr.grp-ok{background:#f0fdf4}
-tbody tr.grp-warn{background:#fffbeb}
 tbody tr:last-child{border-bottom:none}
+tbody tr.grp-row{background:#f0f4ff;font-weight:600}
+tbody tr.grp-row td{padding:8px 10px;font-size:12px}
+tbody tr.mat-row td{padding:6px 10px 6px 24px;font-size:11px;color:var(--tx2)}
+tbody tr.mat-row:hover{background:#fafbff}
 td{padding:7px 10px;font-size:12px;vertical-align:middle}
 td.r{text-align:right;font-family:'IBM Plex Mono',monospace;font-size:11px}
-td.c{text-align:center}
-td.mn{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--tx2)}
-td.sub{padding-left:24px;color:var(--tx2)}
+td.c{text-align:center}td.mn{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--tx2)}
 .badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:4px;font-size:10px;font-family:'IBM Plex Mono',monospace;font-weight:600}
 .b-ok{background:#dcfce7;color:var(--ok)}.b-ng{background:#fee2e2;color:var(--ng)}
 .b-wn{background:#fef3c7;color:var(--wn)}.b-sk{background:#f1f5f9;color:#64748b}
-.chk{width:16px;height:16px;cursor:pointer;accent-color:var(--ac)}
-.dp{color:var(--ng);font-weight:600}.dn-c{color:var(--ac);font-weight:600}.dz{color:var(--ok)}
-.inst-box{background:#fffbeb;border:2px solid #fcd34d;border-radius:10px;padding:18px 22px;margin-top:16px}
-.inst-box h3{font-size:13px;font-weight:700;color:#92400e;margin-bottom:12px}
-.inst-box ol{padding-left:20px}
-.inst-box li{font-size:12px;color:#78350f;line-height:1.8;margin-bottom:4px}
-.inst-box li strong{color:#92400e}
-.inst-note{font-size:11px;color:#a16207;margin-top:2px;padding-left:4px}
+.chk{width:15px;height:15px;cursor:pointer;accent-color:var(--ac)}
+.dp{color:var(--ng);font-weight:600}.dnc{color:var(--ac);font-weight:600}.dz{color:var(--ok)}
+.ibox{background:#fffbeb;border:2px solid #fcd34d;border-radius:10px;padding:18px 22px;margin-top:16px}
+.ibox h3{font-size:13px;font-weight:700;color:#92400e;margin-bottom:12px}
+.ibox ol{padding-left:20px}.ibox li{font-size:12px;color:#78350f;line-height:1.8;margin-bottom:4px}
+.ibox li strong{color:#92400e}
+.inote{font-size:11px;color:#a16207;margin-top:2px;padding-left:4px}
 #status{font-size:11px;color:var(--tx2);padding:5px 0;min-height:18px}
-.expand-btn{cursor:pointer;color:var(--ac);font-size:11px;margin-left:8px;user-select:none}
-.sub-rows{display:none}
-.sub-rows.open{display:table-row-group}
-@media(max-width:768px){.upload-grid{grid-template-columns:1fr}.upload-box.wide{grid-column:span 1}.cards{grid-template-columns:repeat(2,1fr)}.main{padding:12px}}
+@media(max-width:768px){.ugrid{grid-template-columns:1fr}.ubox.wide{grid-column:span 1}.cards{grid-template-columns:repeat(2,1fr)}.main{padding:12px}}
 </style>
 </head>
 <body>
@@ -108,45 +95,37 @@ td.sub{padding-left:24px;color:var(--tx2)}
   <div class="logo">HK</div>
   <div><h1>材料単価改訂システム</h1><small>橋本工業株式会社</small></div>
 </header>
-<nav class="step-nav">
-  <div class="step-item active" onclick="gotoStep(0)"><div class="sn" id="sn0">1</div><div class="sl">ファイル読み込み</div></div>
-  <div class="step-arrow">›</div>
-  <div class="step-item" onclick="gotoStep(1)"><div class="sn" id="sn1">2</div><div class="sl">材料単価の照合</div></div>
-  <div class="step-arrow">›</div>
-  <div class="step-item" onclick="gotoStep(2)"><div class="sn" id="sn2">3</div><div class="sl">更新確認・Excel出力</div></div>
-  <div class="step-arrow">›</div>
-  <div class="step-item" onclick="gotoStep(3)"><div class="sn" id="sn3">4</div><div class="sl">調達基準表との照合</div></div>
+<nav class="snav">
+  <div class="si active" onclick="gotoStep(0)"><div class="sn" id="sn0">1</div><div class="sl">ファイル読み込み</div></div>
+  <div class="sa">›</div>
+  <div class="si" onclick="gotoStep(1)"><div class="sn" id="sn1">2</div><div class="sl">材料単価の照合</div></div>
+  <div class="sa">›</div>
+  <div class="si" onclick="gotoStep(2)"><div class="sn" id="sn2">3</div><div class="sl">更新確認・Excel出力</div></div>
+  <div class="sa">›</div>
+  <div class="si" onclick="gotoStep(3)"><div class="sn" id="sn3">4</div><div class="sl">調達基準表との照合</div></div>
 </nav>
 <div class="main">
 
 <!-- STEP0 -->
 <div class="page active" id="page0">
-  <div class="guide-box">
+  <div class="gbox">
     <h3>📋 作業の流れ</h3>
     <div class="gs cur"><div class="gn">1</div><div>4種類のファイルを読み込んで照合を開始します</div></div>
-    <div class="gs pnd"><div class="gn">2</div><div>改定表PDFの品番をExcelと照合し、実効単価（基準＋エキストラ）と現行単価を比較します</div></div>
-    <div class="gs pnd"><div class="gn">3</div><div>更新する材質グループを選択してExcelをダウンロード → Excelを開いて保存します</div></div>
+    <div class="gs pnd"><div class="gn">2</div><div>改定表PDFの品番とExcelを品番照合し、実効単価（基準+エキストラ）と現行単価を比較します</div></div>
+    <div class="gs pnd"><div class="gn">3</div><div>更新する材質を選択してExcelをダウンロード → Excelで開いて保存します</div></div>
     <div class="gs pnd"><div class="gn">4</div><div>再計算済みExcelを読み込んで調達基準表PDFと照合します</div></div>
   </div>
   <div class="panel">
     <div class="ptl">ファイル読み込み</div>
-    <div class="upload-grid">
-      <div class="upload-box" id="box-excel"><input type="file" accept=".xlsx" id="fi-excel">
-        <span class="ic">📊</span><p>Excelファイル</p><small>見積一覧表.xlsx</small>
-        <div class="file-list" id="fl-excel"></div></div>
-      <div class="upload-box" id="box-kaite"><input type="file" accept=".pdf" multiple id="fi-kaite">
-        <span class="ic">📄</span><p>原材料支給単価改定表PDF</p><small>複数可</small>
-        <div class="file-list" id="fl-kaite"></div></div>
-      <div class="upload-box wide" id="box-annai"><input type="file" accept=".pdf" multiple id="fi-annai">
-        <span class="ic">📋</span><p>案内文PDF（複数可）</p><small>スクラップ改定案内・ステンレス支給単価改定案内 など</small>
-        <div class="file-list" id="fl-annai"></div></div>
-      <div class="upload-box wide" id="box-choutatsu"><input type="file" accept=".pdf" multiple id="fi-choutatsu">
-        <span class="ic">📑</span><p>調達基準表PDF（複数可）</p><small>部品単価通知書 兼 調達基準表</small>
-        <div class="file-list" id="fl-choutatsu"></div></div>
+    <div class="ugrid">
+      <div class="ubox" id="box-excel"><input type="file" accept=".xlsx" id="fi-excel"><span class="ic">📊</span><p>Excelファイル</p><small>見積一覧表.xlsx</small><div class="flist" id="fl-excel"></div></div>
+      <div class="ubox" id="box-kaite"><input type="file" accept=".pdf" multiple id="fi-kaite"><span class="ic">📄</span><p>原材料支給単価改定表PDF</p><small>複数可</small><div class="flist" id="fl-kaite"></div></div>
+      <div class="ubox wide" id="box-annai"><input type="file" accept=".pdf" multiple id="fi-annai"><span class="ic">📋</span><p>案内文PDF（複数可）</p><small>スクラップ改定案内・ステンレス支給単価改定案内 など</small><div class="flist" id="fl-annai"></div></div>
+      <div class="ubox wide" id="box-choutatsu"><input type="file" accept=".pdf" multiple id="fi-choutatsu"><span class="ic">📑</span><p>調達基準表PDF（複数可）</p><small>部品単価通知書 兼 調達基準表</small><div class="flist" id="fl-choutatsu"></div></div>
     </div>
     <div class="pb" id="pb0"><div class="pf" id="pf0"></div></div>
     <div id="status"></div>
-    <div class="btn-row">
+    <div class="brow">
       <button class="btn bp" id="btn-start" disabled onclick="startAnalysis()">▶ 照合開始</button>
       <button class="btn bs" onclick="resetAll()">↺ リセット</button>
     </div>
@@ -157,26 +136,32 @@ td.sub{padding-left:24px;color:var(--tx2)}
 <div class="page" id="page1">
   <div class="cards" id="cards1"></div>
   <div class="panel">
-    <div class="ptl">材質グループ別 照合結果（クリックで品番を展開）</div>
-    <div class="fb-bar">
+    <div class="ptl">品番・材質別 照合結果（材質グループ単位で集計）</div>
+    <div class="fbar">
       <button class="fb fa" id="f1-all" onclick="setF1(this,'all')">すべて</button>
       <button class="fb" id="f1-ok" onclick="setF1(this,'ok')">✅ 条件OK</button>
       <button class="fb" id="f1-warn" onclick="setF1(this,'warn')">⚠ 要確認</button>
-      <button class="fb" id="f1-skip" onclick="setF1(this,'skip')">— 改定なし</button>
+      <button class="fb" id="f1-skip" onclick="setF1(this,'skip')">— PDFなし</button>
     </div>
     <div class="tw"><table id="tbl1">
       <thead><tr>
-        <th class="c">更新</th>
-        <th>材質グループ</th>
-        <th class="r">Excel実効<br>支給単価</th><th class="r">PDF現行<br>支給単価</th><th class="c">①</th>
-        <th class="r">PDF次回<br>支給単価</th><th class="r">差額</th><th class="r">案内文<br>差額</th><th class="c">②</th>
-        <th class="r">Excel実効<br>SC単価</th><th class="r">PDF現行<br>SC単価</th><th class="c">①SC</th>
-        <th class="r">PDF次回SC</th><th class="r">SC差額</th>
-        <th>判定</th><th>品番数</th>
+        <th>材質グループ / 品番</th>
+        <th>材質コード</th>
+        <th class="r">実効支給単価<br>(基準+Extra)</th>
+        <th class="r">PDF現行<br>支給単価</th>
+        <th class="c">①一致</th>
+        <th class="r">PDF次回<br>支給単価</th>
+        <th class="r">差額<br>(支給)</th>
+        <th class="r">実効SC単価<br>(基準+Extra)</th>
+        <th class="r">PDF現行<br>SC単価</th>
+        <th class="c">①一致</th>
+        <th class="r">PDF次回<br>SC単価</th>
+        <th class="r">差額<br>(SC)</th>
+        <th>判定</th>
       </tr></thead>
       <tbody id="tbody1"></tbody>
     </table></div>
-    <div class="btn-row">
+    <div class="brow">
       <button class="btn bp" onclick="gotoStep(2)">次へ：更新確認 →</button>
     </div>
   </div>
@@ -190,25 +175,30 @@ td.sub{padding-left:24px;color:var(--tx2)}
       <thead><tr>
         <th class="c"><input type="checkbox" id="chk-all" class="chk" checked onchange="toggleAll(this)"></th>
         <th>材質グループ</th>
-        <th class="r">現在 支給単価</th><th class="r">→ 次回 支給単価</th><th class="r">差額（支給）</th>
-        <th class="r">現在 SC単価</th><th class="r">→ 次回 SC単価</th><th class="r">差額（SC）</th>
+        <th class="r">現在 支給単価(基準)</th>
+        <th class="r">→ 調整分(支給)</th>
+        <th class="r">次回 支給単価</th>
+        <th class="r">現在 SC単価(基準)</th>
+        <th class="r">→ 調整分(SC)</th>
+        <th class="r">次回 SC単価</th>
+        <th>照合品番数</th>
       </tr></thead>
       <tbody id="tbody2"></tbody>
     </table></div>
-    <div class="btn-row">
+    <div class="brow">
       <button class="btn bg" onclick="downloadExcel()">📥 更新済みExcelをダウンロード</button>
       <button class="btn bs" onclick="gotoStep(1)">← 戻る</button>
     </div>
   </div>
-  <div class="inst-box" id="inst-box" style="display:none">
+  <div class="ibox" id="inst-box" style="display:none">
     <h3>⚠️ STEP4へ進む前に必ず行ってください</h3>
     <ol>
       <li><strong>上のボタンで更新済みExcelをダウンロード</strong>してください</li>
-      <li>ダウンロードしたExcelを<strong>Excelアプリで開いて</strong>ください<div class="inst-note">※ LibreOfficeでは数式が再計算されません</div></li>
-      <li><strong>何も変更せずに保存（Ctrl+S）</strong>してそのまま閉じてください<div class="inst-note">→ SUMIF・材料費などの数式が再計算されます</div></li>
-      <li>保存・終了したファイルをSTEP4で読み込んでください</li>
+      <li>ダウンロードしたExcelを<strong>Excelアプリで開いて</strong>ください<div class="inote">※ LibreOfficeでは数式が再計算されません</div></li>
+      <li><strong>何も変更せずに保存（Ctrl+S）</strong>してそのまま閉じてください<div class="inote">→ この操作でSUMIF・材料費などの数式が再計算されます</div></li>
+      <li>保存したファイルをSTEP4で読み込んでください</li>
     </ol>
-    <div class="btn-row" style="margin-top:14px">
+    <div class="brow" style="margin-top:14px">
       <button class="btn bp" onclick="gotoStep(3)">STEP4：調達基準表との照合へ →</button>
     </div>
   </div>
@@ -218,15 +208,17 @@ td.sub{padding-left:24px;color:var(--tx2)}
 <div class="page" id="page3">
   <div class="panel">
     <div class="ptl">再計算済みExcelの読み込み</div>
-    <div class="guide-box" style="margin-bottom:14px">
+    <div class="gbox" style="margin-bottom:14px">
       <h3>📌 このステップでやること</h3>
       <div class="gs dn"><div class="gn">✓</div><div>STEP3で更新済みExcelをダウンロード済み</div></div>
-      <div class="gs dn"><div class="gn">✓</div><div>ExcelアプリでファイルをCtrl+S保存済み</div></div>
-      <div class="gs cur"><div class="gn">4</div><div>保存したExcelをここに読み込んで、調達基準表PDFと照合します</div></div>
+      <div class="gs dn"><div class="gn">✓</div><div>ExcelアプリでCtrl+S保存済み</div></div>
+      <div class="gs cur"><div class="gn">4</div><div>保存したExcelを読み込んで調達基準表PDFと照合します</div></div>
     </div>
-    <div class="upload-box" id="box-excel2" style="max-width:420px"><input type="file" accept=".xlsx" id="fi-excel2">
-      <span class="ic" id="ic2">📊</span><p id="ft2">再計算済みExcelを読み込む</p><small>ExcelアプリでCtrl+S保存したファイル</small></div>
-    <div class="btn-row" style="margin-top:12px">
+    <div class="ubox" id="box-excel2" style="max-width:420px">
+      <input type="file" accept=".xlsx" id="fi-excel2">
+      <span class="ic" id="ic2">📊</span><p id="ft2">再計算済みExcelを読み込む</p><small>ExcelアプリでCtrl+S保存したファイル</small>
+    </div>
+    <div class="brow" style="margin-top:12px">
       <button class="btn bp" id="btn-match" disabled onclick="runMatch()">▶ 調達基準表と照合</button>
     </div>
     <div class="pb" id="pb3"><div class="pf" id="pf3"></div></div>
@@ -235,11 +227,11 @@ td.sub{padding-left:24px;color:var(--tx2)}
     <div class="cards" id="cards3"></div>
     <div class="panel">
       <div class="ptl">調達基準表 照合結果</div>
-      <div class="fb-bar">
+      <div class="fbar">
         <button class="fb fa" id="f3-all" onclick="setF3(this,'all')">すべて</button>
         <button class="fb" id="f3-ng" onclick="setF3(this,'ng')">⚠ 差異あり</button>
         <button class="fb" id="f3-ok" onclick="setF3(this,'ok')">✓ 一致</button>
-        <button class="fb" id="f3-missing" onclick="setF3(this,'missing')">PDF未記載</button>
+        <button class="fb" id="f3-ms" onclick="setF3(this,'missing')">PDF未記載</button>
       </div>
       <div class="tw"><table>
         <thead><tr>
@@ -249,578 +241,702 @@ td.sub{padding-left:24px;color:var(--tx2)}
         </tr></thead>
         <tbody id="tbody3"></tbody>
       </table></div>
-      <div class="btn-row"><button class="btn bs" onclick="expCSV3()">📥 CSV出力</button></div>
+      <div class="brow"><button class="btn bs" onclick="expCSV3()">📥 CSV出力</button></div>
     </div>
   </div>
 </div>
 
-</div>
+</div><!-- /main -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script id="mat-data" type="application/json">[{"row":17,"code":"(POSCO材あり)","unit":null,"scrap":null},{"row":18,"code":"ALCD-CL60/60","unit":216.2,"scrap":35.9},{"row":19,"code":"APFH60","unit":117.9,"scrap":43.6},{"row":20,"code":"HFS304-S","unit":null,"scrap":null},{"row":21,"code":"HFS409L","unit":283.7,"scrap":53.0},{"row":22,"code":"HFS409L-S","unit":318.7,"scrap":53.0},{"row":23,"code":"HFS409L-T","unit":null,"scrap":null},{"row":24,"code":"HFS409L-TS","unit":222.0,"scrap":43.0},{"row":25,"code":"HFS429M","unit":428.7,"scrap":55.0},{"row":26,"code":"HFS429M-S","unit":335.5,"scrap":31.3},{"row":27,"code":"HFS436L","unit":414.7,"scrap":53.0},{"row":28,"code":"HFS436L-S","unit":449.7,"scrap":53.0},{"row":29,"code":"HSS430CU","unit":388.7,"scrap":53.0},{"row":30,"code":"HSS430CU-S","unit":423.7,"scrap":53.0},{"row":31,"code":"HSS441　(Sコート不可)","unit":null,"scrap":null},{"row":32,"code":"JFE TF1","unit":null,"scrap":null},{"row":33,"code":"JSH270C","unit":129.0,"scrap":38.9},{"row":34,"code":"NGLDD AZ150","unit":199.8,"scrap":35.9},{"row":35,"code":"NSCC FHZ","unit":null,"scrap":null},{"row":36,"code":"SA1D(E)80","unit":240.2,"scrap":44.9},{"row":37,"code":"SA1D80","unit":204.2,"scrap":35.9},{"row":38,"code":"SA1E40","unit":166.7,"scrap":35.8},{"row":39,"code":"SA1E80","unit":212.2,"scrap":35.9},{"row":40,"code":"SUS304-S","unit":592.4,"scrap":100.5},{"row":41,"code":"SUS409L-T","unit":292.1,"scrap":56.0},{"row":42,"code":"SUS409L-TS","unit":212.5,"scrap":37.3},{"row":43,"code":"SUS429M-S","unit":302.0,"scrap":37.3}]</script>
 <script>
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-var MAT_GROUPS = JSON.parse(document.getElementById('mat-data').textContent);
-
-var state = {
+// --- 状態 ---
+var S = {
   excelBuf: null, excelBuf2: null,
   kaitePDFs: [], annaiPDFs: [], choutatsuPDFs: [],
-  excelBlocks: [], matBase: {},
+  matMaster: [], excelBlocks: [],
   kaiteParsed: [], annaiDiffs: [], choutatsuParsed: [],
-  groupRows: [], step2Rows: [], matchRows: [],
+  groupResults: [], matchRows: [],
   f1: 'all', f3: 'all'
 };
 
-// ===== ステップ管理 =====
+// --- ステップ ---
 function gotoStep(n) {
   var pages = document.querySelectorAll('.page');
   for (var i = 0; i < pages.length; i++) pages[i].classList.toggle('active', i === n);
-  var items = document.querySelectorAll('.step-item');
+  var items = document.querySelectorAll('.si');
   for (var i = 0; i < items.length; i++) {
-    items[i].classList.remove('active','done');
+    items[i].classList.remove('active', 'done');
     if (i === n) items[i].classList.add('active');
     else if (i < n) items[i].classList.add('done');
-    document.getElementById('sn'+i).textContent = i < n ? '\u2713' : String(i+1);
+    document.getElementById('sn' + i).textContent = i < n ? '\u2713' : String(i + 1);
   }
-  window.scrollTo(0,0);
+  window.scrollTo(0, 0);
 }
 
-// ===== ファイルイベント =====
-document.getElementById('fi-excel').addEventListener('change', function(){ loadExcelFile(this); });
-document.getElementById('fi-kaite').addEventListener('change', function(){ loadPDFFiles(this,'kaite'); });
-document.getElementById('fi-annai').addEventListener('change', function(){ loadPDFFiles(this,'annai'); });
-document.getElementById('fi-choutatsu').addEventListener('change', function(){ loadPDFFiles(this,'choutatsu'); });
-document.getElementById('fi-excel2').addEventListener('change', function(){ loadExcel2File(this); });
+// --- ファイル読み込み ---
+document.getElementById('fi-excel').addEventListener('change', function() { loadXLSX(this); });
+document.getElementById('fi-kaite').addEventListener('change', function() { loadPDFs(this, 'kaite'); });
+document.getElementById('fi-annai').addEventListener('change', function() { loadPDFs(this, 'annai'); });
+document.getElementById('fi-choutatsu').addEventListener('change', function() { loadPDFs(this, 'choutatsu'); });
+document.getElementById('fi-excel2').addEventListener('change', function() { loadXLSX2(this); });
 
-function loadExcelFile(input) {
-  var f = input.files[0]; if (!f) return;
+function loadXLSX(inp) {
+  var f = inp.files[0]; if (!f) return;
   var r = new FileReader();
-  r.onload = function(e) { state.excelBuf = e.target.result; setLoaded('box-excel','fl-excel',[f.name]); checkReady(); };
+  r.onload = function(e) { S.excelBuf = e.target.result; setLoaded('box-excel','fl-excel',[f.name]); checkReady(); };
   r.readAsArrayBuffer(f);
 }
-function loadPDFFiles(input, key) {
-  var files = Array.from(input.files); if (!files.length) return;
-  Promise.all(files.map(function(f) {
-    return new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(e){res({name:f.name,buf:e.target.result});}; r.onerror=rej; r.readAsArrayBuffer(f); });
-  })).then(function(results) { state[key+'PDFs']=results; setLoaded('box-'+key,'fl-'+key,files.map(function(f){return f.name;})); checkReady(); });
+function loadPDFs(inp, key) {
+  var files = Array.from(inp.files); if (!files.length) return;
+  var ps = files.map(function(f) {
+    return new Promise(function(res, rej) {
+      var r = new FileReader();
+      r.onload = function(e) { res({ name: f.name, buf: e.target.result }); };
+      r.onerror = rej; r.readAsArrayBuffer(f);
+    });
+  });
+  Promise.all(ps).then(function(results) {
+    S[key + 'PDFs'] = results;
+    setLoaded('box-' + key, 'fl-' + key, files.map(function(f) { return f.name; }));
+    checkReady();
+  });
 }
-function setLoaded(boxId,listId,names) {
-  document.getElementById(boxId).classList.add('loaded');
-  document.getElementById(listId).innerHTML = names.map(function(n){return '<div class="file-item">\u2705 '+n+'</div>';}).join('');
+function setLoaded(bid, lid, names) {
+  document.getElementById(bid).classList.add('loaded');
+  document.getElementById(lid).innerHTML = names.map(function(n) { return '<div class="fi">\u2705 ' + n + '</div>'; }).join('');
 }
 function checkReady() {
-  var ok = state.excelBuf && state.kaitePDFs.length && state.annaiPDFs.length && state.choutatsuPDFs.length;
+  var ok = S.excelBuf && S.kaitePDFs.length && S.annaiPDFs.length && S.choutatsuPDFs.length;
   document.getElementById('btn-start').disabled = !ok;
-  if (ok) setSt('ファイルが揃いました。「照合開始」を押してください。');
+  if (ok) setSt('\u30d5\u30a1\u30a4\u30eb\u304c\u6307\u3044\u307e\u3057\u305f\u3002\u300e\u7167\u5408\u958b\u59cb\u300f\u3092\u62bc\u3057\u3066\u304f\u3060\u3055\u3044\u3002');
 }
 
-// ===== PDF解析 =====
+// --- PDF解析ユーティリティ ---
 function decodePDF(s) {
   var r = '', offset = 29;
   for (var i = 0; i < s.length; i++) {
-    var code = s.charCodeAt(i);
-    if (code < 256) { var d = code+offset; if (d>=32 && d<=126) r+=String.fromCharCode(d); }
+    var c = s.charCodeAt(i);
+    if (c < 256) { var d = c + offset; if (d >= 32 && d <= 126) r += String.fromCharCode(d); }
     else r += s[i];
   }
   return r;
 }
+function nearestX(d, x, tol) {
+  if (tol === undefined) tol = 12;
+  var keys = Object.keys(d).filter(function(k) { return Math.abs(Number(k) - x) <= tol; });
+  if (!keys.length) return null;
+  keys.sort(function(a, b) { return Math.abs(Number(a) - x) - Math.abs(Number(b) - x); });
+  return d[keys[0]];
+}
 
+// --- 改定表PDF解析（品番・材質・単価） ---
 async function parseKaitePDF(buf) {
-  var pdf = await pdfjsLib.getDocument({data:new Uint8Array(buf)}).promise;
-  var all = [];
+  var pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+  var records = [];
   for (var p = 1; p <= pdf.numPages; p++) {
     var page = await pdf.getPage(p);
-    var vp = page.getViewport({scale:1.0});
+    var vp = page.getViewport({ scale: 1.0 });
     var tc = await page.getTextContent();
     var spans = [];
     for (var j = 0; j < tc.items.length; j++) {
-      var item = tc.items[j];
-      var t = item.str.trim();
-      if (t) spans.push({x:Math.round(item.transform[4]),y:Math.round(vp.height-item.transform[5]),dec:decodePDF(t)});
+      var it = tc.items[j];
+      var t = it.str.trim();
+      if (t) spans.push({ x: Math.round(it.transform[4]), y: Math.round(vp.height - it.transform[5]), dec: decodePDF(t) });
     }
-    var getNum = function(ty) {
+    var getNumRow = function(ty) {
       var row = {};
       for (var i = 0; i < spans.length; i++) {
-        if (Math.abs(spans[i].y-ty) <= 8) { var v=parseFloat(spans[i].dec); if (!isNaN(v)) row[spans[i].x]=v; }
+        if (Math.abs(spans[i].y - ty) <= 8) { var v = parseFloat(spans[i].dec); if (!isNaN(v)) row[spans[i].x] = v; }
       }
       return row;
     };
-    var scNext=getNum(188), scCur=getNum(254), unNext=getNum(316), unCur=getNum(382);
-    // 材質行（y=555-590, 大文字2字以上で始まる）
-    var matRow = {};
+    var scrapNext = getNumRow(188), scrapCur = getNumRow(254);
+    var unitNext = getNumRow(316), unitCur = getNumRow(382);
+    // 材質行（y=555~590）
+    var matPat = /^(HFS|SA1|SUS|HSS|ALCD|NGLDD|JSH|APFH)/;
+    var matYs = [];
     for (var i = 0; i < spans.length; i++) {
-      var s = spans[i];
-      if (s.y >= 555 && s.y <= 590 && /^[A-Z]{2}[A-Z0-9/()A-Z-]*/.test(s.dec) && !/^\d+$/.test(s.dec)) {
-        matRow[s.x] = s.dec;
+      if (matPat.test(spans[i].dec) && spans[i].y >= 555 && spans[i].y <= 590) {
+        var found = false;
+        for (var k = 0; k < matYs.length; k++) { if (Math.abs(matYs[k] - spans[i].y) <= 6) { found = true; break; } }
+        if (!found) matYs.push(spans[i].y);
       }
     }
-    // 品番行（y=729-739）
+    matYs.sort(function(a, b) { return a - b; });
+    var mat1Row = {}, mat2Row = {};
+    for (var i = 0; i < spans.length; i++) {
+      if (!matPat.test(spans[i].dec)) continue;
+      if (matYs.length > 0 && Math.abs(spans[i].y - matYs[0]) <= 6) mat1Row[spans[i].x] = spans[i].dec;
+      else if (matYs.length > 1 && Math.abs(spans[i].y - matYs[1]) <= 6) mat2Row[spans[i].x] = spans[i].dec;
+    }
+    // 品番行（y=728~742）
     var partRow = {};
     for (var i = 0; i < spans.length; i++) {
-      var s = spans[i];
-      if (s.y >= 729 && s.y <= 739 && /^1[0-9A-Z]{3,5}-[A-Z0-9]/.test(s.dec)) partRow[s.x] = s.dec;
+      if (spans[i].y >= 728 && spans[i].y <= 742 && /^1[0-9A-Z]{4,5}-[A-Z0-9]{2,3}$/.test(spans[i].dec)) {
+        partRow[spans[i].x] = spans[i].dec;
+      }
     }
-    var pick = function(d, x, tol) { if (tol===undefined) tol=9; if (d[x]!==undefined) return d[x]; var best=null,bd=9999; Object.keys(d).forEach(function(k){var dd=Math.abs(Number(k)-x);if(dd<=tol&&dd<bd){bd=dd;best=d[k];}}); return best; };
-    var xKeys = Object.keys(scCur);
-    for (var i = 0; i < xKeys.length; i++) {
-      var x = Number(xKeys[i]);
-      all.push({x:x, page:p, part_no:pick(partRow,x,9), mat:pick(matRow,x,9),
-        sc_cur:pick(scCur,x,9), sc_next:pick(scNext,x,9), unit_cur:pick(unCur,x,9), unit_next:pick(unNext,x,9)});
-    }
+    var allX = {};
+    Object.keys(scrapCur).forEach(function(k) { allX[k] = 1; });
+    Object.keys(unitCur).forEach(function(k) { allX[k] = 1; });
+    Object.keys(allX).forEach(function(x) {
+      var xn = Number(x);
+      records.push({
+        part_no: nearestX(partRow, xn, 15) || '',
+        mat1: nearestX(mat1Row, xn, 15) || '',
+        mat2: nearestX(mat2Row, xn, 15) || '',
+        scrap_cur: nearestX(scrapCur, xn),
+        scrap_next: nearestX(scrapNext, xn),
+        unit_cur: nearestX(unitCur, xn),
+        unit_next: nearestX(unitNext, xn)
+      });
+    });
   }
-  return all;
+  return records;
 }
 
+// --- 案内文PDF解析 ---
 async function parseAnnaiPDF(buf) {
-  var pdf = await pdfjsLib.getDocument({data:new Uint8Array(buf)}).promise;
+  var pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
   var diffs = [];
   for (var p = 1; p <= pdf.numPages; p++) {
     var page = await pdf.getPage(p);
-    var vp = page.getViewport({scale:1.0});
+    var vp = page.getViewport({ scale: 1.0 });
     var tc = await page.getTextContent();
-    var lines=[], cur=[], prevY=-999;
+    var lines = [], cur = [], prevY = -999;
     for (var j = 0; j < tc.items.length; j++) {
-      var item = tc.items[j];
-      if (Math.abs(item.transform[5]-prevY)>5 && cur.length) { lines.push(cur.join(' ')); cur=[]; }
-      cur.push(item.str.trim()); prevY=item.transform[5];
+      var it = tc.items[j];
+      var y = Math.round(vp.height - it.transform[5]);
+      if (Math.abs(y - prevY) > 5 && cur.length) { lines.push(cur.join(' ')); cur = []; }
+      cur.push(it.str.trim()); prevY = y;
     }
     if (cur.length) lines.push(cur.join(' '));
-    for (var j = 0; j < lines.length; j++) {
-      var m = lines[j].match(/([A-Z][A-Z0-9]{2,}(?:-[A-Z0-9]+)?)\s*(?:\([^)]+\))?\s*([+\-][0-9]+\.?[0-9]*)円\/kg/);
-      if (m) diffs.push({name:m[1], diff:parseFloat(m[2])});
+    for (var i = 0; i < lines.length; i++) {
+      var m = lines[i].match(/([A-Z][A-Z0-9]{2,}(?:-[A-Z0-9]+)?)\s*(?:\([^)]+\))?\s*([+\-][0-9]+\.?[0-9]*)\u5186\/kg/);
+      if (m) diffs.push({ name: m[1], diff: parseFloat(m[2]) });
     }
   }
   return diffs;
 }
 
+// --- 調達基準表PDF解析 ---
 async function parseChoutatsuPDF(buf) {
-  var pdf = await pdfjsLib.getDocument({data:new Uint8Array(buf)}).promise;
+  var pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
   var results = [];
   for (var p = 1; p <= pdf.numPages; p++) {
     var page = await pdf.getPage(p);
-    var vp = page.getViewport({scale:1.0});
+    var vp = page.getViewport({ scale: 1.0 });
     var tc = await page.getTextContent();
     var spans = [];
     for (var j = 0; j < tc.items.length; j++) {
-      var item=tc.items[j]; var t=item.str.trim();
-      if (t) spans.push({x:Math.round(item.transform[4]),y:Math.round(vp.height-item.transform[5]),text:t});
+      var it = tc.items[j];
+      var t = it.str.trim();
+      if (t) spans.push({ x: Math.round(it.transform[4]), y: Math.round(vp.height - it.transform[5]), text: t });
     }
     for (var i = 0; i < spans.length; i++) {
       var sp = spans[i];
-      if (sp.x>=130&&sp.x<=330&&sp.y>=95&&sp.y<=175&&/^1[0-9A-Z]{3,4}-[A-Z0-9]{2}/.test(sp.text)) {
-        var price=null;
-        for (var k=0;k<spans.length;k++) {
-          var s2=spans[k];
-          if (Math.abs(s2.y-sp.y)<=6&&s2.x>=660&&s2.x<=800) {
-            var v=parseFloat(s2.text.replace(/,/g,''));
-            if (!isNaN(v)&&v>5){price=v;break;}
+      if (sp.x >= 130 && sp.x <= 330 && sp.y >= 95 && sp.y <= 175 && /^1[0-9A-Z]{3,4}-[A-Z0-9]{2}/.test(sp.text)) {
+        for (var k = 0; k < spans.length; k++) {
+          var s2 = spans[k];
+          if (Math.abs(s2.y - sp.y) <= 6 && s2.x >= 660 && s2.x <= 800) {
+            var v = parseFloat(s2.text.replace(/,/g, ''));
+            if (!isNaN(v) && v > 5) { results.push({ part_no: sp.text.trim(), price: v }); break; }
           }
         }
-        if (price!==null) results.push({part_no:sp.text.trim(),price:price});
       }
     }
   }
   return results;
 }
 
-// ===== Excel解析 =====
-function parseExcel(buf) {
-  var wb = XLSX.read(buf,{type:'array'});
+// --- Excel解析 ---
+function parseExcelFull(buf) {
+  var wb = XLSX.read(buf, { type: 'array' });
+  var wsm = wb.Sheets['\u6750\u6599']; // 材料
+  var wsy = wb.Sheets['\u30e6\u30bf\u30ab']; // ユタカ
   // 材料マスタ
-  var ws = wb.Sheets['\u6750\u6599'];
-  var matBase = {};
-  for (var row=17; row<=43; row++) {
-    var ec=XLSX.utils.encode_cell({r:row-1,c:4}), gc=XLSX.utils.encode_cell({r:row-1,c:6}), hc=XLSX.utils.encode_cell({r:row-1,c:7});
-    var e=ws[ec], g=ws[gc], h=ws[hc];
-    if (!e||!e.v) continue;
-    matBase[String(e.v).trim()] = {unit: g&&typeof g.v==='number'?g.v:null, scrap: h&&typeof h.v==='number'?h.v:null, row:row};
+  var matMaster = {};
+  for (var row = 17; row <= 43; row++) {
+    var ec = XLSX.utils.encode_cell({ r: row - 1, c: 4 });
+    var gc = XLSX.utils.encode_cell({ r: row - 1, c: 6 });
+    var hc = XLSX.utils.encode_cell({ r: row - 1, c: 7 });
+    var e = wsm[ec], g = wsm[gc], h = wsm[hc];
+    if (!e || !e.v) continue;
+    matMaster[String(e.v).trim()] = {
+      unit_base: g && typeof g.v === 'number' ? g.v : 0,
+      scrap_base: h && typeof h.v === 'number' ? h.v : 0,
+      row: row
+    };
   }
-  // ユタカシート（品番ブロック）
-  var wsy = wb.Sheets['\u30e6\u30bf\u30ab'];
+  // ユタカブロック
   var blocks = [];
-  if (wsy) {
-    var range = XLSX.utils.decode_range(wsy['!ref']);
-    for (var r=16; r<=range.e.r; r++) {
-      var c3=wsy[XLSX.utils.encode_cell({r:r,c:2})];
-      var c4=wsy[XLSX.utils.encode_cell({r:r,c:3})];
-      var c8=wsy[XLSX.utils.encode_cell({r:r,c:7})];
-      var isNum = c3&&typeof c3.v==='number'&&c4&&c4.f;
-      var isConst = c3&&c3.v==='構成';
-      if (!isNum&&!isConst) continue;
-      if (!c8||!c8.v) continue;
-      // 材質1コード (行3 H列=col7, r+2)
-      var r3h=wsy[XLSX.utils.encode_cell({r:r+2,c:7})];
-      // 材質2コード (行4 H列, r+3)
-      var r4h=wsy[XLSX.utils.encode_cell({r:r+3,c:7})];
-      // エキストラ支給1 (行3 G列=col6, r+2)
-      var r3g=wsy[XLSX.utils.encode_cell({r:r+2,c:6})];
-      // エキストラ支給2 (行4 G列, r+3)
-      var r4g=wsy[XLSX.utils.encode_cell({r:r+3,c:6})];
-      // エキストラSC (行5 G列, r+4)
-      var r5g=wsy[XLSX.utils.encode_cell({r:r+4,c:6})];
-      blocks.push({
-        start:r, part_no:String(c8.v).trim(),
-        mat1: r3h&&r3h.v?String(r3h.v).trim():'',
-        mat2: r4h&&r4h.v?String(r4h.v).trim():'',
-        extra1: r3g&&typeof r3g.v==='number'?r3g.v:0,
-        extra2: r4g&&typeof r4g.v==='number'?r4g.v:0,
-        extra_sc: r5g&&typeof r5g.v==='number'?r5g.v:0
+  if (!wsy) return { matMaster: matMaster, blocks: blocks };
+  var range = XLSX.utils.decode_range(wsy['!ref']);
+  var matCodeRe = /\st[\d.]+/;
+  for (var r = 15; r <= range.e.r; r++) {
+    var c3 = wsy[XLSX.utils.encode_cell({ r: r, c: 2 })];
+    if (!c3 || typeof c3.v !== 'number') continue;
+    var d4 = wsy[XLSX.utils.encode_cell({ r: r, c: 3 })];
+    if (!d4 || !d4.f || d4.f !== ('=C' + (r + 1))) continue;
+    var c8 = wsy[XLSX.utils.encode_cell({ r: r, c: 7 })];
+    if (!c8 || !c8.v || typeof c8.v !== 'string' || c8.v.indexOf('-') < 0) continue;
+    var mats = [];
+    // 行3(r+2), 行4(r+3)
+    var matDefs = [
+      { row_off: 2, col_g: 6 },  // 行3: G=col6
+      { row_off: 3, col_g: 6 }   // 行4: G=col6
+    ];
+    for (var mi = 0; mi < matDefs.length; mi++) {
+      var md = matDefs[mi];
+      var mhCell = wsy[XLSX.utils.encode_cell({ r: r + md.row_off, c: 7 })]; // H列
+      var mgCell = wsy[XLSX.utils.encode_cell({ r: r + md.row_off, c: md.col_g })]; // G列エキストラ
+      var r5gCell = wsy[XLSX.utils.encode_cell({ r: r + 4, c: 6 })]; // 行5G: SC エキストラ
+      if (!mhCell || !mhCell.v || !matCodeRe.test(String(mhCell.v))) continue;
+      var matCode = String(mhCell.v).trim();
+      var grp = getGroupJS(matCode);
+      var bm = matMaster[grp] || { unit_base: 0, scrap_base: 0 };
+      var eu = mgCell && typeof mgCell.v === 'number' ? mgCell.v : 0;
+      var es = r5gCell && typeof r5gCell.v === 'number' ? r5gCell.v : 0;
+      mats.push({
+        mat_code: matCode, group: grp,
+        eff_unit: Math.round((bm.unit_base + eu) * 100) / 100,
+        eff_scrap: Math.round((bm.scrap_base + es) * 100) / 100,
+        master_row: bm.row, is_mat2: mi === 1
       });
     }
-  }
-  // 品番データ（STEP4用）
-  var products = [];
-  if (wsy) {
-    var range2 = XLSX.utils.decode_range(wsy['!ref']);
-    for (var r=16; r<=range2.e.r; r++) {
-      var c3=wsy[XLSX.utils.encode_cell({r:r,c:2})]; if(!c3||typeof c3.v!=='number') continue;
-      var c8=wsy[XLSX.utils.encode_cell({r:r,c:7})]; if(!c8||!c8.v||typeof c8.v!=='string'||c8.v.indexOf('-')<0) continue;
-      var apCell=wsy[XLSX.utils.encode_cell({r:r+2,c:41})];
-      var arCell=wsy[XLSX.utils.encode_cell({r:r+2,c:43})];
-      var applDate='';
-      if (arCell&&typeof arCell.v==='number') {
-        var d=XLSX.SSF.parse_date_code(arCell.v);
-        if(d) applDate=d.y+'/'+(d.m<10?'0':'')+d.m+'/'+(d.d<10?'0':'')+d.d;
-      }
-      products.push({no:c3.v, part_no:String(c8.v).trim(), excel_no_mold:apCell&&typeof apCell.v==='number'?apCell.v:null, appl_date:applDate});
+    // AP列(col41)型レス単価, AR列(col43)適用日
+    var apCell = wsy[XLSX.utils.encode_cell({ r: r + 2, c: 41 })];
+    var arCell = wsy[XLSX.utils.encode_cell({ r: r + 2, c: 43 })];
+    var applDate = '';
+    if (arCell && typeof arCell.v === 'number') {
+      var d = XLSX.SSF.parse_date_code(arCell.v);
+      if (d) applDate = d.y + '/' + (d.m < 10 ? '0' : '') + d.m + '/' + (d.d < 10 ? '0' : '') + d.d;
     }
+    var h6 = wsy[XLSX.utils.encode_cell({ r: r + 5, c: 7 })];
+    blocks.push({
+      no: c3.v, part_no: String(c8.v).trim(),
+      excel_no_mold: apCell && typeof apCell.v === 'number' ? apCell.v : null,
+      appl_date: applDate,
+      mgmt_no: h6 && h6.v ? String(h6.v) : '',
+      mats: mats
+    });
   }
-  return {matBase:matBase, blocks:blocks, products:products};
+  return { matMaster: matMaster, blocks: blocks };
 }
 
-// ===== 材質コード処理 =====
-function getGroup(code) {
-  if (!code) return null;
+function getGroupJS(code) {
   var m = String(code).match(/^(.+?)\s+t[\d.]+/);
-  return m ? m[1].trim() : String(code).split(' ')[0];
+  return m ? m[1].trim() : String(code).split(' ')[0].trim();
 }
 function normMat(s) {
   return String(s).toUpperCase().replace(/-/g,'').replace(/\s/g,'').replace('CL80','80').replace('CL','');
 }
-function matMatch(pdfMat, excelMat) {
-  if (!pdfMat||!excelMat) return false;
-  var np=normMat(pdfMat), ne=normMat(excelMat);
-  return np===ne || np.indexOf(ne)>=0 || ne.indexOf(np)>=0 || (np.length>=4&&ne.indexOf(np.substring(0,4))>=0);
+function matchMat(excelCode, pdfMat) {
+  if (!pdfMat) return false;
+  var ne = normMat(excelCode), np = normMat(pdfMat);
+  return ne.indexOf(np) === 0 || np.indexOf(ne.substring(0, 6)) === 0;
 }
 
-// ===== STEP1照合 =====
+// --- メイン照合 ---
 async function startAnalysis() {
-  document.getElementById('btn-start').disabled=true;
-  document.getElementById('pb0').style.display='block';
+  document.getElementById('btn-start').disabled = true;
+  document.getElementById('pb0').style.display = 'block';
   try {
-    setSt('Excel解析中...');setProg('pf0',10);
-    var parsed=parseExcel(state.excelBuf);
-    state.matBase=parsed.matBase; state.excelBlocks=parsed.blocks; state.excelProducts=parsed.products;
+    setSt('Excel\u3092\u89e3\u6790\u4e2d...');
+    setProg('pf0', 10);
+    var exParsed = parseExcelFull(S.excelBuf);
+    S.matMaster = exParsed.matMaster;
+    S.excelBlocks = exParsed.blocks;
 
-    setSt('改定表PDF解析中...');setProg('pf0',30);
-    var kaiteAll=[];
-    for (var i=0;i<state.kaitePDFs.length;i++) { var r=await parseKaitePDF(state.kaitePDFs[i].buf); kaiteAll=kaiteAll.concat(r); }
-    state.kaiteParsed=kaiteAll;
+    setSt('\u6539\u5b9a\u8868PDF\u3092\u89e3\u6790\u4e2d...');
+    setProg('pf0', 30);
+    var kaiteAll = [];
+    for (var i = 0; i < S.kaitePDFs.length; i++) {
+      var r = await parseKaitePDF(S.kaitePDFs[i].buf);
+      kaiteAll = kaiteAll.concat(r);
+    }
+    S.kaiteParsed = kaiteAll;
 
-    setSt('案内文PDF解析中...');setProg('pf0',55);
-    var annaiAll=[];
-    for (var i=0;i<state.annaiPDFs.length;i++) { var r=await parseAnnaiPDF(state.annaiPDFs[i].buf); annaiAll=annaiAll.concat(r); }
-    state.annaiDiffs=annaiAll;
+    setSt('\u6848\u5185\u6587PDF\u3092\u89e3\u6790\u4e2d...');
+    setProg('pf0', 55);
+    var annaiAll = [];
+    for (var i = 0; i < S.annaiPDFs.length; i++) {
+      var r = await parseAnnaiPDF(S.annaiPDFs[i].buf);
+      annaiAll = annaiAll.concat(r);
+    }
+    S.annaiDiffs = annaiAll;
 
-    setSt('調達基準表PDF解析中...');setProg('pf0',75);
-    var chouAll=[];
-    for (var i=0;i<state.choutatsuPDFs.length;i++) { var r=await parseChoutatsuPDF(state.choutatsuPDFs[i].buf); chouAll=chouAll.concat(r); }
-    state.choutatsuParsed=chouAll;
+    setSt('\u8abf\u9054\u57fa\u6e96\u8868PDF\u3092\u89e3\u6790\u4e2d...');
+    setProg('pf0', 75);
+    var chouAll = [];
+    for (var i = 0; i < S.choutatsuPDFs.length; i++) {
+      var r = await parseChoutatsuPDF(S.choutatsuPDFs[i].buf);
+      chouAll = chouAll.concat(r);
+    }
+    S.choutatsuParsed = chouAll;
 
-    setSt('照合中...');setProg('pf0',90);
-    buildStep1();
-    setProg('pf0',100);
-    setTimeout(function(){document.getElementById('pb0').style.display='none'; gotoStep(1);},400);
+    setSt('\u7167\u5408\u4e2d...');
+    setProg('pf0', 90);
+    buildMatching();
+    setProg('pf0', 100);
+    setTimeout(function() { document.getElementById('pb0').style.display = 'none'; gotoStep(1); }, 400);
   } catch(e) {
-    setSt('\u274c エラー: '+e.message); console.error(e);
-    document.getElementById('btn-start').disabled=false;
+    setSt('\u274c ' + e.message); console.error(e);
+    document.getElementById('btn-start').disabled = false;
   }
 }
-function setProg(id,pct){document.getElementById(id).style.width=pct+'%';}
+function setProg(id, pct) { document.getElementById(id).style.width = pct + '%'; }
 
-function buildStep1() {
+// --- 照合ロジック ---
+function buildMatching() {
+  // 改定表品番マップ（前方一致用）
+  var kaiteByPart = {};
+  for (var i = 0; i < S.kaiteParsed.length; i++) {
+    var r = S.kaiteParsed[i];
+    if (!r.part_no) continue;
+    var key = r.part_no.toUpperCase();
+    if (!kaiteByPart[key]) kaiteByPart[key] = [];
+    kaiteByPart[key].push(r);
+  }
   // 案内文差額マップ
-  var annaiMap={};
-  for (var i=0;i<state.annaiDiffs.length;i++) { var d=state.annaiDiffs[i]; if(d.name) annaiMap[normMat(d.name)]=d.diff; }
-
-  // 改定表の品番→Excel品番ブロック照合
-  // グループ別に照合結果を集約
-  var groupMap={};  // グループ名 → {records}
-
-  for (var i=0;i<state.kaiteParsed.length;i++) {
-    var kr = state.kaiteParsed[i];
-    if (!kr.part_no||!kr.mat) continue;
-
-    // Excelの品番ブロックと前方一致
-    var prefix=kr.part_no.replace(/\s/g,'').toUpperCase().substring(0,8);
-    var matched=null;
-    for (var j=0;j<state.excelBlocks.length;j++) {
-      var eb=state.excelBlocks[j];
-      var ep=eb.part_no.replace(/\s/g,'').toUpperCase();
-      if (ep.indexOf(prefix)===0||prefix.indexOf(ep.substring(0,8))===0) { matched=eb; break; }
-    }
-    if (!matched) continue;
-
-    // 材質1か材質2かを判定
-    var grp=null, extraUnit=0, extraSC=0;
-    var g1=getGroup(matched.mat1);
-    var g2=getGroup(matched.mat2);
-    if (g1&&matMatch(kr.mat,g1)) { grp=g1; extraUnit=matched.extra1; extraSC=matched.extra_sc; }
-    else if (g2&&matMatch(kr.mat,g2)) { grp=g2; extraUnit=matched.extra2; extraSC=matched.extra_sc; }
-    if (!grp) continue;
-
-    var bv=state.matBase[grp];
-    if (!bv) continue;
-
-    var effUnit = bv.unit!==null ? Math.round((bv.unit+extraUnit)*100)/100 : null;
-    var effSC   = bv.scrap!==null ? Math.round((bv.scrap+extraSC)*100)/100 : null;
-
-    if (!groupMap[grp]) groupMap[grp]={grp:grp, row:bv.row, unit:bv.unit, scrap:bv.scrap,
-      records:[], unitNext:null, scNext:null, pdfDiffU:null, pdfDiffS:null};
-
-    var gd=groupMap[grp];
-    if (kr.unit_next!==null) gd.unitNext=kr.unit_next;
-    if (kr.sc_next!==null) gd.scNext=kr.sc_next;
-    if (kr.unit_cur!==null&&kr.unit_next!==null) gd.pdfDiffU=Math.round((kr.unit_next-kr.unit_cur)*100)/100;
-    if (kr.sc_cur!==null&&kr.sc_next!==null) gd.pdfDiffS=Math.round((kr.sc_next-kr.sc_cur)*100)/100;
-
-    var tol=0.1;
-    var ok1u=kr.unit_cur!==null&&effUnit!==null?Math.abs(effUnit-kr.unit_cur)<=tol:null;
-    var ok1s=kr.sc_cur!==null&&effSC!==null?Math.abs(effSC-kr.sc_cur)<=tol:null;
-    var pdfDu=kr.unit_next!==null&&kr.unit_cur!==null?Math.round((kr.unit_next-kr.unit_cur)*100)/100:null;
-    var pdfDs=kr.sc_next!==null&&kr.sc_cur!==null?Math.round((kr.sc_next-kr.sc_cur)*100)/100:null;
-
-    // 案内文差額
-    var ne=normMat(grp), annaiDu=null;
-    var ak=Object.keys(annaiMap);
-    for (var k=0;k<ak.length;k++){if(ne.indexOf(ak[k])>=0||ak[k].indexOf(ne.substring(0,4))>=0){annaiDu=annaiMap[ak[k]];break;}}
-    var ok2u=pdfDu!==null&&annaiDu!==null?Math.abs(pdfDu-annaiDu)<=tol:null;
-
-    gd.records.push({
-      part_no:kr.part_no, mat:kr.mat, extra_unit:extraUnit, extra_sc:extraSC,
-      eff_unit:effUnit, eff_sc:effSC,
-      sc_cur:kr.sc_cur, sc_next:kr.sc_next, unit_cur:kr.unit_cur, unit_next:kr.unit_next,
-      ok1u:ok1u, ok1s:ok1s, ok2u:ok2u, annai_diff_u:annaiDu, pdf_diff_u:pdfDu, pdf_diff_s:pdfDs
-    });
+  var annaiMap = {};
+  for (var i = 0; i < S.annaiDiffs.length; i++) {
+    var d = S.annaiDiffs[i];
+    if (d.name) annaiMap[normMat(d.name)] = d.diff;
   }
 
-  // グループごとの総合判定
-  var rows=[]; var nOk=0,nWarn=0,nSkip=0;
-  var grpKeys=Object.keys(groupMap);
-  for (var i=0;i<grpKeys.length;i++) {
-    var gd=groupMap[grpKeys[i]];
-    var allOk=true, anyWarn=false;
-    for (var j=0;j<gd.records.length;j++) {
-      var rec=gd.records[j];
-      if (rec.ok1u===false||rec.ok1s===false||rec.ok2u===false){anyWarn=true;allOk=false;}
+  var tol = 0.11;
+  // 材質グループ別に結果を集計
+  var groupMap = {}; // group -> {rows, status集計}
+
+  for (var bi = 0; bi < S.excelBlocks.length; bi++) {
+    var blk = S.excelBlocks[bi];
+    var pnoKey = blk.part_no.replace(/\s/g,'').substring(0, 9).toUpperCase();
+
+    // 前方一致で改定表を検索
+    var pdfRecs = [];
+    var kkeys = Object.keys(kaiteByPart);
+    for (var ki = 0; ki < kkeys.length; ki++) {
+      var kk = kkeys[ki].replace(/\s/g,'');
+      if (kk.indexOf(pnoKey) === 0 || pnoKey.indexOf(kk.substring(0, 9)) === 0) {
+        pdfRecs = pdfRecs.concat(kaiteByPart[kkeys[ki]]);
+      }
     }
-    var status=anyWarn?'warn':'ok';
-    if (status==='ok') nOk++; else nWarn++;
-    // 代表値（最初のrecordから）
-    var rep=gd.records[0]||{};
-    rows.push({grp:gd.grp, row:gd.row, unit:gd.unit, scrap:gd.scrap,
-      unitNext:gd.unitNext, scNext:gd.scNext, pdfDiffU:gd.pdfDiffU, pdfDiffS:gd.pdfDiffS,
-      annaiDiffU:rep.annai_diff_u, ok1u:rep.ok1u, ok1s:rep.ok1s, ok2u:rep.ok2u,
-      status:status, records:gd.records});
+
+    for (var mi = 0; mi < blk.mats.length; mi++) {
+      var mat = blk.mats[mi];
+      var grp = mat.group;
+
+      // PDFで材質マッチ
+      var pdfMatch = null;
+      for (var pi = 0; pi < pdfRecs.length; pi++) {
+        if (matchMat(mat.mat_code, pdfRecs[pi].mat1) || matchMat(mat.mat_code, pdfRecs[pi].mat2)) {
+          pdfMatch = pdfRecs[pi]; break;
+        }
+      }
+      if (!pdfMatch && pdfRecs.length > 0) pdfMatch = pdfRecs[0];
+
+      var c1u = null, c1s = null, c2u = null, c2s = null;
+      var pdfDiffU = null, pdfDiffS = null, annaiDiff = null;
+      if (pdfMatch) {
+        if (pdfMatch.unit_cur !== null) c1u = Math.abs(mat.eff_unit - pdfMatch.unit_cur) <= tol;
+        if (pdfMatch.scrap_cur !== null) c1s = Math.abs(mat.eff_scrap - pdfMatch.scrap_cur) <= tol;
+        if (pdfMatch.unit_next !== null && pdfMatch.unit_cur !== null)
+          pdfDiffU = Math.round((pdfMatch.unit_next - pdfMatch.unit_cur) * 100) / 100;
+        if (pdfMatch.scrap_next !== null && pdfMatch.scrap_cur !== null)
+          pdfDiffS = Math.round((pdfMatch.scrap_next - pdfMatch.scrap_cur) * 100) / 100;
+        // 案内文差額と比較
+        var ne = normMat(mat.mat_code);
+        var akeys = Object.keys(annaiMap);
+        for (var ai = 0; ai < akeys.length; ai++) {
+          if (ne.indexOf(akeys[ai]) === 0 || akeys[ai].indexOf(ne.substring(0, 6)) === 0) {
+            annaiDiff = annaiMap[akeys[ai]]; break;
+          }
+        }
+        if (pdfDiffU !== null && annaiDiff !== null)
+          c2u = Math.abs(pdfDiffU - annaiDiff) <= tol;
+      }
+
+      var status = pdfMatch === null ? 'skip' :
+                   (c1u === false || c1s === false || c2u === false) ? 'warn' : 'ok';
+
+      var rowData = {
+        part_no: blk.part_no, mat_code: mat.mat_code, group: grp,
+        eff_unit: mat.eff_unit, eff_scrap: mat.eff_scrap,
+        pdf_unit_cur: pdfMatch ? pdfMatch.unit_cur : null,
+        pdf_unit_next: pdfMatch ? pdfMatch.unit_next : null,
+        pdf_scrap_cur: pdfMatch ? pdfMatch.scrap_cur : null,
+        pdf_scrap_next: pdfMatch ? pdfMatch.scrap_next : null,
+        pdf_diff_u: pdfDiffU, pdf_diff_s: pdfDiffS,
+        annai_diff: annaiDiff, c1u: c1u, c1s: c1s, c2u: c2u,
+        master_row: mat.master_row, is_mat2: mat.is_mat2,
+        status: status
+      };
+
+      if (!groupMap[grp]) groupMap[grp] = { group: grp, rows: [], ok: 0, warn: 0, skip: 0, pdf_diff_u: null, pdf_diff_s: null, master_row: mat.master_row };
+      groupMap[grp].rows.push(rowData);
+      groupMap[grp][status]++;
+      if (pdfDiffU !== null) groupMap[grp].pdf_diff_u = pdfDiffU;
+      if (pdfDiffS !== null) groupMap[grp].pdf_diff_s = pdfDiffS;
+      if (mat.master_row) groupMap[grp].master_row = mat.master_row;
+    }
   }
 
-  state.groupRows=rows;
-  state.step2Rows=rows.filter(function(r){return r.status==='ok';});
+  S.groupResults = Object.values(groupMap);
+  // STEP2用
+  S.step2Rows = S.groupResults.filter(function(g) { return g.ok > 0 && g.warn === 0; });
 
-  document.getElementById('cards1').innerHTML=
-    '<div class="card"><div class="cl">照合グループ</div><div class="cv cbl">'+rows.length+'</div></div>'+
-    '<div class="card"><div class="cl">✅ 条件OK</div><div class="cv cok">'+nOk+'</div></div>'+
-    '<div class="card"><div class="cl">⚠ 要確認</div><div class="cv cwn">'+nWarn+'</div></div>'+
-    '<div class="card"><div class="cl">PDF照合品番</div><div class="cv" style="color:#64748b">'+state.kaiteParsed.filter(function(r){return r.part_no;}).length+'</div></div>';
+  // 統計
+  var nOk = 0, nWarn = 0, nSkip = 0;
+  for (var i = 0; i < S.groupResults.length; i++) {
+    var g = S.groupResults[i];
+    if (g.ok > 0 && g.warn === 0) nOk++;
+    else if (g.warn > 0) nWarn++;
+    else nSkip++;
+  }
+  document.getElementById('cards1').innerHTML =
+    '<div class="card"><div class="cl">\u6539\u5b9a\u5bfe\u8c61\u30b0\u30eb\u30fc\u30d7</div><div class="cv cbl">' + S.groupResults.length + '</div></div>' +
+    '<div class="card"><div class="cl">\u2705 \u6761\u4ef6OK</div><div class="cv cok">' + nOk + '</div></div>' +
+    '<div class="card"><div class="cl">\u26a0 \u8981\u78ba\u8a8d</div><div class="cv cwn">' + nWarn + '</div></div>' +
+    '<div class="card"><div class="cl">\u2014 PDF\u306a\u3057</div><div class="cv" style="color:#64748b">' + nSkip + '</div></div>';
 
-  state.f1='all'; renderStep1(); renderStep2();
+  S.f1 = 'all';
+  renderStep1();
+  renderStep2();
 }
 
-function f2(v){return v!==null&&v!==undefined?Number(v).toFixed(2):'\u2014';}
-function chkB(v){return v===true?'<span class="badge b-ok">\u2713</span>':v===false?'<span class="badge b-ng">\u2717</span>':'\u2014';}
-function fmtD(v){if(v===null||v===undefined)return '\u2014';return(v>=0?'+':'')+Number(v).toFixed(2);}
-function fmtDH(v){if(v===null||v===undefined)return '\u2014';var c=v>0?'dp':v<0?'dn-c':'dz';return '<span class="'+c+'">'+(v>=0?'+':'')+Number(v).toFixed(2)+'</span>';}
+function f2(v) { return v !== null && v !== undefined ? v.toFixed(2) : '\u2014'; }
+function chkB(v) { return v === true ? '<span class="badge b-ok">\u2713</span>' : v === false ? '<span class="badge b-ng">\u2717</span>' : '<span style="color:#aaa">\u2014</span>'; }
+function fmtD(v) {
+  if (v === null || v === undefined) return '\u2014';
+  var cls = v > 0 ? 'dp' : v < 0 ? 'dnc' : 'dz';
+  return '<span class="' + cls + '">' + (v >= 0 ? '+' : '') + v.toFixed(2) + '</span>';
+}
 
 function renderStep1() {
-  var q=state.f1;
-  var rows=state.groupRows.filter(function(r){return q==='all'||r.status===q;});
-  var html='';
-  for (var i=0;i<rows.length;i++) {
-    var r=rows[i];
-    var badge=r.status==='ok'?'<span class="badge b-ok">\u2705 OK</span>':'<span class="badge b-wn">\u26a0 \u8981\u78ba\u8a8d</span>';
-    var grpId='grp-'+i;
-    html+='<tr class="grp-hd '+(r.status==='ok'?'grp-ok':'grp-warn')+'">';
-    html+='<td class="c"><input type="checkbox" class="chk" '+(r.status==='ok'?'checked':'disabled')+'></td>';
-    html+='<td><span class="expand-btn" onclick="toggleGroup(\''+grpId+'\')">▶</span> <strong>'+r.grp+'</strong></td>';
-    html+='<td class="r">'+f2(r.unit)+'</td><td class="r">'+f2(r.records[0]&&r.records[0].unit_cur)+'</td><td class="c">'+chkB(r.ok1u)+'</td>';
-    html+='<td class="r">'+f2(r.unitNext)+'</td><td class="r">'+fmtD(r.pdfDiffU)+'</td><td class="r">'+fmtD(r.annaiDiffU)+'</td><td class="c">'+chkB(r.ok2u)+'</td>';
-    html+='<td class="r">'+f2(r.scrap)+'</td><td class="r">'+f2(r.records[0]&&r.records[0].sc_cur)+'</td><td class="c">'+chkB(r.ok1s)+'</td>';
-    html+='<td class="r">'+f2(r.scNext)+'</td><td class="r">'+fmtD(r.pdfDiffS)+'</td>';
-    html+='<td>'+badge+'</td><td class="c mn">'+r.records.length+'</td></tr>';
-    // 品番詳細行
-    html+='<tbody class="sub-rows" id="'+grpId+'">';
-    for (var j=0;j<r.records.length;j++) {
-      var rec=r.records[j];
-      html+='<tr><td></td><td class="sub mn">'+rec.part_no+'</td>';
-      html+='<td class="r mn">'+f2(rec.eff_unit)+'</td><td class="r mn">'+f2(rec.unit_cur)+'</td><td class="c">'+chkB(rec.ok1u)+'</td>';
-      html+='<td class="r mn">'+f2(rec.unit_next)+'</td><td class="r mn">'+fmtD(rec.pdf_diff_u)+'</td><td class="r mn">'+fmtD(rec.annai_diff_u)+'</td><td class="c">'+chkB(rec.ok2u)+'</td>';
-      html+='<td class="r mn">'+f2(rec.eff_sc)+'</td><td class="r mn">'+f2(rec.sc_cur)+'</td><td class="c">'+chkB(rec.ok1s)+'</td>';
-      html+='<td class="r mn">'+f2(rec.sc_next)+'</td><td class="r mn">'+fmtD(rec.pdf_diff_s)+'</td>';
-      html+='<td></td><td class="mn" style="font-size:10px;color:var(--tx3)">'+rec.mat+'</td></tr>';
+  var q = S.f1;
+  var groups = S.groupResults.filter(function(g) {
+    if (q === 'all') return true;
+    if (q === 'ok') return g.ok > 0 && g.warn === 0;
+    if (q === 'warn') return g.warn > 0;
+    if (q === 'skip') return g.ok === 0 && g.warn === 0;
+    return true;
+  });
+  if (!groups.length) { document.getElementById('tbody1').innerHTML = '<tr><td colspan="13" style="text-align:center;padding:30px;color:var(--tx3)">\u8a72\u5f53\u306a\u3057</td></tr>'; return; }
+  var html = '';
+  for (var gi = 0; gi < groups.length; gi++) {
+    var g = groups[gi];
+    var gBadge = (g.ok > 0 && g.warn === 0) ? '<span class="badge b-ok">\u2705 OK</span>' :
+                  g.warn > 0 ? '<span class="badge b-wn">\u26a0 \u8981\u78ba\u8a8d</span>' :
+                  '<span class="badge b-sk">\u2014 PDF\u306a\u3057</span>';
+    html += '<tr class="grp-row"><td colspan="12"><strong>' + g.group + '</strong> <span style="font-size:11px;color:var(--tx3)">(' + g.rows.length + '\u4ef6)</span></td><td>' + gBadge + '</td></tr>';
+    for (var ri = 0; ri < g.rows.length; ri++) {
+      var r = g.rows[ri];
+      html += '<tr class="mat-row"><td>' + r.part_no + '</td><td class="mn">' + r.mat_code + '</td>' +
+        '<td class="r">' + f2(r.eff_unit) + '</td>' +
+        '<td class="r">' + f2(r.pdf_unit_cur) + '</td>' +
+        '<td class="c">' + chkB(r.c1u) + '</td>' +
+        '<td class="r">' + f2(r.pdf_unit_next) + '</td>' +
+        '<td class="r">' + fmtD(r.pdf_diff_u) + '</td>' +
+        '<td class="r">' + f2(r.eff_scrap) + '</td>' +
+        '<td class="r">' + f2(r.pdf_scrap_cur) + '</td>' +
+        '<td class="c">' + chkB(r.c1s) + '</td>' +
+        '<td class="r">' + f2(r.pdf_scrap_next) + '</td>' +
+        '<td class="r">' + fmtD(r.pdf_diff_s) + '</td>' +
+        '<td>' + (r.status === 'ok' ? '<span class="badge b-ok">OK</span>' : r.status === 'warn' ? '<span class="badge b-wn">\u26a0</span>' : '<span class="badge b-sk">\u2014</span>') + '</td></tr>';
     }
-    html+='</tbody>';
   }
-  document.getElementById('tbody1').innerHTML=html;
+  document.getElementById('tbody1').innerHTML = html;
 }
 
-function toggleGroup(id) {
-  var el=document.getElementById(id);
-  var btn=el.previousElementSibling.querySelector('.expand-btn');
-  if (el.classList.contains('open')) { el.classList.remove('open'); if(btn)btn.textContent='\u25b6'; }
-  else { el.classList.add('open'); if(btn)btn.textContent='\u25bc'; }
-}
-
-function setF1(btn,f){
-  state.f1=f;
-  document.querySelectorAll('#page1 .fb').forEach(function(b){b.className='fb';});
-  btn.className='fb '+(f==='all'?'fa':f==='ok'?'fok':f==='warn'?'fwn':'fb');
+function setF1(btn, f) {
+  S.f1 = f;
+  document.querySelectorAll('#page1 .fb').forEach(function(b) { b.className = 'fb'; });
+  btn.className = 'fb ' + (f === 'all' ? 'fa' : f === 'ok' ? 'fok' : f === 'warn' ? 'fwn' : 'fb');
   renderStep1();
 }
 
-// ===== STEP2 =====
 function renderStep2() {
-  var rows=state.step2Rows;
-  var html='';
-  for (var i=0;i<rows.length;i++) {
-    var r=rows[i];
-    var ud=r.unitNext!==null&&r.unit!==null?Math.round((r.unitNext-r.unit)*100)/100:null;
-    var sd=r.scNext!==null&&r.scrap!==null?Math.round((r.scNext-r.scrap)*100)/100:null;
-    html+='<tr><td class="c"><input type="checkbox" class="chk row-chk" data-i="'+i+'" checked></td>';
-    html+='<td class="mn">'+r.grp+'</td>';
-    html+='<td class="r">'+f2(r.unit)+'</td><td class="r" style="color:var(--ac);font-weight:600">'+f2(r.unitNext)+'</td><td class="r">'+fmtDH(ud)+'</td>';
-    html+='<td class="r">'+f2(r.scrap)+'</td><td class="r" style="color:var(--ac);font-weight:600">'+f2(r.scNext)+'</td><td class="r">'+fmtDH(sd)+'</td></tr>';
+  var rows = S.step2Rows;
+  var html = '';
+  for (var i = 0; i < rows.length; i++) {
+    var g = rows[i];
+    var bm = S.matMaster[g.group] || {};
+    html += '<tr><td class="c"><input type="checkbox" class="chk row-chk" data-i="' + i + '" checked></td>' +
+      '<td class="mn"><strong>' + g.group + '</strong></td>' +
+      '<td class="r">' + f2(bm.unit_base) + '</td>' +
+      '<td class="r" style="color:var(--ac);font-weight:600">' + fmtD(g.pdf_diff_u) + '</td>' +
+      '<td class="r">' + (bm.unit_base !== undefined && g.pdf_diff_u !== null ? f2(bm.unit_base + g.pdf_diff_u) : '\u2014') + '</td>' +
+      '<td class="r">' + f2(bm.scrap_base) + '</td>' +
+      '<td class="r" style="color:var(--ac);font-weight:600">' + fmtD(g.pdf_diff_s) + '</td>' +
+      '<td class="r">' + (bm.scrap_base !== undefined && g.pdf_diff_s !== null ? f2(bm.scrap_base + g.pdf_diff_s) : '\u2014') + '</td>' +
+      '<td class="c">' + g.rows.length + '</td></tr>';
   }
-  document.getElementById('tbody2').innerHTML=html;
+  document.getElementById('tbody2').innerHTML = html;
 }
-function toggleAll(chk){document.querySelectorAll('.row-chk').forEach(function(c){c.checked=chk.checked;});}
 
+function toggleAll(chk) {
+  document.querySelectorAll('.row-chk').forEach(function(c) { c.checked = chk.checked; });
+}
+
+// --- Excel更新ダウンロード ---
 function downloadExcel() {
-  var selected=[];
-  document.querySelectorAll('.row-chk').forEach(function(c,i){if(c.checked)selected.push(state.step2Rows[i]);});
-  if (!selected.length){alert('更新する材質を選択してください');return;}
-  var wb=XLSX.read(state.excelBuf,{type:'array'});
-  var ws=wb.Sheets['\u6750\u6599'];
-  for (var i=0;i<selected.length;i++) {
-    var r=selected[i];
-    if (r.unitNext!==null&&r.unit!==null) {
-      var diff=Math.round((r.unitNext-r.unit)*100)/100;
-      var cell=XLSX.utils.encode_cell({r:r.row-1,c:10}); // K列
-      if(!ws[cell])ws[cell]={t:'n'}; ws[cell].v=diff; ws[cell].t='n';
+  var selected = [];
+  document.querySelectorAll('.row-chk').forEach(function(c, i) { if (c.checked) selected.push(S.step2Rows[i]); });
+  if (!selected.length) { alert('\u66f4\u65b0\u3059\u308b\u6750\u8ceaを選択してください'); return; }
+  var wb = XLSX.read(S.excelBuf, { type: 'array' });
+  var ws = wb.Sheets['\u6750\u6599'];
+  for (var i = 0; i < selected.length; i++) {
+    var g = selected[i];
+    var bm = S.matMaster[g.group];
+    if (!bm || !bm.row) continue;
+    // K列(col10): 調整分支給, L列(col11): 調整分SC
+    if (g.pdf_diff_u !== null) {
+      var kc = XLSX.utils.encode_cell({ r: bm.row - 1, c: 10 });
+      if (!ws[kc]) ws[kc] = { t: 'n' };
+      ws[kc].v = g.pdf_diff_u; ws[kc].t = 'n';
     }
-    if (r.scNext!==null&&r.scrap!==null) {
-      var sdiff=Math.round((r.scNext-r.scrap)*100)/100;
-      var scell=XLSX.utils.encode_cell({r:r.row-1,c:11}); // L列
-      if(!ws[scell])ws[scell]={t:'n'}; ws[scell].v=sdiff; ws[scell].t='n';
+    if (g.pdf_diff_s !== null) {
+      var lc = XLSX.utils.encode_cell({ r: bm.row - 1, c: 11 });
+      if (!ws[lc]) ws[lc] = { t: 'n' };
+      ws[lc].v = g.pdf_diff_s; ws[lc].t = 'n';
     }
   }
-  var wbout=XLSX.write(wb,{bookType:'xlsx',type:'array'});
-  var a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([wbout],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
-  var dt=new Date();
-  a.download='\u898b\u7a4d\u4e00\u89a7\u8868_\u6539\u8a02\u6e08\u307f_'+dt.getFullYear()+(dt.getMonth()+1<10?'0':'')+(dt.getMonth()+1)+(dt.getDate()<10?'0':'')+dt.getDate()+'.xlsx';
+  var out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  var blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  var dt = new Date();
+  a.download = '\u898b\u7a4d\u4e00\u89a7\u8868_\u6539\u8a02\u6e08\u307f_' + dt.getFullYear() + (dt.getMonth()+1<10?'0':'') + (dt.getMonth()+1) + (dt.getDate()<10?'0':'') + dt.getDate() + '.xlsx';
   a.click();
-  document.getElementById('inst-box').style.display='block';
-  document.getElementById('inst-box').scrollIntoView({behavior:'smooth'});
+  document.getElementById('inst-box').style.display = 'block';
+  document.getElementById('inst-box').scrollIntoView({ behavior: 'smooth' });
 }
 
-// ===== STEP3 =====
-function loadExcel2File(input) {
-  var f=input.files[0]; if(!f)return;
-  var r=new FileReader();
-  r.onload=function(e){state.excelBuf2=e.target.result;document.getElementById('ic2').textContent='\u2705';document.getElementById('ft2').textContent=f.name;document.getElementById('box-excel2').classList.add('loaded');document.getElementById('btn-match').disabled=false;};
+// --- STEP3 ---
+function loadXLSX2(inp) {
+  var f = inp.files[0]; if (!f) return;
+  var r = new FileReader();
+  r.onload = function(e) {
+    S.excelBuf2 = e.target.result;
+    document.getElementById('ic2').textContent = '\u2705';
+    document.getElementById('ft2').textContent = f.name;
+    document.getElementById('box-excel2').classList.add('loaded');
+    document.getElementById('btn-match').disabled = false;
+  };
   r.readAsArrayBuffer(f);
 }
 
 async function runMatch() {
-  document.getElementById('btn-match').disabled=true;
-  document.getElementById('pb3').style.display='block';
-  setProg('pf3',10);
+  document.getElementById('btn-match').disabled = true;
+  document.getElementById('pb3').style.display = 'block';
+  setProg('pf3', 10);
   try {
-    var parsed=parseExcel(state.excelBuf2); setProg('pf3',50);
-    var chouMap={};
-    for (var i=0;i<state.choutatsuParsed.length;i++) {
-      var item=state.choutatsuParsed[i];
-      var k=item.part_no.replace(/\s/g,'').toUpperCase();
-      if(!chouMap[k])chouMap[k]=[]; chouMap[k].push(item);
+    var parsed = parseExcelFull(S.excelBuf2);
+    setProg('pf3', 50);
+    var chouMap = {};
+    for (var i = 0; i < S.choutatsuParsed.length; i++) {
+      var it = S.choutatsuParsed[i];
+      var k = it.part_no.replace(/\s/g,'').toUpperCase();
+      if (!chouMap[k]) chouMap[k] = [];
+      chouMap[k].push(it);
     }
-    setProg('pf3',75);
-    var tol=0.5,rows=[],nOk=0,nNg=0,nMs=0;
-    for (var i=0;i<parsed.products.length;i++) {
-      var p=parsed.products[i];
-      var ek=p.part_no.replace(/\s/g,'').toUpperCase();
-      var found=chouMap[ek]||null;
-      if (!found) { var ck=Object.keys(chouMap); for(var j=0;j<ck.length;j++){if(ck[j].substring(0,8)===ek.substring(0,8)){found=chouMap[ck[j]];break;}} }
-      if (!found){rows.push({no:p.no,part_no:p.part_no,appl_date:p.appl_date,pdf_price:null,excel_no_mold:p.excel_no_mold,diff:null,diff_rate:null,status:'missing'});nMs++;continue;}
-      var best=found[0];
-      if(p.excel_no_mold!==null){for(var j=1;j<found.length;j++){if(Math.abs(found[j].price-p.excel_no_mold)<Math.abs(best.price-p.excel_no_mold))best=found[j];}}
-      var diff=p.excel_no_mold!==null?Math.round((best.price-p.excel_no_mold)*100)/100:null;
-      var dr=p.excel_no_mold&&diff!==null?Math.round(diff/p.excel_no_mold*1000)/10:null;
-      var status=diff!==null&&Math.abs(diff)<=tol?'ok':'ng';
-      if(status==='ok')nOk++;else nNg++;
-      rows.push({no:p.no,part_no:p.part_no,appl_date:p.appl_date,pdf_price:best.price,excel_no_mold:p.excel_no_mold,diff:diff,diff_rate:dr,status:status});
+    setProg('pf3', 75);
+    var tol = 0.5, rows = [], nOk = 0, nNg = 0, nMs = 0;
+    for (var i = 0; i < parsed.blocks.length; i++) {
+      var blk = parsed.blocks[i];
+      var ek = blk.part_no.replace(/\s/g,'').toUpperCase();
+      var found = chouMap[ek] || null;
+      if (!found) {
+        var cks = Object.keys(chouMap);
+        for (var j = 0; j < cks.length; j++) {
+          if (cks[j].substring(0,8) === ek.substring(0,8)) { found = chouMap[cks[j]]; break; }
+        }
+      }
+      if (!found) { rows.push({ no: blk.no, part_no: blk.part_no, appl_date: blk.appl_date, pdf_price: null, excel_nm: blk.excel_no_mold, diff: null, dr: null, status: 'missing' }); nMs++; continue; }
+      var best = found[0];
+      if (blk.excel_no_mold !== null) {
+        for (var j = 1; j < found.length; j++) {
+          if (Math.abs(found[j].price - blk.excel_no_mold) < Math.abs(best.price - blk.excel_no_mold)) best = found[j];
+        }
+      }
+      var diff = blk.excel_no_mold !== null ? Math.round((best.price - blk.excel_no_mold)*100)/100 : null;
+      var dr = blk.excel_no_mold && diff !== null ? Math.round(diff/blk.excel_no_mold*1000)/10 : null;
+      var st = diff !== null && Math.abs(diff) <= tol ? 'ok' : 'ng';
+      if (st === 'ok') nOk++; else nNg++;
+      rows.push({ no: blk.no, part_no: blk.part_no, appl_date: blk.appl_date, pdf_price: best.price, excel_nm: blk.excel_no_mold, diff: diff, dr: dr, status: st });
     }
-    state.matchRows=rows;
-    document.getElementById('cards3').innerHTML=
+    S.matchRows = rows;
+    document.getElementById('cards3').innerHTML =
       '<div class="card"><div class="cl">\u7167\u5408\u4ef6\u6570</div><div class="cv cbl">'+(nOk+nNg)+'</div></div>'+
       '<div class="card"><div class="cl">\u2713 \u4e00\u81f4</div><div class="cv cok">'+nOk+'</div></div>'+
       '<div class="card"><div class="cl">\u26a0 \u5dee\u7570\u3042\u308a</div><div class="cv cng">'+nNg+'</div></div>'+
       '<div class="card"><div class="cl">PDF\u672a\u8a18\u8f09</div><div class="cv cwn">'+nMs+'</div></div>';
-    state.f3='all'; renderStep3();
-    document.getElementById('match-result').style.display='block';
-    setProg('pf3',100); setTimeout(function(){document.getElementById('pb3').style.display='none';},400);
-  } catch(e){setSt('\u274c エラー: '+e.message);console.error(e);document.getElementById('btn-match').disabled=false;}
+    S.f3 = 'all'; renderStep3();
+    document.getElementById('match-result').style.display = 'block';
+    setProg('pf3', 100);
+    setTimeout(function() { document.getElementById('pb3').style.display = 'none'; }, 400);
+  } catch(e) { setSt('\u274c ' + e.message); console.error(e); document.getElementById('btn-match').disabled = false; }
 }
 
 function renderStep3() {
-  var q=state.f3;
-  var rows=(state.matchRows||[]).filter(function(r){return q==='all'||r.status===q;});
-  var html='';
-  for (var i=0;i<rows.length;i++) {
-    var r=rows[i];
-    var badge=r.status==='ok'?'<span class="badge b-ok">\u2713 \u4e00\u81f4</span>':r.status==='ng'?'<span class="badge b-ng">\u26a0 \u5dee\u7570</span>':'<span class="badge b-sk">\u672a\u8a18\u8f09</span>';
-    var dh=r.diff!==null?fmtDH(r.diff):'\u2014';
-    var rh='\u2014';
-    if(r.diff_rate!==null){var c=r.diff_rate>0?'dp':r.diff_rate<0?'dn-c':'dz';rh='<span class="'+c+'">'+(r.diff_rate>=0?'+':'')+r.diff_rate.toFixed(1)+'%</span>';}
-    html+='<tr><td class="mn">'+r.no+'</td><td class="mn">'+r.part_no+'</td><td class="r mn">'+r.appl_date+'</td><td class="r">'+f2(r.pdf_price)+'</td><td class="r">'+f2(r.excel_no_mold)+'</td><td class="r">'+dh+'</td><td class="r">'+rh+'</td><td>'+badge+'</td></tr>';
+  var q = S.f3;
+  var rows = (S.matchRows||[]).filter(function(r) { return q==='all'||r.status===q; });
+  if (!rows.length) { document.getElementById('tbody3').innerHTML = '<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--tx3)">\u8a72\u5f53\u306a\u3057</td></tr>'; return; }
+  var html = '';
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    var badge = r.status==='ok'?'<span class="badge b-ok">\u2713 \u4e00\u81f4</span>':r.status==='ng'?'<span class="badge b-ng">\u26a0 \u5dee\u7570</span>':'<span class="badge b-sk">\u672a\u8a18\u8f09</span>';
+    var dh = '\u2014', rh = '\u2014';
+    if (r.diff!==null){var cls=r.diff>0?'dp':r.diff<0?'dnc':'dz';dh='<span class="'+cls+'">'+(r.diff>=0?'+':'')+r.diff.toFixed(2)+'</span>';}
+    if (r.dr!==null){var cls2=r.dr>0?'dp':r.dr<0?'dnc':'dz';rh='<span class="'+cls2+'">'+(r.dr>=0?'+':'')+r.dr.toFixed(1)+'%</span>';}
+    html += '<tr><td class="mn">'+r.no+'</td><td class="mn">'+r.part_no+'</td><td class="r mn">'+r.appl_date+'</td><td class="r">'+f2(r.pdf_price)+'</td><td class="r">'+f2(r.excel_nm)+'</td><td class="r">'+dh+'</td><td class="r">'+rh+'</td><td>'+badge+'</td></tr>';
   }
-  document.getElementById('tbody3').innerHTML=html||'<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--tx3)">\u8a72\u5f53\u306a\u3057</td></tr>';
+  document.getElementById('tbody3').innerHTML = html;
 }
-function setF3(btn,f){state.f3=f;document.querySelectorAll('#page3 .fb').forEach(function(b){b.className='fb';});btn.className='fb '+(f==='all'?'fa':f==='ng'?'fng':f==='ok'?'fok':'fwn');renderStep3();}
+
+function setF3(btn, f) {
+  S.f3 = f;
+  document.querySelectorAll('#page3 .fb').forEach(function(b) { b.className = 'fb'; });
+  btn.className = 'fb ' + (f==='all'?'fa':f==='ng'?'fng':f==='ok'?'fok':'fwn');
+  renderStep3();
+}
 
 function expCSV3() {
-  var rows=state.matchRows||[];
-  var headers=['\u8abf\u9054NO','\u54c1\u756a','\u9069\u7528\u5e74\u6708\u65e5','PDF\u52a0\u5de5\u5358\u4fa1','Excel\u578b\u30ec\u30b9\u5358\u4fa1','\u5dee\u7570','\u5dee\u7570\u7387','\u5224\u5b9a'];
-  var lines=[headers.join(',')];
-  for (var i=0;i<rows.length;i++) {
-    var r=rows[i];
-    var cols=[r.no,r.part_no,r.appl_date,r.pdf_price!==null?r.pdf_price.toFixed(2):'',r.excel_no_mold!==null?r.excel_no_mold.toFixed(2):'',r.diff!==null?r.diff.toFixed(2):'',r.diff_rate!==null?r.diff_rate.toFixed(1)+'%':'',r.status==='ok'?'\u4e00\u81f4':r.status==='ng'?'\u5dee\u7570\u3042\u308a':'\u672a\u8a18\u8f09'];
-    lines.push(cols.map(function(v){var q=String(v).split('"').join('""');return '"'+q+'"';}).join(','));
+  var rows = S.matchRows || [];
+  var headers = ['\u8abf\u9054NO','\u54c1\u756a','\u9069\u7528\u5e74\u6708\u65e5','PDF\u52a0\u5de5\u5358\u4fa1','Excel\u578b\u30ec\u30b9\u5358\u4fa1','\u5dee\u7570','\u5dee\u7570\u7387','\u5224\u5b9a'];
+  var lines = [headers.join(',')];
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    var cols = [r.no, r.part_no, r.appl_date,
+      r.pdf_price!==null?r.pdf_price.toFixed(2):'',
+      r.excel_nm!==null?r.excel_nm.toFixed(2):'',
+      r.diff!==null?r.diff.toFixed(2):'',
+      r.dr!==null?r.dr.toFixed(1)+'%':'',
+      r.status==='ok'?'\u4e00\u81f4':r.status==='ng'?'\u5dee\u7570\u3042\u308a':'\u672a\u8a18\u8f09'];
+    lines.push(cols.map(function(v){var s=String(v);return '"'+s.split('"').join('""')+'"';}).join(','));
   }
-  var csv='\uFEFF'+lines.join('\r\n');
-  var a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
-  var dt=new Date();
-  a.download='\u8abf\u9054\u57fa\u6e96\u8868\u7167\u5408_'+dt.getFullYear()+(dt.getMonth()+1<10?'0':'')+(dt.getMonth()+1)+(dt.getDate()<10?'0':'')+dt.getDate()+'.csv';
+  var csv = '\uFEFF' + lines.join(String.fromCharCode(13) + String.fromCharCode(10));
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  var dt = new Date();
+  a.download = '\u8abf\u9054\u57fa\u6e96\u8868\u7167\u5408_' + dt.getFullYear() + (dt.getMonth()+1<10?'0':'')+(dt.getMonth()+1)+(dt.getDate()<10?'0':'')+dt.getDate()+'.csv';
   a.click();
 }
 
 function resetAll() {
-  state.excelBuf=null;state.kaitePDFs=[];state.annaiPDFs=[];state.choutatsuPDFs=[];
-  ['excel','kaite','annai','choutatsu'].forEach(function(k){document.getElementById('box-'+k).classList.remove('loaded');document.getElementById('fl-'+k).innerHTML='';});
-  document.getElementById('btn-start').disabled=true; gotoStep(0); setSt('');
+  S.excelBuf=null;S.kaitePDFs=[];S.annaiPDFs=[];S.choutatsuPDFs=[];
+  ['excel','kaite','annai','choutatsu'].forEach(function(k){
+    document.getElementById('box-'+k).classList.remove('loaded');
+    document.getElementById('fl-'+k).innerHTML='';
+  });
+  document.getElementById('btn-start').disabled=true;
+  gotoStep(0);setSt('');
 }
-function setSt(m){document.getElementById('status').textContent=m;}
+function setSt(m) { document.getElementById('status').textContent = m; }
 </script>
 </body>
 </html>
