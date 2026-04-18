@@ -328,7 +328,9 @@ function nearestX(d, x, tol) {
 
 // --- 改定表PDF解析（品番・材質・単価） ---
 async function parseKaitePDF(buf) {
+  console.log('[DEBUG-PDF] parseKaitePDF called, buf size:', buf.byteLength);
   var pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+  console.log('[DEBUG-PDF] numPages:', pdf.numPages);
   var records = [];
   for (var p = 1; p <= pdf.numPages; p++) {
     var page = await pdf.getPage(p);
@@ -351,6 +353,15 @@ async function parseKaitePDF(buf) {
     if (p === 1) {
       var debugSpans = spans.filter(function(s) { return s.y >= 180 && s.y <= 200; });
       console.log('[DEBUG] p1 y=180-200 spans:', debugSpans.slice(0,5).map(function(s){ return {y:s.y, dec:s.dec, charCode0: s.dec.charCodeAt(0)}; }));
+    }
+    if (p === 1) {
+      var debugAll = [];
+      for (var di = 0; di < spans.length; di++) {
+        if (spans[di].y >= 180 && spans[di].y <= 200) {
+          debugAll.push({y: spans[di].y, x: spans[di].x, dec: spans[di].dec, code0: spans[di].dec.charCodeAt(0)});
+        }
+      }
+      console.log('[DEBUG-PDF] p1 y=180-200 spans count:', debugAll.length, 'sample:', JSON.stringify(debugAll.slice(0,3)));
     }
     var scrapNext = getNumRow(188), scrapCur = getNumRow(254);
     var unitNext = getNumRow(316), unitCur = getNumRow(382);
@@ -552,12 +563,16 @@ async function startAnalysis() {
 
     setSt('\u6539\u5b9a\u8868PDF\u3092\u89e3\u6790\u4e2d...');
     setProg('pf0', 30);
+    console.log('[DEBUG-STEP] kaitePDFs count:', S.kaitePDFs.length);
     var kaiteAll = [];
     for (var i = 0; i < S.kaitePDFs.length; i++) {
+      console.log('[DEBUG-STEP] parsing kaite PDF', i, S.kaitePDFs[i].name, 'buf size:', S.kaitePDFs[i].buf.byteLength);
       var r = await parseKaitePDF(S.kaitePDFs[i].buf);
+      console.log('[DEBUG-STEP] kaite records:', r.length, 'first:', JSON.stringify(r[0]));
       kaiteAll = kaiteAll.concat(r);
     }
     S.kaiteParsed = kaiteAll;
+    console.log('[DEBUG-STEP] total kaiteParsed:', kaiteAll.length);
 
     setSt('\u6848\u5185\u6587PDF\u3092\u89e3\u6790\u4e2d...');
     setProg('pf0', 55);
