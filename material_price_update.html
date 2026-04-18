@@ -316,7 +316,20 @@ function checkReady() {
 
 // --- PDF解析ユーティリティ ---
 function decodePDF(s) {
-  return s; // PDF.jsはToUnicode CMAPで既に変換済みのためデコード不要
+  var r = '', offset = 29;
+  for (var i = 0; i < s.length; i++) {
+    var c = s.charCodeAt(i);
+    if (c > 255) {
+      // 2バイトCID: 上位・下位バイトをそれぞれデコード
+      var hi = (c >> 8) & 0xFF;
+      var lo = c & 0xFF;
+      if (hi > 0) { var dhi = hi + offset; if (dhi >= 32 && dhi <= 126) r += String.fromCharCode(dhi); }
+      var dlo = lo + offset; if (dlo >= 32 && dlo <= 126) r += String.fromCharCode(dlo);
+    } else {
+      var d = c + offset; if (d >= 32 && d <= 126) r += String.fromCharCode(d);
+    }
+  }
+  return r;
 }
 function nearestX(d, x, tol) {
   if (tol === undefined) tol = 12;
@@ -328,9 +341,9 @@ function nearestX(d, x, tol) {
 
 // --- 改定表PDF解析（品番・材質・単価） ---
 async function parseKaitePDF(buf) {
-  console.log('[DEBUG-PDF] parseKaitePDF called, buf size:', buf.byteLength);
+
   var pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
-  console.log('[DEBUG-PDF] numPages:', pdf.numPages);
+
   var records = [];
   for (var p = 1; p <= pdf.numPages; p++) {
     var page = await pdf.getPage(p);
@@ -345,39 +358,22 @@ async function parseKaitePDF(buf) {
     var getNumRow = function(ty) {
       var row = {};
       for (var i = 0; i < spans.length; i++) {
-        if (Math.abs(spans[i].y - ty) <= 8) { var v = parseFloat(spans[i].dec); if (!isNaN(v)) row[spans[i].x] = v; }
+        if (Math.abs(spans[i].y - ty) <= 12) { var v = parseFloat(spans[i].dec); if (!isNaN(v)) row[spans[i].x] = v; }
       }
       return row;
     };
     // デバッグ: 1ページ目のみy=180-200のスパンを出力
     if (p === 1) {
       var debugSpans = spans.filter(function(s) { return s.y >= 180 && s.y <= 200; });
-      console.log('[DEBUG] p1 y=180-200 spans:', debugSpans.slice(0,5).map(function(s){ return {y:s.y, dec:s.dec, charCode0: s.dec.charCodeAt(0)}; }));
     }
-    if (p === 1) {
-      // 数値のあるy座標を特定するため全スパンをスキャン
-      var numByY = {};
-      for (var di = 0; di < spans.length; di++) {
-        var v = parseFloat(spans[di].dec);
-        if (!isNaN(v) && v >= 30 && v <= 600) {
-          var yk = spans[di].y;
-          if (!numByY[yk]) numByY[yk] = [];
-          numByY[yk].push(v);
-        }
-      }
-      console.log('[DEBUG-PDF] p1 numeric y-coords:', JSON.stringify(numByY));
-      console.log('[DEBUG-PDF] p1 vp.height:', vp.height, 'spans count:', spans.length);
-      // y=180-210付近のスパンのdecとcode0を確認
-      var near = spans.filter(function(s){ return s.y >= 175 && s.y <= 215; });
-      console.log('[DEBUG-PDF] y=175-215 spans:', near.map(function(s){ return {y:s.y, dec: JSON.stringify(s.dec.substring(0,6)), code0: s.dec.charCodeAt(0)}; }));
-    }
-    var scrapNext = getNumRow(188), scrapCur = getNumRow(254);
-    var unitNext = getNumRow(316), unitCur = getNumRow(382);
+
+    var scrapNext = getNumRow(196), scrapCur = getNumRow(258);
+    var unitNext = getNumRow(324), unitCur = getNumRow(390);
     // 材質行（y=555~590）
     var matPat = /^(HFS|SA1|SUS|HSS|ALCD|NGLDD|JSH|APFH)/;
     var matYs = [];
     for (var i = 0; i < spans.length; i++) {
-      if (matPat.test(spans[i].dec) && spans[i].y >= 555 && spans[i].y <= 590) {
+      if (matPat.test(spans[i].dec) && spans[i].y >= 563 && spans[i].y <= 598) {
         var found = false;
         for (var k = 0; k < matYs.length; k++) { if (Math.abs(matYs[k] - spans[i].y) <= 6) { found = true; break; } }
         if (!found) matYs.push(spans[i].y);
@@ -393,7 +389,7 @@ async function parseKaitePDF(buf) {
     // 品番行（y=728~742）
     var partRow = {};
     for (var i = 0; i < spans.length; i++) {
-      if (spans[i].y >= 728 && spans[i].y <= 742 && /^1[0-9A-Z]{4,5}-[A-Z0-9]{2,3}$/.test(spans[i].dec)) {
+      if (spans[i].y >= 736 && spans[i].y <= 750 && /^1[0-9A-Z]{4,5}-[A-Z0-9]{2,3}$/.test(spans[i].dec)) {
         partRow[spans[i].x] = spans[i].dec;
       }
     }
@@ -571,16 +567,15 @@ async function startAnalysis() {
 
     setSt('\u6539\u5b9a\u8868PDF\u3092\u89e3\u6790\u4e2d...');
     setProg('pf0', 30);
-    console.log('[DEBUG-STEP] kaitePDFs count:', S.kaitePDFs.length);
+
     var kaiteAll = [];
     for (var i = 0; i < S.kaitePDFs.length; i++) {
-      console.log('[DEBUG-STEP] parsing kaite PDF', i, S.kaitePDFs[i].name, 'buf size:', S.kaitePDFs[i].buf.byteLength);
+
       var r = await parseKaitePDF(S.kaitePDFs[i].buf);
-      console.log('[DEBUG-STEP] kaite records:', r.length, 'first:', JSON.stringify(r[0]));
+
       kaiteAll = kaiteAll.concat(r);
     }
     S.kaiteParsed = kaiteAll;
-    console.log('[DEBUG-STEP] total kaiteParsed:', kaiteAll.length);
 
     setSt('\u6848\u5185\u6587PDF\u3092\u89e3\u6790\u4e2d...');
     setProg('pf0', 55);
