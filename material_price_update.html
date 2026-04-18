@@ -817,7 +817,7 @@ function expCSV3(){
   var rows=state.matchRows||[];
   var h=['調達NO','品番','適用年月日','PDF加工単価','Excel型レス単価','差異','差異率','判定'];
   var data=rows.map(function(r){return [r.no,r.part_no,r.appl_date,r.pdf_price!=null?r.pdf_price.toFixed(2):'',r.excel_no_mold!=null?r.excel_no_mold.toFixed(2):'',r.diff!=null?r.diff.toFixed(2):'',r.diff_rate!=null?r.diff_rate.toFixed(1)+'%':'',r.status==='ok'?'一致':r.status==='ng'?'差異あり':'未記載'];});
-  var csv='﻿'+[h].concat(data).map(function(r){return r.map(function(v){return '"'+String(v).replace(/"/g,'""')+'"';}).join(',');}).join('
+  var csv='\uFEFF'+[h].concat(data).map(function(r){return r.map(function(v){var q=String(v).split('"').join('""');return '"'+q+'"';}).join(',');}).join('\r\n');
 ');
   var a=document.createElement('a');
   a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
