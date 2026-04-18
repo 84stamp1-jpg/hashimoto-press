@@ -331,13 +331,6 @@ async function parseKaitePDF(buf) {
   console.log('[DEBUG-PDF] parseKaitePDF called, buf size:', buf.byteLength);
   var pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
   console.log('[DEBUG-PDF] numPages:', pdf.numPages);
-  // ページ1のvp.heightとtransform[5]を確認
-  var pg1 = await pdf.getPage(1);
-  var vp1 = pg1.getViewport({ scale: 1.0 });
-  console.log('[DEBUG-PDF] p1 vp.width:', vp1.width, 'vp.height:', vp1.height);
-  var tc1 = await pg1.getTextContent();
-  var sample5 = tc1.items.filter(function(it){ return it.str.trim().length > 0; }).slice(0, 3);
-  console.log('[DEBUG-PDF] p1 first3 items:', sample5.map(function(it){ return {str: JSON.stringify(it.str), t5: it.transform[5], y_screen: Math.round(vp1.height - it.transform[5])}; }));
   var records = [];
   for (var p = 1; p <= pdf.numPages; p++) {
     var page = await pdf.getPage(p);
@@ -362,16 +355,21 @@ async function parseKaitePDF(buf) {
       console.log('[DEBUG] p1 y=180-200 spans:', debugSpans.slice(0,5).map(function(s){ return {y:s.y, dec:s.dec, charCode0: s.dec.charCodeAt(0)}; }));
     }
     if (p === 1) {
-      var debugAll = [];
-      var tc_debug = await page.getTextContent();
-      for (var di = 0; di < tc_debug.items.length; di++) {
-        var it = tc_debug.items[di];
-        var y_s = Math.round(vp.height - it.transform[5]);
-        if (y_s >= 180 && y_s <= 200 && it.str.trim()) {
-          debugAll.push({y_screen: y_s, t5: it.transform[5], x: Math.round(it.transform[4]), str_len: it.str.length, code0: it.str.charCodeAt(0), code1: it.str.charCodeAt(1)});
+      // 数値のあるy座標を特定するため全スパンをスキャン
+      var numByY = {};
+      for (var di = 0; di < spans.length; di++) {
+        var v = parseFloat(spans[di].dec);
+        if (!isNaN(v) && v >= 30 && v <= 600) {
+          var yk = spans[di].y;
+          if (!numByY[yk]) numByY[yk] = [];
+          numByY[yk].push(v);
         }
       }
-      console.log('[DEBUG-PDF] p1 y_screen=180-200 count:', debugAll.length, JSON.stringify(debugAll.slice(0,5)));
+      console.log('[DEBUG-PDF] p1 numeric y-coords:', JSON.stringify(numByY));
+      console.log('[DEBUG-PDF] p1 vp.height:', vp.height, 'spans count:', spans.length);
+      // y=180-210付近のスパンのdecとcode0を確認
+      var near = spans.filter(function(s){ return s.y >= 175 && s.y <= 215; });
+      console.log('[DEBUG-PDF] y=175-215 spans:', near.map(function(s){ return {y:s.y, dec: JSON.stringify(s.dec.substring(0,6)), code0: s.dec.charCodeAt(0)}; }));
     }
     var scrapNext = getNumRow(188), scrapCur = getNumRow(254);
     var unitNext = getNumRow(316), unitCur = getNumRow(382);
