@@ -509,14 +509,22 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
 // ============================================================
 var GAS_URL = 'https://script.google.com/macros/s/AKfycbw3zssfr-pWlRcgMT4fhQ40HoOUeJHz7-_yYIcA0b4hxh2BXdWAPe96D2kXPizLzsqI/exec';
 
-// fetch POST ヘルパー
+// fetch POST ヘルパー（GASリダイレクト対応）
 function gasPost(action, payload, successHandler, failureHandler) {
+  var body = JSON.stringify(Object.assign({action: action}, payload));
   fetch(GAS_URL, {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(Object.assign({action: action}, payload))
+    redirect: 'follow',
+    body: body
   })
-  .then(function(r){ return r.json(); })
+  .then(function(r){
+    if(!r.ok && r.status !== 0) throw new Error('HTTP ' + r.status);
+    return r.text();
+  })
+  .then(function(text){
+    try { return JSON.parse(text); }
+    catch(e) { throw new Error('レスポンス解析エラー: ' + text.slice(0,100)); }
+  })
   .then(successHandler)
   .catch(function(e){ if(failureHandler) failureHandler(e); else alert('通信エラー: '+e.message); });
 }
@@ -525,8 +533,12 @@ function gasPost(action, payload, successHandler, failureHandler) {
 function gasGet(action, params, successHandler, failureHandler) {
   var url = GAS_URL + '?action=' + action;
   if(params) Object.keys(params).forEach(function(k){ url += '&'+k+'='+encodeURIComponent(params[k]); });
-  fetch(url)
-  .then(function(r){ return r.json(); })
+  fetch(url, {redirect: 'follow'})
+  .then(function(r){ return r.text(); })
+  .then(function(text){
+    try { return JSON.parse(text); }
+    catch(e) { throw new Error('レスポンス解析エラー: ' + text.slice(0,100)); }
+  })
   .then(successHandler)
   .catch(function(e){ if(failureHandler) failureHandler(e); });
 }
