@@ -20,6 +20,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;bac
 label{display:block;font-size:12px;font-weight:700;color:#555;margin-bottom:4px}
 .fld{margin-bottom:11px}
 input[type=text],input[type=date],input[type=number],select,textarea{width:100%;padding:10px;font-size:15px;border:1.5px solid #ddd;border-radius:8px;outline:none;font-family:inherit;background:#fff;color:#222}
+input[type=number]{-moz-appearance:textfield;}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
 input:focus,select:focus,textarea:focus{border-color:#1F4E79}
 textarea{height:55px;resize:none}
 select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23666' d='M6 8L0 0h12z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}
@@ -203,6 +205,11 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
   <div class="tab active" id="tab-form" onclick="showTab('form')">📝 記録する</div>
   <div class="tab" id="tab-list" onclick="showTab('list')">📋 日別一覧</div>
   <div class="tab" id="tab-search" onclick="showTab('search')">🔍 製造番号</div>
+</div>
+
+<!-- システム入力待ちバッジ -->
+<div id="pending-badge" onclick="showPendingList()" style="display:none;background:#E24B4A;color:#fff;padding:8px 16px;font-size:13px;font-weight:700;text-align:center;cursor:pointer;position:sticky;top:88px;z-index:98;">
+  ⚠️ システム入力待ち <span id="pending-count">0</span>件 ── タップして確認
 </div>
 
 <!-- 記録フォーム -->
@@ -564,9 +571,16 @@ function getTeam(n){for(var t in TEAM_MAP){if(TEAM_MAP[t].indexOf(n)>=0)return t
   viewDate=new Date(t.getFullYear(),t.getMonth(),t.getDate());
   updateDateLabel();
   renderPhotoGrid();
+  // 数値入力欄のマウスホイールによる変更を無効化
+  document.addEventListener('wheel', function(e) {
+    if (document.activeElement && document.activeElement.type === 'number') {
+      document.activeElement.blur();
+    }
+  }, { passive: false });
+
   // 起動時にALL_RECORDSを読み込んで完納済みを除外できるようにする
   gasGet('getRecords', null, function(res){
-    if(res && res.ok) ALL_RECORDS = res.records || [];
+    if(res && res.ok) { ALL_RECORDS = res.records || []; updatePendingBadge(); }
   }, function(){});
 })();
 
@@ -826,6 +840,7 @@ function loadRecords(){
   gasGet('getRecords', null, function(res){
     ALL_RECORDS = (res && res.ok) ? (res.records || []) : [];
     filterRecords();
+    updatePendingBadge();
   }, function(){
     document.getElementById('rec-list').innerHTML='<div class="empty">読み込みエラー</div>';
   });
@@ -1420,7 +1435,7 @@ function go(){
       document.getElementById('df').textContent=msg;
       document.getElementById('form-input').style.display='none';
       document.getElementById('form-done').style.display='block';
-      gasGet('getRecords', null, function(r2){ALL_RECORDS=(r2&&r2.ok)?(r2.records||[]):[];}, function(){});
+      gasGet('getRecords', null, function(r2){ALL_RECORDS=(r2&&r2.ok)?(r2.records||[]):[];updatePendingBadge();}, function(){});
     } else {alert('エラー: '+res.err);btn.disabled=false;btn.textContent='記録を保存する';}
   }, function(e){alert('通信エラー: '+e.message+'\n\nGAS URLを確認してください');btn.disabled=false;btn.textContent='記録を保存する';});
 }
@@ -1912,6 +1927,57 @@ function saveAlloc(){
           btn.disabled = false; btn.textContent = 'この内容で保存する';
         }
       });
+  });
+}
+
+// ===== システム入力待ちバッジ =====
+function updatePendingBadge() {
+  var pending = ALL_RECORDS.filter(function(r) {
+    return (r[7] || '') === '完納' && (r[12] || '未') === '未';
+  });
+  var badge = document.getElementById('pending-badge');
+  var countEl = document.getElementById('pending-count');
+  if (pending.length > 0) {
+    countEl.textContent = pending.length;
+    badge.style.display = 'block';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function showPendingList() {
+  // 製造番号検索タブに移動してシステム入力待ちを検索
+  showTab('list');
+  // フィルターをクリアして全日付を表示
+  document.getElementById('filter').value = 'システム入力待ち';
+  // 全日付から未入力の完納レコードを表示
+  var pending = ALL_RECORDS.filter(function(r) {
+    return (r[7] || '') === '完納' && (r[12] || '未') === '未';
+  });
+  if (!pending.length) { updatePendingBadge(); return; }
+
+  // 日付ナビを非表示にして全件表示
+  var el = document.getElementById('rec-list');
+  el.innerHTML = '';
+
+  var lbl = document.createElement('div');
+  lbl.style.cssText = 'font-size:12px;color:#E24B4A;font-weight:700;margin-bottom:8px;padding:8px 4px;border-bottom:2px solid #E24B4A;';
+  lbl.textContent = '⚠️ システム入力待ち（全日付）: ' + pending.length + '件';
+  el.appendChild(lbl);
+
+  // 製造番号でグループ化して表示
+  var gmap = {}, gorder = [];
+  pending.forEach(function(r) {
+    var k = (r[13] || r[2] || '');
+    if (!gmap[k]) {
+      gmap[k] = { recs: [], hinban: r[2], hinmei: r[3], seizoNo: r[13], junjo: r[14], kosei: r[15], shiji: r[16], team: getTeam(r[4] || '') };
+      gorder.push(k);
+    }
+    gmap[k].recs.push(r);
+  });
+
+  gorder.forEach(function(k) {
+    el.appendChild(makeGroupCard(gmap[k], true));
   });
 }
 
