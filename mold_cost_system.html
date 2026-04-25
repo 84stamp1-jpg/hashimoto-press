@@ -695,6 +695,25 @@
       <button class="btn btn-primary btn-sm" onclick="openMoldModal()">＋ 新規登録</button>
     </div>
 
+    <!-- スナップショット管理 -->
+    <div class="config-box" style="margin-bottom:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+        <div>
+          <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:4px;">📸 月別在庫スナップショット</div>
+          <div style="font-size:11px;color:var(--text3);">現時点の金型一覧＋原価データを月別に保存します</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <select class="filter-select" id="snapshotViewSel" onchange="renderSnapshotList()">
+            <option value="">── 過去のスナップショット ──</option>
+          </select>
+          <button class="btn btn-secondary btn-sm" onclick="exportSnapshotExcel()" id="btnSnapExcel" style="display:none">📊 Excel</button>
+          <button class="btn btn-secondary btn-sm" onclick="exportSnapshotPdf()" id="btnSnapPdf" style="display:none">🖨 PDF</button>
+          <button class="btn btn-primary btn-sm" onclick="saveSnapshot()">📸 今月のスナップショットを保存</button>
+        </div>
+      </div>
+      <div id="snapshotLog" style="font-size:11px;color:var(--text3);margin-top:6px;font-family:monospace;"></div>
+    </div>
+
     <div class="table-wrap">
       <div class="table-header">
         <div class="table-title">金型リスト</div>
@@ -1689,6 +1708,7 @@ function initFirebase() {
       DB.purchase      = merge(data.purchase,      DB.purchase);
       DB.labor         = merge(data.labor,         DB.labor);
       DB.quoteRequests = merge(data.quoteRequests, DB.quoteRequests);
+      DB.snapshots     = merge(data.snapshots,     DB.snapshots);
       DB.importLog     = data.importLog || DB.importLog || [];
 
       setStatus(true, 'Firebase接続済');
@@ -1792,7 +1812,7 @@ function showPage(name) {
   if (tab) tab.classList.add('active');
   const renders = {
     dashboard: renderDashboard,
-    molds: renderMolds,
+    molds: () => { renderMolds(); renderSnapshotList(); },
     quote: renderQuote,
     outsource: renderOutsource,
     purchase: renderPurchase,
@@ -4745,6 +4765,233 @@ async function purBulkDelete() {
   if (btn) btn.style.display = 'none';
 
   renderPurchase();
+}
+
+
+// ═══════════════════════════════════════════════
+// 月別在庫スナップショット
+// ═══════════════════════════════════════════════
+
+// スナップショットを保存
+async function saveSnapshot() {
+  const now    = new Date();
+  const yearMonth = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  const label  = now.getFullYear() + '年' + (now.getMonth()+1) + '月時点';
+  const key    = 'snap_' + yearMonth;
+
+  // 既存の確認
+  if (DB.snapshots?.[key]) {
+    if (!confirm(`${label} のスナップショットは既に存在します。上書きしますか？`)) return;
+  }
+
+  // 全金型の現時点データを収集
+  const rows = Object.values(DB.molds||{}).map(m => {
+    const c = getCosts(m.no);
+    // 明細データも収集
+    const matDetails = Object.values(DB.materials||{})
+      .filter(r => (r.moldNo||'').startsWith(m.no) || r.moldNo === m.no)
+      .map(r => ({ moldNo: r.moldNo, name: r.name, material: r.material, amount: r.amount||0, supplier: r.supplier||'' }));
+    const outDetails = Object.values(DB.outsource||{})
+      .filter(r => (r.moldNo||'').startsWith(m.no) || r.moldNo === m.no)
+      .map(r => ({ moldNo: r.moldNo, process: r.process||'', supplier: r.supplier||'', total: r.total||0 }));
+    const purDetails = Object.values(DB.purchase||{})
+      .filter(r => (r.moldNo||'').startsWith(m.no) || r.moldNo === m.no)
+      .map(r => ({ moldNo: r.moldNo, name: r.name||'', supplier: r.supplier||'', total: r.total||0 }));
+    return {
+      no:       m.no,
+      client:   m.client   || '',
+      partNo:   m.partNo   || '',
+      partName: m.partName || '',
+      status:   m.status   || '',
+      estimate: m.estimate || 0,
+      dueDate:  m.dueDate  || '',
+      // 原価集計
+      matTotal: c.mat,
+      outTotal: c.out,
+      purTotal: c.pur,
+      labTotal: c.lab,
+      total:    c.total,
+      // 明細
+      matDetails,
+      outDetails,
+      purDetails,
+    };
+  });
+
+  if (!DB.snapshots) DB.snapshots = {};
+  DB.snapshots[key] = {
+    label,
+    yearMonth,
+    savedAt: now.toISOString(),
+    rows,
+    totalMolds:    rows.length,
+    activeMolds:   rows.filter(r => r.status === '製作中').length,
+    totalEstimate: rows.reduce((s,r) => s + r.estimate, 0),
+    totalCost:     rows.reduce((s,r) => s + r.total,    0),
+  };
+
+  await writeToFirebase('snapshots', DB.snapshots);
+  document.getElementById('snapshotLog').textContent =
+    `✅ ${label} を保存しました（${rows.length}件）`;
+  toast(`${label} のスナップショットを保存しました`, 'success');
+  renderSnapshotList();
+}
+
+// スナップショット一覧をセレクトに反映
+function renderSnapshotList() {
+  const sel = document.getElementById('snapshotViewSel');
+  if (!sel) return;
+  const snaps = Object.entries(DB.snapshots||{})
+    .sort(([a],[b]) => b.localeCompare(a));  // 新しい順
+
+  sel.innerHTML = '<option value="">── 過去のスナップショット ──</option>' +
+    snaps.map(([k,s]) => `<option value="${k}">${s.label}（${s.totalMolds}件）</option>`).join('');
+
+  const selected = sel.value;
+  const hasSnap  = selected && DB.snapshots?.[selected];
+  const btnExcel = document.getElementById('btnSnapExcel');
+  const btnPdf   = document.getElementById('btnSnapPdf');
+  if (btnExcel) btnExcel.style.display = hasSnap ? '' : 'none';
+  if (btnPdf)   btnPdf.style.display   = hasSnap ? '' : 'none';
+}
+
+// Excel出力
+function exportSnapshotExcel() {
+  const key  = document.getElementById('snapshotViewSel')?.value;
+  const snap = DB.snapshots?.[key];
+  if (!snap) { toast('スナップショットを選択してください', 'error'); return; }
+
+  // TSV形式でクリップボードにコピー（Excelに貼り付け可能）
+  const headers = ['管理NO.','客先','品番','品名','ステータス','見積金額','材料費','外注費','購入品費','加工費','現在原価','客先納期'];
+  const rows = snap.rows.map(r => [
+    r.no, r.client, r.partNo, r.partName, r.status,
+    r.estimate, r.matTotal, r.outTotal, r.purTotal, r.labTotal, r.total, r.dueDate
+  ]);
+
+  // CSV生成（BOM付きUTF-8でExcelで開けるように）
+  const bom = '\uFEFF';
+  const csv = bom + [headers, ...rows].map(row =>
+    row.map(v => '"' + String(v||'').replace(/"/g,'""') + '"').join(',')
+  ).join('\r\n');
+
+  // 明細シート用データも追加
+  const detailHeaders = ['管理NO.','種別','品名/工程','仕入先/外注先','金額'];
+  const detailRows = [];
+  snap.rows.forEach(r => {
+    r.matDetails.forEach(d => detailRows.push([d.moldNo,'材料費',d.name||d.material,d.supplier,d.amount]));
+    r.outDetails.forEach(d => detailRows.push([d.moldNo,'外注費',d.process,d.supplier,d.total]));
+    r.purDetails.forEach(d => detailRows.push([d.moldNo,'購入品費',d.name,d.supplier,d.total]));
+  });
+
+  const csv2 = bom + '\r\n=== 明細データ ===\r\n' +
+    [detailHeaders, ...detailRows].map(row =>
+      row.map(v => '"' + String(v||'').replace(/"/g,'""') + '"').join(',')
+    ).join('\r\n');
+
+  const blob = new Blob([csv + csv2], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `金型在庫_${snap.yearMonth}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('CSVをダウンロードしました（Excelで開けます）', 'success');
+}
+
+// PDF出力
+function exportSnapshotPdf() {
+  const key  = document.getElementById('snapshotViewSel')?.value;
+  const snap = DB.snapshots?.[key];
+  if (!snap) { toast('スナップショットを選択してください', 'error'); return; }
+
+  const rows = snap.rows
+    .sort((a,b) => (a.no||'').localeCompare(b.no||'', 'ja', {numeric:true}));
+
+  const tableRows = rows.map((r,i) => {
+    const statusColor = r.status === '製作中' ? '#1d4ed8' : r.status === '完成' ? '#166534' : '#666';
+    const pctVal = r.estimate > 0 ? Math.min(Math.round(r.total/r.estimate*100),999) : 0;
+    const pctColor = pctVal >= 100 ? '#dc2626' : pctVal >= 80 ? '#d97706' : '#16a34a';
+    return `<tr style="border-bottom:1px solid #e5e7eb;${i%2===1?'background:#f9fafb':''}">
+      <td style="padding:6px 8px;font-family:monospace;font-weight:600">${r.no}</td>
+      <td style="padding:6px 8px;font-size:11pt">${r.client}</td>
+      <td style="padding:6px 8px;font-size:10pt;color:#555">${r.partNo}<br><span style="color:#111">${r.partName}</span></td>
+      <td style="padding:6px 8px;text-align:center"><span style="color:${statusColor};font-weight:600">${r.status}</span></td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace">¥${fmt(r.estimate)}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace;color:#1d4ed8">¥${fmt(r.matTotal)}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace;color:#d97706">¥${fmt(r.outTotal)}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace;color:#059669">¥${fmt(r.purTotal)}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace;color:#7c3aed">¥${fmt(r.labTotal)}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace;font-weight:700">¥${fmt(r.total)}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace;color:${pctColor};font-weight:700">${pctVal}%</td>
+      <td style="padding:6px 8px;font-size:10pt">${r.dueDate||''}</td>
+    </tr>`;
+  }).join('');
+
+  // 合計行
+  const totEst  = rows.reduce((s,r)=>s+r.estimate,0);
+  const totMat  = rows.reduce((s,r)=>s+r.matTotal,0);
+  const totOut  = rows.reduce((s,r)=>s+r.outTotal,0);
+  const totPur  = rows.reduce((s,r)=>s+r.purTotal,0);
+  const totLab  = rows.reduce((s,r)=>s+r.labTotal,0);
+  const totCost = rows.reduce((s,r)=>s+r.total,0);
+
+  const win = window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head>
+    <meta charset="UTF-8"><title>金型在庫表 ${snap.label}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+      body{margin:0;font-family:"Noto Sans JP",sans-serif;font-size:11pt;color:#111;}
+      .no-print{position:fixed;top:10px;right:10px;display:flex;gap:8px;z-index:99;}
+      button{padding:7px 14px;border:none;border-radius:4px;cursor:pointer;font-size:12px;}
+      .bp{background:#1d4ed8;color:#fff;} .bc{background:#e5e7eb;color:#333;}
+      table{width:100%;border-collapse:collapse;}
+      th{background:#1e3a5f;color:#fff;padding:7px 8px;font-size:10.5pt;white-space:nowrap;}
+      .tfoot td{background:#1e3a5f;color:#fff;font-weight:700;padding:7px 8px;}
+      @media print{.no-print{display:none!important}@page{size:A3 landscape;margin:5mm}}
+    </style>
+    </head><body>
+    <div class="no-print">
+      <button class="bp" onclick="window.print()">🖨 印刷・PDF保存</button>
+      <button class="bc" onclick="window.close()">閉じる</button>
+    </div>
+    <div style="padding:10mm 8mm;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:12px;">
+        <div>
+          <div style="font-size:18pt;font-weight:700;">金型在庫表</div>
+          <div style="font-size:11pt;color:#555;">${snap.label} &nbsp;|&nbsp; 橋本工業㈱</div>
+        </div>
+        <div style="text-align:right;font-size:11pt;">
+          <div>製作中: <b>${snap.activeMolds}件</b> / 全${snap.totalMolds}件</div>
+          <div>総見積: <b>¥${fmt(totEst)}</b> &nbsp; 総原価: <b>¥${fmt(totCost)}</b></div>
+        </div>
+      </div>
+      <table>
+        <thead><tr>
+          <th>管理NO.</th><th>客先</th><th>品番/品名</th><th>状態</th>
+          <th style="text-align:right">見積金額</th>
+          <th style="text-align:right;color:#93c5fd">材料費</th>
+          <th style="text-align:right;color:#fcd34d">外注費</th>
+          <th style="text-align:right;color:#6ee7b7">購入品費</th>
+          <th style="text-align:right;color:#c4b5fd">加工費</th>
+          <th style="text-align:right">現在原価</th>
+          <th style="text-align:right">達成率</th>
+          <th>客先納期</th>
+        </tr></thead>
+        <tbody>${tableRows}</tbody>
+        <tfoot><tr class="tfoot">
+          <td colspan="4">合 計（${rows.length}件）</td>
+          <td style="text-align:right">¥${fmt(totEst)}</td>
+          <td style="text-align:right">¥${fmt(totMat)}</td>
+          <td style="text-align:right">¥${fmt(totOut)}</td>
+          <td style="text-align:right">¥${fmt(totPur)}</td>
+          <td style="text-align:right">¥${fmt(totLab)}</td>
+          <td style="text-align:right">¥${fmt(totCost)}</td>
+          <td colspan="2"></td>
+        </tr></tfoot>
+      </table>
+    </div>
+    </body></html>`);
+  win.document.close();
 }
 
 // ── Close modal on overlay click ──
