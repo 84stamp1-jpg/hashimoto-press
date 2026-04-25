@@ -661,7 +661,13 @@
       <div class="table-header">
         <div class="table-title">原価進捗 — 製作中金型</div>
         <div class="table-count" id="dashTableCount"></div>
-        <div class="table-actions">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <div style="display:flex;gap:8px;align-items:center;font-size:11px;color:var(--text2);">
+            <span style="display:inline-flex;align-items:center;gap:3px;"><span style="width:10px;height:10px;background:#0ea5e9;border-radius:2px;display:inline-block;"></span>材料費</span>
+            <span style="display:inline-flex;align-items:center;gap:3px;"><span style="width:10px;height:10px;background:#f59e0b;border-radius:2px;display:inline-block;"></span>外注費</span>
+            <span style="display:inline-flex;align-items:center;gap:3px;"><span style="width:10px;height:10px;background:#10b981;border-radius:2px;display:inline-block;"></span>購入品</span>
+            <span style="display:inline-flex;align-items:center;gap:3px;"><span style="width:10px;height:10px;background:#a78bfa;border-radius:2px;display:inline-block;"></span>加工費</span>
+          </div>
           <button class="btn btn-secondary btn-sm" onclick="showPage('molds')">全件表示 →</button>
         </div>
       </div>
@@ -1902,6 +1908,8 @@ function renderDashboard() {
   document.getElementById('statCost').textContent     = fmtM(totalCost);
   document.getElementById('statOver').textContent     = overCount;
 
+  // 管理NO昇順でソート
+  active.sort(([,a],[,b]) => (a.no||'').localeCompare(b.no||'', 'ja', {numeric:true}));
   const rows = active.slice(0,10);
   document.getElementById('dashTableCount').textContent = `${active.length}件`;
 
@@ -1914,7 +1922,7 @@ function renderDashboard() {
     <table>
       <thead>
         <tr>
-          <th>管理NO.</th><th>得意先</th><th>部品名</th>
+          <th>管理NO.</th><th>得意先</th><th>品番 / 品名</th>
           <th>見積金額</th><th>現在原価</th><th>原価構成</th><th>進捗</th><th></th>
         </tr>
       </thead>
@@ -1924,7 +1932,10 @@ function renderDashboard() {
           return `<tr onclick="openMoldDetail('${m.no}')">
             <td class="mono">${m.no}</td>
             <td>${m.client||''}</td>
-            <td>${m.partName||''}</td>
+            <td style="font-size:11px">
+              ${m.partNo ? '<span class="mono" style="color:var(--text3);font-size:10px">' + m.partNo + '</span><br>' : ''}
+              ${m.partName||''}
+            </td>
             <td class="mono">¥${fmt(m.estimate)}</td>
             <td class="mono">¥${fmt(c.total)}</td>
             <td>${costBarHTML(c)}</td>
@@ -1987,7 +1998,10 @@ function renderMolds() {
             <td class="mono">${m.no}</td>
             <td>${m.client||''}</td>
             <td class="mono" style="font-size:11px">${m.partNo||''}</td>
-            <td>${m.partName||''}</td>
+            <td style="font-size:11px">
+              ${m.partNo ? '<span class="mono" style="color:var(--text3);font-size:10px">' + m.partNo + '</span><br>' : ''}
+              ${m.partName||''}
+            </td>
             <td>${typeBadge(m.type)}</td>
             <td>${statusBadge(m.status)}</td>
             <td class="mono">¥${fmt(m.estimate)}</td>
