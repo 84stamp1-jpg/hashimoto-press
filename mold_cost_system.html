@@ -1626,7 +1626,9 @@ function loadConfig() {
   const normF = v => v ? String(v).replace(/ /g,'_') : '';
   const setF = (id, val, def) => {
     const el = document.getElementById(id);
-    if (el) el.value = normF(val) || normF(def) || def || '';
+    // スペースをアンダースコアに強制変換
+    const cleaned = val ? String(val).replace(/[ 　]/g,'_').trim() : '';
+    if (el) el.value = cleaned || def || '';
   };
   // デフォルトは「新規物件(App39)」のフィールドコード（2026/04/14確認）
   setF('cfgKtF_moldNo',     ktF.moldNo,     '文字列_1行_6');
@@ -4169,13 +4171,13 @@ async function fetchKintoneApp(appId, query) {
 function ktVal(rec, ...fields) {
   for (const rawF of fields) {
     if (!rawF) continue;
-    // フィールドコードの正規化（スペース→アンダースコア、全角→半角）
-    const f = String(rawF).replace(/　/g,' ').replace(/ /g,'_');
-    const v = rec[f];
+    // 全空白文字をアンダースコアに変換して正規化
+    const f = String(rawF).replace(/\s+/g, '_').replace(/_+/g,'_').replace(/^_|_$/g,'');
+    let v = rec[f];
+    if (v === null || v === undefined) v = rec[String(rawF)]; // 元キーでも試す
     if (v === null || v === undefined) continue;
     if (typeof v === 'string') return v;
     if (typeof v === 'number') return String(v);
-    // kintone形式: {type: "SINGLE_LINE_TEXT", value: "..."}
     if (v.value !== undefined && v.value !== null) return String(v.value);
   }
   return '';
@@ -4196,26 +4198,36 @@ async function fetchKintoneForPreview() {
   // 画面の入力値を優先（保存前でも反映）
   const appId  = document.getElementById('cfgKtMoldApp')?.value.trim() || cfg.ktMoldApp || '39';
   // フィールドコードも画面の最新値で上書き
-  // フィールドコードを正規化（スペース→アンダースコア）
-  const normCode = v => v ? String(v).replace(/ /g,'_').trim() : '';
-  const getF = (id, cfgVal, def) => normCode(document.getElementById(id)?.value || cfgVal || def);
+  // ── フィールドコードを取得（スペース除去を徹底）──
+  // DOM値を優先、なければハードコードされたデフォルト（スペースなし）を使用
+  // フィールドコードはDOM値を全て正規化（非ASCII空白も除去）
+  const _norm = s => s ? String(s).replace(/[^\u0021-\uFFFF]+/g, '_').replace(/_+/g,'_').replace(/^_|_$/g,'') : '';
+  const _fc = (id, hardDefault) => {
+    const el = document.getElementById(id);
+    const raw = el ? el.value : '';
+    const fixed = _norm(raw);
+    return fixed || hardDefault;
+  };
   const liveF = {
-    moldNo:   getF('cfgKtF_moldNo',   cfg.ktF?.moldNo,   '文字列_1行_6'),
-    partNo:   getF('cfgKtF_partNo',   cfg.ktF?.partNo,   '文字列_1行_7'),
-    partName: getF('cfgKtF_partName', cfg.ktF?.partName, '文字列_1行_5'),
-    client:   getF('cfgKtF_client',   cfg.ktF?.client,   'ルックアップ'),
-    status:   getF('cfgKtF_status',   cfg.ktF?.status,   ''),
-    dueDate:  getF('cfgKtF_dueDate',  cfg.ktF?.dueDate,  '日付'),
-    process:  getF('cfgKtF_process',  cfg.ktF?.process,  ''),
-    estimate: getF('cfgKtF_estimate', cfg.ktF?.estimate, '見積金額'),
+    moldNo:   _fc('cfgKtF_moldNo',   '文字列_1行_6'),
+    partNo:   _fc('cfgKtF_partNo',   '文字列_1行_7'),
+    partName: _fc('cfgKtF_partName', '文字列_1行_5'),
+    client:   _fc('cfgKtF_client',   'ルックアップ'),
+    status:   _fc('cfgKtF_status',   ''),
+    dueDate:  _fc('cfgKtF_dueDate',  '日付'),
+    process:  _fc('cfgKtF_process',  ''),
+    estimate: _fc('cfgKtF_estimate', '見積金額'),
   };
   const liveV = {
-    inProgress: document.getElementById('cfgKtV_inProgress')?.value.trim() || cfg.ktV?.inProgress || '製作中',
-    done:       document.getElementById('cfgKtV_done')?.value.trim()       || cfg.ktV?.done       || '完成',
-    accepted:   document.getElementById('cfgKtV_accepted')?.value.trim()   || cfg.ktV?.accepted   || '検収済',
+    inProgress: _fc('cfgKtV_inProgress', '製作中'),
+    done:       _fc('cfgKtV_done',       '完成'),
+    accepted:   _fc('cfgKtV_accepted',   '検収済'),
   };
+  // cfg にも正規化した値を保存してlocalStorage更新
   cfg.ktF = liveF;
   cfg.ktV = liveV;
+  localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
+  console.log('[kintone] liveF:', JSON.stringify(liveF));
   console.log('[kintone] liveF:', JSON.stringify(liveF));
   const logEl  = document.getElementById('ktSyncLog');
   const setLog = (msg) => { if (logEl) logEl.textContent = msg; };
