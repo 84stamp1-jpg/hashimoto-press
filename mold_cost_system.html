@@ -926,6 +926,10 @@
         <div class="table-title">購入品一覧</div>
         <div class="table-count" id="purCount"></div>
         <div class="table-actions">
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;margin-right:4px;">
+            <input type="checkbox" id="purSelectAll" onchange="purToggleAll(this.checked)"> 全選択
+          </label>
+          <button class="btn btn-danger btn-sm" id="purBulkDeleteBtn" style="display:none" onclick="purBulkDelete()">🗑 選択削除</button>
           <button class="btn btn-secondary btn-sm" onclick="copyTableToClipboard('purTableBody','購入品費')">📋 全行コピー</button>
         </div>
       </div>
@@ -1595,10 +1599,24 @@ function loadConfig() {
   if (maEl) maEl.value = cfg.ktMasterApp || '7';
   const moldAppEl = document.getElementById('cfgKtMoldApp');
   if (moldAppEl) moldAppEl.value = cfg.ktMoldApp || '39';
-  // フィールドコード設定を読込
+  // フィールドコードのスペース→アンダースコア正規化（旧データ対応）
+  if (cfg.ktF) {
+    let changed = false;
+    Object.keys(cfg.ktF).forEach(k => {
+      const old = cfg.ktF[k];
+      const fixed = old ? String(old).replace(/ /g,'_') : old;
+      if (fixed !== old) { cfg.ktF[k] = fixed; changed = true; }
+    });
+    if (changed) localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
+  }
   const ktF = cfg.ktF || {};
   const ktV = cfg.ktV || {};
-  const setF = (id, val, def) => { const el = document.getElementById(id); if(el) el.value = val || def; };
+  // フィールドコードの正規化（スペース→アンダースコア）
+  const normF = v => v ? String(v).replace(/ /g,'_') : '';
+  const setF = (id, val, def) => {
+    const el = document.getElementById(id);
+    if (el) el.value = normF(val) || normF(def) || def || '';
+  };
   // デフォルトは「新規物件(App39)」のフィールドコード（2026/04/14確認）
   setF('cfgKtF_moldNo',     ktF.moldNo,     '文字列_1行_6');
   setF('cfgKtF_partNo',     ktF.partNo,     '文字列_1行_7');
@@ -2185,12 +2203,16 @@ function renderPurchase() {
   document.getElementById('purTableBody').innerHTML = `
     <table>
       <thead><tr>
+        <th style="width:32px;text-align:center">✓</th>
         <th style="width:50px"></th>
         <th>仕入月</th><th>管理NO.</th><th>品番</th><th>品名</th>
         <th>仕入先</th><th>数量</th><th>単価</th><th>合計金額</th>
       </tr></thead>
       <tbody>${entries.map(([k,r])=>`
         <tr>
+          <td style="text-align:center;padding:4px 2px;">
+            <input type="checkbox" class="pur-check" data-key="${k}" onchange="purCheckChanged()">
+          </td>
           <td style="white-space:nowrap">
             <button class="copy-btn" onclick="copyRowTSV(this,[
             '${(r.month||'').replace(/'/g,"\\'")}',
@@ -4091,15 +4113,16 @@ function saveKintoneConfig() {
   cfg.ktMasterApp = document.getElementById('cfgKtMasterApp')?.value.trim() || '7';
   cfg.ktMoldApp   = document.getElementById('cfgKtMoldApp')?.value.trim()   || '39';
   // フィールドコード設定を保存
+  const _n = v => v ? String(v).replace(/ /g,'_').trim() : '';
   cfg.ktF = {
-    moldNo:     document.getElementById('cfgKtF_moldNo')?.value.trim()     || '文字列_1行_6',
-    partNo:     document.getElementById('cfgKtF_partNo')?.value.trim()     || '文字列_1行_7',
-    partName:   document.getElementById('cfgKtF_partName')?.value.trim()   || '文字列_1行_5',
-    client:     document.getElementById('cfgKtF_client')?.value.trim()     || 'ルックアップ',
-    status:     document.getElementById('cfgKtF_status')?.value.trim()     || '',
-    dueDate:    document.getElementById('cfgKtF_dueDate')?.value.trim()    || '日付',
-    process:    document.getElementById('cfgKtF_process')?.value.trim()    || '',
-    estimate:   document.getElementById('cfgKtF_estimate')?.value.trim()   || '見積金額',
+    moldNo:   _n(document.getElementById('cfgKtF_moldNo')?.value)   || '文字列_1行_6',
+    partNo:   _n(document.getElementById('cfgKtF_partNo')?.value)   || '文字列_1行_7',
+    partName: _n(document.getElementById('cfgKtF_partName')?.value) || '文字列_1行_5',
+    client:   _n(document.getElementById('cfgKtF_client')?.value)   || 'ルックアップ',
+    status:   _n(document.getElementById('cfgKtF_status')?.value)   || '',
+    dueDate:  _n(document.getElementById('cfgKtF_dueDate')?.value)  || '日付',
+    process:  _n(document.getElementById('cfgKtF_process')?.value)  || '',
+    estimate: _n(document.getElementById('cfgKtF_estimate')?.value) || '見積金額',
   };
   cfg.ktV = {
     inProgress: document.getElementById('cfgKtV_inProgress')?.value.trim() || '製作中',
@@ -4132,7 +4155,10 @@ async function fetchKintoneApp(appId, query) {
 
 // フィールド値を安全に取得
 function ktVal(rec, ...fields) {
-  for (const f of fields) {
+  for (const rawF of fields) {
+    if (!rawF) continue;
+    // フィールドコードの正規化（スペース→アンダースコア、全角→半角）
+    const f = String(rawF).replace(/　/g,' ').replace(/ /g,'_');
     const v = rec[f];
     if (v === null || v === undefined) continue;
     if (typeof v === 'string') return v;
@@ -4158,15 +4184,18 @@ async function fetchKintoneForPreview() {
   // 画面の入力値を優先（保存前でも反映）
   const appId  = document.getElementById('cfgKtMoldApp')?.value.trim() || cfg.ktMoldApp || '39';
   // フィールドコードも画面の最新値で上書き
+  // フィールドコードを正規化（スペース→アンダースコア）
+  const normCode = v => v ? String(v).replace(/ /g,'_').trim() : '';
+  const getF = (id, cfgVal, def) => normCode(document.getElementById(id)?.value || cfgVal || def);
   const liveF = {
-    moldNo:   document.getElementById('cfgKtF_moldNo')?.value.trim()   || cfg.ktF?.moldNo   || '文字列_1行_6',
-    partNo:   document.getElementById('cfgKtF_partNo')?.value.trim()   || cfg.ktF?.partNo   || '文字列_1行_7',
-    partName: document.getElementById('cfgKtF_partName')?.value.trim() || cfg.ktF?.partName || '文字列_1行_5',
-    client:   document.getElementById('cfgKtF_client')?.value.trim()   || cfg.ktF?.client   || 'ルックアップ',
-    status:   document.getElementById('cfgKtF_status')?.value.trim()   || cfg.ktF?.status   || '',
-    dueDate:  document.getElementById('cfgKtF_dueDate')?.value.trim()  || cfg.ktF?.dueDate  || '日付',
-    process:  document.getElementById('cfgKtF_process')?.value.trim()  || cfg.ktF?.process  || '',
-    estimate: document.getElementById('cfgKtF_estimate')?.value.trim() || cfg.ktF?.estimate || '見積金額',
+    moldNo:   getF('cfgKtF_moldNo',   cfg.ktF?.moldNo,   '文字列_1行_6'),
+    partNo:   getF('cfgKtF_partNo',   cfg.ktF?.partNo,   '文字列_1行_7'),
+    partName: getF('cfgKtF_partName', cfg.ktF?.partName, '文字列_1行_5'),
+    client:   getF('cfgKtF_client',   cfg.ktF?.client,   'ルックアップ'),
+    status:   getF('cfgKtF_status',   cfg.ktF?.status,   ''),
+    dueDate:  getF('cfgKtF_dueDate',  cfg.ktF?.dueDate,  '日付'),
+    process:  getF('cfgKtF_process',  cfg.ktF?.process,  ''),
+    estimate: getF('cfgKtF_estimate', cfg.ktF?.estimate, '見積金額'),
   };
   const liveV = {
     inProgress: document.getElementById('cfgKtV_inProgress')?.value.trim() || cfg.ktV?.inProgress || '製作中',
@@ -4628,6 +4657,56 @@ function findMoldByMatNo(matNo) {
   const matched = moldNos.find(no => matNo.startsWith(no));
   if (!matched) return null;
   return Object.values(DB.molds).find(m => m.no === matched) || null;
+}
+
+
+// ═══════════════════════════════════════════════
+// 購入品 一括選択・削除
+// ═══════════════════════════════════════════════
+
+// 全選択/解除
+function purToggleAll(checked) {
+  document.querySelectorAll('.pur-check').forEach(cb => { cb.checked = checked; });
+  purCheckChanged();
+}
+
+// チェック変化 → 一括削除ボタンの表示切替
+function purCheckChanged() {
+  const checked = document.querySelectorAll('.pur-check:checked').length;
+  const btn = document.getElementById('purBulkDeleteBtn');
+  const all = document.getElementById('purSelectAll');
+  if (btn) {
+    btn.style.display = checked > 0 ? '' : 'none';
+    btn.textContent   = '🗑 選択削除 (' + checked + '件)';
+  }
+  // 全選択チェックの状態を更新
+  const total = document.querySelectorAll('.pur-check').length;
+  if (all) all.indeterminate = checked > 0 && checked < total;
+  if (all && checked === total && total > 0) all.checked = true;
+  if (all && checked === 0) all.checked = false;
+}
+
+// 選択行を一括削除
+async function purBulkDelete() {
+  const checked = [...document.querySelectorAll('.pur-check:checked')];
+  if (!checked.length) return;
+  if (!confirm(checked.length + '件の購入品データを削除しますか？')) return;
+
+  checked.forEach(cb => {
+    const key = cb.dataset.key;
+    if (key && DB.purchase) delete DB.purchase[key];
+  });
+
+  await writeToFirebase('purchase', DB.purchase);
+  toast(checked.length + '件を削除しました', 'success');
+
+  // 全選択チェックをリセット
+  const allCb = document.getElementById('purSelectAll');
+  if (allCb) { allCb.checked = false; allCb.indeterminate = false; }
+  const btn = document.getElementById('purBulkDeleteBtn');
+  if (btn) btn.style.display = 'none';
+
+  renderPurchase();
 }
 
 // ── Close modal on overlay click ──
