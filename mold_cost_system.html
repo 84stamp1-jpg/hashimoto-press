@@ -2353,38 +2353,51 @@ async function importCSV(e) {
 
       if (isMisumi) {
         // ── ミスミ order.csv フォーマット ──
-        // ヘッダー: 通し番号,お客さまコード,受注日,...,お客さま注文番号,...,商品型番,数量,単価(税別),...,金額(税別),...,商品名称,...
-        const orderNo = row['お客さま注文番号'] || '';
-        // 注番から品番と工程を分離（例: "18185-MLZA / TRM"）
-        const orderParts = orderNo.split('/').map(s => s.trim());
-        partNo  = orderParts[0] || '';
-        moldNo  = '';  // 注番からは直接管理NOは取得不可
-        name    = row['商品名称'] || row['商品型番'] || '';
-        qty     = parseInt(row['数量']) || 1;
-        unit    = parseFloat(row['単価(税別)']) || 0;
-        total   = parseFloat(row['金額(税別)']) || qty * unit;
+        // お客さま注文番号 = "18185-MLZA / TRM" → 全体を品番として表示
+        const orderNo  = row['お客さま注文番号'] || '';
+        // 品番: お客さま注文番号の全体（/ 含めてそのまま）
+        partNo    = orderNo;
+        // 管理NO: 品番から金型NOを前方一致で特定し、工程名で生成
+        // 例: "18185-MLZA / TRM" → 金型NO=18185-MLZA相当, 工程=TRM
+        const orderParts  = orderNo.split('/').map(s => s.trim());
+        const basePartNo  = orderParts[0] || '';  // "18185-MLZA"
+        const processName = orderParts[1] || '';  // "TRM"
+        const misMold = findMoldByMatNo ? findMoldByMatNo(basePartNo) : null;
+        if (misMold && processName) {
+          moldNo = genCsvMatNo(misMold.no, processName);
+        } else if (misMold) {
+          moldNo = misMold.no;
+        } else {
+          moldNo = '';
+        }
+        name      = row['商品名称'] || row['商品型番'] || '';
+        qty       = parseInt(row['数量']) || 1;
+        unit      = parseFloat(row['単価(税別)']) || 0;
+        total     = parseFloat(row['金額(税別)']) || qty * unit;
         orderDate = row['受注日'] || row['出荷日'] || row['ミスミ出荷日'] || '';
-        supplier = 'ミスミ';
-        // 品番コードを品名として追加
-        const code = row['商品型番'] || '';
-        if (code && name !== code) name = name ? name + ' [' + code + ']' : code;
+        supplier  = 'ミスミ';
+        const misumiCode = row['商品型番'] || '';
+        if (misumiCode && name !== misumiCode) name = name ? name + ' [' + misumiCode + ']' : misumiCode;
 
       } else if (isAlt) {
-        // ── 別サプライヤー（お客様注番形式）──
-        // ヘッダー: お客様注番,お客様管理No.1,商品(ｶﾀﾛｸﾞ)コード,商品名,数量,単価,金額,出荷日
-        const csvPartNo = row['お客様注番'] || '';
-        const csvProcess= row['お客様管理No.1'] || '';  // 工程名
-        partNo  = csvPartNo;
-        // 材料管理NO: 金型NOが品番マスタと一致する場合に生成
-        const csvMold = findMoldByMatNo && findMoldByMatNo(csvPartNo);
-        if (csvMold && csvProcess) {
-          moldNo = genCsvMatNo(csvMold.no, csvProcess);
+        // ── パンチ工業（お客様注番形式）──
+        // ヘッダー: お客様注番, お客様管理No.1, 商品(ｶﾀﾛｸﾞ)コード, 商品名, 数量, 単価, 金額, 出荷日
+        const csvPartNo  = row['お客様注番'] || '';
+        const csvProcess = row['お客様管理No.1'] || '';  // 工程名（例: FO, TRM）
+        partNo   = csvPartNo;
+        // 管理NO: お客様管理No.1 を使って生成（71-A-FO01 形式）
+        const altMold = findMoldByMatNo ? findMoldByMatNo(csvPartNo) : null;
+        if (altMold && csvProcess) {
+          moldNo = genCsvMatNo(altMold.no, csvProcess);
+        } else if (csvProcess) {
+          // 金型が見つからなくても工程名を管理NOに使用
+          moldNo = csvProcess;
         } else {
-          moldNo = csvPartNo;  // 金型が見つからない場合は品番をそのまま使用
+          moldNo = csvPartNo;
         }
-        const code = row['商品(ｶﾀﾛｸﾞ)コード'] || row['商品(ｶﾀﾛｸﾞ)ｺｰﾄﾞ'] || '';
+        const altCode = row['商品(ｶﾀﾛｸﾞ)コード'] || row['商品(ｶﾀﾛｸﾞ)ｺｰﾄﾞ'] || '';
         name     = row['商品名'] || '';
-        if (code && name !== code) name = name ? name + ' [' + code + ']' : code;
+        if (altCode && name !== altCode) name = name ? name + ' [' + altCode + ']' : altCode;
         qty      = parseInt(row['数量']) || 1;
         unit     = parseFloat(row['単価']) || 0;
         total    = parseFloat(row['金額']) || qty * unit;
