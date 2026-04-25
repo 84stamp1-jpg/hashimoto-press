@@ -61,18 +61,22 @@ header small{font-size:11px;color:#8893bb}
 .fb.fok{background:var(--ok);border-color:var(--ok);color:#fff}
 .fb.fng{background:var(--ng);border-color:var(--ng);color:#fff}
 .fb.fwn{background:var(--wn);border-color:var(--wn);color:#fff}
+.fb.fsk{background:#64748b;border-color:#64748b;color:#fff}
 .tw{border:1px solid var(--bdr);border-radius:9px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05)}
 table{width:100%;border-collapse:collapse}
 thead tr{background:var(--sur2);border-bottom:2px solid var(--bdr)}
 th{padding:7px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--tx3);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
 th.r{text-align:right}th.c{text-align:center}
 tbody tr{border-bottom:1px solid var(--bdr)}
-tbody tr:hover{background:#f8f9ff}
+tbody tr:hover{background:#dbeafe}
 tbody tr:last-child{border-bottom:none}
 tbody tr.grp-row{background:#f0f4ff;font-weight:600}
+tbody tr.grp-row:hover{background:#c7d7f9}
 tbody tr.grp-row td{padding:8px 10px;font-size:12px}
 tbody tr.mat-row td{padding:6px 10px 6px 24px;font-size:11px;color:var(--tx2)}
-tbody tr.mat-row:hover{background:#fafbff}
+tbody tr.mat-row:hover{background:#dbeafe}
+tbody tr.mat-row-warn{background:#fff3e0}
+tbody tr.mat-row-warn:hover{background:#fcd9a0}
 td{padding:7px 10px;font-size:12px;vertical-align:middle}
 td.r{text-align:right;font-family:'IBM Plex Mono',monospace;font-size:11px}
 td.c{text-align:center}td.mn{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--tx2)}
@@ -93,7 +97,7 @@ td.c{text-align:center}td.mn{font-family:'IBM Plex Mono',monospace;font-size:11p
 <body>
 <header>
   <div class="logo">HK</div>
-  <div><h1>材料単価改訂システム</h1><small>橋本工業株式会社</small></div>
+  <div><h1>材料単価改訂システム</h1><small>橋本工業株式会社 ／ ver.2025-04-24d</small></div>
 </header>
 <nav class="snav">
   <div class="si active" onclick="gotoStep(0)"><div class="sn" id="sn0">1</div><div class="sl">ファイル読み込み</div></div>
@@ -110,30 +114,28 @@ td.c{text-align:center}td.mn{font-family:'IBM Plex Mono',monospace;font-size:11p
 <div class="page active" id="page0">
   <div class="gbox">
     <h3>📋 作業の流れ</h3>
-    <div class="gs cur"><div class="gn">1</div><div>4種類のファイルを読み込んで照合を開始します</div></div>
-    <div class="gs pnd"><div class="gn">2</div><div>改定表PDFの品番とExcelを品番照合し、実効単価（基準+エキストラ）と現行単価を比較します</div></div>
+    <div class="gs cur"><div class="gn">1</div><div>material_update.py を実行して生成された <strong>_照合結果.json</strong> を読み込みます</div></div>
+    <div class="gs pnd"><div class="gn">2</div><div>改定表PDFの品番とExcelを品番照合した結果を確認します</div></div>
     <div class="gs pnd"><div class="gn">3</div><div>更新する材質を選択してExcelをダウンロード → Excelで開いて保存します</div></div>
     <div class="gs pnd"><div class="gn">4</div><div>再計算済みExcelを読み込んで調達基準表PDFと照合します</div></div>
   </div>
   <div class="panel">
-    <div class="ptl">ファイル読み込み</div>
-    <div class="ugrid">
-      <div class="ubox" id="box-excel"><input type="file" accept=".xlsx" id="fi-excel"><span class="ic">📊</span><p>Excelファイル</p><small>見積一覧表.xlsx</small><div class="flist" id="fl-excel"></div></div>
-      <div class="ubox" id="box-kaite"><input type="file" accept=".pdf" multiple id="fi-kaite"><span class="ic">📄</span><p>原材料支給単価改定表PDF</p><small>複数可</small><div class="flist" id="fl-kaite"></div></div>
-      <div class="ubox wide" id="box-annai"><input type="file" accept=".pdf" multiple id="fi-annai"><span class="ic">📋</span><p>案内文PDF（複数可）</p><small>スクラップ改定案内・ステンレス支給単価改定案内 など</small><div class="flist" id="fl-annai"></div></div>
-      <div class="ubox wide" id="box-choutatsu"><input type="file" accept=".pdf" multiple id="fi-choutatsu"><span class="ic">📑</span><p>調達基準表PDF（複数可）</p><small>部品単価通知書 兼 調達基準表</small><div class="flist" id="fl-choutatsu"></div></div>
+    <div class="ptl">照合結果JSONを読み込む</div>
+    <div style="font-size:12px;color:#4b5580;margin-bottom:14px">material_update.py 実行後に生成される <strong>見積一覧表_v2_照合結果.json</strong> を選択してください</div>
+    <div class="ubox wide" id="box-json">
+      <input type="file" accept=".json" id="fi-json">
+      <span class="ic">📋</span>
+      <p>照合結果JSON</p>
+      <small>見積一覧表_v2_照合結果.json</small>
+      <div class="flist" id="fl-json"></div>
     </div>
-    <div class="pb" id="pb0"><div class="pf" id="pf0"></div></div>
-    <div id="status"></div>
-    <div class="brow">
-      <button class="btn bp" id="btn-start" disabled onclick="startAnalysis()">▶ 照合開始</button>
-      <button class="btn bs" onclick="resetAll()">↺ リセット</button>
-    </div>
+    <div id="status" style="margin-top:10px"></div>
   </div>
 </div>
 
 <!-- STEP1 -->
 <div class="page" id="page1">
+  <div id="pdf-diag-panel" style="display:none;background:#fef9c3;border:1px solid #fcd34d;border-radius:6px;padding:8px 14px;margin-bottom:12px;font-size:11px;color:#92400e;"></div>
   <div class="cards" id="cards1"></div>
   <div class="panel">
     <div class="ptl">品番・材質別 照合結果（材質グループ単位で集計）</div>
@@ -143,9 +145,14 @@ td.c{text-align:center}td.mn{font-family:'IBM Plex Mono',monospace;font-size:11p
       <button class="fb" id="f1-warn" onclick="setF1(this,'warn')">⚠ 要確認</button>
       <button class="fb" id="f1-skip" onclick="setF1(this,'skip')">— PDFなし</button>
     </div>
+    <div class="fbar" id="fac-bar" style="margin-top:-4px;padding-top:6px;border-top:1px dashed var(--bdr)">
+      <span style="font-size:10px;color:var(--tx3);font-weight:700;margin-right:4px">製作所：</span>
+    </div>
     <div class="tw"><table id="tbl1">
       <thead><tr>
-        <th>材質グループ / 品番</th>
+        <th>製作所</th>
+        <th>調達NO</th>
+        <th>品番</th>
         <th>材質コード</th>
         <th class="r">実効支給単価<br>(基準+Extra)</th>
         <th class="r">PDF現行<br>支給単価</th>
@@ -186,15 +193,13 @@ td.c{text-align:center}td.mn{font-family:'IBM Plex Mono',monospace;font-size:11p
       <tbody id="tbody2"></tbody>
     </table></div>
     <div class="brow">
-      <button class="btn bg" onclick="downloadExcel()">📥 更新済みExcelをダウンロード</button>
       <button class="btn bs" onclick="gotoStep(1)">← 戻る</button>
     </div>
   </div>
-  <div class="ibox" id="inst-box" style="display:none">
+  <div class="ibox" id="inst-box">
     <h3>⚠️ STEP4へ進む前に必ず行ってください</h3>
     <ol>
-      <li><strong>上のボタンで更新済みExcelをダウンロード</strong>してください</li>
-      <li>ダウンロードしたExcelを<strong>Excelアプリで開いて</strong>ください<div class="inote">※ LibreOfficeでは数式が再計算されません</div></li>
+      <li>デスクトップの <strong>見積一覧表_v2_改訂済み.xlsx</strong> を <strong>Excelアプリで開いて</strong>ください</li>
       <li><strong>何も変更せずに保存（Ctrl+S）</strong>してそのまま閉じてください<div class="inote">→ この操作でSUMIF・材料費などの数式が再計算されます</div></li>
       <li>保存したファイルをSTEP4で読み込んでください</li>
     </ol>
@@ -207,19 +212,30 @@ td.c{text-align:center}td.mn{font-family:'IBM Plex Mono',monospace;font-size:11p
 <!-- STEP3 -->
 <div class="page" id="page3">
   <div class="panel">
-    <div class="ptl">再計算済みExcelの読み込み</div>
+    <div class="ptl">ファイル読み込み</div>
     <div class="gbox" style="margin-bottom:14px">
-      <h3>📌 このステップでやること</h3>
-      <div class="gs dn"><div class="gn">✓</div><div>STEP3で更新済みExcelをダウンロード済み</div></div>
-      <div class="gs dn"><div class="gn">✓</div><div>ExcelアプリでCtrl+S保存済み</div></div>
-      <div class="gs cur"><div class="gn">4</div><div>保存したExcelを読み込んで調達基準表PDFと照合します</div></div>
+      <h3>📋 手順</h3>
+      <div class="gs cur"><div class="gn">1</div><div>デスクトップの <strong>見積一覧表_v2_改訂済み.xlsx</strong> をExcelで開き、<strong>Ctrl+S保存</strong>してから読み込む</div></div>
+      <div class="gs cur"><div class="gn">2</div><div><strong>調達基準表PDF</strong>（R_6106・S_6106・Y_6106）を読み込む</div></div>
+      <div class="gs cur"><div class="gn">3</div><div>「照合開始」を押す</div></div>
     </div>
-    <div class="ubox" id="box-excel2" style="max-width:420px">
-      <input type="file" accept=".xlsx" id="fi-excel2">
-      <span class="ic" id="ic2">📊</span><p id="ft2">再計算済みExcelを読み込む</p><small>ExcelアプリでCtrl+S保存したファイル</small>
+    <div class="ugrid">
+      <div class="ubox" id="box-excel2">
+        <input type="file" accept=".xlsx" id="fi-excel2">
+        <span class="ic" id="ic2">📊</span>
+        <p id="ft2">① 改訂済みExcel</p>
+        <small>見積一覧表_v2_改訂済み.xlsx</small>
+      </div>
+      <div class="ubox" id="box-choutatsu2">
+        <input type="file" accept=".pdf" multiple id="fi-choutatsu2">
+        <span class="ic">📑</span>
+        <p>② 調達基準表PDF（複数可）</p>
+        <small>R_6106・S_6106・Y_6106 など</small>
+        <div class="flist" id="fl-choutatsu2"></div>
+      </div>
     </div>
     <div class="brow" style="margin-top:12px">
-      <button class="btn bp" id="btn-match" disabled onclick="runMatch()">▶ 調達基準表と照合</button>
+      <button class="btn bp" id="btn-match" disabled onclick="runMatch()">▶ 照合開始</button>
     </div>
     <div class="pb" id="pb3"><div class="pf" id="pf3"></div></div>
   </div>
@@ -233,10 +249,11 @@ td.c{text-align:center}td.mn{font-family:'IBM Plex Mono',monospace;font-size:11p
         <button class="fb" id="f3-ok" onclick="setF3(this,'ok')">✓ 一致</button>
         <button class="fb" id="f3-ms" onclick="setF3(this,'missing')">PDF未記載</button>
       </div>
+      <div class="fbar" id="fac-bar3" style="margin-top:-4px;padding-top:6px;border-top:1px dashed var(--bdr)"></div>
       <div class="tw"><table>
         <thead><tr>
-          <th>調達NO</th><th>品番</th><th class="r">適用年月日</th>
-          <th class="r">PDF 加工単価</th><th class="r">Excel 型レス単価</th>
+          <th>製作所</th><th>調達NO</th><th>品番</th><th class="r">適用年月日</th>
+          <th class="r">PDF 購入単価</th><th class="r">Excel 型レス単価</th>
           <th class="r">差異</th><th class="r">差異率</th><th>判定</th>
         </tr></thead>
         <tbody id="tbody3"></tbody>
@@ -259,7 +276,7 @@ var S = {
   matMaster: [], excelBlocks: [],
   kaiteParsed: [], annaiDiffs: [], choutatsuParsed: [],
   groupResults: [], matchRows: [],
-  f1: 'all', f3: 'all'
+  f1: 'all', f3: 'all', fac: 'all', fac3: 'all'
 };
 
 // --- ステップ ---
@@ -277,11 +294,26 @@ function gotoStep(n) {
 }
 
 // --- ファイル読み込み ---
-document.getElementById('fi-excel').addEventListener('change', function() { loadXLSX(this); });
-document.getElementById('fi-kaite').addEventListener('change', function() { loadPDFs(this, 'kaite'); });
-document.getElementById('fi-annai').addEventListener('change', function() { loadPDFs(this, 'annai'); });
-document.getElementById('fi-choutatsu').addEventListener('change', function() { loadPDFs(this, 'choutatsu'); });
 document.getElementById('fi-excel2').addEventListener('change', function() { loadXLSX2(this); });
+
+document.getElementById('fi-choutatsu2').addEventListener('change', function() {
+  var files = Array.from(this.files); if (!files.length) return;
+  var ps = files.map(function(f) {
+    return new Promise(function(res, rej) {
+      var r = new FileReader();
+      r.onload = function(e) { res({ name: f.name, buf: e.target.result }); };
+      r.onerror = rej; r.readAsArrayBuffer(f);
+    });
+  });
+  Promise.all(ps).then(function(results) {
+    S.choutatsuPDFs = results;
+    document.getElementById('box-choutatsu2').classList.add('loaded');
+    document.getElementById('fl-choutatsu2').innerHTML = results.map(function(r) {
+      return '<div class="fi">\u2705 ' + r.name + '</div>';
+    }).join('');
+    checkReady3();
+  });
+});
 
 function loadXLSX(inp) {
   var f = inp.files[0]; if (!f) return;
@@ -341,7 +373,7 @@ function nearestX(d, x, tol) {
 
 // --- 改定表PDF解析（品番・材質・単価） ---
 async function parseKaitePDF(buf) {
-
+  console.log('[KAITE v2025-04-24b] parseKaitePDF 起動');
   var pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
 
   var records = [];
@@ -353,7 +385,7 @@ async function parseKaitePDF(buf) {
     for (var j = 0; j < tc.items.length; j++) {
       var it = tc.items[j];
       var t = it.str.trim();
-      if (t) spans.push({ x: Math.round(it.transform[4]), y: Math.round(vp.height - it.transform[5]), dec: decodePDF(t) });
+      if (t) spans.push({ x: Math.round(it.transform[4]), y: Math.round(vp.height - it.transform[5]), dec: decodePDF(t), raw: t });
     }
     var getNumRow = function(ty) {
       var row = {};
@@ -362,9 +394,12 @@ async function parseKaitePDF(buf) {
       }
       return row;
     };
-    // デバッグ: 1ページ目のみy=180-200のスパンを出力
+    // デバッグ: 1ページ目の材質・寸法・品番スパンをコンソール出力
     if (p === 1) {
-      var debugSpans = spans.filter(function(s) { return s.y >= 180 && s.y <= 200; });
+      var matSpans = spans.filter(function(s) { return s.y >= 320 && s.y <= 370; });
+      var partSpans = spans.filter(function(s) { return s.y >= 495 && s.y <= 520; });
+      console.log('[PDF p1] matRow spans:', JSON.stringify(matSpans.map(function(s){return {x:s.x,y:s.y,t:s.dec};})));
+      console.log('[PDF p1] partRow spans:', JSON.stringify(partSpans.map(function(s){return {x:s.x,y:s.y,t:s.dec};})));
     }
 
     var scrapNext = getNumRow(-45), scrapCur = getNumRow(21);
@@ -386,6 +421,59 @@ async function parseKaitePDF(buf) {
       if (matYs.length > 0 && Math.abs(spans[i].y - matYs[0]) <= 6) mat1Row[spans[i].x] = spans[i].dec;
       else if (matYs.length > 1 && Math.abs(spans[i].y - matYs[1]) <= 6) mat2Row[spans[i].x] = spans[i].dec;
     }
+    // 材質行の寸法テキスト（板厚情報）を収集
+    // "0.6 * 270 * C" 形式 / dec(+29シフト)とraw(生テキスト)両方を確認
+    // y範囲: 材質行 ±10px 〜 +30px (同一行 or 直下行に対応)
+    var dim1Row = {}, dim2Row = {};
+    var dimPat = /^\d+\.?\d*[\s*×]/;  // "0.6 * ..." or "0.6*..." 形式
+    for (var i = 0; i < spans.length; i++) {
+      var s = spans[i];
+      var dimDec = dimPat.test(s.dec) ? s.dec : null;
+      var dimRaw = dimPat.test(s.raw) ? s.raw : null;
+      var dimText = dimDec || dimRaw;
+      if (!dimText) continue;
+      // matYs[0] の ±10px 〜 +30px 範囲（同一行 + 直下行）
+      if (matYs.length > 0 && s.y >= matYs[0] - 10 && s.y <= matYs[0] + 30 &&
+          (matYs.length < 2 || s.y < matYs[1] - 5)) {
+        dim1Row[s.x] = dimText;
+      } else if (matYs.length > 1 && s.y >= matYs[1] - 10 && s.y <= matYs[1] + 30) {
+        dim2Row[s.x] = dimText;
+      }
+    }
+    // 材質コードと寸法テキストを結合（同じ列内: 材質x ±10px〜右200pxの寸法を探す）
+    var matFull1Row = {}, matFull2Row = {};
+    Object.keys(mat1Row).forEach(function(mx) {
+      var mxn = Number(mx), matStr = mat1Row[mx];
+      var dimKeys = Object.keys(dim1Row).filter(function(dk) {
+        var dxn = Number(dk); return dxn >= mxn - 10 && dxn <= mxn + 200;
+      });
+      if (dimKeys.length > 0) {
+        dimKeys.sort(function(a, b) { return Math.abs(Number(a)-mxn) - Math.abs(Number(b)-mxn); });
+        matStr = matStr + ' ' + dim1Row[dimKeys[0]];
+      }
+      matFull1Row[mx] = matStr;
+    });
+    Object.keys(mat2Row).forEach(function(mx) {
+      var mxn = Number(mx), matStr = mat2Row[mx];
+      var dimKeys = Object.keys(dim2Row).filter(function(dk) {
+        var dxn = Number(dk); return dxn >= mxn - 10 && dxn <= mxn + 200;
+      });
+      if (dimKeys.length > 0) {
+        dimKeys.sort(function(a, b) { return Math.abs(Number(a)-mxn) - Math.abs(Number(b)-mxn); });
+        matStr = matStr + ' ' + dim2Row[dimKeys[0]];
+      }
+      matFull2Row[mx] = matStr;
+    });
+    // デバッグ: 材質＋寸法の結合結果をコンソール出力（1ページ目のみ）
+    if (p === 1) {
+      var sampleMats = Object.values(matFull1Row).slice(0, 5);
+      console.log('[PDF p1] mat1Row:', JSON.stringify(mat1Row));
+      console.log('[PDF p1] dim1Row:', JSON.stringify(dim1Row));
+      console.log('[PDF p1] matFull1Row サンプル:', JSON.stringify(sampleMats));
+      // UIに診断情報を表示（DevTools不要）
+      var nDim = Object.values(matFull1Row).filter(function(v){return v.indexOf(' ')>0;}).length;
+      window._pdfDiag = { mat1Count: Object.keys(matFull1Row).length, dimCount: nDim, sample: sampleMats[0] || '' };
+    }
     // 品番行（y=728~742）
     var partRow = {};
     for (var i = 0; i < spans.length; i++) {
@@ -400,8 +488,8 @@ async function parseKaitePDF(buf) {
       var xn = Number(x);
       records.push({
         part_no: nearestX(partRow, xn, 15) || '',
-        mat1: nearestX(mat1Row, xn, 15) || '',
-        mat2: nearestX(mat2Row, xn, 15) || '',
+        mat1: nearestX(matFull1Row, xn, 20) || '',
+        mat2: nearestX(matFull2Row, xn, 20) || '',
         scrap_cur: nearestX(scrapCur, xn),
         scrap_next: nearestX(scrapNext, xn),
         unit_cur: nearestX(unitCur, xn),
@@ -450,15 +538,29 @@ async function parseChoutatsuPDF(buf) {
       var t = it.str.trim();
       if (t) spans.push({ x: Math.round(it.transform[4]), y: Math.round(vp.height - it.transform[5]), text: t });
     }
+    // 品番行を探す（x≈155-230, 1XXXXX-XXX形式）
     for (var i = 0; i < spans.length; i++) {
       var sp = spans[i];
-      if (sp.x >= 130 && sp.x <= 330 && sp.y >= 95 && sp.y <= 175 && /^1[0-9A-Z]{3,4}-[A-Z0-9]{2}/.test(sp.text)) {
-        for (var k = 0; k < spans.length; k++) {
-          var s2 = spans[k];
-          if (Math.abs(s2.y - sp.y) <= 6 && s2.x >= 660 && s2.x <= 800) {
-            var v = parseFloat(s2.text.replace(/,/g, ''));
-            if (!isNaN(v) && v > 5) { results.push({ part_no: sp.text.trim(), price: v }); break; }
-          }
+      if (sp.x >= 140 && sp.x <= 240 && /^1[0-9A-Z]{4,5}-[A-Z0-9]{2}/.test(sp.text)) {
+        var rowY = sp.y;
+        // 同じ行のスパンを収集
+        var rowSpans = spans.filter(function(s) { return Math.abs(s.y - rowY) <= 5; });
+        // 工場: x≈55-75
+        var facSpan = rowSpans.filter(function(s) { return s.x >= 50 && s.x <= 80; });
+        var factory = facSpan.length ? facSpan[0].text : '';
+        // 調達NO: x≈120-155
+        var noSpan = rowSpans.filter(function(s) { return s.x >= 110 && s.x <= 160 && /^\d+$/.test(s.text); });
+        var chouNo = noSpan.length ? parseInt(noSpan[0].text) : null;
+        // 購入単価: 価格列の中で最も左（x最小）にある100超の数値を取得
+        // 列順: 購入単価(左) | 支給単価 | 加工単価(右)  ※誤って加工単価を読まないよう最左値を選択
+        var priceSpans = rowSpans
+          .filter(function(s) { return s.x >= 400 && s.x <= 800; })
+          .map(function(s) { return { x: s.x, val: parseFloat(s.text.replace(/,/g,'')) }; })
+          .filter(function(s) { return !isNaN(s.val) && s.val > 50; });
+        priceSpans.sort(function(a, b) { return a.x - b.x; });
+        var price = priceSpans.length ? priceSpans[0].val : null;
+        if (price !== null) {
+          results.push({ part_no: sp.text.trim(), factory: factory, chou_no: chouNo, price: price });
         }
       }
     }
@@ -474,9 +576,9 @@ function parseExcelFull(buf) {
   // 材料マスタ
   var matMaster = {};
   for (var row = 17; row <= 43; row++) {
-    var ec = XLSX.utils.encode_cell({ r: row - 1, c: 4 });
-    var gc = XLSX.utils.encode_cell({ r: row - 1, c: 6 });
-    var hc = XLSX.utils.encode_cell({ r: row - 1, c: 7 });
+    var ec = XLSX.utils.encode_cell({ r: row - 1, c: 2 });  // C列: 材質コード（C・D列削除後）
+    var gc = XLSX.utils.encode_cell({ r: row - 1, c: 4 });  // E列: 支給基準単価（旧G列）
+    var hc = XLSX.utils.encode_cell({ r: row - 1, c: 5 });  // F列: SC基準単価（旧H列）
     var e = wsm[ec], g = wsm[gc], h = wsm[hc];
     if (!e || !e.v) continue;
     matMaster[String(e.v).trim()] = {
@@ -497,6 +599,9 @@ function parseExcelFull(buf) {
     if (!d4 || !d4.f || d4.f !== ('C' + (r + 1))) continue;
     var c8 = wsy[XLSX.utils.encode_cell({ r: r, c: 7 })];
     if (!c8 || !c8.v || typeof c8.v !== 'string' || c8.v.indexOf('-') < 0) continue;
+    // B列: 製作所（工場コード）
+    var b2 = wsy[XLSX.utils.encode_cell({ r: r, c: 1 })];
+    var factory = b2 && b2.v ? String(b2.v).trim() : '';
     var mats = [];
     // 行3(r+2), 行4(r+3)
     var matDefs = [
@@ -509,6 +614,9 @@ function parseExcelFull(buf) {
       var mgCell = wsy[XLSX.utils.encode_cell({ r: r + md.row_off, c: md.col_g })]; // G列エキストラ
       var r5gCell = wsy[XLSX.utils.encode_cell({ r: r + 4, c: 6 })]; // 行5G: SC エキストラ
       if (!mhCell || !mhCell.v || !matCodeRe.test(String(mhCell.v))) continue;
+      // L列(col11): 直接入力のキロ単価は照合しない
+      var lCell = wsy[XLSX.utils.encode_cell({ r: r + md.row_off, c: 11 })];
+      if (lCell && typeof lCell.v === 'number' && !lCell.f) continue;
       var matCode = String(mhCell.v).trim();
       var grp = getGroupJS(matCode);
       var bm = matMaster[grp] || { unit_base: 0, scrap_base: 0 };
@@ -521,8 +629,8 @@ function parseExcelFull(buf) {
         master_row: bm.row, is_mat2: mi === 1
       });
     }
-    // AP列(col41)型レス単価, AR列(col43)適用日
-    var apCell = wsy[XLSX.utils.encode_cell({ r: r + 2, c: 41 })];
+    // AQ列(col42)型レス単価, AR列(col43)適用日
+    var apCell = wsy[XLSX.utils.encode_cell({ r: r + 2, c: 42 })];
     var arCell = wsy[XLSX.utils.encode_cell({ r: r + 2, c: 43 })];
     var applDate = '';
     if (arCell && typeof arCell.v === 'number') {
@@ -531,7 +639,7 @@ function parseExcelFull(buf) {
     }
     var h6 = wsy[XLSX.utils.encode_cell({ r: r + 5, c: 7 })];
     blocks.push({
-      no: c3.v, part_no: String(c8.v).trim(),
+      no: c3.v, factory: factory, part_no: String(c8.v).trim(),
       excel_no_mold: apCell && typeof apCell.v === 'number' ? apCell.v : null,
       appl_date: applDate,
       mgmt_no: h6 && h6.v ? String(h6.v) : '',
@@ -548,9 +656,22 @@ function getGroupJS(code) {
 function normMat(s) {
   return String(s).toUpperCase().replace(/-/g,'').replace(/\s/g,'').replace('CL80','80').replace('CL','');
 }
+function getThickness(code) {
+  // Excel形式: "SUS304-S t0.6" → 0.6 / "SUS304-S t0.4-ST" → 0.4
+  var m = String(code).match(/\bt([\d.]+)/i);
+  if (m) return parseFloat(m[1]);
+  // PDF形式: "SUS304-S 0.8 * 300 * 1140" → 0.8
+  m = String(code).match(/\s(\d+\.?\d*)\s*[*(×]/);
+  if (m && parseFloat(m[1]) < 10) return parseFloat(m[1]);
+  return null;
+}
 function matchMat(excelCode, pdfMat) {
   if (!pdfMat) return false;
   var ne = normMat(excelCode), np = normMat(pdfMat);
+  // 板厚を両形式から抽出して比較（t0.6 vs 0.8 など）
+  var te = getThickness(excelCode);
+  var tp = getThickness(pdfMat);
+  if (te !== null && tp !== null && Math.abs(te - tp) > 0.01) return false;
   return ne.indexOf(np) === 0 || np.indexOf(ne.substring(0, 6)) === 0;
 }
 
@@ -609,12 +730,12 @@ function setProg(id, pct) { document.getElementById(id).style.width = pct + '%';
 
 // --- 照合ロジック ---
 function buildMatching() {
-  // 改定表品番マップ（前方一致用）
+  // 改定表を品番でインデックス化
   var kaiteByPart = {};
   for (var i = 0; i < S.kaiteParsed.length; i++) {
     var r = S.kaiteParsed[i];
     if (!r.part_no) continue;
-    var key = r.part_no.toUpperCase();
+    var key = r.part_no.replace(/\s/g,'').toUpperCase();
     if (!kaiteByPart[key]) kaiteByPart[key] = [];
     kaiteByPart[key].push(r);
   }
@@ -631,14 +752,14 @@ function buildMatching() {
 
   for (var bi = 0; bi < S.excelBlocks.length; bi++) {
     var blk = S.excelBlocks[bi];
-    var pnoKey = blk.part_no.replace(/\s/g,'').substring(0, 9).toUpperCase();
 
-    // 前方一致で改定表を検索
+    // 品番の前方一致で改定表を検索（双方向・フルレングス）
+    var pnoKey = blk.part_no.replace(/\s/g,'').toUpperCase();
     var pdfRecs = [];
     var kkeys = Object.keys(kaiteByPart);
     for (var ki = 0; ki < kkeys.length; ki++) {
-      var kk = kkeys[ki].replace(/\s/g,'');
-      if (kk.indexOf(pnoKey) === 0 || pnoKey.indexOf(kk.substring(0, 9)) === 0) {
+      var kk = kkeys[ki];
+      if (kk.startsWith(pnoKey) || pnoKey.startsWith(kk)) {
         pdfRecs = pdfRecs.concat(kaiteByPart[kkeys[ki]]);
       }
     }
@@ -647,14 +768,14 @@ function buildMatching() {
       var mat = blk.mats[mi];
       var grp = mat.group;
 
-      // PDFで材質マッチ
+      // PDFで材質マッチ（材質・板厚が一致する場合のみ使用）
       var pdfMatch = null;
       for (var pi = 0; pi < pdfRecs.length; pi++) {
         if (matchMat(mat.mat_code, pdfRecs[pi].mat1) || matchMat(mat.mat_code, pdfRecs[pi].mat2)) {
           pdfMatch = pdfRecs[pi]; break;
         }
       }
-      if (!pdfMatch && pdfRecs.length > 0) pdfMatch = pdfRecs[0];
+      // 材質不一致の場合はフォールバックしない → PDFなし(skip)扱い
 
       var c1u = null, c1s = null, c2u = null, c2s = null;
       var pdfDiffU = null, pdfDiffS = null, annaiDiff = null;
@@ -681,7 +802,7 @@ function buildMatching() {
                    (c1u === false || c1s === false || c2u === false) ? 'warn' : 'ok';
 
       var rowData = {
-        part_no: blk.part_no, mat_code: mat.mat_code, group: grp,
+        part_no: blk.part_no, no: blk.no || '', factory: blk.factory || '', mat_code: mat.mat_code, group: grp,
         eff_unit: mat.eff_unit, eff_scrap: mat.eff_scrap,
         pdf_unit_cur: pdfMatch ? pdfMatch.unit_cur : null,
         pdf_unit_next: pdfMatch ? pdfMatch.unit_next : null,
@@ -714,6 +835,18 @@ function buildMatching() {
     else if (g.warn > 0) nWarn++;
     else nSkip++;
   }
+  // PDFデバッグ診断パネル（cards1の上に独立表示）
+  var diag = window._pdfDiag || {};
+  var diagEl = document.getElementById('pdf-diag-panel');
+  if (diagEl) {
+    diagEl.style.display = 'block';
+    diagEl.innerHTML = '📋 <b>PDF診断:</b> ' +
+      'PDFレコード数=' + S.kaiteParsed.length + ' / ' +
+      '材質行=' + (diag.mat1Count || 0) + ' / ' +
+      '寸法付き=' + (diag.dimCount || 0) + ' / ' +
+      'サンプル: <code style="background:#fff8;padding:1px 4px;border-radius:3px;">' + (diag.sample || '(なし)') + '</code>';
+  }
+
   document.getElementById('cards1').innerHTML =
     '<div class="card"><div class="cl">\u6539\u5b9a\u5bfe\u8c61\u30b0\u30eb\u30fc\u30d7</div><div class="cv cbl">' + S.groupResults.length + '</div></div>' +
     '<div class="card"><div class="cl">\u2705 \u6761\u4ef6OK</div><div class="cv cok">' + nOk + '</div></div>' +
@@ -733,26 +866,69 @@ function fmtD(v) {
   return '<span class="' + cls + '">' + (v >= 0 ? '+' : '') + v.toFixed(2) + '</span>';
 }
 
+function buildFactoryFilter() {
+  var facs = {};
+  S.groupResults.forEach(function(g) {
+    (g.rows || []).forEach(function(r) {
+      var f = r.factory || '—';
+      facs[f] = (facs[f] || 0) + 1;
+    });
+  });
+  var bar = document.getElementById('fac-bar');
+  var html = '<span style="font-size:10px;color:var(--tx3);font-weight:700;margin-right:4px">製作所：</span>';
+  html += '<button class="fb fa" onclick="setFac(this,\'all\')">すべて</button>';
+  Object.keys(facs).sort().forEach(function(f) {
+    html += '<button class="fb" onclick="setFac(this,\'' + f + '\')">' + f + ' <span style="font-size:10px;opacity:.7">(' + facs[f] + ')</span></button>';
+  });
+  bar.innerHTML = html;
+}
+
+function setFac(btn, f) {
+  S.fac = f;
+  document.querySelectorAll('#fac-bar .fb').forEach(function(b) { b.className = 'fb'; });
+  btn.className = 'fb fa';
+  renderStep1();
+}
+
 function renderStep1() {
   var q = S.f1;
+  var fac = S.fac;
   var groups = S.groupResults.filter(function(g) {
-    if (q === 'all') return true;
-    if (q === 'ok') return g.ok > 0 && g.warn === 0;
-    if (q === 'warn') return g.warn > 0;
-    if (q === 'skip') return g.ok === 0 && g.warn === 0;
+    // 製作所フィルター適用後の行で判定
+    var rows = fac === 'all' ? g.rows : g.rows.filter(function(r) { return (r.factory || '—') === fac; });
+    if (!rows.length) return false;
+    if (q === 'ok')   return rows.some(function(r) { return r.status === 'ok'; }) && !rows.some(function(r) { return r.status === 'warn'; });
+    if (q === 'warn') return rows.some(function(r) { return r.status === 'warn'; });
+    if (q === 'skip') return rows.every(function(r) { return r.status === 'skip'; });
     return true;
   });
-  if (!groups.length) { document.getElementById('tbody1').innerHTML = '<tr><td colspan="13" style="text-align:center;padding:30px;color:var(--tx3)">\u8a72\u5f53\u306a\u3057</td></tr>'; return; }
+  // 製作所→調達NO順にソート
+  groups = groups.map(function(g) {
+    var rows = fac === 'all' ? g.rows.slice() : g.rows.filter(function(r) { return (r.factory || '—') === fac; });
+    rows.sort(function(a, b) {
+      var fa = a.factory || ''; var fb = b.factory || '';
+      if (fa !== fb) return fa < fb ? -1 : 1;
+      return (a.no || 0) - (b.no || 0);
+    });
+    return { g: g, rows: rows };
+  });
+  if (!groups.length) { document.getElementById('tbody1').innerHTML = '<tr><td colspan="15" style="text-align:center;padding:30px;color:var(--tx3)">\u8a72\u5f53\u306a\u3057</td></tr>'; return; }
   var html = '';
   for (var gi = 0; gi < groups.length; gi++) {
-    var g = groups[gi];
+    var g = groups[gi].g;
+    var allRows = groups[gi].rows;
+    var dispRows = allRows;
+    if (q === 'warn') dispRows = allRows.filter(function(r) { return r.status === 'warn'; });
+    if (q === 'ok')   dispRows = allRows.filter(function(r) { return r.status === 'ok'; });
+    if (!dispRows.length) continue;
     var gBadge = (g.ok > 0 && g.warn === 0) ? '<span class="badge b-ok">\u2705 OK</span>' :
                   g.warn > 0 ? '<span class="badge b-wn">\u26a0 \u8981\u78ba\u8a8d</span>' :
                   '<span class="badge b-sk">\u2014 PDF\u306a\u3057</span>';
-    html += '<tr class="grp-row"><td colspan="12"><strong>' + g.group + '</strong> <span style="font-size:11px;color:var(--tx3)">(' + g.rows.length + '\u4ef6)</span></td><td>' + gBadge + '</td></tr>';
-    for (var ri = 0; ri < g.rows.length; ri++) {
-      var r = g.rows[ri];
-      html += '<tr class="mat-row"><td>' + r.part_no + '</td><td class="mn">' + r.mat_code + '</td>' +
+    html += '<tr class="grp-row"><td colspan="14"><strong>' + g.group + '</strong> <span style="font-size:11px;color:var(--tx3)">(' + dispRows.length + '\u4ef6 / \u5168' + g.rows.length + '\u4ef6)</span></td><td>' + gBadge + '</td></tr>';
+    for (var ri = 0; ri < dispRows.length; ri++) {
+      var r = dispRows[ri];
+      var rowCls = r.status === 'warn' ? 'mat-row mat-row-warn' : 'mat-row';
+      html += '<tr class="' + rowCls + '"><td class="mn">' + (r.factory || '\u2014') + '</td><td class="mn">' + (r.no || '\u2014') + '</td><td>' + r.part_no + '</td><td class="mn">' + r.mat_code + '</td>' +
         '<td class="r">' + f2(r.eff_unit) + '</td>' +
         '<td class="r">' + f2(r.pdf_unit_cur) + '</td>' +
         '<td class="c">' + chkB(r.c1u) + '</td>' +
@@ -771,8 +947,9 @@ function renderStep1() {
 
 function setF1(btn, f) {
   S.f1 = f;
-  document.querySelectorAll('#page1 .fb').forEach(function(b) { b.className = 'fb'; });
-  btn.className = 'fb ' + (f === 'all' ? 'fa' : f === 'ok' ? 'fok' : f === 'warn' ? 'fwn' : 'fb');
+  document.querySelectorAll('#page1 .fbar .fb').forEach(function(b) { b.className = 'fb'; });
+  var cls = f === 'all' ? 'fa' : f === 'ok' ? 'fok' : f === 'warn' ? 'fwn' : 'fsk';
+  btn.className = 'fb ' + cls;
   renderStep1();
 }
 
@@ -804,6 +981,7 @@ function downloadExcel() {
   var selected = [];
   document.querySelectorAll('.row-chk').forEach(function(c, i) { if (c.checked) selected.push(S.step2Rows[i]); });
   if (!selected.length) { alert('\u66f4\u65b0\u3059\u308b\u6750\u8ceaを選択してください'); return; }
+  if (!S.excelBuf) { alert('JSONから読み込んだ場合はExcelダウンロードできません。\nPythonスクリプト（material_update.py）で更新を実行してください。'); return; }
   var wb = XLSX.read(S.excelBuf, { type: 'array' });
   var ws = wb.Sheets['\u6750\u6599'];
   for (var i = 0; i < selected.length; i++) {
@@ -842,9 +1020,14 @@ function loadXLSX2(inp) {
     document.getElementById('ic2').textContent = '\u2705';
     document.getElementById('ft2').textContent = f.name;
     document.getElementById('box-excel2').classList.add('loaded');
-    document.getElementById('btn-match').disabled = false;
+    checkReady3();
   };
   r.readAsArrayBuffer(f);
+}
+
+function checkReady3() {
+  var ok = S.excelBuf2 && S.choutatsuPDFs.length > 0;
+  document.getElementById('btn-match').disabled = !ok;
 }
 
 async function runMatch() {
@@ -852,41 +1035,70 @@ async function runMatch() {
   document.getElementById('pb3').style.display = 'block';
   setProg('pf3', 10);
   try {
+    // STEP4で読み込んだ調達基準表PDFを解析
+    if (S.choutatsuPDFs.length > 0) {
+      document.getElementById('status') && (document.getElementById('status').textContent = '調達基準表PDFを解析中...');
+      var chouAll = [];
+      for (var i = 0; i < S.choutatsuPDFs.length; i++) {
+        var r = await parseChoutatsuPDF(S.choutatsuPDFs[i].buf);
+        chouAll = chouAll.concat(r);
+        setProg('pf3', 10 + Math.round((i+1)/S.choutatsuPDFs.length*30));
+      }
+      S.choutatsuParsed = chouAll;
+    }
     var parsed = parseExcelFull(S.excelBuf2);
     setProg('pf3', 50);
+    // 「工場_調達NO」でインデックス作成（完全一致のみ・誤マッチ防止）
     var chouMap = {};
     for (var i = 0; i < S.choutatsuParsed.length; i++) {
       var it = S.choutatsuParsed[i];
-      var k = it.part_no.replace(/\s/g,'').toUpperCase();
-      if (!chouMap[k]) chouMap[k] = [];
-      chouMap[k].push(it);
+      var cno = String(it.chou_no || '');
+      if (cno && cno !== 'null' && cno !== '0') {
+        // キー = "工場_調達NO"（例: "R_34", "S_4"）
+        var nk = (it.factory || '') + '_' + cno;
+        if (!chouMap[nk]) chouMap[nk] = [];
+        chouMap[nk].push(it);
+      }
     }
     setProg('pf3', 75);
     var tol = 0.5, rows = [], nOk = 0, nNg = 0, nMs = 0;
     for (var i = 0; i < parsed.blocks.length; i++) {
       var blk = parsed.blocks[i];
-      var ek = blk.part_no.replace(/\s/g,'').toUpperCase();
-      var found = chouMap[ek] || null;
-      if (!found) {
-        var cks = Object.keys(chouMap);
-        for (var j = 0; j < cks.length; j++) {
-          if (cks[j].substring(0,8) === ek.substring(0,8)) { found = chouMap[cks[j]]; break; }
-        }
-      }
-      if (!found) { rows.push({ no: blk.no, part_no: blk.part_no, appl_date: blk.appl_date, pdf_price: null, excel_nm: blk.excel_no_mold, diff: null, dr: null, status: 'missing' }); nMs++; continue; }
+      // 工場+調達NOで完全一致照合のみ（フォールバックなし）
+      var ek = String(blk.no || '');
+      var fk = (blk.factory || '') + '_' + ek;
+      var found = (ek && ek !== '0' && chouMap[fk]) ? chouMap[fk] : null;
+      var factory = blk.factory || '';
+      if (!found) { rows.push({ no: blk.no, factory: factory, part_no: blk.part_no, appl_date: blk.appl_date, pdf_price: null, excel_nm: blk.excel_no_mold, diff: null, dr: null, status: 'missing' }); nMs++; continue; }
       var best = found[0];
       if (blk.excel_no_mold !== null) {
         for (var j = 1; j < found.length; j++) {
           if (Math.abs(found[j].price - blk.excel_no_mold) < Math.abs(best.price - blk.excel_no_mold)) best = found[j];
         }
       }
+      // PDFの工場・調達NOも上書き（PDF側が正）
+      if (best.factory) factory = best.factory;
       var diff = blk.excel_no_mold !== null ? Math.round((best.price - blk.excel_no_mold)*100)/100 : null;
       var dr = blk.excel_no_mold && diff !== null ? Math.round(diff/blk.excel_no_mold*1000)/10 : null;
       var st = diff !== null && Math.abs(diff) <= tol ? 'ok' : 'ng';
       if (st === 'ok') nOk++; else nNg++;
-      rows.push({ no: blk.no, part_no: blk.part_no, appl_date: blk.appl_date, pdf_price: best.price, excel_nm: blk.excel_no_mold, diff: diff, dr: dr, status: st });
+      rows.push({ no: blk.no, factory: factory, part_no: blk.part_no, appl_date: blk.appl_date, pdf_price: best.price, excel_nm: blk.excel_no_mold, diff: diff, dr: dr, status: st });
     }
+    // 製作所→調達NO順ソート
+    rows.sort(function(a,b){
+      if ((a.factory||'') !== (b.factory||'')) return (a.factory||'') < (b.factory||'') ? -1 : 1;
+      return (a.no||0) - (b.no||0);
+    });
     S.matchRows = rows;
+    // 製作所フィルターボタン生成
+    var facs3 = {};
+    rows.forEach(function(r){ var f=r.factory||'—'; facs3[f]=(facs3[f]||0)+1; });
+    var fbar3 = '<button class="fb fa" onclick="setF3fac(this,\'all\')">すべて</button>';
+    Object.keys(facs3).sort().forEach(function(f){
+      fbar3 += '<button class="fb" onclick="setF3fac(this,\''+f+'\')">'+f+' <span style="font-size:10px;opacity:.7">('+facs3[f]+')</span></button>';
+    });
+    document.getElementById('fac-bar3').innerHTML = fbar3;
+    S.fac3 = 'all';
     document.getElementById('cards3').innerHTML =
       '<div class="card"><div class="cl">\u7167\u5408\u4ef6\u6570</div><div class="cv cbl">'+(nOk+nNg)+'</div></div>'+
       '<div class="card"><div class="cl">\u2713 \u4e00\u81f4</div><div class="cv cok">'+nOk+'</div></div>'+
@@ -901,30 +1113,43 @@ async function runMatch() {
 
 function renderStep3() {
   var q = S.f3;
-  var rows = (S.matchRows||[]).filter(function(r) { return q==='all'||r.status===q; });
-  if (!rows.length) { document.getElementById('tbody3').innerHTML = '<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--tx3)">\u8a72\u5f53\u306a\u3057</td></tr>'; return; }
+  var fac = S.fac3 || 'all';
+  var rows = (S.matchRows||[]).filter(function(r) {
+    if (q !== 'all' && r.status !== q) return false;
+    if (fac !== 'all' && (r.factory||'—') !== fac) return false;
+    return true;
+  });
+  if (!rows.length) { document.getElementById('tbody3').innerHTML = '<tr><td colspan="9" style="text-align:center;padding:30px;color:var(--tx3)">\u8a72\u5f53\u306a\u3057</td></tr>'; return; }
   var html = '';
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i];
     var badge = r.status==='ok'?'<span class="badge b-ok">\u2713 \u4e00\u81f4</span>':r.status==='ng'?'<span class="badge b-ng">\u26a0 \u5dee\u7570</span>':'<span class="badge b-sk">\u672a\u8a18\u8f09</span>';
+    var rowCls = r.status==='ng' ? ' style="background:#fff5f5"' : '';
     var dh = '\u2014', rh = '\u2014';
     if (r.diff!==null){var cls=r.diff>0?'dp':r.diff<0?'dnc':'dz';dh='<span class="'+cls+'">'+(r.diff>=0?'+':'')+r.diff.toFixed(2)+'</span>';}
     if (r.dr!==null){var cls2=r.dr>0?'dp':r.dr<0?'dnc':'dz';rh='<span class="'+cls2+'">'+(r.dr>=0?'+':'')+r.dr.toFixed(1)+'%</span>';}
-    html += '<tr><td class="mn">'+r.no+'</td><td class="mn">'+r.part_no+'</td><td class="r mn">'+r.appl_date+'</td><td class="r">'+f2(r.pdf_price)+'</td><td class="r">'+f2(r.excel_nm)+'</td><td class="r">'+dh+'</td><td class="r">'+rh+'</td><td>'+badge+'</td></tr>';
+    html += '<tr'+rowCls+'><td class="mn">'+(r.factory||'—')+'</td><td class="mn">'+(r.no||'—')+'</td><td class="mn">'+r.part_no+'</td><td class="r mn">'+r.appl_date+'</td><td class="r">'+f2(r.pdf_price)+'</td><td class="r">'+f2(r.excel_nm)+'</td><td class="r">'+dh+'</td><td class="r">'+rh+'</td><td>'+badge+'</td></tr>';
   }
   document.getElementById('tbody3').innerHTML = html;
 }
 
 function setF3(btn, f) {
   S.f3 = f;
-  document.querySelectorAll('#page3 .fb').forEach(function(b) { b.className = 'fb'; });
+  document.querySelectorAll('#page3 .fbar:first-child .fb').forEach(function(b) { b.className = 'fb'; });
   btn.className = 'fb ' + (f==='all'?'fa':f==='ng'?'fng':f==='ok'?'fok':'fwn');
+  renderStep3();
+}
+
+function setF3fac(btn, f) {
+  S.fac3 = f;
+  document.querySelectorAll('#fac-bar3 .fb').forEach(function(b) { b.className = 'fb'; });
+  btn.className = 'fb fa';
   renderStep3();
 }
 
 function expCSV3() {
   var rows = S.matchRows || [];
-  var headers = ['\u8abf\u9054NO','\u54c1\u756a','\u9069\u7528\u5e74\u6708\u65e5','PDF\u52a0\u5de5\u5358\u4fa1','Excel\u578b\u30ec\u30b9\u5358\u4fa1','\u5dee\u7570','\u5dee\u7570\u7387','\u5224\u5b9a'];
+  var headers = ['\u8abf\u9054NO','\u54c1\u756a','\u9069\u7528\u5e74\u6708\u65e5','PDF\u8cfc\u5165\u5358\u4fa1','Excel\u578b\u30ec\u30b9\u5358\u4fa1','\u5dee\u7570','\u5dee\u7570\u7387','\u5224\u5b9a'];
   var lines = [headers.join(',')];
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i];
@@ -954,6 +1179,47 @@ function resetAll() {
   gotoStep(0);setSt('');
 }
 function setSt(m) { document.getElementById('status').textContent = m; }
+
+// --- JSON読み込み ---
+document.getElementById('fi-json').addEventListener('change', function() {
+  var f = this.files[0]; if (!f) return;
+  var r = new FileReader();
+  r.onload = function(e) {
+    try {
+      var data = JSON.parse(e.target.result);
+      loadFromJSON(data, f.name);
+    } catch(err) {
+      alert('JSONの読み込みに失敗しました: ' + err.message);
+    }
+  };
+  r.readAsText(f, 'utf-8');
+});
+
+function loadFromJSON(data, fname) {
+  S.groupResults = data.groupResults || [];
+  S.matMaster = data.matMaster || {};
+  S.step2Rows = S.groupResults.filter(function(g) { return g.ok > 0 && g.warn === 0; });
+
+  var nOk = 0, nWarn = 0, nSkip = 0;
+  for (var i = 0; i < S.groupResults.length; i++) {
+    var g = S.groupResults[i];
+    if (g.ok > 0 && g.warn === 0) nOk++;
+    else if (g.warn > 0) nWarn++;
+    else nSkip++;
+  }
+  document.getElementById('cards1').innerHTML =
+    '<div class="card"><div class="cl">\u6539\u5b9a\u5bfe\u8c61\u30b0\u30eb\u30fc\u30d7</div><div class="cv cbl">' + S.groupResults.length + '</div></div>' +
+    '<div class="card"><div class="cl">\u2705 \u6761\u4ef6OK</div><div class="cv cok">' + nOk + '</div></div>' +
+    '<div class="card"><div class="cl">\u26a0 \u8981\u78ba\u8a8d</div><div class="cv cwn">' + nWarn + '</div></div>' +
+    '<div class="card"><div class="cl">\u2014 PDF\u306a\u3057</div><div class="cv" style="color:#64748b">' + nSkip + '</div></div>';
+
+  setLoaded('box-json', 'fl-json', [fname || 'data.json']);
+  S.f1 = 'all'; S.fac = 'all';
+  buildFactoryFilter();
+  renderStep1();
+  renderStep2();
+  gotoStep(1);
+}
 </script>
 </body>
 </html>
