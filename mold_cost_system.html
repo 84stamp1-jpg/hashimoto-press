@@ -703,7 +703,7 @@
           <div style="font-size:11px;color:var(--text3);">現時点の金型一覧＋原価データを月別に保存します</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <select class="filter-select" id="snapshotViewSel" onchange="renderSnapshotList()">
+          <select class="filter-select" id="snapshotViewSel" onchange="onSnapshotSelChange()">
             <option value="">── 過去のスナップショット ──</option>
           </select>
           <button class="btn btn-secondary btn-sm" onclick="exportSnapshotExcel()" id="btnSnapExcel" style="display:none">📊 Excel</button>
@@ -4841,18 +4841,31 @@ async function saveSnapshot() {
 function renderSnapshotList() {
   const sel = document.getElementById('snapshotViewSel');
   if (!sel) return;
+  const prev = sel.value;  // 選択値を保持
   const snaps = Object.entries(DB.snapshots||{})
     .sort(([a],[b]) => b.localeCompare(a));  // 新しい順
 
   sel.innerHTML = '<option value="">── 過去のスナップショット ──</option>' +
-    snaps.map(([k,s]) => `<option value="${k}">${s.label}（${s.totalMolds}件）</option>`).join('');
+    snaps.map(([k,s]) => `<option value="${k}"${k===prev?' selected':''}>${s.label}（${s.totalMolds}件）</option>`).join('');
 
-  const selected = sel.value;
-  const hasSnap  = selected && DB.snapshots?.[selected];
+  onSnapshotSelChange();  // ボタン表示を更新
+}
+
+function onSnapshotSelChange() {
+  const sel    = document.getElementById('snapshotViewSel');
+  const key    = sel ? sel.value : '';
+  const hasSnap = key && DB.snapshots?.[key];
   const btnExcel = document.getElementById('btnSnapExcel');
   const btnPdf   = document.getElementById('btnSnapPdf');
   if (btnExcel) btnExcel.style.display = hasSnap ? '' : 'none';
   if (btnPdf)   btnPdf.style.display   = hasSnap ? '' : 'none';
+  // 選択したスナップショットの情報を表示
+  if (hasSnap) {
+    const s = DB.snapshots[key];
+    const log = document.getElementById('snapshotLog');
+    if (log) log.textContent =
+      `${s.label} | ${s.totalMolds}件 | 総見積: ¥${fmt(s.totalEstimate)} | 総原価: ¥${fmt(s.totalCost)} | 保存日時: ${new Date(s.savedAt).toLocaleString('ja-JP')}`;
+  }
 }
 
 // Excel出力
