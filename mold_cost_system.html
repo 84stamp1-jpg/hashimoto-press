@@ -1105,8 +1105,8 @@
           </div>
           <div class="form-group">
             <label class="form-label">工程 フィールドコード</label>
-            <input class="form-input" id="cfgKtF_process" placeholder="例: 文字列_複数行_">
-            <div style="font-size:10px;color:var(--text3);margin-top:2px;">空欄の場合「文字列_複数行_」を自動使用</div>
+            <input class="form-input" id="cfgKtF_process" placeholder="例: 文字列__複数行_">
+            <div style="font-size:10px;color:var(--text3);margin-top:2px;">空欄の場合「文字列__複数行_」を自動使用</div>
           </div>
           <div class="form-group">
             <label class="form-label">見積金額 フィールドコード</label>
@@ -1631,9 +1631,9 @@ function loadConfig() {
     if (el) el.value = cleaned || def || '';
   };
   // デフォルトは「新規物件(App39)」のフィールドコード（2026/04/14確認）
-  setF('cfgKtF_moldNo',     ktF.moldNo,     '文字列_1行_6');
-  setF('cfgKtF_partNo',     ktF.partNo,     '文字列_1行_7');
-  setF('cfgKtF_partName',   ktF.partName,   '文字列_1行_5');
+  setF('cfgKtF_moldNo',     ktF.moldNo,     '文字列__1行__6');
+  setF('cfgKtF_partNo',     ktF.partNo,     '文字列__1行__7');
+  setF('cfgKtF_partName',   ktF.partName,   '文字列__1行__5');
   setF('cfgKtF_client',     ktF.client,     'ルックアップ');
   setF('cfgKtF_status',     ktF.status,     '');
   setF('cfgKtF_dueDate',    ktF.dueDate,    '日付');
@@ -4128,9 +4128,9 @@ function saveKintoneConfig() {
   // フィールドコード設定を保存
   const _n = v => v ? String(v).replace(/ /g,'_').trim() : '';
   cfg.ktF = {
-    moldNo:   _n(document.getElementById('cfgKtF_moldNo')?.value)   || '文字列_1行_6',
-    partNo:   _n(document.getElementById('cfgKtF_partNo')?.value)   || '文字列_1行_7',
-    partName: _n(document.getElementById('cfgKtF_partName')?.value) || '文字列_1行_5',
+    moldNo:   _n(document.getElementById('cfgKtF_moldNo')?.value)   || '文字列__1行__6',
+    partNo:   _n(document.getElementById('cfgKtF_partNo')?.value)   || '文字列__1行__7',
+    partName: _n(document.getElementById('cfgKtF_partName')?.value) || '文字列__1行__5',
     client:   _n(document.getElementById('cfgKtF_client')?.value)   || 'ルックアップ',
     status:   _n(document.getElementById('cfgKtF_status')?.value)   || '',
     dueDate:  _n(document.getElementById('cfgKtF_dueDate')?.value)  || '日付',
@@ -4171,8 +4171,8 @@ async function fetchKintoneApp(appId, query) {
 function ktVal(rec, ...fields) {
   for (const rawF of fields) {
     if (!rawF) continue;
-    // 全空白文字をアンダースコアに変換して正規化
-    const f = String(rawF).replace(/\s+/g, '_').replace(/_+/g,'_').replace(/^_|_$/g,'');
+    // 空白のみアンダースコアに変換（連続アンダースコアはそのまま保持）
+    const f = String(rawF).replace(/[ \t\u3000]+/g, '_');
     let v = rec[f];
     if (v === null || v === undefined) v = rec[String(rawF)]; // 元キーでも試す
     if (v === null || v === undefined) continue;
@@ -4201,7 +4201,7 @@ async function fetchKintoneForPreview() {
   // ── フィールドコードを取得（スペース除去を徹底）──
   // DOM値を優先、なければハードコードされたデフォルト（スペースなし）を使用
   // フィールドコードはDOM値を全て正規化（非ASCII空白も除去）
-  const _norm = s => s ? String(s).replace(/[^\u0021-\uFFFF]+/g, '_').replace(/_+/g,'_').replace(/^_|_$/g,'') : '';
+  const _norm = s => s ? String(s).replace(/[ \t\u3000]+/g, '_').trim() : '';
   const _fc = (id, hardDefault) => {
     const el = document.getElementById(id);
     const raw = el ? el.value : '';
@@ -4209,9 +4209,9 @@ async function fetchKintoneForPreview() {
     return fixed || hardDefault;
   };
   const liveF = {
-    moldNo:   _fc('cfgKtF_moldNo',   '文字列_1行_6'),
-    partNo:   _fc('cfgKtF_partNo',   '文字列_1行_7'),
-    partName: _fc('cfgKtF_partName', '文字列_1行_5'),
+    moldNo:   _fc('cfgKtF_moldNo',   '文字列__1行__6'),
+    partNo:   _fc('cfgKtF_partNo',   '文字列__1行__7'),
+    partName: _fc('cfgKtF_partName', '文字列__1行__5'),
     client:   _fc('cfgKtF_client',   'ルックアップ'),
     status:   _fc('cfgKtF_status',   ''),
     dueDate:  _fc('cfgKtF_dueDate',  '日付'),
@@ -4293,9 +4293,9 @@ async function fetchKintoneForPreview() {
       // フィールドコードは設定タブから変更可能（liveF/liveVは取込ボタン押下時に最新化）
       const F = liveF || cfg.ktF || {};
       const V = liveV || cfg.ktV || {};
-      const moldNo    = ktVal(rec, F.moldNo   || '文字列_1行_6');
-      const partNo    = ktVal(rec, F.partNo   || '文字列_1行_7');
-      const partName  = ktVal(rec, F.partName || '文字列_1行_5');
+      const moldNo    = ktVal(rec, F.moldNo   || '文字列__1行__6');
+      const partNo    = ktVal(rec, F.partNo   || '文字列__1行__7');
+      const partName  = ktVal(rec, F.partName || '文字列__1行__5');
       const client    = ktVal(rec, F.client   || 'ルックアップ');
       const dueDate   = ktVal(rec, F.dueDate  || '日付');
       const orderDate = ktVal(rec, '作成日時');
@@ -4312,10 +4312,10 @@ async function fetchKintoneForPreview() {
       const isDone    = kanryoRaw.includes('完了') || kanryoRaw.includes('完成');
       const status    = isAccepted ? '検収済' : isDone ? '完成' : '製作中';
 
-      // 見積工程（文字列_複数行_ から取得）
+      // 見積工程（文字列__複数行_ から取得）
       const processRaw = F.process
         ? ktVal(rec, F.process)
-        : ktVal(rec, '文字列_複数行_', '見積工程');
+        : ktVal(rec, '文字列__複数行_', '見積工程');
       const processes  = processRaw
         ? processRaw.split(/[\n\r,、・]/).map(s => s.replace(/^\s*\d+\.?\s*/, '').trim()).filter(Boolean)
         : [];
