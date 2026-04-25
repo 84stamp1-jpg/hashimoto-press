@@ -1583,9 +1583,20 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 function loadConfig() {
+  // フィールドコードのバージョン管理（スペース→アンダースコア移行）
+  const CONFIG_VERSION = '2';
   const saved = localStorage.getItem(CFG_KEY);
   if (saved) {
-    try { Object.assign(cfg, JSON.parse(saved)); } catch(e) {}
+    try {
+      const parsed = JSON.parse(saved);
+      // バージョンが古い場合はktFをリセット（スペース問題対応）
+      if (parsed._v !== CONFIG_VERSION) {
+        delete parsed.ktF;  // フィールドコードをデフォルトに戻す
+        parsed._v = CONFIG_VERSION;
+        localStorage.setItem(CFG_KEY, JSON.stringify(parsed));
+      }
+      Object.assign(cfg, parsed);
+    } catch(e) {}
   }
   document.getElementById('cfgProjectId').value = cfg.projectId || '';
   document.getElementById('cfgDbUrl').value = cfg.dbUrl || '';
@@ -4129,6 +4140,7 @@ function saveKintoneConfig() {
     done:       document.getElementById('cfgKtV_done')?.value.trim()       || '完成',
     accepted:   document.getElementById('cfgKtV_accepted')?.value.trim()   || '検収済',
   };
+  cfg._v = '2';  // バージョン記録
   localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
   toast('kintone設定を保存しました', 'success');
 }
