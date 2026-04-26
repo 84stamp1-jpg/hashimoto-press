@@ -2354,14 +2354,16 @@ function renderLabor() {
     (r.worker||'').toLowerCase().includes(search)
   );
   if (month) entries = entries.filter(([,r]) => r.month === month);
-  document.getElementById('labCount').textContent = entries.length + '件 / ¥' + fmt(entries.reduce((s,[,r])=>s+(r.amount||0),0));
+  const labTotal  = entries.reduce((s,[,r])=>s+(r.amount||0),0);
+  const labBudget = entries.reduce((s,[,r])=>s+(r.budget||0),0);
+  document.getElementById('labCount').textContent = entries.length + '件　加工予算: ¥' + fmt(labBudget) + '　加工実績: ¥' + fmt(labTotal);
   if (!entries.length) { document.getElementById('labTableBody').innerHTML = '<div class="empty"><div class="empty-icon">⚙️</div>データなし（データ取込タブからkintone CSVを取り込んでください）</div>'; return; }
   document.getElementById('labTableBody').innerHTML = `
     <table>
       <thead><tr>
         <th style="width:44px"></th>
         <th>月</th><th>管理NO.</th><th>部品番号</th><th>工程</th>
-        <th>作業員</th><th>作業内容</th><th>チャージ</th><th>時間</th><th>金額</th>
+        <th>作業員</th><th>状況</th><th>加工予算</th><th>加工実績</th><th>残予算</th>
       </tr></thead>
       <tbody>${entries.map(([k,r])=>`
         <tr>
@@ -2372,14 +2374,14 @@ function renderLabor() {
               onclick="deleteRecord('labor','${k}')">×</button>
           </td>
           <td class="mono">${r.month||''}</td>
-          <td class="mono">${r.moldNo||''}</td>
+          <td class="mono" style="font-weight:600;color:var(--accent)">${r.moldNo||''}</td>
           <td class="mono" style="font-size:11px">${r.partNo||''}</td>
           <td><span class="chip">${r.process||''}</span></td>
-          <td>${r.worker||''}</td>
-          <td>${r.workType||''}</td>
-          <td class="mono">¥${fmt(r.charge)}</td>
-          <td class="mono">${r.time}h</td>
-          <td class="mono"><b>¥${fmt(r.amount)}</b></td>
+          <td style="font-size:11px">${r.worker||''}</td>
+          <td style="font-size:11px">${r.workType||''}</td>
+          <td class="mono" style="text-align:right">¥${fmt(r.budget||0)}</td>
+          <td class="mono" style="text-align:right;font-weight:700;color:var(--accent)">¥${fmt(r.amount||0)}</td>
+          <td class="mono" style="text-align:right;color:${(r.remain||0)<0?'var(--red)':'var(--green)'}">¥${fmt(r.remain||0)}</td>
         </tr>`).join('')}
       </tbody>
     </table>`;
@@ -2410,41 +2412,78 @@ function importKintoneCSV(e) {
   const file = e.target.files[0]; if (!file) return;
   const reader = new FileReader();
   reader.onload = async ev => {
-    const lines = ev.target.result.split('\n');
-    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g,''));
-    let count = 0;
+    // Shift-JIS(CP932)対応
+    let text = '';
+    try { text = new TextDecoder('shift-jis').decode(ev.target.result); }
+    catch(_) { text = new TextDecoder('utf-8').decode(ev.target.result); }
+
+    const lines = text.split(/\r?\n/);
+    const headers = parseCSVLine(lines[0]);
+    console.log('[kintoneCSV] ヘッダー:', headers);
+
+    let count = 0, skipped = 0;
     for (let i = 1; i < lines.length; i++) {
-      if (!lines[i].trim()) continue;
-      const vals = parseCSVLine(lines[i]);
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      const vals = parseCSVLine(line);
       const row = {};
-      headers.forEach((h,j) => row[h] = vals[j]);
+      headers.forEach((h, j) => { row[h.trim()] = (vals[j] || '').trim(); });
 
-      // kintoneの列名マッピング（実際のkintoneフィールド名に合わせて調整）
-      const moldNo  = row['管理コード'] || row['moldNo'] || '';
-      const partNo  = row['部品番号']   || row['partNo'] || '';
-      const process = row['工程']       || row['process'] || '';
-      const worker  = row['作業員']     || row['worker'] || '';
-      const workType= row['作業内容']   || row['workType'] || '';
-      const charge  = parseFloat(row['チャージ'] || row['charge'] || '0');
-      const time    = parseFloat(row['時間']     || row['time'] || '0');
-      const amount  = parseFloat(row['金額']     || row['amount'] || '0') || (charge * time);
-      const dateStr = row['日付'] || row['date'] || '';
-      const month   = dateStr ? dateStr.slice(0,7) : new Date().toISOString().slice(0,7);
+      // ★新規物件(工程別作業実績) CSV のフィールドマッピング
+      // ヘッダー: レコードの開始行,管理コード,部品番号,工程,トライ状況,日付,作業員,
+      //           問題点,対策,対策区分[完了],加工予算,加工実績,残予算,更新日時
+      const startRow = row['レコードの開始行'] || '';
+      const moldNo   = row['管理コード'] || '';
+      const partNo   = row['部品番号']   || '';
+      const process  = row['工程']       || '';
+      const workType = row['トライ状況'] || '';
+      const worker   = row['作業員']     || '';
+      const budget   = parseFloat(row['加工予算']  || '0');
+      const actual   = parseFloat(row['加工実績']  || '0');
+      const remain   = parseFloat(row['残予算']    || '0');
+      const dateStr  = row['日付']       || row['更新日時'] || '';
 
-      if (!moldNo && !partNo) continue;
+      // 月を取得（2026/4/3 → 2026-04）
+      let month = new Date().toISOString().slice(0, 7);
+      if (dateStr) {
+        const d = dateStr.replace(/\//g, '-').slice(0, 10);
+        const dt = new Date(d);
+        if (!isNaN(dt)) {
+          month = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0');
+        }
+      }
+
+      // 管理コードか部品番号がなければスキップ
+      if (!moldNo && !partNo) { skipped++; continue; }
 
       const key = 'lab_' + Date.now() + '_' + i;
-      DB.labor[key] = { month, moldNo, partNo, process, worker, workType, charge, time, amount };
+      if (!DB.labor) DB.labor = {};
+      DB.labor[key] = {
+        month,
+        moldNo,
+        partNo,
+        process,
+        worker,
+        workType,
+        charge:   0,       // チャージ単価は別途設定
+        time:     0,       // 時間は別途設定
+        amount:   actual,  // 加工実績を金額として使用
+        budget,            // 加工予算
+        remain,            // 残予算
+      };
       count++;
     }
+
     logImport('kintone作業実績', count);
     await writeToFirebase('labor', DB.labor);
+    const msg = `✅ ${count}件取込完了（スキップ: ${skipped}件） (${new Date().toLocaleString('ja-JP')})`;
     toast(`${count}件の作業実績を取込しました`, 'success');
-    document.getElementById('kintoneImportLog').textContent = `✅ ${count}件取込完了 (${new Date().toLocaleString('ja-JP')})`;
+    document.getElementById('kintoneImportLog').textContent = msg;
     e.target.value = '';
     renderLabor();
   };
-  reader.readAsText(file, 'UTF-8');
+  reader.readAsArrayBuffer(file);  // バイナリで読んでTextDecoderで変換
 }
 
 // ── 購入品CSV import（ミスミ order.csv / その他 汎用 対応）──
