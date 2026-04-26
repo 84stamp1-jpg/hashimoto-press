@@ -4145,13 +4145,16 @@ function openMoldCombo(ddId, query, moldInputId, partNoInputId, partNoDispId) {
   const molds = Object.values(DB.molds || {});
   const q = (query || '').toLowerCase();
 
-  const filtered = molds.filter(m =>
-    !q ||
-    (m.no   || '').toLowerCase().includes(q) ||
-    (m.partNo   || '').toLowerCase().includes(q) ||
-    (m.partName || '').toLowerCase().includes(q) ||
-    (m.client   || '').toLowerCase().includes(q)
-  ).slice(0, 20);
+  const filtered = molds
+    .filter(m =>
+      !q ||
+      (m.no       || '').toLowerCase().includes(q) ||
+      (m.partNo   || '').toLowerCase().includes(q) ||
+      (m.partName || '').toLowerCase().includes(q) ||
+      (m.client   || '').toLowerCase().includes(q)
+    )
+    .sort((a, b) => (a.no||'').localeCompare(b.no||'', 'ja', {numeric: true}))
+    .slice(0, 20);
 
   if (!filtered.length && !q) {
     dd.innerHTML = '<div class="mold-combo-new">金型一覧タブで金型を登録してください</div>';
