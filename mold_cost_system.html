@@ -1860,8 +1860,7 @@ function fmt(n) {
 
 function fmtM(n) {
   if (!n) return '—';
-  // 普通の数字表示（カンマ区切り）
-  return String(n);
+  return Number(n).toLocaleString('ja-JP');
 }
 
 function progressColor(p) {
@@ -1943,14 +1942,14 @@ function renderDashboard() {
         ${rows.map(([key,m]) => {
           const c = getCosts(m.no);
           return `<tr onclick="openMoldDetail('${m.no}')">
-            <td class="mono">${m.no}</td>
-            <td>${m.client||''}</td>
-            <td style="font-size:11px">
-              ${m.partNo ? '<span class="mono" style="color:var(--text3);font-size:10px">' + m.partNo + '</span><br>' : ''}
-              ${m.partName||''}
+            <td class="mono" style="font-size:13px;font-weight:600;white-space:nowrap">${m.no}</td>
+            <td style="font-size:12px">${m.client||''}</td>
+            <td style="min-width:140px">
+              <div class="mono" style="font-size:13px;font-weight:700;color:var(--accent)">${m.partNo||''}</div>
+              <div style="font-size:11px;color:var(--text2);margin-top:1px">${m.partName||''}</div>
             </td>
-            <td class="mono">¥${fmt(m.estimate)}</td>
-            <td class="mono">¥${fmt(c.total)}</td>
+            <td class="mono" style="font-size:13px;text-align:right">¥${fmt(m.estimate)}</td>
+            <td class="mono" style="font-size:13px;font-weight:600;text-align:right">¥${fmt(c.total)}</td>
             <td>${costBarHTML(c)}</td>
             <td>${progressHTML(c.total, m.estimate)}</td>
             <td style="white-space:nowrap">
