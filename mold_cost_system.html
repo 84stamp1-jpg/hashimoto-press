@@ -620,6 +620,7 @@
   <button class="tab active" id="nav-dashboard" onclick="showPage('dashboard')">ダッシュボード</button>
   <button class="tab" id="nav-molds" onclick="showPage('molds')">金型一覧</button>
   <button class="tab" id="nav-quote" onclick="showPage('quote')">📋 材料見積・手配</button>
+  <button class="tab" id="nav-materials" onclick="showPage('materials')">材料費</button>
   <button class="tab" id="nav-outsource" onclick="showPage('outsource')">外注費</button>
   <button class="tab" id="nav-purchase" onclick="showPage('purchase')">購入品費</button>
   <button class="tab" id="nav-labor" onclick="showPage('labor')">加工費</button>
@@ -763,6 +764,7 @@
                   <span class="mold-combo-arrow">▼</span>
                   <div class="mold-combo-dropdown" id="qf_moldNo_dd"></div>
                 </div>
+                <div id="qf_moldInfo" style="display:none;"></div>
               </div>
               <div class="form-group">
                 <label class="form-label">工程番号
@@ -912,6 +914,32 @@
     </div>
   </div>
 
+  <!-- ═══ 材料費 ═══ -->
+  <div id="page-materials" class="page">
+    <div class="section-title">材料費</div>
+    <div class="filter-bar">
+      <input class="search-input" type="text" placeholder="管理NO・品名で検索..." id="matSearch" oninput="renderMaterials()">
+      <select class="filter-select" id="matMoldFilter" onchange="renderMaterials()">
+        <option value="">全金型</option>
+      </select>
+      <button class="btn btn-primary btn-sm" onclick="openMatModal()">＋ 材料費入力</button>
+    </div>
+    <div class="table-wrap">
+      <div class="table-header">
+        <div class="table-title">材料費一覧</div>
+        <div class="table-count" id="matCount"></div>
+        <div class="table-actions">
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;margin-right:4px;">
+            <input type="checkbox" id="matSelectAll" onchange="matToggleAll(this.checked)"> 全選択
+          </label>
+          <button class="btn btn-danger btn-sm" id="matBulkDeleteBtn" style="display:none" onclick="matBulkDelete()">🗑 選択削除</button>
+          <button class="btn btn-secondary btn-sm" onclick="copyTableToClipboard('matTableBody','材料費')">📋 全行コピー</button>
+        </div>
+      </div>
+      <div id="matTableBody"><div class="loading"><div class="spin"></div></div></div>
+    </div>
+  </div>
+
   <!-- ═══ 外注費 ═══ -->
   <div id="page-outsource" class="page">
     <div class="section-title">外注費</div>
@@ -927,6 +955,10 @@
         <div class="table-title">外注費一覧</div>
         <div class="table-count" id="outCount"></div>
         <div class="table-actions">
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;margin-right:4px;">
+            <input type="checkbox" id="outSelectAll" onchange="outToggleAll(this.checked)"> 全選択
+          </label>
+          <button class="btn btn-danger btn-sm" id="outBulkDeleteBtn" style="display:none" onclick="outBulkDelete()">🗑 選択削除</button>
           <button class="btn btn-secondary btn-sm" onclick="copyTableToClipboard('outTableBody','外注費')">📋 全行コピー</button>
         </div>
       </div>
@@ -1335,7 +1367,7 @@
           <label class="form-label">仕入月</label>
           <input class="form-input" id="matf_month" type="month">
         </div>
-        <div class="form-group">
+        <div class="form-group" style="grid-column:1/-1">
           <label class="form-label">金型NO.</label>
           <div class="mold-combo-wrap">
             <input class="mold-combo-input" id="matf_moldNo" placeholder="選択または入力" autocomplete="off"
@@ -1345,6 +1377,7 @@
             <span class="mold-combo-arrow">▼</span>
             <div class="mold-combo-dropdown" id="matf_moldNo_dd"></div>
           </div>
+          <div id="matf_moldInfo" style="display:none;"></div>
         </div>
         <div class="form-group">
           <label class="form-label">工程番号 <span style="font-size:9px;color:var(--text3);">数字</span></label>
@@ -1413,7 +1446,7 @@
           <label class="form-label">仕入月</label>
           <input class="form-input" id="outf_month" type="month">
         </div>
-        <div class="form-group">
+        <div class="form-group" style="grid-column:1/-1">
           <label class="form-label">金型NO.</label>
           <div class="mold-combo-wrap">
             <input class="mold-combo-input" id="outf_moldNo" placeholder="選択または入力" autocomplete="off"
@@ -1423,6 +1456,7 @@
             <span class="mold-combo-arrow">▼</span>
             <div class="mold-combo-dropdown" id="outf_moldNo_dd"></div>
           </div>
+          <div id="outf_moldInfo" style="display:none;"></div>
         </div>
         <div class="form-group">
           <label class="form-label">工程番号 <span style="font-size:9px;color:var(--text3);">数字</span></label>
@@ -1442,8 +1476,10 @@
           <input class="form-input" id="outf_supplier" placeholder="DOWA, 大同...">
         </div>
         <div class="form-group">
-          <label class="form-label">工程</label>
-          <input class="form-input" id="outf_process" placeholder="TD処理, 焼入れ...">
+          <label class="form-label">工程
+            <span style="font-size:9px;color:var(--text3);margin-left:4px;">管理NO.の工程番号に対応</span>
+          </label>
+          <input class="form-input" id="outf_process" placeholder="例: 1（工程番号）または DR（工程名）">
         </div>
         <div class="form-group">
           <label class="form-label">内容</label>
@@ -2208,7 +2244,8 @@ function renderMaterials() {
       </tr></thead>
       <tbody>${entries.map(([k,r])=>`
         <tr>
-          <td style="white-space:nowrap">
+          <td style="white-space:nowrap;padding:4px 4px">
+            <input type="checkbox" class="mat-check" data-key="${k}" onchange="matCheckChanged()" style="margin-right:3px">
             <button class="copy-btn" onclick="copyRowTSV(this,[
             '${(r.month||'').replace(/'/g,"\\'")}',
             '${(r.moldNo||'').replace(/'/g,"\\'")}',
@@ -2220,7 +2257,7 @@ function renderMaterials() {
             '${r.weight||''}',
             '${r.amount||''}',
             '${(r.supplier||'').replace(/'/g,"\\'")}'])">📋</button>
-            <button class="btn btn-danger btn-sm" style="padding:3px 6px;font-size:11px" onclick="deleteRecord('materials','${k}')">×</button>
+            <button class="btn btn-danger btn-sm" style="padding:3px 6px;font-size:11px" onclick="matDeleteOne('${k}')">×</button>
           </td>
           <td class="mono">${r.month||''}</td>
           <td class="mono">${r.moldNo||''}</td>
@@ -2261,11 +2298,12 @@ function renderOutsource() {
       <thead><tr>
         <th style="width:50px"></th>
         <th>仕入月</th><th>管理NO.</th><th>品番</th><th>仕入先</th>
-        <th>工程</th><th>内容</th><th>数量</th><th>単価</th><th>合計金額</th>
+        <th>数量</th><th>単価</th><th>合計金額</th>
       </tr></thead>
       <tbody>${entries.map(([k,r])=>`
         <tr>
-          <td style="white-space:nowrap">
+          <td style="white-space:nowrap;padding:4px 4px">
+            <input type="checkbox" class="out-check" data-key="${k}" onchange="outCheckChanged()" style="margin-right:3px">
             <button class="copy-btn" onclick="copyRowTSV(this,[
             '${(r.month||'').replace(/'/g,"\\'")}',
             '${(r.moldNo||'').replace(/'/g,"\\'")}',
@@ -2276,14 +2314,18 @@ function renderOutsource() {
             '${r.qty||''}',
             '${r.unit||''}',
             '${r.total||''}'])">📋</button>
-            <button class="btn btn-danger btn-sm" style="padding:3px 6px;font-size:11px" onclick="deleteRecord('outsource','${k}')">×</button>
+            <button class="btn btn-danger btn-sm" style="padding:3px 6px;font-size:11px" onclick="outDeleteOne('${k}')">×</button>
           </td>
           <td class="mono">${r.month||''}</td>
-          <td class="mono">${r.moldNo||''}</td>
-          <td class="mono" style="font-size:11px">${r.partNo||''}</td>
-          <td>${r.supplier||''}</td>
-          <td><span class="chip">${r.process||''}</span></td>
-          <td>${r.detail||''}</td>
+          <td>
+            <div class="mono" style="font-size:13px;font-weight:700;color:var(--accent)">${r.moldNo||''}</div>
+            ${r.process ? '<div style="font-size:10px;color:var(--text3)">' + r.process + '</div>' : ''}
+          </td>
+          <td>
+            <div class="mono" style="font-size:13px;font-weight:700">${r.partNo||''}</div>
+            ${r.detail ? '<div style="font-size:10px;color:var(--text2)">' + r.detail + '</div>' : ''}
+          </td>
+          <td style="font-size:12px">${r.supplier||''}</td>
           <td class="mono">${r.qty||''}</td>
           <td class="mono">¥${fmt(r.unit)}</td>
           <td class="mono"><b>¥${fmt(r.total)}</b></td>
@@ -2339,7 +2381,7 @@ function renderPurchase() {
             '${r.qty||''}',
             '${r.unit||''}',
             '${r.total||''}'])">📋</button>
-            <button class="btn btn-danger btn-sm" style="padding:3px 6px;font-size:11px" onclick="deleteRecord('purchase','${k}')">×</button>
+            <button class="btn btn-danger btn-sm" style="padding:3px 6px;font-size:11px" onclick="purDeleteOne('${k}')">×</button>
           </td>
           <td class="mono">${r.month||''}</td>
           <td class="mono">${r.moldNo||''}</td>
@@ -4128,14 +4170,58 @@ function openMoldCombo(ddId, query, moldInputId, partNoInputId, partNoDispId) {
 
 function selectMoldCombo(e, ddId, moldNo, partNo, partName, moldInputId, partNoInputId, partNoDispId) {
   e.preventDefault();
-  // 入力欄に値をセット
-  const moldEl   = document.getElementById(moldInputId);
-  const partEl   = document.getElementById(partNoInputId);
-  const dispEl   = document.getElementById(partNoDispId);
+  const moldEl = document.getElementById(moldInputId);
+  const partEl = document.getElementById(partNoInputId);
+  const dispEl = document.getElementById(partNoDispId);
   if (moldEl) { moldEl.value = moldNo; moldEl.classList.add('filled'); }
   if (partEl) partEl.value = partNo;
   if (dispEl) dispEl.textContent = partName ? '(' + partName + ')' : '';
   closeMoldCombo(ddId);
+
+  // 金型を選択したら品番・品名・工程リストを表示
+  const prefix = moldInputId.replace('_moldNo', '');
+  showMoldInfo(prefix, moldNo);
+  // genModalMatNo も更新
+  if (typeof genModalMatNo === 'function') genModalMatNo(prefix);
+}
+
+// 金型選択時に品番・品名・工程を表示
+function showMoldInfo(prefix, moldNo) {
+  const mold = Object.values(DB.molds||{}).find(m => m.no === moldNo);
+  if (!mold) return;
+
+  // 品番・品名表示エリアを更新
+  const infoId = prefix + '_moldInfo';
+  let infoEl = document.getElementById(infoId);
+  if (!infoEl) return;
+
+  const processes = mold.processes || [];
+  infoEl.innerHTML = `
+    <div style="background:var(--accent-dim);border:1px solid var(--accent);border-radius:6px;padding:10px;margin-top:6px;">
+      <div style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--accent);margin-bottom:2px;">${mold.partNo||''}</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:${processes.length?'8px':'0'}">${mold.partName||''} ／ ${mold.client||''}</div>
+      ${processes.length ? `
+        <div style="font-size:11px;color:var(--text3);margin-bottom:4px;font-weight:600;">工程：</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          ${processes.map((p,i) => `
+            <button type="button" class="btn btn-secondary btn-sm"
+              style="padding:3px 10px;font-size:12px;font-weight:600"
+              onclick="setProcessNo('${prefix}', ${i+1}, '${p.replace(/'/g,'')}')">
+              ${i+1}: ${p}
+            </button>`).join('')}
+        </div>
+      ` : '<div style="font-size:11px;color:var(--text3);">工程未登録</div>'}
+    </div>`;
+  infoEl.style.display = 'block';
+}
+
+// 工程ボタンを押したら工程番号を自動入力
+function setProcessNo(prefix, num, processName) {
+  const procEl = document.getElementById(prefix + '_processNo');
+  if (procEl) {
+    procEl.value = num;
+    if (typeof genModalMatNo === 'function') genModalMatNo(prefix);
+  }
 }
 
 function closeMoldCombo(ddId) {
@@ -4161,10 +4247,12 @@ function initMoldComboField(moldInputId, partNoInputId, partNoDispId) {
   if (partEl) partEl.value = '';
   const dispEl = document.getElementById(partNoDispId);
   if (dispEl) dispEl.textContent = '';
-  // 工程番号もリセット（プレフィックスから推定）
   const prefix = moldInputId.replace('_moldNo','');
   const procEl = document.getElementById(prefix + '_processNo');
   if (procEl) procEl.value = '';
+  // 情報エリアもリセット
+  const infoEl = document.getElementById(prefix + '_moldInfo');
+  if (infoEl) { infoEl.innerHTML = ''; infoEl.style.display = 'none'; }
 }
 
 // ドキュメントクリックでコンボを閉じる
@@ -5272,6 +5360,80 @@ async function labClearAndImport() {
   }
   // ファイル選択を開く
   document.getElementById('kintoneCSV').click();
+}
+
+
+// ═══════════════════════════════════════════════
+// 即時削除（画面反映 → Firebase非同期）
+// ═══════════════════════════════════════════════
+function matDeleteOne(key) {
+  if (!confirm('この行を削除しますか？')) return;
+  delete DB.materials[key]; renderMaterials();
+  writeToFirebase('materials', DB.materials).then(()=>toast('削除しました','success'));
+}
+function outDeleteOne(key) {
+  if (!confirm('この行を削除しますか？')) return;
+  delete DB.outsource[key]; renderOutsource();
+  writeToFirebase('outsource', DB.outsource).then(()=>toast('削除しました','success'));
+}
+function purDeleteOne(key) {
+  if (!confirm('この行を削除しますか？')) return;
+  delete DB.purchase[key]; renderPurchase();
+  writeToFirebase('purchase', DB.purchase).then(()=>toast('削除しました','success'));
+}
+
+// ═══════════════════════════════════════════════
+// 材料費 一括削除
+// ═══════════════════════════════════════════════
+function matCheckChanged() {
+  const checked = document.querySelectorAll('.mat-check:checked').length;
+  const btn = document.getElementById('matBulkDeleteBtn');
+  const all = document.getElementById('matSelectAll');
+  if (btn) { btn.style.display = checked>0?'':'none'; btn.textContent='🗑 選択削除 ('+checked+'件)'; }
+  const total = document.querySelectorAll('.mat-check').length;
+  if (all) { all.indeterminate = checked>0&&checked<total; if(checked===total&&total>0)all.checked=true; if(checked===0)all.checked=false; }
+}
+function matToggleAll(checked) {
+  document.querySelectorAll('.mat-check').forEach(cb=>cb.checked=checked);
+  matCheckChanged();
+}
+async function matBulkDelete() {
+  const checked = [...document.querySelectorAll('.mat-check:checked')];
+  if (!checked.length) return;
+  if (!confirm(checked.length+'件の材料費データを削除しますか？')) return;
+  checked.forEach(cb=>{ if(DB.materials?.[cb.dataset.key]) delete DB.materials[cb.dataset.key]; });
+  renderMaterials();
+  await writeToFirebase('materials', DB.materials);
+  toast(checked.length+'件を削除しました','success');
+  const a=document.getElementById('matSelectAll'); if(a){a.checked=false;a.indeterminate=false;}
+  const b=document.getElementById('matBulkDeleteBtn'); if(b)b.style.display='none';
+}
+
+// ═══════════════════════════════════════════════
+// 外注費 一括削除
+// ═══════════════════════════════════════════════
+function outCheckChanged() {
+  const checked = document.querySelectorAll('.out-check:checked').length;
+  const btn = document.getElementById('outBulkDeleteBtn');
+  const all = document.getElementById('outSelectAll');
+  if (btn) { btn.style.display = checked>0?'':'none'; btn.textContent='🗑 選択削除 ('+checked+'件)'; }
+  const total = document.querySelectorAll('.out-check').length;
+  if (all) { all.indeterminate = checked>0&&checked<total; if(checked===total&&total>0)all.checked=true; if(checked===0)all.checked=false; }
+}
+function outToggleAll(checked) {
+  document.querySelectorAll('.out-check').forEach(cb=>cb.checked=checked);
+  outCheckChanged();
+}
+async function outBulkDelete() {
+  const checked = [...document.querySelectorAll('.out-check:checked')];
+  if (!checked.length) return;
+  if (!confirm(checked.length+'件の外注費データを削除しますか？')) return;
+  checked.forEach(cb=>{ if(DB.outsource?.[cb.dataset.key]) delete DB.outsource[cb.dataset.key]; });
+  renderOutsource();
+  await writeToFirebase('outsource', DB.outsource);
+  toast(checked.length+'件を削除しました','success');
+  const a=document.getElementById('outSelectAll'); if(a){a.checked=false;a.indeterminate=false;}
+  const b=document.getElementById('outBulkDeleteBtn'); if(b)b.style.display='none';
 }
 
 // ── Close modal on overlay click ──
