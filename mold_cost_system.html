@@ -976,6 +976,11 @@
         <div class="table-title">作業実績一覧</div>
         <div class="table-count" id="labCount"></div>
         <div class="table-actions">
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;margin-right:4px;">
+            <input type="checkbox" id="labSelectAll" onchange="labToggleAll(this.checked)"> 全選択
+          </label>
+          <button class="btn btn-danger btn-sm" id="labBulkDeleteBtn" style="display:none" onclick="labBulkDelete()">🗑 選択削除</button>
+          <button class="btn btn-danger btn-sm" onclick="labDeleteAll()" style="background:var(--red-dim,#fee2e2);color:var(--red);border:1px solid var(--red)">🗑 全件削除</button>
           <button class="btn btn-secondary btn-sm" onclick="showPage('import')">kintone取込 →</button>
         </div>
       </div>
@@ -991,11 +996,24 @@
       <!-- kintone -->
       <div class="config-box">
         <div class="config-title">🔗 kintone 作業実績取込</div>
-        <p style="font-size:12px;color:var(--text3);margin-bottom:14px;">kintoneから作業実績CSVをエクスポートし、ここに取り込みます。月次で実行してください。</p>
-        <div class="import-box" onclick="document.getElementById('kintoneCSV').click()">
+        <div style="background:var(--accent-dim);border:1px solid var(--accent);border-radius:6px;padding:10px;margin-bottom:12px;font-size:11px;line-height:1.7;color:var(--text2);">
+          <b>📌 推奨運用：毎月「全件削除→全件再取込」</b><br>
+          kintoneからCSVを全件エクスポートして取込むと最新状態に更新されます。<br>
+          下の「全件削除して再取込」ボタンを使うと1クリックで完了します。
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+          <button class="btn btn-primary" onclick="document.getElementById('kintoneCSV').click()">
+            📥 CSVを選択して取込
+          </button>
+          <button class="btn btn-danger btn-sm" onclick="labClearAndImport()"
+            style="background:var(--red-dim,#fee2e2);color:var(--red);border:1px solid var(--red)">
+            🔄 全件削除して再取込
+          </button>
+        </div>
+        <div class="import-box" onclick="document.getElementById('kintoneCSV').click()" style="margin-bottom:8px;">
           <div class="import-icon">📊</div>
           <div class="import-label">kintone作業実績CSV</div>
-          <div class="import-sub">クリックしてファイルを選択</div>
+          <div class="import-sub">クリックしてファイルを選択（Shift-JIS対応）</div>
         </div>
         <input type="file" id="kintoneCSV" accept=".csv" onchange="importKintoneCSV(event)">
         <div id="kintoneImportLog" style="font-size:11px;color:var(--text3);font-family:var(--mono);max-height:100px;overflow-y:auto;"></div>
@@ -2368,10 +2386,12 @@ function renderLabor() {
       <tbody>${entries.map(([k,r])=>`
         <tr>
           <td style="white-space:nowrap;padding:4px 4px">
+            <input type="checkbox" class="lab-check" data-key="${k}"
+              onchange="labCheckChanged()" style="margin-right:3px">
             <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px"
               onclick="editLabor('${k}')">編集</button>
             <button class="btn btn-danger btn-sm" style="padding:2px 5px;font-size:10px;margin-left:2px"
-              onclick="deleteRecord('labor','${k}')">×</button>
+              onclick="labDeleteOne('${k}')">×</button>
           </td>
           <td class="mono">${r.month||''}</td>
           <td class="mono" style="font-weight:600;color:var(--accent)">${r.moldNo||''}</td>
@@ -5170,6 +5190,89 @@ async function saveLaborEdit() {
 }
 
 // deleteRecord('labor', key) は共通関数で対応済み
+
+
+// ═══════════════════════════════════════════════
+// 加工費 一括操作
+// ═══════════════════════════════════════════════
+
+// 1件削除（画面即時反映・Firebase非同期）
+function labDeleteOne(key) {
+  if (!confirm('この行を削除しますか？')) return;
+  if (!DB.labor?.[key]) return;
+  delete DB.labor[key];
+  // 画面を即時更新してからFirebaseに書込
+  renderLabor();
+  writeToFirebase('labor', DB.labor).then(() => {
+    toast('削除しました', 'success');
+  });
+}
+
+// チェック変化 → 一括削除ボタン表示切替
+function labCheckChanged() {
+  const checked = document.querySelectorAll('.lab-check:checked').length;
+  const btn = document.getElementById('labBulkDeleteBtn');
+  const all = document.getElementById('labSelectAll');
+  if (btn) {
+    btn.style.display = checked > 0 ? '' : 'none';
+    btn.textContent = '🗑 選択削除 (' + checked + '件)';
+  }
+  const total = document.querySelectorAll('.lab-check').length;
+  if (all) {
+    all.indeterminate = checked > 0 && checked < total;
+    if (checked === total && total > 0) all.checked = true;
+    if (checked === 0) all.checked = false;
+  }
+}
+
+// 全選択/解除
+function labToggleAll(checked) {
+  document.querySelectorAll('.lab-check').forEach(cb => cb.checked = checked);
+  labCheckChanged();
+}
+
+// 選択行を一括削除
+async function labBulkDelete() {
+  const checked = [...document.querySelectorAll('.lab-check:checked')];
+  if (!checked.length) return;
+  if (!confirm(checked.length + '件の作業実績を削除しますか？')) return;
+  checked.forEach(cb => {
+    if (DB.labor?.[cb.dataset.key]) delete DB.labor[cb.dataset.key];
+  });
+  renderLabor();  // 即時反映
+  await writeToFirebase('labor', DB.labor);
+  toast(checked.length + '件を削除しました', 'success');
+  document.getElementById('labSelectAll').checked = false;
+  document.getElementById('labBulkDeleteBtn').style.display = 'none';
+}
+
+// 全件削除
+async function labDeleteAll() {
+  const count = Object.keys(DB.labor || {}).length;
+  if (!count) { toast('削除するデータがありません', 'error'); return; }
+  if (!confirm('加工費データ全' + count + '件を削除しますか？\n削除後にCSVを再取込してください。')) return;
+  DB.labor = {};
+  renderLabor();  // 即時反映
+  await writeToFirebase('labor', DB.labor);
+  toast('全' + count + '件を削除しました', 'success');
+}
+
+// 全件削除 → ファイル選択ダイアログを開く
+async function labClearAndImport() {
+  const count = Object.keys(DB.labor || {}).length;
+  const msg = count > 0
+    ? '加工費データ全' + count + '件を削除してから新しいCSVを取込みます。\n続けますか？'
+    : '加工費CSVを取込みます。';
+  if (!confirm(msg)) return;
+  if (count > 0) {
+    DB.labor = {};
+    renderLabor();
+    await writeToFirebase('labor', DB.labor);
+    toast('全件削除しました。CSVを選択してください', 'success');
+  }
+  // ファイル選択を開く
+  document.getElementById('kintoneCSV').click();
+}
 
 // ── Close modal on overlay click ──
 document.querySelectorAll('.modal-overlay').forEach(el => {
