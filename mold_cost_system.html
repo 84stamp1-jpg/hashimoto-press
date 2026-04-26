@@ -1561,6 +1561,66 @@
   </div>
 </div>
 
+<!-- 加工費 編集モーダル -->
+<div class="modal-overlay" id="laborModal">
+  <div class="modal" style="width:min(520px,96vw)">
+    <div class="modal-head">
+      <div class="modal-title">加工費 編集</div>
+      <button class="close-btn" onclick="closeModal('laborModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="laborEditKey">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">月</label>
+          <input class="form-input" id="lf_month" placeholder="例: 2026-04">
+        </div>
+        <div class="form-group">
+          <label class="form-label">管理NO.</label>
+          <input class="form-input" id="lf_moldNo" placeholder="例: 71-A">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">部品番号</label>
+          <input class="form-input" id="lf_partNo" placeholder="例: 18185-MLZA">
+        </div>
+        <div class="form-group">
+          <label class="form-label">工程</label>
+          <input class="form-input" id="lf_process" placeholder="例: DR">
+        </div>
+        <div class="form-group">
+          <label class="form-label">作業員</label>
+          <input class="form-input" id="lf_worker" placeholder="例: 大石辰祥">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">作業内容</label>
+          <input class="form-input" id="lf_workType" placeholder="例: M/C (自動)">
+        </div>
+        <div class="form-group">
+          <label class="form-label">チャージ（円/h）</label>
+          <input class="form-input" id="lf_charge" type="number" placeholder="3000"
+            oninput="calcLaborAmount()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">時間</label>
+          <input class="form-input" id="lf_time" type="number" step="0.1" placeholder="1.5"
+            oninput="calcLaborAmount()">
+        </div>
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">金額（円）
+            <span style="font-size:10px;color:var(--text3);margin-left:4px;">チャージ×時間で自動計算</span>
+          </label>
+          <input class="form-input" id="lf_amount" type="number" placeholder="0"
+            style="font-weight:700;color:var(--accent)">
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeModal('laborModal')">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveLaborEdit()">💾 保存</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div id="toast"></div>
 
@@ -1935,7 +1995,7 @@ function renderDashboard() {
       <thead>
         <tr>
           <th>管理NO.</th><th>得意先</th><th>品番 / 品名</th>
-          <th>見積金額</th><th>現在原価</th><th>原価構成</th><th>進捗</th><th></th>
+          <th>見積金額</th><th>現在原価</th><th>原価構成</th><th>進捗</th><th>客先納期</th><th></th>
         </tr>
       </thead>
       <tbody>
@@ -1952,6 +2012,7 @@ function renderDashboard() {
             <td class="mono" style="font-size:13px;font-weight:600;text-align:right">¥${fmt(c.total)}</td>
             <td>${costBarHTML(c)}</td>
             <td>${progressHTML(c.total, m.estimate)}</td>
+            <td class="mono" style="font-size:12px;white-space:nowrap">${m.dueDate||'—'}</td>
             <td style="white-space:nowrap">
               <button class="btn btn-secondary btn-sm" style="padding:3px 8px;font-size:11px;margin-right:4px" onclick="event.stopPropagation();editMold('${key}')">編集</button>
               <button class="btn btn-danger btn-sm" style="padding:3px 8px;font-size:11px" onclick="event.stopPropagation();deleteMold('${key}')">×</button>
@@ -2298,11 +2359,18 @@ function renderLabor() {
   document.getElementById('labTableBody').innerHTML = `
     <table>
       <thead><tr>
+        <th style="width:44px"></th>
         <th>月</th><th>管理NO.</th><th>部品番号</th><th>工程</th>
         <th>作業員</th><th>作業内容</th><th>チャージ</th><th>時間</th><th>金額</th>
       </tr></thead>
       <tbody>${entries.map(([k,r])=>`
         <tr>
+          <td style="white-space:nowrap;padding:4px 4px">
+            <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px"
+              onclick="editLabor('${k}')">編集</button>
+            <button class="btn btn-danger btn-sm" style="padding:2px 5px;font-size:10px;margin-left:2px"
+              onclick="deleteRecord('labor','${k}')">×</button>
+          </td>
           <td class="mono">${r.month||''}</td>
           <td class="mono">${r.moldNo||''}</td>
           <td class="mono" style="font-size:11px">${r.partNo||''}</td>
@@ -4933,6 +5001,7 @@ function exportSnapshotPdf() {
       <td style="padding:6px 8px;text-align:right;font-family:monospace;color:#7c3aed;white-space:nowrap">¥${fmt(r.labTotal)}</td>
       <td style="padding:6px 8px;text-align:right;font-family:monospace;font-weight:700;white-space:nowrap">¥${fmt(r.total)}</td>
       <td style="padding:6px 8px;text-align:right;font-family:monospace;color:${pctColor};font-weight:700;white-space:nowrap">${pctVal}%</td>
+      <td style="padding:6px 8px;font-family:monospace;font-size:10pt;white-space:nowrap">${r.dueDate||'—'}</td>
     </tr>`;
   }).join('');
 
@@ -4987,6 +5056,7 @@ function exportSnapshotPdf() {
           <th style="text-align:right;color:#c4b5fd;white-space:nowrap">加工費</th>
           <th style="text-align:right;white-space:nowrap">現在原価</th>
           <th style="text-align:right;white-space:nowrap">達成率</th>
+          <th style="white-space:nowrap">客先納期</th>
         </tr></thead>
         <tbody>${tableRows}</tbody>
         <tfoot><tr class="tfoot">
@@ -4998,12 +5068,69 @@ function exportSnapshotPdf() {
           <td style="text-align:right">¥${fmt(totLab)}</td>
           <td style="text-align:right">¥${fmt(totCost)}</td>
           <td></td>
+          <td></td>
         </tr></tfoot>
       </table>
     </div>
     </body></html>`);
   win.document.close();
 }
+
+
+// ═══════════════════════════════════════════════
+// 加工費 編集・保存
+// ═══════════════════════════════════════════════
+function editLabor(key) {
+  const r = DB.labor?.[key];
+  if (!r) return;
+  document.getElementById('laborEditKey').value = key;
+  document.getElementById('lf_month').value    = r.month    || '';
+  document.getElementById('lf_moldNo').value   = r.moldNo   || '';
+  document.getElementById('lf_partNo').value   = r.partNo   || '';
+  document.getElementById('lf_process').value  = r.process  || '';
+  document.getElementById('lf_worker').value   = r.worker   || '';
+  document.getElementById('lf_workType').value = r.workType || '';
+  document.getElementById('lf_charge').value   = r.charge   || '';
+  document.getElementById('lf_time').value     = r.time     || '';
+  document.getElementById('lf_amount').value   = r.amount   || '';
+  document.getElementById('laborModal').classList.add('open');
+}
+
+function calcLaborAmount() {
+  const charge = parseFloat(document.getElementById('lf_charge').value) || 0;
+  const time   = parseFloat(document.getElementById('lf_time').value)   || 0;
+  if (charge && time) {
+    document.getElementById('lf_amount').value = Math.round(charge * time);
+  }
+}
+
+async function saveLaborEdit() {
+  const key = document.getElementById('laborEditKey').value;
+  if (!key || !DB.labor?.[key]) return;
+
+  const charge = parseFloat(document.getElementById('lf_charge').value) || 0;
+  const time   = parseFloat(document.getElementById('lf_time').value)   || 0;
+  const amount = parseFloat(document.getElementById('lf_amount').value) || (charge * time);
+
+  DB.labor[key] = {
+    month:    document.getElementById('lf_month').value.trim(),
+    moldNo:   document.getElementById('lf_moldNo').value.trim(),
+    partNo:   document.getElementById('lf_partNo').value.trim(),
+    process:  document.getElementById('lf_process').value.trim(),
+    worker:   document.getElementById('lf_worker').value.trim(),
+    workType: document.getElementById('lf_workType').value.trim(),
+    charge,
+    time,
+    amount,
+  };
+
+  await writeToFirebase('labor', DB.labor);
+  closeModal('laborModal');
+  toast('加工費を更新しました', 'success');
+  renderLabor();
+}
+
+// deleteRecord('labor', key) は共通関数で対応済み
 
 // ── Close modal on overlay click ──
 document.querySelectorAll('.modal-overlay').forEach(el => {
