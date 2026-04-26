@@ -4785,7 +4785,7 @@ async function saveSnapshot() {
   }
 
   // 全金型の現時点データを収集
-  const rows = Object.values(DB.molds||{}).map(m => {
+  const rows = Object.values(DB.molds||{}).filter(m => m.status !== '検収済').map(m => {
     const c = getCosts(m.no);
     // 明細データも収集
     const matDetails = Object.values(DB.materials||{})
@@ -4875,11 +4875,14 @@ function exportSnapshotExcel() {
   if (!snap) { toast('スナップショットを選択してください', 'error'); return; }
 
   // TSV形式でクリップボードにコピー（Excelに貼り付け可能）
-  const headers = ['管理NO.','客先','品番','品名','ステータス','見積金額','材料費','外注費','購入品費','加工費','現在原価','客先納期'];
-  const rows = snap.rows.map(r => [
-    r.no, r.client, r.partNo, r.partName, r.status,
-    r.estimate, r.matTotal, r.outTotal, r.purTotal, r.labTotal, r.total, r.dueDate
-  ]);
+  const headers = ['管理NO.','客先','品番','品名','ステータス','見積金額','材料費','外注費','購入品費','加工費','現在原価'];
+  const rows = snap.rows
+    .filter(r => r.status !== '検収済')
+    .sort((a,b) => (a.no||'').localeCompare(b.no||'','ja',{numeric:true}))
+    .map(r => [
+      r.no, r.client, r.partNo, r.partName, r.status,
+      r.estimate, r.matTotal, r.outTotal, r.purTotal, r.labTotal, r.total
+    ]);
 
   // CSV生成（BOM付きUTF-8でExcelで開けるように）
   const bom = '\uFEFF';
@@ -4918,6 +4921,7 @@ function exportSnapshotPdf() {
   if (!snap) { toast('スナップショットを選択してください', 'error'); return; }
 
   const rows = snap.rows
+    .filter(r => r.status !== '検収済')  // 検収済を除外
     .sort((a,b) => (a.no||'').localeCompare(b.no||'', 'ja', {numeric:true}));
 
   const tableRows = rows.map((r,i) => {
@@ -4925,18 +4929,20 @@ function exportSnapshotPdf() {
     const pctVal = r.estimate > 0 ? Math.min(Math.round(r.total/r.estimate*100),999) : 0;
     const pctColor = pctVal >= 100 ? '#dc2626' : pctVal >= 80 ? '#d97706' : '#16a34a';
     return `<tr style="border-bottom:1px solid #e5e7eb;${i%2===1?'background:#f9fafb':''}">
-      <td style="padding:6px 8px;font-family:monospace;font-weight:600">${r.no}</td>
-      <td style="padding:6px 8px;font-size:11pt">${r.client}</td>
-      <td style="padding:6px 8px;font-size:10pt;color:#555">${r.partNo}<br><span style="color:#111">${r.partName}</span></td>
-      <td style="padding:6px 8px;text-align:center"><span style="color:${statusColor};font-weight:600">${r.status}</span></td>
-      <td style="padding:6px 8px;text-align:right;font-family:monospace">¥${fmt(r.estimate)}</td>
-      <td style="padding:6px 8px;text-align:right;font-family:monospace;color:#1d4ed8">¥${fmt(r.matTotal)}</td>
-      <td style="padding:6px 8px;text-align:right;font-family:monospace;color:#d97706">¥${fmt(r.outTotal)}</td>
-      <td style="padding:6px 8px;text-align:right;font-family:monospace;color:#059669">¥${fmt(r.purTotal)}</td>
-      <td style="padding:6px 8px;text-align:right;font-family:monospace;color:#7c3aed">¥${fmt(r.labTotal)}</td>
-      <td style="padding:6px 8px;text-align:right;font-family:monospace;font-weight:700">¥${fmt(r.total)}</td>
-      <td style="padding:6px 8px;text-align:right;font-family:monospace;color:${pctColor};font-weight:700">${pctVal}%</td>
-      <td style="padding:6px 8px;font-size:10pt">${r.dueDate||''}</td>
+      <td style="padding:6px 8px;font-family:monospace;font-weight:600;white-space:nowrap">${r.no}</td>
+      <td style="padding:6px 6px;font-size:10pt;width:80px;max-width:80px;overflow:hidden;white-space:nowrap">${r.client}</td>
+      <td style="padding:6px 8px;">
+        <div style="font-size:9.5pt;color:#777;font-family:monospace">${r.partNo}</div>
+        <div style="font-size:11pt;font-weight:600">${r.partName}</div>
+      </td>
+      <td style="padding:6px 8px;text-align:center;white-space:nowrap"><span style="color:${statusColor};font-weight:600">${r.status}</span></td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace;white-space:nowrap">¥${fmt(r.estimate)}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace;color:#1d4ed8;white-space:nowrap">¥${fmt(r.matTotal)}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace;color:#d97706;white-space:nowrap">¥${fmt(r.outTotal)}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace;color:#059669;white-space:nowrap">¥${fmt(r.purTotal)}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace;color:#7c3aed;white-space:nowrap">¥${fmt(r.labTotal)}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace;font-weight:700;white-space:nowrap">¥${fmt(r.total)}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace;color:${pctColor};font-weight:700;white-space:nowrap">${pctVal}%</td>
     </tr>`;
   }).join('');
 
@@ -4980,15 +4986,17 @@ function exportSnapshotPdf() {
       </div>
       <table>
         <thead><tr>
-          <th>管理NO.</th><th>客先</th><th>品番/品名</th><th>状態</th>
-          <th style="text-align:right">見積金額</th>
-          <th style="text-align:right;color:#93c5fd">材料費</th>
-          <th style="text-align:right;color:#fcd34d">外注費</th>
-          <th style="text-align:right;color:#6ee7b7">購入品費</th>
-          <th style="text-align:right;color:#c4b5fd">加工費</th>
-          <th style="text-align:right">現在原価</th>
-          <th style="text-align:right">達成率</th>
-          <th>客先納期</th>
+          <th style="white-space:nowrap">管理NO.</th>
+          <th style="width:80px">客先</th>
+          <th>品番 / 品名</th>
+          <th style="white-space:nowrap">状態</th>
+          <th style="text-align:right;white-space:nowrap">見積金額</th>
+          <th style="text-align:right;color:#93c5fd;white-space:nowrap">材料費</th>
+          <th style="text-align:right;color:#fcd34d;white-space:nowrap">外注費</th>
+          <th style="text-align:right;color:#6ee7b7;white-space:nowrap">購入品費</th>
+          <th style="text-align:right;color:#c4b5fd;white-space:nowrap">加工費</th>
+          <th style="text-align:right;white-space:nowrap">現在原価</th>
+          <th style="text-align:right;white-space:nowrap">達成率</th>
         </tr></thead>
         <tbody>${tableRows}</tbody>
         <tfoot><tr class="tfoot">
@@ -4999,7 +5007,7 @@ function exportSnapshotPdf() {
           <td style="text-align:right">¥${fmt(totPur)}</td>
           <td style="text-align:right">¥${fmt(totLab)}</td>
           <td style="text-align:right">¥${fmt(totCost)}</td>
-          <td colspan="2"></td>
+          <td></td>
         </tr></tfoot>
       </table>
     </div>
