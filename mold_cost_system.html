@@ -709,7 +709,12 @@
           </select>
           <button class="btn btn-secondary btn-sm" onclick="exportSnapshotExcel()" id="btnSnapExcel" style="display:none">📊 Excel</button>
           <button class="btn btn-secondary btn-sm" onclick="exportSnapshotPdf()" id="btnSnapPdf" style="display:none">🖨 PDF</button>
-          <button class="btn btn-primary btn-sm" onclick="saveSnapshot()">📸 今月のスナップショットを保存</button>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <label style="font-size:11px;color:var(--text2);font-weight:600;">対象年月：</label>
+            <input type="month" class="form-input" id="snapshotMonth"
+              style="width:140px;padding:5px 8px;font-size:12px;">
+            <button class="btn btn-primary btn-sm" onclick="saveSnapshot()">📸 スナップショットを保存</button>
+          </div>
         </div>
       </div>
       <div id="snapshotLog" style="font-size:11px;color:var(--text3);margin-top:6px;font-family:monospace;"></div>
@@ -1920,7 +1925,16 @@ function showPage(name) {
   if (tab) tab.classList.add('active');
   const renders = {
     dashboard: renderDashboard,
-    molds: () => { renderMolds(); renderSnapshotList(); },
+    molds: () => {
+    renderMolds();
+    renderSnapshotList();
+    // 年月セレクタを今月に初期化
+    const mi = document.getElementById('snapshotMonth');
+    if (mi && !mi.value) {
+      const now = new Date();
+      mi.value = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+    }
+  },
     quote: renderQuote,
     outsource: renderOutsource,
     purchase: renderPurchase,
@@ -4980,30 +4994,58 @@ async function purBulkDelete() {
 // 月別在庫スナップショット
 // ═══════════════════════════════════════════════
 
-// スナップショットを保存
+// スナップショットを保存（選択月の末日までのデータのみ集計）
 async function saveSnapshot() {
-  const now    = new Date();
-  const yearMonth = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
-  const label  = now.getFullYear() + '年' + (now.getMonth()+1) + '月時点';
-  const key    = 'snap_' + yearMonth;
+  // 対象年月を取得
+  const monthInput = document.getElementById('snapshotMonth');
+  const yearMonth  = monthInput?.value;
+  if (!yearMonth) {
+    toast('対象年月を選択してください', 'error');
+    monthInput?.focus();
+    return;
+  }
+
+  const [year, month] = yearMonth.split('-').map(Number);
+  const label   = year + '年' + month + '月時点';
+  const key     = 'snap_' + yearMonth;
+  // 締め日 = 選択月の末日 23:59:59
+  const cutoff  = new Date(year, month, 0, 23, 59, 59);  // month日 = 翌月0日 = 末日
+  const cutoffStr = yearMonth;  // "2026-04" 以下の月のデータのみ
 
   // 既存の確認
   if (DB.snapshots?.[key]) {
-    if (!confirm(`${label} のスナップショットは既に存在します。上書きしますか？`)) return;
+    if (!confirm(label + ' のスナップショットは既に存在します。上書きしますか？')) return;
   }
 
-  // 全金型の現時点データを収集
+  // 月文字列比較用（"2026-04" 以下かどうか）
+  const inRange = (r) => {
+    const m = (r.month || '').slice(0, 7);
+    return !m || m <= cutoffStr;
+  };
+
+  // 締め日以前のデータのみで原価集計
+  const getCostsAtDate = (moldNo) => {
+    const mold   = Object.values(DB.molds||{}).find(m => m.no === moldNo);
+    const partNo = mold?.partNo || '';
+    const match  = r => ((r.moldNo||'').startsWith(moldNo) || r.moldNo === moldNo || (partNo && r.partNo === partNo)) && inRange(r);
+    const mat    = Object.values(DB.materials||{}).filter(match).reduce((s,r) => s + (r.amount||0), 0);
+    const out    = Object.values(DB.outsource||{}).filter(match).reduce((s,r) => s + (r.total||0),  0);
+    const pur    = Object.values(DB.purchase ||{}).filter(match).reduce((s,r) => s + (r.total||0),  0);
+    const lab    = Object.values(DB.labor    ||{}).filter(match).reduce((s,r) => s + (r.amount||0), 0);
+    return { mat, out, pur, lab, total: mat + out + pur + lab };
+  };
+
+  // 全金型（検収済除く）
   const rows = Object.values(DB.molds||{}).filter(m => m.status !== '検収済').map(m => {
-    const c = getCosts(m.no);
-    // 明細データも収集
+    const c = getCostsAtDate(m.no);
     const matDetails = Object.values(DB.materials||{})
-      .filter(r => (r.moldNo||'').startsWith(m.no) || r.moldNo === m.no)
-      .map(r => ({ moldNo: r.moldNo, name: r.name, material: r.material, amount: r.amount||0, supplier: r.supplier||'' }));
+      .filter(r => ((r.moldNo||'').startsWith(m.no) || r.moldNo === m.no) && inRange(r))
+      .map(r => ({ moldNo: r.moldNo, name: r.name||'', material: r.material||'', amount: r.amount||0, supplier: r.supplier||'' }));
     const outDetails = Object.values(DB.outsource||{})
-      .filter(r => (r.moldNo||'').startsWith(m.no) || r.moldNo === m.no)
+      .filter(r => ((r.moldNo||'').startsWith(m.no) || r.moldNo === m.no) && inRange(r))
       .map(r => ({ moldNo: r.moldNo, process: r.process||'', supplier: r.supplier||'', total: r.total||0 }));
     const purDetails = Object.values(DB.purchase||{})
-      .filter(r => (r.moldNo||'').startsWith(m.no) || r.moldNo === m.no)
+      .filter(r => ((r.moldNo||'').startsWith(m.no) || r.moldNo === m.no) && inRange(r))
       .map(r => ({ moldNo: r.moldNo, name: r.name||'', supplier: r.supplier||'', total: r.total||0 }));
     return {
       no:       m.no,
@@ -5013,13 +5055,11 @@ async function saveSnapshot() {
       status:   m.status   || '',
       estimate: m.estimate || 0,
       dueDate:  m.dueDate  || '',
-      // 原価集計
       matTotal: c.mat,
       outTotal: c.out,
       purTotal: c.pur,
       labTotal: c.lab,
       total:    c.total,
-      // 明細
       matDetails,
       outDetails,
       purDetails,
@@ -5030,7 +5070,8 @@ async function saveSnapshot() {
   DB.snapshots[key] = {
     label,
     yearMonth,
-    savedAt: now.toISOString(),
+    cutoff:        cutoffStr,
+    savedAt:       new Date().toISOString(),
     rows,
     totalMolds:    rows.length,
     activeMolds:   rows.filter(r => r.status === '製作中').length,
@@ -5040,8 +5081,8 @@ async function saveSnapshot() {
 
   await writeToFirebase('snapshots', DB.snapshots);
   document.getElementById('snapshotLog').textContent =
-    `✅ ${label} を保存しました（${rows.length}件）`;
-  toast(`${label} のスナップショットを保存しました`, 'success');
+    `✅ ${label}（${cutoffStr}月末締め）を保存しました（${rows.length}件）`;
+  toast(label + ' のスナップショットを保存しました', 'success');
   renderSnapshotList();
 }
 
