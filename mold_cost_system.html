@@ -709,6 +709,7 @@
           </select>
           <button class="btn btn-secondary btn-sm" onclick="exportSnapshotExcel()" id="btnSnapExcel" style="display:none">📊 Excel</button>
           <button class="btn btn-secondary btn-sm" onclick="exportSnapshotPdf()" id="btnSnapPdf" style="display:none">🖨 PDF</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteSnapshot()" id="btnSnapDelete" style="display:none">🗑 削除</button>
           <div style="display:flex;align-items:center;gap:6px;">
             <label style="font-size:11px;color:var(--text2);font-weight:600;">対象年月：</label>
             <input type="month" class="form-input" id="snapshotMonth"
@@ -5104,10 +5105,12 @@ function onSnapshotSelChange() {
   const sel    = document.getElementById('snapshotViewSel');
   const key    = sel ? sel.value : '';
   const hasSnap = key && DB.snapshots?.[key];
-  const btnExcel = document.getElementById('btnSnapExcel');
-  const btnPdf   = document.getElementById('btnSnapPdf');
-  if (btnExcel) btnExcel.style.display = hasSnap ? '' : 'none';
-  if (btnPdf)   btnPdf.style.display   = hasSnap ? '' : 'none';
+  const btnExcel  = document.getElementById('btnSnapExcel');
+  const btnPdf    = document.getElementById('btnSnapPdf');
+  const btnDelete = document.getElementById('btnSnapDelete');
+  if (btnExcel)  btnExcel.style.display  = hasSnap ? '' : 'none';
+  if (btnPdf)    btnPdf.style.display    = hasSnap ? '' : 'none';
+  if (btnDelete) btnDelete.style.display = hasSnap ? '' : 'none';
   // 選択したスナップショットの情報を表示
   if (hasSnap) {
     const s = DB.snapshots[key];
@@ -5478,6 +5481,20 @@ async function outBulkDelete() {
   toast(checked.length+'件を削除しました','success');
   const a=document.getElementById('outSelectAll'); if(a){a.checked=false;a.indeterminate=false;}
   const b=document.getElementById('outBulkDeleteBtn'); if(b)b.style.display='none';
+}
+
+
+// スナップショット削除
+async function deleteSnapshot() {
+  const key  = document.getElementById('snapshotViewSel')?.value;
+  const snap = DB.snapshots?.[key];
+  if (!snap) return;
+  if (!confirm(snap.label + ' のスナップショットを削除しますか？')) return;
+  delete DB.snapshots[key];
+  await writeToFirebase('snapshots', DB.snapshots);
+  toast(snap.label + ' を削除しました', 'success');
+  document.getElementById('snapshotLog').textContent = '';
+  renderSnapshotList();
 }
 
 // ── Close modal on overlay click ──
