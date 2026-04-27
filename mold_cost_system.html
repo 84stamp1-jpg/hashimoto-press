@@ -1211,9 +1211,12 @@
       <div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.6;">
         ★新規物件から<b>製作中・完成</b>の案件を取込みます。検収済は除外されます。
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button class="btn btn-primary" onclick="saveKintoneConfig()">💾 設定保存</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <button class="btn btn-primary" onclick="saveKintoneConfig()">💾 設定保存（全PC共有）</button>
         <button class="btn btn-secondary" onclick="fetchKintoneForPreview()">📥 取込プレビュー</button>
+        <button class="btn btn-secondary btn-sm" onclick="loadSharedConfig()" style="font-size:11px;">
+          🔄 共有設定を再読込
+        </button>
       </div>
       <div id="ktSyncLog" style="font-size:11px;color:var(--text3);margin-top:8px;font-family:monospace;max-height:80px;overflow-y:auto;white-space:pre-wrap;"></div>
       <div style="margin-top:8px;">
@@ -1824,6 +1827,16 @@ function initFirebase() {
       DB.quoteRequests = merge(data.quoteRequests, DB.quoteRequests);
       DB.snapshots     = merge(data.snapshots,     DB.snapshots);
       DB.importLog     = data.importLog || DB.importLog || [];
+      // Firebase経由で設定を同期（Firebase接続情報以外）
+      if (data.sharedConfig) {
+        const sc = data.sharedConfig;
+        // 既存のFirebase接続情報は保持しつつkintone設定を上書き
+        ['gasUrl','ktMoldApp','ktApp','ktToken','ktDomain','ktMasterApp','ktF','ktV'].forEach(k => {
+          if (sc[k] !== undefined) cfg[k] = sc[k];
+        });
+        localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
+        applyConfigToUI();
+      }
 
       setStatus(true, 'Firebase接続済');
       saveLocal();  // マージ結果をローカルにも保存
@@ -2116,6 +2129,9 @@ function renderMolds() {
   );
   if (sts) entries = entries.filter(([,m]) => m.status === sts);
   if (cli) entries = entries.filter(([,m]) => m.client === cli);
+
+  // 管理NO.昇順
+  entries.sort(([,a],[,b]) => (a.no||'').localeCompare(b.no||'', 'ja', {numeric:true}));
 
   document.getElementById('moldCount').textContent = entries.length + '件';
 
@@ -4401,7 +4417,25 @@ function saveKintoneConfig() {
   };
   cfg._v = '2';  // バージョン記録
   localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
-  toast('kintone設定を保存しました', 'success');
+  // Firebaseにも共有設定として保存（他のPCで自動反映）
+  const sharedConfig = {
+    gasUrl:      cfg.gasUrl      || '',
+    ktMoldApp:   cfg.ktMoldApp   || '39',
+    ktApp:       cfg.ktApp       || '',
+    ktToken:     cfg.ktToken     || '',
+    ktDomain:    cfg.ktDomain    || '',
+    ktMasterApp: cfg.ktMasterApp || '7',
+    ktF:         cfg.ktF         || {},
+    ktV:         cfg.ktV         || {},
+    _savedAt:    new Date().toISOString(),
+  };
+  if (db) {
+    db.ref('/moldCostSystem/sharedConfig').set(sharedConfig)
+      .then(() => toast('kintone設定を保存しました（全PC共有）', 'success'))
+      .catch(() => toast('kintone設定を保存しました（ローカルのみ）', 'success'));
+  } else {
+    toast('kintone設定を保存しました', 'success');
+  }
 }
 
 function toggleFieldCodeSettings() {
@@ -5495,6 +5529,57 @@ async function deleteSnapshot() {
   toast(snap.label + ' を削除しました', 'success');
   document.getElementById('snapshotLog').textContent = '';
   renderSnapshotList();
+}
+
+
+// Firebase から読み込んだ設定をUIに反映
+function applyConfigToUI() {
+  const gasEl = document.getElementById('cfgGasUrl');
+  if (gasEl && cfg.gasUrl) gasEl.value = cfg.gasUrl;
+  const moldAppEl = document.getElementById('cfgKtMoldApp');
+  if (moldAppEl && cfg.ktMoldApp) moldAppEl.value = cfg.ktMoldApp;
+  const appEl = document.getElementById('cfgKtApp');
+  if (appEl && cfg.ktApp) appEl.value = cfg.ktApp;
+  const domainEl = document.getElementById('cfgKtDomain');
+  if (domainEl && cfg.ktDomain) domainEl.value = cfg.ktDomain;
+  // フィールドコード
+  const ktF = cfg.ktF || {};
+  const ktV = cfg.ktV || {};
+  const _n  = v => v ? String(v).replace(/ /g,'_') : '';
+  const setF = (id, val, def) => {
+    const el = document.getElementById(id);
+    if (el) el.value = _n(val) || def || '';
+  };
+  setF('cfgKtF_moldNo',     ktF.moldNo,     '文字列__1行__6');
+  setF('cfgKtF_partNo',     ktF.partNo,     '文字列__1行__7');
+  setF('cfgKtF_partName',   ktF.partName,   '文字列__1行__5');
+  setF('cfgKtF_client',     ktF.client,     'ルックアップ');
+  setF('cfgKtF_status',     ktF.status,     '');
+  setF('cfgKtF_dueDate',    ktF.dueDate,    '日付');
+  setF('cfgKtF_process',    ktF.process,    '');
+  setF('cfgKtF_estimate',   ktF.estimate,   '見積金額');
+  setF('cfgKtV_inProgress', ktV.inProgress, '');
+  setF('cfgKtV_done',       ktV.done,       '');
+  setF('cfgKtV_accepted',   ktV.accepted,   '');
+}
+
+
+// Firebaseから共有設定を強制再読込
+async function loadSharedConfig() {
+  if (!db) { toast('Firebase未接続のため読込できません', 'error'); return; }
+  try {
+    const snap = await db.ref('/moldCostSystem/sharedConfig').once('value');
+    const sc   = snap.val();
+    if (!sc) { toast('共有設定がまだ保存されていません', 'error'); return; }
+    ['gasUrl','ktMoldApp','ktApp','ktToken','ktDomain','ktMasterApp','ktF','ktV'].forEach(k => {
+      if (sc[k] !== undefined) cfg[k] = sc[k];
+    });
+    localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
+    applyConfigToUI();
+    toast('共有設定を読み込みました（' + new Date(sc._savedAt).toLocaleString('ja-JP') + '保存）', 'success');
+  } catch(e) {
+    toast('読込失敗: ' + e.message, 'error');
+  }
 }
 
 // ── Close modal on overlay click ──
