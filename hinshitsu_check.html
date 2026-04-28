@@ -1000,10 +1000,24 @@ function makeGroupCard(g,allDates){
   // 材料残「あり」がひとつでもあれば表示
   var hasZairyo=recs.some(function(r){return r[8]==='あり';});
   if(hasZairyo){var tz=document.createElement('span');tz.className='tag';tz.style.cssText='background:#E1F5EE;color:#0F6E56;';tz.textContent='📦 材料残あり';tags.appendChild(tz);}
-  // メモがあれば表示
+  // メモ（不良内容・特記事項）があれば表示
   var allMemos=recs.map(function(r){return r[9]||'';}).filter(function(m){return m&&m.indexOf('http')!==0;});
   var uniqMemos=allMemos.filter(function(m,i){return allMemos.indexOf(m)===i;});
-  uniqMemos.forEach(function(memo){var tm=document.createElement('div');tm.style.cssText='font-size:11px;color:#555;margin-top:5px;padding:3px 8px;background:#f8f8f8;border-left:3px solid #ccc;border-radius:0 4px 4px 0;';tm.textContent='📝 '+memo;tags.appendChild(tm);});
+  uniqMemos.forEach(function(memo){
+    var tm=document.createElement('div');
+    tm.style.cssText='font-size:11px;color:#555;margin-top:5px;padding:3px 8px;background:#fff8e1;border-left:3px solid #f9a825;border-radius:0 4px 4px 0;';
+    tm.textContent='📝 メモ: '+memo;
+    tags.appendChild(tm);
+  });
+  // その他メモ（r[19]）があれば表示
+  var allSonotaMemos=recs.map(function(r){return r[19]||'';}).filter(function(m){return m&&m.trim()!=='';});
+  var uniqSonotaMemos=allSonotaMemos.filter(function(m,i){return allSonotaMemos.indexOf(m)===i;});
+  uniqSonotaMemos.forEach(function(memo){
+    var tm=document.createElement('div');
+    tm.style.cssText='font-size:11px;color:#555;margin-top:5px;padding:3px 8px;background:#f3e5f5;border-left:3px solid #8e24aa;border-radius:0 4px 4px 0;';
+    tm.textContent='📋 その他: '+memo;
+    tags.appendChild(tm);
+  });
   div.appendChild(tags);
   // 工順別累計パネル
   var junjoKeys=Object.keys(junjoTotals).sort();
@@ -1064,7 +1078,9 @@ function makeGroupCard(g,allDates){
     // 材料残あり表示
     if(r[8]==='あり'){var zTag=document.createElement('span');zTag.style.cssText='display:inline-block;font-size:10px;background:#E1F5EE;color:#0F6E56;border-radius:4px;padding:1px 6px;margin-top:3px;margin-right:4px;';zTag.textContent='📦 材料残あり';sr.appendChild(zTag);}
     // メモ表示
-    if(r[9]&&r[9].indexOf('http')!==0){var mo=document.createElement('div');mo.style.cssText='font-size:11px;color:#555;margin-top:4px;padding:3px 8px;background:#f8f8f8;border-left:3px solid #ccc;border-radius:0 4px 4px 0;';mo.textContent='📝 '+r[9];sr.appendChild(mo);}
+    if(r[9]&&r[9].indexOf('http')!==0){var mo=document.createElement('div');mo.style.cssText='font-size:11px;color:#555;margin-top:4px;padding:3px 8px;background:#fff8e1;border-left:3px solid #f9a825;border-radius:0 4px 4px 0;';mo.textContent='📝 メモ: '+r[9];sr.appendChild(mo);}
+    // その他メモ表示
+    if(r[19]&&String(r[19]).trim()){var sm=document.createElement('div');sm.style.cssText='font-size:11px;color:#555;margin-top:4px;padding:3px 8px;background:#f3e5f5;border-left:3px solid #8e24aa;border-radius:0 4px 4px 0;';sm.textContent='📋 その他: '+r[19];sr.appendChild(sm);}
     // アクション
     var sa=document.createElement('div');sa.style.cssText='display:flex;gap:5px;margin-top:5px;flex-wrap:wrap';
     var urls=(r[10]||'').split('|').filter(function(u){return u.indexOf('https://drive.google.com/file/d/')===0;});
