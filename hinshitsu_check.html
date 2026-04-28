@@ -997,6 +997,13 @@ function makeGroupCard(g,allDates){
     kt.textContent=k;tags.appendChild(kt);
   });
   if(!allDone&&hasKanno){var t3=document.createElement('span');t3.className='tag t-alert';t3.style.animation='pulse 1.5s infinite';t3.textContent='⚠️ システム入力待ち';tags.appendChild(t3);}
+  // 材料残「あり」がひとつでもあれば表示
+  var hasZairyo=recs.some(function(r){return r[8]==='あり';});
+  if(hasZairyo){var tz=document.createElement('span');tz.className='tag';tz.style.cssText='background:#E1F5EE;color:#0F6E56;';tz.textContent='📦 材料残あり';tags.appendChild(tz);}
+  // メモがあれば表示
+  var allMemos=recs.map(function(r){return r[9]||'';}).filter(function(m){return m&&m.indexOf('http')!==0;});
+  var uniqMemos=allMemos.filter(function(m,i){return allMemos.indexOf(m)===i;});
+  uniqMemos.forEach(function(memo){var tm=document.createElement('div');tm.style.cssText='font-size:11px;color:#555;margin-top:5px;padding:3px 8px;background:#f8f8f8;border-left:3px solid #ccc;border-radius:0 4px 4px 0;';tm.textContent='📝 '+memo;tags.appendChild(tm);});
   div.appendChild(tags);
   // 工順別累計パネル
   var junjoKeys=Object.keys(junjoTotals).sort();
