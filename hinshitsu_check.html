@@ -208,7 +208,7 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
 </div>
 
 <!-- システム入力待ちバッジ -->
-<div id="pending-badge" onclick="showPendingList()" style="display:none;background:#E24B4A;color:#fff;padding:8px 16px;font-size:13px;font-weight:700;text-align:center;cursor:pointer;position:sticky;top:88px;z-index:98;">
+<div id="pending-badge" onclick="showPendingList()" style="display:none;background:#E24B4A;color:#fff;padding:8px 16px;font-size:13px;font-weight:700;text-align:center;cursor:pointer;">
   ⚠️ システム入力待ち <span id="pending-count">0</span>件 ── タップして確認
 </div>
 
@@ -1208,7 +1208,7 @@ function makeRecCard(r){
     var kTag=r[7]==='完納'?'tag-kanno':(r[7]==='中間実績'?'tag-chukan':'tag-bunno');
     addTag(r[7],kTag);
   }
-  if(r[8]&&r[8].length<5) addTag('材料残: '+r[8],'tag-z'+r[8]);
+  if(r[8]==='あり') addTag('📦 材料残あり','tag-zあり');
   if(isDone){
     addTag('システム入力済','tag-sys-done');
   } else if((r[7]||'')==='完納'){
@@ -1221,7 +1221,10 @@ function makeRecCard(r){
   div.appendChild(tags);
 
   if(r[9]&&r[9].length>0&&r[9].indexOf('http')!==0){
-    var mo=document.createElement('div');mo.style.cssText='font-size:11px;color:#888;margin-top:5px';mo.textContent=r[9];div.appendChild(mo);
+    var mo=document.createElement('div');
+    mo.style.cssText='font-size:11px;color:#555;margin-top:6px;padding:4px 8px;background:#f8f8f8;border-left:3px solid #ccc;border-radius:0 4px 4px 0;';
+    mo.textContent='📝 '+r[9];
+    div.appendChild(mo);
   }
   var urls=(r[10]||'').split('|').filter(function(u){return u.indexOf('https://drive.google.com/file/d/')===0;});
   var actions=document.createElement('div'); actions.className='rec-actions';
