@@ -2129,6 +2129,10 @@ function renderDashboard() {
 // MOLDS
 // ═══════════════════════════════════════════════
 function renderMolds() {
+  // スナップショット月が選択されていればその月末で原価を集計
+  const snapMonth = document.getElementById('snapshotMonth')?.value || '';
+  _costCutoff = snapMonth;
+
   const search = (document.getElementById('moldSearch')?.value||'').toLowerCase();
   const sts    = document.getElementById('moldStatusFilter')?.value || '';
   const cli    = document.getElementById('moldClientFilter')?.value || '';
@@ -2267,6 +2271,17 @@ function openMoldDetail(no) {
 // ═══════════════════════════════════════════════
 // MATERIALS
 // ═══════════════════════════════════════════════
+
+// 管理NOから品番/品名セルを生成（renderMaterialsで使用）
+function matPartNoCell(moldNo, fallbackPartNo) {
+  const m = findMoldByNo(moldNo);
+  if (m && (m.partNo || m.partName)) {
+    return '<div class="mono" style="font-size:12px;font-weight:700;color:var(--accent)">' + (m.partNo||'') + '</div>'
+         + '<div style="font-size:10px;color:var(--text2)">' + (m.partName||'') + '</div>';
+  }
+  return fallbackPartNo ? '<span class="mono">' + fallbackPartNo + '</span>' : '—';
+}
+
 function renderMaterials() {
   if (!DB.materials) DB.materials = {};
   const search  = (document.getElementById('matSearch')?.value||'').toLowerCase();
@@ -5720,15 +5735,6 @@ function editPurchase(key) {
 }
 
 
-// 材料費テーブル用：管理NOから品番/品名セルを生成
-function matPartNoCell(moldNo, fallbackPartNo) {
-  const m = findMoldByNo(moldNo);
-  if (m && (m.partNo || m.partName)) {
-    return '<div class="mono" style="font-size:12px;font-weight:700;color:var(--accent)">' + (m.partNo||'') + '</div>'
-         + '<div style="font-size:10px;color:var(--text2)">' + (m.partName||'') + '</div>';
-  }
-  return fallbackPartNo ? '<span class="mono">' + fallbackPartNo + '</span>' : '—';
-}
 
 // ── Close modal on overlay click ──
 document.querySelectorAll('.modal-overlay').forEach(el => {
