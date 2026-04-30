@@ -593,6 +593,11 @@
     #subpage-list { display:none !important; }
     #subpage-quote { display:block !important; }
   }
+
+/* number input のホイールスクロール無効化 */
+input[type=number] { -moz-appearance: textfield; }
+input[type=number]::-webkit-outer-spin-button,
+input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 </style>
 </head>
 <body>
@@ -621,8 +626,8 @@
   <button class="tab" id="nav-molds" onclick="showPage('molds')">金型一覧</button>
   <button class="tab" id="nav-quote" onclick="showPage('quote')">📋 材料見積・手配</button>
   <button class="tab" id="nav-materials" onclick="showPage('materials')">材料費</button>
-  <button class="tab" id="nav-outsource" onclick="showPage('outsource')">外注費</button>
   <button class="tab" id="nav-purchase" onclick="showPage('purchase')">購入品費</button>
+  <button class="tab" id="nav-outsource" onclick="showPage('outsource')">外注費</button>
   <button class="tab" id="nav-labor" onclick="showPage('labor')">加工費</button>
   <button class="tab" id="nav-import" onclick="showPage('import')">データ取込</button>
   <button class="tab" id="nav-settings" onclick="showPage('settings')">設定</button>
@@ -2276,31 +2281,21 @@ function renderMaterials() {
       <tbody>${entries.map(([k,r])=>`
         <tr>
           <td style="white-space:nowrap;padding:4px 4px">
-            <input type="checkbox" class="mat-check" data-key="${k}" onchange="matCheckChanged()" style="margin-right:3px">
-            <button class="copy-btn" onclick="copyRowTSV(this,[
-            '${(r.month||'').replace(/'/g,"\\'")}',
-            '${(r.moldNo||'').replace(/'/g,"\\'")}',
-            '${(r.partNo||'').replace(/'/g,"\\'")}',
-            '${(r.name||'').replace(/'/g,"\\'")}',
-            '${(r.material||'').replace(/'/g,"\\'")}',
-            '${(r.size||'').replace(/'/g,"\\'")}',
-            '${(r.finish||'').replace(/'/g,"\\'")}',
-            '${r.weight||''}',
-            '${r.amount||''}',
-            '${(r.supplier||'').replace(/'/g,"\\'")}'])">📋</button>
-            <button class="btn btn-danger btn-sm" style="padding:3px 6px;font-size:11px" onclick="matDeleteOne('${k}')">×</button>
-          </td>
-          <td class="mono">${r.month||''}</td>
-          <td class="mono">${r.moldNo||''}</td>
-          <td class="mono" style="font-size:11px">${r.partNo||''}</td>
-          <td>${r.name||''}</td>
-          <td class="mono">${r.material||''}</td>
-          <td class="mono" style="font-size:11px">${r.size||''}</td>
-          <td>${r.finish||''}</td>
-          <td class="mono">${r.weight||''}</td>
-          <td class="mono">¥${fmt(r.amount)}</td>
-          <td>${r.supplier||''}</td>
-        </tr>`).join('')}
+             <input type="checkbox" class="mat-check" data-key="${k}" onchange="matCheckChanged()" style="margin-right:3px">
+             <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px;margin-right:2px" onclick="editMaterial('${k}')">編集</button>
+             <button class="btn btn-danger btn-sm" style="padding:2px 5px;font-size:10px" onclick="matDeleteOne('${k}')">×</button>
+           </td>
+           <td class="mono">${r.month||''}</td>
+           <td class="mono" style="font-weight:600">${r.moldNo||''}</td>
+           <td>${(() => { const m=findMoldByNo(r.moldNo); return m ? '<div class=\"mono\" style=\"font-size:12px;font-weight:700;color:var(--accent)\">' + (m.partNo||'') + '</div><div style=\"font-size:10px;color:var(--text2)\">' + (m.partName||'') + '</div>' : (r.partNo ? '<span class=\"mono\">' + r.partNo + '</span>' : '—'); })()}</td>
+           <td style="font-size:11px">${r.name||''}</td>
+           <td class="mono">${r.material||''}</td>
+           <td class="mono" style="font-size:11px">${r.size||''}</td>
+           <td>${r.finish||''}</td>
+           <td class="mono">${r.weight||''}</td>
+           <td class="mono">¥${fmt(r.amount)}</td>
+           <td>${r.supplier||''}</td>
+         </tr>`).join('')}
       </tbody>
     </table>`;
 }
@@ -2345,7 +2340,8 @@ function renderOutsource() {
             '${r.qty||''}',
             '${r.unit||''}',
             '${r.total||''}'])">📋</button>
-            <button class="btn btn-danger btn-sm" style="padding:3px 6px;font-size:11px" onclick="outDeleteOne('${k}')">×</button>
+            <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px;margin-right:2px" onclick="editOutsource('${k}')">編集</button>
+            <button class="btn btn-danger btn-sm" style="padding:2px 5px;font-size:10px" onclick="outDeleteOne('${k}')">×</button>
           </td>
           <td class="mono">${r.month||''}</td>
           <td>
@@ -2412,7 +2408,8 @@ function renderPurchase() {
             '${r.qty||''}',
             '${r.unit||''}',
             '${r.total||''}'])">📋</button>
-            <button class="btn btn-danger btn-sm" style="padding:3px 6px;font-size:11px" onclick="purDeleteOne('${k}')">×</button>
+            <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px;margin-right:2px" onclick="editPurchase('${k}')">編集</button>
+            <button class="btn btn-danger btn-sm" style="padding:2px 5px;font-size:10px" onclick="purDeleteOne('${k}')">×</button>
           </td>
           <td class="mono">${r.month||''}</td>
           <td class="mono">${r.moldNo||''}</td>
@@ -5052,10 +5049,14 @@ async function saveSnapshot() {
     if (!confirm(label + ' のスナップショットは既に存在します。上書きしますか？')) return;
   }
 
-  // 月文字列比較用（"2026-04" 以下かどうか）
+  // 月文字列比較用（cutoffStr以下の月のデータのみ）
+  // month フィールドが空・未設定の場合は含める
   const inRange = (r) => {
-    const m = (r.month || '').slice(0, 7);
-    return !m || m <= cutoffStr;
+    const raw = r.month || r.orderDate || '';
+    if (!raw) return true;  // 月不明は含める
+    // "2026-03" or "2026/03" 形式を正規化
+    const m = raw.replace(/\//g, '-').slice(0, 7);
+    return m <= cutoffStr;
   };
 
   // 締め日以前のデータのみで原価集計
@@ -5580,6 +5581,37 @@ async function loadSharedConfig() {
   } catch(e) {
     toast('読込失敗: ' + e.message, 'error');
   }
+}
+
+
+// 管理NOから金型データを取得
+function findMoldByNo(moldNo) {
+  if (!moldNo) return null;
+  // 完全一致を試みる
+  let mold = Object.values(DB.molds||{}).find(m => m.no === moldNo);
+  if (mold) return mold;
+  // 前方一致（材料管理NOから金型NOを逆引き）
+  const sorted = Object.values(DB.molds||{})
+    .filter(m => m.no && moldNo.startsWith(m.no))
+    .sort((a,b) => b.no.length - a.no.length);
+  return sorted[0] || null;
+}
+
+// モーダルフォームのリセット
+function resetModal(prefix) {
+  const ids = [
+    'moldNo','processNo','partNo','partNoDisp','moldInfo',
+    'material','size','finish','weight','amount','supplier',
+    'process','detail','qty','unit','total','name','month'
+  ];
+  ids.forEach(id => {
+    const el = document.getElementById(prefix + '_' + id);
+    if (!el) return;
+    if (el.type === 'hidden') return;
+    if (el.tagName === 'DIV') { el.innerHTML = ''; el.style.display = 'none'; return; }
+    el.value = '';
+    el.classList.remove('filled');
+  });
 }
 
 // ── Close modal on overlay click ──
