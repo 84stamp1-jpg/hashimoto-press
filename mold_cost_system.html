@@ -718,7 +718,8 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
           <div style="display:flex;align-items:center;gap:6px;">
             <label style="font-size:11px;color:var(--text2);font-weight:600;">対象年月：</label>
             <input type="month" class="form-input" id="snapshotMonth"
-              style="width:140px;padding:5px 8px;font-size:12px;">
+              style="width:140px;padding:5px 8px;font-size:12px;"
+              onchange="renderMolds()">
             <button class="btn btn-primary btn-sm" onclick="saveSnapshot()">📸 スナップショットを保存</button>
           </div>
         </div>
@@ -1969,6 +1970,12 @@ function pageLabel(n) {
 }
 
 function refreshAll() {
+  // DB null ガード
+  if (!DB.materials) DB.materials = {};
+  if (!DB.outsource) DB.outsource = {};
+  if (!DB.purchase)  DB.purchase  = {};
+  if (!DB.labor)     DB.labor     = {};
+  if (!DB.snapshots) DB.snapshots = {};
   const active = document.querySelector('.page.active');
   if (!active) return;
   const id = active.id.replace('page-', '');
@@ -1978,17 +1985,26 @@ function refreshAll() {
 // ═══════════════════════════════════════════════
 // COST HELPERS
 // ═══════════════════════════════════════════════
-function getCosts(moldNo) {
-  // 完全一致 または 前方一致（材料管理NO が 金型NO で始まる）
+// 月のカットオフ文字列（金型一覧でスナップショット月選択時に設定）
+let _costCutoff = '';
+
+function getCosts(moldNo, cutoff) {
+  const co = cutoff || _costCutoff || '';
   const mold   = Object.values(DB.molds||{}).find(m => m.no === moldNo);
   const partNo = mold?.partNo || '';
-  const match  = r =>
-    r.moldNo === moldNo ||                    // 完全一致
-    (r.moldNo||'').startsWith(moldNo) ||       // 前方一致（71-A101 → 71-A）
-    (partNo && r.partNo === partNo);           // 品番一致
+  const match  = r => {
+    const moldMatch = r.moldNo === moldNo || (r.moldNo||'').startsWith(moldNo) || (partNo && r.partNo === partNo);
+    if (!moldMatch) return false;
+    if (!co) return true;
+    // 月フィルタ
+    const raw = r.month || r.orderDate || '';
+    if (!raw) return true;
+    const m = String(raw).replace(/\//g,'-').slice(0,7);
+    return !m || m.length < 7 || m <= co;
+  };
   const mat   = Object.values(DB.materials).filter(match).reduce((s,r) => s + (r.amount||0), 0);
-  const out   = Object.values(DB.outsource).filter(match).reduce((s,r) => s + (r.total||0), 0);
-  const pur   = Object.values(DB.purchase ).filter(match).reduce((s,r) => s + (r.total||0), 0);
+  const out   = Object.values(DB.outsource).filter(match).reduce((s,r) => s + (r.total||0),  0);
+  const pur   = Object.values(DB.purchase ).filter(match).reduce((s,r) => s + (r.total||0),  0);
   const lab   = Object.values(DB.labor    ).filter(match).reduce((s,r) => s + (r.amount||0), 0);
   const total = mat + out + pur + lab;
   return { mat, out, pur, lab, total };
