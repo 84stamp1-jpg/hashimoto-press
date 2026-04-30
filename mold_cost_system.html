@@ -1813,15 +1813,14 @@ function initFirebase() {
       if (window._fbWriting) return;  // 書き込み中は上書きしない
       const data = snap.val() || {};
 
-      // ローカルDBとFirebaseデータをマージ（件数が多い方を優先）
+      // Firebaseを正とする（Firebaseにデータがあればそれを使う）
       const merge = (fbData, localData) => {
         const fb = fbData || {};
         const lc = localData || {};
-        // Firebaseの件数がローカルより少ない場合はローカルを優先
         const fbCount = Object.keys(fb).length;
-        const lcCount = Object.keys(lc).length;
-        if (lcCount > fbCount) return lc;
-        return Object.assign({}, lc, fb);
+        // Firebaseにデータがあればそれを使う。なければローカル
+        if (fbCount > 0) return Object.assign({}, lc, fb);
+        return lc;
       };
 
       DB.molds         = merge(data.molds,         DB.molds);
@@ -2253,6 +2252,7 @@ function openMoldDetail(no) {
 // MATERIALS
 // ═══════════════════════════════════════════════
 function renderMaterials() {
+  if (!DB.materials) DB.materials = {};
   const search  = (document.getElementById('matSearch')?.value||'').toLowerCase();
   const moldFil = document.getElementById('matMoldFilter')?.value || '';
   const moldNos = [...new Set(Object.values(DB.materials).map(r=>r.moldNo).filter(Boolean))].sort();
@@ -5059,12 +5059,15 @@ async function saveSnapshot() {
     if (!confirm(label + ' のスナップショットは既に存在します。上書きしますか？')) return;
   }
 
-  // 月文字列比較（cutoffStr以下のみ、空は含める）
+  // 月文字列比較（cutoffStr以下のみ）
+  // month未設定データはcutoffStr当月として扱う（含める）
+  const parseMonth = (raw) => {
+    if (!raw) return '';
+    return String(raw).replace(/\//g,'-').replace(/[年月日]/g,'').trim().slice(0,7);
+  };
   const inRange = (r) => {
-    const raw = r.month || r.orderDate || '';
-    if (!raw) return true;
-    const m = String(raw).replace(/[/年]/g,'-').replace(/[月日]/g,'').trim().slice(0,7);
-    if (!m || m.length < 7) return true;
+    const m = parseMonth(r.month || r.orderDate || '');
+    if (!m || m.length < 7) return true;  // 月不明は含める
     return m <= cutoffStr;
   };
 
