@@ -1379,8 +1379,8 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="modal-body">
       <div class="form-grid">
         <div class="form-group">
-          <label class="form-label">仕入月</label>
-          <input class="form-input" id="matf_month" type="month">
+          <label class="form-label">仕入日</label>
+          <input class="form-input" id="matf_month" type="date">
         </div>
         <div class="form-group" style="grid-column:1/-1">
           <label class="form-label">金型NO.</label>
@@ -1458,8 +1458,8 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="modal-body">
       <div class="form-grid">
         <div class="form-group">
-          <label class="form-label">仕入月</label>
-          <input class="form-input" id="outf_month" type="month">
+          <label class="form-label">仕入日</label>
+          <input class="form-input" id="outf_month" type="date">
         </div>
         <div class="form-group" style="grid-column:1/-1">
           <label class="form-label">金型NO.</label>
@@ -1535,8 +1535,8 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="modal-body">
       <div class="form-grid">
         <div class="form-group">
-          <label class="form-label">仕入月</label>
-          <input class="form-input" id="purf_month" type="month">
+          <label class="form-label">仕入日</label>
+          <input class="form-input" id="purf_month" type="date">
         </div>
         <div class="form-group">
           <label class="form-label">金型NO.</label>
@@ -1563,7 +1563,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
             style="background:var(--bg3);color:var(--text2);">
         </div>
         <div class="form-group" style="grid-column:1/-1">
-          <label class="form-label">品名</label>
+          <label class="form-label">商品名</label>
           <input class="form-input" id="purf_name" placeholder="例: 丸線コイルスプリング [WWW10-30]">
         </div>
         <div class="form-group">
@@ -2170,7 +2170,7 @@ function renderMolds() {
         <tr>
           <th>管理NO.</th><th>得意先</th><th>品番 / 品名</th>
           <th>ステータス</th><th>見積金額</th>
-          <th>材料費</th><th>外注費</th><th>購入品費</th><th>加工費</th><th>合計原価</th><th>進捗</th><th></th>
+          <th>材料費</th><th>購入品費</th><th>外注費</th><th>加工費</th><th>合計原価</th><th>進捗</th><th></th>
         </tr>
       </thead>
       <tbody>
@@ -2186,8 +2186,8 @@ function renderMolds() {
             <td>${statusBadge(m.status)}</td>
             <td class="mono">¥${fmt(m.estimate)}</td>
             <td class="mono">¥${fmt(c.mat)}</td>
-            <td class="mono">¥${fmt(c.out)}</td>
             <td class="mono">¥${fmt(c.pur)}</td>
+            <td class="mono">¥${fmt(c.out)}</td>
             <td class="mono">¥${fmt(c.lab)}</td>
             <td class="mono"><b>¥${fmt(c.total)}</b></td>
             <td>${progressHTML(c.total, m.estimate)}</td>
@@ -2306,7 +2306,7 @@ function renderMaterials() {
     <table>
       <thead><tr>
         <th style="width:50px"></th>
-        <th>仕入月</th><th>管理NO.</th><th>品番</th><th>品名</th>
+        <th>仕入日</th><th>管理NO.</th><th>品番 / 品名</th>
         <th>材質</th><th>サイズ</th><th>仕上</th><th>重量(kg)</th><th>仕入金額</th><th>手配先</th>
       </tr></thead>
       <tbody>${entries.map(([k,r])=>`
@@ -2337,7 +2337,7 @@ function renderMaterials() {
 function renderOutsource() {
   const search = (document.getElementById('outSearch')?.value||'').toLowerCase();
   const month  = document.getElementById('outMonthFilter')?.value || '';
-  const months = [...new Set(Object.values(DB.outsource).map(r=>r.month).filter(Boolean))].sort().reverse();
+  const months = [...new Set(Object.values(DB.outsource).map(r=>(r.month||'').slice(0,7)).filter(Boolean))].sort().reverse();
   const mSel = document.getElementById('outMonthFilter');
   const mCur = mSel?.value;
   if (mSel) mSel.innerHTML = '<option value="">全月</option>' + months.map(m=>`<option value="${m}"${m===mCur?' selected':''}>${m}</option>`).join('');
@@ -2347,14 +2347,14 @@ function renderOutsource() {
     (r.supplier||'').toLowerCase().includes(search) ||
     (r.moldNo||'').toLowerCase().includes(search)
   );
-  if (month) entries = entries.filter(([,r]) => r.month === month);
+  if (month) entries = entries.filter(([,r]) => (r.month||'').slice(0,7) === month);
   document.getElementById('outCount').textContent = entries.length + '件 / ¥' + fmt(entries.reduce((s,[,r])=>s+(r.total||0),0));
   if (!entries.length) { document.getElementById('outTableBody').innerHTML = '<div class="empty"><div class="empty-icon">🏭</div>データなし</div>'; return; }
   document.getElementById('outTableBody').innerHTML = `
     <table>
       <thead><tr>
         <th style="width:50px"></th>
-        <th>仕入月</th><th>管理NO.</th><th>品番</th><th>仕入先</th>
+        <th>仕入日</th><th>管理NO.</th><th>品番 / 品名</th><th>内容</th><th>仕入先</th>
         <th>数量</th><th>単価</th><th>合計金額</th>
       </tr></thead>
       <tbody>${entries.map(([k,r])=>`
@@ -2380,6 +2380,10 @@ function renderOutsource() {
             ${r.process ? '<div style="font-size:10px;color:var(--text3)">' + r.process + '</div>' : ''}
           </td>
           <td>${matPartNoCell(r.moldNo, r.partNo)}</td>
+          <td style="font-size:11px;max-width:150px">
+            ${r.detail ? '<div>' + r.detail + '</div>' : ''}
+            ${r.process ? '<div style="color:var(--text3);font-size:10px">' + r.process + '</div>' : ''}
+          </td>
           <td style="font-size:12px">${r.supplier||''}</td>
           <td class="mono">${r.qty||''}</td>
           <td class="mono">¥${fmt(r.unit)}</td>
@@ -2418,8 +2422,8 @@ function renderPurchase() {
       <thead><tr>
         <th style="width:32px;text-align:center">✓</th>
         <th style="width:50px"></th>
-        <th>仕入月</th><th>管理NO.</th><th>品番</th><th>品名</th>
-        <th>仕入先</th><th>数量</th><th>単価</th><th>合計金額</th>
+        <th>仕入日</th><th>管理NO.</th><th>品番 / 品名</th>
+        <th>商品名</th><th>仕入先</th><th>数量</th><th>単価</th><th>合計金額</th>
       </tr></thead>
       <tbody>${entries.map(([k,r])=>`
         <tr>
@@ -2458,7 +2462,7 @@ function renderPurchase() {
 function renderLabor() {
   const search = (document.getElementById('labSearch')?.value||'').toLowerCase();
   const month  = document.getElementById('labMonthFilter')?.value || '';
-  const months = [...new Set(Object.values(DB.labor).map(r=>r.month).filter(Boolean))].sort().reverse();
+  const months = [...new Set(Object.values(DB.labor).map(r=>(r.month||'').slice(0,7)).filter(Boolean))].sort().reverse();
   const mSel = document.getElementById('labMonthFilter');
   const mCur = mSel?.value;
   if (mSel) mSel.innerHTML = '<option value="">全月</option>' + months.map(m=>`<option value="${m}"${m===mCur?' selected':''}>${m}</option>`).join('');
@@ -2469,7 +2473,7 @@ function renderLabor() {
     (r.partNo||'').toLowerCase().includes(search) ||
     (r.worker||'').toLowerCase().includes(search)
   );
-  if (month) entries = entries.filter(([,r]) => r.month === month);
+  if (month) entries = entries.filter(([,r]) => (r.month||'').slice(0,7) === month);
   const labTotal  = entries.reduce((s,[,r])=>s+(r.amount||0),0);
   const labBudget = entries.reduce((s,[,r])=>s+(r.budget||0),0);
   document.getElementById('labCount').textContent = entries.length + '件　加工予算: ¥' + fmt(labBudget) + '　加工実績: ¥' + fmt(labTotal);
@@ -5261,7 +5265,6 @@ function exportSnapshotPdf() {
     const pctColor = pctVal >= 100 ? '#dc2626' : pctVal >= 80 ? '#d97706' : '#16a34a';
     return `<tr style="border-bottom:1px solid #e5e7eb;${i%2===1?'background:#f9fafb':''}">
       <td style="padding:6px 5px;font-family:monospace;font-weight:600;white-space:nowrap;width:60px;max-width:60px;font-size:10pt">${r.no}</td>
-      <td style="padding:6px 6px;font-size:9.5pt;width:100px;max-width:100px;overflow:hidden">${r.client}</td>
       <td style="padding:6px 8px;">
         <div style="font-size:11.5pt;font-weight:700;font-family:monospace;letter-spacing:0.3px">${r.partNo}</div>
         <div style="font-size:10pt;color:#444;margin-top:1px">${r.partName}</div>
@@ -5319,7 +5322,6 @@ function exportSnapshotPdf() {
       <table>
         <thead><tr>
           <th style="white-space:nowrap;width:60px">管理NO.</th>
-          <th style="width:100px">客先</th>
           <th>品番 / 品名</th>
           <th style="white-space:nowrap">状態</th>
           <th style="text-align:right;white-space:nowrap">見積金額</th>
@@ -5333,7 +5335,7 @@ function exportSnapshotPdf() {
         </tr></thead>
         <tbody>${tableRows}</tbody>
         <tfoot><tr class="tfoot">
-          <td colspan="4">合 計（${rows.length}件）</td>
+          <td colspan="3">合 計（${rows.length}件）</td>
           <td style="text-align:right">¥${fmt(totEst)}</td>
           <td style="text-align:right">¥${fmt(totMat)}</td>
           <td style="text-align:right">¥${fmt(totOut)}</td>
