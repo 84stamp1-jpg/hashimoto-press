@@ -2281,21 +2281,21 @@ function renderMaterials() {
       <tbody>${entries.map(([k,r])=>`
         <tr>
           <td style="white-space:nowrap;padding:4px 4px">
-             <input type="checkbox" class="mat-check" data-key="${k}" onchange="matCheckChanged()" style="margin-right:3px">
-             <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px;margin-right:2px" onclick="editMaterial('${k}')">編集</button>
-             <button class="btn btn-danger btn-sm" style="padding:2px 5px;font-size:10px" onclick="matDeleteOne('${k}')">×</button>
-           </td>
-           <td class="mono">${r.month||''}</td>
-           <td class="mono" style="font-weight:600">${r.moldNo||''}</td>
-           <td>${(() => { const m=findMoldByNo(r.moldNo); return m ? '<div class=\"mono\" style=\"font-size:12px;font-weight:700;color:var(--accent)\">' + (m.partNo||'') + '</div><div style=\"font-size:10px;color:var(--text2)\">' + (m.partName||'') + '</div>' : (r.partNo ? '<span class=\"mono\">' + r.partNo + '</span>' : '—'); })()}</td>
-           <td style="font-size:11px">${r.name||''}</td>
-           <td class="mono">${r.material||''}</td>
-           <td class="mono" style="font-size:11px">${r.size||''}</td>
-           <td>${r.finish||''}</td>
-           <td class="mono">${r.weight||''}</td>
-           <td class="mono">¥${fmt(r.amount)}</td>
-           <td>${r.supplier||''}</td>
-         </tr>`).join('')}
+            <input type="checkbox" class="mat-check" data-key="${k}" onchange="matCheckChanged()" style="margin-right:3px">
+            <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px;margin-right:2px" onclick="editMaterial('${k}')">編集</button>
+            <button class="btn btn-danger btn-sm" style="padding:2px 5px;font-size:10px" onclick="matDeleteOne('${k}')">×</button>
+          </td>
+          <td class="mono">${r.month||''}</td>
+          <td class="mono" style="font-weight:600">${r.moldNo||''}</td>
+          <td>${matPartNoCell(r.moldNo, r.partNo)}</td>
+          <td style="font-size:11px">${r.name||''}</td>
+          <td class="mono">${r.material||''}</td>
+          <td class="mono" style="font-size:11px">${r.size||''}</td>
+          <td>${r.finish||''}</td>
+          <td class="mono">${r.weight||''}</td>
+          <td class="mono"><b>¥${fmt(r.amount)}</b></td>
+          <td style="font-size:11px">${r.supplier||''}</td>
+        </tr>`).join('')}
       </tbody>
     </table>`;
 }
@@ -5080,6 +5080,10 @@ async function saveSnapshot() {
     return { mat, out, pur, lab, total: mat + out + pur + lab };
   };
 
+  // デバッグ：材料費の月フィールドを確認
+  const matSample = Object.values(DB.materials||{}).slice(0,3);
+  console.log('[snapshot] cutoffStr:', cutoffStr, '材料費サンプル:', matSample.map(r=>({month:r.month, moldNo:r.moldNo, amount:r.amount})));
+
   // 全金型（検収済除く）
   const rows = Object.values(DB.molds||{}).filter(m => m.status !== '検収済').map(m => {
     const c = getCostsAtDate(m.no);
@@ -5694,6 +5698,17 @@ function editPurchase(key) {
   hid.value = key;
   if (r.moldNo) showMoldInfo('purf', r.moldNo);
   document.getElementById('purModal').classList.add('open');
+}
+
+
+// 材料費テーブル用：管理NOから品番/品名セルを生成
+function matPartNoCell(moldNo, fallbackPartNo) {
+  const m = findMoldByNo(moldNo);
+  if (m && (m.partNo || m.partName)) {
+    return '<div class="mono" style="font-size:12px;font-weight:700;color:var(--accent)">' + (m.partNo||'') + '</div>'
+         + '<div style="font-size:10px;color:var(--text2)">' + (m.partName||'') + '</div>';
+  }
+  return fallbackPartNo ? '<span class="mono">' + fallbackPartNo + '</span>' : '—';
 }
 
 // ── Close modal on overlay click ──
