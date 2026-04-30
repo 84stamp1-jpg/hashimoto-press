@@ -2769,6 +2769,8 @@ async function saveMold() {
 
 function openMatModal() {
   initMoldComboField('matf_moldNo','matf_partNo','matf_partNoDisp');
+  const hid = document.getElementById('matf_editKey');
+  if (hid) hid.value = '';
   document.getElementById('matModal').classList.add('open');
 }
 async function saveMaterial() {
@@ -2785,15 +2787,19 @@ async function saveMaterial() {
     supplier:document.getElementById('matf_supplier').value.trim(),
     note:document.getElementById('matf_note').value.trim()
   };
-  DB.materials['mat_'+Date.now()] = data;
+  const editKey = document.getElementById('matf_editKey')?.value;
+  const key = editKey || 'mat_' + Date.now();
+  DB.materials[key] = data;
   await writeToFirebase('materials', DB.materials);
   closeModal('matModal');
-  toast('材料費を保存しました', 'success');
+  toast(editKey ? '材料費を更新しました' : '材料費を保存しました', 'success');
   renderMaterials();
 }
 
 function openOutModal() {
   initMoldComboField('outf_moldNo','outf_partNo','outf_partNoDisp');
+  const hid = document.getElementById('outf_editKey');
+  if (hid) hid.value = '';
   document.getElementById('outModal').classList.add('open');
 }
 function calcOutTotal() {
@@ -2814,10 +2820,12 @@ async function saveOutsource() {
     total:parseFloat(document.getElementById('outf_total').value)||0,
     note:document.getElementById('outf_note').value.trim()
   };
-  DB.outsource['out_'+Date.now()] = data;
+  const editKeyOut = document.getElementById('outf_editKey')?.value;
+  const keyOut = editKeyOut || 'out_' + Date.now();
+  DB.outsource[keyOut] = data;
   await writeToFirebase('outsource', DB.outsource);
   closeModal('outModal');
-  toast('外注費を保存しました', 'success');
+  toast(editKeyOut ? '外注費を更新しました' : '外注費を保存しました', 'success');
   renderOutsource();
 }
 
@@ -2842,10 +2850,12 @@ async function savePurchase() {
     total:parseFloat(document.getElementById('purf_total').value)||0,
     note:document.getElementById('purf_note').value.trim()
   };
-  DB.purchase['pur_'+Date.now()] = data;
+  const editKeyPur = document.getElementById('purf_editKey')?.value;
+  const keyPur = editKeyPur || 'pur_' + Date.now();
+  DB.purchase[keyPur] = data;
   await writeToFirebase('purchase', DB.purchase);
   closeModal('purModal');
-  toast('購入品費を保存しました', 'success');
+  toast(editKeyPur ? '購入品費を更新しました' : '購入品費を保存しました', 'success');
   renderPurchase();
 }
 
@@ -5049,13 +5059,12 @@ async function saveSnapshot() {
     if (!confirm(label + ' のスナップショットは既に存在します。上書きしますか？')) return;
   }
 
-  // 月文字列比較用（cutoffStr以下の月のデータのみ）
-  // month フィールドが空・未設定の場合は含める
+  // 月文字列比較（cutoffStr以下のみ、空は含める）
   const inRange = (r) => {
     const raw = r.month || r.orderDate || '';
-    if (!raw) return true;  // 月不明は含める
-    // "2026-03" or "2026/03" 形式を正規化
-    const m = raw.replace(/\//g, '-').slice(0, 7);
+    if (!raw) return true;
+    const m = String(raw).replace(/[/年]/g,'-').replace(/[月日]/g,'').trim().slice(0,7);
+    if (!m || m.length < 7) return true;
     return m <= cutoffStr;
   };
 
@@ -5612,6 +5621,79 @@ function resetModal(prefix) {
     el.value = '';
     el.classList.remove('filled');
   });
+}
+
+
+// ═══════════════════════════════════════════════
+// 材料費・外注費・購入品費 編集
+// ═══════════════════════════════════════════════
+
+function editMaterial(key) {
+  const r = DB.materials?.[key];
+  if (!r) { toast('データが見つかりません', 'error'); return; }
+  // フォームリセット
+  initMoldComboField('matf_moldNo','matf_partNo','matf_partNoDisp');
+  // 値を設定
+  const set = (id, v) => { const el = document.getElementById(id); if(el) el.value = v||''; };
+  set('matf_month',    r.month);
+  set('matf_moldNo',   r.moldNo);
+  set('matf_partNo',   r.partNo);
+  set('matf_name',     r.name);
+  set('matf_material', r.material);
+  set('matf_size',     r.size);
+  set('matf_finish',   r.finish);
+  set('matf_weight',   r.weight);
+  set('matf_amount',   r.amount);
+  set('matf_supplier', r.supplier);
+  set('matf_note',     r.note);
+  // 編集キーを保存
+  let hid = document.getElementById('matf_editKey');
+  if (!hid) { hid = document.createElement('input'); hid.type='hidden'; hid.id='matf_editKey'; document.getElementById('matModal').appendChild(hid); }
+  hid.value = key;
+  // 金型情報表示
+  if (r.moldNo) showMoldInfo('matf', r.moldNo);
+  document.getElementById('matModal').classList.add('open');
+}
+
+function editOutsource(key) {
+  const r = DB.outsource?.[key];
+  if (!r) { toast('データが見つかりません', 'error'); return; }
+  initMoldComboField('outf_moldNo','outf_partNo','outf_partNoDisp');
+  const set = (id, v) => { const el = document.getElementById(id); if(el) el.value = v||''; };
+  set('outf_month',    r.month);
+  set('outf_moldNo',   r.moldNo);
+  set('outf_partNo',   r.partNo);
+  set('outf_supplier', r.supplier);
+  set('outf_process',  r.process);
+  set('outf_detail',   r.detail);
+  set('outf_qty',      r.qty);
+  set('outf_unit',     r.unit);
+  set('outf_total',    r.total);
+  let hid = document.getElementById('outf_editKey');
+  if (!hid) { hid = document.createElement('input'); hid.type='hidden'; hid.id='outf_editKey'; document.getElementById('outModal').appendChild(hid); }
+  hid.value = key;
+  if (r.moldNo) showMoldInfo('outf', r.moldNo);
+  document.getElementById('outModal').classList.add('open');
+}
+
+function editPurchase(key) {
+  const r = DB.purchase?.[key];
+  if (!r) { toast('データが見つかりません', 'error'); return; }
+  initMoldComboField('purf_moldNo','purf_partNo','purf_partNoDisp');
+  const set = (id, v) => { const el = document.getElementById(id); if(el) el.value = v||''; };
+  set('purf_month',    r.month);
+  set('purf_moldNo',   r.moldNo);
+  set('purf_partNo',   r.partNo);
+  set('purf_name',     r.name);
+  set('purf_supplier', r.supplier);
+  set('purf_qty',      r.qty);
+  set('purf_unit',     r.unit);
+  set('purf_total',    r.total);
+  let hid = document.getElementById('purf_editKey');
+  if (!hid) { hid = document.createElement('input'); hid.type='hidden'; hid.id='purf_editKey'; document.getElementById('purModal').appendChild(hid); }
+  hid.value = key;
+  if (r.moldNo) showMoldInfo('purf', r.moldNo);
+  document.getElementById('purModal').classList.add('open');
 }
 
 // ── Close modal on overlay click ──
