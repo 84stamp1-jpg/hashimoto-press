@@ -2319,7 +2319,16 @@ function renderMaterials() {
           <td class="mono">${r.material||''}</td>
           <td class="mono" style="font-size:11px">${r.size||''}</td>
           <td>${r.finish||''}</td>
-          <td class="mono">${r.weight||''}</td>
+          <td class="mono" style="font-size:11px">
+            ${r.weight ? (() => {
+              const unit = parseFloat(r.weight)||0;
+              const qty  = parseFloat(r.qty)||1;
+              const total= unit * qty;
+              if (qty <= 1) return unit.toFixed(2) + ' kg';
+              return '<div>' + unit.toFixed(2) + ' kg</div>' +
+                     '<div style="color:var(--text3);font-size:10px">計 ' + total.toFixed(2) + ' kg</div>';
+            })() : '—'}
+          </td>
           <td class="mono"><b>¥${fmt(r.amount)}</b></td>
           <td style="font-size:11px">${r.supplier||''}</td>
         </tr>`).join('')}
@@ -5951,24 +5960,43 @@ async function confirmCheckedItems(reqKey) {
 // ③ 注文書作成
 // ══════════════════════════════════════════════
 
+let _showHiddenOrders = false;
+
 function renderOrderPage() {
   const wrap = document.getElementById('orderPageContent');
   if (!wrap) return;
 
   // 発注済みアイテムを持つ見積依頼を収集
-  const reqs = Object.entries(DB.quoteRequests||{}).filter(([,rec]) =>
+  const allReqs = Object.entries(DB.quoteRequests||{}).filter(([,rec]) =>
     rec.orderedItems && Object.values(rec.orderedItems).some(v=>v)
   ).sort(([,a],[,b]) => (b.date||'').localeCompare(a.date||''));
 
-  if (!reqs.length) {
+  if (!allReqs.length) {
     wrap.innerHTML = '<div class="empty"><div class="empty-icon">📋</div>②見積比較で発注確定した案件が表示されます</div>';
     return;
   }
 
+  // 非表示件数を確認
+  const hiddenCount = allReqs.reduce((s,[,rec]) => {
+    const printed = rec.printedOrders || {};
+    const sups = [...new Set((rec.items||[]).map((_,i) => (rec.itemDecided||{})[i]||rec.decided||'').filter(Boolean))];
+    return s + sups.filter(sid => printed[sid]).length;
+  }, 0);
+
+  const reqs = allReqs;
+
   const suppliers = getSuppliers();
   const supMap    = Object.fromEntries(suppliers.map(s=>[s.id,s]));
 
-  wrap.innerHTML = reqs.map(([key,rec]) => {
+  // ヘッダーボタン
+  const headerHtml = hiddenCount > 0 ? `
+    <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+      <button class="btn btn-secondary btn-sm" onclick="_showHiddenOrders=!_showHiddenOrders;renderOrderPage()">
+        ${_showHiddenOrders ? '非表示の案件を隠す' : '非表示の案件を表示 (' + hiddenCount + '件)'}
+      </button>
+    </div>` : '';
+
+  wrap.innerHTML = headerHtml + reqs.map(([key,rec]) => {
     const ordered = rec.orderedItems || {};
     const items   = (rec.items||[]).filter((_,i) => ordered[i]);
     // 仕入先ごとにグループ化
@@ -5982,7 +6010,10 @@ function renderOrderPage() {
       bySupplier[sid].push({...item, idx:i, supplierId:sid, decidedPrice: q.unitPrice||''});
     });
 
-    return Object.entries(bySupplier).map(([sid, sitems]) => {
+    // 非表示設定に応じてフィルタ
+    const printed = rec.printedOrders || {};
+    return Object.entries(bySupplier).filter(([sid]) => _showHiddenOrders || !printed[sid]).map(([sid, sitems]) => {
+      const isHidden = printed[sid];
       const sup = supMap[sid] || {name: sid||'未設定', person:'', fax:'', email:''};
       const blockId = 'order_' + key + '_' + sid;
 
@@ -6013,8 +6044,13 @@ function renderOrderPage() {
             <span style="color:var(--text3);font-size:11px;margin-left:8px">${rec.date||''}</span>
             <span style="font-size:12px;margin-left:12px;font-weight:600">${sup.name}</span>
             ${sup.person ? `<span style="color:var(--text3);font-size:11px;margin-left:6px">${sup.person}</span>` : ''}
+            ${isHidden ? '<span style="background:#f59e0b;color:#fff;font-size:10px;padding:2px 6px;border-radius:4px;margin-left:8px">非表示中</span>' : ''}
           </div>
-          <div class="table-actions">
+          <div class="table-actions" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer;padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:var(--bg);">
+              <input type="checkbox" onchange="toggleOrderHide('${key}','${sid}',this.checked)">
+              <span>この注文書を非表示にする</span>
+            </label>
             <button class="btn btn-primary btn-sm" onclick="printOrder('${key}','${sid}')">🖨 注文書を印刷</button>
           </div>
         </div>
@@ -6066,7 +6102,7 @@ async function updateOrderPrice(reqKey, itemIdx, supId, value) {
 }
 
 // 注文書印刷
-function printOrder(reqKey, supId) {
+async function printOrder(reqKey, supId) {
   const rec = DB.quoteRequests?.[reqKey];
   if (!rec) return;
   const suppliers = getSuppliers();
@@ -6135,7 +6171,7 @@ function printOrder(reqKey, supId) {
         </div>
       </div>
       <div style="font-size:16pt;font-weight:700;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:12px">
-        ${sup.name} ${sup.person} 御中
+        ${sup.name} ${sup.person} 様
         ${sup.fax ? `<span style="font-size:12pt;font-weight:400;margin-left:16px">FAX: ${sup.fax}</span>` : ''}
       </div>
       <div style="font-size:13pt;margin-bottom:12px">
@@ -6144,17 +6180,17 @@ function printOrder(reqKey, supId) {
       </div>
       <table>
         <thead><tr>
-          <th style="width:24px">No.</th>
-          <th style="width:68px">管理NO.</th>
-          <th>名　称</th>
-          <th style="width:28px">数量</th>
-          <th style="width:52px">材質</th>
-          <th style="width:44px">長さ(X)</th>
-          <th style="width:44px">幅(Y)</th>
-          <th style="width:44px">材厚(Z)</th>
-          <th style="width:32px">仕上</th>
-          <th style="width:72px">単価(円)</th>
-          <th style="width:80px">発注金額</th>
+          <th style="width:22px">No.</th>
+          <th style="width:66px">管理NO.</th>
+          <th style="width:120px">名　称</th>
+          <th style="width:26px">数量</th>
+          <th style="width:60px">材質</th>
+          <th style="width:52px">長さ(X)</th>
+          <th style="width:52px">幅(Y)</th>
+          <th style="width:52px">材厚(Z)</th>
+          <th style="width:30px">仕上</th>
+          <th style="width:82px">単価(円)</th>
+          <th style="width:90px">発注金額</th>
         </tr></thead>
         <tbody>${itemRows}</tbody>
         <tfoot><tr>
@@ -6167,6 +6203,27 @@ function printOrder(reqKey, supId) {
       </div>
     </div></body></html>`);
   win.document.close();
+}
+
+
+// 注文書を非表示にする／元に戻す
+async function toggleOrderHide(reqKey, supId, hide) {
+  if (hide) {
+    if (!confirm('この注文書を非表示にします。\n再表示するには「非表示を表示」ボタンから確認できます。\nよろしいですか？')) {
+      // チェックを戻す
+      renderOrderPage();
+      return;
+    }
+  }
+  if (!DB.quoteRequests?.[reqKey]) return;
+  if (!DB.quoteRequests[reqKey].printedOrders) DB.quoteRequests[reqKey].printedOrders = {};
+  if (hide) {
+    DB.quoteRequests[reqKey].printedOrders[supId] = true;
+  } else {
+    delete DB.quoteRequests[reqKey].printedOrders[supId];
+  }
+  await writeToFirebase('quoteRequests', DB.quoteRequests);
+  renderOrderPage();
 }
 
 // ── Close modal on overlay click ──
