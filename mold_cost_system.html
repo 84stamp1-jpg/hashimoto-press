@@ -3117,7 +3117,13 @@ function renderQuoteItemTable() {
         const fxMark = r.fX ? ' <span style="color:var(--green);font-size:9px;font-weight:700;">▽▽</span>' : '';
         const fyMark = r.fY ? ' <span style="color:var(--green);font-size:9px;font-weight:700;">▽▽</span>' : '';
         const fzMark = r.fZ ? ' <span style="color:var(--green);font-size:9px;font-weight:700;">▽▽</span>' : '';
-        const moldOk = Object.values(DB.molds||{}).some(m => m.no === r.moldNo);
+        // itemMatNo(71-B113)または moldNo(71-B)で前方一致チェック
+        const _checkNo = r.moldNo || '';
+        const moldOk = Object.values(DB.molds||{}).some(m =>
+          m.no === _checkNo ||
+          _checkNo.startsWith(m.no) ||
+          (r.itemMatNo||'').startsWith(m.no)
+        );
         const moldStyle = moldOk ? 'color:var(--accent);font-weight:700;' : (r.moldNo ? 'color:var(--yellow);font-weight:700;' : 'color:var(--text3);');
         const warnIcon = moldOk ? '' : (r.moldNo ? ' ⚠' : '');
         const warnTitle = moldOk ? '登録済み金型' : '⚠未登録または未選択';
@@ -3279,7 +3285,7 @@ function generateQuotePrint() {
       const sZ = String(r.sizeZ||'').replace(/\.00$/,'');
       return '<tr>' +
         '<td style="text-align:center;' + B + 'padding:4px 2px">' + (i+1) + '</td>' +
-        '<td style="text-align:center;' + B + 'padding:4px 3px;font-family:monospace;font-size:14.2pt">' + (r.itemMatNo||r.moldNo||'') + '</td>' +
+        '<td style="text-align:center;' + B + 'padding:4px 2px;font-family:monospace;font-size:11pt;white-space:nowrap">' + (r.itemMatNo||r.moldNo||'') + '</td>' +
         '<td style="' + B + 'padding:4px 6px">' + (r.name||'') + '</td>' +
         '<td style="text-align:center;' + B + 'padding:4px 2px">' + (r.qty||1) + '</td>' +
         '<td style="' + B + 'padding:4px 3px">' + (r.material||'') + '</td>' +
@@ -3310,8 +3316,8 @@ function generateQuotePrint() {
         '<thead>' +
           '<tr style="background:#d0d0d0">' +
             '<th style="' + B + 'padding:5px 2px;text-align:center;width:20px">No.</th>' +
-            '<th style="' + B + 'padding:5px 3px;text-align:center;width:46px">管理NO.</th>' +
-            '<th style="' + B + 'padding:5px 6px">名　　称</th>' +
+            '<th style="' + B + 'padding:5px 3px;text-align:center;width:72px">管理NO.</th>' +
+            '<th style="' + B + 'padding:5px 4px;font-size:11.5pt">名　　称</th>' +
             '<th style="' + B + 'padding:5px 2px;text-align:center;width:22px">数量</th>' +
             '<th style="' + B + 'padding:5px 3px;text-align:center;width:48px">材質</th>' +
             '<th style="' + B + 'padding:5px 3px;text-align:center;width:60px">長さ(X)</th>' +
@@ -5774,11 +5780,14 @@ function editQuoteItem(i) {
   if (!r) return;
   // 入力フォームに値を戻す
   const set = (id, v) => { const el = document.getElementById(id); if(el) el.value = v||''; };
-  // 元の管理NOをqf_partNoにセット（そのまま保持）
+  // qf_partNoにiteMatNOをセット、qf_moldNoに金型NOをセット
   const partNoEl = document.getElementById('qf_partNo');
-  if (partNoEl) partNoEl.value = r.itemMatNo || r.moldNo || '';
+  if (partNoEl) partNoEl.value = r.itemMatNo || '';
   const prevEl = document.getElementById('qf_matNoPreview');
-  if (prevEl) prevEl.textContent = r.itemMatNo || r.moldNo || '';
+  if (prevEl) prevEl.textContent = r.itemMatNo || '';
+  // 金型NOも復元
+  const moldNoEl = document.getElementById('qf_moldNo');
+  if (moldNoEl) { moldNoEl.value = r.moldNo || ''; moldNoEl.classList.add('filled'); }
   set('qf_name',      r.name);
   set('qf_qty',       r.qty||1);
   set('qf_material',  r.material);
