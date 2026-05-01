@@ -2945,7 +2945,7 @@ function renderSupplierChecks() {
   if (!wrap) return;
   wrap.innerHTML = getSuppliers().map(s => `
     <label style="font-size:12px;display:flex;align-items:center;gap:8px;cursor:pointer;padding:4px 0">
-      <input type="checkbox" id="qto_${s.id}" checked>
+      <input type="checkbox" id="qto_${s.id}" ${(s.name||'').includes('大同') || (s.name||'').includes('スチールポリッシュ') ? 'checked' : ''}>
       <span style="font-weight:500">${s.name}</span>
       <span style="color:var(--text3)">${s.person}</span>
       ${s.fax ? `<span style="color:var(--text3);font-size:10px">FAX:${s.fax}</span>` : ''}
@@ -3028,7 +3028,20 @@ function addQuoteRequestItem() {
 
   const size = [sizeX, sizeY, sizeZ].filter(Boolean).join(' × ');
 
-  quoteItems.push({ moldNo, partNo, dwgNo, name, qty, material,
+  // 依頼品目リストの管理NO: 基準管理NO + 連番（リスト内の同一基準NOの次の番号）
+  const baseMatNo = matNo || baseMoldNo;
+  const sameBase = quoteItems.filter(it => (it.itemMatNo||'').startsWith(baseMatNo) || it.moldNo === moldNo).length;
+  // baseMatNoが 71-B101 なら 71-B101, 71-B102... と連番
+  let itemMatNo = baseMatNo;
+  if (baseMatNo && baseMatNo.match(/\d{3}$/)) {
+    // 既に3桁連番あり → 末尾の3桁を増やす
+    const base3 = baseMatNo.slice(0, -2);
+    const startSeq = parseInt(baseMatNo.slice(-2)) || 1;
+    itemMatNo = base3 + String(startSeq + sameBase).padStart(2,'0');
+  } else if (baseMatNo) {
+    itemMatNo = baseMatNo + String(sameBase + 1).padStart(2,'0');
+  }
+  quoteItems.push({ moldNo, partNo, dwgNo, name, qty, material, itemMatNo,
     size, sizeX, sizeY, sizeZ, fX, fY, fZ, finish, note,
     katakiri, tsuri, noteExtra });
   renderQuoteItemTable();
@@ -3070,6 +3083,9 @@ function removeQuoteItem(i) {
 function clearQuoteItems() {
   if (quoteItems.length && !confirm('品目リストをクリアしますか？')) return;
   quoteItems = [];
+  // Excelファイル入力をリセット（再取込できるように）
+  const excelInput = document.getElementById('materialExcel');
+  if (excelInput) excelInput.value = '';
   renderQuoteItemTable();
 }
 
@@ -3109,7 +3125,7 @@ function renderQuoteItemTable() {
           '<td style="text-align:center"><input type="checkbox"' + (included ? ' checked' : '') +
             ' onchange="toggleItemInclude(' + i + ',this.checked)" title="依頼書に含める"></td>' +
           '<td class="mono">' + (i+1) + '</td>' +
-          '<td class="mono" style="' + moldStyle + '" title="' + warnTitle + '">' + (r.moldNo||'—') + warnIcon + '</td>' +
+          '<td class="mono" style="' + moldStyle + '" title="' + warnTitle + '">' + (r.itemMatNo||r.moldNo||'—') + warnIcon + '</td>' +
           '<td>' + (r.name||'') + '</td>' +
           '<td class="mono">' + (r.qty||1) + '</td>' +
           '<td class="mono">' + (r.material||'') + '</td>' +
@@ -3118,7 +3134,10 @@ function renderQuoteItemTable() {
           '<td class="mono" style="font-size:11px">' + (r.sizeZ||'') + fzMark + '</td>' +
           '<td><span class="chip">' + finishLabel(r.finish) + '</span></td>' +
           '<td style="font-size:11px">' + (r.note||'') + '</td>' +
-          '<td><button class="btn btn-danger btn-sm" onclick="removeQuoteItem(' + i + ')">×</button></td>' +
+          '<td style="white-space:nowrap">' +
+            '<button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px;margin-right:3px" onclick="editQuoteItem(' + i + ')">編集</button>' +
+            '<button class="btn btn-danger btn-sm" style="padding:2px 5px;font-size:10px" onclick="removeQuoteItem(' + i + ')">×</button>' +
+          '</td>' +
           '</tr>';
       }).join('')}
       </tbody>
@@ -3206,7 +3225,20 @@ function parseMaterialExcel(buf) {
   const fXb = (xF === 'F' || xF === 'f');
   const fYb = (yF === 'F' || yF === 'f');
   const fZb = (zF === 'F' || zF === 'f');
-  quoteItems.push({ moldNo, partNo, dwgNo, name, qty, material, sizeX, sizeY, sizeZ, size,
+  // 依頼品目リストの管理NO: 基準管理NO + 連番（リスト内の同一基準NOの次の番号）
+  const baseMatNo = matNo || baseMoldNo;
+  const sameBase = quoteItems.filter(it => (it.itemMatNo||'').startsWith(baseMatNo) || it.moldNo === moldNo).length;
+  // baseMatNoが 71-B101 なら 71-B101, 71-B102... と連番
+  let itemMatNo = baseMatNo;
+  if (baseMatNo && baseMatNo.match(/\d{3}$/)) {
+    // 既に3桁連番あり → 末尾の3桁を増やす
+    const base3 = baseMatNo.slice(0, -2);
+    const startSeq = parseInt(baseMatNo.slice(-2)) || 1;
+    itemMatNo = base3 + String(startSeq + sameBase).padStart(2,'0');
+  } else if (baseMatNo) {
+    itemMatNo = baseMatNo + String(sameBase + 1).padStart(2,'0');
+  }
+  quoteItems.push({ moldNo, partNo, dwgNo, name, qty, material, itemMatNo, sizeX, sizeY, sizeZ, size,
     fX: fXb, fY: fYb, fZ: fZb, finish, note, katakiri, tsuri, noteRaw });
     count++;
   }
@@ -5740,6 +5772,33 @@ function editPurchase(key) {
 }
 
 
+
+
+// 品目リストの編集
+function editQuoteItem(i) {
+  const r = quoteItems[i];
+  if (!r) return;
+  // 入力フォームに値を戻す
+  const set = (id, v) => { const el = document.getElementById(id); if(el) el.value = v||''; };
+  set('qf_name',      r.name);
+  set('qf_qty',       r.qty||1);
+  set('qf_material',  r.material);
+  set('qf_sizeX',     r.sizeX);
+  set('qf_sizeY',     r.sizeY);
+  set('qf_sizeZ',     r.sizeZ);
+  set('qf_finish',    r.finish);
+  set('qf_noteExtra', r.noteRaw || r.note);
+  // チェックボックス
+  const cbX = document.getElementById('qf_fX'); if(cbX) cbX.checked = r.fX||false;
+  const cbY = document.getElementById('qf_fY'); if(cbY) cbY.checked = r.fY||false;
+  const cbZ = document.getElementById('qf_fZ'); if(cbZ) cbZ.checked = r.fZ||false;
+  const cbK = document.getElementById('qf_katakiri'); if(cbK) cbK.checked = r.katakiri||false;
+  const cbT = document.getElementById('qf_tsuri');    if(cbT) cbT.checked = r.tsuri||false;
+  // 削除してから再追加
+  quoteItems.splice(i, 1);
+  renderQuoteItemTable();
+  toast('フォームに読み込みました。修正後「品目リストへ追加」を押してください', 'success');
+}
 
 // ── Close modal on overlay click ──
 document.querySelectorAll('.modal-overlay').forEach(el => {
