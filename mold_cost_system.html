@@ -744,7 +744,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="subtab-bar">
       <button class="subtab active" id="qtab-request" onclick="showQuoteTab('request')">① 見積依頼書作成</button>
       <button class="subtab" id="qtab-compare"  onclick="showQuoteTab('compare')">② 見積比較・決定</button>
-      <button class="subtab" id="qtab-history"  onclick="showQuoteTab('history')">③ 発注履歴</button>
+      <button class="subtab" id="qtab-order" onclick="showQuoteTab('order')">③ 注文書作成</button>
     </div>
     <!-- ① 依頼書作成 -->
     <div id="qpage-request" class="subpage active">
@@ -914,15 +914,10 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
       </div>
       <div id="compareTableWrap"><div class="empty"><div class="empty-icon">📊</div>保存した見積依頼がありません</div></div>
     </div>
-    <!-- ③ 発注履歴 -->
-    <div id="qpage-history" class="subpage">
-      <div class="filter-bar">
-        <input class="search-input" type="text" placeholder="依頼日・管理NO・品名で検索..." id="histSearch" oninput="renderQuoteHistory()">
-        <button class="btn btn-secondary btn-sm" onclick="copyTableToClipboard('histTableBody','発注履歴')">📋 全行コピー</button>
-      </div>
-      <div class="table-wrap">
-        <div class="table-header"><div class="table-title">見積・発注 一覧</div><div class="table-count" id="histCount"></div></div>
-        <div id="histTableBody"><div class="empty"><div class="empty-icon">📦</div>データがありません</div></div>
+    <!-- ③ 注文書作成 -->
+    <div id="qpage-order" class="subpage">
+      <div id="orderPageContent">
+        <div class="empty"><div class="empty-icon">📋</div>②見積比較で「発注確定」した案件が表示されます</div>
       </div>
     </div>
   </div>
@@ -1954,7 +1949,7 @@ function showPage(name) {
         mi.value = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
       }
     },
-    quote:     renderQuote,
+    quote:     () => { renderQuote(); },
     materials: renderMaterials,
     outsource: renderOutsource,
     purchase:  renderPurchase,
@@ -2918,12 +2913,12 @@ function renderQuote() {
 }
 
 function showQuoteTab(name) {
-  ['request','compare','history'].forEach(n => {
+  ['request','compare','order'].forEach(n => {
     document.getElementById('qpage-' + n)?.classList.toggle('active', n === name);
     document.getElementById('qtab-' + n)?.classList.toggle('active', n === name);
   });
   if (name === 'compare') renderCompare();
-  if (name === 'history') renderQuoteHistory();
+  if (name === 'order')   renderOrderPage();
 }
 
 // ── 仕入先マスタ（ローカル保存） ──
@@ -3440,6 +3435,8 @@ function renderCompare() {
 
     // 明細ごとの行を生成
     const itemRows = rec.items.map((item, i) => {
+      // 発注済みの行は非表示
+      if ((rec.orderedItems||{})[i]) return '';
       // 各社の見積単価・kg単価
       const prices = sups.map(sid => {
         const q = rec.quotes?.[key+'_'+i+'_'+sid] || {};
@@ -3686,7 +3683,7 @@ async function deleteQuoteRequest(reqKey) {
   // 現在のタブを再描画
   const active = document.querySelector('.subtab.active[id^="qtab-"]');
   if (active?.id === 'qtab-compare') renderCompare();
-  else if (active?.id === 'qtab-history') renderQuoteHistory();
+  else if (active?.id === 'qtab-order') renderOrderPage();
   else renderCompare();
 }
 
@@ -5932,10 +5929,244 @@ async function confirmCheckedItems(reqKey) {
     matCount++;
   });
 
+  // 発注済みフラグを立てる（比較画面で非表示に）
+  if (!rec.orderedItems) rec.orderedItems = {};
+  items.forEach((_,i) => {
+    if (checked[i] !== false) rec.orderedItems[i] = true;
+  });
+  // 全行が発注済みならstatusを発注済みに
+  const allOrdered = items.every((_,i) => rec.orderedItems[i]);
+  if (allOrdered) rec.status = '発注済み';
+
   await writeToFirebase('quoteRequests', DB.quoteRequests);
   await writeToFirebase('materials', DB.materials);
-  toast(`${matCount}件を発注確定しました（材料費に登録）`, 'success');
-  renderCompare();
+  toast(`${matCount}件を発注確定しました`, 'success');
+
+  // 注文書作成タブへ移動
+  showQuoteTab('order');
+}
+
+
+// ══════════════════════════════════════════════
+// ③ 注文書作成
+// ══════════════════════════════════════════════
+
+function renderOrderPage() {
+  const wrap = document.getElementById('orderPageContent');
+  if (!wrap) return;
+
+  // 発注済みアイテムを持つ見積依頼を収集
+  const reqs = Object.entries(DB.quoteRequests||{}).filter(([,rec]) =>
+    rec.orderedItems && Object.values(rec.orderedItems).some(v=>v)
+  ).sort(([,a],[,b]) => (b.date||'').localeCompare(a.date||''));
+
+  if (!reqs.length) {
+    wrap.innerHTML = '<div class="empty"><div class="empty-icon">📋</div>②見積比較で発注確定した案件が表示されます</div>';
+    return;
+  }
+
+  const suppliers = getSuppliers();
+  const supMap    = Object.fromEntries(suppliers.map(s=>[s.id,s]));
+
+  wrap.innerHTML = reqs.map(([key,rec]) => {
+    const ordered = rec.orderedItems || {};
+    const items   = (rec.items||[]).filter((_,i) => ordered[i]);
+    // 仕入先ごとにグループ化
+    const bySupplier = {};
+    items.forEach((item,origIdx) => {
+      const i = (rec.items||[]).indexOf(item);
+      const sid = (rec.itemDecided||{})[i] || rec.decided || '';
+      if (!bySupplier[sid]) bySupplier[sid] = [];
+      const qkey = key+'_'+i+'_'+sid;
+      const q = (rec.quotes||{})[qkey] || {};
+      bySupplier[sid].push({...item, idx:i, supplierId:sid, decidedPrice: q.unitPrice||''});
+    });
+
+    return Object.entries(bySupplier).map(([sid, sitems]) => {
+      const sup = supMap[sid] || {name: sid||'未設定', person:'', fax:'', email:''};
+      const blockId = 'order_' + key + '_' + sid;
+
+      const itemRows = sitems.map((item,ri) => `
+        <tr style="border-bottom:1px solid var(--border)">
+          <td class="mono" style="padding:5px 8px;font-weight:600;color:var(--accent)">${item.itemMatNo||item.moldNo||''}</td>
+          <td style="padding:5px 8px">${item.name||''}</td>
+          <td class="mono" style="padding:5px 6px;text-align:center">${item.qty||1}</td>
+          <td class="mono" style="padding:5px 6px">${item.material||''}</td>
+          <td class="mono" style="padding:5px 6px;font-size:11px">${[item.sizeX,item.sizeY,item.sizeZ].filter(Boolean).join('×')}</td>
+          <td style="padding:5px 4px;text-align:center;font-weight:700">${finishLabel(item.finish)}</td>
+          <td style="padding:4px 6px">
+            <input class="form-input" type="number" style="width:110px;padding:3px 6px;font-size:12px"
+              placeholder="発注単価(円)" value="${item.decidedPrice||''}"
+              onchange="updateOrderPrice('${key}',${item.idx},'${sid}',this.value)">
+          </td>
+          <td class="mono" style="padding:5px 6px;font-weight:700;color:var(--accent)">
+            ${item.decidedPrice ? '¥'+fmt(parseFloat(item.decidedPrice)*(item.qty||1)) : '—'}
+          </td>
+        </tr>`).join('');
+
+      const total = sitems.reduce((s,it) => s + (parseFloat(it.decidedPrice||0)*(it.qty||1)), 0);
+
+      return `<div class="table-wrap" style="margin-bottom:20px">
+        <div class="table-header">
+          <div class="table-title">
+            <span class="mono" style="font-weight:700;color:var(--accent)">${rec.moldNo||'—'}</span>
+            <span style="color:var(--text3);font-size:11px;margin-left:8px">${rec.date||''}</span>
+            <span style="font-size:12px;margin-left:12px;font-weight:600">${sup.name}</span>
+            ${sup.person ? `<span style="color:var(--text3);font-size:11px;margin-left:6px">${sup.person}</span>` : ''}
+          </div>
+          <div class="table-actions">
+            <button class="btn btn-primary btn-sm" onclick="printOrder('${key}','${sid}')">🖨 注文書を印刷</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead><tr style="background:var(--bg3)">
+              <th style="padding:7px 8px">管理NO.</th>
+              <th style="padding:7px 8px">名称</th>
+              <th style="padding:7px 6px;text-align:center">数量</th>
+              <th style="padding:7px 6px">材質</th>
+              <th style="padding:7px 6px">サイズ</th>
+              <th style="padding:7px 4px;text-align:center">仕上</th>
+              <th style="padding:7px 8px">発注単価(円)</th>
+              <th style="padding:7px 8px;color:var(--accent)">発注金額</th>
+            </tr></thead>
+            <tbody>${itemRows}</tbody>
+            <tfoot><tr style="background:var(--bg3)">
+              <td colspan="7" style="padding:6px 8px;text-align:right;font-weight:700">合計</td>
+              <td class="mono" style="padding:6px 8px;font-weight:700;color:var(--accent)">¥${fmt(total)}</td>
+            </tr></tfoot>
+          </table>
+        </div>
+      </div>`;
+    }).join('');
+  }).join('');
+}
+
+// 発注単価の更新
+async function updateOrderPrice(reqKey, itemIdx, supId, value) {
+  if (!DB.quoteRequests?.[reqKey]) return;
+  const rec  = DB.quoteRequests[reqKey];
+  const qkey = reqKey+'_'+itemIdx+'_'+supId;
+  if (!rec.quotes) rec.quotes = {};
+  if (!rec.quotes[qkey]) rec.quotes[qkey] = {};
+  rec.quotes[qkey].unitPrice = parseFloat(value)||0;
+  // 材料費も更新
+  const item = (rec.items||[])[itemIdx];
+  if (item) {
+    const matEntries = Object.entries(DB.materials||{})
+      .filter(([,r]) => r.quoteReqKey === reqKey && r.partNo === (item.itemMatNo||item.partNo));
+    matEntries.forEach(([k,r]) => {
+      r.unit   = parseFloat(value)||0;
+      r.amount = (parseFloat(value)||0) * (item.qty||1);
+    });
+    await writeToFirebase('materials', DB.materials);
+  }
+  await writeToFirebase('quoteRequests', DB.quoteRequests);
+  renderOrderPage();
+}
+
+// 注文書印刷
+function printOrder(reqKey, supId) {
+  const rec = DB.quoteRequests?.[reqKey];
+  if (!rec) return;
+  const suppliers = getSuppliers();
+  const sup = suppliers.find(s=>s.id===supId) || {name:supId, person:'', fax:'', email:''};
+  const ordered = rec.orderedItems || {};
+  const items = (rec.items||[]).filter((_,i)=>ordered[i] && ((rec.itemDecided||{})[i]||rec.decided)===supId);
+
+  const B = 'border:1px solid #999;';
+  const itemRows = items.map((item,ri) => {
+    const i = (rec.items||[]).indexOf(item);
+    const qkey = reqKey+'_'+i+'_'+supId;
+    const q = (rec.quotes||{})[qkey]||{};
+    const price = parseFloat(q.unitPrice||0);
+    const mat = convertMaterial(item.material, supId);
+    const sX = String(item.sizeX||'').replace(/\.00$/,'');
+    const sY = String(item.sizeY||'').replace(/\.00$/,'');
+    const sZ = String(item.sizeZ||'').replace(/\.00$/,'');
+    const finish = finishLabel(item.finish);
+    return `<tr>
+      <td style="${B}padding:5px 4px;text-align:center;font-family:monospace">${ri+1}</td>
+      <td style="${B}padding:5px 4px;font-family:monospace;font-weight:700">${item.itemMatNo||item.moldNo||''}</td>
+      <td style="${B}padding:5px 8px">${item.name||''}</td>
+      <td style="${B}padding:5px 4px;text-align:center">${item.qty||1}</td>
+      <td style="${B}padding:5px 4px">${mat}</td>
+      <td style="${B}padding:5px 4px;text-align:center;font-weight:700">${sX}</td>
+      <td style="${B}padding:5px 4px;text-align:center;font-weight:700">${sY}</td>
+      <td style="${B}padding:5px 4px;text-align:center;font-weight:700">${sZ}</td>
+      <td style="${B}padding:5px 4px;text-align:center;font-weight:800">${finish}</td>
+      <td style="${B}padding:5px 8px;text-align:right;font-family:monospace">${price?'¥'+fmt(price):'—'}</td>
+      <td style="${B}padding:5px 8px;text-align:right;font-family:monospace;font-weight:700">${price?'¥'+fmt(price*(item.qty||1)):'—'}</td>
+    </tr>`;
+  }).join('');
+
+  const total = items.reduce((s,item) => {
+    const i = (rec.items||[]).indexOf(item);
+    const q = (rec.quotes||{})[reqKey+'_'+i+'_'+supId]||{};
+    return s + (parseFloat(q.unitPrice||0)*(item.qty||1));
+  }, 0);
+
+  const win = window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head>
+    <meta charset="UTF-8"><title>注文書 - ${sup.name}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+      body{margin:0;font-family:"Noto Sans JP",sans-serif;font-size:14pt;color:#000}
+      .no-print{position:fixed;top:10px;right:10px;display:flex;gap:8px}
+      button{padding:7px 14px;border:none;border-radius:4px;cursor:pointer;font-size:12px}
+      .bp{background:#1d4ed8;color:#fff}.bc{background:#e5e7eb;color:#333}
+      table{width:100%;border-collapse:collapse}
+      th{background:#c8c8c8;font-weight:800;font-size:14pt;border:1px solid #999;padding:6px 4px;text-align:center}
+      @media print{.no-print{display:none!important}@page{size:A4 portrait;margin:10mm}}
+    </style></head><body>
+    <div class="no-print">
+      <button class="bp" onclick="window.print()">🖨 印刷・PDF保存</button>
+      <button class="bc" onclick="window.close()">閉じる</button>
+    </div>
+    <div style="padding:8mm 10mm">
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:16px">
+        <div>
+          <div style="font-size:22pt;font-weight:900;letter-spacing:4px">注 文 書</div>
+          <div style="font-size:13pt;margin-top:4px">発行日：${rec.date||new Date().toISOString().slice(0,10)}</div>
+        </div>
+        <div style="text-align:right;font-size:13pt">
+          <div style="font-weight:700">橋本工業㈱</div>
+          <div>担当：松本</div>
+        </div>
+      </div>
+      <div style="font-size:16pt;font-weight:700;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:12px">
+        ${sup.name} ${sup.person} 御中
+        ${sup.fax ? `<span style="font-size:12pt;font-weight:400;margin-left:16px">FAX: ${sup.fax}</span>` : ''}
+      </div>
+      <div style="font-size:13pt;margin-bottom:12px">
+        下記の通り、ご注文申し上げます。<br>
+        <span style="font-weight:700">管理NO.：${rec.moldNo||''}　　合計金額：¥${fmt(total)}（税別）</span>
+      </div>
+      <table>
+        <thead><tr>
+          <th style="width:24px">No.</th>
+          <th style="width:68px">管理NO.</th>
+          <th>名　称</th>
+          <th style="width:28px">数量</th>
+          <th style="width:52px">材質</th>
+          <th style="width:44px">長さ(X)</th>
+          <th style="width:44px">幅(Y)</th>
+          <th style="width:44px">材厚(Z)</th>
+          <th style="width:32px">仕上</th>
+          <th style="width:72px">単価(円)</th>
+          <th style="width:80px">発注金額</th>
+        </tr></thead>
+        <tbody>${itemRows}</tbody>
+        <tfoot><tr>
+          <td colspan="10" style="border:1px solid #999;padding:5px 8px;text-align:right;font-weight:700">合　計</td>
+          <td style="border:1px solid #999;padding:5px 8px;text-align:right;font-family:monospace;font-weight:900;font-size:16pt">¥${fmt(total)}</td>
+        </tr></tfoot>
+      </table>
+      <div style="margin-top:16px;font-size:12pt;color:#555">
+        ご不明な点はお気軽にお問い合わせください。
+      </div>
+    </div></body></html>`);
+  win.document.close();
 }
 
 // ── Close modal on overlay click ──
