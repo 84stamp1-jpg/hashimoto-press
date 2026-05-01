@@ -2302,7 +2302,8 @@ function renderMaterials() {
     <table>
       <thead><tr>
         <th style="width:50px"></th>
-        <th>仕入日</th><th>管理NO.</th><th>品番 / 品名</th>
+        <th style="width:44px"></th>
+        <th>仕入日</th><th>管理NO.</th><th>品番 / 品名</th><th>名称</th>
         <th>材質</th><th>サイズ</th><th>仕上</th><th>重量(kg)</th><th>仕入金額</th><th>手配先</th>
       </tr></thead>
       <tbody>${entries.map(([k,r])=>`
@@ -2314,7 +2315,7 @@ function renderMaterials() {
             ${r.quoteReqKey && r.orderHidden ? '<button class="btn btn-secondary btn-sm" style="padding:2px 5px;font-size:9px;background:var(--yellow-dim);color:var(--yellow);border:1px solid var(--yellow)" onclick="restoreToOrderPage(\'' + r.quoteReqKey + '\',\'' + (r.orderedSupId||'') + '\')">📋 注文書に戻す</button>' : ''}
           </td>
           <td class="mono">${r.month||''}</td>
-          <td class="mono" style="font-weight:600">${r.moldNo||''}</td>
+          <td class="mono" style="font-weight:600;color:var(--accent)">${r.partNo||r.moldNo||''}</td>
           <td>${matPartNoCell(r.moldNo, r.partNo)}</td>
           <td style="font-size:11px">${r.name||''}</td>
           <td class="mono">${r.material||''}</td>
@@ -5902,11 +5903,14 @@ async function confirmCheckedItems(reqKey) {
   const items = rec.items || [];
 
   // チェック済みの行を確認
-  const toConfirm = items.filter((_,i) => checked[i] !== false);
+  // チェック済みの行インデックスを収集
+  const checkedIndices = items.map((_,i) => i).filter(i => checked[i] !== false);
+  const toConfirm = checkedIndices.map(i => items[i]);
   if (!toConfirm.length) { toast('発注確定する行にチェックを入れてください', 'error'); return; }
 
   const decided = rec.itemDecided || {};
-  const unset = toConfirm.filter((_,i) => !decided[i] && !rec.decided);
+  // 正しいインデックスで未選択チェック
+  const unset = checkedIndices.filter(i => !decided[i] && !rec.decided);
   if (unset.length) {
     if (!confirm(`${unset.length}件の発注先が未選択です。そのまま確定しますか？`)) return;
   }
@@ -5920,12 +5924,13 @@ async function confirmCheckedItems(reqKey) {
 
   items.forEach((item, i) => {
     if (checked[i] === false) return;  // チェックなしはスキップ
-    const supplierId = (rec.itemDecided||{})[i] || rec.decided || '';
+    const supplierId = (rec.itemDecided||{})[i] || (decided[i]) || rec.decided || '';
     const sup = supMap[supplierId];
     const qkey = reqKey+'_'+i+'_'+supplierId;
     const q = (rec.quotes||{})[qkey] || {};
     const month = rec.date ? rec.date.slice(0,7) : new Date().toISOString().slice(0,7);
-    const matKey = 'mat_' + Date.now() + '_' + i;
+    // 同じ発注確定で重複登録されないよう固定キーを使用
+    const matKey = 'mat_order_' + reqKey + '_' + i;
     DB.materials[matKey] = {
       month,
       moldNo:   item.moldNo   || rec.moldNo || '',
