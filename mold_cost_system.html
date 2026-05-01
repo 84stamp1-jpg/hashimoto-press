@@ -2311,6 +2311,7 @@ function renderMaterials() {
             <input type="checkbox" class="mat-check" data-key="${k}" onchange="matCheckChanged()" style="margin-right:3px">
             <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px;margin-right:2px" onclick="editMaterial('${k}')">編集</button>
             <button class="btn btn-danger btn-sm" style="padding:2px 5px;font-size:10px" onclick="matDeleteOne('${k}')">×</button>
+            ${r.quoteReqKey && r.orderHidden ? '<button class="btn btn-secondary btn-sm" style="padding:2px 5px;font-size:9px;background:var(--yellow-dim);color:var(--yellow);border:1px solid var(--yellow)" onclick="restoreToOrderPage(\'' + r.quoteReqKey + '\',\'' + (r.orderedSupId||'') + '\')">📋 注文書に戻す</button>' : ''}
           </td>
           <td class="mono">${r.month||''}</td>
           <td class="mono" style="font-weight:600">${r.moldNo||''}</td>
@@ -2320,14 +2321,18 @@ function renderMaterials() {
           <td class="mono" style="font-size:11px">${r.size||''}</td>
           <td>${r.finish||''}</td>
           <td class="mono" style="font-size:11px">
-            ${r.weight ? (() => {
-              const unit = parseFloat(r.weight)||0;
-              const qty  = parseFloat(r.qty)||1;
-              const total= unit * qty;
-              if (qty <= 1) return unit.toFixed(2) + ' kg';
-              return '<div>' + unit.toFixed(2) + ' kg</div>' +
-                     '<div style="color:var(--text3);font-size:10px">計 ' + total.toFixed(2) + ' kg</div>';
-            })() : '—'}
+            ${(() => {
+              // 手入力重量があれば優先、なければ自動計算
+              const manualKg = r.weight ? parseFloat(r.weight) : null;
+              const w = manualKg
+                ? { unit: manualKg, total: manualKg * (parseFloat(r.qty)||1) }
+                : calcWeight(r.sizeX, r.sizeY, r.sizeZ, r.material, r.qty);
+              if (!w) return '—';
+              const qty = parseFloat(r.qty)||1;
+              if (qty <= 1) return w.unit.toFixed(3) + ' kg';
+              return '<div>' + w.unit.toFixed(3) + ' kg</div>' +
+                     '<div style=\"color:var(--text3);font-size:10px\">計 ' + w.total.toFixed(3) + ' kg</div>';
+            })()}
           </td>
           <td class="mono"><b>¥${fmt(r.amount)}</b></td>
           <td style="font-size:11px">${r.supplier||''}</td>
@@ -3046,7 +3051,9 @@ function addQuoteRequestItem() {
   const _autoMatNo = baseMoldNo && processNo ? baseMoldNo + processNo + nextMatSeq(baseMoldNo, processNo) : '';
   const itemMatNo = matNo && matNo !== _autoMatNo ? matNo : _proposed;
 
-  quoteItems.push({ moldNo, partNo, dwgNo, name, qty, material, itemMatNo,
+  // 重量は自動計算（手入力がある場合のみ）
+  const weightVal = document.getElementById('qf_weight')?.value.trim() || '';
+  quoteItems.push({ moldNo, partNo, dwgNo, name, qty, material, itemMatNo, weight: weightVal,
     size, sizeX, sizeY, sizeZ, fX, fY, fZ, finish, note,
     katakiri, tsuri, noteExtra });
   renderQuoteItemTable();
@@ -3245,7 +3252,9 @@ function parseMaterialExcel(buf) {
     const alreadySeq = quoteItems.filter(it => (it.itemMatNo||'').startsWith(baseForSeq)).length;
     const itemMatNo  = baseForSeq ? baseForSeq + String(startSeq + alreadySeq).padStart(2,'0') : '';
 
-    quoteItems.push({ moldNo, partNo, dwgNo, name, qty, material, itemMatNo, sizeX, sizeY, sizeZ, size,
+    // 重量は自動計算（手入力がある場合のみ）
+  const weightVal = document.getElementById('qf_weight')?.value.trim() || '';
+  quoteItems.push({ moldNo, partNo, dwgNo, name, qty, material, itemMatNo, weight: weightVal, sizeX, sizeY, sizeZ, size,
       fX: fXb, fY: fYb, fZ: fZb, finish, note, katakiri, tsuri, noteRaw });
     count++;
   }
@@ -5928,12 +5937,15 @@ async function confirmCheckedItems(reqKey) {
       sizeY:    item.sizeY || '',
       sizeZ:    item.sizeZ || '',
       finish:   item.finish   || '',
+      weight:   item.weight   || '',
       qty:      item.qty      || 1,
       unit:     parseFloat(q.unitPrice||0),
       amount:   parseFloat(q.unitPrice||0) * (item.qty||1),
       supplier: sup ? sup.name : (supplierId || ''),
       note:     item.note     || '',
       quoteReqKey: reqKey,
+      orderedSupId: supplierId,
+      orderHidden:  false,
     };
     matCount++;
   });
@@ -5989,13 +6001,7 @@ function renderOrderPage() {
   const supMap    = Object.fromEntries(suppliers.map(s=>[s.id,s]));
 
   // ヘッダーボタン
-  const headerHtml = hiddenCount > 0 ? `
-    <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
-      <button class="btn btn-secondary btn-sm" onclick="_showHiddenOrders=!_showHiddenOrders;renderOrderPage()">
-        ${_showHiddenOrders ? '非表示の案件を隠す' : '非表示の案件を表示 (' + hiddenCount + '件)'}
-      </button>
-    </div>` : '';
-
+  const headerHtml = '';
   wrap.innerHTML = headerHtml + reqs.map(([key,rec]) => {
     const ordered = rec.orderedItems || {};
     const items   = (rec.items||[]).filter((_,i) => ordered[i]);
@@ -6042,8 +6048,9 @@ function renderOrderPage() {
           <div class="table-title">
             <span class="mono" style="font-weight:700;color:var(--accent)">${rec.moldNo||'—'}</span>
             <span style="color:var(--text3);font-size:11px;margin-left:8px">${rec.date||''}</span>
-            <span style="font-size:12px;margin-left:12px;font-weight:600">${sup.name}</span>
+            <span style="font-size:12px;margin-left:12px;font-weight:600">${sid ? sup.name : '<span style=\"color:var(--yellow);font-weight:700\">未設定</span>'}</span>
             ${sup.person ? `<span style="color:var(--text3);font-size:11px;margin-left:6px">${sup.person}</span>` : ''}
+            ${!sid ? '<span style="font-size:11px;color:var(--yellow);margin-left:8px">②見積比較で発注先を選択して再保存してください</span>' : ''}
             ${isHidden ? '<span style="background:#f59e0b;color:#fff;font-size:10px;padding:2px 6px;border-radius:4px;margin-left:8px">非表示中</span>' : ''}
           </div>
           <div class="table-actions" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
@@ -6171,7 +6178,7 @@ async function printOrder(reqKey, supId) {
         </div>
       </div>
       <div style="font-size:16pt;font-weight:700;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:12px">
-        ${sup.name} ${sup.person} 様
+        ${sup.name}　${sup.person ? sup.person + ' 様' : '様'}
         ${sup.fax ? `<span style="font-size:12pt;font-weight:400;margin-left:16px">FAX: ${sup.fax}</span>` : ''}
       </div>
       <div style="font-size:13pt;margin-bottom:12px">
@@ -6181,16 +6188,16 @@ async function printOrder(reqKey, supId) {
       <table>
         <thead><tr>
           <th style="width:22px">No.</th>
-          <th style="width:66px">管理NO.</th>
-          <th style="width:120px">名　称</th>
-          <th style="width:26px">数量</th>
-          <th style="width:60px">材質</th>
-          <th style="width:52px">長さ(X)</th>
-          <th style="width:52px">幅(Y)</th>
-          <th style="width:52px">材厚(Z)</th>
-          <th style="width:30px">仕上</th>
+          <th style="width:64px">管理NO.</th>
+          <th style="width:110px">名　称</th>
+          <th style="width:24px">数量</th>
+          <th style="width:56px">材質</th>
+          <th style="width:48px">長さ(X)</th>
+          <th style="width:48px">幅(Y)</th>
+          <th style="width:48px">材厚(Z)</th>
+          <th style="width:28px">仕上</th>
           <th style="width:82px">単価(円)</th>
-          <th style="width:90px">発注金額</th>
+          <th style="width:84px">発注金額</th>
         </tr></thead>
         <tbody>${itemRows}</tbody>
         <tfoot><tr>
@@ -6219,11 +6226,90 @@ async function toggleOrderHide(reqKey, supId, hide) {
   if (!DB.quoteRequests[reqKey].printedOrders) DB.quoteRequests[reqKey].printedOrders = {};
   if (hide) {
     DB.quoteRequests[reqKey].printedOrders[supId] = true;
+    // 材料費のorderHiddenも更新
+    Object.values(DB.materials||{}).forEach(r => {
+      if (r.quoteReqKey === reqKey && r.orderedSupId === supId) r.orderHidden = true;
+    });
+    await writeToFirebase('materials', DB.materials);
   } else {
     delete DB.quoteRequests[reqKey].printedOrders[supId];
+    Object.values(DB.materials||{}).forEach(r => {
+      if (r.quoteReqKey === reqKey && r.orderedSupId === supId) r.orderHidden = false;
+    });
+    await writeToFirebase('materials', DB.materials);
   }
   await writeToFirebase('quoteRequests', DB.quoteRequests);
   renderOrderPage();
+}
+
+
+// 材料費から注文書ページに再表示
+async function restoreToOrderPage(reqKey, supId) {
+  if (!DB.quoteRequests?.[reqKey]) { toast('見積依頼データが見つかりません', 'error'); return; }
+  if (!DB.quoteRequests[reqKey].printedOrders) DB.quoteRequests[reqKey].printedOrders = {};
+  delete DB.quoteRequests[reqKey].printedOrders[supId];
+  // 材料費のorderHiddenをfalseに
+  Object.values(DB.materials||{}).forEach(r => {
+    if (r.quoteReqKey === reqKey && r.orderedSupId === supId) r.orderHidden = false;
+  });
+  await writeToFirebase('quoteRequests', DB.quoteRequests);
+  await writeToFirebase('materials', DB.materials);
+  toast('③注文書作成タブに再表示しました', 'success');
+  renderMaterials();
+  showPage('quote');
+  showQuoteTab('order');
+}
+
+
+// ═══════════════════════════════════════════════
+// 比重テーブルと重量自動計算
+// ═══════════════════════════════════════════════
+const SPECIFIC_GRAVITY = {
+  // 鋼・工具鋼
+  'SK3':7.85,'SK4':7.85,'SK5':7.85,'SK6':7.85,'SK7':7.85,
+  'S50C':7.85,'S45C':7.85,'S55C':7.85,'S35C':7.85,'S30C':7.85,
+  'SS400':7.85,'SS490':7.85,'SS540':7.85,
+  'SCM440':7.85,'SCM415':7.85,'SCM435':7.85,
+  'SUJ2':7.81,
+  // ダイス鋼・冷間工具鋼
+  'DCMX':7.80,'DC11':7.80,'DC53':7.80,'SKD11':7.80,'SKD61':7.80,
+  'SKS3':7.85,'SKH51':8.16,
+  // プリハードン鋼
+  'NAK55':8.00,'NAK80':8.00,'P20':7.85,'HPM7':7.80,
+  // ステンレス
+  'SUS304':7.93,'SUS316':7.98,'SUS420':7.73,'SUS440':7.73,
+  // アルミニウム
+  'A5052':2.68,'A2017':2.79,'A7075':2.81,'A5056':2.64,
+  // 銅・真鍮
+  'C1100':8.89,'C2801':8.50,'C3604':8.50,
+};
+
+// 材質文字列から比重を取得（部分一致）
+function getSpecificGravity(material) {
+  if (!material) return 7.85;
+  const m = String(material).toUpperCase().trim();
+  // 完全一致
+  if (SPECIFIC_GRAVITY[m]) return SPECIFIC_GRAVITY[m];
+  // 部分一致（先頭から）
+  for (const [key, val] of Object.entries(SPECIFIC_GRAVITY)) {
+    if (m.startsWith(key) || m.includes(key)) return val;
+  }
+  // デフォルト鋼材比重
+  return 7.85;
+}
+
+// X×Y×Z(mm)と材質から重量(kg)を計算
+function calcWeight(sizeX, sizeY, sizeZ, material, qty) {
+  const x = parseFloat(sizeX) || 0;
+  const y = parseFloat(sizeY) || 0;
+  const z = parseFloat(sizeZ) || 0;
+  if (!x || !y || !z) return null;
+  const sg  = getSpecificGravity(material);
+  const vol = x * y * z;            // mm³
+  const kg  = vol * sg / 1e6;       // kg (1cm³=1e3mm³, 1kg=sg g/cm³)
+  const unitKg = Math.round(kg * 1000) / 1000;
+  const totalKg = Math.round(unitKg * ((qty||1)) * 1000) / 1000;
+  return { unit: unitKg, total: totalKg };
 }
 
 // ── Close modal on overlay click ──
