@@ -3285,8 +3285,8 @@ function generateQuotePrint() {
       const sZ = String(r.sizeZ||'').replace(/\.00$/,'');
       return '<tr>' +
         '<td style="text-align:center;' + B + 'padding:4px 2px">' + (i+1) + '</td>' +
-        '<td style="text-align:center;' + B + 'padding:4px 2px;font-family:monospace;font-size:11pt;white-space:nowrap">' + (r.itemMatNo||r.moldNo||'') + '</td>' +
-        '<td style="' + B + 'padding:4px 6px">' + (r.name||'') + '</td>' +
+        '<td style="text-align:center;' + B + 'padding:4px 2px;font-family:monospace;font-size:15pt;font-weight:700;white-space:nowrap">' + (r.itemMatNo||r.moldNo||'') + '</td>' +
+        '<td style="' + B + 'padding:4px 4px;font-size:13pt">' + (r.name||'') + '</td>' +
         '<td style="text-align:center;' + B + 'padding:4px 2px">' + (r.qty||1) + '</td>' +
         '<td style="' + B + 'padding:4px 3px">' + (r.material||'') + '</td>' +
         '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + xMark + '<div style="padding:2px 3px;font-size:15.8pt;font-weight:600">' + sX + '</div></td>' +
@@ -3316,8 +3316,8 @@ function generateQuotePrint() {
         '<thead>' +
           '<tr style="background:#d0d0d0">' +
             '<th style="' + B + 'padding:5px 2px;text-align:center;width:20px">No.</th>' +
-            '<th style="' + B + 'padding:5px 3px;text-align:center;width:72px">管理NO.</th>' +
-            '<th style="' + B + 'padding:5px 4px;font-size:11.5pt">名　　称</th>' +
+            '<th style="' + B + 'padding:5px 3px;text-align:center;width:86px">管理NO.</th>' +
+            '<th style="' + B + 'padding:5px 4px;font-size:13pt">名　　称</th>' +
             '<th style="' + B + 'padding:5px 2px;text-align:center;width:22px">数量</th>' +
             '<th style="' + B + 'padding:5px 3px;text-align:center;width:48px">材質</th>' +
             '<th style="' + B + 'padding:5px 3px;text-align:center;width:60px">長さ(X)</th>' +
@@ -3383,9 +3383,17 @@ async function saveQuoteRequest() {
   DB.quoteRequests[key] = record;
   await writeToFirebase('quoteRequests', DB.quoteRequests);
 
-  toast('見積依頼を保存しました', 'success');
+  toast('見積依頼を保存しました。続けて次の品目を入力できます。', 'success');
   quoteItems = [];
+  // 管理NOと工程番号をリセット（次の金型入力の準備）
+  const partNoEl = document.getElementById('qf_partNo');
+  if (partNoEl) partNoEl.value = '';
+  const prevEl = document.getElementById('qf_matNoPreview');
+  if (prevEl) prevEl.textContent = '';
+  const procEl = document.getElementById('qf_processNo');
+  if (procEl) procEl.value = '';
   renderQuoteItemTable();
+  // ②比較タブに切り替え（品目一覧確認後、①に戻れる）
   showQuoteTab('compare');
 }
 
@@ -3491,7 +3499,7 @@ function renderCompare() {
         <span style="font-size:11px;color:var(--text3);margin-left:8px">${rec.date||''}</span>
         <div class="table-actions">
           <button class="btn btn-primary btn-sm" onclick="confirmAllDecided('${key}')">✅ 全明細を発注確定</button>
-          <button class="btn btn-secondary btn-sm" onclick="reopenQuote('${key}')">🔄 再編集</button>
+          <button class="btn btn-secondary btn-sm" onclick="reopenQuote('${key}')">✏️ ①に読込・再編集</button>
           <button class="btn btn-danger btn-sm" onclick="deleteQuoteRequest('${key}')">🗑 削除</button>
         </div>
       </div>
@@ -3619,10 +3627,36 @@ async function confirmAllDecided(reqKey) {
 // 発注確定後に再編集可能にする
 async function reopenQuote(reqKey) {
   if (!DB.quoteRequests?.[reqKey]) return;
-  DB.quoteRequests[reqKey].status = '回答済み';
-  await writeToFirebase('quoteRequests', DB.quoteRequests);
-  toast('再編集モードにしました', 'success');
-  renderCompare();
+  const rec = DB.quoteRequests[reqKey];
+  if (!confirm('この見積依頼を①作成画面に読み込みますか？現在の品目リストは上書きされます。')) return;
+
+  // 品目リストに読み込む
+  quoteItems = (rec.items || []).map(it => ({...it}));
+
+  // 金型NOと材料管理NOをフォームにセット
+  const moldNoEl = document.getElementById('qf_moldNo');
+  if (moldNoEl) { moldNoEl.value = rec.moldNo||''; moldNoEl.classList.add('filled'); }
+  const partNoEl = document.getElementById('qf_partNo');
+  if (partNoEl) partNoEl.value = rec.partNo||'';
+  const prevEl = document.getElementById('qf_matNoPreview');
+  if (prevEl) prevEl.textContent = rec.partNo||'';
+  const dateEl = document.getElementById('qf_date');
+  if (dateEl) dateEl.value = rec.date||'';
+
+  // 発注先チェックを復元
+  const sups = getSuppliers();
+  sups.forEach(s => {
+    const cb = document.getElementById('qto_' + s.id);
+    if (cb) cb.checked = (rec.suppliers||[]).includes(s.id);
+  });
+
+  // 金型情報を表示
+  if (rec.moldNo) showMoldInfo('qf', rec.moldNo);
+
+  // ①タブに切り替え
+  showQuoteTab('request');
+  renderQuoteItemTable();
+  toast(rec.items.length + '件の品目を読み込みました。編集後「見積待ちとして保存」を押してください', 'success');
 }
 
 // 見積依頼を削除
