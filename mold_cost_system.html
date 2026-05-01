@@ -3361,6 +3361,8 @@ function generateQuotePrint() {
 
 
 // ── 見積待ちとして保存 ──
+let _editingQuoteKey = '';  // 再編集中の見積キー
+
 async function saveQuoteRequest() {
   if (!quoteItems.length) { toast('品目を追加してください', 'error'); return; }
   const date   = document.getElementById('qf_date').value || new Date().toISOString().slice(0,10);
@@ -3369,21 +3371,28 @@ async function saveQuoteRequest() {
   const suppliers = getSuppliers();
   const toList = suppliers.filter(s => document.getElementById('qto_' + s.id)?.checked).map(s => s.id);
 
-  const key    = 'qr_' + Date.now();
+  // 再編集中なら上書き、新規なら新しいキー
+  const isEdit = _editingQuoteKey && DB.quoteRequests?.[_editingQuoteKey];
+  const key    = isEdit ? _editingQuoteKey : 'qr_' + Date.now();
+  const existing = isEdit ? DB.quoteRequests[_editingQuoteKey] : {};
   const record = {
+    ...existing,
     date, moldNo, partNo,
     items:     [...quoteItems],
     suppliers: toList,
     status:    '見積待ち',
-    quotes:    {},
-    decided:   null
+    quotes:    existing.quotes || {},
+    decided:   existing.decided || null,
+    itemDecided: existing.itemDecided || {}
   };
 
   if (!DB.quoteRequests) DB.quoteRequests = {};
   DB.quoteRequests[key] = record;
   await writeToFirebase('quoteRequests', DB.quoteRequests);
 
-  toast('見積依頼を保存しました。続けて次の品目を入力できます。', 'success');
+  const saveMsg = isEdit ? '見積依頼を更新しました。' : '見積依頼を保存しました。続けて次の品目を入力できます。';
+  toast(saveMsg, 'success');
+  _editingQuoteKey = '';  // 編集キーをリセット
   quoteItems = [];
   // 管理NOと工程番号をリセット（次の金型入力の準備）
   const partNoEl = document.getElementById('qf_partNo');
@@ -3465,8 +3474,12 @@ function renderCompare() {
         ...sups.map(sid => `<option value="${sid}"${itemDecided===sid?' selected':''}>${supShort[sid]||sid}</option>`)
       ].join('');
 
-      return `<tr style="border-bottom:1px solid var(--border)">
-        <td class="mono" style="padding:5px 8px;font-weight:600;color:var(--accent)">${item.moldNo||rec.moldNo||'—'}</td>
+      const isChecked = (rec.checkedItems||{})[i] !== false;  // デフォルトtrue
+      return `<tr style="border-bottom:1px solid var(--border);${isChecked?'':'opacity:0.5'}">
+        <td style="padding:4px 6px;text-align:center">
+          <input type="checkbox" ${isChecked?'checked':''} onchange="toggleItemCheck('${key}',${i},this.checked)">
+        </td>
+        <td class="mono" style="padding:5px 8px;font-weight:600;color:var(--accent)">${item.itemMatNo||item.moldNo||rec.moldNo||'—'}</td>
         <td style="padding:5px 8px;font-size:12px">${item.name||''}</td>
         <td class="mono" style="padding:5px 6px;text-align:center">${item.qty||1}</td>
         <td class="mono" style="padding:5px 6px">${item.material||''}</td>
@@ -3498,7 +3511,7 @@ function renderCompare() {
         <span class="badge ${statusBg[rec.status]||'badge-gray'}">${rec.status}</span>
         <span style="font-size:11px;color:var(--text3);margin-left:8px">${rec.date||''}</span>
         <div class="table-actions">
-          <button class="btn btn-primary btn-sm" onclick="confirmAllDecided('${key}')">✅ 全明細を発注確定</button>
+          <button class="btn btn-primary btn-sm" onclick="confirmCheckedItems('${key}')">✅ チェック済みを発注確定</button>
           <button class="btn btn-secondary btn-sm" onclick="reopenQuote('${key}')">✏️ ①に読込・再編集</button>
           <button class="btn btn-danger btn-sm" onclick="deleteQuoteRequest('${key}')">🗑 削除</button>
         </div>
@@ -3507,6 +3520,9 @@ function renderCompare() {
         <table style="width:100%;border-collapse:collapse;font-size:12px;">
           <thead>
             <tr style="background:var(--bg3)">
+              <th style="padding:7px 4px;width:32px;text-align:center">
+                <input type="checkbox" checked title="全選択" onchange="toggleAllItemCheck('${key}',this.checked)">
+              </th>
               <th style="padding:7px 8px;text-align:left">管理NO.</th>
               <th style="padding:7px 8px;text-align:left">名称</th>
               <th style="padding:7px 6px;text-align:center">数量</th>
@@ -3630,6 +3646,8 @@ async function reopenQuote(reqKey) {
   const rec = DB.quoteRequests[reqKey];
   if (!confirm('この見積依頼を①作成画面に読み込みますか？現在の品目リストは上書きされます。')) return;
 
+  // 編集キーを記録（上書き保存用）
+  _editingQuoteKey = reqKey;
   // 品目リストに読み込む
   quoteItems = (rec.items || []).map(it => ({...it}));
 
@@ -5840,6 +5858,84 @@ function editQuoteItem(i) {
   quoteItems.splice(i, 1);
   renderQuoteItemTable();
   toast('フォームに読み込みました。修正後「品目リストへ追加」を押してください', 'success');
+}
+
+
+// ── 見積比較：行チェック操作 ──
+async function toggleItemCheck(reqKey, itemIdx, checked) {
+  if (!DB.quoteRequests?.[reqKey]) return;
+  if (!DB.quoteRequests[reqKey].checkedItems) DB.quoteRequests[reqKey].checkedItems = {};
+  DB.quoteRequests[reqKey].checkedItems[itemIdx] = checked;
+  await writeToFirebase('quoteRequests', DB.quoteRequests);
+  renderCompare();
+}
+
+async function toggleAllItemCheck(reqKey, checked) {
+  if (!DB.quoteRequests?.[reqKey]) return;
+  const rec = DB.quoteRequests[reqKey];
+  rec.checkedItems = {};
+  (rec.items||[]).forEach((_,i) => rec.checkedItems[i] = checked);
+  await writeToFirebase('quoteRequests', DB.quoteRequests);
+  renderCompare();
+}
+
+// チェック済みの行のみ発注確定
+async function confirmCheckedItems(reqKey) {
+  if (!DB.quoteRequests?.[reqKey]) return;
+  const rec = DB.quoteRequests[reqKey];
+  const checked = rec.checkedItems || {};
+  const items = rec.items || [];
+
+  // チェック済みの行を確認
+  const toConfirm = items.filter((_,i) => checked[i] !== false);
+  if (!toConfirm.length) { toast('発注確定する行にチェックを入れてください', 'error'); return; }
+
+  const decided = rec.itemDecided || {};
+  const unset = toConfirm.filter((_,i) => !decided[i] && !rec.decided);
+  if (unset.length) {
+    if (!confirm(`${unset.length}件の発注先が未選択です。そのまま確定しますか？`)) return;
+  }
+
+  // 発注確定処理（既存のconfirmAllDecidedを流用）
+  rec.status = '発注済み';
+  if (!DB.materials) DB.materials = {};
+  const suppliers = getSuppliers();
+  const supMap = Object.fromEntries(suppliers.map(s => [s.id, s]));
+  let matCount = 0;
+
+  items.forEach((item, i) => {
+    if (checked[i] === false) return;  // チェックなしはスキップ
+    const supplierId = (rec.itemDecided||{})[i] || rec.decided || '';
+    const sup = supMap[supplierId];
+    const qkey = reqKey+'_'+i+'_'+supplierId;
+    const q = (rec.quotes||{})[qkey] || {};
+    const month = rec.date ? rec.date.slice(0,7) : new Date().toISOString().slice(0,7);
+    const matKey = 'mat_' + Date.now() + '_' + i;
+    DB.materials[matKey] = {
+      month,
+      moldNo:   item.moldNo   || rec.moldNo || '',
+      partNo:   item.itemMatNo || item.partNo || rec.partNo || '',
+      name:     item.name     || '',
+      material: convertMaterial(item.material, supplierId),
+      size:     [item.sizeX, item.sizeY, item.sizeZ].filter(Boolean).join(' × '),
+      sizeX:    item.sizeX || '',
+      sizeY:    item.sizeY || '',
+      sizeZ:    item.sizeZ || '',
+      finish:   item.finish   || '',
+      qty:      item.qty      || 1,
+      unit:     parseFloat(q.unitPrice||0),
+      amount:   parseFloat(q.unitPrice||0) * (item.qty||1),
+      supplier: sup ? sup.name : (supplierId || ''),
+      note:     item.note     || '',
+      quoteReqKey: reqKey,
+    };
+    matCount++;
+  });
+
+  await writeToFirebase('quoteRequests', DB.quoteRequests);
+  await writeToFirebase('materials', DB.materials);
+  toast(`${matCount}件を発注確定しました（材料費に登録）`, 'success');
+  renderCompare();
 }
 
 // ── Close modal on overlay click ──
