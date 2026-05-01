@@ -791,8 +791,9 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
                   材料管理NO.
                   <span id="qf_matNoPreview" style="font-size:10px;color:var(--accent);font-family:var(--mono);margin-left:4px;font-weight:700;"></span>
                 </label>
-                <input class="form-input" id="qf_partNo" placeholder="金型NO+工程番号で自動生成" readonly
-                  style="background:var(--bg3);color:var(--text2);cursor:default;">
+                <input class="form-input" id="qf_partNo" placeholder="金型NO+工程番号で自動生成（直接入力も可）"
+                  style="font-family:var(--mono);font-weight:600;color:var(--accent);"
+                  oninput="document.getElementById('qf_matNoPreview').textContent=this.value">
               </div>
             </div>
             <!-- 品名・材質 -->
@@ -2994,6 +2995,7 @@ function addQuoteRequestItem() {
   const baseMoldNo = document.getElementById('qf_moldNo').value.trim();
   const processNo  = document.getElementById('qf_processNo')?.value.trim() || '';
   // 材料管理NOを確実に生成（qf_partNoに値がなければ自動生成）
+  // qf_partNoに手入力値があればそれを優先
   let matNo = document.getElementById('qf_partNo').value.trim();
   if (!matNo && baseMoldNo && processNo) {
     const seq = nextMatSeq(baseMoldNo, processNo);
@@ -3001,6 +3003,7 @@ function addQuoteRequestItem() {
     const partNoEl = document.getElementById('qf_partNo');
     if (partNoEl) partNoEl.value = matNo;
   }
+  // 編集時：既存のitemMatNoを上書きしないようにフラグ確認
   const moldNo = matNo || baseMoldNo;
   const partNo = matNo;
   const dwgNo  = '';
@@ -3028,12 +3031,16 @@ function addQuoteRequestItem() {
 
   const size = [sizeX, sizeY, sizeZ].filter(Boolean).join(' × ');
 
-  // 管理NO連番
+  // 管理NO: qf_partNoに値があればそれをベースに連番
   const _base  = matNo || baseMoldNo;
   const _bfor  = (_base && _base.length >= 5 && !isNaN(_base.slice(-2))) ? _base.slice(0,-2) : _base;
   const _start = (_base && !isNaN(_base.slice(-2)) && _base.length >= 5) ? (parseInt(_base.slice(-2)) || 1) : 1;
   const _done  = quoteItems.filter(it => (it.itemMatNo||'').startsWith(_bfor)).length;
-  const itemMatNo = _bfor ? _bfor + String(_start + _done).padStart(2,'0') : _base;
+  // 既にリストに同じ番号がある場合のみ連番を進める
+  const _proposed = _bfor ? _bfor + String(_start + _done).padStart(2,'0') : _base;
+  // qf_partNoが手入力（自動生成と異なる）場合はそのまま使用
+  const _autoMatNo = baseMoldNo && processNo ? baseMoldNo + processNo + nextMatSeq(baseMoldNo, processNo) : '';
+  const itemMatNo = matNo && matNo !== _autoMatNo ? matNo : _proposed;
 
   quoteItems.push({ moldNo, partNo, dwgNo, name, qty, material, itemMatNo,
     size, sizeX, sizeY, sizeZ, fX, fY, fZ, finish, note,
@@ -3078,7 +3085,7 @@ function clearQuoteItems() {
   if (quoteItems.length && !confirm('品目リストをクリアしますか？')) return;
   quoteItems = [];
   // Excelファイル入力をリセット（再取込できるように）
-  const excelInput = document.getElementById('materialExcel');
+  const excelInput = document.getElementById('matExcelFile');
   if (excelInput) excelInput.value = '';
   renderQuoteItemTable();
 }
@@ -5767,6 +5774,11 @@ function editQuoteItem(i) {
   if (!r) return;
   // 入力フォームに値を戻す
   const set = (id, v) => { const el = document.getElementById(id); if(el) el.value = v||''; };
+  // 元の管理NOをqf_partNoにセット（そのまま保持）
+  const partNoEl = document.getElementById('qf_partNo');
+  if (partNoEl) partNoEl.value = r.itemMatNo || r.moldNo || '';
+  const prevEl = document.getElementById('qf_matNoPreview');
+  if (prevEl) prevEl.textContent = r.itemMatNo || r.moldNo || '';
   set('qf_name',      r.name);
   set('qf_qty',       r.qty||1);
   set('qf_material',  r.material);
