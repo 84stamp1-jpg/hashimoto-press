@@ -2993,11 +2993,17 @@ function calcFinish(xF, yF, zF, explicitFinish) {
 function addQuoteRequestItem() {
   const baseMoldNo = document.getElementById('qf_moldNo').value.trim();
   const processNo  = document.getElementById('qf_processNo')?.value.trim() || '';
-  // 材料管理NO: 金型NO+工程番号+連番（qf_partNoに生成済み）
-  const matNo  = document.getElementById('qf_partNo').value.trim();
-  const moldNo = matNo || baseMoldNo;  // 材料管理NOがあればそれを使用
+  // 材料管理NOを確実に生成（qf_partNoに値がなければ自動生成）
+  let matNo = document.getElementById('qf_partNo').value.trim();
+  if (!matNo && baseMoldNo && processNo) {
+    const seq = nextMatSeq(baseMoldNo, processNo);
+    matNo = baseMoldNo + processNo + seq;
+    const partNoEl = document.getElementById('qf_partNo');
+    if (partNoEl) partNoEl.value = matNo;
+  }
+  const moldNo = matNo || baseMoldNo;
   const partNo = matNo;
-  const dwgNo  = '';  // DWG.NO廃止
+  const dwgNo  = '';
   const name     = document.getElementById('qf_name').value.trim();
   const qty      = parseInt(document.getElementById('qf_qty').value) || 1;
   const material = document.getElementById('qf_material').value.trim();
@@ -3251,9 +3257,9 @@ function generateQuotePrint() {
         '<td style="' + B + 'padding:4px 6px">' + (r.name||'') + '</td>' +
         '<td style="text-align:center;' + B + 'padding:4px 2px">' + (r.qty||1) + '</td>' +
         '<td style="' + B + 'padding:4px 3px">' + (r.material||'') + '</td>' +
-        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + xMark + '<div style="padding:2px 3px;border-top:1px solid #555;font-size:15.8pt;font-weight:600">' + sX + '</div></td>' +
-        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + yMark + '<div style="padding:2px 3px;border-top:1px solid #555;font-size:15.8pt;font-weight:600">' + sY + '</div></td>' +
-        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + zMark + '<div style="padding:2px 3px;border-top:1px solid #555;font-size:15.8pt;font-weight:600">' + sZ + '</div></td>' +
+        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + xMark + '<div style="padding:2px 3px;font-size:15.8pt;font-weight:600">' + sX + '</div></td>' +
+        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + yMark + '<div style="padding:2px 3px;font-size:15.8pt;font-weight:600">' + sY + '</div></td>' +
+        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + zMark + '<div style="padding:2px 3px;font-size:15.8pt;font-weight:600">' + sZ + '</div></td>' +
         '<td style="text-align:center;' + B + 'padding:4px 2px;font-weight:800;font-size:15.8pt">' + finish + '</td>' +
         '<td style="' + B + 'padding:4px 8px;font-size:14.2pt;min-width:80px">' + (r.note||'') + '</td>' +
         '</tr>';
@@ -5272,8 +5278,8 @@ function exportSnapshotPdf() {
       <td style="padding:6px 8px;text-align:center;white-space:nowrap"><span style="color:${statusColor};font-weight:600">${r.status}</span></td>
       <td style="padding:6px 8px;text-align:right;font-family:monospace;white-space:nowrap">¥${fmt(r.estimate)}</td>
       <td style="padding:6px 8px;text-align:right;font-family:monospace;color:#1d4ed8;white-space:nowrap">¥${fmt(r.matTotal)}</td>
-      <td style="padding:6px 8px;text-align:right;font-family:monospace;color:#d97706;white-space:nowrap">¥${fmt(r.outTotal)}</td>
       <td style="padding:6px 8px;text-align:right;font-family:monospace;color:#059669;white-space:nowrap">¥${fmt(r.purTotal)}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:monospace;color:#d97706;white-space:nowrap">¥${fmt(r.outTotal)}</td>
       <td style="padding:6px 8px;text-align:right;font-family:monospace;color:#7c3aed;white-space:nowrap">¥${fmt(r.labTotal)}</td>
       <td style="padding:6px 8px;text-align:right;font-family:monospace;font-weight:700;white-space:nowrap">¥${fmt(r.total)}</td>
       <td style="padding:6px 8px;text-align:right;font-family:monospace;color:${pctColor};font-weight:700;white-space:nowrap">${pctVal}%</td>
@@ -5326,8 +5332,8 @@ function exportSnapshotPdf() {
           <th style="white-space:nowrap">状態</th>
           <th style="text-align:right;white-space:nowrap">見積金額</th>
           <th style="text-align:right;color:#93c5fd;white-space:nowrap">材料費</th>
-          <th style="text-align:right;color:#fcd34d;white-space:nowrap">外注費</th>
           <th style="text-align:right;color:#6ee7b7;white-space:nowrap">購入品費</th>
+          <th style="text-align:right;color:#fcd34d;white-space:nowrap">外注費</th>
           <th style="text-align:right;color:#c4b5fd;white-space:nowrap">加工費</th>
           <th style="text-align:right;white-space:nowrap">現在原価</th>
           <th style="text-align:right;white-space:nowrap">達成率</th>
@@ -5338,8 +5344,8 @@ function exportSnapshotPdf() {
           <td colspan="3">合 計（${rows.length}件）</td>
           <td style="text-align:right">¥${fmt(totEst)}</td>
           <td style="text-align:right">¥${fmt(totMat)}</td>
-          <td style="text-align:right">¥${fmt(totOut)}</td>
           <td style="text-align:right">¥${fmt(totPur)}</td>
+          <td style="text-align:right">¥${fmt(totOut)}</td>
           <td style="text-align:right">¥${fmt(totLab)}</td>
           <td style="text-align:right">¥${fmt(totCost)}</td>
           <td></td>
