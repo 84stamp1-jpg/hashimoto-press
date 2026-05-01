@@ -3028,19 +3028,13 @@ function addQuoteRequestItem() {
 
   const size = [sizeX, sizeY, sizeZ].filter(Boolean).join(' × ');
 
-  // 依頼品目リストの管理NO: 基準管理NO + 連番（リスト内の同一基準NOの次の番号）
-  const baseMatNo = matNo || baseMoldNo;
-  const sameBase = quoteItems.filter(it => (it.itemMatNo||'').startsWith(baseMatNo) || it.moldNo === moldNo).length;
-  // baseMatNoが 71-B101 なら 71-B101, 71-B102... と連番
-  let itemMatNo = baseMatNo;
-  if (baseMatNo && baseMatNo.match(/\d{3}$/)) {
-    // 既に3桁連番あり → 末尾の3桁を増やす
-    const base3 = baseMatNo.slice(0, -2);
-    const startSeq = parseInt(baseMatNo.slice(-2)) || 1;
-    itemMatNo = base3 + String(startSeq + sameBase).padStart(2,'0');
-  } else if (baseMatNo) {
-    itemMatNo = baseMatNo + String(sameBase + 1).padStart(2,'0');
-  }
+  // 管理NO連番
+  const _base  = matNo || baseMoldNo;
+  const _bfor  = (_base && _base.length >= 5 && !isNaN(_base.slice(-2))) ? _base.slice(0,-2) : _base;
+  const _start = (_base && !isNaN(_base.slice(-2)) && _base.length >= 5) ? (parseInt(_base.slice(-2)) || 1) : 1;
+  const _done  = quoteItems.filter(it => (it.itemMatNo||'').startsWith(_bfor)).length;
+  const itemMatNo = _bfor ? _bfor + String(_start + _done).padStart(2,'0') : _base;
+
   quoteItems.push({ moldNo, partNo, dwgNo, name, qty, material, itemMatNo,
     size, sizeX, sizeY, sizeZ, fX, fY, fZ, finish, note,
     katakiri, tsuri, noteExtra });
@@ -3187,6 +3181,7 @@ function parseMaterialExcel(buf) {
 
   // 現在の管理NOを使用
   moldNo = document.getElementById('qf_moldNo').value.trim();
+  const baseExcelMatNo = document.getElementById('qf_partNo').value.trim() || moldNo;
 
   let count = 0;
   for (let i = dataStart; i < rows.length; i++) {
@@ -3221,31 +3216,23 @@ function parseMaterialExcel(buf) {
     // 実際の仕入先別変換はgenerateQuotePrintで行う
     const size = [sizeX, sizeY, sizeZ].filter(Boolean).join(' × ');
 
+
     // fX/fY/fZ はExcelのF列から取得したbool値
-  const fXb = (xF === 'F' || xF === 'f');
-  const fYb = (yF === 'F' || yF === 'f');
-  const fZb = (zF === 'F' || zF === 'f');
-  // 依頼品目リストの管理NO: 基準管理NO + 連番（リスト内の同一基準NOの次の番号）
-  const baseMatNo = matNo || baseMoldNo;
-  const sameBase = quoteItems.filter(it => (it.itemMatNo||'').startsWith(baseMatNo) || it.moldNo === moldNo).length;
-  // baseMatNoが 71-B101 なら 71-B101, 71-B102... と連番
-  let itemMatNo = baseMatNo;
-  if (baseMatNo && baseMatNo.match(/\d{3}$/)) {
-    // 既に3桁連番あり → 末尾の3桁を増やす
-    const base3 = baseMatNo.slice(0, -2);
-    const startSeq = parseInt(baseMatNo.slice(-2)) || 1;
-    itemMatNo = base3 + String(startSeq + sameBase).padStart(2,'0');
-  } else if (baseMatNo) {
-    itemMatNo = baseMatNo + String(sameBase + 1).padStart(2,'0');
-  }
-  quoteItems.push({ moldNo, partNo, dwgNo, name, qty, material, itemMatNo, sizeX, sizeY, sizeZ, size,
-    fX: fXb, fY: fYb, fZ: fZb, finish, note, katakiri, tsuri, noteRaw });
+    const fXb = (xF === 'F' || xF === 'f');
+    const fYb = (yF === 'F' || yF === 'f');
+    const fZb = (zF === 'F' || zF === 'f');
+
+    // 管理NO連番（baseExcelMatNoからループ内で連番付加）
+    const baseForSeq = baseExcelMatNo ? (baseExcelMatNo.length >= 5 && !isNaN(baseExcelMatNo.slice(-2)) ? baseExcelMatNo.slice(0,-2) : baseExcelMatNo) : '';
+    const startSeq   = baseExcelMatNo && !isNaN(baseExcelMatNo.slice(-2)) && baseExcelMatNo.length >= 5 ? (parseInt(baseExcelMatNo.slice(-2)) || 1) : 1;
+    const alreadySeq = quoteItems.filter(it => (it.itemMatNo||'').startsWith(baseForSeq)).length;
+    const itemMatNo  = baseForSeq ? baseForSeq + String(startSeq + alreadySeq).padStart(2,'0') : '';
+
+    quoteItems.push({ moldNo, partNo, dwgNo, name, qty, material, itemMatNo, sizeX, sizeY, sizeZ, size,
+      fX: fXb, fY: fYb, fZ: fZb, finish, note, katakiri, tsuri, noteRaw });
     count++;
   }
   renderQuoteItemTable();
-
-  // 品番・品名を自動セット
-  if (partNo) document.getElementById('qf_partNo').value = partNo;
   toast(count + '件の品目を取り込みました', 'success');
 }
 
