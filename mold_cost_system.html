@@ -3013,10 +3013,11 @@ function convertMaterial(material, supplierId) {
 
 // 仕上げ記号（▽表示）
 function finishLabel(f) {
+  // 仕上列にはテキストのみ表示（▽記号はXYZサイズの上に出す）
   const map = {
-    '6F':'▽▽▽<br>6F', '4F':'▽▽<br>4F', '2F':'▽<br>2F', '黒皮':'黒皮',
-    '▽▽▽':'▽▽▽<br>6F', '▽▽':'▽▽<br>4F', '▽':'▽<br>2F',
-    '6F（全面）':'▽▽▽<br>6F', '4F（2面）':'▽▽<br>4F', '2F（1面）':'▽<br>2F',
+    '6F':'6F', '4F':'4F', '2F':'2F', '黒皮':'黒皮',
+    '▽▽▽':'6F', '▽▽':'4F', '▽':'2F',
+    '6F（全面）':'6F', '4F（2面）':'4F', '2F（1面）':'2F',
   };
   return map[f] || (f ? String(f) : '—');
 }
@@ -3159,9 +3160,15 @@ function renderQuoteItemTable() {
         <th></th>
       </tr></thead>
       <tbody>${quoteItems.map((r,i) => {
-        const fxMark = r.fX ? ' <span style="color:var(--green);font-size:9px;font-weight:700;">▽▽</span>' : '';
-        const fyMark = r.fY ? ' <span style="color:var(--green);font-size:9px;font-weight:700;">▽▽</span>' : '';
-        const fzMark = r.fZ ? ' <span style="color:var(--green);font-size:9px;font-weight:700;">▽▽</span>' : '';
+        // ▽▽が上・数値が下の縦並びヘルパー
+        const sizeCell = (val, hasF) => {
+          const num = String(val||'').replace(/\.00$/,'');
+          if (!num) return '—';
+          const mark = hasF
+            ? '<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>'
+            : '<div style="height:13px"></div>';
+          return '<div style="display:inline-flex;flex-direction:column;align-items:center;line-height:1.3">' + mark + '<span>' + num + '</span></div>';
+        };
         // itemMatNo(71-B113)または moldNo(71-B)で前方一致チェック
         const _checkNo = r.moldNo || '';
         const moldOk = Object.values(DB.molds||{}).some(m =>
@@ -3181,10 +3188,10 @@ function renderQuoteItemTable() {
           '<td>' + (r.name||'') + '</td>' +
           '<td class="mono">' + (r.qty||1) + '</td>' +
           '<td class="mono">' + (r.material||'') + '</td>' +
-          '<td class="mono" style="font-size:11px">' + (r.sizeX||'') + fxMark + '</td>' +
-          '<td class="mono" style="font-size:11px">' + (r.sizeY||'') + fyMark + '</td>' +
-          '<td class="mono" style="font-size:11px">' + (r.sizeZ||'') + fzMark + '</td>' +
-          '<td><span class="chip">' + finishLabel(r.finish) + '</span></td>' +
+          '<td class="mono" style="font-size:11px;text-align:center;vertical-align:middle;padding:3px 4px">' + sizeCell(r.sizeX, r.fX) + '</td>' +
+          '<td class="mono" style="font-size:11px;text-align:center;vertical-align:middle;padding:3px 4px">' + sizeCell(r.sizeY, r.fY) + '</td>' +
+          '<td class="mono" style="font-size:11px;text-align:center;vertical-align:middle;padding:3px 4px">' + sizeCell(r.sizeZ, r.fZ) + '</td>' +
+          '<td style="text-align:center;vertical-align:middle;padding:4px 8px;font-weight:600">' + finishLabel(r.finish) + '</td>' +
           '<td style="font-size:11px">' + (r.note||'') + '</td>' +
           '<td style="white-space:nowrap">' +
             '<button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px;margin-right:3px" onclick="editQuoteItem(' + i + ')">編集</button>' +
@@ -3537,7 +3544,7 @@ function renderCompare() {
         <td class="mono" style="padding:5px 6px;text-align:center">${item.qty||1}</td>
         <td class="mono" style="padding:5px 6px">${item.material||''}</td>
         <td class="mono" style="padding:5px 6px;font-size:13px">${[item.sizeX,item.sizeY,item.sizeZ].filter(Boolean).join(' × ')}</td>
-        <td style="padding:5px 4px;text-align:center;font-weight:700">${finishLabel(item.finish)}</td>
+        <td style="padding:5px 4px;text-align:center;vertical-align:middle;font-weight:600">${finishLabel(item.finish)}</td>
         ${supInputs}
         <td class="mono" style="padding:5px 6px;color:var(--green);font-weight:700">${minPrice?'¥'+fmt(minPrice):'—'}</td>
         <td class="mono" style="padding:5px 6px;color:var(--red)">${diff?'▼¥'+fmt(diff):'—'}</td>
@@ -3703,9 +3710,7 @@ async function reopenQuote(reqKey) {
   _editingQuoteKey = reqKey;
   // 品目リストに読み込む
   const orderedItems = rec.orderedItems || {};
-  quoteItems = (rec.items || [])
-    .map((it, i) => orderedItems[i] ? null : {...it})
-    .filter(Boolean);
+  quoteItems = (rec.items||[]).map((it,i)=>orderedItems[i]?null:{...it}).filter(Boolean);
 
   // 金型NOと材料管理NOをフォームにセット
   const moldNoEl = document.getElementById('qf_moldNo');
@@ -3797,7 +3802,7 @@ function renderQuoteHistory() {
         <td style="font-size:12px">${item.name||''}</td>
         <td class="mono" style="font-size:11px">${item.material||''}</td>
         <td class="mono" style="font-size:11px">${[item.sizeX,item.sizeY,item.sizeZ].filter(Boolean).join('×')}</td>
-        <td style="font-size:11px">${finishLabel(item.finish)}</td>
+        <td style="font-size:11px;text-align:center;vertical-align:middle;font-weight:600">${finishLabel(item.finish)}</td>
         <td style="font-size:11px">${supName}</td>
         <td class="mono">¥${fmt(q.unitPrice||0)}</td>
         <td style="font-size:11px">${item.note||''}</td>
@@ -5646,15 +5651,15 @@ function matDeleteOne(key) {
   if (r?.quoteReqKey) {
     const rec = DB.quoteRequests?.[r.quoteReqKey];
     if (rec) {
-      const matKeyMatch = key.match(/mat_order_.+_([0-9]+)$/);
-      if (matKeyMatch) {
-        const idx = parseInt(matKeyMatch[1]);
+      const m = key.match(/mat_order_.+_([0-9]+)$/);
+      if (m) {
+        const idx = parseInt(m[1]);
         if (rec.orderedItems) delete rec.orderedItems[idx];
         if (rec.orderBatches) {
           for (const bid of Object.keys(rec.orderBatches)) {
-            const batch = rec.orderBatches[bid];
-            batch.indices = (batch.indices||[]).filter(i => i !== idx);
-            if (batch.indices.length === 0) delete rec.orderBatches[bid];
+            const b = rec.orderBatches[bid];
+            b.indices = (b.indices||[]).filter(i => i !== idx);
+            if (b.indices.length === 0) delete rec.orderBatches[bid];
           }
         }
         writeToFirebase('quoteRequests', DB.quoteRequests);
@@ -6084,65 +6089,51 @@ function renderOrderPage() {
   const suppliers = getSuppliers();
   const supMap    = Object.fromEntries(suppliers.map(s=>[s.id,s]));
 
-  // 材料費に実在する品目キーセットを作成（削除済み品目を注文書から除外するため）
+  // 材料費に実在する品目キーセット（削除済みを注文書から除外するため）
   const existingMatKeys = new Set(
-    Object.entries(DB.materials||{})
-      .filter(([k]) => k.startsWith('mat_order_'))
-      .map(([k]) => k)
+    Object.keys(DB.materials||{}).filter(k => k.startsWith('mat_order_'))
   );
 
-  // バッチごとに注文書カードを生成
-  // 重複対策: 同一品目インデックスは最新バッチのみ表示（古いバッチの同index除外）
   const allCards = [];
   for (const [key, rec] of reqs) {
+    const ordered = rec.orderedItems || {};
     const printed = rec.printedOrders || {};
     const batches = rec.orderBatches || {};
-
-    // 全バッチを新しい順にソート
     const batchList = Object.entries(batches)
       .sort(([,a],[,b]) => (b.createdAt||'').localeCompare(a.createdAt||''));
 
-    // どの品目インデックスをどのバッチで表示済みかを追跡（重複除去）
+    // 重複除去：同一indexは最新バッチのみ表示
     const displayedIndices = new Set();
 
-    for (const [bid, batch] of batchList) {
-      const batchKey = key + '_batch_' + bid;
-      const indices = (batch.indices || []).filter(i => {
-        // 既に新しいバッチで表示済みのindexはスキップ
-        if (displayedIndices.has(i)) return false;
-        // 材料費に実データがない（削除済み）indexはスキップ
-        const matKey = 'mat_order_' + key + '_' + i;
-        if (!existingMatKeys.has(matKey)) return false;
-        return true;
-      });
-
-      if (indices.length === 0) continue;  // 表示する品目がなければカードを作らない
-      indices.forEach(i => displayedIndices.add(i));
-
-      if (!_showHiddenOrders && printed[batchKey]) continue;
-
-      const bySupplier = {};
-      indices.forEach(i => {
-        const item = (rec.items||[])[i];
-        if (!item) return;
-        const sid = (rec.itemDecided||{})[i] || rec.decided || '';
-        if (!bySupplier[sid]) bySupplier[sid] = [];
-        const q = (rec.quotes||{})[key+'_'+i+'_'+sid] || {};
-        bySupplier[sid].push({...item, idx:i, supplierId:sid, decidedPrice: q.unitPrice||''});
-      });
-      for (const [sid, sitems] of Object.entries(bySupplier)) {
-        allCards.push({ key, rec, sid, sitems, batchKey, isHidden: !!printed[batchKey] });
+    if (batchList.length > 0) {
+      for (const [bid, batch] of batchList) {
+        const batchKey = key + '_batch_' + bid;
+        const validIndices = (batch.indices||[]).filter(i => {
+          if (displayedIndices.has(i)) return false;
+          if (!existingMatKeys.has('mat_order_' + key + '_' + i)) return false;
+          return true;
+        });
+        validIndices.forEach(i => displayedIndices.add(i));
+        if (validIndices.length === 0) continue;
+        if (!_showHiddenOrders && printed[batchKey]) continue;
+        const bySupplier = {};
+        validIndices.forEach(i => {
+          const item = (rec.items||[])[i]; if (!item) return;
+          const sid = (rec.itemDecided||{})[i] || rec.decided || '';
+          if (!bySupplier[sid]) bySupplier[sid] = [];
+          const q = (rec.quotes||{})[key+'_'+i+'_'+sid] || {};
+          bySupplier[sid].push({...item, idx:i, supplierId:sid, decidedPrice: q.unitPrice||''});
+        });
+        for (const [sid, sitems] of Object.entries(bySupplier)) {
+          allCards.push({ key, rec, sid, sitems, batchKey, isHidden: !!printed[batchKey] });
+        }
       }
-    }
-
-    // orderBatchesがない古いデータ（互換）
-    if (batchList.length === 0) {
-      const ordered = rec.orderedItems || {};
+    } else {
+      // orderBatchesがない古いデータ互換
       const bySupplier = {};
       (rec.items||[]).forEach((item, i) => {
         if (!ordered[i]) return;
-        const matKey = 'mat_order_' + key + '_' + i;
-        if (!existingMatKeys.has(matKey)) return;  // 削除済みは除外
+        if (!existingMatKeys.has('mat_order_' + key + '_' + i)) return;
         const sid = (rec.itemDecided||{})[i] || rec.decided || '';
         if (!bySupplier[sid]) bySupplier[sid] = [];
         const q = (rec.quotes||{})[key+'_'+i+'_'+sid] || {};
@@ -6174,7 +6165,7 @@ function renderOrderPage() {
           <td class="mono" style="padding:5px 6px;text-align:center">${item.qty||1}</td>
           <td class="mono" style="padding:5px 6px">${item.material||''}</td>
           <td class="mono" style="padding:5px 6px;font-size:13px">${[item.sizeX,item.sizeY,item.sizeZ].filter(Boolean).join(' × ')}</td>
-          <td style="padding:5px 4px;text-align:center;font-weight:700">${finishLabel(item.finish)}</td>
+          <td style="padding:5px 4px;text-align:center;vertical-align:middle;font-weight:600">${finishLabel(item.finish)}</td>
           <td style="padding:4px 6px">
             <input class="form-input" type="number" style="width:110px;padding:3px 6px;font-size:12px"
               placeholder="発注単価(円)" value="${item.decidedPrice||''}"
@@ -6361,17 +6352,13 @@ async function printOrder(reqKey, supId, indices) {
 
 // 注文書を非表示にする／元に戻す
 async function toggleOrderHide(batchKey, supId, hide, reqKey) {
-  // batchKey = 注文書単位キー（key_batch_xxx）、reqKey = DB.quoteRequests のキー
   if (hide) {
     if (!confirm('この注文書を非表示にします。\n再表示するには「非表示を表示」ボタンから確認できます。\nよろしいですか？')) {
-      renderOrderPage();
-      return;
+      renderOrderPage(); return;
     }
   }
   if (!reqKey || !DB.quoteRequests?.[reqKey]) {
-    toast('データが見つかりません (reqKey=' + reqKey + ')', 'error');
-    renderOrderPage();
-    return;
+    toast('データが見つかりません', 'error'); renderOrderPage(); return;
   }
   if (!DB.quoteRequests[reqKey].printedOrders) DB.quoteRequests[reqKey].printedOrders = {};
   if (hide) {
