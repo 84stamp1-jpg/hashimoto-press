@@ -6334,15 +6334,10 @@ async function toggleOrderHide(batchKey, supId, hide, reqKey) {
 async function restoreToOrderPage(reqKey, supId) {
   if (!DB.quoteRequests?.[reqKey]) { toast('見積依頼データが見つかりません', 'error'); return; }
   const rec = DB.quoteRequests[reqKey];
-  // printedOrdersの中でこのreqKeyに関連するbatchKeyを全てクリア
   if (rec.printedOrders) {
-    Object.keys(rec.printedOrders).forEach(k => {
-      // batchKey形式: reqKey_batch_xxx または reqKey_supId
-      if (k.startsWith(reqKey)) delete rec.printedOrders[k];
-    });
+    Object.keys(rec.printedOrders).forEach(k => { if (k.startsWith(reqKey)) delete rec.printedOrders[k]; });
+    delete rec.printedOrders[supId];
   }
-  // 旧形式（supIdキー）もクリア
-  if (rec.printedOrders) delete rec.printedOrders[supId];
   await writeToFirebase('quoteRequests', DB.quoteRequests);
   toast('③注文書作成タブに再表示しました', 'success');
   renderMaterials();
