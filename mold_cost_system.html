@@ -3527,7 +3527,7 @@ function renderCompare() {
         ...sups.map(sid => `<option value="${sid}"${itemDecided===sid?' selected':''}>${supShort[sid]||sid}</option>`)
       ].join('');
 
-      const isChecked = (rec.checkedItems||{})[i] !== false;  // デフォルトtrue
+      const isChecked = (rec.checkedItems||{})[i] === true;
       return `<tr style="border-bottom:1px solid var(--border);${isChecked?'':'opacity:0.5'}">
         <td style="padding:4px 6px;text-align:center">
           <input type="checkbox" ${isChecked?'checked':''} onchange="toggleItemCheck('${key}',${i},this.checked)">
@@ -3702,7 +3702,10 @@ async function reopenQuote(reqKey) {
   // 編集キーを記録（上書き保存用）
   _editingQuoteKey = reqKey;
   // 品目リストに読み込む
-  quoteItems = (rec.items || []).map(it => ({...it}));
+  const orderedItems = rec.orderedItems || {};
+  quoteItems = (rec.items || [])
+    .map((it, i) => orderedItems[i] ? null : {...it})
+    .filter(Boolean);
 
   // 金型NOと材料管理NOをフォームにセット
   const moldNoEl = document.getElementById('qf_moldNo');
@@ -5640,7 +5643,6 @@ async function labClearAndImport() {
 function matDeleteOne(key) {
   if (!confirm('この材料費を削除しますか？\n※関連する注文書からも削除されます')) return;
   const r = DB.materials[key];
-  // 関連するquoteRequestsのorderedItems・orderBatchesもクリア
   if (r?.quoteReqKey) {
     const rec = DB.quoteRequests?.[r.quoteReqKey];
     if (rec) {
@@ -5655,8 +5657,6 @@ function matDeleteOne(key) {
             if (batch.indices.length === 0) delete rec.orderBatches[bid];
           }
         }
-        const remaining = Object.values(rec.orderedItems||{}).filter(Boolean);
-        if (!remaining.length) rec.status = '見積待ち';
         writeToFirebase('quoteRequests', DB.quoteRequests);
       }
     }
@@ -5973,7 +5973,8 @@ async function confirmCheckedItems(reqKey) {
 
   // チェック済みの行を確認
   // チェック済みの行インデックスを収集
-  const checkedIndices = items.map((_,i) => i).filter(i => checked[i] !== false);
+  const orderedItems = rec.orderedItems || {};
+  const checkedIndices = items.map((_,i) => i).filter(i => checked[i] === true && !orderedItems[i]);
   const toConfirm = checkedIndices.map(i => items[i]);
   if (!toConfirm.length) { toast('発注確定する行にチェックを入れてください', 'error'); return; }
 
@@ -5992,7 +5993,7 @@ async function confirmCheckedItems(reqKey) {
   let matCount = 0;
 
   items.forEach((item, i) => {
-    if (checked[i] === false) return;  // チェックなしはスキップ
+    if (checked[i] !== true || (rec.orderedItems||{})[i]) return;
     const supplierId = (rec.itemDecided||{})[i] || (decided[i]) || rec.decided || '';
     const sup = supMap[supplierId];
     const qkey = reqKey+'_'+i+'_'+supplierId;
@@ -6031,7 +6032,7 @@ async function confirmCheckedItems(reqKey) {
   rec.orderBatches[batchId] = { createdAt: new Date().toISOString(), indices: [] };
 
   items.forEach((_,i) => {
-    if (checked[i] !== false) {
+    if (checked[i] === true && !(rec.orderedItems||{})[i]) {
       rec.orderedItems[i] = true;
       rec.orderBatches[batchId].indices.push(i);
     }
@@ -6083,36 +6084,65 @@ function renderOrderPage() {
   const suppliers = getSuppliers();
   const supMap    = Object.fromEntries(suppliers.map(s=>[s.id,s]));
 
-  // バッチごとに注文書カードを生成（発注確定ごとに1枚）
+  // 材料費に実在する品目キーセットを作成（削除済み品目を注文書から除外するため）
+  const existingMatKeys = new Set(
+    Object.entries(DB.materials||{})
+      .filter(([k]) => k.startsWith('mat_order_'))
+      .map(([k]) => k)
+  );
+
+  // バッチごとに注文書カードを生成
+  // 重複対策: 同一品目インデックスは最新バッチのみ表示（古いバッチの同index除外）
   const allCards = [];
   for (const [key, rec] of reqs) {
-    const ordered = rec.orderedItems || {};
     const printed = rec.printedOrders || {};
     const batches = rec.orderBatches || {};
+
+    // 全バッチを新しい順にソート
     const batchList = Object.entries(batches)
       .sort(([,a],[,b]) => (b.createdAt||'').localeCompare(a.createdAt||''));
-    if (batchList.length > 0) {
-      for (const [bid, batch] of batchList) {
-        const batchKey = key + '_batch_' + bid;
-        if (!_showHiddenOrders && printed[batchKey]) continue;
-        const indices = batch.indices || [];
-        const bySupplier = {};
-        indices.forEach(i => {
-          const item = (rec.items||[])[i];
-          if (!item) return;
-          const sid = (rec.itemDecided||{})[i] || rec.decided || '';
-          if (!bySupplier[sid]) bySupplier[sid] = [];
-          const q = (rec.quotes||{})[key+'_'+i+'_'+sid] || {};
-          bySupplier[sid].push({...item, idx:i, supplierId:sid, decidedPrice: q.unitPrice||''});
-        });
-        for (const [sid, sitems] of Object.entries(bySupplier)) {
-          allCards.push({ key, rec, sid, sitems, batchKey, isHidden: !!printed[batchKey] });
-        }
+
+    // どの品目インデックスをどのバッチで表示済みかを追跡（重複除去）
+    const displayedIndices = new Set();
+
+    for (const [bid, batch] of batchList) {
+      const batchKey = key + '_batch_' + bid;
+      const indices = (batch.indices || []).filter(i => {
+        // 既に新しいバッチで表示済みのindexはスキップ
+        if (displayedIndices.has(i)) return false;
+        // 材料費に実データがない（削除済み）indexはスキップ
+        const matKey = 'mat_order_' + key + '_' + i;
+        if (!existingMatKeys.has(matKey)) return false;
+        return true;
+      });
+
+      if (indices.length === 0) continue;  // 表示する品目がなければカードを作らない
+      indices.forEach(i => displayedIndices.add(i));
+
+      if (!_showHiddenOrders && printed[batchKey]) continue;
+
+      const bySupplier = {};
+      indices.forEach(i => {
+        const item = (rec.items||[])[i];
+        if (!item) return;
+        const sid = (rec.itemDecided||{})[i] || rec.decided || '';
+        if (!bySupplier[sid]) bySupplier[sid] = [];
+        const q = (rec.quotes||{})[key+'_'+i+'_'+sid] || {};
+        bySupplier[sid].push({...item, idx:i, supplierId:sid, decidedPrice: q.unitPrice||''});
+      });
+      for (const [sid, sitems] of Object.entries(bySupplier)) {
+        allCards.push({ key, rec, sid, sitems, batchKey, isHidden: !!printed[batchKey] });
       }
-    } else {
+    }
+
+    // orderBatchesがない古いデータ（互換）
+    if (batchList.length === 0) {
+      const ordered = rec.orderedItems || {};
       const bySupplier = {};
       (rec.items||[]).forEach((item, i) => {
         if (!ordered[i]) return;
+        const matKey = 'mat_order_' + key + '_' + i;
+        if (!existingMatKeys.has(matKey)) return;  // 削除済みは除外
         const sid = (rec.itemDecided||{})[i] || rec.decided || '';
         if (!bySupplier[sid]) bySupplier[sid] = [];
         const q = (rec.quotes||{})[key+'_'+i+'_'+sid] || {};
@@ -6330,29 +6360,24 @@ async function printOrder(reqKey, supId, indices) {
 
 
 // 注文書を非表示にする／元に戻す
-async function toggleOrderHide(reqKey, supId, hide) {
+async function toggleOrderHide(batchKey, supId, hide, reqKey) {
+  // batchKey = 注文書単位キー（key_batch_xxx）、reqKey = DB.quoteRequests のキー
   if (hide) {
     if (!confirm('この注文書を非表示にします。\n再表示するには「非表示を表示」ボタンから確認できます。\nよろしいですか？')) {
-      // チェックを戻す
       renderOrderPage();
       return;
     }
   }
-  if (!DB.quoteRequests?.[reqKey]) return;
+  if (!reqKey || !DB.quoteRequests?.[reqKey]) {
+    toast('データが見つかりません (reqKey=' + reqKey + ')', 'error');
+    renderOrderPage();
+    return;
+  }
   if (!DB.quoteRequests[reqKey].printedOrders) DB.quoteRequests[reqKey].printedOrders = {};
   if (hide) {
-    DB.quoteRequests[reqKey].printedOrders[supId] = true;
-    // 材料費のorderHiddenも更新
-    Object.values(DB.materials||{}).forEach(r => {
-      if (r.quoteReqKey === reqKey && r.orderedSupId === supId) r.orderHidden = true;
-    });
-    await writeToFirebase('materials', DB.materials);
+    DB.quoteRequests[reqKey].printedOrders[batchKey] = true;
   } else {
-    delete DB.quoteRequests[reqKey].printedOrders[supId];
-    Object.values(DB.materials||{}).forEach(r => {
-      if (r.quoteReqKey === reqKey && r.orderedSupId === supId) r.orderHidden = false;
-    });
-    await writeToFirebase('materials', DB.materials);
+    delete DB.quoteRequests[reqKey].printedOrders[batchKey];
   }
   await writeToFirebase('quoteRequests', DB.quoteRequests);
   renderOrderPage();
