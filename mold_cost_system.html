@@ -1412,16 +1412,32 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
           <input class="form-input" id="matf_material" placeholder="SS400, S50C...">
         </div>
         <div class="form-group">
+          <label class="form-label">数量</label>
+          <input class="form-input" id="matf_qty" type="number" value="1" min="1">
+        </div>
+        <div class="form-group">
           <label class="form-label">サイズ (幅×奥×厚)</label>
           <input class="form-input" id="matf_size" placeholder="700×460×30">
+        </div>
+        <div class="form-group">
+          <label class="form-label">長さX (mm)</label>
+          <input class="form-input" id="matf_sizeX" type="number" placeholder="185">
+        </div>
+        <div class="form-group">
+          <label class="form-label">幅Y (mm)</label>
+          <input class="form-input" id="matf_sizeY" type="number" placeholder="210">
+        </div>
+        <div class="form-group">
+          <label class="form-label">材厚Z (mm)</label>
+          <input class="form-input" id="matf_sizeZ" type="number" placeholder="30">
         </div>
         <div class="form-group">
           <label class="form-label">仕上</label>
           <input class="form-input" id="matf_finish" placeholder="4F, 6F...">
         </div>
         <div class="form-group">
-          <label class="form-label">重量 (kg)</label>
-          <input class="form-input" id="matf_weight" type="number" step="0.001">
+          <label class="form-label">重量 (kg) <span style="font-size:10px;color:var(--text3)">空欄で自動計算</span></label>
+          <input class="form-input" id="matf_weight" type="number" step="0.001" placeholder="自動計算">
         </div>
         <div class="form-group">
           <label class="form-label">仕入金額（円）</label>
@@ -2319,7 +2335,7 @@ function renderMaterials() {
             ${matPartNoCell(r.moldNo, r.partNo)}
             ${r.name ? '<div style="font-size:10px;color:var(--text2);margin-top:1px">' + r.name + '</div>' : ''}
           </td>
-          <td class="mono">${r.material||''}</td>
+          <td class="mono" style="font-size:13px;font-weight:600">${r.material||''}</td>
           <td class="mono" style="font-size:11px">${r.size||[r.sizeX,r.sizeY,r.sizeZ].filter(Boolean).join(' × ')||''}</td>
           <td style="text-align:center">${r.finish||''}</td>
           <td class="mono" style="font-size:11px">
@@ -2334,7 +2350,7 @@ function renderMaterials() {
               return tot.toFixed(1) + ' kg<div style=\\"color:var(--text3);font-size:10px\\">' + qty + '枚</div>';
             })()}
           </td>
-          <td class="mono"><b>¥${fmt(r.amount)}</b></td>
+          <td class="mono" style="font-size:14px;font-weight:700">¥${fmt(r.amount)}</td>
           <td style="font-size:11px">${r.supplier||''}</td>
         </tr>`).join('')}
       </tbody>
@@ -2397,7 +2413,7 @@ function renderOutsource() {
           <td style="font-size:12px">${r.supplier||''}</td>
           <td class="mono">${r.qty||''}</td>
           <td class="mono">¥${fmt(r.unit)}</td>
-          <td class="mono"><b>¥${fmt(r.total)}</b></td>
+          <td class="mono" style="font-size:14px;font-weight:700">¥${fmt(r.total)}</td>
         </tr>`).join('')}
       </tbody>
     </table>`;
@@ -2460,7 +2476,7 @@ function renderPurchase() {
           <td>${r.supplier||''}</td>
           <td class="mono">${r.qty||''}</td>
           <td class="mono">¥${fmt(r.unit)}</td>
-          <td class="mono"><b>¥${fmt(r.total)}</b></td>
+          <td class="mono" style="font-size:14px;font-weight:700">¥${fmt(r.total)}</td>
         </tr>`).join('')}
       </tbody>
     </table>`;
@@ -2512,7 +2528,7 @@ function renderLabor() {
           <td style="font-size:11px">${r.worker||''}</td>
           <td style="font-size:11px">${r.workType||''}</td>
           <td class="mono" style="text-align:right">¥${fmt(r.budget||0)}</td>
-          <td class="mono" style="text-align:right;font-weight:700;color:var(--accent)">¥${fmt(r.amount||0)}</td>
+          <td class="mono" style="text-align:right;font-size:14px;font-weight:700;color:var(--accent)">¥${fmt(r.amount||0)}</td>
           <td class="mono" style="text-align:right;color:${(r.remain||0)<0?'var(--red)':'var(--green)'}">¥${fmt(r.remain||0)}</td>
         </tr>`).join('')}
       </tbody>
@@ -5786,12 +5802,20 @@ function editMaterial(key) {
   set('matf_partNo',   r.partNo);
   set('matf_name',     r.name);
   set('matf_material', r.material);
+  set('matf_qty',      r.qty||1);
   set('matf_size',     r.size);
+  set('matf_sizeX',    r.sizeX);
+  set('matf_sizeY',    r.sizeY);
+  set('matf_sizeZ',    r.sizeZ);
   set('matf_finish',   r.finish);
   set('matf_weight',   r.weight);
   set('matf_amount',   r.amount);
   set('matf_supplier', r.supplier);
   set('matf_note',     r.note);
+  // 工程番号を管理NOから自動抽出（例: 71-B101 → 百の位=1）
+  const partNo = r.partNo||'';
+  const procMatch = partNo.match(/[A-Za-z](\d)\d{2}$/);
+  if (procMatch) set('matf_processNo', procMatch[1]);
   // 編集キーを保存
   let hid = document.getElementById('matf_editKey');
   if (!hid) { hid = document.createElement('input'); hid.type='hidden'; hid.id='matf_editKey'; document.getElementById('matModal').appendChild(hid); }
