@@ -2360,7 +2360,7 @@ function renderMaterials() {
               return tot.toFixed(1) + ' kg<div style=\\"color:var(--text3);font-size:11px\\">' + qty + '枚</div>';
             })()}
           </td>
-          <td class="mono" style="font-size:15px;">¥${fmt(r.amount)}</td>
+          <td class="mono" style="font-size:15px">¥${fmt(r.amount)}</td>
           <td style="font-size:10px;word-break:break-all;min-width:70px;max-width:100px;color:var(--text2)">${r.supplier||''}</td>
         </tr>`).join('')}
       </tbody>
@@ -2423,7 +2423,7 @@ function renderOutsource() {
           <td style="font-size:12px">${r.supplier||''}</td>
           <td class="mono" style="font-size:15px">${r.qty||''}</td>
           <td class="mono" style="font-size:15px">¥${fmt(r.unit)}</td>
-          <td class="mono" style="font-size:15px;">¥${fmt(r.total)}</td>
+          <td class="mono" style="font-size:15px">¥${fmt(r.total)}</td>
         </tr>`).join('')}
       </tbody>
     </table>`;
@@ -2486,7 +2486,7 @@ function renderPurchase() {
           <td>${r.supplier||''}</td>
           <td class="mono" style="font-size:15px">${r.qty||''}</td>
           <td class="mono" style="font-size:15px">¥${fmt(r.unit)}</td>
-          <td class="mono" style="font-size:15px;">¥${fmt(r.total)}</td>
+          <td class="mono" style="font-size:15px">¥${fmt(r.total)}</td>
         </tr>`).join('')}
       </tbody>
     </table>`;
@@ -6333,14 +6333,17 @@ async function toggleOrderHide(batchKey, supId, hide, reqKey) {
 // 材料費から注文書ページに再表示
 async function restoreToOrderPage(reqKey, supId) {
   if (!DB.quoteRequests?.[reqKey]) { toast('見積依頼データが見つかりません', 'error'); return; }
-  if (!DB.quoteRequests[reqKey].printedOrders) DB.quoteRequests[reqKey].printedOrders = {};
-  delete DB.quoteRequests[reqKey].printedOrders[supId];
-  // 材料費のorderHiddenをfalseに
-  Object.values(DB.materials||{}).forEach(r => {
-    if (r.quoteReqKey === reqKey && r.orderedSupId === supId) r.orderHidden = false;
-  });
+  const rec = DB.quoteRequests[reqKey];
+  // printedOrdersの中でこのreqKeyに関連するbatchKeyを全てクリア
+  if (rec.printedOrders) {
+    Object.keys(rec.printedOrders).forEach(k => {
+      // batchKey形式: reqKey_batch_xxx または reqKey_supId
+      if (k.startsWith(reqKey)) delete rec.printedOrders[k];
+    });
+  }
+  // 旧形式（supIdキー）もクリア
+  if (rec.printedOrders) delete rec.printedOrders[supId];
   await writeToFirebase('quoteRequests', DB.quoteRequests);
-  await writeToFirebase('materials', DB.materials);
   toast('③注文書作成タブに再表示しました', 'success');
   renderMaterials();
   showPage('quote');
