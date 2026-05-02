@@ -2346,22 +2346,16 @@ function renderMaterials() {
           </td>
           <td class="mono" style="font-size:15px">${r.material||''}</td>
           <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 6px">${(()=>{
-            const v=String(r.sizeX||'').replace(/\.00$/,'');
-            if(!v)return'—';
-            return(r.fX?'<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>')
-              +'<div style="font-size:16px;font-weight:600">'+v+'</div>';
+            const v=String(r.sizeX||'').replace(/\.00$/,'');if(!v)return'—';
+            return(r.fX?'<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>')+'<div style="font-size:16px;font-weight:600">'+v+'</div>';
           })()}</td>
           <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 6px">${(()=>{
-            const v=String(r.sizeY||'').replace(/\.00$/,'');
-            if(!v)return'—';
-            return(r.fY?'<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>')
-              +'<div style="font-size:16px;font-weight:600">'+v+'</div>';
+            const v=String(r.sizeY||'').replace(/\.00$/,'');if(!v)return'—';
+            return(r.fY?'<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>')+'<div style="font-size:16px;font-weight:600">'+v+'</div>';
           })()}</td>
           <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 6px">${(()=>{
-            const v=String(r.sizeZ||'').replace(/\.00$/,'');
-            if(!v)return'—';
-            return(r.fZ?'<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>')
-              +'<div style="font-size:16px;font-weight:600">'+v+'</div>';
+            const v=String(r.sizeZ||'').replace(/\.00$/,'');if(!v)return'—';
+            return(r.fZ?'<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>')+'<div style="font-size:16px;font-weight:600">'+v+'</div>';
           })()}</td>
           <td class="mono" style="font-size:14px">
             ${(() => {
@@ -3533,7 +3527,7 @@ function renderCompare() {
         ...sups.map(sid => `<option value="${sid}"${itemDecided===sid?' selected':''}>${supShort[sid]||sid}</option>`)
       ].join('');
 
-      const isChecked = (rec.checkedItems||{})[i] === true;
+      const isChecked = (rec.checkedItems||{})[i] !== false;  // デフォルトtrue
       return `<tr style="border-bottom:1px solid var(--border);${isChecked?'':'opacity:0.5'}">
         <td style="padding:4px 6px;text-align:center">
           <input type="checkbox" ${isChecked?'checked':''} onchange="toggleItemCheck('${key}',${i},this.checked)">
@@ -3542,7 +3536,7 @@ function renderCompare() {
         <td style="padding:5px 8px;font-size:12px">${item.name||''}</td>
         <td class="mono" style="padding:5px 6px;text-align:center">${item.qty||1}</td>
         <td class="mono" style="padding:5px 6px">${item.material||''}</td>
-        <td class="mono" style="padding:5px 6px;font-size:14px;font-weight:600">${[item.sizeX,item.sizeY,item.sizeZ].filter(Boolean).join(' × ')}</td>
+        <td class="mono" style="padding:5px 6px;font-size:13px">${[item.sizeX,item.sizeY,item.sizeZ].filter(Boolean).join(' × ')}</td>
         <td style="padding:5px 4px;text-align:center;font-weight:700">${finishLabel(item.finish)}</td>
         ${supInputs}
         <td class="mono" style="padding:5px 6px;color:var(--green);font-weight:700">${minPrice?'¥'+fmt(minPrice):'—'}</td>
@@ -3708,11 +3702,7 @@ async function reopenQuote(reqKey) {
   // 編集キーを記録（上書き保存用）
   _editingQuoteKey = reqKey;
   // 品目リストに読み込む
-  // 未発注行のみ読み込む（発注済み行は除外）
-  const orderedItems = rec.orderedItems || {};
-  quoteItems = (rec.items || [])
-    .map((it, i) => orderedItems[i] ? null : {...it})
-    .filter(Boolean);
+  quoteItems = (rec.items || []).map(it => ({...it}));
 
   // 金型NOと材料管理NOをフォームにセット
   const moldNoEl = document.getElementById('qf_moldNo');
@@ -5648,7 +5638,29 @@ async function labClearAndImport() {
 // 即時削除（画面反映 → Firebase非同期）
 // ═══════════════════════════════════════════════
 function matDeleteOne(key) {
-  if (!confirm('この行を削除しますか？')) return;
+  if (!confirm('この材料費を削除しますか？\n※関連する注文書からも削除されます')) return;
+  const r = DB.materials[key];
+  // 関連するquoteRequestsのorderedItems・orderBatchesもクリア
+  if (r?.quoteReqKey) {
+    const rec = DB.quoteRequests?.[r.quoteReqKey];
+    if (rec) {
+      const matKeyMatch = key.match(/mat_order_.+_([0-9]+)$/);
+      if (matKeyMatch) {
+        const idx = parseInt(matKeyMatch[1]);
+        if (rec.orderedItems) delete rec.orderedItems[idx];
+        if (rec.orderBatches) {
+          for (const bid of Object.keys(rec.orderBatches)) {
+            const batch = rec.orderBatches[bid];
+            batch.indices = (batch.indices||[]).filter(i => i !== idx);
+            if (batch.indices.length === 0) delete rec.orderBatches[bid];
+          }
+        }
+        const remaining = Object.values(rec.orderedItems||{}).filter(Boolean);
+        if (!remaining.length) rec.status = '見積待ち';
+        writeToFirebase('quoteRequests', DB.quoteRequests);
+      }
+    }
+  }
   delete DB.materials[key]; renderMaterials();
   writeToFirebase('materials', DB.materials).then(()=>toast('削除しました','success'));
 }
@@ -5961,8 +5973,7 @@ async function confirmCheckedItems(reqKey) {
 
   // チェック済みの行を確認
   // チェック済みの行インデックスを収集
-  const orderedItems = rec.orderedItems || {};
-  const checkedIndices = items.map((_,i) => i).filter(i => checked[i] === true && !orderedItems[i]);
+  const checkedIndices = items.map((_,i) => i).filter(i => checked[i] !== false);
   const toConfirm = checkedIndices.map(i => items[i]);
   if (!toConfirm.length) { toast('発注確定する行にチェックを入れてください', 'error'); return; }
 
@@ -5981,7 +5992,7 @@ async function confirmCheckedItems(reqKey) {
   let matCount = 0;
 
   items.forEach((item, i) => {
-    if (checked[i] !== true || orderedItems[i]) return;  // チェックなし・発注済みはスキップ
+    if (checked[i] === false) return;  // チェックなしはスキップ
     const supplierId = (rec.itemDecided||{})[i] || (decided[i]) || rec.decided || '';
     const sup = supMap[supplierId];
     const qkey = reqKey+'_'+i+'_'+supplierId;
@@ -6020,7 +6031,7 @@ async function confirmCheckedItems(reqKey) {
   rec.orderBatches[batchId] = { createdAt: new Date().toISOString(), indices: [] };
 
   items.forEach((_,i) => {
-    if (checked[i] === true && !orderedItems[i]) {
+    if (checked[i] !== false) {
       rec.orderedItems[i] = true;
       rec.orderBatches[batchId].indices.push(i);
     }
@@ -6132,7 +6143,7 @@ function renderOrderPage() {
           <td style="padding:5px 8px">${item.name||''}</td>
           <td class="mono" style="padding:5px 6px;text-align:center">${item.qty||1}</td>
           <td class="mono" style="padding:5px 6px">${item.material||''}</td>
-          <td class="mono" style="padding:5px 6px;font-size:14px;font-weight:600">${[item.sizeX,item.sizeY,item.sizeZ].filter(Boolean).join(' × ')}</td>
+          <td class="mono" style="padding:5px 6px;font-size:13px">${[item.sizeX,item.sizeY,item.sizeZ].filter(Boolean).join(' × ')}</td>
           <td style="padding:5px 4px;text-align:center;font-weight:700">${finishLabel(item.finish)}</td>
           <td style="padding:4px 6px">
             <input class="form-input" type="number" style="width:110px;padding:3px 6px;font-size:12px"
