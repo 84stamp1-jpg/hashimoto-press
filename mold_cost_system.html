@@ -2328,7 +2328,7 @@ function renderMaterials() {
       <thead><tr>
         <th style="width:120px"></th>
         <th>仕入日</th><th>管理NO.</th><th>品番 / 品名</th>
-        <th>材質</th><th>サイズ</th><th>仕上</th><th>重量(kg)</th><th>仕入金額</th><th>手配先</th>
+        <th>材質</th><th style="text-align:center">X(長)</th><th style="text-align:center">Y(幅)</th><th style="text-align:center">Z(厚)</th><th>重量(kg)</th><th>仕入金額</th><th>手配先</th>
       </tr></thead>
       <tbody>${entries.map(([k,r])=>`
         <tr style="height:52px">
@@ -2345,8 +2345,24 @@ function renderMaterials() {
             ${r.name ? '<div style="font-size:10px;color:var(--text2);margin-top:1px">' + r.name + '</div>' : ''}
           </td>
           <td class="mono" style="font-size:15px">${r.material||''}</td>
-          <td class="mono" style="font-size:14px">${r.size||[r.sizeX,r.sizeY,r.sizeZ].filter(Boolean).join(' × ')||''}</td>
-          <td style="text-align:center;font-size:14px;font-weight:700;line-height:1.4">${finishLabel(r.finish)}</td>
+          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 6px">${(()=>{
+            const v=String(r.sizeX||'').replace(/\.00$/,'');
+            if(!v)return'—';
+            return(r.fX?'<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>')
+              +'<div style="font-size:16px;font-weight:600">'+v+'</div>';
+          })()}</td>
+          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 6px">${(()=>{
+            const v=String(r.sizeY||'').replace(/\.00$/,'');
+            if(!v)return'—';
+            return(r.fY?'<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>')
+              +'<div style="font-size:16px;font-weight:600">'+v+'</div>';
+          })()}</td>
+          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 6px">${(()=>{
+            const v=String(r.sizeZ||'').replace(/\.00$/,'');
+            if(!v)return'—';
+            return(r.fZ?'<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>')
+              +'<div style="font-size:16px;font-weight:600">'+v+'</div>';
+          })()}</td>
           <td class="mono" style="font-size:14px">
             ${(() => {
               const manualKg = r.weight ? parseFloat(r.weight) : null;
@@ -2360,7 +2376,7 @@ function renderMaterials() {
             })()}
           </td>
           <td class="mono" style="font-size:15px;font-weight:700">¥${fmt(r.amount)}</td>
-          <td style="font-size:14px;word-break:break-all;min-width:80px;max-width:120px">${r.supplier||''}</td>
+          <td style="font-size:10px;word-break:break-all;min-width:70px;max-width:100px;color:var(--text2)">${r.supplier||''}</td>
         </tr>`).join('')}
       </tbody>
     </table>`;
@@ -3517,7 +3533,7 @@ function renderCompare() {
         ...sups.map(sid => `<option value="${sid}"${itemDecided===sid?' selected':''}>${supShort[sid]||sid}</option>`)
       ].join('');
 
-      const isChecked = (rec.checkedItems||{})[i] === true;  // 明示的にチェックされたもののみ
+      const isChecked = (rec.checkedItems||{})[i] === true;
       return `<tr style="border-bottom:1px solid var(--border);${isChecked?'':'opacity:0.5'}">
         <td style="padding:4px 6px;text-align:center">
           <input type="checkbox" ${isChecked?'checked':''} onchange="toggleItemCheck('${key}',${i},this.checked)">
@@ -3526,7 +3542,7 @@ function renderCompare() {
         <td style="padding:5px 8px;font-size:12px">${item.name||''}</td>
         <td class="mono" style="padding:5px 6px;text-align:center">${item.qty||1}</td>
         <td class="mono" style="padding:5px 6px">${item.material||''}</td>
-        <td class="mono" style="padding:5px 6px;font-size:11px">${[item.sizeX,item.sizeY,item.sizeZ].filter(Boolean).join('×')}</td>
+        <td class="mono" style="padding:5px 6px;font-size:14px;font-weight:600">${[item.sizeX,item.sizeY,item.sizeZ].filter(Boolean).join(' × ')}</td>
         <td style="padding:5px 4px;text-align:center;font-weight:700">${finishLabel(item.finish)}</td>
         ${supInputs}
         <td class="mono" style="padding:5px 6px;color:var(--green);font-weight:700">${minPrice?'¥'+fmt(minPrice):'—'}</td>
@@ -3692,7 +3708,11 @@ async function reopenQuote(reqKey) {
   // 編集キーを記録（上書き保存用）
   _editingQuoteKey = reqKey;
   // 品目リストに読み込む
-  quoteItems = (rec.items || []).map(it => ({...it}));
+  // 未発注行のみ読み込む（発注済み行は除外）
+  const orderedItems = rec.orderedItems || {};
+  quoteItems = (rec.items || [])
+    .map((it, i) => orderedItems[i] ? null : {...it})
+    .filter(Boolean);
 
   // 金型NOと材料管理NOをフォームにセット
   const moldNoEl = document.getElementById('qf_moldNo');
@@ -5941,7 +5961,8 @@ async function confirmCheckedItems(reqKey) {
 
   // チェック済みの行を確認
   // チェック済みの行インデックスを収集
-  const checkedIndices = items.map((_,i) => i).filter(i => checked[i] === true);
+  const orderedItems = rec.orderedItems || {};
+  const checkedIndices = items.map((_,i) => i).filter(i => checked[i] === true && !orderedItems[i]);
   const toConfirm = checkedIndices.map(i => items[i]);
   if (!toConfirm.length) { toast('発注確定する行にチェックを入れてください', 'error'); return; }
 
@@ -5960,7 +5981,7 @@ async function confirmCheckedItems(reqKey) {
   let matCount = 0;
 
   items.forEach((item, i) => {
-    if (checked[i] !== true) return;  // チェックありのみ発注確定
+    if (checked[i] !== true || orderedItems[i]) return;  // チェックなし・発注済みはスキップ
     const supplierId = (rec.itemDecided||{})[i] || (decided[i]) || rec.decided || '';
     const sup = supMap[supplierId];
     const qkey = reqKey+'_'+i+'_'+supplierId;
@@ -5999,7 +6020,7 @@ async function confirmCheckedItems(reqKey) {
   rec.orderBatches[batchId] = { createdAt: new Date().toISOString(), indices: [] };
 
   items.forEach((_,i) => {
-    if (checked[i] !== false) {
+    if (checked[i] === true && !orderedItems[i]) {
       rec.orderedItems[i] = true;
       rec.orderBatches[batchId].indices.push(i);
     }
@@ -6111,7 +6132,7 @@ function renderOrderPage() {
           <td style="padding:5px 8px">${item.name||''}</td>
           <td class="mono" style="padding:5px 6px;text-align:center">${item.qty||1}</td>
           <td class="mono" style="padding:5px 6px">${item.material||''}</td>
-          <td class="mono" style="padding:5px 6px;font-size:11px">${[item.sizeX,item.sizeY,item.sizeZ].filter(Boolean).join('×')}</td>
+          <td class="mono" style="padding:5px 6px;font-size:14px;font-weight:600">${[item.sizeX,item.sizeY,item.sizeZ].filter(Boolean).join(' × ')}</td>
           <td style="padding:5px 4px;text-align:center;font-weight:700">${finishLabel(item.finish)}</td>
           <td style="padding:4px 6px">
             <input class="form-input" type="number" style="width:110px;padding:3px 6px;font-size:12px"
@@ -6298,26 +6319,25 @@ async function printOrder(reqKey, supId, indices) {
 
 
 // 注文書を非表示にする／元に戻す
-async function toggleOrderHide(batchKey, supId, hide, reqKey) {
-  // batchKey: 注文書の表示/非表示キー（例: key_batch_xxx または key_sid）
-  // reqKey:   DB.quoteRequests のキー（materials更新に使用）
+async function toggleOrderHide(reqKey, supId, hide) {
   if (hide) {
     if (!confirm('この注文書を非表示にします。\n再表示するには「非表示を表示」ボタンから確認できます。\nよろしいですか？')) {
+      // チェックを戻す
       renderOrderPage();
       return;
     }
   }
-  if (!reqKey || !DB.quoteRequests?.[reqKey]) return;
+  if (!DB.quoteRequests?.[reqKey]) return;
   if (!DB.quoteRequests[reqKey].printedOrders) DB.quoteRequests[reqKey].printedOrders = {};
   if (hide) {
-    // batchKey単位で非表示フラグを立てる
-    DB.quoteRequests[reqKey].printedOrders[batchKey] = true;
+    DB.quoteRequests[reqKey].printedOrders[supId] = true;
+    // 材料費のorderHiddenも更新
     Object.values(DB.materials||{}).forEach(r => {
       if (r.quoteReqKey === reqKey && r.orderedSupId === supId) r.orderHidden = true;
     });
     await writeToFirebase('materials', DB.materials);
   } else {
-    delete DB.quoteRequests[reqKey].printedOrders[batchKey];
+    delete DB.quoteRequests[reqKey].printedOrders[supId];
     Object.values(DB.materials||{}).forEach(r => {
       if (r.quoteReqKey === reqKey && r.orderedSupId === supId) r.orderHidden = false;
     });
