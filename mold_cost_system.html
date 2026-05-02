@@ -930,6 +930,10 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
       <select class="filter-select" id="matMoldFilter" onchange="renderMaterials()">
         <option value="">全金型</option>
       </select>
+      <select class="filter-select" id="matDateFilter" onchange="renderMaterials()" style="width:120px">
+        <option value="">全日付</option>
+        <option value="nodate">仕入日なし</option>
+      </select>
       <button class="btn btn-primary btn-sm" onclick="openMatModal()">＋ 材料費入力</button>
     </div>
     <div class="table-wrap">
@@ -941,6 +945,10 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
             <input type="checkbox" id="matSelectAll" onchange="matToggleAll(this.checked)"> 全選択
           </label>
           <button class="btn btn-danger btn-sm" id="matBulkDeleteBtn" style="display:none" onclick="matBulkDelete()">🗑 選択削除</button>
+          <div id="matBulkDateWrap" style="display:none;align-items:center;gap:6px;">
+            <input type="date" class="form-input" id="matBulkDate" style="padding:3px 6px;font-size:12px;width:140px">
+            <button class="btn btn-primary btn-sm" onclick="matBulkSetDate()">📅 仕入日を一括設定</button>
+          </div>
           <button class="btn btn-secondary btn-sm" onclick="copyTableToClipboard('matTableBody','材料費')">📋 全行コピー</button>
         </div>
       </div>
@@ -2296,8 +2304,9 @@ function matPartNoCell(moldNo, fallbackPartNo) {
 
 function renderMaterials() {
   if (!DB.materials) DB.materials = {};
-  const search  = (document.getElementById('matSearch')?.value||'').toLowerCase();
-  const moldFil = document.getElementById('matMoldFilter')?.value || '';
+  const search   = (document.getElementById('matSearch')?.value||'').toLowerCase();
+  const moldFil  = document.getElementById('matMoldFilter')?.value || '';
+  const dateFil  = document.getElementById('matDateFilter')?.value || '';
   const moldNos = [...new Set(Object.values(DB.materials).map(r=>r.moldNo).filter(Boolean))].sort();
   const mSel = document.getElementById('matMoldFilter');
   if (mSel) {
@@ -2335,9 +2344,9 @@ function renderMaterials() {
             ${matPartNoCell(r.moldNo, r.partNo)}
             ${r.name ? '<div style="font-size:10px;color:var(--text2);margin-top:1px">' + r.name + '</div>' : ''}
           </td>
-          <td class="mono" style="font-size:13px;font-weight:600">${r.material||''}</td>
-          <td class="mono" style="font-size:11px">${r.size||[r.sizeX,r.sizeY,r.sizeZ].filter(Boolean).join(' × ')||''}</td>
-          <td style="text-align:center">${r.finish||''}</td>
+          <td class="mono" style="font-size:13px">${r.material||''}</td>
+          <td class="mono" style="font-size:12px">${r.size||[r.sizeX,r.sizeY,r.sizeZ].filter(Boolean).join(' × ')||''}</td>
+          <td style="text-align:center;font-size:13px;font-weight:600">${r.finish||''}</td>
           <td class="mono" style="font-size:11px">
             ${(() => {
               const manualKg = r.weight ? parseFloat(r.weight) : null;
@@ -5640,6 +5649,8 @@ function purDeleteOne(key) {
 // ═══════════════════════════════════════════════
 function matCheckChanged() {
   const checked = document.querySelectorAll('.mat-check:checked').length;
+  const dateWrap = document.getElementById('matBulkDateWrap');
+  if (dateWrap) dateWrap.style.display = checked > 0 ? 'flex' : 'none';
   const btn = document.getElementById('matBulkDeleteBtn');
   const all = document.getElementById('matSelectAll');
   if (btn) { btn.style.display = checked>0?'':'none'; btn.textContent='🗑 選択削除 ('+checked+'件)'; }
@@ -6365,6 +6376,21 @@ async function goBackToCompareForSupplier(reqKey) {
 
   toast('②見積比較に戻しました。発注先を選択して再度「発注確定」してください', 'success');
   showQuoteTab('compare');
+}
+
+
+// 材料費：仕入日を一括設定
+async function matBulkSetDate() {
+  const date = document.getElementById('matBulkDate')?.value;
+  if (!date) { toast('仕入日を入力してください', 'error'); return; }
+  const checks = [...document.querySelectorAll('.mat-check:checked')];
+  if (!checks.length) { toast('行を選択してください', 'error'); return; }
+  checks.forEach(cb => {
+    if (DB.materials?.[cb.dataset.key]) DB.materials[cb.dataset.key].month = date;
+  });
+  await writeToFirebase('materials', DB.materials);
+  toast(checks.length + '件の仕入日を ' + date + ' に設定しました', 'success');
+  renderMaterials();
 }
 
 // ── Close modal on overlay click ──
