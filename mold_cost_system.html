@@ -2328,7 +2328,7 @@ function renderMaterials() {
       <thead><tr>
         <th style="width:120px"></th>
         <th>仕入日</th><th>管理NO.</th><th>品番 / 品名</th>
-        <th>材質</th><th style="text-align:center">X(長)</th><th style="text-align:center">Y(幅)</th><th style="text-align:center">Z(厚)</th><th>重量(kg)</th><th>仕入金額</th><th>手配先</th>
+        <th>材質</th><th>サイズ</th><th>仕上</th><th>重量(kg)</th><th>仕入金額</th><th>手配先</th>
       </tr></thead>
       <tbody>${entries.map(([k,r])=>`
         <tr style="height:52px">
@@ -2345,9 +2345,8 @@ function renderMaterials() {
             ${r.name ? '<div style="font-size:10px;color:var(--text2);margin-top:1px">' + r.name + '</div>' : ''}
           </td>
           <td class="mono" style="font-size:15px">${r.material||''}</td>
-          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 5px;font-size:13px">${(()=>{const v=String(r.sizeX||'').replace(/\.00$/,'');if(!v)return'—';return(r.fX?'<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>')+'<div>'+v+'</div>';})()}</td>
-          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 5px;font-size:13px">${(()=>{const v=String(r.sizeY||'').replace(/\.00$/,'');if(!v)return'—';return(r.fY?'<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>')+'<div>'+v+'</div>';})()}</td>
-          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 5px;font-size:13px">${(()=>{const v=String(r.sizeZ||'').replace(/\.00$/,'');if(!v)return'—';return(r.fZ?'<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>')+'<div>'+v+'</div>';})()}</td>
+          <td class="mono" style="font-size:14px">${r.size||[r.sizeX,r.sizeY,r.sizeZ].filter(Boolean).join(' × ')||''}</td>
+          <td style="text-align:center;font-size:14px;font-weight:700;line-height:1.4">${finishLabel(r.finish)}</td>
           <td class="mono" style="font-size:14px">
             ${(() => {
               const manualKg = r.weight ? parseFloat(r.weight) : null;
@@ -3150,15 +3149,9 @@ function renderQuoteItemTable() {
         <th></th>
       </tr></thead>
       <tbody>${quoteItems.map((r,i) => {
-        // ▽▽を上、数値を下に縦並び表示するヘルパー
-        const sizeCell = (val, hasF) => {
-          const num = String(val||'').replace(/\.00$/,'');
-          if (!num) return '—';
-          const mark = hasF
-            ? '<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>'
-            : '<div style="height:13px"></div>';
-          return '<div style="display:inline-flex;flex-direction:column;align-items:center;line-height:1.3">' + mark + '<span>' + num + '</span></div>';
-        };
+        const fxMark = r.fX ? ' <span style="color:var(--green);font-size:9px;font-weight:700;">▽▽</span>' : '';
+        const fyMark = r.fY ? ' <span style="color:var(--green);font-size:9px;font-weight:700;">▽▽</span>' : '';
+        const fzMark = r.fZ ? ' <span style="color:var(--green);font-size:9px;font-weight:700;">▽▽</span>' : '';
         // itemMatNo(71-B113)または moldNo(71-B)で前方一致チェック
         const _checkNo = r.moldNo || '';
         const moldOk = Object.values(DB.molds||{}).some(m =>
@@ -3178,9 +3171,9 @@ function renderQuoteItemTable() {
           '<td>' + (r.name||'') + '</td>' +
           '<td class="mono">' + (r.qty||1) + '</td>' +
           '<td class="mono">' + (r.material||'') + '</td>' +
-          '<td class="mono" style="font-size:11px;text-align:center;vertical-align:middle;padding:3px 4px">' + sizeCell(r.sizeX, r.fX) + '</td>' +
-          '<td class="mono" style="font-size:11px;text-align:center;vertical-align:middle;padding:3px 4px">' + sizeCell(r.sizeY, r.fY) + '</td>' +
-          '<td class="mono" style="font-size:11px;text-align:center;vertical-align:middle;padding:3px 4px">' + sizeCell(r.sizeZ, r.fZ) + '</td>' +
+          '<td class="mono" style="font-size:11px">' + (r.sizeX||'') + fxMark + '</td>' +
+          '<td class="mono" style="font-size:11px">' + (r.sizeY||'') + fyMark + '</td>' +
+          '<td class="mono" style="font-size:11px">' + (r.sizeZ||'') + fzMark + '</td>' +
           '<td><span class="chip">' + finishLabel(r.finish) + '</span></td>' +
           '<td style="font-size:11px">' + (r.note||'') + '</td>' +
           '<td style="white-space:nowrap">' +
@@ -3524,7 +3517,7 @@ function renderCompare() {
         ...sups.map(sid => `<option value="${sid}"${itemDecided===sid?' selected':''}>${supShort[sid]||sid}</option>`)
       ].join('');
 
-      const isChecked = (rec.checkedItems||{})[i] !== false;  // デフォルトtrue
+      const isChecked = (rec.checkedItems||{})[i] === true;  // 明示的にチェックされたもののみ
       return `<tr style="border-bottom:1px solid var(--border);${isChecked?'':'opacity:0.5'}">
         <td style="padding:4px 6px;text-align:center">
           <input type="checkbox" ${isChecked?'checked':''} onchange="toggleItemCheck('${key}',${i},this.checked)">
@@ -5948,7 +5941,7 @@ async function confirmCheckedItems(reqKey) {
 
   // チェック済みの行を確認
   // チェック済みの行インデックスを収集
-  const checkedIndices = items.map((_,i) => i).filter(i => checked[i] !== false);
+  const checkedIndices = items.map((_,i) => i).filter(i => checked[i] === true);
   const toConfirm = checkedIndices.map(i => items[i]);
   if (!toConfirm.length) { toast('発注確定する行にチェックを入れてください', 'error'); return; }
 
@@ -5967,7 +5960,7 @@ async function confirmCheckedItems(reqKey) {
   let matCount = 0;
 
   items.forEach((item, i) => {
-    if (checked[i] === false) return;  // チェックなしはスキップ
+    if (checked[i] !== true) return;  // チェックありのみ発注確定
     const supplierId = (rec.itemDecided||{})[i] || (decided[i]) || rec.decided || '';
     const sup = supMap[supplierId];
     const qkey = reqKey+'_'+i+'_'+supplierId;
@@ -6305,25 +6298,26 @@ async function printOrder(reqKey, supId, indices) {
 
 
 // 注文書を非表示にする／元に戻す
-async function toggleOrderHide(reqKey, supId, hide) {
+async function toggleOrderHide(batchKey, supId, hide, reqKey) {
+  // batchKey: 注文書の表示/非表示キー（例: key_batch_xxx または key_sid）
+  // reqKey:   DB.quoteRequests のキー（materials更新に使用）
   if (hide) {
     if (!confirm('この注文書を非表示にします。\n再表示するには「非表示を表示」ボタンから確認できます。\nよろしいですか？')) {
-      // チェックを戻す
       renderOrderPage();
       return;
     }
   }
-  if (!DB.quoteRequests?.[reqKey]) return;
+  if (!reqKey || !DB.quoteRequests?.[reqKey]) return;
   if (!DB.quoteRequests[reqKey].printedOrders) DB.quoteRequests[reqKey].printedOrders = {};
   if (hide) {
-    DB.quoteRequests[reqKey].printedOrders[supId] = true;
-    // 材料費のorderHiddenも更新
+    // batchKey単位で非表示フラグを立てる
+    DB.quoteRequests[reqKey].printedOrders[batchKey] = true;
     Object.values(DB.materials||{}).forEach(r => {
       if (r.quoteReqKey === reqKey && r.orderedSupId === supId) r.orderHidden = true;
     });
     await writeToFirebase('materials', DB.materials);
   } else {
-    delete DB.quoteRequests[reqKey].printedOrders[supId];
+    delete DB.quoteRequests[reqKey].printedOrders[batchKey];
     Object.values(DB.materials||{}).forEach(r => {
       if (r.quoteReqKey === reqKey && r.orderedSupId === supId) r.orderHidden = false;
     });
