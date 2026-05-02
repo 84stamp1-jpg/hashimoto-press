@@ -2331,7 +2331,7 @@ function renderMaterials() {
         <th>材質</th><th>サイズ</th><th>仕上</th><th>重量(kg)</th><th>仕入金額</th><th>手配先</th>
       </tr></thead>
       <tbody>${entries.map(([k,r])=>`
-        <tr>
+        <tr style="height:52px">
           <td style="white-space:nowrap;padding:4px 4px">
             <input type="checkbox" class="mat-check" data-key="${k}" onchange="matCheckChanged()" style="margin-right:3px">
             <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px;margin-right:2px" onclick="editMaterial('${k}')">編集</button>
@@ -3003,13 +3003,12 @@ function convertMaterial(material, supplierId) {
 
 // 仕上げ記号（▽表示）
 function finishLabel(f) {
-  // 仕上欄は 2F / 4F / 6F のみ表示（記号なし）
   const map = {
-    '6F':'6F', '4F':'4F', '2F':'2F', '黒皮':'黒皮',
-    '▽▽▽':'6F', '▽▽':'4F', '▽':'2F',
-    '6F（全面）':'6F', '4F（2面）':'4F', '2F（1面）':'2F',
+    '6F':'▽▽▽<br>6F', '4F':'▽▽<br>4F', '2F':'▽<br>2F', '黒皮':'黒皮',
+    '▽▽▽':'▽▽▽<br>6F', '▽▽':'▽▽<br>4F', '▽':'▽<br>2F',
+    '6F（全面）':'▽▽▽<br>6F', '4F（2面）':'▽▽<br>4F', '2F（1面）':'▽<br>2F',
   };
-  return map[f] || (f ? String(f).replace(/▽/g,'') : '—');
+  return map[f] || (f ? String(f) : '—');
 }
 
 // F数から仕上げ記号を計算（Excelの列5,7,9のF）
@@ -5995,8 +5994,15 @@ async function confirmCheckedItems(reqKey) {
 
   // 発注済みフラグを立てる（比較画面で非表示に）
   if (!rec.orderedItems) rec.orderedItems = {};
+  const batchId = 'batch_' + Date.now();  // 今回の発注バッチID
+  if (!rec.orderBatches) rec.orderBatches = {};
+  rec.orderBatches[batchId] = { createdAt: new Date().toISOString(), indices: [] };
+
   items.forEach((_,i) => {
-    if (checked[i] !== false) rec.orderedItems[i] = true;
+    if (checked[i] !== false) {
+      rec.orderedItems[i] = true;
+      rec.orderBatches[batchId].indices.push(i);
+    }
   });
   // 全行が発注済みならstatusを発注済みに
   const allOrdered = items.every((_,i) => rec.orderedItems[i]);
@@ -6006,7 +6012,8 @@ async function confirmCheckedItems(reqKey) {
   await writeToFirebase('materials', DB.materials);
   toast(`${matCount}件を発注確定しました`, 'success');
 
-  // 注文書作成タブへ移動
+  // 注文書作成タブへ移動（最新バッチを表示）
+  _latestOrderBatch = { reqKey, batchId };
   showQuoteTab('order');
 }
 
@@ -6016,6 +6023,7 @@ async function confirmCheckedItems(reqKey) {
 // ══════════════════════════════════════════════
 
 let _showHiddenOrders = false;
+let _latestOrderBatch = null;  // 直前に発注確定したバッチ
 
 function renderOrderPage() {
   const wrap = document.getElementById('orderPageContent');
@@ -6043,29 +6051,61 @@ function renderOrderPage() {
   const suppliers = getSuppliers();
   const supMap    = Object.fromEntries(suppliers.map(s=>[s.id,s]));
 
-  // ヘッダーボタン
-  const headerHtml = '';
-  wrap.innerHTML = headerHtml + reqs.map(([key,rec]) => {
+  // バッチごとに注文書カードを生成（発注確定ごとに1枚）
+  const allCards = [];
+  for (const [key, rec] of reqs) {
     const ordered = rec.orderedItems || {};
-    // 発注済みの元インデックスを保持してグループ化
-    const bySupplier = {};
-    (rec.items||[]).forEach((item, i) => {
-      if (!ordered[i]) return;  // 発注済みでない行はスキップ
-      const sid = (rec.itemDecided||{})[i] || rec.decided || '';
-      if (!bySupplier[sid]) bySupplier[sid] = [];
-      const qkey = key+'_'+i+'_'+sid;
-      const q = (rec.quotes||{})[qkey] || {};
-      bySupplier[sid].push({...item, idx:i, supplierId:sid, decidedPrice: q.unitPrice||''});
-    });
-
-    // 非表示設定に応じてフィルタ
     const printed = rec.printedOrders || {};
-    return Object.entries(bySupplier).filter(([sid]) => _showHiddenOrders || !printed[sid]).map(([sid, sitems]) => {
-      const isHidden = printed[sid];
-      const sup = supMap[sid] || {name: sid||'未設定', person:'', fax:'', email:''};
-      const blockId = 'order_' + key + '_' + sid;
-
-      const itemRows = sitems.map((item,ri) => `
+    const batches = rec.orderBatches || {};
+    const batchList = Object.entries(batches)
+      .sort(([,a],[,b]) => (b.createdAt||'').localeCompare(a.createdAt||''));
+    if (batchList.length > 0) {
+      for (const [bid, batch] of batchList) {
+        const batchKey = key + '_batch_' + bid;
+        if (!_showHiddenOrders && printed[batchKey]) continue;
+        const indices = batch.indices || [];
+        const bySupplier = {};
+        indices.forEach(i => {
+          const item = (rec.items||[])[i];
+          if (!item) return;
+          const sid = (rec.itemDecided||{})[i] || rec.decided || '';
+          if (!bySupplier[sid]) bySupplier[sid] = [];
+          const q = (rec.quotes||{})[key+'_'+i+'_'+sid] || {};
+          bySupplier[sid].push({...item, idx:i, supplierId:sid, decidedPrice: q.unitPrice||''});
+        });
+        for (const [sid, sitems] of Object.entries(bySupplier)) {
+          allCards.push({ key, rec, sid, sitems, batchKey, isHidden: !!printed[batchKey] });
+        }
+      }
+    } else {
+      const bySupplier = {};
+      (rec.items||[]).forEach((item, i) => {
+        if (!ordered[i]) return;
+        const sid = (rec.itemDecided||{})[i] || rec.decided || '';
+        if (!bySupplier[sid]) bySupplier[sid] = [];
+        const q = (rec.quotes||{})[key+'_'+i+'_'+sid] || {};
+        bySupplier[sid].push({...item, idx:i, supplierId:sid, decidedPrice: q.unitPrice||''});
+      });
+      for (const [sid, sitems] of Object.entries(bySupplier)) {
+        const batchKey = key + '_' + sid;
+        if (!_showHiddenOrders && printed[batchKey]) continue;
+        allCards.push({ key, rec, sid, sitems, batchKey, isHidden: !!printed[batchKey] });
+      }
+    }
+  }
+  if (_latestOrderBatch) {
+    const { reqKey: lrk, batchId: lbid } = _latestOrderBatch;
+    allCards.sort((a,b) => ((b.key===lrk&&b.batchKey.includes(lbid))?1:0)-((a.key===lrk&&a.batchKey.includes(lbid))?1:0));
+  }
+  if (!allCards.length) {
+    wrap.innerHTML = '<div class="empty"><div class="empty-icon">📋</div>②見積比較で発注確定した案件が表示されます</div>';
+    return;
+  }
+  wrap.innerHTML = allCards.map(({ key, rec, sid, sitems, batchKey, isHidden }) => {
+    const suppliers = getSuppliers();
+    const supMap2   = Object.fromEntries(suppliers.map(s=>[s.id,s]));
+    const sup = supMap2[sid] || {name: sid||'未設定', person:'', fax:'', email:''};
+    const itemRows = sitems.map((item,ri) => `
         <tr style="border-bottom:1px solid var(--border)">
           <td class="mono" style="padding:5px 8px;font-weight:600;color:var(--accent)">${item.itemMatNo||item.moldNo||''}</td>
           <td style="padding:5px 8px">${item.name||''}</td>
@@ -6082,50 +6122,40 @@ function renderOrderPage() {
             ${item.decidedPrice ? '¥'+fmt(parseFloat(item.decidedPrice)*(item.qty||1)) : '—'}
           </td>
         </tr>`).join('');
-
-      const total = sitems.reduce((s,it) => s + (parseFloat(it.decidedPrice||0)*(it.qty||1)), 0);
-
-      return `<div class="table-wrap" style="margin-bottom:20px">
-        <div class="table-header">
-          <div class="table-title">
-            <span class="mono" style="font-weight:700;color:var(--accent)">${rec.moldNo||'—'}</span>
-            <span style="color:var(--text3);font-size:11px;margin-left:8px">${rec.date||''}</span>
-            <span style="font-size:12px;margin-left:12px;font-weight:600">${sid ? sup.name : '<span style=\"color:var(--yellow);font-weight:700\">未設定</span>'}</span>
-            ${sup.person ? `<span style="color:var(--text3);font-size:11px;margin-left:6px">${sup.person}</span>` : ''}
-            ${!sid ? `<span style="font-size:11px;color:var(--yellow);margin-left:8px">発注先未設定</span>
-              <button class="btn btn-secondary btn-sm" style="padding:2px 8px;font-size:11px;margin-left:8px"
-                onclick="goBackToCompareForSupplier('${key}')">②で発注先を設定する</button>` : ''}
-            ${isHidden ? '<span style="background:#f59e0b;color:#fff;font-size:10px;padding:2px 6px;border-radius:4px;margin-left:8px">非表示中</span>' : ''}
-          </div>
-          <div class="table-actions" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);cursor:pointer;padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:var(--bg);">
-              <input type="checkbox" onchange="toggleOrderHide('${key}','${sid}',this.checked)">
-              <span>この注文書を非表示にする</span>
-            </label>
-            <button class="btn btn-primary btn-sm" onclick="printOrder('${key}','${sid}')">🖨 注文書を印刷</button>
-          </div>
+    const total = sitems.reduce((s,it) => s+(parseFloat(it.decidedPrice||0)*(it.qty||1)),0);
+    return `<div class="table-wrap" style="margin-bottom:20px">
+      <div class="table-header">
+        <div class="table-title">
+          <span class="mono" style="font-weight:700;color:var(--accent)">${rec.moldNo||'—'}</span>
+          <span style="color:var(--text3);font-size:11px;margin-left:8px">${rec.date||''}</span>
+          <span style="font-size:12px;margin-left:12px;font-weight:600">${sid?sup.name:'<span style="color:var(--yellow)">未設定</span>'}</span>
+          ${sup.person?`<span style="color:var(--text3);font-size:11px;margin-left:6px">${sup.person}</span>`:''}
+          ${isHidden?'<span style="background:#f59e0b;color:#fff;font-size:10px;padding:2px 6px;border-radius:4px;margin-left:8px">非表示中</span>':''}
         </div>
-        <div style="overflow-x:auto">
-          <table style="width:100%;border-collapse:collapse;font-size:12px">
-            <thead><tr style="background:var(--bg3)">
-              <th style="padding:7px 8px">管理NO.</th>
-              <th style="padding:7px 8px">名称</th>
-              <th style="padding:7px 6px;text-align:center">数量</th>
-              <th style="padding:7px 6px">材質</th>
-              <th style="padding:7px 6px">サイズ</th>
-              <th style="padding:7px 4px;text-align:center">仕上</th>
-              <th style="padding:7px 8px">発注単価(円)</th>
-              <th style="padding:7px 8px;color:var(--accent)">発注金額</th>
-            </tr></thead>
-            <tbody>${itemRows}</tbody>
-            <tfoot><tr style="background:var(--bg3)">
-              <td colspan="7" style="padding:6px 8px;text-align:right;font-weight:700">合計</td>
-              <td class="mono" style="padding:6px 8px;font-weight:700;color:var(--accent)">¥${fmt(total)}</td>
-            </tr></tfoot>
-          </table>
+        <div class="table-actions" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;padding:4px 8px;border:1px solid var(--border);border-radius:4px;">
+            <input type="checkbox" ${isHidden?'checked':''} onchange="toggleOrderHide('${batchKey}','${sid}',this.checked,'${key}')">
+            <span>この注文書を非表示にする</span>
+          </label>
+          <button class="btn btn-primary btn-sm" onclick="printOrder('${key}','${sid}',${JSON.stringify(sitems.map(it=>it.idx))})">🖨 注文書を印刷</button>
         </div>
-      </div>`;
-    }).join('');
+      </div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead><tr style="background:var(--bg3)">
+            <th style="padding:7px 8px">管理NO.</th><th style="padding:7px 8px">名称</th>
+            <th style="padding:7px 6px;text-align:center">数量</th><th style="padding:7px 6px">材質</th>
+            <th style="padding:7px 6px">サイズ</th><th style="padding:7px 4px;text-align:center">仕上</th>
+            <th style="padding:7px 8px">発注単価(円)</th><th style="padding:7px 8px;color:var(--accent)">発注金額</th>
+          </tr></thead>
+          <tbody>${itemRows}</tbody>
+          <tfoot><tr style="background:var(--bg3)">
+            <td colspan="7" style="padding:6px 8px;text-align:right;font-weight:700">合計</td>
+            <td class="mono" style="padding:6px 8px;font-weight:700;color:var(--accent)">¥${fmt(total)}</td>
+          </tr></tfoot>
+        </table>
+      </div>
+    </div>`;
   }).join('');
 }
 
@@ -6153,13 +6183,16 @@ async function updateOrderPrice(reqKey, itemIdx, supId, value) {
 }
 
 // 注文書印刷
-async function printOrder(reqKey, supId) {
+async function printOrder(reqKey, supId, indices) {
   const rec = DB.quoteRequests?.[reqKey];
   if (!rec) return;
   const suppliers = getSuppliers();
   const sup = suppliers.find(s=>s.id===supId) || {name:supId, person:'', fax:'', email:''};
   const ordered = rec.orderedItems || {};
-  const items = (rec.items||[]).filter((_,i)=>ordered[i] && ((rec.itemDecided||{})[i]||rec.decided)===supId);
+  // indices があればバッチ内の明細のみ、なければ全発注済みを対象
+  const items = indices && indices.length > 0
+    ? indices.map(i => (rec.items||[])[i]).filter(Boolean)
+    : (rec.items||[]).filter((_,i)=>ordered[i] && ((rec.itemDecided||{})[i]||rec.decided)===supId);
 
   const B = 'border:1px solid #999;';
   const itemRows = items.map((item,ri) => {
