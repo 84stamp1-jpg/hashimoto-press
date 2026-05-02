@@ -2345,18 +2345,9 @@ function renderMaterials() {
             ${r.name ? '<div style="font-size:10px;color:var(--text2);margin-top:1px">' + r.name + '</div>' : ''}
           </td>
           <td class="mono" style="font-size:15px">${r.material||''}</td>
-          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 6px">${(()=>{
-            const v=String(r.sizeX||'').replace(/\.00$/,'');if(!v)return'—';
-            return(r.fX?'<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>')+'<div style="font-size:16px;font-weight:600">'+v+'</div>';
-          })()}</td>
-          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 6px">${(()=>{
-            const v=String(r.sizeY||'').replace(/\.00$/,'');if(!v)return'—';
-            return(r.fY?'<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>')+'<div style="font-size:16px;font-weight:600">'+v+'</div>';
-          })()}</td>
-          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 6px">${(()=>{
-            const v=String(r.sizeZ||'').replace(/\.00$/,'');if(!v)return'—';
-            return(r.fZ?'<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>')+'<div style="font-size:16px;font-weight:600">'+v+'</div>';
-          })()}</td>
+          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 6px">${(()=>{const v=String(r.sizeX||'').replace(/\.00$/,'');if(!v)return'—';return(r.fX?'<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>')+'<div style="font-size:16px;font-weight:600">'+v+'</div>';})()}</td>
+          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 6px">${(()=>{const v=String(r.sizeY||'').replace(/\.00$/,'');if(!v)return'—';return(r.fY?'<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>')+'<div style="font-size:16px;font-weight:600">'+v+'</div>';})()}</td>
+          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 6px">${(()=>{const v=String(r.sizeZ||'').replace(/\.00$/,'');if(!v)return'—';return(r.fZ?'<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>')+'<div style="font-size:16px;font-weight:600">'+v+'</div>';})()}</td>
           <td class="mono" style="font-size:14px">
             ${(() => {
               const manualKg = r.weight ? parseFloat(r.weight) : null;
@@ -3013,7 +3004,6 @@ function convertMaterial(material, supplierId) {
 
 // 仕上げ記号（▽表示）
 function finishLabel(f) {
-  // 仕上列にはテキストのみ表示（▽記号はXYZサイズの上に出す）
   const map = {
     '6F':'6F', '4F':'4F', '2F':'2F', '黒皮':'黒皮',
     '▽▽▽':'6F', '▽▽':'4F', '▽':'2F',
@@ -3160,13 +3150,10 @@ function renderQuoteItemTable() {
         <th></th>
       </tr></thead>
       <tbody>${quoteItems.map((r,i) => {
-        // ▽▽が上・数値が下の縦並びヘルパー
         const sizeCell = (val, hasF) => {
           const num = String(val||'').replace(/\.00$/,'');
           if (!num) return '—';
-          const mark = hasF
-            ? '<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>'
-            : '<div style="height:13px"></div>';
+          const mark = hasF ? '<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>' : '<div style="height:13px"></div>';
           return '<div style="display:inline-flex;flex-direction:column;align-items:center;line-height:1.3">' + mark + '<span>' + num + '</span></div>';
         };
         // itemMatNo(71-B113)または moldNo(71-B)で前方一致チェック
@@ -3543,8 +3530,19 @@ function renderCompare() {
         <td style="padding:5px 8px;font-size:12px">${item.name||''}</td>
         <td class="mono" style="padding:5px 6px;text-align:center">${item.qty||1}</td>
         <td class="mono" style="padding:5px 6px">${item.material||''}</td>
-        <td class="mono" style="padding:5px 6px;font-size:13px">${[item.sizeX,item.sizeY,item.sizeZ].filter(Boolean).join(' × ')}</td>
-        <td style="padding:5px 4px;text-align:center;vertical-align:middle;font-weight:600">${finishLabel(item.finish)}</td>
+        <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{
+          const v=String(item.sizeX||'').replace(/\.00$/,'');if(!v)return'—';
+          return(item.fX?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:11px"></div>')+'<div>'+v+'</div>';
+        })()}</td>
+        <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{
+          const v=String(item.sizeY||'').replace(/\.00$/,'');if(!v)return'—';
+          return(item.fY?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:11px"></div>')+'<div>'+v+'</div>';
+        })()}</td>
+        <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{
+          const v=String(item.sizeZ||'').replace(/\.00$/,'');if(!v)return'—';
+          return(item.fZ?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:11px"></div>')+'<div>'+v+'</div>';
+        })()}</td>
+        <td style="padding:5px 4px;text-align:center;font-weight:700">${finishLabel(item.finish)}</td>
         ${supInputs}
         <td class="mono" style="padding:5px 6px;color:var(--green);font-weight:700">${minPrice?'¥'+fmt(minPrice):'—'}</td>
         <td class="mono" style="padding:5px 6px;color:var(--red)">${diff?'▼¥'+fmt(diff):'—'}</td>
@@ -3587,7 +3585,9 @@ function renderCompare() {
               <th style="padding:7px 8px;text-align:left">名称</th>
               <th style="padding:7px 6px;text-align:center">数量</th>
               <th style="padding:7px 6px">材質</th>
-              <th style="padding:7px 6px">サイズ</th>
+              <th style="padding:7px 4px;text-align:center">X(長)</th>
+              <th style="padding:7px 4px;text-align:center">Y(幅)</th>
+              <th style="padding:7px 4px;text-align:center">Z(厚)</th>
               <th style="padding:7px 4px;text-align:center">仕上</th>
               ${supHeaders}
               <th style="padding:7px 6px;color:var(--green)">最安値</th>
@@ -3802,7 +3802,7 @@ function renderQuoteHistory() {
         <td style="font-size:12px">${item.name||''}</td>
         <td class="mono" style="font-size:11px">${item.material||''}</td>
         <td class="mono" style="font-size:11px">${[item.sizeX,item.sizeY,item.sizeZ].filter(Boolean).join('×')}</td>
-        <td style="font-size:11px;text-align:center;vertical-align:middle;font-weight:600">${finishLabel(item.finish)}</td>
+        <td style="font-size:11px">${finishLabel(item.finish)}</td>
         <td style="font-size:11px">${supName}</td>
         <td class="mono">¥${fmt(q.unitPrice||0)}</td>
         <td style="font-size:11px">${item.note||''}</td>
@@ -6089,22 +6089,14 @@ function renderOrderPage() {
   const suppliers = getSuppliers();
   const supMap    = Object.fromEntries(suppliers.map(s=>[s.id,s]));
 
-  // 材料費に実在する品目キーセット（削除済みを注文書から除外するため）
-  const existingMatKeys = new Set(
-    Object.keys(DB.materials||{}).filter(k => k.startsWith('mat_order_'))
-  );
-
+  const existingMatKeys = new Set(Object.keys(DB.materials||{}).filter(k=>k.startsWith('mat_order_')));
   const allCards = [];
   for (const [key, rec] of reqs) {
     const ordered = rec.orderedItems || {};
     const printed = rec.printedOrders || {};
     const batches = rec.orderBatches || {};
-    const batchList = Object.entries(batches)
-      .sort(([,a],[,b]) => (b.createdAt||'').localeCompare(a.createdAt||''));
-
-    // 重複除去：同一indexは最新バッチのみ表示
+    const batchList = Object.entries(batches).sort(([,a],[,b])=>(b.createdAt||'').localeCompare(a.createdAt||''));
     const displayedIndices = new Set();
-
     if (batchList.length > 0) {
       for (const [bid, batch] of batchList) {
         const batchKey = key + '_batch_' + bid;
@@ -6129,7 +6121,6 @@ function renderOrderPage() {
         }
       }
     } else {
-      // orderBatchesがない古いデータ互換
       const bySupplier = {};
       (rec.items||[]).forEach((item, i) => {
         if (!ordered[i]) return;
@@ -6164,8 +6155,19 @@ function renderOrderPage() {
           <td style="padding:5px 8px">${item.name||''}</td>
           <td class="mono" style="padding:5px 6px;text-align:center">${item.qty||1}</td>
           <td class="mono" style="padding:5px 6px">${item.material||''}</td>
-          <td class="mono" style="padding:5px 6px;font-size:13px">${[item.sizeX,item.sizeY,item.sizeZ].filter(Boolean).join(' × ')}</td>
-          <td style="padding:5px 4px;text-align:center;vertical-align:middle;font-weight:600">${finishLabel(item.finish)}</td>
+          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{
+          const v=String(item.sizeX||'').replace(/\.00$/,'');if(!v)return'—';
+          return(item.fX?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:11px"></div>')+'<div>'+v+'</div>';
+        })()}</td>
+        <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{
+          const v=String(item.sizeY||'').replace(/\.00$/,'');if(!v)return'—';
+          return(item.fY?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:11px"></div>')+'<div>'+v+'</div>';
+        })()}</td>
+        <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{
+          const v=String(item.sizeZ||'').replace(/\.00$/,'');if(!v)return'—';
+          return(item.fZ?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:11px"></div>')+'<div>'+v+'</div>';
+        })()}</td>
+          <td style="padding:5px 4px;text-align:center;font-weight:700">${finishLabel(item.finish)}</td>
           <td style="padding:4px 6px">
             <input class="form-input" type="number" style="width:110px;padding:3px 6px;font-size:12px"
               placeholder="発注単価(円)" value="${item.decidedPrice||''}"
