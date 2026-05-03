@@ -3561,7 +3561,9 @@ function renderCompare() {
           <thead>
             <tr style="background:var(--bg3)">
               <th style="padding:7px 4px;width:32px;text-align:center">
-                <input type="checkbox" checked title="全選択" onchange="toggleAllItemCheck('${key}',this.checked)">
+                <input type="checkbox" title="全選択/解除"
+                  ${pendingIndices.every(i=>(rec.checkedItems||{})[i]===true)?'checked':''}
+                  onchange="toggleAllItemCheck('${key}',this.checked)">
               </th>
               <th style="padding:7px 8px;text-align:left">管理NO.</th>
               <th style="padding:7px 8px;text-align:left">名称</th>
@@ -4780,7 +4782,7 @@ async function fetchKintoneForPreview() {
         ? ktVal(rec, F.process)
         : ktVal(rec, '文字列__複数行_', '見積工程');
       const processes  = processRaw
-        ? processRaw.split(/[\n\r]/).map(s => s.replace(/^\s*\d+[.．]?\s*/, '').trim()).filter(Boolean)
+        ? processRaw.split(/[\n\r,、・]/).map(s => s.replace(/^\s*\d+\.?\s*/, '').trim()).filter(Boolean)
         : [];
       return { _idx: idx, moldNo, partNo, partName, client, status, dueDate, orderDate, estimate, ktCode, processes, _raw: rec };
     });
