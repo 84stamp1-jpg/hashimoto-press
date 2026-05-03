@@ -3664,19 +3664,12 @@ async function confirmAllDecided(reqKey) {
       name:     item.name     || '',
       material: mat,
       size:     [item.sizeX,item.sizeY,item.sizeZ].filter(Boolean).join(' × '),
-      sizeX:    item.sizeX    || '',
-      sizeY:    item.sizeY    || '',
-      sizeZ:    item.sizeZ    || '',
-      fX:       item.fX       || false,
-      fY:       item.fY       || false,
-      fZ:       item.fZ       || false,
       finish:   item.finish   || '',
       weight:   0,
       amount:   (parseFloat(q.unitPrice||0)) * (item.qty||1),
       supplier: supNameMap[sid] || sid,
       note:     item.note || '',
-      quoteKey:    reqKey,
-      quoteReqKey: reqKey
+      quoteKey: reqKey
     };
   });
 
@@ -4787,7 +4780,7 @@ async function fetchKintoneForPreview() {
         ? ktVal(rec, F.process)
         : ktVal(rec, '文字列__複数行_', '見積工程');
       const processes  = processRaw
-        ? processRaw.split(/[\n\r,、・]/).map(s => s.replace(/^\s*\d+\.?\s*/, '').trim()).filter(Boolean)
+        ? processRaw.split(/[\n\r]/).map(s => s.replace(/^\s*\d+[.．]?\s*/, '').trim()).filter(Boolean)
         : [];
       return { _idx: idx, moldNo, partNo, partName, client, status, dueDate, orderDate, estimate, ktCode, processes, _raw: rec };
     });
@@ -5999,9 +5992,6 @@ async function confirmCheckedItems(reqKey) {
       sizeX:    item.sizeX || '',
       sizeY:    item.sizeY || '',
       sizeZ:    item.sizeZ || '',
-      fX:       item.fX    || false,
-      fY:       item.fY    || false,
-      fZ:       item.fZ    || false,
       finish:   item.finish   || '',
       weight:   item.weight   || '',
       qty:      item.qty      || 1,
