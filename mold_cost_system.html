@@ -1499,22 +1499,18 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
             style="font-family:var(--mono);font-weight:600;"
             oninput="genModalMatNo('outf')">
         </div>
-        <div class="form-group" style="grid-column:1/-1">
-          <label class="form-label">管理NO.
-            <span id="outf_partNoDisp" style="font-size:10px;color:var(--accent);font-family:var(--mono);margin-left:4px;font-weight:700;"></span>
-          </label>
-          <input class="form-input" id="outf_partNo" placeholder="金型NO+工程番号で自動生成" readonly
-            style="background:var(--bg3);color:var(--text2);">
-        </div>
+        <span id="outf_partNoDisp" style="display:none"></span>
+        <input id="outf_partNo" type="hidden">
         <div class="form-group">
           <label class="form-label">仕入先</label>
           <input class="form-input" id="outf_supplier" placeholder="DOWA, 大同...">
         </div>
         <div class="form-group">
           <label class="form-label">工程
-            <span style="font-size:9px;color:var(--text3);margin-left:4px;">管理NO.の工程番号に対応</span>
+            <span style="font-size:9px;color:var(--text3);margin-left:4px;">工程番号で自動入力</span>
           </label>
-          <input class="form-input" id="outf_process" placeholder="例: 1（工程番号）または DR（工程名）">
+          <input class="form-input" id="outf_process" placeholder="工程番号を入力すると自動入力" readonly
+            style="background:var(--bg3);color:var(--text2);">
         </div>
         <div class="form-group">
           <label class="form-label">内容</label>
@@ -1575,13 +1571,8 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
             style="font-family:var(--mono);font-weight:600;"
             oninput="genModalMatNo('purf')">
         </div>
-        <div class="form-group" style="grid-column:1/-1">
-          <label class="form-label">管理NO.
-            <span id="purf_partNoDisp" style="font-size:10px;color:var(--accent);font-family:var(--mono);margin-left:4px;font-weight:700;"></span>
-          </label>
-          <input class="form-input" id="purf_partNo" placeholder="金型NO+工程番号で自動生成" readonly
-            style="background:var(--bg3);color:var(--text2);">
-        </div>
+        <span id="purf_partNoDisp" style="display:none"></span>
+        <input id="purf_partNo" type="hidden">
         <div class="form-group" style="grid-column:1/-1">
           <label class="form-label">商品名</label>
           <input class="form-input" id="purf_name" placeholder="例: 丸線コイルスプリング [WWW10-30]">
@@ -3561,9 +3552,7 @@ function renderCompare() {
           <thead>
             <tr style="background:var(--bg3)">
               <th style="padding:7px 4px;width:32px;text-align:center">
-                <input type="checkbox" title="全選択/解除"
-                  ${pendingIndices.every(i=>(rec.checkedItems||{})[i]===true)?'checked':''}
-                  onchange="toggleAllItemCheck('${key}',this.checked)">
+                <input type="checkbox" checked title="全選択" onchange="toggleAllItemCheck('${key}',this.checked)">
               </th>
               <th style="padding:7px 8px;text-align:left">管理NO.</th>
               <th style="padding:7px 8px;text-align:left">名称</th>
@@ -5116,6 +5105,9 @@ function genModalMatNo(prefix) {
   if (!moldNo || !processNo) {
     if (dispEl)   dispEl.textContent = '';
     if (partNoEl) partNoEl.value = '';
+    // 工程フィールドもクリア
+    const procEl = document.getElementById(prefix + '_process');
+    if (procEl && procEl.readOnly) procEl.value = '';
     return;
   }
 
@@ -5123,6 +5115,17 @@ function genModalMatNo(prefix) {
   const matNo = moldNo + processNo + seq;
   if (dispEl)   dispEl.textContent = '→ ' + matNo;
   if (partNoEl) partNoEl.value = matNo;
+
+  // 工程名を自動入力（readonlyの工程フィールドのみ）
+  const procEl = document.getElementById(prefix + '_process');
+  if (procEl && procEl.readOnly) {
+    // 金型のprocessesリストから工程番号に対応する工程名を取得
+    const mold = Object.values(DB.molds||{}).find(m => m.no === moldNo);
+    const processes = mold?.processes || [];
+    const idx = parseInt(processNo) - 1;
+    const procName = processes[idx] || '';
+    procEl.value = procName ? `${processNo}: ${procName}` : processNo;
+  }
 }
 
 // CSV取込用: 金型NO + - + 工程名 + 連番2桁
