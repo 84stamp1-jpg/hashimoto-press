@@ -1534,6 +1534,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     </div>
     <div class="modal-foot">
       <button class="btn btn-secondary" onclick="closeModal('outModal')">キャンセル</button>
+      <button class="btn btn-secondary" onclick="saveOutsource(true)" style="background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent)">💾 保存して続けて入力</button>
       <button class="btn btn-primary" onclick="saveOutsource()">💾 保存</button>
     </div>
   </div>
@@ -2870,26 +2871,62 @@ function calcOutTotal() {
   const q = parseFloat(document.getElementById('outf_qty' ).value)||1;
   document.getElementById('outf_total').value = u*q;
 }
-async function saveOutsource() {
+async function saveOutsource(continueInput = false) {
   const data = {
-    month:document.getElementById('outf_month').value,
-    moldNo:document.getElementById('outf_moldNo').value.trim(),
-    partNo:document.getElementById('outf_partNo').value.trim(),
-    supplier:document.getElementById('outf_supplier').value.trim(),
-    process:document.getElementById('outf_process').value.trim(),
-    detail:document.getElementById('outf_detail').value.trim(),
-    qty:parseFloat(document.getElementById('outf_qty').value)||1,
-    unit:parseFloat(document.getElementById('outf_unit').value)||0,
-    total:parseFloat(document.getElementById('outf_total').value)||0,
-    note:document.getElementById('outf_note').value.trim()
+    month:    document.getElementById('outf_month').value,
+    moldNo:   document.getElementById('outf_moldNo').value.trim(),
+    partNo:   document.getElementById('outf_partNo').value.trim(),
+    supplier: document.getElementById('outf_supplier').value.trim(),
+    process:  document.getElementById('outf_process').value.trim(),
+    processNo:document.getElementById('outf_processNo').value.trim(),
+    detail:   document.getElementById('outf_detail').value.trim(),
+    qty:      parseFloat(document.getElementById('outf_qty').value)||1,
+    unit:     parseFloat(document.getElementById('outf_unit').value)||0,
+    total:    parseFloat(document.getElementById('outf_total').value)||0,
+    note:     document.getElementById('outf_note').value.trim()
   };
   const editKeyOut = document.getElementById('outf_editKey')?.value;
   const keyOut = editKeyOut || 'out_' + Date.now();
   DB.outsource[keyOut] = data;
   await writeToFirebase('outsource', DB.outsource);
-  closeModal('outModal');
   toast(editKeyOut ? '外注費を更新しました' : '外注費を保存しました', 'success');
   renderOutsource();
+
+  if (continueInput && !editKeyOut) {
+    // 引き継ぎ値を保持したままクリア項目だけリセット
+    const keepMonth    = data.month;
+    const keepMoldNo   = data.moldNo;
+    const keepProcessNo= data.processNo;
+    const keepProcess  = data.process;
+    const keepSupplier = data.supplier;
+    const keepMoldInfo = document.getElementById('outf_moldInfo').innerHTML;
+    const keepMoldInfoStyle = document.getElementById('outf_moldInfo').style.display;
+
+    // editKeyをクリア
+    const hid = document.getElementById('outf_editKey');
+    if (hid) hid.value = '';
+
+    // クリアする項目
+    document.getElementById('outf_detail').value  = '';
+    document.getElementById('outf_qty').value     = '1';
+    document.getElementById('outf_unit').value    = '';
+    document.getElementById('outf_total').value   = '';
+    document.getElementById('outf_note').value    = '';
+
+    // 引き継ぎ項目を再セット（念のため）
+    document.getElementById('outf_month').value      = keepMonth;
+    document.getElementById('outf_moldNo').value     = keepMoldNo;
+    document.getElementById('outf_processNo').value  = keepProcessNo;
+    document.getElementById('outf_process').value    = keepProcess;
+    document.getElementById('outf_supplier').value   = keepSupplier;
+    document.getElementById('outf_moldInfo').innerHTML = keepMoldInfo;
+    document.getElementById('outf_moldInfo').style.display = keepMoldInfoStyle;
+
+    // 内容フィールドにフォーカス
+    setTimeout(() => document.getElementById('outf_detail').focus(), 100);
+  } else {
+    closeModal('outModal');
+  }
 }
 
 function openPurModal() {
@@ -5119,7 +5156,6 @@ function genModalMatNo(prefix) {
   if (dispEl)   dispEl.textContent = '→ ' + matNo;
   if (partNoEl) partNoEl.value = matNo;
 
-  // 工程名を自動入力（readonlyの工程フィールド）
   if (procEl && procEl.readOnly) {
     const mold = Object.values(DB.molds||{}).find(m => m.no === moldNo);
     const processes = mold?.processes || [];
