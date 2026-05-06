@@ -904,7 +904,6 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <!-- ② 見積比較 -->
     <div id="qpage-compare" class="subpage">
       <div class="filter-bar">
-        <input class="search-input" type="text" placeholder="管理NO・品名で検索..." id="cmpSearch" oninput="renderCompare()">
         <select class="filter-select" id="cmpMoldFilter" onchange="renderCompare()"><option value="">全金型</option></select>
         <select class="filter-select" id="cmpStatusFilter" onchange="renderCompare()">
           <option value="">全ステータス</option>
@@ -3167,9 +3166,9 @@ function renderQuoteItemTable() {
           '<td>' + (r.name||'') + '</td>' +
           '<td class="mono">' + (r.qty||1) + '</td>' +
           '<td class="mono">' + (r.material||'') + '</td>' +
-          '<td class="mono" style="font-size:14px;text-align:center;vertical-align:middle;padding:5px">' + sizeCell(r.sizeX, r.fX) + '</td>' +
-          '<td class="mono" style="font-size:14px;text-align:center;vertical-align:middle;padding:5px">' + sizeCell(r.sizeY, r.fY) + '</td>' +
-          '<td class="mono" style="font-size:14px;text-align:center;vertical-align:middle;padding:5px">' + sizeCell(r.sizeZ, r.fZ) + '</td>' +
+          '<td class="mono" style="font-size:11px;text-align:center;vertical-align:middle;padding:3px 4px">' + sizeCell(r.sizeX, r.fX) + '</td>' +
+          '<td class="mono" style="font-size:11px;text-align:center;vertical-align:middle;padding:3px 4px">' + sizeCell(r.sizeY, r.fY) + '</td>' +
+          '<td class="mono" style="font-size:11px;text-align:center;vertical-align:middle;padding:3px 4px">' + sizeCell(r.sizeZ, r.fZ) + '</td>' +
           '<td style="text-align:center;vertical-align:middle;padding:4px 8px;font-weight:600">' + finishLabel(r.finish) + '</td>' +
           '<td style="font-size:11px">' + (r.note||'') + '</td>' +
           '<td style="white-space:nowrap">' +
@@ -3441,7 +3440,6 @@ async function saveQuoteRequest() {
 
 // ── ② 見積比較・決定 ──
 function renderCompare() {
-  const search    = (document.getElementById('cmpSearch')?.value || '').toLowerCase();
   const moldFil   = document.getElementById('cmpMoldFilter')?.value || '';
   const statusFil = document.getElementById('cmpStatusFilter')?.value || '';
   if (!DB.quoteRequests) DB.quoteRequests = {};
@@ -3459,15 +3457,6 @@ function renderCompare() {
   }
 
   let filtered = entries;
-  if (search)    filtered = filtered.filter(([,r]) =>
-    (r.moldNo||'').toLowerCase().includes(search) ||
-    (r.partNo||'').toLowerCase().includes(search) ||
-    (r.partName||'').toLowerCase().includes(search) ||
-    (r.items||[]).some(it =>
-      (it.itemMatNo||'').toLowerCase().includes(search) ||
-      (it.name||'').toLowerCase().includes(search)
-    )
-  );
   if (moldFil)   filtered = filtered.filter(([,r]) => r.moldNo   === moldFil);
   if (statusFil) filtered = filtered.filter(([,r]) => r.status   === statusFil);
 
@@ -3523,15 +3512,6 @@ function renderCompare() {
         ...sups.map(sid => `<option value="${sid}"${itemDecided===sid?' selected':''}>${supShort[sid]||sid}</option>`)
       ].join('');
 
-      // fX/fY/fZ が未保存の場合、finishフィールドから補完
-      // finish='6F'/'4F'は全面仕上げ → fX=fY=fZ=trueとする
-      // 個別フラグが保存済みであればそちらを優先
-      const hasFinishFlag = 'fX' in item;
-      const allFace = !hasFinishFlag && ['6F','4F','▽▽▽','▽▽','6F（全面）','4F（2面）'].includes(item.finish);
-      const _fX = hasFinishFlag ? item.fX : allFace;
-      const _fY = hasFinishFlag ? item.fY : allFace;
-      const _fZ = hasFinishFlag ? item.fZ : allFace;
-
       const isChecked = (rec.checkedItems||{})[i] === true;
       return `<tr style="border-bottom:1px solid var(--border);${isChecked?'':'opacity:0.5'}">
         <td style="padding:4px 6px;text-align:center">
@@ -3541,9 +3521,9 @@ function renderCompare() {
         <td style="padding:5px 8px;font-size:12px">${item.name||''}</td>
         <td class="mono" style="padding:5px 6px;text-align:center">${item.qty||1}</td>
         <td class="mono" style="padding:5px 6px">${item.material||''}</td>
-        <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{const v=String(item.sizeX||'').replace(/\.00$/,'');if(!v)return'—';return(_fX?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:11px"></div>')+'<div>'+v+'</div>';})()}</td>
-        <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{const v=String(item.sizeY||'').replace(/\.00$/,'');if(!v)return'—';return(_fY?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:11px"></div>')+'<div>'+v+'</div>';})()}</td>
-        <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{const v=String(item.sizeZ||'').replace(/\.00$/,'');if(!v)return'—';return(_fZ?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:11px"></div>')+'<div>'+v+'</div>';})()}</td>
+        <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{const v=String(item.sizeX||'').replace(/\.00$/,'');if(!v)return'—';return(item.fX?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:11px"></div>')+'<div>'+v+'</div>';})()}</td>
+        <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{const v=String(item.sizeY||'').replace(/\.00$/,'');if(!v)return'—';return(item.fY?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:11px"></div>')+'<div>'+v+'</div>';})()}</td>
+        <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{const v=String(item.sizeZ||'').replace(/\.00$/,'');if(!v)return'—';return(item.fZ?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:11px"></div>')+'<div>'+v+'</div>';})()}</td>
         <td style="padding:5px 4px;text-align:center;font-weight:700">${finishLabel(item.finish)}</td>
         ${supInputs}
         <td class="mono" style="padding:5px 6px;color:var(--green);font-weight:700">${minPrice?'¥'+fmt(minPrice):'—'}</td>
@@ -3573,8 +3553,6 @@ function renderCompare() {
         <div class="table-actions">
           <button class="btn btn-primary btn-sm" onclick="confirmCheckedItems('${key}')">✅ チェック済みを発注確定</button>
           <button class="btn btn-secondary btn-sm" onclick="reopenQuote('${key}')">✏️ ①に読込・再編集</button>
-          <button class="btn btn-secondary btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #86efac" onclick="printCompareSheet('${key}',false)">🖨 依頼書印刷（単価なし）</button>
-          <button class="btn btn-secondary btn-sm" style="background:#eff6ff;color:#2563eb;border:1px solid #93c5fd" onclick="printCompareSheet('${key}',true)">🖨 依頼書印刷（単価あり）</button>
           <button class="btn btn-danger btn-sm" onclick="deleteQuoteRequest('${key}')">🗑 削除</button>
         </div>
       </div>
@@ -3583,7 +3561,10 @@ function renderCompare() {
           <thead>
             <tr style="background:var(--bg3)">
               <th style="padding:7px 4px;width:32px;text-align:center">
-                <input type="checkbox" checked title="全選択" onchange="toggleAllItemCheck('${key}',this.checked)">
+                <input type="checkbox"
+                  ${pendingIndices.length > 0 && pendingIndices.every(i=>(rec.checkedItems||{})[i]===true) ? 'checked' : ''}
+                  title="全選択/解除"
+                  onchange="toggleAllItemCheck('${key}',this.checked)">
               </th>
               <th style="padding:7px 8px;text-align:left">管理NO.</th>
               <th style="padding:7px 8px;text-align:left">名称</th>
@@ -3657,58 +3638,6 @@ async function setItemDecided(reqKey, itemIdx, supId) {
 }
 
 // 全明細を発注確定（明細ごとの発注先で材料費に登録）
-function printCompareSheet(reqKey, showPrice) {
-  const rec = DB.quoteRequests?.[reqKey];
-  if (!rec) return;
-  const items = (rec.items||[]).map((item,i)=>({item,i})).filter(({i})=>!(rec.orderedItems||{})[i]);
-  const rows = items.map(({item,i}) => {
-    const decidedSid = (rec.itemDecided||{})[i] || rec.decided || '';
-    const q = decidedSid ? (rec.quotes?.[reqKey+'_'+i+'_'+decidedSid] || {}) : {};
-    const unitPrice = parseFloat(q.unitPrice||0);
-    const f3 = v => String(v||'').replace(/\.00$/,'');
-    // fX/fY/fZ補完
-    const hasFlag = 'fX' in item;
-    const allFace = !hasFlag && ['6F','4F','▽▽▽','▽▽','6F（全面）','4F（2面）'].includes(item.finish);
-    const fX = hasFlag ? item.fX : allFace;
-    const fY = hasFlag ? item.fY : allFace;
-    const fZ = hasFlag ? item.fZ : allFace;
-    // サイズセル（▽▽上・数値下）
-    const sc = (v,f) => { const n=f3(v); if(!n)return'&mdash;'; return (f?'<div style="color:#16a34a;font-size:11px;font-weight:700;text-align:center">▽▽</div>':'<div style="height:14px"></div>')+'<div>'+n+'</div>'; };
-    // 仕上テキスト
-    const finishMap = {'6F':'6F','4F':'4F','2F':'2F','黒皮':'黒皮','▽▽▽':'6F','▽▽':'4F','▽':'2F','6F（全面）':'6F','4F（2面）':'4F','2F（1面）':'2F'};
-    const finishTxt = finishMap[item.finish] || item.finish || '&mdash;';
-    const priceCell = showPrice ? `<td style="text-align:right;padding:5px 8px">${unitPrice?'&yen;'+fmt(unitPrice):'&mdash;'}</td>` : '';
-    return `<tr style="border-bottom:1px solid #e2e8f0">
-      <td style="padding:5px 8px;font-weight:700;color:#0369a1;font-family:monospace">${item.itemMatNo||item.moldNo||'&mdash;'}</td>
-      <td style="padding:5px 8px">${item.name||''}</td>
-      <td style="padding:5px 8px;text-align:center">${item.qty||1}</td>
-      <td style="padding:5px 8px;font-family:monospace">${item.material||''}</td>
-      <td style="padding:5px 8px;text-align:center;font-family:monospace">${sc(item.sizeX,fX)}</td>
-      <td style="padding:5px 8px;text-align:center;font-family:monospace">${sc(item.sizeY,fY)}</td>
-      <td style="padding:5px 8px;text-align:center;font-family:monospace">${sc(item.sizeZ,fZ)}</td>
-      <td style="padding:5px 8px;text-align:center">${finishTxt}</td>
-      <td style="padding:5px 8px">${item.note||''}</td>
-      ${priceCell}
-    </tr>`;
-  }).join('');
-  const pH = showPrice ? '<th style="text-align:right">単価(円)</th>' : '';
-  const dateStr = rec.createdAt ? rec.createdAt.slice(0,10) : rec.date || new Date().toLocaleDateString('ja-JP');
-  const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>材料依頼書</title>
-  <style>body{font-family:'Noto Sans JP',sans-serif;font-size:14px;margin:20px}h2{font-size:18px;margin-bottom:6px}.meta{font-size:13px;color:#555;margin-bottom:14px;border-bottom:1px solid #e2e8f0;padding-bottom:8px}table{border-collapse:collapse;width:100%}th{background:#f1f5f9;padding:6px 8px;text-align:left;border-bottom:2px solid #cbd5e1;font-size:13px;white-space:nowrap}tr:nth-child(even){background:#f8fafc}td{font-size:14px;vertical-align:middle}@media print{body{margin:8mm}}</style>
-  </head><body>
-  <h2>材料依頼書</h2>
-  <div class="meta">金型NO: <strong>${rec.moldNo||''}</strong>&emsp;品番: <strong>${rec.partNo||''}</strong>&emsp;品名: ${rec.partName||''}&emsp;依頼日: ${dateStr}&emsp;${showPrice?'<span style="color:#2563eb">（単価あり）</span>':'<span style="color:#16a34a">（単価なし）</span>'}</div>
-  <table><thead><tr>
-    <th>管理NO.</th><th>名称</th><th style="text-align:center">数量</th><th>材質</th>
-    <th style="text-align:center">X(長)</th><th style="text-align:center">Y(幅)</th><th style="text-align:center">Z(厚)</th>
-    <th style="text-align:center">仕上</th><th>備考</th>${pH}
-  </tr></thead><tbody>${rows}</tbody></table>
-  <div style="margin-top:20px;font-size:11px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px">橋本工業&#xFF08;株&#xFF09;&ensp;金型製作原価管理システム&ensp;印刷日: ${new Date().toLocaleDateString('ja-JP')}</div>
-  <script>window.onload=()=>window.print();<\/script></body></html>`;
-  const w = window.open('','_blank','width=1000,height=750');
-  if (w) { w.document.write(html); w.document.close(); }
-}
-
 async function confirmAllDecided(reqKey) {
   const rec = DB.quoteRequests?.[reqKey];
   if (!rec) return;
@@ -6013,8 +5942,12 @@ async function toggleItemCheck(reqKey, itemIdx, checked) {
 async function toggleAllItemCheck(reqKey, checked) {
   if (!DB.quoteRequests?.[reqKey]) return;
   const rec = DB.quoteRequests[reqKey];
-  rec.checkedItems = {};
-  (rec.items||[]).forEach((_,i) => rec.checkedItems[i] = checked);
+  if (!rec.checkedItems) rec.checkedItems = {};
+  // 発注済み行を除いた未発注行のみ対象
+  const ordered = rec.orderedItems || {};
+  (rec.items||[]).forEach((_,i) => {
+    if (!ordered[i]) rec.checkedItems[i] = checked;
+  });
   await writeToFirebase('quoteRequests', DB.quoteRequests);
   renderCompare();
 }
@@ -6200,9 +6133,9 @@ function renderOrderPage() {
           <td style="padding:5px 8px">${item.name||''}</td>
           <td class="mono" style="padding:5px 6px;text-align:center">${item.qty||1}</td>
           <td class="mono" style="padding:5px 6px">${item.material||''}</td>
-          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{const v=String(item.sizeX||'').replace(/\.00$/,'');if(!v)return'—';return(_fX?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:11px"></div>')+'<div>'+v+'</div>';})()}</td>
-        <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{const v=String(item.sizeY||'').replace(/\.00$/,'');if(!v)return'—';return(_fY?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:11px"></div>')+'<div>'+v+'</div>';})()}</td>
-        <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{const v=String(item.sizeZ||'').replace(/\.00$/,'');if(!v)return'—';return(_fZ?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:11px"></div>')+'<div>'+v+'</div>';})()}</td>
+          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{const v=String(item.sizeX||'').replace(/\.00$/,'');if(!v)return'—';return(item.fX?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:11px"></div>')+'<div>'+v+'</div>';})()}</td>
+        <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{const v=String(item.sizeY||'').replace(/\.00$/,'');if(!v)return'—';return(item.fY?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:11px"></div>')+'<div>'+v+'</div>';})()}</td>
+        <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{const v=String(item.sizeZ||'').replace(/\.00$/,'');if(!v)return'—';return(item.fZ?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:11px"></div>')+'<div>'+v+'</div>';})()}</td>
           <td style="padding:5px 4px;text-align:center;font-weight:700">${finishLabel(item.finish)}</td>
           <td style="padding:4px 6px">
             <input class="form-input" type="number" style="width:110px;padding:3px 6px;font-size:12px"
