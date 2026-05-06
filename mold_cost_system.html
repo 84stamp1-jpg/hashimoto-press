@@ -3316,9 +3316,9 @@ function generateQuotePrint() {
       const sY = String(r.sizeY||'').replace(/\.00$/,'');
       const sZ = String(r.sizeZ||'').replace(/\.00$/,'');
       return '<tr>' +
-        '<td style="text-align:center;' + B + 'padding:8px 2px">' + (i+1) + '</td>' +
-        '<td style="text-align:center;' + B + 'padding:8px 2px;font-family:monospace;font-size:20pt;font-weight:700;white-space:nowrap">' + (r.itemMatNo||r.moldNo||'') + '</td>' +
-        '<td style="' + B + 'padding:8px 4px;font-size:20pt;max-width:90px;overflow:hidden;word-break:break-all">' + (r.name||'') + '</td>' +
+        '<td style="text-align:center;' + B + 'padding:8px 1px;width:16px">' + (i+1) + '</td>' +
+        '<td style="text-align:center;' + B + 'padding:8px 2px;font-family:monospace;font-size:20pt;font-weight:700;white-space:nowrap;width:72px">' + (r.itemMatNo||r.moldNo||'') + '</td>' +
+        '<td style="' + B + 'padding:8px 4px;font-size:20pt">' + (r.name||'') + '</td>' +
         '<td style="text-align:center;' + B + 'padding:8px 2px">' + (r.qty||1) + '</td>' +
         '<td style="' + B + 'padding:8px 3px">' + (r.material||'') + '</td>' +
         '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + xMark + '<div style="padding:6px 3px;font-size:20.8pt;font-weight:600">' + sX + '</div></td>' +
@@ -3347,9 +3347,9 @@ function generateQuotePrint() {
       '<table style="width:100%;border-collapse:collapse;font-size:20pt">' +
         '<thead>' +
           '<tr style="background:#d0d0d0">' +
-            '<th style="' + B + 'padding:8px 2px;text-align:center;width:24px">No.</th>' +
-            '<th style="' + B + 'padding:8px 3px;text-align:center;width:100px">管理NO.</th>' +
-            '<th style="' + B + 'padding:8px 4px;width:90px">名称</th>' +
+            '<th style="' + B + 'padding:8px 2px;text-align:center;width:16px">No.</th>' +
+            '<th style="' + B + 'padding:8px 3px;text-align:center;width:72px">管理NO.</th>' +
+            '<th style="' + B + 'padding:8px 4px">名　　称</th>' +
             '<th style="' + B + 'padding:8px 2px;text-align:center;width:26px">数量</th>' +
             '<th style="' + B + 'padding:8px 3px;text-align:center;width:56px">材質</th>' +
             '<th style="' + B + 'padding:8px 3px;text-align:center;width:70px">長さ(X)</th>' +
@@ -3690,21 +3690,22 @@ async function reopenQuote(reqKey) {
 
   // 編集キーを記録（上書き保存用）
   _editingQuoteKey = reqKey;
-  // 品目リストに読み込む（チェック済みの行のみ、なければ未発注行全て）
-  const orderedItems  = rec.orderedItems || {};
-  const checkedItems  = rec.checkedItems || {};
-  const hasChecked    = Object.values(checkedItems).some(v => v === true);
+  // 品目リストに読み込む（未発注行を全件）
+  // チェックされた行を先頭に、未チェック行をその後に並べる
+  const orderedItems = rec.orderedItems || {};
+  const checkedItems = rec.checkedItems || {};
+  const hasChecked   = Object.values(checkedItems).some(v => v === true);
+  const pendingItems = (rec.items||[])
+    .map((it,i) => orderedItems[i] ? null : {...it, _origIdx: i})
+    .filter(Boolean);
   if (hasChecked) {
-    // チェックされた行のみ（発注済みは除外）
-    quoteItems = (rec.items||[])
-      .map((it,i) => (checkedItems[i] === true && !orderedItems[i]) ? {...it} : null)
-      .filter(Boolean);
+    const checked   = pendingItems.filter(it => checkedItems[it._origIdx] === true);
+    const unchecked = pendingItems.filter(it => checkedItems[it._origIdx] !== true);
+    quoteItems = [...checked, ...unchecked];
   } else {
-    // チェックなし → 未発注行を全て読み込む
-    quoteItems = (rec.items||[])
-      .map((it,i) => orderedItems[i] ? null : {...it})
-      .filter(Boolean);
+    quoteItems = pendingItems;
   }
+  quoteItems = quoteItems.map(it => { const r = {...it}; delete r._origIdx; return r; });
 
   // 金型NOと材料管理NOをフォームにセット
   const moldNoEl = document.getElementById('qf_moldNo');
@@ -3729,7 +3730,9 @@ async function reopenQuote(reqKey) {
   // ①タブに切り替え
   showQuoteTab('request');
   renderQuoteItemTable();
-  toast(rec.items.length + '件の品目を読み込みました。編集後「見積待ちとして保存」を押してください', 'success');
+  const loadedCount = quoteItems.length;
+  const checkedCount = hasChecked ? Object.values(checkedItems).filter(v=>v===true).length : 0;
+  toast(loadedCount + '件の品目を読み込みました' + (checkedCount ? '（チェック' + checkedCount + '件を先頭に表示）' : '') + '。編集後「見積待ちとして保存」を押してください', 'success');
 }
 
 // 見積依頼を削除
