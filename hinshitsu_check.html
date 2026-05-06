@@ -391,6 +391,7 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
     <input type="file" id="bulk-pi" accept="image/*" capture="environment" style="display:none">
     <div class="sz" id="bulk-sz"></div>
     <img id="bulk-prev" style="display:none;width:100%;border-radius:8px;margin-top:8px;cursor:pointer" onclick="openBulkViewer()">
+    <button id="bulk-rot-btn" onclick="rotateBulkPhoto()" style="display:none;margin-top:6px;padding:6px 18px;background:#1a3a6c;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;">↻ 写真を回転</button>
   </div>
 
   <div class="alloc-card" id="alloc-list-card" style="display:none">
@@ -579,13 +580,13 @@ function getTeam(n){for(var t in TEAM_MAP){if(TEAM_MAP[t].indexOf(n)>=0)return t
   }, { passive: false });
 
   // 起動時にALL_RECORDSを読み込んで完納済みを除外できるようにする
-  gasGet('getRecords', null, function(res){
+  gasPost('getRecords', {}, function(res){
     if(res && res.ok) { ALL_RECORDS = res.records || []; updatePendingBadge(); }
   }, function(){});
 })();
 
 // 作業予定データ読み込み
-gasGet('getSakuyoData', null, function(res){
+gasPost('getSakuyoData', {}, function(res){
   if(res && res.ok) SAKUYO = res.data || [];
   else SAKUYO = [];
 }, function(){ SAKUYO = []; });
@@ -706,7 +707,7 @@ document.getElementById('pi-retake').addEventListener('change',function(){
 function addPhoto(file){
   if(!file) return;
   if(PHOTOS.length>=MAX_PHOTOS){alert('写真は最大'+MAX_PHOTOS+'枚まです');return;}
-  compressImage(file,function(data,ok,ck){PHOTOS.push({data:data,origKB:ok,compKB:ck});renderPhotoGrid();});
+  compressImage(file,function(data,ok,ck){PHOTOS.push({data:data,origKB:ok,compKB:ck,rotation:0});renderPhotoGrid();});
 }
 // EXIF orientationを取得
 function getExifOrientation(buffer){
@@ -769,6 +770,49 @@ function compressImage(file,cb){
   };
   reader.readAsArrayBuffer(file);
 }
+// 一括振り分け写真を回転する関数
+function rotateBulkPhoto(){
+  if(!BULK_PHOTO) return;
+  var ri=new Image();
+  ri.onload=function(){
+    var canvas=document.createElement('canvas');
+    canvas.width=ri.height; canvas.height=ri.width;
+    var ctx=canvas.getContext('2d');
+    ctx.save();
+    ctx.translate(canvas.width/2, canvas.height/2);
+    ctx.rotate(90*Math.PI/180);
+    ctx.drawImage(ri, -ri.width/2, -ri.height/2);
+    ctx.restore();
+    BULK_PHOTO=canvas.toDataURL('image/jpeg',0.85);
+    document.getElementById('bulk-prev').src=BULK_PHOTO;
+  };
+  ri.src=BULK_PHOTO;
+}
+
+// 写真を回転する関数
+function rotatePhoto(i){
+  PHOTOS[i].rotation=(PHOTOS[i].rotation+90)%360;
+  // Canvasで回転して新しいdataUrlを生成
+  var img=new Image();
+  img.onload=function(){
+    var r=PHOTOS[i].rotation;
+    var canvas=document.createElement('canvas');
+    var swap=(r===90||r===270);
+    canvas.width=swap?img.height:img.width;
+    canvas.height=swap?img.width:img.height;
+    var ctx=canvas.getContext('2d');
+    ctx.save();
+    ctx.translate(canvas.width/2,canvas.height/2);
+    ctx.rotate(r*Math.PI/180);
+    ctx.drawImage(img,-img.width/2,-img.height/2);
+    ctx.restore();
+    PHOTOS[i].data=canvas.toDataURL('image/jpeg',0.85);
+    PHOTOS[i].rotation=0; // 回転済みなのでリセット
+    renderPhotoGrid();
+  };
+  img.src=PHOTOS[i].data;
+}
+
 function renderPhotoGrid(){
   var grid=document.getElementById('photo-grid');
   var area=document.getElementById('photo-area');
@@ -781,7 +825,11 @@ function renderPhotoGrid(){
     img.addEventListener('click',function(){openViewer(i);});
     var del=document.createElement('button'); del.className='photo-del'; del.textContent='×';
     del.addEventListener('click',function(e){e.stopPropagation();PHOTOS.splice(i,1);renderPhotoGrid();});
-    item.appendChild(img); item.appendChild(del);
+    var rot=document.createElement('button');
+    rot.style.cssText='position:absolute;top:4px;left:4px;width:26px;height:26px;background:rgba(30,80,160,0.85);color:#fff;border:none;border-radius:50%;font-size:15px;cursor:pointer;z-index:2;padding:0;';
+    rot.textContent='↻';
+    rot.addEventListener('click',(function(idx){return function(e){e.stopPropagation();rotatePhoto(idx);};})(i));
+    item.appendChild(img); item.appendChild(del); item.appendChild(rot);
     grid.appendChild(item);
   });
   var totalO=0,totalC=0;
@@ -837,7 +885,7 @@ function goToday(){var t=new Date();viewDate=new Date(t.getFullYear(),t.getMonth
 // ===== 記録一覧 =====
 function loadRecords(){
   document.getElementById('rec-list').innerHTML='<div class="loading">読み込み中...</div>';
-  gasGet('getRecords', null, function(res){
+  gasPost('getRecords', {}, function(res){
     ALL_RECORDS = (res && res.ok) ? (res.records || []) : [];
     filterRecords();
     updatePendingBadge();
@@ -1174,7 +1222,7 @@ function runSeizoSearch(){
   if(!q){el.innerHTML='<div class="empty">製造番号を入力してください</div>';return;}
   if(!ALL_RECORDS.length){
     el.innerHTML='<div class="loading">読み込み中...</div>';
-    gasGet('getRecords', null, function(res){
+    gasPost('getRecords', null, function(res){
       ALL_RECORDS=(res&&res.ok)?(res.records||[]):[];
       runSeizoSearch();
     }, function(){ el.innerHTML='<div class="empty">読み込みエラー</div>'; });
@@ -1464,7 +1512,7 @@ function go(){
       document.getElementById('df').textContent=msg;
       document.getElementById('form-input').style.display='none';
       document.getElementById('form-done').style.display='block';
-      gasGet('getRecords', null, function(r2){ALL_RECORDS=(r2&&r2.ok)?(r2.records||[]):[];updatePendingBadge();}, function(){});
+      gasPost('getRecords', null, function(r2){ALL_RECORDS=(r2&&r2.ok)?(r2.records||[]):[];updatePendingBadge();}, function(){});
     } else {alert('エラー: '+res.err);btn.disabled=false;btn.textContent='記録を保存する';}
   }, function(e){alert('通信エラー: '+e.message+'\n\nGAS URLを確認してください');btn.disabled=false;btn.textContent='記録を保存する';});
 }
@@ -1497,6 +1545,7 @@ function openBulkMode(){
   BULK_PHOTO = null;
   document.getElementById('bulk-sz').textContent = '';
   document.getElementById('bulk-prev').style.display = 'none';
+  document.getElementById('bulk-rot-btn').style.display = 'none';
   document.getElementById('bulk-pt').textContent = 'タップして撮影（必須）';
   ALLOC_DATA = [];
   document.getElementById('alloc-list-card').style.display = 'none';
@@ -1635,6 +1684,7 @@ function addBulkPhoto(file){
     document.getElementById('bulk-sz').textContent = '元: '+ok+'KB → 圧縮後: '+ck+'KB';
     document.getElementById('bulk-prev').src = data;
     document.getElementById('bulk-prev').style.display = 'block';
+    document.getElementById('bulk-rot-btn').style.display = 'inline-block';
     document.getElementById('bulk-pb').classList.add('ok');
     document.getElementById('bulk-pt').textContent = '写真を変更する場合はタップ';
   });
@@ -1734,6 +1784,7 @@ function camDone(){
       document.getElementById('bulk-sz').textContent='圧縮後: '+p.compKB+'KB';
       document.getElementById('bulk-prev').src=p.data;
       document.getElementById('bulk-prev').style.display='block';
+      document.getElementById('bulk-rot-btn').style.display='inline-block';
       document.getElementById('bulk-pt').textContent='写真を変更する場合はタップ';
     }
   } else {
@@ -1942,7 +1993,7 @@ function saveAlloc(){
           } else {
             alert('✅ '+targets.length+'件の記録を保存しました');
             BULK_PHOTO = null;
-            gasGet('getRecords', null, function(r2){ALL_RECORDS=(r2&&r2.ok)?(r2.records||[]):[];}, function(){});
+            gasPost('getRecords', null, function(r2){ALL_RECORDS=(r2&&r2.ok)?(r2.records||[]):[];}, function(){});
             showTab('list');
             loadRecords();
           }
