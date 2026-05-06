@@ -609,13 +609,24 @@ document.getElementById('sakuyo-search').addEventListener('input', function(){
     }
   });
   var r=[];
+  var seenHinban={};
   for(var i=0;i<SAKUYO.length;i++){
     var s=SAKUYO[i];
     // 完納済みは除外
     var sk=s.seizoNo+'_'+s.junjo;
     if(doneSeizoSet[sk]) continue;
     if(s.hinban.toLowerCase().indexOf(q)>=0||s.hinmei.toLowerCase().indexOf(q)>=0||s.seizoNo.toLowerCase().indexOf(q)>=0){
-      r.push(s); if(r.length>=20) break;
+      // 製造番号検索の場合はそのまま、品番・品名検索の場合は品番で重複除外
+      var isSeizoSearch = s.seizoNo.toLowerCase().indexOf(q)>=0 && s.hinban.toLowerCase().indexOf(q)<0 && s.hinmei.toLowerCase().indexOf(q)<0;
+      if(isSeizoSearch){
+        r.push(s);
+      } else {
+        if(!seenHinban[s.hinban]){
+          seenHinban[s.hinban]=true;
+          r.push(s);
+        }
+      }
+      if(r.length>=30) break;
     }
   }
   if(!r.length){sug.style.display='none';return;}
