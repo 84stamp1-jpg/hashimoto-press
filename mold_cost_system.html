@@ -3408,13 +3408,13 @@ async function saveQuoteRequest() {
   const isEdit = _editingQuoteKey && DB.quoteRequests?.[_editingQuoteKey];
   const key    = isEdit ? _editingQuoteKey : 'qr_' + Date.now();
   const existing = isEdit ? DB.quoteRequests[_editingQuoteKey] : {};
-  // 金型一覧からpartNameを取得
   const moldData = Object.values(DB.molds||{}).find(m => m.no === moldNo);
-  const partName = moldData?.partName || existing.partName || '';
+  const partName  = moldData?.partName  || existing.partName  || '';
+  const moldPartNo = moldData?.partNo   || existing.moldPartNo || '';
 
   const record = {
     ...existing,
-    date, moldNo, partNo, partName,
+    date, moldNo, moldPartNo, partName,
     items:     [...quoteItems],
     suppliers: toList,
     status:    '見積待ち',
@@ -3465,12 +3465,9 @@ function renderCompare() {
   let filtered = entries;
   if (search)    filtered = filtered.filter(([,r]) =>
     (r.moldNo||'').toLowerCase().includes(search) ||
-    (r.partNo||'').toLowerCase().includes(search) ||
+    (r.moldPartNo||r.partNo||'').toLowerCase().includes(search) ||
     (r.partName||'').toLowerCase().includes(search) ||
-    (r.items||[]).some(it =>
-      (it.itemMatNo||'').toLowerCase().includes(search) ||
-      (it.name||'').toLowerCase().includes(search)
-    )
+    (r.items||[]).some(it => (it.itemMatNo||'').toLowerCase().includes(search) || (it.name||'').toLowerCase().includes(search))
   );
   if (moldFil)   filtered = filtered.filter(([,r]) => r.moldNo   === moldFil);
   if (statusFil) filtered = filtered.filter(([,r]) => r.status   === statusFil);
@@ -3664,14 +3661,11 @@ function printCompareSheet(reqKey, showPrice) {
   const rec = DB.quoteRequests?.[reqKey];
   if (!rec) return;
   const items = (rec.items||[]).map((item,i)=>({item,i})).filter(({i})=>!(rec.orderedItems||{})[i]);
-
-  // 品名: rec.partNameまたは金型データから取得
   const moldData   = Object.values(DB.molds||{}).find(m => m.no === rec.moldNo);
-  const partName   = rec.partName || moldData?.partName || '';
-  // 工程: 金型のprocessesリストをすべて表示
+  const partName   = rec.partName  || moldData?.partName  || '';
+  const moldPartNo = rec.moldPartNo || moldData?.partNo   || '';
   const processes  = moldData?.processes || [];
   const processStr = processes.map((p,i)=>`${i+1}: ${p}`).join('　');
-
   const rows = items.map(({item,i}) => {
     const decidedSid = (rec.itemDecided||{})[i] || rec.decided || '';
     const q = decidedSid ? (rec.quotes?.[reqKey+'_'+i+'_'+decidedSid] || {}) : {};
@@ -3699,27 +3693,22 @@ function printCompareSheet(reqKey, showPrice) {
       ${priceCell}
     </tr>`;
   }).join('');
-
   const pH = showPrice ? '<th style="text-align:right">単価(円)</th>' : '';
   const dateStr = rec.createdAt ? rec.createdAt.slice(0,10) : rec.date || new Date().toLocaleDateString('ja-JP');
-
   const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>材料依頼書</title>
-  <style>body{font-family:'Noto Sans JP',sans-serif;font-size:14px;margin:20px}h2{font-size:18px;margin-bottom:6px}.meta{font-size:13px;color:#333;margin-bottom:14px;border-bottom:2px solid #cbd5e1;padding-bottom:10px}.meta-row{display:flex;gap:24px;flex-wrap:wrap;align-items:baseline}.meta-item{display:flex;gap:6px;align-items:baseline}.meta-label{color:#64748b;font-size:12px;white-space:nowrap}.meta-value{font-weight:700;font-size:14px}table{border-collapse:collapse;width:100%}th{background:#f1f5f9;padding:6px 8px;text-align:left;border-bottom:2px solid #cbd5e1;font-size:13px;white-space:nowrap}tr:nth-child(even){background:#f8fafc}td{font-size:14px;vertical-align:middle}@media print{body{margin:8mm}}</style>
+  <style>body{font-family:'Noto Sans JP',sans-serif;font-size:14px;margin:20px}h2{font-size:18px;margin-bottom:6px}.meta{font-size:13px;margin-bottom:14px;border-bottom:2px solid #cbd5e1;padding-bottom:10px}.meta-row{display:flex;gap:24px;flex-wrap:wrap;align-items:baseline}.meta-item{display:flex;gap:6px;align-items:baseline}.meta-label{color:#64748b;font-size:12px;white-space:nowrap}.meta-value{font-weight:700;font-size:14px}table{border-collapse:collapse;width:100%}th{background:#f1f5f9;padding:6px 8px;text-align:left;border-bottom:2px solid #cbd5e1;font-size:13px;white-space:nowrap}tr:nth-child(even){background:#f8fafc}td{font-size:14px;vertical-align:middle}@media print{body{margin:8mm}}</style>
   </head><body>
   <h2>材料依頼書</h2>
-  <div class="meta">
-    <div class="meta-row">
-      <div class="meta-item"><span class="meta-label">金型NO.</span><span class="meta-value" style="color:#0369a1">${rec.moldNo||''}</span></div>
-      <div class="meta-item"><span class="meta-label">品番</span><span class="meta-value">${rec.partNo||''}</span></div>
-      <div class="meta-item"><span class="meta-label">品名</span><span class="meta-value">${partName}</span></div>
-      ${processStr ? `<div class="meta-item"><span class="meta-label">工程</span><span class="meta-value" style="color:#059669">${processStr}</span></div>` : ''}
-      <div class="meta-item"><span class="meta-label">依頼日</span><span class="meta-value">${dateStr}</span></div>
-      ${showPrice ? '<div class="meta-item"><span style="color:#2563eb;font-weight:700">（単価あり）</span></div>' : ''}
-    </div>
-  </div>
+  <div class="meta"><div class="meta-row">
+    <div class="meta-item"><span class="meta-label">金型NO.</span><span class="meta-value" style="color:#0369a1">${rec.moldNo||''}</span></div>
+    <div class="meta-item"><span class="meta-label">品番</span><span class="meta-value">${moldPartNo}</span></div>
+    <div class="meta-item"><span class="meta-label">品名</span><span class="meta-value">${partName}</span></div>
+    ${processStr ? `<div class="meta-item"><span class="meta-label">工程</span><span class="meta-value" style="color:#059669">${processStr}</span></div>` : ''}
+    <div class="meta-item"><span class="meta-label">依頼日</span><span class="meta-value">${dateStr}</span></div>
+    ${showPrice ? '<div class="meta-item"><span style="color:#2563eb;font-weight:700">（単価あり）</span></div>' : ''}
+  </div></div>
   <table><thead><tr>
-    <th>管理NO.</th><th>名称</th>
-    <th style="text-align:center">数量</th><th>材質</th>
+    <th>管理NO.</th><th>名称</th><th style="text-align:center">数量</th><th>材質</th>
     <th style="text-align:center">X(長)</th><th style="text-align:center">Y(幅)</th><th style="text-align:center">Z(厚)</th>
     <th style="text-align:center">仕上</th><th>備考</th>${pH}
   </tr></thead><tbody>${rows}</tbody></table>
