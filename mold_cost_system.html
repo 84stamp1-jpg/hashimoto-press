@@ -3660,6 +3660,11 @@ function printCompareSheet(reqKey, showPrice) {
   const rec = DB.quoteRequests?.[reqKey];
   if (!rec) return;
   const items = (rec.items||[]).map((item,i)=>({item,i})).filter(({i})=>!(rec.orderedItems||{})[i]);
+
+  // 品番・工程は明細行から収集してヘッダーに表示
+  const partNos = [...new Set(items.map(({item})=>item.partNo||'').filter(Boolean))];
+  const processes = [...new Set(items.map(({item})=>item.process||'').filter(Boolean))];
+
   const rows = items.map(({item,i}) => {
     const decidedSid = (rec.itemDecided||{})[i] || rec.decided || '';
     const q = decidedSid ? (rec.quotes?.[reqKey+'_'+i+'_'+decidedSid] || {}) : {};
@@ -3676,8 +3681,6 @@ function printCompareSheet(reqKey, showPrice) {
     const priceCell = showPrice ? `<td style="text-align:right;padding:5px 8px">${unitPrice?'&yen;'+fmt(unitPrice):'&mdash;'}</td>` : '';
     return `<tr style="border-bottom:1px solid #e2e8f0">
       <td style="padding:5px 8px;font-weight:700;color:#0369a1;font-family:monospace">${item.itemMatNo||item.moldNo||'&mdash;'}</td>
-      <td style="padding:5px 8px;font-family:monospace;color:#555;font-size:13px">${item.partNo||''}</td>
-      <td style="padding:5px 8px;color:#059669;font-size:13px">${item.process||''}</td>
       <td style="padding:5px 8px">${item.name||''}</td>
       <td style="padding:5px 8px;text-align:center">${item.qty||1}</td>
       <td style="padding:5px 8px;font-family:monospace">${item.material||''}</td>
@@ -3689,15 +3692,28 @@ function printCompareSheet(reqKey, showPrice) {
       ${priceCell}
     </tr>`;
   }).join('');
+
   const pH = showPrice ? '<th style="text-align:right">単価(円)</th>' : '';
   const dateStr = rec.createdAt ? rec.createdAt.slice(0,10) : rec.date || new Date().toLocaleDateString('ja-JP');
+  const partNoStr = partNos.join('、') || rec.partNo || '';
+  const processStr = processes.join('、');
+
   const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>材料依頼書</title>
-  <style>body{font-family:'Noto Sans JP',sans-serif;font-size:14px;margin:20px}h2{font-size:18px;margin-bottom:6px}.meta{font-size:13px;color:#555;margin-bottom:14px;border-bottom:1px solid #e2e8f0;padding-bottom:8px}table{border-collapse:collapse;width:100%}th{background:#f1f5f9;padding:6px 8px;text-align:left;border-bottom:2px solid #cbd5e1;font-size:13px;white-space:nowrap}tr:nth-child(even){background:#f8fafc}td{font-size:14px;vertical-align:middle}@media print{body{margin:8mm}}</style>
+  <style>body{font-family:'Noto Sans JP',sans-serif;font-size:14px;margin:20px}h2{font-size:18px;margin-bottom:6px}.meta{font-size:13px;color:#333;margin-bottom:14px;border-bottom:2px solid #cbd5e1;padding-bottom:10px;line-height:2}.meta-row{display:flex;gap:32px;flex-wrap:wrap}.meta-item{display:flex;gap:6px}.meta-label{color:#64748b;font-size:12px}.meta-value{font-weight:700;font-size:14px}table{border-collapse:collapse;width:100%}th{background:#f1f5f9;padding:6px 8px;text-align:left;border-bottom:2px solid #cbd5e1;font-size:13px;white-space:nowrap}tr:nth-child(even){background:#f8fafc}td{font-size:14px;vertical-align:middle}@media print{body{margin:8mm}}</style>
   </head><body>
   <h2>材料依頼書</h2>
-  <div class="meta">金型NO: <strong>${rec.moldNo||''}</strong>&emsp;品番: <strong>${rec.partNo||''}</strong>&emsp;品名: ${rec.partName||''}&emsp;依頼日: ${dateStr}&emsp;${showPrice?'<span style="color:#2563eb">（単価あり）</span>':'<span style="color:#16a34a">（単価なし）</span>'}</div>
+  <div class="meta">
+    <div class="meta-row">
+      <div class="meta-item"><span class="meta-label">金型NO.</span><span class="meta-value" style="color:#0369a1">${rec.moldNo||''}</span></div>
+      <div class="meta-item"><span class="meta-label">品番</span><span class="meta-value">${partNoStr}</span></div>
+      <div class="meta-item"><span class="meta-label">品名</span><span class="meta-value">${rec.partName||''}</span></div>
+      ${processStr ? `<div class="meta-item"><span class="meta-label">工程</span><span class="meta-value" style="color:#059669">${processStr}</span></div>` : ''}
+      <div class="meta-item"><span class="meta-label">依頼日</span><span class="meta-value">${dateStr}</span></div>
+      ${showPrice ? '<div class="meta-item"><span style="color:#2563eb;font-weight:700">（単価あり）</span></div>' : ''}
+    </div>
+  </div>
   <table><thead><tr>
-    <th>管理NO.</th><th>品番</th><th>工程</th><th>名称</th>
+    <th>管理NO.</th><th>名称</th>
     <th style="text-align:center">数量</th><th>材質</th>
     <th style="text-align:center">X(長)</th><th style="text-align:center">Y(幅)</th><th style="text-align:center">Z(厚)</th>
     <th style="text-align:center">仕上</th><th>備考</th>${pH}
@@ -6150,13 +6166,7 @@ function renderOrderPage() {
     if (batchList.length > 0) {
       for (const [bid, batch] of batchList) {
         const batchKey = key + '_batch_' + bid;
-        const validIndices = (batch.indices||[]).filter(i => {
-          if (displayedIndices.has(i)) return false;
-          // mat_order_キーが存在するか、または一度も登録されていない新規バッチは表示する
-          const matKey = 'mat_order_'+key+'_'+i;
-          if (existingMatKeys.size > 0 && existingMatKeys.has('dummy_never_exists')) return false; // 将来の拡張用
-          return true; // existingMatKeysチェックを撤廃（削除時はmatDeleteOneで連動）
-        });
+        const validIndices = (batch.indices||[]).filter(i => !displayedIndices.has(i));
         validIndices.forEach(i => displayedIndices.add(i));
         if (!validIndices.length) continue;
         if (!_showHiddenOrders && printed[batchKey]) continue;
@@ -6415,10 +6425,8 @@ async function restoreToOrderPage(reqKey, supId) {
   if (!DB.quoteRequests?.[reqKey]) { toast('見積依頼データが見つかりません', 'error'); return; }
   const rec = DB.quoteRequests[reqKey];
   if (rec.printedOrders) {
-    // batchKey形式（key_batch_xxx）・旧形式（key_supId）両方クリア
-    Object.keys(rec.printedOrders).forEach(k => {
-      if (k.startsWith(reqKey) || k === supId) delete rec.printedOrders[k];
-    });
+    Object.keys(rec.printedOrders).forEach(k => { if (k.startsWith(reqKey)) delete rec.printedOrders[k]; });
+    delete rec.printedOrders[supId];
   }
   await writeToFirebase('quoteRequests', DB.quoteRequests);
   toast('③注文書作成タブに再表示しました', 'success');
