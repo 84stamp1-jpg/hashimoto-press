@@ -945,11 +945,9 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
             <input type="checkbox" id="matSelectAll" onchange="matToggleAll(this.checked)"> 全選択
           </label>
           <button class="btn btn-danger btn-sm" id="matBulkDeleteBtn" style="display:none" onclick="matBulkDelete()">🗑 選択削除</button>
-          <div id="matBulkDateWrap" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;">
+          <div id="matBulkDateWrap" style="display:none;align-items:center;gap:6px;">
             <input type="date" class="form-input" id="matBulkDate" style="padding:3px 6px;font-size:12px;width:140px">
             <button class="btn btn-primary btn-sm" onclick="matBulkSetDate()">📅 仕入日を一括設定</button>
-            <input type="date" class="form-input" id="matBulkArrivalDate" style="padding:3px 6px;font-size:12px;width:140px">
-            <button class="btn btn-secondary btn-sm" onclick="matBulkSetArrivalDate()">📦 入荷予定日を一括設定</button>
           </div>
           <button class="btn btn-secondary btn-sm" onclick="copyTableToClipboard('matTableBody','材料費')">📋 全行コピー</button>
         </div>
@@ -1387,10 +1385,6 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
         <div class="form-group">
           <label class="form-label">仕入日</label>
           <input class="form-input" id="matf_month" type="date">
-        </div>
-        <div class="form-group">
-          <label class="form-label">入荷予定日</label>
-          <input class="form-input" id="matf_arrivalDate" type="date">
         </div>
         <div class="form-group" style="grid-column:1/-1">
           <label class="form-label">金型NO.</label>
@@ -2333,7 +2327,7 @@ function renderMaterials() {
     <table>
       <thead><tr>
         <th style="width:120px"></th>
-        <th>仕入日</th><th>入荷予定日</th><th>管理NO.</th><th>品番 / 品名</th>
+        <th>仕入日</th><th>管理NO.</th><th>品番 / 品名</th>
         <th>材質</th><th style="text-align:center">X(長)</th><th style="text-align:center">Y(幅)</th><th style="text-align:center">Z(厚)</th><th>重量(kg)</th><th>仕入金額</th><th>手配先</th>
       </tr></thead>
       <tbody>${entries.map(([k,r])=>`
@@ -2345,7 +2339,6 @@ function renderMaterials() {
             ${r.quoteReqKey ? '<button class="btn btn-secondary btn-sm" style="padding:2px 5px;font-size:9px;background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd" onclick="restoreToOrderPage(\'' + r.quoteReqKey + '\',\'' + (r.orderedSupId||'') + '\')">📋 注文書</button>' : ''}
           </td>
           <td class="mono" style="font-size:15px">${r.month||''}</td>
-          <td class="mono" style="font-size:15px;color:${r.arrivalDate?'var(--accent)':' var(--text2)'}">${r.arrivalDate||'—'}</td>
           <td class="mono" style="font-size:15px;font-weight:600;color:var(--accent)">${r.partNo||r.moldNo||''}</td>
           <td>
             ${matPartNoCell(r.moldNo, r.partNo)}
@@ -2397,7 +2390,7 @@ function renderOutsource() {
     <table>
       <thead><tr>
         <th style="width:50px"></th>
-        <th>仕入日</th><th>入荷予定日</th><th>管理NO.</th><th>品番 / 品名</th><th>内容</th><th>仕入先</th>
+        <th>仕入日</th><th>管理NO.</th><th>品番 / 品名</th><th>内容</th><th>仕入先</th>
         <th>数量</th><th>単価</th><th>合計金額</th>
       </tr></thead>
       <tbody>${entries.map(([k,r])=>`
@@ -2465,7 +2458,7 @@ function renderPurchase() {
       <thead><tr>
         <th style="width:32px;text-align:center">✓</th>
         <th style="width:50px"></th>
-        <th>仕入日</th><th>入荷予定日</th><th>管理NO.</th><th>品番 / 品名</th>
+        <th>仕入日</th><th>管理NO.</th><th>品番 / 品名</th>
         <th>商品名</th><th>仕入先</th><th>数量</th><th>単価</th><th>合計金額</th>
       </tr></thead>
       <tbody>${entries.map(([k,r])=>`
@@ -2851,7 +2844,6 @@ function openMatModal() {
 async function saveMaterial() {
   const data = {
     month:document.getElementById('matf_month').value,
-    arrivalDate:document.getElementById('matf_arrivalDate').value,
     moldNo:document.getElementById('matf_moldNo').value.trim(),
     partNo:document.getElementById('matf_partNo').value.trim(),
     name:document.getElementById('matf_name').value.trim(),
@@ -3324,16 +3316,16 @@ function generateQuotePrint() {
       const sY = String(r.sizeY||'').replace(/\.00$/,'');
       const sZ = String(r.sizeZ||'').replace(/\.00$/,'');
       return '<tr>' +
-        '<td style="text-align:center;' + B + 'padding:4px 2px">' + (i+1) + '</td>' +
-        '<td style="text-align:center;' + B + 'padding:4px 2px;font-family:monospace;font-size:15pt;font-weight:700;white-space:nowrap">' + (r.itemMatNo||r.moldNo||'') + '</td>' +
-        '<td style="' + B + 'padding:4px 4px;font-size:13pt">' + (r.name||'') + '</td>' +
-        '<td style="text-align:center;' + B + 'padding:4px 2px">' + (r.qty||1) + '</td>' +
-        '<td style="' + B + 'padding:4px 3px">' + (r.material||'') + '</td>' +
-        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + xMark + '<div style="padding:2px 3px;font-size:15.8pt;font-weight:600">' + sX + '</div></td>' +
-        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + yMark + '<div style="padding:2px 3px;font-size:15.8pt;font-weight:600">' + sY + '</div></td>' +
-        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + zMark + '<div style="padding:2px 3px;font-size:15.8pt;font-weight:600">' + sZ + '</div></td>' +
-        '<td style="text-align:center;' + B + 'padding:4px 2px;font-weight:800;font-size:15.8pt">' + finish + '</td>' +
-        '<td style="' + B + 'padding:4px 8px;font-size:14.2pt;min-width:80px">' + (r.note||'') + '</td>' +
+        '<td style="text-align:center;' + B + 'padding:8px 2px">' + (i+1) + '</td>' +
+        '<td style="text-align:center;' + B + 'padding:8px 2px;font-family:monospace;font-size:20pt;font-weight:700;white-space:nowrap">' + (r.itemMatNo||r.moldNo||'') + '</td>' +
+        '<td style="' + B + 'padding:8px 4px;font-size:20pt;max-width:90px;overflow:hidden;word-break:break-all">' + (r.name||'') + '</td>' +
+        '<td style="text-align:center;' + B + 'padding:8px 2px">' + (r.qty||1) + '</td>' +
+        '<td style="' + B + 'padding:8px 3px">' + (r.material||'') + '</td>' +
+        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + xMark + '<div style="padding:6px 3px;font-size:20.8pt;font-weight:600">' + sX + '</div></td>' +
+        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + yMark + '<div style="padding:6px 3px;font-size:20.8pt;font-weight:600">' + sY + '</div></td>' +
+        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + zMark + '<div style="padding:6px 3px;font-size:20.8pt;font-weight:600">' + sZ + '</div></td>' +
+        '<td style="text-align:center;' + B + 'padding:8px 2px;font-weight:800;font-size:20.8pt">' + finish + '</td>' +
+        '<td style="' + B + 'padding:8px 4px;font-size:20pt;max-width:80px;overflow:hidden;word-break:break-all">' + (r.note||'') + '</td>' +
         '</tr>';
     }).filter(Boolean).join('');
 
@@ -3351,25 +3343,25 @@ function generateQuotePrint() {
           '<div style="font-size:13.5pt">橋本工業㈱　' + staff + '</div>' +
         '</div>' +
       '</div>' +
-      '<div style="margin-bottom:7px;font-size:15pt;line-height:1.8">いつもお世話になります。<br>下記の見積りをお願い致します。</div>' +
-      '<table style="width:100%;border-collapse:collapse;font-size:15pt">' +
+      '<div style="margin-bottom:10px;font-size:20pt;line-height:1.8">いつもお世話になります。<br>下記の見積りをお願い致します。</div>' +
+      '<table style="width:100%;border-collapse:collapse;font-size:20pt">' +
         '<thead>' +
           '<tr style="background:#d0d0d0">' +
-            '<th style="' + B + 'padding:5px 2px;text-align:center;width:20px">No.</th>' +
-            '<th style="' + B + 'padding:5px 3px;text-align:center;width:86px">管理NO.</th>' +
-            '<th style="' + B + 'padding:5px 4px;font-size:13pt">名　　称</th>' +
-            '<th style="' + B + 'padding:5px 2px;text-align:center;width:22px">数量</th>' +
-            '<th style="' + B + 'padding:5px 3px;text-align:center;width:48px">材質</th>' +
-            '<th style="' + B + 'padding:5px 3px;text-align:center;width:60px">長さ(X)</th>' +
-            '<th style="' + B + 'padding:5px 3px;text-align:center;width:60px">幅(Y)</th>' +
-            '<th style="' + B + 'padding:5px 3px;text-align:center;width:60px">材厚(Z)</th>' +
-            '<th style="' + B + 'padding:5px 2px;text-align:center;width:28px">仕上</th>' +
-            '<th style="' + B + 'padding:5px 8px">備　　考</th>' +
+            '<th style="' + B + 'padding:8px 2px;text-align:center;width:24px">No.</th>' +
+            '<th style="' + B + 'padding:8px 3px;text-align:center;width:100px">管理NO.</th>' +
+            '<th style="' + B + 'padding:8px 4px;width:90px">名称</th>' +
+            '<th style="' + B + 'padding:8px 2px;text-align:center;width:26px">数量</th>' +
+            '<th style="' + B + 'padding:8px 3px;text-align:center;width:56px">材質</th>' +
+            '<th style="' + B + 'padding:8px 3px;text-align:center;width:70px">長さ(X)</th>' +
+            '<th style="' + B + 'padding:8px 3px;text-align:center;width:70px">幅(Y)</th>' +
+            '<th style="' + B + 'padding:8px 3px;text-align:center;width:70px">材厚(Z)</th>' +
+            '<th style="' + B + 'padding:8px 2px;text-align:center;width:34px">仕上</th>' +
+            '<th style="' + B + 'padding:8px 6px;width:80px">備考</th>' +
           '</tr>' +
         '</thead>' +
         '<tbody>' + itemRows + '</tbody>' +
       '</table>' +
-      '<div style="margin-top:12px;font-size:13.5pt;color:#444">ご回答はFAXまたはメールにてお願いいたします。</div>' +
+      '<div style="margin-top:16px;font-size:18pt;color:#444">ご回答はFAXまたはメールにてお願いいたします。</div>' +
     '</div>';
   }).join('');
 
@@ -3378,14 +3370,14 @@ function generateQuotePrint() {
     '<meta charset="UTF-8"><title>見積依頼書</title>' +
     '<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;700;900&display=swap" rel="stylesheet">' +
     '<style>' +
-      'body{margin:0;font-family:"Noto Sans JP",sans-serif;font-size:15pt;background:#fff;color:#000;}' +
+      'body{margin:0;font-family:"Noto Sans JP",sans-serif;font-size:20pt;background:#fff;color:#000;}' +
       '.page-break{width:100%;margin:0;padding:4mm 5mm 3mm;box-sizing:border-box;page-break-after:always;}' +
       '.page-break:last-child{page-break-after:auto;}' +
       '.no-print{position:fixed;top:12px;right:12px;display:flex;gap:8px;z-index:99;}' +
       'button{padding:8px 16px;cursor:pointer;border:none;border-radius:4px;font-size:13px;}' +
       '.bp{background:#0369a1;color:#fff;}.bc{background:#e2e8f0;color:#333;}' +
-      'th{background:#c8c8c8;font-weight:800;font-size:15pt;}' +
-      'td,th{font-size:15pt;line-height:1.3;}' +
+      'th{background:#c8c8c8;font-weight:800;font-size:20pt;}' +
+      'td,th{font-size:20pt;line-height:1.5;}' +
       'tr:nth-child(even) td{background:#f8f8f8;}' +
       '@media print{.no-print{display:none!important}@page{size:A4 portrait;margin:2mm 3mm}}' +
     '</style>' +
@@ -3698,9 +3690,21 @@ async function reopenQuote(reqKey) {
 
   // 編集キーを記録（上書き保存用）
   _editingQuoteKey = reqKey;
-  // 品目リストに読み込む
-  const orderedItems = rec.orderedItems || {};
-  quoteItems = (rec.items||[]).map((it,i)=>orderedItems[i]?null:{...it}).filter(Boolean);
+  // 品目リストに読み込む（チェック済みの行のみ、なければ未発注行全て）
+  const orderedItems  = rec.orderedItems || {};
+  const checkedItems  = rec.checkedItems || {};
+  const hasChecked    = Object.values(checkedItems).some(v => v === true);
+  if (hasChecked) {
+    // チェックされた行のみ（発注済みは除外）
+    quoteItems = (rec.items||[])
+      .map((it,i) => (checkedItems[i] === true && !orderedItems[i]) ? {...it} : null)
+      .filter(Boolean);
+  } else {
+    // チェックなし → 未発注行を全て読み込む
+    quoteItems = (rec.items||[])
+      .map((it,i) => orderedItems[i] ? null : {...it})
+      .filter(Boolean);
+  }
 
   // 金型NOと材料管理NOをフォームにセット
   const moldNoEl = document.getElementById('qf_moldNo');
@@ -5828,8 +5832,7 @@ function editMaterial(key) {
   initMoldComboField('matf_moldNo','matf_partNo','matf_partNoDisp');
   // 値を設定
   const set = (id, v) => { const el = document.getElementById(id); if(el) el.value = v||''; };
-  set('matf_month',       r.month);
-  set('matf_arrivalDate', r.arrivalDate);
+  set('matf_month',    r.month);
   set('matf_moldNo',   r.moldNo);
   set('matf_partNo',   r.partNo);
   set('matf_name',     r.name);
@@ -6440,20 +6443,6 @@ async function matBulkSetDate() {
   });
   await writeToFirebase('materials', DB.materials);
   toast(checks.length + '件の仕入日を ' + date + ' に設定しました', 'success');
-  renderMaterials();
-}
-
-// 材料費：入荷予定日を一括設定
-async function matBulkSetArrivalDate() {
-  const date = document.getElementById('matBulkArrivalDate')?.value;
-  if (!date) { toast('入荷予定日を入力してください', 'error'); return; }
-  const checks = [...document.querySelectorAll('.mat-check:checked')];
-  if (!checks.length) { toast('行を選択してください', 'error'); return; }
-  checks.forEach(cb => {
-    if (DB.materials?.[cb.dataset.key]) DB.materials[cb.dataset.key].arrivalDate = date;
-  });
-  await writeToFirebase('materials', DB.materials);
-  toast(checks.length + '件の入荷予定日を ' + date + ' に設定しました', 'success');
   renderMaterials();
 }
 
