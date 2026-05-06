@@ -2337,7 +2337,7 @@ function renderMaterials() {
             <input type="checkbox" class="mat-check" data-key="${k}" onchange="matCheckChanged()" style="margin-right:3px">
             <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px;margin-right:2px" onclick="editMaterial('${k}')">編集</button>
             <button class="btn btn-danger btn-sm" style="padding:2px 5px;font-size:10px" onclick="matDeleteOne('${k}')">×</button>
-            ${r.quoteReqKey ? '<button class="btn btn-secondary btn-sm" style="padding:2px 5px;font-size:9px;background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd" onclick="restoreToOrderPage(\'' + r.quoteReqKey + '\',\'' + (r.orderedSupId||'') + '\')">📋 注文書</button>' : ''}
+            ${(r.quoteReqKey||r.quoteKey) ? '<button class="btn btn-secondary btn-sm" style="padding:2px 5px;font-size:9px;background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd" onclick="restoreToOrderPage(\'' + (r.quoteReqKey||r.quoteKey) + '\',\'' + (r.orderedSupId||'') + '\')">📋 注文書</button>' : ''}
           </td>
           <td class="mono" style="font-size:15px">${r.month||''}</td>
           <td class="mono" style="font-size:15px;font-weight:600;color:var(--accent)">${r.partNo||r.moldNo||''}</td>
@@ -3523,13 +3523,11 @@ function renderCompare() {
         ...sups.map(sid => `<option value="${sid}"${itemDecided===sid?' selected':''}>${supShort[sid]||sid}</option>`)
       ].join('');
 
-      // fX/fY/fZ未保存データの補完
       const hasFlag = 'fX' in item;
       const allFace = !hasFlag && ['6F','4F','▽▽▽','▽▽','6F（全面）','4F（2面）'].includes(item.finish);
       const _fX = hasFlag ? item.fX : allFace;
       const _fY = hasFlag ? item.fY : allFace;
       const _fZ = hasFlag ? item.fZ : allFace;
-
       const isChecked = (rec.checkedItems||{})[i] === true;
       return `<tr style="border-bottom:1px solid var(--border);${isChecked?'':'opacity:0.5'}">
         <td style="padding:4px 6px;text-align:center">
@@ -3678,6 +3676,8 @@ function printCompareSheet(reqKey, showPrice) {
     const priceCell = showPrice ? `<td style="text-align:right;padding:5px 8px">${unitPrice?'&yen;'+fmt(unitPrice):'&mdash;'}</td>` : '';
     return `<tr style="border-bottom:1px solid #e2e8f0">
       <td style="padding:5px 8px;font-weight:700;color:#0369a1;font-family:monospace">${item.itemMatNo||item.moldNo||'&mdash;'}</td>
+      <td style="padding:5px 8px;font-family:monospace;color:#555;font-size:13px">${item.partNo||''}</td>
+      <td style="padding:5px 8px;color:#059669;font-size:13px">${item.process||''}</td>
       <td style="padding:5px 8px">${item.name||''}</td>
       <td style="padding:5px 8px;text-align:center">${item.qty||1}</td>
       <td style="padding:5px 8px;font-family:monospace">${item.material||''}</td>
@@ -3697,13 +3697,14 @@ function printCompareSheet(reqKey, showPrice) {
   <h2>材料依頼書</h2>
   <div class="meta">金型NO: <strong>${rec.moldNo||''}</strong>&emsp;品番: <strong>${rec.partNo||''}</strong>&emsp;品名: ${rec.partName||''}&emsp;依頼日: ${dateStr}&emsp;${showPrice?'<span style="color:#2563eb">（単価あり）</span>':'<span style="color:#16a34a">（単価なし）</span>'}</div>
   <table><thead><tr>
-    <th>管理NO.</th><th>名称</th><th style="text-align:center">数量</th><th>材質</th>
+    <th>管理NO.</th><th>品番</th><th>工程</th><th>名称</th>
+    <th style="text-align:center">数量</th><th>材質</th>
     <th style="text-align:center">X(長)</th><th style="text-align:center">Y(幅)</th><th style="text-align:center">Z(厚)</th>
     <th style="text-align:center">仕上</th><th>備考</th>${pH}
   </tr></thead><tbody>${rows}</tbody></table>
   <div style="margin-top:20px;font-size:11px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px">橋本工業&#xFF08;株&#xFF09;&ensp;金型製作原価管理システム&ensp;印刷日: ${new Date().toLocaleDateString('ja-JP')}</div>
   <script>window.onload=()=>window.print();<\/script></body></html>`;
-  const w = window.open('','_blank','width=1000,height=750');
+  const w = window.open('','_blank','width=1100,height=800');
   if (w) { w.document.write(html); w.document.close(); }
 }
 
@@ -6149,7 +6150,13 @@ function renderOrderPage() {
     if (batchList.length > 0) {
       for (const [bid, batch] of batchList) {
         const batchKey = key + '_batch_' + bid;
-        const validIndices = (batch.indices||[]).filter(i => !displayedIndices.has(i) && existingMatKeys.has('mat_order_'+key+'_'+i));
+        const validIndices = (batch.indices||[]).filter(i => {
+          if (displayedIndices.has(i)) return false;
+          // mat_order_キーが存在するか、または一度も登録されていない新規バッチは表示する
+          const matKey = 'mat_order_'+key+'_'+i;
+          if (existingMatKeys.size > 0 && existingMatKeys.has('dummy_never_exists')) return false; // 将来の拡張用
+          return true; // existingMatKeysチェックを撤廃（削除時はmatDeleteOneで連動）
+        });
         validIndices.forEach(i => displayedIndices.add(i));
         if (!validIndices.length) continue;
         if (!_showHiddenOrders && printed[batchKey]) continue;
@@ -6168,7 +6175,7 @@ function renderOrderPage() {
     } else {
       const bySupplier = {};
       (rec.items||[]).forEach((item, i) => {
-        if (!ordered[i] || !existingMatKeys.has('mat_order_'+key+'_'+i)) return;
+        if (!ordered[i]) return;
         const sid = (rec.itemDecided||{})[i] || rec.decided || '';
         if (!bySupplier[sid]) bySupplier[sid] = [];
         const q = (rec.quotes||{})[key+'_'+i+'_'+sid] || {};
@@ -6408,8 +6415,10 @@ async function restoreToOrderPage(reqKey, supId) {
   if (!DB.quoteRequests?.[reqKey]) { toast('見積依頼データが見つかりません', 'error'); return; }
   const rec = DB.quoteRequests[reqKey];
   if (rec.printedOrders) {
-    Object.keys(rec.printedOrders).forEach(k => { if (k.startsWith(reqKey)) delete rec.printedOrders[k]; });
-    delete rec.printedOrders[supId];
+    // batchKey形式（key_batch_xxx）・旧形式（key_supId）両方クリア
+    Object.keys(rec.printedOrders).forEach(k => {
+      if (k.startsWith(reqKey) || k === supId) delete rec.printedOrders[k];
+    });
   }
   await writeToFirebase('quoteRequests', DB.quoteRequests);
   toast('③注文書作成タブに再表示しました', 'success');
