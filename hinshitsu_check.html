@@ -631,24 +631,67 @@ document.getElementById('sakuyo-search').addEventListener('input', function(){
   }
   if(!r.length){sug.style.display='none';return;}
   sug.innerHTML='';
+
+  // 品番でグループ化（製造番号検索はグループ化しない）
+  var grouped={}, groupOrder=[];
   r.forEach(function(item){
+    var isSeizoSearch = item.seizoNo.toLowerCase().indexOf(q)>=0 && item.hinban.toLowerCase().indexOf(q)<0 && item.hinmei.toLowerCase().indexOf(q)<0;
+    if(isSeizoSearch){
+      var key='_s_'+item.seizoNo+'_'+item.junjo;
+      grouped[key]=[item]; groupOrder.push(key);
+    } else {
+      if(!grouped[item.hinban]){ grouped[item.hinban]=[]; groupOrder.push(item.hinban); }
+      grouped[item.hinban].push(item);
+    }
+  });
+
+  // 各グループを表示
+  groupOrder.forEach(function(key){
+    var items=grouped[key];
+    var first=items[0];
     var div=document.createElement('div'); div.className='sk-item';
-    var hb=document.createElement('div'); hb.className='sk-hinban'; hb.textContent=item.hinban;
-    var dt=document.createElement('div'); dt.className='sk-detail';
-    [
-      {l:item.hinmei},
-      {l:'製造番号: '+item.seizoNo, c:'sk-badge'},
-      {l:'工順'+item.junjo, c:'sk-badge'},
-      {l:item.kosei, c:'sk-badge'},
-      {l:'指示数: '+item.shiji+'個', c:'sk-badge'},
-      {l:item['納期']?'納期: '+item['納期']:'', c:'sk-badge'}
-    ].filter(function(b){return b.l;}).forEach(function(b){
-      var sp=document.createElement('span');
-      if(b.c) sp.className=b.c;
-      sp.textContent=b.l; dt.appendChild(sp);
-    });
-    div.appendChild(hb); div.appendChild(dt);
-    div.addEventListener('click',function(){selectSakuyo(item);});
+    var hb=document.createElement('div'); hb.className='sk-hinban';
+    hb.textContent=first.hinban+(items.length>1?' ▼ '+items.length+'件':'');
+
+    // 詳細バッジを作る関数
+    function makeBadges(item){
+      var dt=document.createElement('div'); dt.className='sk-detail';
+      [{l:item.hinmei},{l:'製造番号: '+item.seizoNo,c:'sk-badge'},{l:'工順'+item.junjo,c:'sk-badge'},{l:item.kosei,c:'sk-badge'},{l:'指示数: '+item.shiji+'個',c:'sk-badge'},{l:item['納期']?'納期: '+item['納期']:'',c:'sk-badge'}]
+      .filter(function(b){return b.l;}).forEach(function(b){
+        var sp=document.createElement('span'); if(b.c) sp.className=b.c; sp.textContent=b.l; dt.appendChild(sp);
+      });
+      return dt;
+    }
+
+    div.appendChild(hb);
+
+    if(items.length===1){
+      // 1件のみ：直接選択
+      div.appendChild(makeBadges(first));
+      div.addEventListener('click',function(){selectSakuyo(first);});
+    } else {
+      // 複数件：先頭1件のバッジを表示し、タップで全件展開
+      div.appendChild(makeBadges(first));
+      var expanded=false;
+      var subList=document.createElement('div');
+      subList.style.cssText='display:none;border-top:1px solid #dde;margin-top:4px;background:#f8f9ff;border-radius:0 0 6px 6px;';
+      items.forEach(function(item,idx){
+        var sub=document.createElement('div');
+        sub.style.cssText='padding:7px 12px 7px 16px;cursor:pointer;border-bottom:1px solid #ececec;font-size:12px;'+(idx===0?'font-weight:700;':'');
+        var subBadges=makeBadges(item);
+        sub.appendChild(subBadges);
+        sub.addEventListener('click',function(e){e.stopPropagation();selectSakuyo(item);});
+        sub.addEventListener('mouseover',function(){this.style.background='#dceeff';});
+        sub.addEventListener('mouseout',function(){this.style.background='';});
+        subList.appendChild(sub);
+      });
+      div.appendChild(subList);
+      div.addEventListener('click',function(){
+        expanded=!expanded;
+        subList.style.display=expanded?'block':'none';
+        hb.textContent=first.hinban+(expanded?' ▲ '+items.length+'件':' ▼ '+items.length+'件');
+      });
+    }
     sug.appendChild(div);
   });
   sug.style.display='block';
