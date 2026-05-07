@@ -2342,10 +2342,10 @@ function renderMaterials() {
             <input type="checkbox" class="mat-check" data-key="${k}" onchange="matCheckChanged()" style="margin-right:3px">
             <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px;margin-right:2px" onclick="editMaterial('${k}')">編集</button>
             <button class="btn btn-danger btn-sm" style="padding:2px 5px;font-size:10px" onclick="matDeleteOne('${k}')">×</button>
-            ${(r.quoteReqKey||r.quoteKey) ? '<button class="btn btn-secondary btn-sm" style="padding:2px 5px;font-size:9px;background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd" onclick="restoreToOrderPage(\'' + (r.quoteReqKey||r.quoteKey) + '\',\'' + (r.orderedSupId||'') + '\',\'' + key + '\')">📋 注文書</button>' : ''}
+            ${(r.quoteReqKey||r.quoteKey) ? '<button class="btn btn-secondary btn-sm" style="padding:2px 5px;font-size:9px;background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd" onclick="restoreToOrderPage(\'' + (r.quoteReqKey||r.quoteKey) + '\',\'' + (r.orderedSupId||'') + '\',\'' + k + '\')">📋 注文書</button>' : ''}
           </td>
           <td class="mono" style="font-size:15px">${r.month||''}</td>
-          <td class="mono" style="font-size:15px;color:${r.arrivalDate?'var(--accent)':'var(--text2)'}">${r.arrivalDate||'—'}</td>
+          <td class="mono" style="font-size:13px;color:${r.arrivalDate?'var(--accent)':'var(--text3)'}">${r.arrivalDate||'—'}</td>
           <td class="mono" style="font-size:15px;font-weight:600;color:var(--accent)">${r.partNo||r.moldNo||''}</td>
           <td>
             ${matPartNoCell(r.moldNo, r.partNo)}
@@ -2397,7 +2397,7 @@ function renderOutsource() {
     <table>
       <thead><tr>
         <th style="width:50px"></th>
-        <th>仕入日</th><th>入荷予定日</th><th>管理NO.</th><th>品番 / 品名</th><th>内容</th><th>仕入先</th>
+        <th>仕入日</th><th>管理NO.</th><th>品番 / 品名</th><th>内容</th><th>仕入先</th>
         <th>数量</th><th>単価</th><th>合計金額</th>
       </tr></thead>
       <tbody>${entries.map(([k,r])=>`
@@ -2465,7 +2465,7 @@ function renderPurchase() {
       <thead><tr>
         <th style="width:32px;text-align:center">✓</th>
         <th style="width:50px"></th>
-        <th>仕入日</th><th>入荷予定日</th><th>管理NO.</th><th>品番 / 品名</th>
+        <th>仕入日</th><th>管理NO.</th><th>品番 / 品名</th>
         <th>商品名</th><th>仕入先</th><th>数量</th><th>単価</th><th>合計金額</th>
       </tr></thead>
       <tbody>${entries.map(([k,r])=>`
@@ -3561,8 +3561,6 @@ function renderCompare() {
         <div class="table-actions">
           <button class="btn btn-primary btn-sm" onclick="confirmCheckedItems('${key}')">✅ チェック済みを発注確定</button>
           <button class="btn btn-secondary btn-sm" onclick="reopenQuote('${key}')">✏️ ①に読込・再編集</button>
-          <button class="btn btn-secondary btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #86efac" onclick="printCompareSheet('${key}',false)">🖨 依頼書印刷（単価なし）</button>
-          <button class="btn btn-secondary btn-sm" style="background:#eff6ff;color:#2563eb;border:1px solid #93c5fd" onclick="printCompareSheet('${key}',true)">🖨 依頼書印刷（単価あり）</button>
           <button class="btn btn-danger btn-sm" onclick="deleteQuoteRequest('${key}')">🗑 削除</button>
         </div>
       </div>
@@ -3645,67 +3643,6 @@ async function setItemDecided(reqKey, itemIdx, supId) {
 }
 
 // 全明細を発注確定（明細ごとの発注先で材料費に登録）
-function printCompareSheet(reqKey, showPrice) {
-  const rec = DB.quoteRequests?.[reqKey];
-  if (!rec) return;
-  const items = (rec.items||[]).map((item,i)=>({item,i})).filter(({i})=>!(rec.orderedItems||{})[i]);
-  const moldData   = Object.values(DB.molds||{}).find(m => m.no === rec.moldNo);
-  const partName   = rec.partName  || moldData?.partName  || '';
-  const moldPartNo = rec.moldPartNo || moldData?.partNo   || '';
-  const processes  = moldData?.processes || [];
-  const processStr = processes.map((p,idx)=>`${idx+1}: ${p}`).join('　');
-  const rows = items.map(({item,i}) => {
-    const decidedSid = (rec.itemDecided||{})[i] || rec.decided || '';
-    const q = decidedSid ? (rec.quotes?.[reqKey+'_'+i+'_'+decidedSid] || {}) : {};
-    const unitPrice = parseFloat(q.unitPrice||0);
-    const f3 = v => String(v||'').replace(/\.00$/,'');
-    const hasFlag = 'fX' in item;
-    const allFace = !hasFlag && ['6F','4F','▽▽▽','▽▽','6F（全面）','4F（2面）'].includes(item.finish);
-    const fX = hasFlag ? item.fX : allFace;
-    const fY = hasFlag ? item.fY : allFace;
-    const fZ = hasFlag ? item.fZ : allFace;
-    const sc = (v,f) => { const n=f3(v); if(!n)return'&mdash;'; return (f?'<div style="color:#16a34a;font-size:11px;font-weight:700;text-align:center">▽▽</div>':'<div style="height:16px"></div>')+'<div>'+n+'</div>'; };
-    const finishMap = {'6F':'6F','4F':'4F','2F':'2F','黒皮':'黒皮','▽▽▽':'6F','▽▽':'4F','▽':'2F','6F（全面）':'6F','4F（2面）':'4F','2F（1面）':'2F'};
-    const finishTxt = finishMap[item.finish] || item.finish || '&mdash;';
-    const priceCell = showPrice ? `<td style="text-align:right;padding:5px 8px">${unitPrice?'&yen;'+fmt(unitPrice):'&mdash;'}</td>` : '';
-    return `<tr style="border-bottom:1px solid #e2e8f0">
-      <td style="padding:5px 8px;font-weight:700;color:#0369a1;font-family:monospace">${item.itemMatNo||item.moldNo||'&mdash;'}</td>
-      <td style="padding:5px 8px">${item.name||''}</td>
-      <td style="padding:5px 8px;text-align:center">${item.qty||1}</td>
-      <td style="padding:5px 8px;font-family:monospace">${item.material||''}</td>
-      <td style="padding:5px 8px;text-align:center;font-family:monospace;vertical-align:middle">${sc(item.sizeX,fX)}</td>
-      <td style="padding:5px 8px;text-align:center;font-family:monospace;vertical-align:middle">${sc(item.sizeY,fY)}</td>
-      <td style="padding:5px 8px;text-align:center;font-family:monospace;vertical-align:middle">${sc(item.sizeZ,fZ)}</td>
-      <td style="padding:5px 8px;text-align:center">${finishTxt}</td>
-      <td style="padding:5px 8px">${item.note||''}</td>
-      ${priceCell}
-    </tr>`;
-  }).join('');
-  const pH = showPrice ? '<th style="text-align:right">単価(円)</th>' : '';
-  const dateStr = rec.createdAt ? rec.createdAt.slice(0,10) : rec.date || new Date().toLocaleDateString('ja-JP');
-  const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>材料依頼書</title>
-  <style>body{font-family:'Noto Sans JP',sans-serif;font-size:14px;margin:20px}h2{font-size:18px;margin-bottom:6px}.meta{font-size:13px;margin-bottom:14px;border-bottom:2px solid #cbd5e1;padding-bottom:10px}.meta-row{display:flex;gap:24px;flex-wrap:wrap;align-items:baseline}.meta-item{display:flex;gap:6px;align-items:baseline}.meta-label{color:#64748b;font-size:12px;white-space:nowrap}.meta-value{font-weight:700;font-size:14px}table{border-collapse:collapse;width:100%}th{background:#f1f5f9;padding:6px 8px;text-align:left;border-bottom:2px solid #cbd5e1;font-size:13px;white-space:nowrap}tr:nth-child(even){background:#f8fafc}td{font-size:14px;vertical-align:middle}@media print{body{margin:8mm}}</style>
-  </head><body>
-  <h2>材料依頼書</h2>
-  <div class="meta"><div class="meta-row">
-    <div class="meta-item"><span class="meta-label">金型NO.</span><span class="meta-value" style="color:#0369a1">${rec.moldNo||''}</span></div>
-    <div class="meta-item"><span class="meta-label">品番</span><span class="meta-value">${moldPartNo}</span></div>
-    <div class="meta-item"><span class="meta-label">品名</span><span class="meta-value">${partName}</span></div>
-    ${processStr ? `<div class="meta-item"><span class="meta-label">工程</span><span class="meta-value" style="color:#059669">${processStr}</span></div>` : ''}
-    <div class="meta-item"><span class="meta-label">依頼日</span><span class="meta-value">${dateStr}</span></div>
-    ${showPrice ? '<div class="meta-item"><span style="color:#2563eb;font-weight:700">（単価あり）</span></div>' : ''}
-  </div></div>
-  <table><thead><tr>
-    <th>管理NO.</th><th>名称</th><th style="text-align:center">数量</th><th>材質</th>
-    <th style="text-align:center">X(長)</th><th style="text-align:center">Y(幅)</th><th style="text-align:center">Z(厚)</th>
-    <th style="text-align:center">仕上</th><th>備考</th>${pH}
-  </tr></thead><tbody>${rows}</tbody></table>
-  <div style="margin-top:20px;font-size:11px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px">橋本工業&#xFF08;株&#xFF09;&ensp;金型製作原価管理システム&ensp;印刷日: ${new Date().toLocaleDateString('ja-JP')}</div>
-  <script>window.onload=()=>window.print();<\/script></body></html>`;
-  const w = window.open('','_blank','width=1100,height=800');
-  if (w) { w.document.write(html); w.document.close(); }
-}
-
 async function confirmAllDecided(reqKey) {
   const rec = DB.quoteRequests?.[reqKey];
   if (!rec) return;
@@ -6408,27 +6345,24 @@ async function restoreToOrderPage(reqKey, supId, matKey) {
   if (!DB.quoteRequests?.[reqKey]) { toast('見積依頼データが見つかりません', 'error'); return; }
   const rec = DB.quoteRequests[reqKey];
   if (rec.printedOrders) {
-    // matKeyからバッチキーを特定してそのバッチのみクリア
-    // matKey例: "mat_order_qr_xxx_2" → index=2のバッチを探す
     if (matKey) {
-      const matIdx = matKey.match(/_(\d+)$/)?.[1];
-      if (matIdx !== undefined) {
-        const idx = parseInt(matIdx);
-        // このインデックスを含むバッチのみクリア
+      // matKeyからインデックスを取得して、そのバッチのみクリア
+      const matIdxMatch = matKey.match(/_(\d+)$/);
+      if (matIdxMatch) {
+        const idx = parseInt(matIdxMatch[1]);
         const batches = rec.orderBatches || {};
         Object.entries(batches).forEach(([bid, batch]) => {
           if ((batch.indices||[]).includes(idx)) {
-            const bk = reqKey + '_batch_' + bid;
-            delete rec.printedOrders[bk];
+            delete rec.printedOrders[reqKey + '_batch_' + bid];
           }
         });
       }
     } else {
-      // matKeyなし（旧形式）→ supId形式をクリア
-      delete rec.printedOrders[supId];
+      // matKeyなし → 全バッチクリア（旧形式）
       Object.keys(rec.printedOrders).forEach(k => {
-        if (k.startsWith(reqKey + '_batch_')) delete rec.printedOrders[k];
+        if (k.startsWith(reqKey)) delete rec.printedOrders[k];
       });
+      delete rec.printedOrders[supId];
     }
   }
   await writeToFirebase('quoteRequests', DB.quoteRequests);
