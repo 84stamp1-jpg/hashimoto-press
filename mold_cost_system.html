@@ -904,6 +904,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <!-- ② 見積比較 -->
     <div id="qpage-compare" class="subpage">
       <div class="filter-bar">
+        <input class="search-input" type="text" placeholder="管理NO・品名で検索..." id="cmpSearch" oninput="renderCompare()">
         <select class="filter-select" id="cmpMoldFilter" onchange="renderCompare()"><option value="">全金型</option></select>
         <select class="filter-select" id="cmpStatusFilter" onchange="renderCompare()">
           <option value="">全ステータス</option>
@@ -3324,16 +3325,16 @@ function generateQuotePrint() {
       const sY = String(r.sizeY||'').replace(/\.00$/,'');
       const sZ = String(r.sizeZ||'').replace(/\.00$/,'');
       return '<tr>' +
-        '<td style="text-align:center;' + B + 'padding:4px 2px">' + (i+1) + '</td>' +
-        '<td style="text-align:center;' + B + 'padding:4px 2px;font-family:monospace;font-size:15pt;font-weight:700;white-space:nowrap">' + (r.itemMatNo||r.moldNo||'') + '</td>' +
-        '<td style="' + B + 'padding:4px 4px;font-size:13pt">' + (r.name||'') + '</td>' +
-        '<td style="text-align:center;' + B + 'padding:4px 2px">' + (r.qty||1) + '</td>' +
-        '<td style="' + B + 'padding:4px 3px">' + (r.material||'') + '</td>' +
-        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + xMark + '<div style="padding:2px 3px;font-size:15.8pt;font-weight:600">' + sX + '</div></td>' +
-        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + yMark + '<div style="padding:2px 3px;font-size:15.8pt;font-weight:600">' + sY + '</div></td>' +
-        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + zMark + '<div style="padding:2px 3px;font-size:15.8pt;font-weight:600">' + sZ + '</div></td>' +
-        '<td style="text-align:center;' + B + 'padding:4px 2px;font-weight:800;font-size:15.8pt">' + finish + '</td>' +
-        '<td style="' + B + 'padding:4px 8px;font-size:14.2pt;min-width:80px">' + (r.note||'') + '</td>' +
+        '<td style="text-align:center;' + B + 'padding:8px 2px;width:20px">' + (i+1) + '</td>' +
+        '<td style="text-align:center;' + B + 'padding:8px 2px;font-family:monospace;font-size:20pt;font-weight:700;white-space:nowrap;width:86px">' + (r.itemMatNo||r.moldNo||'') + '</td>' +
+        '<td style="' + B + 'padding:8px 4px;font-size:20pt">' + (r.name||'') + '</td>' +
+        '<td style="text-align:center;' + B + 'padding:8px 2px">' + (r.qty||1) + '</td>' +
+        '<td style="' + B + 'padding:8px 3px">' + (r.material||'') + '</td>' +
+        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + xMark + '<div style="padding:6px 3px;font-size:20.8pt;font-weight:600">' + sX + '</div></td>' +
+        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + yMark + '<div style="padding:6px 3px;font-size:20.8pt;font-weight:600">' + sY + '</div></td>' +
+        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + zMark + '<div style="padding:6px 3px;font-size:20.8pt;font-weight:600">' + sZ + '</div></td>' +
+        '<td style="text-align:center;' + B + 'padding:8px 2px;font-weight:800;font-size:20.8pt">' + finish + '</td>' +
+        '<td style="' + B + 'padding:8px 8px;font-size:20pt">' + (r.note||'') + '</td>' +
         '</tr>';
     }).filter(Boolean).join('');
 
@@ -3351,25 +3352,25 @@ function generateQuotePrint() {
           '<div style="font-size:13.5pt">橋本工業㈱　' + staff + '</div>' +
         '</div>' +
       '</div>' +
-      '<div style="margin-bottom:7px;font-size:15pt;line-height:1.8">いつもお世話になります。<br>下記の見積りをお願い致します。</div>' +
-      '<table style="width:100%;border-collapse:collapse;font-size:15pt">' +
+      '<div style="margin-bottom:10px;font-size:20pt;line-height:1.8">いつもお世話になります。<br>下記の見積りをお願い致します。</div>' +
+      '<table style="width:100%;border-collapse:collapse;font-size:20pt">' +
         '<thead>' +
           '<tr style="background:#d0d0d0">' +
-            '<th style="' + B + 'padding:5px 2px;text-align:center;width:20px">No.</th>' +
-            '<th style="' + B + 'padding:5px 3px;text-align:center;width:86px">管理NO.</th>' +
-            '<th style="' + B + 'padding:5px 4px;font-size:13pt">名　　称</th>' +
-            '<th style="' + B + 'padding:5px 2px;text-align:center;width:22px">数量</th>' +
-            '<th style="' + B + 'padding:5px 3px;text-align:center;width:48px">材質</th>' +
-            '<th style="' + B + 'padding:5px 3px;text-align:center;width:60px">長さ(X)</th>' +
-            '<th style="' + B + 'padding:5px 3px;text-align:center;width:60px">幅(Y)</th>' +
-            '<th style="' + B + 'padding:5px 3px;text-align:center;width:60px">材厚(Z)</th>' +
-            '<th style="' + B + 'padding:5px 2px;text-align:center;width:28px">仕上</th>' +
-            '<th style="' + B + 'padding:5px 8px">備　　考</th>' +
+            '<th style="' + B + 'padding:8px 2px;text-align:center;width:20px">No.</th>' +
+            '<th style="' + B + 'padding:8px 3px;text-align:center;width:86px">管理NO.</th>' +
+            '<th style="' + B + 'padding:8px 4px;font-size:20pt">名　　称</th>' +
+            '<th style="' + B + 'padding:8px 2px;text-align:center;width:22px">数量</th>' +
+            '<th style="' + B + 'padding:8px 3px;text-align:center;width:48px">材質</th>' +
+            '<th style="' + B + 'padding:8px 3px;text-align:center;width:60px">長さ(X)</th>' +
+            '<th style="' + B + 'padding:8px 3px;text-align:center;width:60px">幅(Y)</th>' +
+            '<th style="' + B + 'padding:8px 3px;text-align:center;width:60px">材厚(Z)</th>' +
+            '<th style="' + B + 'padding:8px 2px;text-align:center;width:28px">仕上</th>' +
+            '<th style="' + B + 'padding:8px 8px">備　　考</th>' +
           '</tr>' +
         '</thead>' +
         '<tbody>' + itemRows + '</tbody>' +
       '</table>' +
-      '<div style="margin-top:12px;font-size:13.5pt;color:#444">ご回答はFAXまたはメールにてお願いいたします。</div>' +
+      '<div style="margin-top:16px;font-size:18pt;color:#444">ご回答はFAXまたはメールにてお願いいたします。</div>' +
     '</div>';
   }).join('');
 
@@ -3378,14 +3379,14 @@ function generateQuotePrint() {
     '<meta charset="UTF-8"><title>見積依頼書</title>' +
     '<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;700;900&display=swap" rel="stylesheet">' +
     '<style>' +
-      'body{margin:0;font-family:"Noto Sans JP",sans-serif;font-size:15pt;background:#fff;color:#000;}' +
+      'body{margin:0;font-family:"Noto Sans JP",sans-serif;font-size:20pt;background:#fff;color:#000;}' +
       '.page-break{width:100%;margin:0;padding:4mm 5mm 3mm;box-sizing:border-box;page-break-after:always;}' +
       '.page-break:last-child{page-break-after:auto;}' +
       '.no-print{position:fixed;top:12px;right:12px;display:flex;gap:8px;z-index:99;}' +
       'button{padding:8px 16px;cursor:pointer;border:none;border-radius:4px;font-size:13px;}' +
       '.bp{background:#0369a1;color:#fff;}.bc{background:#e2e8f0;color:#333;}' +
-      'th{background:#c8c8c8;font-weight:800;font-size:15pt;}' +
-      'td,th{font-size:15pt;line-height:1.3;}' +
+      'th{background:#c8c8c8;font-weight:800;font-size:20pt;}' +
+      'td,th{font-size:20pt;line-height:1.5;}' +
       'tr:nth-child(even) td{background:#f8f8f8;}' +
       '@media print{.no-print{display:none!important}@page{size:A4 portrait;margin:2mm 3mm}}' +
     '</style>' +
@@ -3402,6 +3403,7 @@ function generateQuotePrint() {
 
 // ── 見積待ちとして保存 ──
 let _editingQuoteKey = '';  // 再編集中の見積キー
+let _reopenMergeIndices = [];  // 再編集時の元インデックス（部分マージ用）
 
 async function saveQuoteRequest() {
   if (!quoteItems.length) { toast('品目を追加してください', 'error'); return; }
@@ -3415,10 +3417,18 @@ async function saveQuoteRequest() {
   const isEdit = _editingQuoteKey && DB.quoteRequests?.[_editingQuoteKey];
   const key    = isEdit ? _editingQuoteKey : 'qr_' + Date.now();
   const existing = isEdit ? DB.quoteRequests[_editingQuoteKey] : {};
+  let mergedItems;
+  if (isEdit && _reopenMergeIndices.length > 0 && _reopenMergeIndices.length < (existing.items||[]).length) {
+    mergedItems = [...(existing.items||[])];
+    _reopenMergeIndices.forEach((origIdx,qi) => { if (quoteItems[qi]) mergedItems[origIdx]={...quoteItems[qi]}; });
+  } else { mergedItems = [...quoteItems]; }
+  const moldData2  = Object.values(DB.molds||{}).find(m=>m.no===moldNo);
+  const partName   = moldData2?.partName  || existing.partName  || '';
+  const moldPartNo = moldData2?.partNo    || existing.moldPartNo || '';
   const record = {
     ...existing,
-    date, moldNo, partNo,
-    items:     [...quoteItems],
+    date, moldNo, moldPartNo, partName,
+    items:     mergedItems,
     suppliers: toList,
     status:    '見積待ち',
     quotes:    existing.quotes || {},
@@ -3432,7 +3442,8 @@ async function saveQuoteRequest() {
 
   const saveMsg = isEdit ? '見積依頼を更新しました。' : '見積依頼を保存しました。続けて次の品目を入力できます。';
   toast(saveMsg, 'success');
-  _editingQuoteKey = '';  // 編集キーをリセット
+  _editingQuoteKey = '';
+  _reopenMergeIndices = [];
   quoteItems = [];
   // 管理NOと工程番号をリセット（次の金型入力の準備）
   const partNoEl = document.getElementById('qf_partNo');
@@ -3448,6 +3459,7 @@ async function saveQuoteRequest() {
 
 // ── ② 見積比較・決定 ──
 function renderCompare() {
+  const search    = (document.getElementById('cmpSearch')?.value || '').toLowerCase();
   const moldFil   = document.getElementById('cmpMoldFilter')?.value || '';
   const statusFil = document.getElementById('cmpStatusFilter')?.value || '';
   if (!DB.quoteRequests) DB.quoteRequests = {};
@@ -3465,6 +3477,12 @@ function renderCompare() {
   }
 
   let filtered = entries;
+  if (search)    filtered = filtered.filter(([,r]) =>
+    (r.moldNo||'').toLowerCase().includes(search) ||
+    (r.moldPartNo||r.partNo||'').toLowerCase().includes(search) ||
+    (r.partName||'').toLowerCase().includes(search) ||
+    (r.items||[]).some(it=>(it.itemMatNo||'').toLowerCase().includes(search)||(it.name||'').toLowerCase().includes(search))
+  );
   if (moldFil)   filtered = filtered.filter(([,r]) => r.moldNo   === moldFil);
   if (statusFil) filtered = filtered.filter(([,r]) => r.status   === statusFil);
 
@@ -3510,7 +3528,9 @@ function renderCompare() {
           <input class="form-input" style="padding:3px 6px;font-size:11px;width:100px;margin-bottom:2px"
             type="number" placeholder="見積単価(円)"
             value="${q.unitPrice||''}"
-            onchange="updateQuote('${key}',${i},'${sid}','unitPrice',this.value)">
+            class="price-input" data-sid="${sid}"
+            onchange="updateQuote('${key}',${i},'${sid}','unitPrice',this.value)"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();moveToNextPriceInput(this,'${sid}');}">
           <div style="font-size:10px;color:var(--text3)">㎏単価: ${kgCalc ? fmt(kgCalc) : '—'}</div>
         </td>`;
       }).join('');
@@ -3520,6 +3540,11 @@ function renderCompare() {
         ...sups.map(sid => `<option value="${sid}"${itemDecided===sid?' selected':''}>${supShort[sid]||sid}</option>`)
       ].join('');
 
+      const hasFlag = 'fX' in item;
+      const allFace = !hasFlag && ['6F','4F','▽▽▽','▽▽','6F（全面）','4F（2面）'].includes(item.finish);
+      const _fX = hasFlag ? item.fX : allFace;
+      const _fY = hasFlag ? item.fY : allFace;
+      const _fZ = hasFlag ? item.fZ : allFace;
       const isChecked = (rec.checkedItems||{})[i] === true;
       return `<tr style="border-bottom:1px solid var(--border);${isChecked?'':'opacity:0.5'}">
         <td style="padding:4px 6px;text-align:center">
@@ -3529,9 +3554,9 @@ function renderCompare() {
         <td style="padding:5px 8px;font-size:12px">${item.name||''}</td>
         <td class="mono" style="padding:5px 6px;text-align:center">${item.qty||1}</td>
         <td class="mono" style="padding:5px 6px">${item.material||''}</td>
-        <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{const v=String(item.sizeX||'').replace(/\.00$/,'');if(!v)return'—';return(item.fX?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:11px"></div>')+'<div>'+v+'</div>';})()}</td>
-        <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{const v=String(item.sizeY||'').replace(/\.00$/,'');if(!v)return'—';return(item.fY?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:11px"></div>')+'<div>'+v+'</div>';})()}</td>
-        <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{const v=String(item.sizeZ||'').replace(/\.00$/,'');if(!v)return'—';return(item.fZ?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:11px"></div>')+'<div>'+v+'</div>';})()}</td>
+        <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{const v=String(item.sizeX||'').replace(/\.00$/,'');if(!v)return'—';return(_fX?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:16px"></div>')+'<div>'+v+'</div>';})()}</td>
+        <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{const v=String(item.sizeY||'').replace(/\.00$/,'');if(!v)return'—';return(_fY?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:16px"></div>')+'<div>'+v+'</div>';})()}</td>
+        <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{const v=String(item.sizeZ||'').replace(/\.00$/,'');if(!v)return'—';return(_fZ?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:16px"></div>')+'<div>'+v+'</div>';})()}</td>
         <td style="padding:5px 4px;text-align:center;font-weight:700">${finishLabel(item.finish)}</td>
         ${supInputs}
         <td class="mono" style="padding:5px 6px;color:var(--green);font-weight:700">${minPrice?'¥'+fmt(minPrice):'—'}</td>
@@ -3561,6 +3586,8 @@ function renderCompare() {
         <div class="table-actions">
           <button class="btn btn-primary btn-sm" onclick="confirmCheckedItems('${key}')">✅ チェック済みを発注確定</button>
           <button class="btn btn-secondary btn-sm" onclick="reopenQuote('${key}')">✏️ ①に読込・再編集</button>
+          <button class="btn btn-secondary btn-sm" style="background:#f0fdf4;color:#16a34a;border:1px solid #86efac" onclick="printCompareSheet('${key}',false)">🖨 依頼書印刷（単価なし）</button>
+          <button class="btn btn-secondary btn-sm" style="background:#eff6ff;color:#2563eb;border:1px solid #93c5fd" onclick="printCompareSheet('${key}',true)">🖨 依頼書印刷（単価あり）</button>
           <button class="btn btn-danger btn-sm" onclick="deleteQuoteRequest('${key}')">🗑 削除</button>
         </div>
       </div>
@@ -3569,7 +3596,10 @@ function renderCompare() {
           <thead>
             <tr style="background:var(--bg3)">
               <th style="padding:7px 4px;width:32px;text-align:center">
-                <input type="checkbox" checked title="全選択" onchange="toggleAllItemCheck('${key}',this.checked)">
+                <input type="checkbox"
+                  ${pendingIndices.length > 0 && pendingIndices.every(i=>(rec.checkedItems||{})[i]===true) ? 'checked' : ''}
+                  title="全選択/解除"
+                  onchange="toggleAllItemCheck('${key}',this.checked)">
               </th>
               <th style="padding:7px 8px;text-align:left">管理NO.</th>
               <th style="padding:7px 8px;text-align:left">名称</th>
@@ -3643,6 +3673,67 @@ async function setItemDecided(reqKey, itemIdx, supId) {
 }
 
 // 全明細を発注確定（明細ごとの発注先で材料費に登録）
+function printCompareSheet(reqKey, showPrice) {
+  const rec = DB.quoteRequests?.[reqKey];
+  if (!rec) return;
+  const items = (rec.items||[]).map((item,i)=>({item,i})).filter(({i})=>!(rec.orderedItems||{})[i]);
+  const moldData   = Object.values(DB.molds||{}).find(m => m.no === rec.moldNo);
+  const partName   = rec.partName  || moldData?.partName  || '';
+  const moldPartNo = rec.moldPartNo || moldData?.partNo   || '';
+  const processes  = moldData?.processes || [];
+  const processStr = processes.map((p,idx)=>`${idx+1}: ${p}`).join('　');
+  const rows = items.map(({item,i}) => {
+    const decidedSid = (rec.itemDecided||{})[i] || rec.decided || '';
+    const q = decidedSid ? (rec.quotes?.[reqKey+'_'+i+'_'+decidedSid] || {}) : {};
+    const unitPrice = parseFloat(q.unitPrice||0);
+    const f3 = v => String(v||'').replace(/\.00$/,'');
+    const hasFlag = 'fX' in item;
+    const allFace = !hasFlag && ['6F','4F','▽▽▽','▽▽','6F（全面）','4F（2面）'].includes(item.finish);
+    const fX = hasFlag ? item.fX : allFace;
+    const fY = hasFlag ? item.fY : allFace;
+    const fZ = hasFlag ? item.fZ : allFace;
+    const sc = (v,f) => { const n=f3(v); if(!n)return'&mdash;'; return (f?'<div style="color:#16a34a;font-size:11px;font-weight:700;text-align:center">▽▽</div>':'<div style="height:16px"></div>')+'<div>'+n+'</div>'; };
+    const finishMap = {'6F':'6F','4F':'4F','2F':'2F','黒皮':'黒皮','▽▽▽':'6F','▽▽':'4F','▽':'2F','6F（全面）':'6F','4F（2面）':'4F','2F（1面）':'2F'};
+    const finishTxt = finishMap[item.finish] || item.finish || '&mdash;';
+    const priceCell = showPrice ? `<td style="text-align:right;padding:5px 8px">${unitPrice?'&yen;'+fmt(unitPrice):'&mdash;'}</td>` : '';
+    return `<tr style="border-bottom:1px solid #e2e8f0">
+      <td style="padding:5px 8px;font-weight:700;color:#0369a1;font-family:monospace">${item.itemMatNo||item.moldNo||'&mdash;'}</td>
+      <td style="padding:5px 8px">${item.name||''}</td>
+      <td style="padding:5px 8px;text-align:center">${item.qty||1}</td>
+      <td style="padding:5px 8px;font-family:monospace">${item.material||''}</td>
+      <td style="padding:5px 8px;text-align:center;font-family:monospace;vertical-align:middle">${sc(item.sizeX,fX)}</td>
+      <td style="padding:5px 8px;text-align:center;font-family:monospace;vertical-align:middle">${sc(item.sizeY,fY)}</td>
+      <td style="padding:5px 8px;text-align:center;font-family:monospace;vertical-align:middle">${sc(item.sizeZ,fZ)}</td>
+      <td style="padding:5px 8px;text-align:center">${finishTxt}</td>
+      <td style="padding:5px 8px">${item.note||''}</td>
+      ${priceCell}
+    </tr>`;
+  }).join('');
+  const pH = showPrice ? '<th style="text-align:right">単価(円)</th>' : '';
+  const dateStr = rec.createdAt ? rec.createdAt.slice(0,10) : rec.date || new Date().toLocaleDateString('ja-JP');
+  const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>材料依頼書</title>
+  <style>body{font-family:'Noto Sans JP',sans-serif;font-size:14px;margin:20px}h2{font-size:18px;margin-bottom:6px}.meta{font-size:13px;margin-bottom:14px;border-bottom:2px solid #cbd5e1;padding-bottom:10px}.meta-row{display:flex;gap:24px;flex-wrap:wrap;align-items:baseline}.meta-item{display:flex;gap:6px;align-items:baseline}.meta-label{color:#64748b;font-size:12px;white-space:nowrap}.meta-value{font-weight:700;font-size:14px}table{border-collapse:collapse;width:100%}th{background:#f1f5f9;padding:6px 8px;text-align:left;border-bottom:2px solid #cbd5e1;font-size:13px;white-space:nowrap}tr:nth-child(even){background:#f8fafc}td{font-size:14px;vertical-align:middle}@media print{body{margin:8mm}}</style>
+  </head><body>
+  <h2>材料依頼書</h2>
+  <div class="meta"><div class="meta-row">
+    <div class="meta-item"><span class="meta-label">金型NO.</span><span class="meta-value" style="color:#0369a1">${rec.moldNo||''}</span></div>
+    <div class="meta-item"><span class="meta-label">品番</span><span class="meta-value">${moldPartNo}</span></div>
+    <div class="meta-item"><span class="meta-label">品名</span><span class="meta-value">${partName}</span></div>
+    ${processStr ? `<div class="meta-item"><span class="meta-label">工程</span><span class="meta-value" style="color:#059669">${processStr}</span></div>` : ''}
+    <div class="meta-item"><span class="meta-label">依頼日</span><span class="meta-value">${dateStr}</span></div>
+    ${showPrice ? '<div class="meta-item"><span style="color:#2563eb;font-weight:700">（単価あり）</span></div>' : ''}
+  </div></div>
+  <table><thead><tr>
+    <th>管理NO.</th><th>名称</th><th style="text-align:center">数量</th><th>材質</th>
+    <th style="text-align:center">X(長)</th><th style="text-align:center">Y(幅)</th><th style="text-align:center">Z(厚)</th>
+    <th style="text-align:center">仕上</th><th>備考</th>${pH}
+  </tr></thead><tbody>${rows}</tbody></table>
+  <div style="margin-top:20px;font-size:11px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:8px">橋本工業&#xFF08;株&#xFF09;&ensp;金型製作原価管理システム&ensp;印刷日: ${new Date().toLocaleDateString('ja-JP')}</div>
+  <script>window.onload=()=>window.print();<\/script></body></html>`;
+  const w = window.open('','_blank','width=1100,height=800');
+  if (w) { w.document.write(html); w.document.close(); }
+}
+
 async function confirmAllDecided(reqKey) {
   const rec = DB.quoteRequests?.[reqKey];
   if (!rec) return;
@@ -3698,9 +3789,25 @@ async function reopenQuote(reqKey) {
 
   // 編集キーを記録（上書き保存用）
   _editingQuoteKey = reqKey;
-  // 品目リストに読み込む
   const orderedItems = rec.orderedItems || {};
-  quoteItems = (rec.items||[]).map((it,i)=>orderedItems[i]?null:{...it}).filter(Boolean);
+  const checkedItems = rec.checkedItems || {};
+  const hasChecked   = Object.values(checkedItems).some(v => v === true);
+  _reopenMergeIndices = [];
+  if (hasChecked) {
+    quoteItems = [];
+    (rec.items||[]).forEach((it,i) => {
+      if (!orderedItems[i] && checkedItems[i] === true) {
+        _reopenMergeIndices.push(i);
+        quoteItems.push({...it});
+      }
+    });
+  } else {
+    quoteItems = (rec.items||[]).map((it,i) => {
+      if (orderedItems[i]) return null;
+      _reopenMergeIndices.push(i);
+      return {...it};
+    }).filter(Boolean);
+  }
 
   // 金型NOと材料管理NOをフォームにセット
   const moldNoEl = document.getElementById('qf_moldNo');
@@ -3725,7 +3832,8 @@ async function reopenQuote(reqKey) {
   // ①タブに切り替え
   showQuoteTab('request');
   renderQuoteItemTable();
-  toast(rec.items.length + '件の品目を読み込みました。編集後「見積待ちとして保存」を押してください', 'success');
+  const _cnt=quoteItems.length,_chk=hasChecked?_reopenMergeIndices.length:0;
+  toast(_cnt+'件読み込み'+(_chk?'（選択'+_chk+'件のみ）':'（全件）')+' 編集後「見積待ちとして保存」を押してください','success');
 }
 
 // 見積依頼を削除
@@ -5937,6 +6045,12 @@ function editQuoteItem(i) {
 
 
 // ── 見積比較：行チェック操作 ──
+function moveToNextPriceInput(el, sid) {
+  const all = [...document.querySelectorAll('.price-input[data-sid="' + sid + '"]')];
+  const idx = all.indexOf(el);
+  if (idx >= 0 && idx < all.length - 1) { all[idx+1].focus(); all[idx+1].select(); }
+}
+
 async function toggleItemCheck(reqKey, itemIdx, checked) {
   if (!DB.quoteRequests?.[reqKey]) return;
   if (!DB.quoteRequests[reqKey].checkedItems) DB.quoteRequests[reqKey].checkedItems = {};
@@ -5948,8 +6062,9 @@ async function toggleItemCheck(reqKey, itemIdx, checked) {
 async function toggleAllItemCheck(reqKey, checked) {
   if (!DB.quoteRequests?.[reqKey]) return;
   const rec = DB.quoteRequests[reqKey];
-  rec.checkedItems = {};
-  (rec.items||[]).forEach((_,i) => rec.checkedItems[i] = checked);
+  if (!rec.checkedItems) rec.checkedItems = {};
+  const ordered = rec.orderedItems || {};
+  (rec.items||[]).forEach((_,i) => { if (!ordered[i]) rec.checkedItems[i] = checked; });
   await writeToFirebase('quoteRequests', DB.quoteRequests);
   renderCompare();
 }
@@ -6085,7 +6200,7 @@ function renderOrderPage() {
     if (batchList.length > 0) {
       for (const [bid, batch] of batchList) {
         const batchKey = key + '_batch_' + bid;
-        const validIndices = (batch.indices||[]).filter(i => !displayedIndices.has(i) && existingMatKeys.has('mat_order_'+key+'_'+i));
+        const validIndices = (batch.indices||[]).filter(i => !displayedIndices.has(i));
         validIndices.forEach(i => displayedIndices.add(i));
         if (!validIndices.length) continue;
         if (!_showHiddenOrders && printed[batchKey]) continue;
@@ -6104,7 +6219,7 @@ function renderOrderPage() {
     } else {
       const bySupplier = {};
       (rec.items||[]).forEach((item, i) => {
-        if (!ordered[i] || !existingMatKeys.has('mat_order_'+key+'_'+i)) return;
+        if (!ordered[i]) return;
         const sid = (rec.itemDecided||{})[i] || rec.decided || '';
         if (!bySupplier[sid]) bySupplier[sid] = [];
         const q = (rec.quotes||{})[key+'_'+i+'_'+sid] || {};
@@ -6125,8 +6240,7 @@ function renderOrderPage() {
     wrap.innerHTML = '<div class="empty"><div class="empty-icon">📋</div>②見積比較で発注確定した案件が表示されます</div>';
     return;
   }
-  const backBtn = `<div style="margin-bottom:12px"><button class="btn btn-secondary btn-sm" onclick="showQuoteTab('compare')" style="font-size:12px">← ② 見積比較へ戻る</button></div>`;
-  wrap.innerHTML = backBtn + allCards.map(({ key, rec, sid, sitems, batchKey, isHidden }) => {
+  wrap.innerHTML = allCards.map(({ key, rec, sid, sitems, batchKey, isHidden }) => {
     const suppliers = getSuppliers();
     const supMap2   = Object.fromEntries(suppliers.map(s=>[s.id,s]));
     const sup = supMap2[sid] || {name: sid||'未設定', person:'', fax:'', email:''};
@@ -6136,9 +6250,9 @@ function renderOrderPage() {
           <td style="padding:5px 8px">${item.name||''}</td>
           <td class="mono" style="padding:5px 6px;text-align:center">${item.qty||1}</td>
           <td class="mono" style="padding:5px 6px">${item.material||''}</td>
-          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{const v=String(item.sizeX||'').replace(/\.00$/,'');if(!v)return'—';return(item.fX?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:11px"></div>')+'<div>'+v+'</div>';})()}</td>
-        <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{const v=String(item.sizeY||'').replace(/\.00$/,'');if(!v)return'—';return(item.fY?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:11px"></div>')+'<div>'+v+'</div>';})()}</td>
-        <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{const v=String(item.sizeZ||'').replace(/\.00$/,'');if(!v)return'—';return(item.fZ?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:11px"></div>')+'<div>'+v+'</div>';})()}</td>
+          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{const v=String(item.sizeX||'').replace(/\.00$/,'');if(!v)return'—';return(_fX?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:16px"></div>')+'<div>'+v+'</div>';})()}</td>
+        <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{const v=String(item.sizeY||'').replace(/\.00$/,'');if(!v)return'—';return(_fY?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:16px"></div>')+'<div>'+v+'</div>';})()}</td>
+        <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{const v=String(item.sizeZ||'').replace(/\.00$/,'');if(!v)return'—';return(_fZ?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:16px"></div>')+'<div>'+v+'</div>';})()}</td>
           <td style="padding:5px 4px;text-align:center;font-weight:700">${finishLabel(item.finish)}</td>
           <td style="padding:4px 6px">
             <input class="form-input" type="number" style="width:110px;padding:3px 6px;font-size:12px"
@@ -6233,9 +6347,9 @@ async function printOrder(reqKey, supId, indices) {
     const sY = String(item.sizeY||'').replace(/\.00$/,'');
     const sZ = String(item.sizeZ||'').replace(/\.00$/,'');
     // 各面の仕上げ▽マーク（fX/fY/fZ フラグから）
-    const mX = item.fX ? '<div style=\"font-size:9pt;color:#555;line-height:1\">▽▽</div>' : '';
-    const mY = item.fY ? '<div style=\"font-size:9pt;color:#555;line-height:1\">▽▽</div>' : '';
-    const mZ = item.fZ ? '<div style=\"font-size:9pt;color:#555;line-height:1\">▽▽</div>' : '';
+    const mX = item.fX ? '<div style=\"font-size:9pt;color:#555;line-height:1\">▽▽</div>' : '<div style=\"height:14px\"></div>';
+    const mY = item.fY ? '<div style=\"font-size:9pt;color:#555;line-height:1\">▽▽</div>' : '<div style=\"height:14px\"></div>';
+    const mZ = item.fZ ? '<div style=\"font-size:9pt;color:#555;line-height:1\">▽▽</div>' : '<div style=\"height:14px\"></div>';
     // F数表示（仕上列）
     const fcount = (item.fX?1:0)+(item.fY?1:0)+(item.fZ?1:0);
     const fLabel = item.finish || (fcount===3?'6F':fcount===2?'4F':fcount===1?'2F':'黒皮');
@@ -6281,7 +6395,14 @@ async function printOrder(reqKey, supId, indices) {
       <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:16px">
         <div>
           <div style="font-size:22pt;font-weight:900;letter-spacing:4px">注 文 書</div>
-          <div style="font-size:13pt;margin-top:4px">発行日：${rec.date||new Date().toISOString().slice(0,10)}</div>
+          <div style="font-size:13pt;margin-top:4px">
+            発行日：<span id="orderDateText">${rec.date||new Date().toISOString().slice(0,10)}</span>
+            <span class="no-print" style="margin-left:8px">
+              <input type="date" id="orderDateInput" value="${rec.date||new Date().toISOString().slice(0,10)}"
+                style="font-size:12pt;padding:2px 6px;border:1px solid #ccc;border-radius:4px"
+                onchange="document.getElementById('orderDateText').textContent=this.value">
+            </span>
+          </div>
         </div>
         <div style="text-align:right;font-size:13pt">
           <div style="font-weight:700">橋本工業㈱</div>
@@ -6289,7 +6410,7 @@ async function printOrder(reqKey, supId, indices) {
         </div>
       </div>
       <div style="font-size:16pt;font-weight:700;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:12px">
-        ${sup.name}　${sup.person ? sup.person + ' 様' : '様'}
+        ${sup.name}　${sup.person ? (sup.person.includes('様') ? sup.person : sup.person + ' 様') : '様'}
         ${sup.fax ? `<span style="font-size:12pt;font-weight:400;margin-left:16px">FAX: ${sup.fax}</span>` : ''}
       </div>
       <div style="font-size:13pt;margin-bottom:12px">
@@ -6346,22 +6467,15 @@ async function restoreToOrderPage(reqKey, supId, matKey) {
   const rec = DB.quoteRequests[reqKey];
   if (rec.printedOrders) {
     if (matKey) {
-      // matKeyからインデックスを取得して、そのバッチのみクリア
-      const matIdxMatch = matKey.match(/_(\d+)$/);
-      if (matIdxMatch) {
-        const idx = parseInt(matIdxMatch[1]);
-        const batches = rec.orderBatches || {};
-        Object.entries(batches).forEach(([bid, batch]) => {
-          if ((batch.indices||[]).includes(idx)) {
-            delete rec.printedOrders[reqKey + '_batch_' + bid];
-          }
+      const idxMatch = String(matKey).match(/(\d+)$/);
+      if (idxMatch) {
+        const idx = parseInt(idxMatch[1]);
+        Object.entries(rec.orderBatches||{}).forEach(([bid,batch]) => {
+          if ((batch.indices||[]).includes(idx)) delete rec.printedOrders[reqKey+'_batch_'+bid];
         });
       }
     } else {
-      // matKeyなし → 全バッチクリア（旧形式）
-      Object.keys(rec.printedOrders).forEach(k => {
-        if (k.startsWith(reqKey)) delete rec.printedOrders[k];
-      });
+      Object.keys(rec.printedOrders).forEach(k => { if (k.startsWith(reqKey)) delete rec.printedOrders[k]; });
       delete rec.printedOrders[supId];
     }
   }
