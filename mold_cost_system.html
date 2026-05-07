@@ -2336,7 +2336,7 @@ function renderMaterials() {
             <input type="checkbox" class="mat-check" data-key="${k}" onchange="matCheckChanged()" style="margin-right:3px">
             <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px;margin-right:2px" onclick="editMaterial('${k}')">編集</button>
             <button class="btn btn-danger btn-sm" style="padding:2px 5px;font-size:10px" onclick="matDeleteOne('${k}')">×</button>
-            ${(r.quoteReqKey||r.quoteKey) ? '<button class="btn btn-secondary btn-sm" style="padding:2px 5px;font-size:9px;background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd" onclick="restoreToOrderPage(\'' + (r.quoteReqKey||r.quoteKey) + '\',\'' + (r.orderedSupId||'') + '\')">📋 注文書</button>' : ''}
+            ${r.quoteReqKey ? '<button class="btn btn-secondary btn-sm" style="padding:2px 5px;font-size:9px;background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd" onclick="restoreToOrderPage(\'' + r.quoteReqKey + '\',\'' + (r.orderedSupId||'') + '\')">📋 注文書</button>' : ''}
           </td>
           <td class="mono" style="font-size:15px">${r.month||''}</td>
           <td class="mono" style="font-size:15px;font-weight:600;color:var(--accent)">${r.partNo||r.moldNo||''}</td>
@@ -6076,7 +6076,7 @@ function renderOrderPage() {
     if (batchList.length > 0) {
       for (const [bid, batch] of batchList) {
         const batchKey = key + '_batch_' + bid;
-        const validIndices = (batch.indices||[]).filter(i => !displayedIndices.has(i));
+        const validIndices = (batch.indices||[]).filter(i => !displayedIndices.has(i) && existingMatKeys.has('mat_order_'+key+'_'+i));
         validIndices.forEach(i => displayedIndices.add(i));
         if (!validIndices.length) continue;
         if (!_showHiddenOrders && printed[batchKey]) continue;
@@ -6095,7 +6095,7 @@ function renderOrderPage() {
     } else {
       const bySupplier = {};
       (rec.items||[]).forEach((item, i) => {
-        if (!ordered[i]) return;
+        if (!ordered[i] || !existingMatKeys.has('mat_order_'+key+'_'+i)) return;
         const sid = (rec.itemDecided||{})[i] || rec.decided || '';
         if (!bySupplier[sid]) bySupplier[sid] = [];
         const q = (rec.quotes||{})[key+'_'+i+'_'+sid] || {};
@@ -6126,9 +6126,9 @@ function renderOrderPage() {
           <td style="padding:5px 8px">${item.name||''}</td>
           <td class="mono" style="padding:5px 6px;text-align:center">${item.qty||1}</td>
           <td class="mono" style="padding:5px 6px">${item.material||''}</td>
-          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{const v=String(item.sizeX||'').replace(/\.00$/,'');if(!v)return'—';return(item.fX?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:11px"></div>')+'<div>'+v+'</div>';})()}</td>
-        <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{const v=String(item.sizeY||'').replace(/\.00$/,'');if(!v)return'—';return(item.fY?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:11px"></div>')+'<div>'+v+'</div>';})()}</td>
-        <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{const v=String(item.sizeZ||'').replace(/\.00$/,'');if(!v)return'—';return(item.fZ?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:11px"></div>')+'<div>'+v+'</div>';})()}</td>
+          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{const v=String(item.sizeX||'').replace(/\.00$/,'');if(!v)return'—';return(item.fX?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:16px"></div>')+'<div>'+v+'</div>';})()}</td>
+        <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{const v=String(item.sizeY||'').replace(/\.00$/,'');if(!v)return'—';return(item.fY?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:16px"></div>')+'<div>'+v+'</div>';})()}</td>
+        <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 4px;font-size:11px">${(()=>{const v=String(item.sizeZ||'').replace(/\.00$/,'');if(!v)return'—';return(item.fZ?'<div style="color:var(--green);font-size:9px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:16px"></div>')+'<div>'+v+'</div>';})()}</td>
           <td style="padding:5px 4px;text-align:center;font-weight:700">${finishLabel(item.finish)}</td>
           <td style="padding:4px 6px">
             <input class="form-input" type="number" style="width:110px;padding:3px 6px;font-size:12px"
@@ -6223,9 +6223,9 @@ async function printOrder(reqKey, supId, indices) {
     const sY = String(item.sizeY||'').replace(/\.00$/,'');
     const sZ = String(item.sizeZ||'').replace(/\.00$/,'');
     // 各面の仕上げ▽マーク（fX/fY/fZ フラグから）
-    const mX = item.fX ? '<div style=\"font-size:9pt;color:#555;line-height:1\">▽▽</div>' : '';
-    const mY = item.fY ? '<div style=\"font-size:9pt;color:#555;line-height:1\">▽▽</div>' : '';
-    const mZ = item.fZ ? '<div style=\"font-size:9pt;color:#555;line-height:1\">▽▽</div>' : '';
+    const mX = item.fX ? '<div style=\"font-size:9pt;color:#555;line-height:1\">▽▽</div>' : '<div style=\"height:14px\"></div>';
+    const mY = item.fY ? '<div style=\"font-size:9pt;color:#555;line-height:1\">▽▽</div>' : '<div style=\"height:14px\"></div>';
+    const mZ = item.fZ ? '<div style=\"font-size:9pt;color:#555;line-height:1\">▽▽</div>' : '<div style=\"height:14px\"></div>';
     // F数表示（仕上列）
     const fcount = (item.fX?1:0)+(item.fY?1:0)+(item.fZ?1:0);
     const fLabel = item.finish || (fcount===3?'6F':fcount===2?'4F':fcount===1?'2F':'黒皮');
@@ -6271,7 +6271,14 @@ async function printOrder(reqKey, supId, indices) {
       <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:16px">
         <div>
           <div style="font-size:22pt;font-weight:900;letter-spacing:4px">注 文 書</div>
-          <div style="font-size:13pt;margin-top:4px">発行日：${rec.date||new Date().toISOString().slice(0,10)}</div>
+          <div style="font-size:13pt;margin-top:4px">
+            発行日：<span id="orderDateText">${rec.date||new Date().toISOString().slice(0,10)}</span>
+            <span class="no-print" style="margin-left:8px">
+              <input type="date" id="orderDateInput" value="${rec.date||new Date().toISOString().slice(0,10)}"
+                style="font-size:12pt;padding:2px 6px;border:1px solid #ccc;border-radius:4px"
+                onchange="document.getElementById('orderDateText').textContent=this.value">
+            </span>
+          </div>
         </div>
         <div style="text-align:right;font-size:13pt">
           <div style="font-weight:700">橋本工業㈱</div>
@@ -6279,7 +6286,7 @@ async function printOrder(reqKey, supId, indices) {
         </div>
       </div>
       <div style="font-size:16pt;font-weight:700;border-bottom:2px solid #000;padding-bottom:6px;margin-bottom:12px">
-        ${sup.name}　${sup.person ? sup.person + ' 様' : '様'}
+        ${sup.name}　${sup.person ? (sup.person.includes('様') ? sup.person : sup.person + ' 様') : '様'}
         ${sup.fax ? `<span style="font-size:12pt;font-weight:400;margin-left:16px">FAX: ${sup.fax}</span>` : ''}
       </div>
       <div style="font-size:13pt;margin-bottom:12px">
@@ -6335,10 +6342,8 @@ async function restoreToOrderPage(reqKey, supId) {
   if (!DB.quoteRequests?.[reqKey]) { toast('見積依頼データが見つかりません', 'error'); return; }
   const rec = DB.quoteRequests[reqKey];
   if (rec.printedOrders) {
-    // batchKey形式（reqKey_batch_xxx）・旧形式（supId）両方クリア
-    Object.keys(rec.printedOrders).forEach(k => {
-      if (k.startsWith(reqKey) || k === supId) delete rec.printedOrders[k];
-    });
+    Object.keys(rec.printedOrders).forEach(k => { if (k.startsWith(reqKey)) delete rec.printedOrders[k]; });
+    delete rec.printedOrders[supId];
   }
   await writeToFirebase('quoteRequests', DB.quoteRequests);
   toast('③注文書作成タブに再表示しました', 'success');
