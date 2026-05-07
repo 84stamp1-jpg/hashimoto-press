@@ -608,7 +608,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM</div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.09</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -6170,7 +6170,11 @@ function renderOrderPage() {
     const suppliers = getSuppliers();
     const supMap2   = Object.fromEntries(suppliers.map(s=>[s.id,s]));
     const sup = supMap2[sid] || {name: sid||'未設定', person:'', fax:'', email:''};
-    const itemRows = sitems.map((item,ri) => `
+    const itemRows = sitems.map((item,ri) => {
+      // fX/fY/fZ補完（旧データ対応）
+      const _hf2='fX' in item, _af2=!_hf2&&['6F','4F','▽▽▽','▽▽','6F（全面）','4F（2面）'].includes(item.finish);
+      const _fX=_hf2?item.fX:_af2, _fY=_hf2?item.fY:_af2, _fZ=_hf2?item.fZ:_af2;
+      return `
         <tr style="border-bottom:1px solid var(--border)">
           <td class="mono" style="padding:5px 8px;font-weight:600;color:var(--accent)">${item.itemMatNo||item.moldNo||''}</td>
           <td style="padding:5px 8px">${item.name||''}</td>
@@ -6188,7 +6192,8 @@ function renderOrderPage() {
           <td class="mono" style="padding:5px 6px;font-weight:700;color:var(--accent)">
             ${item.decidedPrice ? '¥'+fmt(parseFloat(item.decidedPrice)*(item.qty||1)) : '—'}
           </td>
-        </tr>`).join('');
+        </tr>`;
+    }).join('');
     const total = sitems.reduce((s,it) => s+(parseFloat(it.decidedPrice||0)*(it.qty||1)),0);
     return `<div class="table-wrap" style="margin-bottom:20px">
       <div class="table-header">
