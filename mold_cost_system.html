@@ -608,7 +608,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.10-14</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.10-15</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -3663,10 +3663,14 @@ function printCompareSheet(reqKey, showPrice) {
   const items=(rec.items||[]).map((item,i)=>({item,i})).filter(({i})=>!(rec.orderedItems||{})[i]);
   // rec.moldNoがない場合はitemsのitemMatNoから金型NOを推定（例:69-R301→69-R）
   const inferMoldNo=(mn)=>{
-    if(mn)return mn;
-    const first=(rec.items||[])[0]?.itemMatNo||'';
-    const mm=first.match(/^([A-Za-z0-9]+-[A-Za-z]+)/);
-    return mm?mm[1]:first.replace(/[0-9]+$/,'');
+    // まずそのままDB.moldsで検索
+    if(mn && Object.values(DB.molds||{}).some(m=>m.no===mn)) return mn;
+    // 見つからない場合は管理NOから金型NOを抽出（例:69-R301→69-R）
+    const src = mn || (rec.items||[])[0]?.itemMatNo || '';
+    const mm=src.match(/^(\d+-[A-Za-z]+?)(?=\d)/);
+    if(mm)return mm[1];
+    // それも失敗したら末尾数字を除去
+    return src.replace(/\d+$/, '');
   };
   const mno=inferMoldNo(rec.moldNo);
   const md=Object.values(DB.molds||{}).find(m=>m.no===mno);
