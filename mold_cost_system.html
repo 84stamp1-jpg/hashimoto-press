@@ -608,7 +608,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.10-12</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.10-13</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -3416,20 +3416,19 @@ async function saveQuoteRequest() {
   const isEdit = _editingQuoteKey && DB.quoteRequests?.[_editingQuoteKey];
   const key    = isEdit ? _editingQuoteKey : 'qr_' + Date.now();
   const existing = isEdit ? DB.quoteRequests[_editingQuoteKey] : {};
-  // 金型データから品番・品名を取得
-  // moldNoが空の場合はquoteItemsのitemMatNoから金型NOを推定
-  const inferMoldNo = moldNo || (()=>{
-    const first = (quoteItems[0]?.itemMatNo)||'';
-    const mm2 = first.match(/^([A-Za-z0-9]+-[A-Za-z]+)/);
-    return mm2 ? mm2[1] : first.replace(/[0-9]+$/, '');
+  // moldNoが空の場合はquoteItemsのitemMatNoから推定
+  const inferredMN = moldNo || (()=>{
+    const first = (quoteItems[0]?.itemMatNo) || '';
+    const mm = first.match(/^([A-Za-z0-9]+-[A-Za-z]+)/);
+    return mm ? mm[1] : first.replace(/[0-9]+$/, '');
   })();
-  const moldData3  = Object.values(DB.molds||{}).find(m => m.no === inferMoldNo);
+  const moldData3  = Object.values(DB.molds||{}).find(m => m.no === inferredMN);
   const moldPartNo = moldData3?.partNo   || '';
   const partName   = moldData3?.partName || '';
 
   const record = {
     ...existing,
-    date, moldNo: inferMoldNo||moldNo, partNo, moldPartNo, partName,
+    date, moldNo: inferredMN||moldNo, partNo, moldPartNo, partName,
     items:     [...quoteItems],
     suppliers: toList,
     status:    '見積待ち',
@@ -3662,17 +3661,17 @@ async function setItemDecided(reqKey, itemIdx, supId) {
 function printCompareSheet(reqKey, showPrice) {
   const rec=DB.quoteRequests?.[reqKey]; if(!rec)return;
   const items=(rec.items||[]).map((item,i)=>({item,i})).filter(({i})=>!(rec.orderedItems||{})[i]);
-  // rec.moldNoがない場合はitemsのitemMatNoから金型NOを推定
-  const inferredMoldNo = rec.moldNo || (()=>{
-    const firstMatNo = (rec.items||[])[0]?.itemMatNo || '';
-    // 例: "69-R301" → "69-R" (末尾の数字を除く)
-    const m2 = firstMatNo.match(/^([A-Za-z0-9]+-[A-Za-z]+)/);
-    return m2 ? m2[1] : firstMatNo.replace(/\d+$/, '');
-  })();
-  const md=Object.values(DB.molds||{}).find(m=>m.no===inferredMoldNo)||
-           Object.values(DB.molds||{}).find(m=>m.no===rec.moldNo);
+  // rec.moldNoがない場合はitemsのitemMatNoから金型NOを推定（例:69-R301→69-R）
+  const inferMoldNo=(mn)=>{
+    if(mn)return mn;
+    const first=(rec.items||[])[0]?.itemMatNo||'';
+    const mm=first.match(/^([A-Za-z0-9]+-[A-Za-z]+)/);
+    return mm?mm[1]:first.replace(/[0-9]+$/,'');
+  };
+  const mno=inferMoldNo(rec.moldNo);
+  const md=Object.values(DB.molds||{}).find(m=>m.no===mno);
   const partName=rec.partName||md?.partName||'', moldPartNo=rec.moldPartNo||md?.partNo||'';
-  const procs=md?.processes||[], mno=rec.moldNo||'';
+  const procs=md?.processes||[];
   const usedPNos=new Set(items.flatMap(({item})=>{const s=(item?.itemMatNo||'').startsWith(mno)?(item.itemMatNo||'').slice(mno.length):'';const n=parseInt(s);return isNaN(n)?[]:[n];}));
   const processStr=procs.map((p,idx)=>usedPNos.size===0||usedPNos.has(idx+1)?`${idx+1}: ${p}`:null).filter(Boolean).join('　');
   const rows=items.map(({item,i})=>{
@@ -3818,13 +3817,13 @@ async function reopenQuote(reqKey) {
 
   // 金型NOと材料管理NOをフォームにセット
   // rec.moldNoがない場合はitemsのitemMatNoから推定
-  const moldNoToSet = rec.moldNo || (()=>{
+  const inferredMoldNo2 = rec.moldNo || (()=>{
     const first = (rec.items||[])[0]?.itemMatNo || '';
     const mm = first.match(/^([A-Za-z0-9]+-[A-Za-z]+)/);
-    return mm ? mm[1] : first.replace(/\d+$/, '');
+    return mm ? mm[1] : first.replace(/[0-9]+$/, '');
   })();
   const moldNoEl = document.getElementById('qf_moldNo');
-  if (moldNoEl) { moldNoEl.value = moldNoToSet; if(moldNoToSet) moldNoEl.classList.add('filled'); }
+  if (moldNoEl) { moldNoEl.value = inferredMoldNo2; if(inferredMoldNo2) moldNoEl.classList.add('filled'); }
   const partNoEl = document.getElementById('qf_partNo');
   if (partNoEl) partNoEl.value = rec.partNo||'';
   const prevEl = document.getElementById('qf_matNoPreview');
@@ -3840,7 +3839,7 @@ async function reopenQuote(reqKey) {
   });
 
   // 金型情報を表示
-  if (moldNoToSet) showMoldInfo('qf', moldNoToSet);
+  if (inferredMoldNo2) showMoldInfo('qf', inferredMoldNo2);
 
   // ①タブに切り替え
   showQuoteTab('request');
