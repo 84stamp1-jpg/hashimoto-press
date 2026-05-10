@@ -963,6 +963,7 @@ function getViewDateStr(){
     +('0'+viewDate.getDate()).slice(-2);
 }
 function filterRecords(){
+  if(typeof PENDING_MODE !== 'undefined' && PENDING_MODE) return; // システム入力待ち表示中は上書きしない
   var q=document.getElementById('filter').value.trim().toLowerCase();
   var ds=getViewDateStr();
   var r=ALL_RECORDS.filter(function(row){
@@ -2089,25 +2090,39 @@ function updatePendingBadge() {
   }
 }
 
+var PENDING_MODE = false; // システム入力待ち表示中フラグ
+
 function showPendingList() {
-  // 製造番号検索タブに移動してシステム入力待ちを検索
   showTab('list');
-  // フィルターをクリアして全日付を表示
-  document.getElementById('filter').value = 'システム入力待ち';
-  // 全日付から未入力の完納レコードを表示
   var pending = ALL_RECORDS.filter(function(r) {
     return (r[7] || '') === '完納' && (r[12] || '未') === '未';
   });
   if (!pending.length) { updatePendingBadge(); return; }
 
-  // 日付ナビを非表示にして全件表示
+  PENDING_MODE = true;
+
+  // 日付ナビを非表示にして戻るボタンを表示
+  var nav = document.getElementById('date-nav');
+  if (nav) nav.style.display = 'none';
+  var filterEl = document.getElementById('list-filter-wrap');
+  if (filterEl) filterEl.style.display = 'none';
+
   var el = document.getElementById('rec-list');
   el.innerHTML = '';
 
-  var lbl = document.createElement('div');
-  lbl.style.cssText = 'font-size:12px;color:#E24B4A;font-weight:700;margin-bottom:8px;padding:8px 4px;border-bottom:2px solid #E24B4A;';
+  // ヘッダー＋戻るボタン
+  var hdr = document.createElement('div');
+  hdr.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding:8px;background:#ffebee;border-radius:8px;border-left:4px solid #E24B4A;';
+  var lbl = document.createElement('span');
+  lbl.style.cssText = 'font-size:13px;color:#E24B4A;font-weight:700;';
   lbl.textContent = '⚠️ システム入力待ち（全日付）: ' + pending.length + '件';
-  el.appendChild(lbl);
+  var backBtn = document.createElement('button');
+  backBtn.textContent = '✕ 閉じる';
+  backBtn.style.cssText = 'padding:4px 12px;background:#555;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;';
+  backBtn.onclick = function() { exitPendingMode(); };
+  hdr.appendChild(lbl);
+  hdr.appendChild(backBtn);
+  el.appendChild(hdr);
 
   // 製造番号でグループ化して表示
   var gmap = {}, gorder = [];
@@ -2123,6 +2138,16 @@ function showPendingList() {
   gorder.forEach(function(k) {
     el.appendChild(makeGroupCard(gmap[k], true));
   });
+}
+
+function exitPendingMode() {
+  PENDING_MODE = false;
+  // 日付ナビを再表示
+  var nav = document.getElementById('date-nav');
+  if (nav) nav.style.display = '';
+  var filterEl = document.getElementById('list-filter-wrap');
+  if (filterEl) filterEl.style.display = '';
+  filterRecords();
 }
 
 function resetForm(){
