@@ -608,7 +608,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.10-2</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.10-4</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -2352,9 +2352,9 @@ function renderMaterials() {
             ${r.name ? '<div style="font-size:10px;color:var(--text2);margin-top:1px">' + r.name + '</div>' : ''}
           </td>
           <td class="mono" style="font-size:15px">${r.material||''}</td>
-          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 6px">${(()=>{const v=String(r.sizeX||'').replace(/\.00$/,'');if(!v)return'—';return(r.fX?'<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>')+'<div style="font-size:16px;">'+v+'</div>';})()}</td>
-          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 6px">${(()=>{const v=String(r.sizeY||'').replace(/\.00$/,'');if(!v)return'—';return(r.fY?'<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>')+'<div style="font-size:16px;">'+v+'</div>';})()}</td>
-          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 6px">${(()=>{const v=String(r.sizeZ||'').replace(/\.00$/,'');if(!v)return'—';return(r.fZ?'<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>')+'<div style="font-size:16px;">'+v+'</div>';})()}</td>
+          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 6px">${(()=>{const v=String(r.sizeX||'').replace(/\.00$/,'');if(!v)return'—';return(('fX' in r?r.fX:['6F','4F','▽▽▽','▽▽','6F（全面）','4F（2面）'].includes(r.finish))?'<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>')+'<div style="font-size:16px;">'+v+'</div>';})()}</td>
+          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 6px">${(()=>{const v=String(r.sizeY||'').replace(/\.00$/,'');if(!v)return'—';return(('fX' in r?r.fY:['6F','4F','▽▽▽','▽▽','6F（全面）','4F（2面）'].includes(r.finish))?'<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>')+'<div style="font-size:16px;">'+v+'</div>';})()}</td>
+          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 6px">${(()=>{const v=String(r.sizeZ||'').replace(/\.00$/,'');if(!v)return'—';return(('fX' in r?r.fZ:['6F','4F','▽▽▽','▽▽','6F（全面）','4F（2面）'].includes(r.finish))?'<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>')+'<div style="font-size:16px;">'+v+'</div>';})()}</td>
           <td class="mono" style="font-size:14px">
             ${(() => {
               const manualKg = r.weight ? parseFloat(r.weight) : null;
@@ -3352,7 +3352,7 @@ function generateQuotePrint() {
         '</div>' +
       '</div>' +
       '<div style="margin-bottom:10px;font-size:20pt;line-height:1.8">いつもお世話になります。<br>下記の見積りをお願い致します。</div>' +
-      '<table style="width:100%;border-collapse:collapse;font-size:20pt;table-layout:fixed">' +
+      '<table style="width:100%;border-collapse:collapse;font-size:20pt">' +
         '<thead>' +
           '<tr style="background:#d0d0d0">' +
             '<th style="' + B + 'padding:8px 2px;text-align:center;width:20px">No.</th>' +
@@ -3653,18 +3653,7 @@ function printCompareSheet(reqKey, showPrice) {
   const md=Object.values(DB.molds||{}).find(m=>m.no===rec.moldNo);
   const partName=rec.partName||md?.partName||'', moldPartNo=rec.moldPartNo||md?.partNo||'';
   const procs=md?.processes||[], mno=rec.moldNo||'';
-  const usedPNos=new Set(items.flatMap(({item})=>{
-    const matNo=item?.itemMatNo||'';
-    if(!matNo.startsWith(mno))return[];
-    const suffix=matNo.slice(mno.length); // 例: "69-R301"から"69-R"を除いた"301"
-    const m2=suffix.match(/^[A-Za-z]*([0-9]+)/); // 先頭のアルファベットをスキップして数字を取得
-    if(!m2)return[];
-    // 工程番号は通常1〜2桁。suffixが"301"なら先頭"3"が工程番号
-    // suffixが"3"なら"3"、"10"なら"10"、"301"なら"3"（3桁以上の場合は先頭1桁）
-    const digits=m2[1];
-    const n=digits.length>=3?parseInt(digits[0]):parseInt(digits);
-    return isNaN(n)?[]:[n];
-  }));
+  const usedPNos=new Set(items.flatMap(({item})=>{const s=(item?.itemMatNo||'').startsWith(mno)?(item.itemMatNo||'').slice(mno.length):'';const n=parseInt(s);return isNaN(n)?[]:[n];}));
   const processStr=procs.map((p,idx)=>usedPNos.size===0||usedPNos.has(idx+1)?`${idx+1}: ${p}`:null).filter(Boolean).join('　');
   const rows=items.map(({item,i})=>{
     const sid=(rec.itemDecided||{})[i]||rec.decided||'';
