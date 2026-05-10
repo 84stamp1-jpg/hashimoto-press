@@ -608,7 +608,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.10-11</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.10-12</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -3417,16 +3417,19 @@ async function saveQuoteRequest() {
   const key    = isEdit ? _editingQuoteKey : 'qr_' + Date.now();
   const existing = isEdit ? DB.quoteRequests[_editingQuoteKey] : {};
   // 金型データから品番・品名を取得
-  // 金型データから品番・品名を取得（DOM表示値も併用）
-  const moldData3  = Object.values(DB.molds||{}).find(m => m.no === moldNo);
-  // DOM上の表示値をフォールバックとして使用
-  const dispEl3    = document.getElementById('qf_partNoDisp');
-  const moldPartNo = moldData3?.partNo   || dispEl3?.textContent?.replace(/[()]/g,'').trim() || '';
+  // moldNoが空の場合はquoteItemsのitemMatNoから金型NOを推定
+  const inferMoldNo = moldNo || (()=>{
+    const first = (quoteItems[0]?.itemMatNo)||'';
+    const mm2 = first.match(/^([A-Za-z0-9]+-[A-Za-z]+)/);
+    return mm2 ? mm2[1] : first.replace(/[0-9]+$/, '');
+  })();
+  const moldData3  = Object.values(DB.molds||{}).find(m => m.no === inferMoldNo);
+  const moldPartNo = moldData3?.partNo   || '';
   const partName   = moldData3?.partName || '';
 
   const record = {
     ...existing,
-    date, moldNo, partNo, moldPartNo, partName,
+    date, moldNo: inferMoldNo||moldNo, partNo, moldPartNo, partName,
     items:     [...quoteItems],
     suppliers: toList,
     status:    '見積待ち',
@@ -3659,7 +3662,15 @@ async function setItemDecided(reqKey, itemIdx, supId) {
 function printCompareSheet(reqKey, showPrice) {
   const rec=DB.quoteRequests?.[reqKey]; if(!rec)return;
   const items=(rec.items||[]).map((item,i)=>({item,i})).filter(({i})=>!(rec.orderedItems||{})[i]);
-  const md=Object.values(DB.molds||{}).find(m=>m.no===rec.moldNo);
+  // rec.moldNoがない場合はitemsのitemMatNoから金型NOを推定
+  const inferredMoldNo = rec.moldNo || (()=>{
+    const firstMatNo = (rec.items||[])[0]?.itemMatNo || '';
+    // 例: "69-R301" → "69-R" (末尾の数字を除く)
+    const m2 = firstMatNo.match(/^([A-Za-z0-9]+-[A-Za-z]+)/);
+    return m2 ? m2[1] : firstMatNo.replace(/\d+$/, '');
+  })();
+  const md=Object.values(DB.molds||{}).find(m=>m.no===inferredMoldNo)||
+           Object.values(DB.molds||{}).find(m=>m.no===rec.moldNo);
   const partName=rec.partName||md?.partName||'', moldPartNo=rec.moldPartNo||md?.partNo||'';
   const procs=md?.processes||[], mno=rec.moldNo||'';
   const usedPNos=new Set(items.flatMap(({item})=>{const s=(item?.itemMatNo||'').startsWith(mno)?(item.itemMatNo||'').slice(mno.length):'';const n=parseInt(s);return isNaN(n)?[]:[n];}));
@@ -3806,8 +3817,14 @@ async function reopenQuote(reqKey) {
   quoteItems = (rec.items||[]).map((it,i)=>orderedItems[i]?null:{...it}).filter(Boolean);
 
   // 金型NOと材料管理NOをフォームにセット
+  // rec.moldNoがない場合はitemsのitemMatNoから推定
+  const moldNoToSet = rec.moldNo || (()=>{
+    const first = (rec.items||[])[0]?.itemMatNo || '';
+    const mm = first.match(/^([A-Za-z0-9]+-[A-Za-z]+)/);
+    return mm ? mm[1] : first.replace(/\d+$/, '');
+  })();
   const moldNoEl = document.getElementById('qf_moldNo');
-  if (moldNoEl) { moldNoEl.value = rec.moldNo||''; moldNoEl.classList.add('filled'); }
+  if (moldNoEl) { moldNoEl.value = moldNoToSet; if(moldNoToSet) moldNoEl.classList.add('filled'); }
   const partNoEl = document.getElementById('qf_partNo');
   if (partNoEl) partNoEl.value = rec.partNo||'';
   const prevEl = document.getElementById('qf_matNoPreview');
@@ -3823,7 +3840,7 @@ async function reopenQuote(reqKey) {
   });
 
   // 金型情報を表示
-  if (rec.moldNo) showMoldInfo('qf', rec.moldNo);
+  if (moldNoToSet) showMoldInfo('qf', moldNoToSet);
 
   // ①タブに切り替え
   showQuoteTab('request');
