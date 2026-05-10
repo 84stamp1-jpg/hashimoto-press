@@ -616,17 +616,13 @@ document.getElementById('sakuyo-search').addEventListener('input', function(){
     var sk=s.seizoNo+'_'+s.junjo;
     if(doneSeizoSet[sk]) continue;
     if(s.hinban.toLowerCase().indexOf(q)>=0||s.hinmei.toLowerCase().indexOf(q)>=0||s.seizoNo.toLowerCase().indexOf(q)>=0){
-      // 製造番号検索の場合はそのまま、品番・品名検索の場合は品番で重複除外
+      // 全件rに追加（グループ化は表示時に行う）
+      // ただし品番・品名検索で同一品番は30グループまで
       var isSeizoSearch = s.seizoNo.toLowerCase().indexOf(q)>=0 && s.hinban.toLowerCase().indexOf(q)<0 && s.hinmei.toLowerCase().indexOf(q)<0;
-      if(isSeizoSearch){
+      if(!isSeizoSearch) seenHinban[s.hinban]=(seenHinban[s.hinban]||0)+1;
+      if(isSeizoSearch || Object.keys(seenHinban).length<=30){
         r.push(s);
-      } else {
-        if(!seenHinban[s.hinban]){
-          seenHinban[s.hinban]=true;
-          r.push(s);
-        }
       }
-      if(r.length>=30) break;
     }
   }
   if(!r.length){sug.style.display='none';return;}
@@ -645,13 +641,27 @@ document.getElementById('sakuyo-search').addEventListener('input', function(){
     }
   });
 
+  // 各グループ内を納期優先・同納期は工順昇順でソート
+  var noukiNum=function(n){
+    if(!n) return 9999;
+    var m=n.match(/(\d{1,2})\/(\d{1,2})/);
+    return m?parseInt(m[1])*100+parseInt(m[2]):9999;
+  };
+  groupOrder.forEach(function(key){
+    grouped[key].sort(function(a,b){
+      var nd=noukiNum(a['納期'])-noukiNum(b['納期']);
+      return nd!==0?nd:((parseInt(a.junjo)||0)-(parseInt(b.junjo)||0));
+    });
+  });
+
   // 各グループを表示
   groupOrder.forEach(function(key){
     var items=grouped[key];
     var first=items[0];
     var div=document.createElement('div'); div.className='sk-item';
     var hb=document.createElement('div'); hb.className='sk-hinban';
-    hb.textContent=first.hinban+(items.length>1?' ▼ '+items.length+'件':'');
+    var totalCount=items.length;
+    hb.textContent=first.hinban+(totalCount>1?' ▼ '+totalCount+'件':'');
 
     // 詳細バッジを作る関数
     function makeBadges(item){
