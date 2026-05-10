@@ -2326,6 +2326,14 @@ function renderMaterials() {
     (r.moldNo||'').toLowerCase().includes(search)
   );
   if (moldFil) entries = entries.filter(([,r]) => r.moldNo === moldFil);
+  if (dateFil) entries = entries.filter(([,r]) => (r.month||'').startsWith(dateFil));
+  // 日付フィルター選択肢を動的生成
+  const dSel = document.getElementById('matDateFilter');
+  if (dSel) {
+    const months = [...new Set(Object.values(DB.materials).map(r=>r.month).filter(Boolean))].sort().reverse();
+    const curD = dSel.value;
+    dSel.innerHTML = '<option value="">全日付</option>' + months.map(m=>`<option value="${m}"${m===curD?' selected':''}>${m}</option>`).join('');
+  }
   const total = entries.reduce((s,[,r])=>s+(r.amount||0),0);
   document.getElementById('matCount').textContent = entries.length + '件 / ¥' + fmt(total);
   if (!entries.length) { document.getElementById('matTableBody').innerHTML = '<div class="empty"><div class="empty-icon">🔩</div>データなし</div>'; return; }
@@ -2352,9 +2360,9 @@ function renderMaterials() {
             ${r.name ? '<div style="font-size:10px;color:var(--text2);margin-top:1px">' + r.name + '</div>' : ''}
           </td>
           <td class="mono" style="font-size:15px">${r.material||''}</td>
-          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 6px">${(()=>{const v=String(r.sizeX||'').replace(/\.00$/,'');if(!v)return'—';return((r.fX===true)?'<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>')+'<div style="font-size:16px;">'+v+'</div>';})()}</td>
-          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 6px">${(()=>{const v=String(r.sizeY||'').replace(/\.00$/,'');if(!v)return'—';return((r.fY===true)?'<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>')+'<div style="font-size:16px;">'+v+'</div>';})()}</td>
-          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 6px">${(()=>{const v=String(r.sizeZ||'').replace(/\.00$/,'');if(!v)return'—';return((r.fZ===true)?'<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>')+'<div style="font-size:16px;">'+v+'</div>';})()}</td>
+          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 6px">${(()=>{const v=String(r.sizeX||'').replace(/\.00$/,'');if(!v)return'—';return(r.fX?'<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>')+'<div style="font-size:16px;">'+v+'</div>';})()}</td>
+          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 6px">${(()=>{const v=String(r.sizeY||'').replace(/\.00$/,'');if(!v)return'—';return(r.fY?'<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>')+'<div style="font-size:16px;">'+v+'</div>';})()}</td>
+          <td class="mono" style="text-align:center;vertical-align:middle;padding:3px 6px">${(()=>{const v=String(r.sizeZ||'').replace(/\.00$/,'');if(!v)return'—';return(r.fZ?'<div style="color:var(--green);font-size:10px;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>')+'<div style="font-size:16px;">'+v+'</div>';})()}</td>
           <td class="mono" style="font-size:14px">
             ${(() => {
               const manualKg = r.weight ? parseFloat(r.weight) : null;
