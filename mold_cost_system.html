@@ -608,7 +608,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.10-15</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.11-1</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -1447,7 +1447,12 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
         </div>
         <div class="form-group">
           <label class="form-label">仕上</label>
-          <input class="form-input" id="matf_finish" placeholder="4F, 6F...">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input class="form-input" id="matf_finish" placeholder="4F, 6F..." style="width:100px">
+            <label style="display:flex;gap:4px;align-items:center;font-size:12px"><input type="checkbox" id="matf_fX"> X▽</label>
+            <label style="display:flex;gap:4px;align-items:center;font-size:12px"><input type="checkbox" id="matf_fY"> Y▽</label>
+            <label style="display:flex;gap:4px;align-items:center;font-size:12px"><input type="checkbox" id="matf_fZ"> Z▽</label>
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label">重量 (kg) <span style="font-size:10px;color:var(--text3)">空欄で自動計算</span></label>
@@ -2858,6 +2863,12 @@ async function saveMaterial() {
     name:document.getElementById('matf_name').value.trim(),
     material:document.getElementById('matf_material').value.trim(),
     size:document.getElementById('matf_size').value.trim(),
+    sizeX:  document.getElementById('matf_sizeX').value.trim(),
+    sizeY:  document.getElementById('matf_sizeY').value.trim(),
+    sizeZ:  document.getElementById('matf_sizeZ').value.trim(),
+    fX:     document.getElementById('matf_fX')?.checked||false,
+    fY:     document.getElementById('matf_fY')?.checked||false,
+    fZ:     document.getElementById('matf_fZ')?.checked||false,
     finish:document.getElementById('matf_finish').value.trim(),
     weight:parseFloat(document.getElementById('matf_weight').value)||0,
     amount:parseFloat(document.getElementById('matf_amount').value)||0,
@@ -3325,16 +3336,16 @@ function generateQuotePrint() {
       const sY = String(r.sizeY||'').replace(/\.00$/,'');
       const sZ = String(r.sizeZ||'').replace(/\.00$/,'');
       return '<tr>' +
-        '<td style="text-align:center;' + B + 'padding:8px 2px;width:22px">' + (i+1) + '</td>' +
-        '<td style="text-align:center;' + B + 'padding:8px 2px;font-family:monospace;font-size:20pt;font-weight:400;white-space:nowrap;width:90px">' + (r.itemMatNo||r.moldNo||'') + '</td>' +
-        '<td style="' + B + 'padding:8px 4px;font-size:15pt;width:210px;overflow:hidden;word-break:break-all">' + (r.name||'') + '</td>' +
-        '<td style="text-align:center;' + B + 'padding:8px 2px;width:44px">' + (r.qty||1) + '</td>' +
-        '<td style="' + B + 'padding:8px 2px;width:85px">' + (r.material||'') + '</td>' +
-        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + xMark + '<div style="padding:6px 2px;font-size:22pt;font-weight:400">' + sX + '</div></td>' +
-        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + yMark + '<div style="padding:6px 2px;font-size:22pt;font-weight:400">' + sY + '</div></td>' +
-        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + zMark + '<div style="padding:6px 2px;font-size:22pt;font-weight:400">' + sZ + '</div></td>' +
-        '<td style="text-align:center;' + B + 'padding:8px 2px;font-weight:400;font-size:18pt;width:22px">' + finish + '</td>' +
-        '<td style="' + B + 'padding:8px 4px;font-size:20pt">' + (r.note||'') + '</td>' +
+        '<td style="text-align:center;' + B + 'padding:5px 2px;width:15px">' + (i+1) + '</td>' +
+        '<td style="text-align:center;' + B + 'padding:5px 2px;font-family:monospace;font-size:16pt;font-weight:400;white-space:nowrap;width:60px">' + (r.itemMatNo||r.moldNo||'') + '</td>' +
+        '<td style="' + B + 'padding:5px 3px;font-size:12pt;width:140px;overflow:hidden;word-break:break-all">' + (r.name||'') + '</td>' +
+        '<td style="text-align:center;' + B + 'padding:5px 2px;width:30px">' + (r.qty||1) + '</td>' +
+        '<td style="' + B + 'padding:5px 2px;font-size:13pt;width:57px">' + (r.material||'') + '</td>' +
+        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + xMark + '<div style="padding:3px 2px;font-size:15pt;font-weight:400">' + sX + '</div></td>' +
+        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + yMark + '<div style="padding:3px 2px;font-size:15pt;font-weight:400">' + sY + '</div></td>' +
+        '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom">' + zMark + '<div style="padding:3px 2px;font-size:15pt;font-weight:400">' + sZ + '</div></td>' +
+        '<td style="text-align:center;' + B + 'padding:5px 2px;font-weight:400;font-size:13pt;width:30px">' + finish + '</td>' +
+        '<td style="' + B + 'padding:5px 3px;font-size:13pt">' + (r.note||'') + '</td>' +
         '</tr>';
     }).filter(Boolean).join('');
 
@@ -3356,16 +3367,16 @@ function generateQuotePrint() {
       '<table style="width:100%;border-collapse:collapse;font-size:20pt;table-layout:fixed">' +
         '<thead>' +
           '<tr style="background:#d0d0d0">' +
-            '<th style="' + B + 'padding:8px 2px;text-align:center;width:22px">No.</th>' +
-            '<th style="' + B + 'padding:8px 2px;text-align:center;width:90px">管理NO.</th>' +
-            '<th style="' + B + 'padding:8px 4px;width:210px">名　　称</th>' +
-            '<th style="' + B + 'padding:8px 2px;text-align:center;width:44px">数量</th>' +
-            '<th style="' + B + 'padding:8px 2px;text-align:center;width:85px">材質</th>' +
-            '<th style="' + B + 'padding:8px 2px;text-align:center;width:85px">長さ(X)</th>' +
-            '<th style="' + B + 'padding:8px 2px;text-align:center;width:85px">幅(Y)</th>' +
-            '<th style="' + B + 'padding:8px 2px;text-align:center;width:85px">材厚(Z)</th>' +
-            '<th style="' + B + 'padding:8px 2px;text-align:center;width:22px">仕上</th>' +
-            '<th style="' + B + 'padding:8px 4px">備　　考</th>' +
+            '<th style="' + B + 'padding:5px 2px;text-align:center;width:15px">No.</th>' +
+            '<th style="' + B + 'padding:5px 2px;text-align:center;width:60px">管理NO.</th>' +
+            '<th style="' + B + 'padding:5px 3px;width:140px">名　　称</th>' +
+            '<th style="' + B + 'padding:5px 2px;text-align:center;width:30px">数量</th>' +
+            '<th style="' + B + 'padding:5px 2px;text-align:center;width:57px">材質</th>' +
+            '<th style="' + B + 'padding:5px 2px;text-align:center;width:57px">長さ(X)</th>' +
+            '<th style="' + B + 'padding:5px 2px;text-align:center;width:57px">幅(Y)</th>' +
+            '<th style="' + B + 'padding:5px 2px;text-align:center;width:57px">材厚(Z)</th>' +
+            '<th style="' + B + 'padding:5px 2px;text-align:center;width:30px">仕上</th>' +
+            '<th style="' + B + 'padding:5px 3px">備　　考</th>' +
           '</tr>' +
         '</thead>' +
         '<tbody>' + itemRows + '</tbody>' +
@@ -3663,14 +3674,10 @@ function printCompareSheet(reqKey, showPrice) {
   const items=(rec.items||[]).map((item,i)=>({item,i})).filter(({i})=>!(rec.orderedItems||{})[i]);
   // rec.moldNoがない場合はitemsのitemMatNoから金型NOを推定（例:69-R301→69-R）
   const inferMoldNo=(mn)=>{
-    // まずそのままDB.moldsで検索
-    if(mn && Object.values(DB.molds||{}).some(m=>m.no===mn)) return mn;
-    // 見つからない場合は管理NOから金型NOを抽出（例:69-R301→69-R）
-    const src = mn || (rec.items||[])[0]?.itemMatNo || '';
-    const mm=src.match(/^(\d+-[A-Za-z]+?)(?=\d)/);
-    if(mm)return mm[1];
-    // それも失敗したら末尾数字を除去
-    return src.replace(/\d+$/, '');
+    if(mn)return mn;
+    const first=(rec.items||[])[0]?.itemMatNo||'';
+    const mm=first.match(/^([A-Za-z0-9]+-[A-Za-z]+)/);
+    return mm?mm[1]:first.replace(/[0-9]+$/,'');
   };
   const mno=inferMoldNo(rec.moldNo);
   const md=Object.values(DB.molds||{}).find(m=>m.no===mno);
@@ -5971,6 +5978,9 @@ function editMaterial(key) {
   set('matf_sizeY',    r.sizeY);
   set('matf_sizeZ',    r.sizeZ);
   set('matf_finish',   r.finish);
+  const _fXel=document.getElementById('matf_fX'); if(_fXel)_fXel.checked=r.fX||false;
+  const _fYel=document.getElementById('matf_fY'); if(_fYel)_fYel.checked=r.fY||false;
+  const _fZel=document.getElementById('matf_fZ'); if(_fZel)_fZel.checked=r.fZ||false;
   set('matf_weight',   r.weight);
   set('matf_amount',   r.amount);
   set('matf_supplier', r.supplier);
