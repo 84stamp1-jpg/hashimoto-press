@@ -608,7 +608,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.10-7</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.10-8</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -3685,6 +3685,59 @@ function printCompareSheet(reqKey, showPrice) {
   const w=window.open('','_blank','width=1100,height=800'); if(w){w.document.write(html);w.document.close();}
 }
 
+// 注文書作成画面から材料費に手動追加
+async function addToMaterials(reqKey, supId, indices) {
+  if (!DB.quoteRequests?.[reqKey]) { toast('データが見つかりません', 'error'); return; }
+  const rec = DB.quoteRequests[reqKey];
+  const suppliers = getSuppliers();
+  const supMap = Object.fromEntries(suppliers.map(s => [s.id, s]));
+  const sup = supMap[supId];
+  if (!DB.materials) DB.materials = {};
+  let count = 0;
+  indices.forEach(i => {
+    const item = (rec.items||[])[i];
+    if (!item) return;
+    const matKey = 'mat_order_' + reqKey + '_' + i;
+    if (DB.materials[matKey]) {
+      // 既存データがあれば確認
+      if (!confirm(`${item.itemMatNo||item.moldNo} は既に材料費に存在します。上書きしますか？`)) return;
+    }
+    const qkey = reqKey+'_'+i+'_'+supId;
+    const q = (rec.quotes||{})[qkey] || {};
+    const month = rec.date ? rec.date.slice(0,7) : new Date().toISOString().slice(0,7);
+    DB.materials[matKey] = {
+      month,
+      moldNo:   item.moldNo   || rec.moldNo || '',
+      partNo:   item.itemMatNo || rec.partNo || '',
+      name:     item.name     || '',
+      material: convertMaterial(item.material, supId),
+      size:     [item.sizeX, item.sizeY, item.sizeZ].filter(Boolean).join(' × '),
+      sizeX:    item.sizeX || '',
+      sizeY:    item.sizeY || '',
+      sizeZ:    item.sizeZ || '',
+      fX:       item.fX || false,
+      fY:       item.fY || false,
+      fZ:       item.fZ || false,
+      finish:   item.finish || '',
+      weight:   item.weight || '',
+      qty:      item.qty    || 1,
+      unit:     parseFloat(q.unitPrice||0),
+      amount:   parseFloat(q.unitPrice||0) * (item.qty||1),
+      supplier: sup ? sup.name : (supId || ''),
+      note:     item.note   || '',
+      quoteReqKey:  reqKey,
+      orderedSupId: supId,
+      orderHidden:  false,
+    };
+    count++;
+  });
+  if (count > 0) {
+    await writeToFirebase('materials', DB.materials);
+    toast(count + '件を材料費に追加しました', 'success');
+    renderMaterials();
+  }
+}
+
 async function confirmAllDecided(reqKey) {
   const rec = DB.quoteRequests?.[reqKey];
   if (!rec) return;
@@ -6214,6 +6267,7 @@ function renderOrderPage() {
             <span>この注文書を非表示にする</span>
           </label>
           <button class="btn btn-primary btn-sm" onclick="printOrder('${key}','${sid}',${JSON.stringify(sitems.map(it=>it.idx))})">🖨 注文書を印刷</button>
+          <button class="btn btn-secondary btn-sm" style="background:#ecfdf5;color:#059669;border:1px solid #6ee7b7;font-size:11px" onclick="addToMaterials('${key}','${sid}',${JSON.stringify(sitems.map(it=>it.idx))})">📦 材料費に追加</button>
         </div>
       </div>
       <div style="overflow-x:auto">
