@@ -608,7 +608,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.10-10</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.10-11</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -3417,9 +3417,12 @@ async function saveQuoteRequest() {
   const key    = isEdit ? _editingQuoteKey : 'qr_' + Date.now();
   const existing = isEdit ? DB.quoteRequests[_editingQuoteKey] : {};
   // 金型データから品番・品名を取得
-  const moldData3 = Object.values(DB.molds||{}).find(m => m.no === moldNo);
-  const moldPartNo = moldData3?.partNo   || existing.moldPartNo || '';
-  const partName   = moldData3?.partName || existing.partName   || '';
+  // 金型データから品番・品名を取得（DOM表示値も併用）
+  const moldData3  = Object.values(DB.molds||{}).find(m => m.no === moldNo);
+  // DOM上の表示値をフォールバックとして使用
+  const dispEl3    = document.getElementById('qf_partNoDisp');
+  const moldPartNo = moldData3?.partNo   || dispEl3?.textContent?.replace(/[()]/g,'').trim() || '';
+  const partName   = moldData3?.partName || '';
 
   const record = {
     ...existing,
