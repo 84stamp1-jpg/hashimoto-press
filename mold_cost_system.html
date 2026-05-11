@@ -608,7 +608,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.11-7</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.11-8</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -3675,10 +3675,13 @@ function printCompareSheet(reqKey, showPrice) {
   const items=(rec.items||[]).map((item,i)=>({item,i})).filter(({i})=>!(rec.orderedItems||{})[i]);
   // rec.moldNoがない場合はitemsのitemMatNoから金型NOを推定（例:69-R301→69-R）
   const inferMoldNo=(mn)=>{
-    if(mn)return mn;
-    const first=(rec.items||[])[0]?.itemMatNo||'';
-    const mm=first.match(/^([A-Za-z0-9]+-[A-Za-z]+)/);
-    return mm?mm[1]:first.replace(/[0-9]+$/,'');
+    // DB.moldsで直接見つかればそのまま返す
+    if(mn && Object.values(DB.molds||{}).some(m=>m.no===mn)) return mn;
+    // 見つからない場合はmn自体か最初のitemMatNoから金型NOを抽出
+    const src=mn||(rec.items||[])[0]?.itemMatNo||'';
+    const mm=src.match(/^(\d+-[A-Za-z]+?)(?=\d)/);
+    if(mm)return mm[1];
+    return src.replace(/\d+$/,'');
   };
   const mno=inferMoldNo(rec.moldNo);
   const md=Object.values(DB.molds||{}).find(m=>m.no===mno);
@@ -6347,6 +6350,8 @@ function renderOrderPage() {
               <th style="padding:4px 6px">管理NO.</th><th style="padding:4px 6px">名称</th>
               ${getSuppliers().filter(s=>(rec.suppliers||[]).includes(s.id)).map(s=>`<th style="padding:4px 6px;text-align:right">${s.name}</th>`).join('')}
               <th style="padding:4px 6px;text-align:right;color:var(--accent)">決定先</th>
+              <th style="padding:4px 6px;text-align:right;color:#dc2626">最安値比</th>
+              <th style="padding:4px 6px;text-align:right;color:#dc2626">差額</th>
             </tr></thead>
             <tbody>${sitems.map(it=>{
               const idx=it.idx;
@@ -6355,8 +6360,20 @@ function renderOrderPage() {
               return '<tr style="border-bottom:1px solid var(--border)">'+
                 '<td style="padding:4px 6px;font-family:monospace;font-weight:600;color:var(--accent)">'+(it.itemMatNo||it.moldNo||'')+'</td>'+
                 '<td style="padding:4px 6px">'+(it.name||'')+'</td>'+
-                sups.map(s=>{const qk=key+'_'+idx+'_'+s.id;const qv=(rec.quotes||{})[qk];const up=qv&&qv.unitPrice?parseFloat(qv.unitPrice):null;const isD=s.id===decided;return '<td style="padding:4px 6px;text-align:right;'+(isD?'font-weight:700;color:var(--accent)':'')+'">'+( up?'¥'+fmt(up):'—')+'</td>';}).join('')+
-                '<td style="padding:4px 6px;text-align:right;font-weight:700;color:var(--accent)">'+(decided?(sups.find(s=>s.id===decided)?.name||''):'—')+'</td></tr>';
+                (()=>{
+                  const prices=sups.map(s=>{const qk=key+'_'+idx+'_'+s.id;const qv=(rec.quotes||{})[qk];return qv&&qv.unitPrice?parseFloat(qv.unitPrice):null;});
+                  const validPrices=prices.filter(p=>p!==null);
+                  const minP=validPrices.length?Math.min(...validPrices):null;
+                  const decidedP=prices[sups.findIndex(s=>s.id===decided)]||null;
+                  const cells=sups.map((s,si)=>{const up=prices[si];const isD=s.id===decided;return '<td style="padding:4px 6px;text-align:right;'+(isD?'font-weight:700;color:var(--accent)':up===minP&&up!==null?'color:#16a34a':'')+'">'+( up!==null?'¥'+fmt(up):'—')+'</td>';}).join('');
+                  const decidedName=decided?(sups.find(s=>s.id===decided)?.name||''):'—';
+                  const ratio=minP&&decidedP?(decidedP/minP*100).toFixed(1)+'%':'—';
+                  const diff=minP&&decidedP&&decidedP!==minP?'¥'+fmt(decidedP-minP):'—';
+                  return cells+
+                    '<td style="padding:4px 6px;text-align:right;font-weight:700;color:var(--accent)">'+decidedName+'</td>'+
+                    '<td style="padding:4px 6px;text-align:right;color:'+(ratio==='—'?'#64748b':'#dc2626')+'">'+(ratio==='100.0%'?'最安':ratio)+'</td>'+
+                    '<td style="padding:4px 6px;text-align:right;color:'+(diff==='—'?'#64748b':'#dc2626')+'">'+diff+'</td>';
+                })()+'</tr>';
             }).join('')}</tbody>
           </table>
         </div>
@@ -6429,6 +6446,7 @@ async function printOrder(reqKey, supId, indices) {
       <td style="${B}padding:3px 4px;text-align:center;font-weight:700;vertical-align:bottom">${mY}<div style=\"font-size:15.8pt;font-weight:700\">${sY}</div></td>
       <td style="${B}padding:3px 4px;text-align:center;font-weight:700;vertical-align:bottom">${mZ}<div style=\"font-size:15.8pt;font-weight:700\">${sZ}</div></td>
       <td style="${B}padding:5px 4px;text-align:center;font-weight:800">${fLabel}</td>
+          <td style="${B}padding:5px 4px;font-size:11px">${item.note||''}</td>
       <td style="${B}padding:5px 8px;text-align:right;font-family:monospace">${price?'¥'+fmt(price):'—'}</td>
       <td style="${B}padding:5px 8px;text-align:right;font-family:monospace;font-weight:700">${price?'¥'+fmt(price*(item.qty||1)):'—'}</td>
     </tr>`;
@@ -6487,6 +6505,7 @@ async function printOrder(reqKey, supId, indices) {
           <th style="width:48px">幅(Y)</th>
           <th style="width:48px">材厚(Z)</th>
           <th style="width:28px">仕上</th>
+<th style="width:80px">備考</th>
           <th style="width:82px">単価(円)</th>
           <th style="width:84px">発注金額</th>
         </tr></thead>
