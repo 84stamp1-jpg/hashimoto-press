@@ -608,7 +608,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.11-13</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.11-14</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -3508,12 +3508,12 @@ function renderCompare() {
 
     // 明細ごとの行を生成
     // 未発注の行だけを表示（全行発注済みの案件は非表示）
-    const pendingIndices = rec.items.map((_,i)=>i).filter(i=>!(rec.orderedItems||{})[i]);
+    const pendingIndices = rec.items.map((_,i)=>i).filter(i=>!((rec.orderedItems||{})[i]||(rec.orderedItems||{})[String(i)]));
     if (!pendingIndices.length) return '';  // 全行発注済みは案件ブロックごと非表示
 
     const itemRows = rec.items.map((item, i) => {
       // 発注済みの行は非表示
-      if ((rec.orderedItems||{})[i]) return '';
+      if ((rec.orderedItems||{})[i]||(rec.orderedItems||{})[String(i)]) return '';
       // 各社の見積単価・kg単価
       const prices = sups.map(sid => {
         const q = rec.quotes?.[key+'_'+i+'_'+sid] || {};
@@ -3677,7 +3677,7 @@ async function setItemDecided(reqKey, itemIdx, supId) {
 // 全明細を発注確定（明細ごとの発注先で材料費に登録）
 function printCompareSheet(reqKey, showPrice) {
   const rec=DB.quoteRequests?.[reqKey]; if(!rec)return;
-  const items=(rec.items||[]).map((item,i)=>({item,i})).filter(({i})=>!(rec.orderedItems||{})[i]);
+  const items=(rec.items||[]).map((item,i)=>({item,i})).filter(({i})=>!((rec.orderedItems||{})[i]||(rec.orderedItems||{})[String(i)]));
   // rec.moldNoがない場合はitemsのitemMatNoから金型NOを推定（例:69-R301→69-R）
   const inferMoldNo=(mn)=>{
     // DB.moldsで直接見つかればそのまま返す
@@ -3847,7 +3847,7 @@ async function reopenQuote(reqKey) {
   _editingQuoteKey = reqKey;
   // 品目リストに読み込む
   const orderedItems = rec.orderedItems || {};
-  quoteItems = (rec.items||[]).map((it,i)=>orderedItems[i]?null:{...it}).filter(Boolean);
+  quoteItems = (rec.items||[]).map((it,i)=>(orderedItems[i]||orderedItems[String(i)])?null:{...it}).filter(Boolean);
 
   // 金型NOと材料管理NOをフォームにセット
   // rec.moldNoがない場合はitemsのitemMatNoから推定
@@ -6122,13 +6122,16 @@ async function confirmCheckedItems(reqKey) {
   // チェック済みの行を確認
   // チェック済みの行インデックスを収集
   const orderedItems = rec.orderedItems || {};
-  const checkedIndices = items.map((_,i) => i).filter(i => checked[i] === true && !orderedItems[i]);
+  // Firebase保存後はキーが文字列になるため、数値・文字列両方を確認
+  const isOrdered = i => !!(orderedItems[i] || orderedItems[String(i)]);
+  const isChecked = i => !!(checked[i] === true || checked[String(i)] === true);
+  const checkedIndices = items.map((_,i) => i).filter(i => isChecked(i) && !isOrdered(i));
   const toConfirm = checkedIndices.map(i => items[i]);
   if (!toConfirm.length) { toast('発注確定する行にチェックを入れてください', 'error'); return; }
 
   const decided = rec.itemDecided || {};
   // 正しいインデックスで未選択チェック
-  const unset = checkedIndices.filter(i => !decided[i] && !rec.decided);
+  const unset = checkedIndices.filter(i => !decided[i] && !decided[String(i)] && !rec.decided);
   if (unset.length) {
     if (!confirm(`${unset.length}件の発注先が未選択です。そのまま確定しますか？`)) return;
   }
@@ -6141,8 +6144,8 @@ async function confirmCheckedItems(reqKey) {
   let matCount = 0;
 
   items.forEach((item, i) => {
-    if (checked[i] !== true || (rec.orderedItems||{})[i]) return;
-    const supplierId = (rec.itemDecided||{})[i] || (decided[i]) || rec.decided || '';
+    if (!isChecked(i) || isOrdered(i)) return;
+    const supplierId = (rec.itemDecided||{})[i] || (rec.itemDecided||{})[String(i)] || (decided[i]) || (decided[String(i)]) || rec.decided || '';
     const sup = supMap[supplierId];
     const qkey = reqKey+'_'+i+'_'+supplierId;
     const q = (rec.quotes||{})[qkey] || {};
@@ -6183,13 +6186,13 @@ async function confirmCheckedItems(reqKey) {
   rec.orderBatches[batchId] = { createdAt: new Date().toISOString(), indices: [] };
 
   items.forEach((_,i) => {
-    if (checked[i] === true && !(rec.orderedItems||{})[i]) {
-      rec.orderedItems[i] = true;
+    if (isChecked(i) && !isOrdered(i)) {
+      rec.orderedItems[String(i)] = true;
       rec.orderBatches[batchId].indices.push(i);
     }
   });
   // 全行が発注済みならstatusを発注済みに
-  const allOrdered = items.every((_,i) => rec.orderedItems[i]);
+  const allOrdered = items.every((_,i) => !!(rec.orderedItems[i]||rec.orderedItems[String(i)]));
   if (allOrdered) rec.status = '発注済み';
 
   await writeToFirebase('quoteRequests', DB.quoteRequests);
@@ -6215,7 +6218,7 @@ function renderOrderPage() {
 
   // 発注済みアイテムを持つ見積依頼を収集
   const allReqs = Object.entries(DB.quoteRequests||{}).filter(([,rec]) =>
-    rec.orderedItems && Object.values(rec.orderedItems).some(v=>v)
+    rec.orderedItems && Object.values(rec.orderedItems).some(v => v === true || v === 'true')
   ).sort(([,a],[,b]) => (b.date||'').localeCompare(a.date||''));
 
   if (!allReqs.length) {
@@ -6243,8 +6246,8 @@ function renderOrderPage() {
     // 常にorderedItemsベースでカードを生成（シンプルで確実）
     const bySupplier = {};
     (rec.items||[]).forEach((item, i) => {
-      if (!ordered[i]) return;
-      const sid = (rec.itemDecided||{})[i] || rec.decided || '';
+      if (!ordered[i] && !ordered[String(i)]) return;
+      const sid = (rec.itemDecided||{})[i] || (rec.itemDecided||{})[String(i)] || rec.decided || '';
       if (!sid) return;
       if (!bySupplier[sid]) bySupplier[sid] = [];
       const q = (rec.quotes||{})[key+'_'+i+'_'+sid] || {};
@@ -6254,7 +6257,7 @@ function renderOrderPage() {
       // 非表示フラグ：batchベースと旧形式の両方を確認
       const batches = rec.orderBatches || {};
       const batchEntry = Object.entries(batches).find(([,b]) =>
-        sitems.some(it => (b.indices||[]).includes(it.idx))
+        sitems.some(it => (b.indices||[]).some(idx => String(idx) === String(it.idx)))
       );
       const batchKey = batchEntry ? key+'_'+batchEntry[0] : key+'_'+sid;
       const isHidden = !!printed[batchKey] || !!printed[key+'_batch_'+batchEntry?.[0]] || !!printed[key+'_'+sid];
@@ -6410,7 +6413,7 @@ async function printOrder(reqKey, supId, indices) {
   // indices があればバッチ内の明細のみ、なければ全発注済みを対象
   const items = indices && indices.length > 0
     ? indices.map(i => (rec.items||[])[i]).filter(Boolean)
-    : (rec.items||[]).filter((_,i)=>ordered[i] && ((rec.itemDecided||{})[i]||rec.decided)===supId);
+    : (rec.items||[]).filter((_,i)=>(ordered[i]||ordered[String(i)]) && ((rec.itemDecided||{})[i]||(rec.itemDecided||{})[String(i)]||rec.decided)===supId);
 
   const B = 'border:1px solid #999;';
   const itemRows = items.map((item,ri) => {
