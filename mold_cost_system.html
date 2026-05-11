@@ -608,7 +608,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.11-12</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.11-13</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -6256,8 +6256,8 @@ function renderOrderPage() {
       const batchEntry = Object.entries(batches).find(([,b]) =>
         sitems.some(it => (b.indices||[]).includes(it.idx))
       );
-      const batchKey = batchEntry ? key+'_batch_'+batchEntry[0] : key+'_'+sid;
-      const isHidden = !!printed[batchKey] || !!printed[key+'_'+sid];
+      const batchKey = batchEntry ? key+'_'+batchEntry[0] : key+'_'+sid;
+      const isHidden = !!printed[batchKey] || !!printed[key+'_batch_'+batchEntry?.[0]] || !!printed[key+'_'+sid];
       if (!_showHiddenOrders && isHidden) continue;
       allCards.push({ key, rec, sid, sitems, batchKey, isHidden });
     }
@@ -6538,17 +6538,14 @@ async function toggleOrderHide(batchKey, supId, hide, reqKey) {
 async function restoreToOrderPage(reqKey, supId, matKey) {
   if (!DB.quoteRequests?.[reqKey]) { toast('見積依頼データが見つかりません', 'error'); return; }
   const rec = DB.quoteRequests[reqKey];
-  // printedOrdersを全てクリア（非表示フラグを解除）
+  // printedOrdersをFirebaseから削除（nullで上書き）
   rec.printedOrders = {};
+  // ローカルのDB.quoteRequestsも確実に更新
+  DB.quoteRequests[reqKey] = rec;
   await writeToFirebase('quoteRequests', DB.quoteRequests);
   toast('③注文書作成タブに再表示しました', 'success');
-  // 確実に再描画
-  await new Promise(r => setTimeout(r, 300));
-  renderMaterials();
   showPage('quote');
   showQuoteTab('order');
-  // 少し待って再度renderOrderPageを呼ぶ（Firebase反映待ち）
-  setTimeout(() => renderOrderPage(), 500);
 }
 
 
