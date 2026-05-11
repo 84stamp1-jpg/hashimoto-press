@@ -608,7 +608,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.11-26</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.11-27</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -3391,12 +3391,12 @@ function generateQuotePrint() {
       const sX = String(r.sizeX||'').replace(/\.00$/,'');
       const sY = String(r.sizeY||'').replace(/\.00$/,'');
       const sZ = String(r.sizeZ||'').replace(/\.00$/,'');
-      return '<tr>' +
+      return '<tr style="height:48px;max-height:48px">' +
         '<td style="text-align:center;' + B + 'padding:4px 2px;width:30px">' + (i+1) + '</td>' +
         '<td style="text-align:center;' + B + 'padding:4px 2px;font-family:monospace;font-size:20pt;font-weight:400;white-space:nowrap;width:100px">' + (r.itemMatNo||r.moldNo||'') + '</td>' +
-        '<td style="' + B + 'padding:4px 3px;font-size:15pt;width:150px;overflow:hidden;word-break:break-all">' + (r.name||'') + '</td>' +
+        '<td style="' + B + 'padding:4px 3px;font-size:14pt;width:150px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">' + (r.name||'') + '</td>' +
         '<td style="text-align:center;' + B + 'padding:5px 2px;width:30px">' + (r.qty||1) + '</td>' +
-        '<td style="' + B + 'padding:4px 2px;font-size:20pt;width:70px">' + (r.material||'') + '</td>' +
+        '<td style="' + B + 'padding:4px 2px;font-size:16pt;width:85px;word-break:break-all">' + (r.material||'') + '</td>' +
         '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom;width:70px">' + xMark + '<div style="padding:3px 2px;font-size:20pt;font-weight:400">' + sX + '</div></td>' +
         '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom;width:70px">' + yMark + '<div style="padding:3px 2px;font-size:20pt;font-weight:400">' + sY + '</div></td>' +
         '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom;width:70px">' + zMark + '<div style="padding:3px 2px;font-size:20pt;font-weight:400">' + sZ + '</div></td>' +
@@ -3415,11 +3415,11 @@ function generateQuotePrint() {
         '</div>' +
         '<div style="text-align:right">' +
           '<div style="font-size:30pt;font-weight:900;letter-spacing:3px;border-bottom:2.5px solid #000;padding-bottom:4px;margin-bottom:4px">見 積 依 頼 書</div>' +
-          '<div style="font-size:15pt">' + dateJa + '</div>' +
-          '<div style="font-size:15pt">橋本工業㈱　' + staff + '</div>' +
+          '<div style="font-size:16pt">' + dateJa + '</div>' +
+          '<div style="font-size:16pt">橋本工業㈱　' + staff + '</div>' +
         '</div>' +
       '</div>' +
-      '<div style="margin-bottom:10px;font-size:14pt;line-height:1.8">いつもお世話になります。<br>下記の見積りをお願い致します。</div>' +
+      '<div style="margin-bottom:10px;font-size:16pt;line-height:1.8">いつもお世話になります。<br>下記の見積りをお願い致します。</div>' +
       '<table style="width:100%;border-collapse:collapse;font-size:20pt;table-layout:fixed">' +
         '<thead>' +
           '<tr style="background:#d0d0d0">' +
@@ -3427,7 +3427,7 @@ function generateQuotePrint() {
             '<th style="' + B + 'padding:4px 2px;text-align:center;width:100px">管理NO.</th>' +
             '<th style="' + B + 'padding:4px 3px;width:140px">名　　称</th>' +
             '<th style="' + B + 'padding:4px 2px;text-align:center;width:30px">数量</th>' +
-            '<th style="' + B + 'padding:4px 2px;text-align:center;width:70px">材質</th>' +
+            '<th style="' + B + 'padding:4px 2px;text-align:center;width:85px">材質</th>' +
             '<th style="' + B + 'padding:4px 2px;text-align:center;width:70px">長さ(X)</th>' +
             '<th style="' + B + 'padding:4px 2px;text-align:center;width:70px">幅(Y)</th>' +
             '<th style="' + B + 'padding:4px 2px;text-align:center;width:70px">材厚(Z)</th>' +
@@ -3437,7 +3437,7 @@ function generateQuotePrint() {
         '</thead>' +
         '<tbody>' + itemRows + '</tbody>' +
       '</table>' +
-      '<div style="margin-top:16px;font-size:15pt;color:#444">ご回答はFAXまたはメールにてお願いいたします。</div>' +
+      '<div style="margin-top:16px;font-size:16pt;color:#444">ご回答はFAXまたはメールにてお願いいたします。</div>' +
     '</div>';
   }).join('');
 
@@ -3572,6 +3572,7 @@ function renderCompare() {
       const minPrice = prices.length ? Math.min(...prices) : 0;
       const maxPrice = prices.length ? Math.max(...prices) : 0;
       const diff     = prices.length > 1 ? maxPrice - minPrice : 0;
+      const ratio    = prices.length > 1 && minPrice > 0 ? ((maxPrice/minPrice-1)*100).toFixed(1) : '';
 
       // 現在の決定仕入先（明細ごと）
       const itemDecided = (rec.itemDecided||{})[i] || rec.decided || '';
@@ -3615,7 +3616,7 @@ function renderCompare() {
         <td style="padding:5px 4px;text-align:center;font-weight:700">${finishLabel(item.finish)}</td>
         ${supInputs}
         <td class="mono" style="padding:5px 6px;color:var(--green);font-weight:700">${minPrice?'¥'+fmt(minPrice):'—'}</td>
-        <td class="mono" style="padding:5px 6px;color:var(--red)">${diff?'▼¥'+fmt(diff)+'<div style="font-size:9px;color:#f87171">'+((maxPrice/minPrice-1)*100).toFixed(1)+'%高</div>':'—'}</td>
+        <td class="mono" style="padding:5px 6px;color:var(--red)">${diff?'▼¥'+fmt(diff)+'<div style="font-size:9px;color:#f87171">'+ratio+'%高</div>':'—'}</td>
         <td style="padding:4px 6px;min-width:110px">
           <select class="filter-select" style="font-size:11px;width:105px;padding:4px 6px"
             onchange="setItemDecided('${key}',${i},this.value)">${decidedOpts}</select>
@@ -3651,7 +3652,9 @@ function renderCompare() {
           <thead>
             <tr style="background:var(--bg3)">
               <th style="padding:7px 4px;width:32px;text-align:center">
-                <input type="checkbox" checked title="全選択" onchange="toggleAllItemCheck('${key}',this.checked)">
+                <input type="checkbox" id="chkAll_${key}"
+                  ${(()=>{ const ci=rec.checkedItems||{}; const items2=rec.items||[]; const allChk=items2.length>0&&items2.every((_,i)=>ci[i]===true||ci[String(i)]===true); const anyChk=items2.some((_,i)=>ci[i]===true||ci[String(i)]===true); return allChk?'checked':anyChk?'':''; })()}
+                  title="全選択/解除" onchange="toggleAllItemCheck('${key}',this.checked)">
               </th>
               <th style="padding:7px 8px;text-align:left">管理NO.</th>
               <th style="padding:7px 8px;text-align:left">名称</th>
@@ -6523,7 +6526,7 @@ function renderOrderPage() {
             <th style="padding:4px 6px">管理NO.</th><th style="padding:4px 6px">名称</th>
             ${supList.filter(s=>(rec.suppliers||[]).includes(s.id)).map(s=>`<th style="padding:4px 6px;text-align:right">${s.name}</th>`).join('')}
             <th style="padding:4px 6px;text-align:right;color:var(--accent)">決定先</th>
-            <th style="padding:4px 6px;text-align:right;color:#dc2626">差額</th>
+            <th style="padding:4px 6px;text-align:right;color:#dc2626">差額/比率</th>
           </tr></thead>
           <tbody>${sitems.map(it => {
             const sups2 = supList.filter(s=>(rec.suppliers||[]).includes(s.id));
@@ -6532,22 +6535,23 @@ function renderOrderPage() {
               const q2 = (rec.quotes||{})[key+'_'+it.idx+'_'+s.id] || {};
               return parseFloat(q2.unitPrice||0)||null;
             });
-            const valid = prices.filter(p=>p!==null);
+            const valid = prices.filter(p=>p!==null&&p>0);
             const minP = valid.length ? Math.min(...valid) : null;
             const maxP = valid.length ? Math.max(...valid) : null;
             const cells = sups2.map((s,si) => {
               const up = prices[si];
               const isD = s.id === decidedSup;
-              return `<td style="padding:4px 6px;text-align:right;${isD?'font-weight:700;color:var(--accent)':up===minP&&up!==null?'color:#16a34a':''}">${up!==null?'¥'+fmt(up):'—'}</td>`;
+              return `<td style="padding:4px 6px;text-align:right;${isD?'font-weight:700;color:var(--accent)':up===minP&&up!==null?'color:#16a34a':''}">${up!==null&&up>0?'¥'+fmt(up):'—'}</td>`;
             }).join('');
             const diff = maxP&&minP&&maxP!==minP ? '¥'+fmt(maxP-minP) : '—';
+            const ratio = maxP&&minP&&minP>0&&maxP!==minP ? ((maxP/minP-1)*100).toFixed(1)+'%' : '';
             const decidedName = decidedSup ? (supMap[decidedSup]?.name||decidedSup) : '—';
             return `<tr style="border-bottom:1px solid var(--border)">
               <td style="padding:4px 6px;font-weight:600;color:var(--accent)">${it.itemMatNo||it.moldNo||''}</td>
               <td style="padding:4px 6px">${it.name||''}</td>
               ${cells}
               <td style="padding:4px 6px;text-align:right;font-weight:700;color:var(--accent)">${decidedName}</td>
-              <td style="padding:4px 6px;text-align:right;color:${diff==='—'?'#64748b':'#dc2626'}">${diff}</td>
+              <td style="padding:4px 6px;text-align:right;color:${diff==='—'?'#64748b':'#dc2626'}">${diff}${ratio?'<div style="font-size:9px;color:#f87171">'+ratio+'高</div>':''}</td>
             </tr>`;
           }).join('')}</tbody>
         </table>
