@@ -608,7 +608,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.11-31</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.11-32</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -3591,7 +3591,8 @@ function renderCompare() {
             type="number" placeholder="見積単価(円)"
             value="${q.unitPrice||''}"
             data-key="${key}" data-row="${i}" data-sup="${sid}"
-            onchange="updateQuote('${key}',${i},'${sid}','unitPrice',this.value)"
+            data-original="${q.unitPrice||''}"
+            onblur="quotePriceBlur(this)"
             onkeydown="quotePriceKeyDown(event,this)">
           <div style="font-size:10px;color:var(--text3)">㎏単価: ${kgCalc ? fmt(kgCalc) : '—'}</div>
         </td>`;
@@ -3687,30 +3688,50 @@ function quotePriceKeyDown(e, el) {
   if (e.key !== 'Enter') return;
   e.preventDefault();
 
-  const key    = el.dataset.key;
-  const row    = parseInt(el.dataset.row);
-  const sup    = el.dataset.sup;
-  const val    = el.value;
+  const key     = el.dataset.key;
+  const row     = parseInt(el.dataset.row);
+  const sup     = el.dataset.sup;
   const nextRow = row + 1;
 
-  // フォーカス先を特定する関数（再描画後も使える）
-  const focusNext = () => {
-    // まず次の行を探す
-    let target = document.querySelector(
-      `.quote-price-input[data-key="${key}"][data-sup="${sup}"][data-row="${nextRow}"]`
-    );
-    // なければ先頭に戻る
-    if (!target) {
-      target = document.querySelector(
-        `.quote-price-input[data-key="${key}"][data-sup="${sup}"][data-row="0"]`
-      );
-    }
-    if (target) { target.focus(); target.select(); }
-  };
+  // ローカルDBだけ即時更新（DOMは再描画しない）
+  quotePriceSaveLocal(el);
 
-  // updateQuoteを呼ぶ（renderCompare→DOM再描画が走る）
-  // renderCompareはsyncなのでupdateQuoteのawait後にフォーカス
-  updateQuote(key, row, sup, 'unitPrice', val).then(focusNext);
+  // 現在のDOM上で次のinputを探してフォーカス
+  let target = document.querySelector(
+    `.quote-price-input[data-key="${key}"][data-sup="${sup}"][data-row="${nextRow}"]`
+  );
+  if (!target) {
+    target = document.querySelector(
+      `.quote-price-input[data-key="${key}"][data-sup="${sup}"][data-row="0"]`
+    );
+  }
+  if (target) { target.focus(); target.select(); }
+}
+
+// ローカルDBに値を保存（DOM再描画なし）
+function quotePriceSaveLocal(el) {
+  const key = el.dataset.key;
+  const row = parseInt(el.dataset.row);
+  const sup = el.dataset.sup;
+  const val = parseFloat(el.value) || 0;
+  const rec = DB.quoteRequests?.[key];
+  if (!rec) return;
+  if (!rec.quotes) rec.quotes = {};
+  const qkey = key + '_' + row + '_' + sup;
+  if (!rec.quotes[qkey]) rec.quotes[qkey] = {};
+  rec.quotes[qkey].unitPrice = val;
+  if (rec.status === '見積待ち') rec.status = '回答済み';
+  autoSetCheapestSupplier(rec, key, row);
+  el.dataset.original = el.value; // 保存済みとしてマーク
+}
+
+// フォーカスが外れたときに保存＋再描画
+function quotePriceBlur(el) {
+  const original = el.dataset.original || '';
+  if (el.value === original) return; // 変更なし→スキップ
+  quotePriceSaveLocal(el);
+  writeToFirebase('quoteRequests', DB.quoteRequests);
+  renderCompare();
 }
 
 
@@ -3722,14 +3743,11 @@ async function updateQuote(reqKey, itemIdx, supId, field, value) {
   if (!rec.quotes[qkey]) rec.quotes[qkey] = {};
   rec.quotes[qkey][field] = parseFloat(value)||0;
   if (rec.status === '見積待ち') rec.status = '回答済み';
-
-  // 見積単価が入力されたら最安値サプライヤーを自動で発注先にセット
   if (field === 'unitPrice') {
     autoSetCheapestSupplier(rec, reqKey, itemIdx);
   }
-  // ローカル再描画を先に行い、Firebase書込みはバックグラウンドで実行
+  await writeToFirebase('quoteRequests', DB.quoteRequests);
   renderCompare();
-  writeToFirebase('quoteRequests', DB.quoteRequests); // awaitしない
 }
 
 // 最安値のサプライヤーを発注先に自動セット
