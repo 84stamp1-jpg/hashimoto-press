@@ -608,7 +608,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.11-24</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.11-25</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -1833,6 +1833,28 @@ function loadConfig() {
   setF('cfgKtV_accepted',   ktV.accepted,   '');
 }
 
+
+// quoteRequestsの配列フィールドを正規化（文字列→配列変換）
+function normalizeQuoteRequests(qr) {
+  const ARRAY_FIELDS = ['orderedItems','itemDecided','checkedItems','suppliers','items'];
+  Object.values(qr || {}).forEach(rec => {
+    ARRAY_FIELDS.forEach(field => {
+      if (typeof rec[field] === 'string') {
+        try { rec[field] = JSON.parse(rec[field]); } catch(e) {}
+      }
+    });
+    if (rec.orderBatches) {
+      Object.values(rec.orderBatches).forEach(b => {
+        if (typeof b.indices === 'string') {
+          try { b.indices = JSON.parse(b.indices); } catch(e) {}
+        }
+      });
+    }
+  });
+  return qr;
+}
+
+
 function initFirebase() {
   if (!cfg.dbUrl || !cfg.apiKey) {
     setStatus(false, 'Firebase未設定');
@@ -1870,10 +1892,31 @@ function initFirebase() {
       DB.outsource     = merge(data.outsource,     DB.outsource);
       DB.purchase      = merge(data.purchase,      DB.purchase);
       DB.labor         = merge(data.labor,         DB.labor);
-      // quoteRequests: Firebaseを正とする（ローカルで変更した内容はFirebase書き込み済みのため）
-      DB.quoteRequests = data.quoteRequests
-        ? Object.assign({}, DB.quoteRequests, data.quoteRequests)
-        : DB.quoteRequests;
+      // quoteRequests: ローカル優先でマージ＋正規化（文字列→配列変換）
+      if (data.quoteRequests) {
+        const fbQR = data.quoteRequests;
+        const lcQR = DB.quoteRequests || {};
+        const merged = Object.assign({}, fbQR);
+        Object.keys(lcQR).forEach(k => {
+          if (!merged[k]) {
+            merged[k] = lcQR[k]; // ローカルのみ → そのまま使う
+          } else {
+            // 両方あり → orderedItems等はローカル最新値を優先
+            const lc = lcQR[k];
+            const fb = merged[k];
+            merged[k] = Object.assign({}, fb, lc, {
+              orderedItems:  lc.orderedItems  !== undefined ? lc.orderedItems  : fb.orderedItems,
+              itemDecided:   lc.itemDecided   !== undefined ? lc.itemDecided   : fb.itemDecided,
+              orderBatches:  Object.assign({}, fb.orderBatches, lc.orderBatches),
+              printedOrders: lc.printedOrders !== undefined ? lc.printedOrders : fb.printedOrders,
+              quotes:        Object.assign({}, fb.quotes, lc.quotes),
+            });
+          }
+        });
+        DB.quoteRequests = normalizeQuoteRequests(merged);
+      } else {
+        normalizeQuoteRequests(DB.quoteRequests);
+      }
       DB.snapshots     = merge(data.snapshots,     DB.snapshots);
       DB.importLog     = data.importLog || DB.importLog || [];
       // Firebase経由で設定を同期（Firebase接続情報以外）
@@ -1915,6 +1958,8 @@ function saveLocal() {
 }
 
 async function writeToFirebase(path, data) {
+  // quoteRequests書込み時は正規化してから保存
+  if (path === 'quoteRequests') normalizeQuoteRequests(data);
   // ローカルDBは常に最新を保持
   saveLocal();
   if (db) {
@@ -6130,11 +6175,7 @@ async function confirmCheckedItems(reqKey) {
   if (!DB.quoteRequests?.[reqKey]) return;
   const rec = DB.quoteRequests[reqKey];
   // 文字列で保存されたJSON配列を正規化
-  ['orderedItems','itemDecided','checkedItems','suppliers'].forEach(field => {
-    if (typeof rec[field] === 'string') {
-      try { rec[field] = JSON.parse(rec[field]); } catch(e) {}
-    }
-  });
+  normalizeQuoteRequests(DB.quoteRequests);
   const checked = rec.checkedItems || {};
   const items = rec.items || [];
 
@@ -6259,22 +6300,8 @@ function renderOrderPage() {
     });
   });
 
-  // ── ① 文字列で保存されたJSON配列を正規化 ──
-  Object.values(DB.quoteRequests||{}).forEach(rec => {
-    // Firebaseで文字列になってしまったフィールドをパース
-    ['orderedItems','itemDecided','checkedItems','suppliers'].forEach(field => {
-      if (typeof rec[field] === 'string') {
-        try { rec[field] = JSON.parse(rec[field]); } catch(e) {}
-      }
-    });
-    if (rec.orderBatches) {
-      Object.values(rec.orderBatches).forEach(b => {
-        if (typeof b.indices === 'string') {
-          try { b.indices = JSON.parse(b.indices); } catch(e) {}
-        }
-      });
-    }
-  });
+  // ── ① 文字列フィールドを正規化（配列として使えるよう変換） ──
+  normalizeQuoteRequests(DB.quoteRequests);
 
   // ── ② 発注済みレコードを収集（キーが文字列でも数値でも対応） ──
   const allReqs = Object.entries(DB.quoteRequests||{}).filter(([,rec]) => {
