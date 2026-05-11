@@ -608,7 +608,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.11-27</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.11-28</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -3572,7 +3572,8 @@ function renderCompare() {
       const minPrice = prices.length ? Math.min(...prices) : 0;
       const maxPrice = prices.length ? Math.max(...prices) : 0;
       const diff     = prices.length > 1 ? maxPrice - minPrice : 0;
-      const ratio    = prices.length > 1 && minPrice > 0 ? ((maxPrice/minPrice-1)*100).toFixed(1) : '';
+      // 最安値が最高値より何%低いか（最安値基準）
+      const ratio    = prices.length > 1 && maxPrice > 0 && diff > 0 ? ((1 - minPrice/maxPrice)*100).toFixed(1) : '';
 
       // 現在の決定仕入先（明細ごと）
       const itemDecided = (rec.itemDecided||{})[i] || rec.decided || '';
@@ -3616,7 +3617,7 @@ function renderCompare() {
         <td style="padding:5px 4px;text-align:center;font-weight:700">${finishLabel(item.finish)}</td>
         ${supInputs}
         <td class="mono" style="padding:5px 6px;color:var(--green);font-weight:700">${minPrice?'¥'+fmt(minPrice):'—'}</td>
-        <td class="mono" style="padding:5px 6px;color:var(--red)">${diff?'▼¥'+fmt(diff)+'<div style="font-size:9px;color:#f87171">'+ratio+'%高</div>':'—'}</td>
+        <td class="mono" style="padding:5px 6px;color:var(--red)">${diff?'△¥'+fmt(diff)+'<div style="font-size:9px;color:#16a34a">△'+ratio+'%低</div>':'—'}</td>
         <td style="padding:4px 6px;min-width:110px">
           <select class="filter-select" style="font-size:11px;width:105px;padding:4px 6px"
             onchange="setItemDecided('${key}',${i},this.value)">${decidedOpts}</select>
@@ -6544,14 +6545,15 @@ function renderOrderPage() {
               return `<td style="padding:4px 6px;text-align:right;${isD?'font-weight:700;color:var(--accent)':up===minP&&up!==null?'color:#16a34a':''}">${up!==null&&up>0?'¥'+fmt(up):'—'}</td>`;
             }).join('');
             const diff = maxP&&minP&&maxP!==minP ? '¥'+fmt(maxP-minP) : '—';
-            const ratio = maxP&&minP&&minP>0&&maxP!==minP ? ((maxP/minP-1)*100).toFixed(1)+'%' : '';
+            // 最安値が最高値より何%低いか（最安値基準）
+            const ratio = maxP&&minP&&maxP>0&&maxP!==minP ? ((1-minP/maxP)*100).toFixed(1)+'%' : '';
             const decidedName = decidedSup ? (supMap[decidedSup]?.name||decidedSup) : '—';
             return `<tr style="border-bottom:1px solid var(--border)">
               <td style="padding:4px 6px;font-weight:600;color:var(--accent)">${it.itemMatNo||it.moldNo||''}</td>
               <td style="padding:4px 6px">${it.name||''}</td>
               ${cells}
               <td style="padding:4px 6px;text-align:right;font-weight:700;color:var(--accent)">${decidedName}</td>
-              <td style="padding:4px 6px;text-align:right;color:${diff==='—'?'#64748b':'#dc2626'}">${diff}${ratio?'<div style="font-size:9px;color:#f87171">'+ratio+'高</div>':''}</td>
+              <td style="padding:4px 6px;text-align:right;color:${diff==='—'?'#64748b':'#dc2626'}">${diff}${ratio?'<div style="font-size:9px;color:#16a34a">△'+ratio+'低</div>':''}</td>
             </tr>`;
           }).join('')}</tbody>
         </table>
