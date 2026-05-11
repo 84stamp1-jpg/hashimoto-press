@@ -608,7 +608,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.11-16</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.11-17</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -922,6 +922,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
           <span style="font-size:13px;font-weight:700;color:#38bdf8;">🔬 診断パネル（原因特定用）</span>
           <div style="display:flex;gap:8px;">
             <button onclick="runDiag()" style="background:#0369a1;color:#fff;border:none;border-radius:4px;padding:4px 12px;cursor:pointer;font-size:11px;">▶ 診断実行</button>
+            <button onclick="clearAllPrintedOrders()" style="background:#dc2626;color:#fff;border:none;border-radius:4px;padding:4px 12px;cursor:pointer;font-size:11px;">🗑 非表示フラグを全削除</button>
             <button onclick="document.getElementById('diagPanel').style.display='none'" style="background:#475569;color:#fff;border:none;border-radius:4px;padding:4px 10px;cursor:pointer;font-size:11px;">✕ 閉じる</button>
           </div>
         </div>
@@ -6232,8 +6233,10 @@ function renderOrderPage() {
 
   // ── ① 発注済みレコードを収集（キーが文字列でも数値でも対応） ──
   const allReqs = Object.entries(DB.quoteRequests||{}).filter(([,rec]) => {
-    if (!rec.orderedItems) return false;
-    return Object.values(rec.orderedItems).some(v => !!v);
+    // orderedItemsに true があるか、またはstatus='発注済み'のレコードを対象にする
+    if (rec.orderedItems && Object.values(rec.orderedItems).some(v => !!v)) return true;
+    if (rec.status === '発注済み' && rec.itemDecided) return true;
+    return false;
   }).sort(([,a],[,b]) => (b.date||'').localeCompare(a.date||''));
 
   if (!allReqs.length) {
@@ -6251,9 +6254,16 @@ function renderOrderPage() {
     const items    = rec.items        || [];
 
     // 発注済みインデックスを収集（数値・文字列キー両対応）
-    const orderedIndices = items.map((_,i) => i).filter(i =>
-      ordered[i] || ordered[String(i)]
-    );
+    // orderedItemsがない場合（status=発注済みで来たケース）は全件を対象にする
+    let orderedIndices;
+    if (!rec.orderedItems || Object.keys(ordered).length === 0) {
+      // orderedItemsがない → items全件を発注済みとして扱う
+      orderedIndices = items.map((_,i) => i);
+    } else {
+      orderedIndices = items.map((_,i) => i).filter(i =>
+        ordered[i] || ordered[String(i)]
+      );
+    }
 
     if (!orderedIndices.length) continue;
 
@@ -6277,10 +6287,12 @@ function renderOrderPage() {
         ? key+'_'+batchEntry[0]
         : key+'_'+sid;
 
-      // printedOrdersのキーを複数パターンで確認
+      // printedOrdersのキーを全パターンで確認（旧データの_batch_二重も含む）
+      const batchId0 = batchEntry ? batchEntry[0] : null; // 例: "batch_1777..."
       const isHidden = !!(
         printed[batchKey] ||
-        (batchEntry && printed[key+'_batch_'+batchEntry[0]]) ||
+        (batchId0 && printed[key+'_batch_'+batchId0]) ||
+        (batchId0 && printed[key+'_'+batchId0]) ||
         printed[key+'_'+sid]
       );
       if (!_showHiddenOrders && isHidden) continue;
@@ -6597,26 +6609,28 @@ async function toggleOrderHide(batchKey, supId, hide, reqKey) {
 // 材料費から注文書ページに再表示
 async function restoreToOrderPage(reqKey, supId, matKey) {
   if (!DB.quoteRequests?.[reqKey]) { toast('見積依頼データが見つかりません', 'error'); return; }
-  const rec = DB.quoteRequests[reqKey];
-  // printedOrdersを完全にクリア（ローカルとFirebase両方）
-  rec.printedOrders = null;
-  DB.quoteRequests[reqKey] = rec;
-  // Firebaseに直接nullをセット（フィールド削除）
+  // ローカルのprintedOrdersを完全削除
+  DB.quoteRequests[reqKey].printedOrders = null;
+  // FirebaseのprintedOrdersフィールドを直接remove（空オブジェクト書込みだと復活するため）
   if (db) {
     try {
       window._fbWriting = true;
       await db.ref('/moldCostSystem/quoteRequests/' + reqKey + '/printedOrders').remove();
-      setTimeout(() => { window._fbWriting = false; }, 2000);
+      setTimeout(() => { window._fbWriting = false; }, 3000);
     } catch(e) {
       console.warn('remove error:', e);
       window._fbWriting = false;
     }
   }
-  // ローカルのDBも確実にクリア済み状態にする
-  DB.quoteRequests[reqKey].printedOrders = null;
   toast('③注文書作成タブに再表示しました', 'success');
   showPage('quote');
-  showQuoteTab('order');
+  // renderOrderPage はローカルのDBを見るので、Firebase完了前でも正しく表示される
+  renderOrderPage();
+  // ③注文書タブをアクティブにする
+  ['request','compare','order'].forEach(n => {
+    document.getElementById('qpage-' + n)?.classList.toggle('active', n === 'order');
+    document.getElementById('qtab-' + n)?.classList.toggle('active', n === 'order');
+  });
 }
 
 
@@ -6719,7 +6733,31 @@ document.querySelectorAll('.modal-overlay').forEach(el => {
 // ═══════════════════════════════════════
 // 🔬 診断関数
 // ═══════════════════════════════════════
-function runDiag() {
+fu
+
+async function clearAllPrintedOrders() {
+  if (!confirm('全ての見積依頼の「非表示フラグ(printedOrders)」をFirebaseから削除します。\nよろしいですか？')) return;
+  const qr = DB.quoteRequests || {};
+  let count = 0;
+  window._fbWriting = true;
+  for (const reqKey of Object.keys(qr)) {
+    if (qr[reqKey].printedOrders) {
+      qr[reqKey].printedOrders = null;
+      count++;
+      if (db) {
+        try {
+          await db.ref('/moldCostSystem/quoteRequests/' + reqKey + '/printedOrders').remove();
+        } catch(e) { console.warn(e); }
+      }
+    }
+  }
+  setTimeout(() => { window._fbWriting = false; }, 3000);
+  toast(count + '件の非表示フラグを削除しました', 'success');
+  runDiag();
+  renderOrderPage();
+}
+
+nction runDiag() {
   const out = document.getElementById('diagOutput');
   if (!out) return;
   const lines = [];
@@ -6813,6 +6851,7 @@ function runDiag() {
       const isHidden = !!(
         printed[batchKey] ||
         (batchEntry && printed[k+'_batch_'+batchEntry[0]]) ||
+        (batchEntry && printed[k+'_'+batchEntry[0]]) ||
         printed[k+'_'+sid]
       );
       lines.push('  sid=' + sid + ' batchKey=' + batchKey + ' isHidden=' + isHidden);
