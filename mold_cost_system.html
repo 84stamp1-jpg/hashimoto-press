@@ -608,7 +608,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.11-18</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.11-19</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -3578,7 +3578,7 @@ function renderCompare() {
         <td style="padding:5px 4px;text-align:center;font-weight:700">${finishLabel(item.finish)}</td>
         ${supInputs}
         <td class="mono" style="padding:5px 6px;color:var(--green);font-weight:700">${minPrice?'¥'+fmt(minPrice):'—'}</td>
-        <td class="mono" style="padding:5px 6px;color:var(--red)">${diff?'▼¥'+fmt(diff):'—'}</td>
+        <td class="mono" style="padding:5px 6px;color:var(--red)">${diff?'▼¥'+fmt(diff)+'<div style="font-size:9px;color:#f87171">'+((maxPrice/minPrice-1)*100).toFixed(1)+'%高</div>':'—'}</td>
         <td style="padding:4px 6px;min-width:110px">
           <select class="filter-select" style="font-size:11px;width:105px;padding:4px 6px"
             onchange="setItemDecided('${key}',${i},this.value)">${decidedOpts}</select>
@@ -3626,7 +3626,7 @@ function renderCompare() {
               <th style="padding:7px 4px;text-align:center">仕上</th>
               ${supHeaders}
               <th style="padding:7px 6px;color:var(--green)">最安値</th>
-              <th style="padding:7px 6px;color:var(--red)">差額</th>
+              <th style="padding:7px 6px;color:var(--red)">差額/比率</th>
               <th style="padding:7px 6px">発注先</th>
             </tr>
           </thead>
@@ -6225,15 +6225,28 @@ async function confirmCheckedItems(reqKey) {
 let _showHiddenOrders = false;
 let _latestOrderBatch = null;  // 直前に発注確定したバッチ
 
+
+function clearOrderFilter() {
+  const si = document.getElementById('orderSearchInput');
+  const fs = document.getElementById('orderFilterSup');
+  const fd = document.getElementById('orderFilterDate');
+  if (si) si.value = '';
+  if (fs) fs.value = '';
+  if (fd) fd.value = '';
+  renderOrderPage();
+}
+
+
 function renderOrderPage() {
   const wrap = document.getElementById('orderPageContent');
   if (!wrap) return;
 
   // ── ① 発注済みレコードを収集（キーが文字列でも数値でも対応） ──
   const allReqs = Object.entries(DB.quoteRequests||{}).filter(([,rec]) => {
-    // orderedItemsに true があるか、またはstatus='発注済み'のレコードを対象にする
+    // orderedItemsにtrueがある
     if (rec.orderedItems && Object.values(rec.orderedItems).some(v => !!v)) return true;
-    if (rec.status === '発注済み' && rec.itemDecided) return true;
+    // orderedItemsがなくてもitemDecidedがあれば発注済みとして扱う
+    if (rec.itemDecided && Object.values(rec.itemDecided).some(v => !!v)) return true;
     return false;
   }).sort(([,a],[,b]) => (b.date||'').localeCompare(a.date||''));
 
@@ -6325,11 +6338,70 @@ function renderOrderPage() {
     return;
   }
 
-  // ── ③ カードHTML生成 ──
+  // ── ③ 検索・フィルター適用 ──
   const supList = getSuppliers();
   const supMap  = Object.fromEntries(supList.map(s=>[s.id,s]));
 
-  wrap.innerHTML = allCards.map(({ key, rec, sid, sitems, batchKey, isHidden }) => {
+  // 現在の検索・フィルター値を取得（DOMがあれば使用、なければデフォルト）
+  const searchVal = (document.getElementById('orderSearchInput')?.value || '').trim().toLowerCase();
+  const filterSup = document.getElementById('orderFilterSup')?.value || '';
+  const filterDate = document.getElementById('orderFilterDate')?.value || '';
+
+  const filteredCards = allCards.filter(({ key, rec, sid }) => {
+    // 発注先フィルター
+    if (filterSup && sid !== filterSup) return false;
+    // 日付フィルター（年月一致）
+    if (filterDate && !(rec.date||'').startsWith(filterDate)) return false;
+    // テキスト検索（金型NO・名称・材質で検索）
+    if (searchVal) {
+      const moldNo = (rec.moldNo||'').toLowerCase();
+      const names  = (rec.items||[]).map(it=>(it.name||'').toLowerCase()).join(' ');
+      const mats   = (rec.items||[]).map(it=>(it.material||'').toLowerCase()).join(' ');
+      const supName= (supMap[sid]?.name||sid||'').toLowerCase();
+      if (!moldNo.includes(searchVal) && !names.includes(searchVal) &&
+          !mats.includes(searchVal) && !supName.includes(searchVal)) return false;
+    }
+    return true;
+  });
+
+  // フィルター用の発注先リスト（表示中のカードから収集）
+  const supOptions = [...new Set(allCards.map(c => c.sid))].map(sid => {
+    const name = supMap[sid]?.name || (sid === '__none__' ? '（未設定）' : sid);
+    return `<option value="${sid}"${filterSup===sid?' selected':''}>${name}</option>`;
+  }).join('');
+
+  // 年月リスト
+  const dateOptions = [...new Set(allCards.map(c => (c.rec.date||'').slice(0,7)).filter(Boolean))].sort().reverse().map(ym =>
+    `<option value="${ym}"${filterDate===ym?' selected':''}>${ym}</option>`
+  ).join('');
+
+  // 検索バーHTML（常に先頭に表示）
+  const searchBarHTML = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px;padding:10px 14px;background:var(--bg2);border-radius:8px;border:1px solid var(--border)">
+    <span style="font-size:12px;font-weight:600;color:var(--text2);white-space:nowrap">🔍 絞り込み</span>
+    <input id="orderSearchInput" type="text" placeholder="金型NO・名称・材質・発注先で検索…" value="${searchVal}"
+      style="flex:1;min-width:180px;max-width:280px;padding:5px 10px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:var(--bg);color:var(--text)"
+      oninput="renderOrderPage()">
+    <select id="orderFilterSup" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:var(--bg);color:var(--text)" onchange="renderOrderPage()">
+      <option value="">全発注先</option>${supOptions}
+    </select>
+    <select id="orderFilterDate" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:var(--bg);color:var(--text)" onchange="renderOrderPage()">
+      <option value="">全期間</option>${dateOptions}
+    </select>
+    <span style="font-size:11px;color:var(--text3);white-space:nowrap">${filteredCards.length}/${allCards.length}件表示</span>
+    ${(searchVal||filterSup||filterDate) ? '<button onclick="clearOrderFilter()" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;font-size:11px;cursor:pointer;background:var(--bg);color:var(--text2)">✕ クリア</button>' : ''}
+    <label style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer;margin-left:auto">
+      <input type="checkbox" ${window._showHiddenOrders?'checked':''} onchange="window._showHiddenOrders=this.checked;renderOrderPage()">
+      <span style="color:var(--text3)">非表示も表示</span>
+    </label>
+  </div>`;
+
+  // 検索結果ゼロ
+  if (!filteredCards.length) {
+    wrap.innerHTML = searchBarHTML + '<div class="empty" style="margin-top:0"><div class="empty-icon">🔍</div>条件に一致する注文書がありません</div>';
+    return;
+  }
+
+  wrap.innerHTML = searchBarHTML + filteredCards.map(({ key, rec, sid, sitems, batchKey, isHidden }) => {
     const realSid = sid === '__none__' ? '' : sid;
     const sup = supMap[realSid] || { name: realSid || '（発注先未設定）', person:'', fax:'', email:'' };
 
