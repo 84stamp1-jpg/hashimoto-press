@@ -608,7 +608,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.11-9</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.11-10</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -2878,7 +2878,12 @@ async function saveMaterial() {
   };
   const editKey = document.getElementById('matf_editKey')?.value;
   const key = editKey || 'mat_' + Date.now();
-  DB.materials[key] = data;
+  // 編集時は既存データ（quoteReqKey等）を保持してマージ
+  const existing = editKey ? (DB.materials[editKey] || {}) : {};
+  DB.materials[key] = {
+    ...existing,  // quoteReqKey, orderedSupId, orderHidden等を保持
+    ...data       // 編集した内容で上書き
+  };
   await writeToFirebase('materials', DB.materials);
   closeModal('matModal');
   toast(editKey ? '材料費を更新しました' : '材料費を保存しました', 'success');
@@ -6547,9 +6552,11 @@ async function toggleOrderHide(batchKey, supId, hide, reqKey) {
 async function restoreToOrderPage(reqKey, supId, matKey) {
   if (!DB.quoteRequests?.[reqKey]) { toast('見積依頼データが見つかりません', 'error'); return; }
   const rec = DB.quoteRequests[reqKey];
-  if (rec.printedOrders) {
-    Object.keys(rec.printedOrders).forEach(k => { if (k.startsWith(reqKey+'_batch_')||k===supId) delete rec.printedOrders[k]; });
-  }
+  // printedOrdersを全てクリア（非表示フラグを解除）
+  rec.printedOrders = {};
+  // orderBatchesも削除してシンプルなorderedItemsベースの表示に戻す
+  // （再表示後に再度発注確定すれば新しいbatchが作られる）
+  delete rec.orderBatches;
   await writeToFirebase('quoteRequests', DB.quoteRequests);
   toast('③注文書作成タブに再表示しました', 'success');
   renderMaterials();
