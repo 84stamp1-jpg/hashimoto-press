@@ -608,7 +608,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.11-11</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.11-12</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -5071,12 +5071,14 @@ async function importCheckedKtRecords() {
       // 既存を更新（工程・見積は保持）
       const existing = DB.molds[existKey];
       DB.molds[existKey] = Object.assign({}, existing, {
-        partNo:   r.partNo   || existing.partNo,
-        partName: r.partName || existing.partName,
-        client:   r.client   || existing.client,
-        ktCode:   r.ktCode,
-        dueDate:  r.dueDate  || existing.dueDate,
-        status:   r.status,
+        partNo:    r.partNo   || existing.partNo,
+        partName:  r.partName || existing.partName,
+        client:    r.client   || existing.client,
+        ktCode:    r.ktCode,
+        dueDate:   r.dueDate  || existing.dueDate,
+        orderDate: r.orderDate|| existing.orderDate,
+        status:    r.status,
+        estimate:  r.estimate || existing.estimate || 0,
         processes: r.processes.length ? r.processes : (existing.processes || []),
       });
       updated++;
@@ -6238,61 +6240,26 @@ function renderOrderPage() {
   for (const [key, rec] of reqs) {
     const ordered = rec.orderedItems || {};
     const printed = rec.printedOrders || {};
-    const batches = rec.orderBatches || {};
-    const batchList = Object.entries(batches).sort(([,a],[,b])=>(b.createdAt||'').localeCompare(a.createdAt||''));
-    const displayedIndices = new Set();
-    if (batchList.length > 0) {
-      for (const [bid, batch] of batchList) {
-        const batchKey = key + '_batch_' + bid;
-        const validIndices = (batch.indices||[]).filter(i => !displayedIndices.has(i));
-        validIndices.forEach(i => displayedIndices.add(i));
-        if (!validIndices.length) continue;
-        if (!_showHiddenOrders && printed[batchKey]) continue;
-        const bySupplier = {};
-        validIndices.forEach(i => {
-          const item = (rec.items||[])[i]; if (!item) return;
-          const sid = (rec.itemDecided||{})[i] || rec.decided || '';
-          if (!bySupplier[sid]) bySupplier[sid] = [];
-          const q = (rec.quotes||{})[key+'_'+i+'_'+sid] || {};
-          bySupplier[sid].push({...item, idx:i, supplierId:sid, decidedPrice: q.unitPrice||''});
-        });
-        for (const [sid, sitems] of Object.entries(bySupplier)) {
-          allCards.push({ key, rec, sid, sitems, batchKey, isHidden: !!printed[batchKey] });
-        }
-      }
-    } else {
-      const bySupplier = {};
-      (rec.items||[]).forEach((item, i) => {
-        if (!ordered[i]) return;
-        const sid = (rec.itemDecided||{})[i] || rec.decided || '';
-        if (!bySupplier[sid]) bySupplier[sid] = [];
-        const q = (rec.quotes||{})[key+'_'+i+'_'+sid] || {};
-        bySupplier[sid].push({...item, idx:i, supplierId:sid, decidedPrice: q.unitPrice||''});
-      });
-      for (const [sid, sitems] of Object.entries(bySupplier)) {
-        const batchKey = key + '_' + sid;
-        if (!_showHiddenOrders && printed[batchKey]) continue;
-        allCards.push({ key, rec, sid, sitems, batchKey, isHidden: !!printed[batchKey] });
-      }
-    }
-    // orderBatchesがあってもprintedOrdersが空の場合はorderedItemsベースでも表示
-    if (batchList.length > 0 && Object.keys(printed).length === 0) {
-      const bySupplier2 = {};
-      (rec.items||[]).forEach((item, i) => {
-        if (!ordered[i]) return;
-        const sid = (rec.itemDecided||{})[i] || rec.decided || '';
-        if (!bySupplier2[sid]) bySupplier2[sid] = [];
-        const q = (rec.quotes||{})[key+'_'+i+'_'+sid] || {};
-        bySupplier2[sid].push({...item, idx:i, supplierId:sid, decidedPrice: q.unitPrice||''});
-      });
-      // すでにbatchListパスでallCardsに追加済みかチェック
-      const alreadyAdded = allCards.some(c => c.key === key);
-      if (!alreadyAdded) {
-        for (const [sid, sitems] of Object.entries(bySupplier2)) {
-          const batchKey = key + '_' + sid;
-          allCards.push({ key, rec, sid, sitems, batchKey, isHidden: false });
-        }
-      }
+    // 常にorderedItemsベースでカードを生成（シンプルで確実）
+    const bySupplier = {};
+    (rec.items||[]).forEach((item, i) => {
+      if (!ordered[i]) return;
+      const sid = (rec.itemDecided||{})[i] || rec.decided || '';
+      if (!sid) return;
+      if (!bySupplier[sid]) bySupplier[sid] = [];
+      const q = (rec.quotes||{})[key+'_'+i+'_'+sid] || {};
+      bySupplier[sid].push({...item, idx:i, supplierId:sid, decidedPrice: q.unitPrice||''});
+    });
+    for (const [sid, sitems] of Object.entries(bySupplier)) {
+      // 非表示フラグ：batchベースと旧形式の両方を確認
+      const batches = rec.orderBatches || {};
+      const batchEntry = Object.entries(batches).find(([,b]) =>
+        sitems.some(it => (b.indices||[]).includes(it.idx))
+      );
+      const batchKey = batchEntry ? key+'_batch_'+batchEntry[0] : key+'_'+sid;
+      const isHidden = !!printed[batchKey] || !!printed[key+'_'+sid];
+      if (!_showHiddenOrders && isHidden) continue;
+      allCards.push({ key, rec, sid, sitems, batchKey, isHidden });
     }
   }
   if (_latestOrderBatch) {
