@@ -608,7 +608,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.11-8</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.11-9</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -6350,8 +6350,8 @@ function renderOrderPage() {
               <th style="padding:4px 6px">管理NO.</th><th style="padding:4px 6px">名称</th>
               ${getSuppliers().filter(s=>(rec.suppliers||[]).includes(s.id)).map(s=>`<th style="padding:4px 6px;text-align:right">${s.name}</th>`).join('')}
               <th style="padding:4px 6px;text-align:right;color:var(--accent)">決定先</th>
-              <th style="padding:4px 6px;text-align:right;color:#dc2626">最安値比</th>
-              <th style="padding:4px 6px;text-align:right;color:#dc2626">差額</th>
+              <th style="padding:4px 6px;text-align:right;color:#dc2626">最高/最安比率</th>
+              <th style="padding:4px 6px;text-align:right;color:#dc2626">最高-最安差額</th>
             </tr></thead>
             <tbody>${sitems.map(it=>{
               const idx=it.idx;
@@ -6367,8 +6367,12 @@ function renderOrderPage() {
                   const decidedP=prices[sups.findIndex(s=>s.id===decided)]||null;
                   const cells=sups.map((s,si)=>{const up=prices[si];const isD=s.id===decided;return '<td style="padding:4px 6px;text-align:right;'+(isD?'font-weight:700;color:var(--accent)':up===minP&&up!==null?'color:#16a34a':'')+'">'+( up!==null?'¥'+fmt(up):'—')+'</td>';}).join('');
                   const decidedName=decided?(sups.find(s=>s.id===decided)?.name||''):'—';
-                  const ratio=minP&&decidedP?(decidedP/minP*100).toFixed(1)+'%':'—';
-                  const diff=minP&&decidedP&&decidedP!==minP?'¥'+fmt(decidedP-minP):'—';
+                  const maxP=validPrices.length?Math.max(...validPrices):null;
+                  // 最高値と最安値の差額
+                  const diff=maxP&&minP&&maxP!==minP?'¥'+fmt(maxP-minP):'—';
+                  // 最高値より最安値が何割安いか: (maxP-minP)/maxP
+                  const savePct=maxP&&minP&&maxP!==minP?((maxP-minP)/maxP*100).toFixed(1)+'%割安':'—';
+                  const ratio=savePct;
                   return cells+
                     '<td style="padding:4px 6px;text-align:right;font-weight:700;color:var(--accent)">'+decidedName+'</td>'+
                     '<td style="padding:4px 6px;text-align:right;color:'+(ratio==='—'?'#64748b':'#dc2626')+'">'+(ratio==='100.0%'?'最安':ratio)+'</td>'+
