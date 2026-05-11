@@ -608,7 +608,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.11-21</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.11-22</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -6129,6 +6129,12 @@ async function toggleAllItemCheck(reqKey, checked) {
 async function confirmCheckedItems(reqKey) {
   if (!DB.quoteRequests?.[reqKey]) return;
   const rec = DB.quoteRequests[reqKey];
+  // 文字列で保存されたJSON配列を正規化
+  ['orderedItems','itemDecided','checkedItems','suppliers'].forEach(field => {
+    if (typeof rec[field] === 'string') {
+      try { rec[field] = JSON.parse(rec[field]); } catch(e) {}
+    }
+  });
   const checked = rec.checkedItems || {};
   const items = rec.items || [];
 
@@ -6252,7 +6258,24 @@ function renderOrderPage() {
     });
   });
 
-  // ── ① 発注済みレコードを収集（キーが文字列でも数値でも対応） ──
+  // ── ① 文字列で保存されたJSON配列を正規化 ──
+  Object.values(DB.quoteRequests||{}).forEach(rec => {
+    // Firebaseで文字列になってしまったフィールドをパース
+    ['orderedItems','itemDecided','checkedItems','suppliers'].forEach(field => {
+      if (typeof rec[field] === 'string') {
+        try { rec[field] = JSON.parse(rec[field]); } catch(e) {}
+      }
+    });
+    if (rec.orderBatches) {
+      Object.values(rec.orderBatches).forEach(b => {
+        if (typeof b.indices === 'string') {
+          try { b.indices = JSON.parse(b.indices); } catch(e) {}
+        }
+      });
+    }
+  });
+
+  // ── ② 発注済みレコードを収集（キーが文字列でも数値でも対応） ──
   const allReqs = Object.entries(DB.quoteRequests||{}).filter(([,rec]) => {
     // orderedItemsにtrueがある
     if (rec.orderedItems && Object.values(rec.orderedItems).some(v => !!v)) return true;
@@ -6816,7 +6839,6 @@ document.querySelectorAll('.modal-overlay').forEach(el => {
 // ═══════════════════════════════════════
 // 🔬 診断関数
 // ═══════════════════════════════════════
-fu
 
 
 // 診断パネルボタンのバインド（DOM構築後に実行）
