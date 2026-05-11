@@ -608,7 +608,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.11-29</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.11-30</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -3587,10 +3587,12 @@ function renderCompare() {
         const kgCalc = calcKgPrice(up, item.sizeX, item.sizeY, item.sizeZ, item.material, item.qty);
         return `<td style="padding:3px 6px;min-width:110px;background:${isMin?'var(--green-dim)':''};border-right:1px solid var(--border)">
           ${mat !== item.material ? `<div style="font-size:9px;color:var(--yellow)">→${mat}</div>` : ''}
-          <input class="form-input" style="padding:3px 6px;font-size:11px;width:100px;margin-bottom:2px"
+          <input class="form-input quote-price-input" style="padding:3px 6px;font-size:11px;width:100px;margin-bottom:2px"
             type="number" placeholder="見積単価(円)"
             value="${q.unitPrice||''}"
-            onchange="updateQuote('${key}',${i},'${sid}','unitPrice',this.value)">
+            data-key="${key}" data-row="${i}" data-sup="${sid}"
+            onchange="updateQuote('${key}',${i},'${sid}','unitPrice',this.value)"
+            onkeydown="quotePriceKeyDown(event,this)">
           <div style="font-size:10px;color:var(--text3)">㎏単価: ${kgCalc ? fmt(kgCalc) : '—'}</div>
         </td>`;
       }).join('');
@@ -3676,6 +3678,32 @@ function renderCompare() {
       </div>
     </div>`;
   }).join('');
+}
+
+
+
+// 見積単価入力でEnter→同メーカーの次行へ移動
+function quotePriceKeyDown(e, el) {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const key = el.dataset.key;
+  const row = parseInt(el.dataset.row);
+  const sup = el.dataset.sup;
+  // 同じkey・supで次のrow番号のinputを探す
+  const nextRow = row + 1;
+  const next = document.querySelector(
+    `.quote-price-input[data-key="${key}"][data-sup="${sup}"][data-row="${nextRow}"]`
+  );
+  if (next) {
+    next.focus();
+    next.select();
+  } else {
+    // 末尾なら先頭に戻る
+    const first = document.querySelector(
+      `.quote-price-input[data-key="${key}"][data-sup="${sup}"][data-row="0"]`
+    );
+    if (first) { first.focus(); first.select(); }
+  }
 }
 
 
