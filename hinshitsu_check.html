@@ -1110,8 +1110,17 @@ function makeGroupCard(g,allDates){
     kt.textContent=k;tags.appendChild(kt);
   });
   if(!allDone&&hasKanno){var t3=document.createElement('span');t3.className='tag t-alert';t3.style.animation='pulse 1.5s infinite';t3.textContent='⚠️ システム入力待ち';tags.appendChild(t3);}
-  // 材料残「あり」がひとつでもあれば表示
-  var hasZairyo=allRecs.some(function(r){return r[8]==='あり';});
+  // 材料残あり表示：最新レコードが「なし」なら表示しない
+  var hasZairyo=false;
+  if(allRecs.length>0){
+    // 送信日時(r[0])で降順ソートして最新レコードを取得
+    var sortedRecs=allRecs.slice().sort(function(a,b){return String(b[0]).localeCompare(String(a[0]));});
+    var latestZairyo=sortedRecs[0][8]||'';
+    // 最新が「なし」でなければ「あり」のものがあれば表示
+    if(latestZairyo!=='なし'){
+      hasZairyo=allRecs.some(function(r){return r[8]==='あり';});
+    }
+  }
   if(hasZairyo){var tz=document.createElement('span');tz.className='tag';tz.style.cssText='background:#E1F5EE;color:#0F6E56;';tz.textContent='📦 材料残あり';tags.appendChild(tz);}
   // メモ（不良内容・特記事項）- 全日付のレコードから取得
   var allMemos=allRecs.map(function(r){return r[9]||'';}).filter(function(m){return m&&m.indexOf('http')!==0;});
@@ -2136,7 +2145,15 @@ function showPendingList() {
   });
 
   gorder.forEach(function(k) {
-    el.appendChild(makeGroupCard(gmap[k], true));
+    var card = makeGroupCard(gmap[k], true);
+    // 明細を最初から展開した状態にする
+    var toggle = card.querySelector('.grp-toggle');
+    var detail = card.querySelector('.grp-detail');
+    if(toggle && detail){
+      detail.style.display = 'block';
+      toggle.textContent = toggle.textContent.replace('▼','▲').replace('を表示（全日付）','（全日付）を非表示');
+    }
+    el.appendChild(card);
   });
 }
 
