@@ -1027,8 +1027,8 @@ function renderByTeam(rows){
 
 function makeGroupCard(g,allDates){
   var recs=g.recs;
-  // 同じ製造番号の全工順を集計
-  var allRecs=ALL_RECORDS.filter(function(r){return r[13]===g.seizoNo;});
+  // 同じ製造番号・同工順のレコードを集計
+  var allRecs=ALL_RECORDS.filter(function(r){return r[13]===g.seizoNo&&String(r[14])===String(g.junjo);});
   var kannoRecs=allRecs.filter(function(r){return r[7]==='完納';});
   // 工順別に累計を計算
   var junjoTotals={};
@@ -1179,9 +1179,9 @@ function makeGroupCard(g,allDates){
     toggle.textContent=(open?'▲ ':'▼ ')+'明細'+toggleLabel+'件（全日付）を'+(open?'非表示':'表示');
   });
   div.appendChild(toggle);
-  // 常に全日付の明細を表示
-  var detailRecs=allDates?recs:allRecs;
-  var toggleLabel=allDates?recs.length:allRecs.length;
+  // 常に全日付・同工順の明細を表示
+  var detailRecs=allRecs;
+  var toggleLabel=allRecs.length;
   toggle.textContent='▼ 明細'+toggleLabel+'件を表示（全日付）';
   detailRecs.forEach(function(r){
     var sr=document.createElement('div');sr.className='sub-rec';
