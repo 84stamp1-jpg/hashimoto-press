@@ -608,7 +608,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.12-6</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.12-7</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -6691,7 +6691,7 @@ async function printOrder(reqKey, supId, indices) {
     const dimCell = (val, hasF) => {
       if (!val) return '<td style="'+B+'padding:0 2px;text-align:center"></td>';
       return '<td style="'+B+'padding:0 2px;text-align:center;vertical-align:middle">'
-        + (hasF ? '<div style=\"font-size:6.5pt;font-weight:700;line-height:1;color:#333;text-align:center\">▽▽</div>' : '<div style=\"height:8px\"></div>')
+        + (hasF ? '<div style=\"font-size:16pt;font-weight:700;line-height:1;color:#000;text-align:center\">▽▽</div>' : '<div style=\"height:10px\"></div>')
         + '<div style=\"font-size:16pt;text-align:center\">'+val+'</div>'
         + '</td>';
     };
@@ -6699,7 +6699,6 @@ async function printOrder(reqKey, supId, indices) {
       ? '（¥'+fmt(price)+'）<br><strong>¥'+fmt(price*(item.qty||1))+'</strong>'
       : '—';
     return '<tr style="height:44px">'
-      + '<td style="'+B+'padding:0 2px;text-align:center;font-size:16pt;font-weight:400">'+(ri+1)+'</td>'
       + '<td style="'+B+'padding:1px 4px;font-size:16pt;font-weight:400;white-space:nowrap">'+(item.itemMatNo||item.moldNo||'')+'</td>'
       + '<td style="'+B+'padding:2px 4px;font-size:12pt;font-weight:400;word-break:break-all">'+(item.name||'')+'</td>'
       + dimCell(sX, fX)
@@ -6708,7 +6707,7 @@ async function printOrder(reqKey, supId, indices) {
       + '<td style="'+B+'padding:0 2px;text-align:center;font-size:16pt;font-weight:400">'+(item.qty||1)+'</td>'
       + '<td style="'+B+'padding:1px 4px;font-size:16pt">'+mat+'</td>'
       + '<td style="'+B+'padding:0 2px;text-align:center;font-size:16pt">'+fLabel+'</td>'
-      + '<td style="'+B+'padding:2px 4px;font-size:16pt">'+(item.note||'')+'</td>'
+      + '<td style="'+B+'padding:2px 4px;font-size:14pt">'+(item.note||'')+'</td>'
       + '<td style="'+B+'padding:3px 5px;text-align:right;font-family:monospace;font-size:16pt;line-height:1.6">'+priceStr+'</td>'
       + '</tr>';
   }).join('');
@@ -6747,12 +6746,13 @@ async function printOrder(reqKey, supId, indices) {
         <!-- 右：宛先・発行情報ブロック -->
         <div style="flex:1;margin-left:14px;border-left:3px solid #000;padding-left:12px">
           <div style="display:flex;align-items:flex-start;justify-content:space-between">
-            <!-- 左：宛名 ＋ 「下記の通り」を宛名直下 -->
+            <!-- 左：宛名 ＋ あいさつ ＋ 「下記の通り」 -->
             <div>
-              <div style="font-size:14pt;font-weight:700;line-height:1.3">
+              <div style="font-size:18pt;font-weight:700;line-height:1.3">
                 ${sup.name}　${sup.person?(sup.person.includes('様')?sup.person:sup.person+' 様'):'様'}
               </div>
-              <div style="font-size:16pt;margin-top:4px">下記の通り、ご注文申し上げます。</div>
+              <div style="font-size:16pt;margin-top:4px">いつもお世話になります。</div>
+              <div style="font-size:16pt;margin-top:2px">下記の通り、ご注文申し上げます。</div>
             </div>
             <!-- 右：発行日・会社名・担当を縦に（担当と「下記の通り」が同じ高さ） -->
             <div style="text-align:right;line-height:1.9">
@@ -6775,39 +6775,37 @@ async function printOrder(reqKey, supId, indices) {
       <!-- 明細テーブル（11列・1行/品目） -->
       <table>
         <colgroup>
-          <col style="width:22px">    <!-- No. -->
-          <col style="width:52px">    <!-- 管理NO. -->
-          <col style="width:100px">   <!-- 名称 -->
-          <col style="width:44px">    <!-- X -->
-          <col style="width:44px">    <!-- Y -->
-          <col style="width:48px">    <!-- Z -->
-          <col style="width:22px">    <!-- 数量 -->
-          <col style="width:48px">    <!-- 材質 -->
-          <col style="width:26px">    <!-- 仕上 -->
-          <col style="width:90px">    <!-- 備考（固定） -->
-          <col style="width:74px">    <!-- 単価/発注金額 -->
+          <col style="width:56px">    <!-- 管理NO. -->
+          <col style="width:110px">   <!-- 名称 -->
+          <col style="width:46px">    <!-- X -->
+          <col style="width:46px">    <!-- Y -->
+          <col style="width:50px">    <!-- Z -->
+          <col style="width:24px">    <!-- 数量 -->
+          <col style="width:52px">    <!-- 材質 -->
+          <col style="width:28px">    <!-- 仕上 -->
+          <col style="width:auto">    <!-- 備考（残り幅） -->
+          <col style="width:76px">    <!-- 単価/発注金額 -->
         </colgroup>
         <thead>
           <tr>
-            <th rowspan="2">No.</th>
             <th rowspan="2">管理NO.</th>
             <th rowspan="2">名　称</th>
-            <th rowspan="2" style="font-size:7pt">長さ<br>(X)</th>
-            <th rowspan="2" style="font-size:7pt">幅<br>(Y)</th>
-            <th rowspan="2" style="font-size:7pt">材厚<br>(Z)</th>
+            <th rowspan="2">長さ<br>(X)</th>
+            <th rowspan="2">幅<br>(Y)</th>
+            <th rowspan="2">材厚<br>(Z)</th>
             <th rowspan="2">数量</th>
             <th rowspan="2">材質</th>
             <th rowspan="2">仕上</th>
             <th rowspan="2">備　考</th>
-            <th style="font-size:7pt;border-bottom:0.5px solid #bbb;padding:2px 1px">単価（円）</th>
+            <th style="border-bottom:0.5px solid #bbb;padding:2px 2px">単価（円）</th>
           </tr>
           <tr>
-            <th style="font-size:7pt;background:#d8d8d8;padding:2px 1px">発注金額</th>
+            <th style="background:#d8d8d8;padding:2px 2px">発注金額</th>
           </tr>
         </thead>
         <tbody>${itemRows}</tbody>
         <tfoot><tr>
-          <td colspan="10" style="border:1px solid #999;padding:4px 8px;text-align:right;font-size:16pt;font-weight:700">合　計</td>
+          <td colspan="9" style="border:1px solid #999;padding:4px 8px;text-align:right;font-size:16pt;font-weight:700">合　計</td>
           <td style="border:1px solid #999;padding:4px 6px;text-align:right;font-family:monospace;font-size:16pt;font-weight:700">¥${fmt(total)}</td>
         </tr></tfoot>
       </table>
