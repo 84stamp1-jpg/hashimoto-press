@@ -608,7 +608,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.13-5</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.13-6</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -2394,20 +2394,7 @@ function renderMaterials() {
         <tr style="height:52px">
           <td style="white-space:nowrap;padding:4px 4px">
             <input type="checkbox" class="mat-check" data-key="${k}" onchange="matCheckChanged()" style="margin-right:3px">
-            <button class="copy-btn" onclick="(()=>{
-              const matNo = (r.partNo||r.moldNo||'').replace(/'/g,\"\\'\")||\"\";
-              const sX = String(r.sizeX||'').replace(/\.00$/,'');
-              const sY = String(r.sizeY||'').replace(/\.00$/,'');
-              const sZ = String(r.sizeZ||'').replace(/\.00$/,'');
-              const dim = [sX,sY,sZ].filter(Boolean).join(' × ');
-              const mat = r.material||'';
-              const fin = r.finish||'';
-              const w = calcWeight(r.sizeX,r.sizeY,r.sizeZ,r.material,r.qty);
-              const qty = parseFloat(r.qty)||1;
-              const wStr = w ? (w.total||w.unit*qty).toFixed(1)+' kg' : '';
-              const parts = [matNo, mat+(dim?' '+dim:''), fin, wStr].filter(Boolean);
-              copyRowTSV(this, [parts.join(' / ')]);
-            })()">📋</button>
+            <button class="copy-btn" onclick="copyMatRow(this)" data-partno="${(r.partNo||r.moldNo||'').replace(/"/g,'&quot;')}" data-material="${(r.material||'').replace(/"/g,'&quot;')}" data-sx="${String(r.sizeX||'').replace(/\.00$/, '')}" data-sy="${String(r.sizeY||'').replace(/\.00$/, '')}" data-sz="${String(r.sizeZ||'').replace(/\.00$/, '')}" data-finish="${(r.finish||'').replace(/"/g,'&quot;')}" data-qty="${r.qty||1}" data-weight="${r.weight||''}">📋</button>
             <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px;margin-right:2px" onclick="editMaterial('${k}')">編集</button>
             <button class="btn btn-danger btn-sm" style="padding:2px 5px;font-size:10px" onclick="matDeleteOne('${k}')">×</button>
             ${(r.quoteReqKey||r.quoteKey) ? '<button class="btn btn-secondary btn-sm" style="padding:2px 5px;font-size:9px;background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd" onclick="restoreToOrderPage(\'' + (r.quoteReqKey||r.quoteKey) + '\',\'' + (r.orderedSupId||'') + '\',\'' + k + '\')">📋 注文書</button>' : ''}
@@ -2473,8 +2460,7 @@ function renderOutsource() {
         <tr>
           <td style="white-space:nowrap;padding:4px 4px">
             <input type="checkbox" class="out-check" data-key="${k}" onchange="outCheckChanged()" style="margin-right:3px">
-            <button class="copy-btn" onclick="copyRowTSV(this,[
-            [(r.partNo||''), (r.process||''), (r.detail||''), (r.qty||'')].filter(Boolean).join(' / ')])">📋</button>
+            <button class="copy-btn" onclick="copyOutRow(this)" data-partno="${(r.partNo||'').replace(/"/g,'&quot;')}" data-process="${(r.process||'').replace(/"/g,'&quot;')}" data-detail="${(r.detail||'').replace(/"/g,'&quot;')}" data-qty="${r.qty||''}">📋</button>
             <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px;margin-right:2px" onclick="editOutsource('${k}')">編集</button>
             <button class="btn btn-danger btn-sm" style="padding:2px 5px;font-size:10px" onclick="outDeleteOne('${k}')">×</button>
           </td>
@@ -2535,8 +2521,7 @@ function renderPurchase() {
             <input type="checkbox" class="pur-check" data-key="${k}" onchange="purCheckChanged()">
           </td>
           <td style="white-space:nowrap">
-            <button class="copy-btn" onclick="copyRowTSV(this,[
-            [(r.name||''), (r.qty||'')].filter(Boolean).join(' / ')])">📋</button>
+            <button class="copy-btn" onclick="copyPurRow(this)" data-name="${(r.name||'').replace(/"/g,'&quot;')}" data-qty="${r.qty||''}">📋</button>
             <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px;margin-right:2px" onclick="editPurchase('${k}')">編集</button>
             <button class="btn btn-danger btn-sm" style="padding:2px 5px;font-size:10px" onclick="purDeleteOne('${k}')">×</button>
           </td>
@@ -4313,6 +4298,47 @@ function copyRowTSV(btn, values) {
     btn.textContent = '✓ コピー済'; btn.classList.add('copied');
     setTimeout(() => { btn.textContent = '📋 コピー'; btn.classList.remove('copied'); }, 2000);
   });
+}
+
+
+// ── 材料費行コピー：管理番号 / 材質 寸法 / 仕上 / 重量 ──
+function copyMatRow(btn) {
+  const d = btn.dataset;
+  const sX = d.sx||'', sY = d.sy||'', sZ = d.sz||'';
+  const dim = [sX,sY,sZ].filter(Boolean).join(' × ');
+  const mat = d.material||'';
+  const fin = d.finish||'';
+  // 重量計算
+  const w = calcWeight(d.sx, d.sy, d.sz, d.material, d.qty);
+  const qty = parseFloat(d.qty)||1;
+  let wStr = '';
+  if (d.weight) {
+    const mw = parseFloat(d.weight);
+    wStr = (mw * qty).toFixed(1) + ' kg';
+  } else if (w) {
+    wStr = (w.total || w.unit*qty).toFixed(1) + ' kg';
+  }
+  const parts = [
+    d.partno,
+    mat + (dim ? ' ' + dim : ''),
+    fin,
+    wStr
+  ].filter(Boolean);
+  copyRowTSV(btn, [parts.join(' / ')]);
+}
+
+// ── 外注費行コピー：品番 / 工程 / 内容 / 数量 ──
+function copyOutRow(btn) {
+  const d = btn.dataset;
+  const parts = [d.partno, d.process, d.detail, d.qty].filter(Boolean);
+  copyRowTSV(btn, [parts.join(' / ')]);
+}
+
+// ── 購入品費行コピー：商品名 / 数量 ──
+function copyPurRow(btn) {
+  const d = btn.dataset;
+  const parts = [d.name, d.qty].filter(Boolean);
+  copyRowTSV(btn, [parts.join(' / ')]);
 }
 
 
