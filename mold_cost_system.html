@@ -608,7 +608,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.13-6</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.13-7</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -2460,7 +2460,7 @@ function renderOutsource() {
         <tr>
           <td style="white-space:nowrap;padding:4px 4px">
             <input type="checkbox" class="out-check" data-key="${k}" onchange="outCheckChanged()" style="margin-right:3px">
-            <button class="copy-btn" onclick="copyOutRow(this)" data-partno="${(r.partNo||'').replace(/"/g,'&quot;')}" data-process="${(r.process||'').replace(/"/g,'&quot;')}" data-detail="${(r.detail||'').replace(/"/g,'&quot;')}" data-qty="${r.qty||''}">📋</button>
+            <button class="copy-btn" onclick="copyOutRow(this)" data-moldno="${(r.moldNo||'').replace(/"/g,'&quot;')}" data-partno="${(r.partNo||'').replace(/"/g,'&quot;')}" data-process="${(r.process||'').replace(/"/g,'&quot;')}" data-detail="${(r.detail||'').replace(/"/g,'&quot;')}" data-qty="${r.qty||''}">📋</button>
             <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px;margin-right:2px" onclick="editOutsource('${k}')">編集</button>
             <button class="btn btn-danger btn-sm" style="padding:2px 5px;font-size:10px" onclick="outDeleteOne('${k}')">×</button>
           </td>
@@ -4301,36 +4301,40 @@ function copyRowTSV(btn, values) {
 }
 
 
-// ── 材料費行コピー：管理番号 / 材質 寸法 / 仕上 / 重量 ──
+// ── 材料費行コピー：管理番号 / 材質 / XYZ / 仕上 / 重量 ──
 function copyMatRow(btn) {
   const d = btn.dataset;
   const sX = d.sx||'', sY = d.sy||'', sZ = d.sz||'';
-  const dim = [sX,sY,sZ].filter(Boolean).join(' × ');
+  const dim = [sX,sY,sZ].filter(Boolean).join('×');  // スペースなし
   const mat = d.material||'';
   const fin = d.finish||'';
-  // 重量計算
+  // 重量計算（単位なし）
   const w = calcWeight(d.sx, d.sy, d.sz, d.material, d.qty);
   const qty = parseFloat(d.qty)||1;
   let wStr = '';
   if (d.weight) {
     const mw = parseFloat(d.weight);
-    wStr = (mw * qty).toFixed(1) + ' kg';
+    wStr = (mw * qty).toFixed(1);
   } else if (w) {
-    wStr = (w.total || w.unit*qty).toFixed(1) + ' kg';
+    wStr = (w.total || w.unit*qty).toFixed(1);
   }
   const parts = [
     d.partno,
-    mat + (dim ? ' ' + dim : ''),
+    mat,
+    dim,
     fin,
     wStr
   ].filter(Boolean);
   copyRowTSV(btn, [parts.join(' / ')]);
 }
 
-// ── 外注費行コピー：品番 / 工程 / 内容 / 数量 ──
+// ── 外注費行コピー：品番(品名) / 工程 / 内容 / 数量 ──
 function copyOutRow(btn) {
   const d = btn.dataset;
-  const parts = [d.partno, d.process, d.detail, d.qty].filter(Boolean);
+  // moldNoから金型マスターの品番・品名を取得
+  const mold = findMoldByNo(d.moldno||'');
+  const moldInfo = mold ? [mold.partNo, mold.partName].filter(Boolean).join(' / ') : (d.partno||'');
+  const parts = [moldInfo, d.process, d.detail, d.qty].filter(Boolean);
   copyRowTSV(btn, [parts.join(' / ')]);
 }
 
