@@ -608,7 +608,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.13-7</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.13-8</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -2521,7 +2521,7 @@ function renderPurchase() {
             <input type="checkbox" class="pur-check" data-key="${k}" onchange="purCheckChanged()">
           </td>
           <td style="white-space:nowrap">
-            <button class="copy-btn" onclick="copyPurRow(this)" data-name="${(r.name||'').replace(/"/g,'&quot;')}" data-qty="${r.qty||''}">📋</button>
+            <button class="copy-btn" onclick="copyPurRow(this)" data-moldno="${(r.moldNo||'').replace(/"/g,'&quot;')}" data-partno="${(r.partNo||'').replace(/"/g,'&quot;')}" data-name="${(r.name||'').replace(/"/g,'&quot;')}" data-qty="${r.qty||''}">📋</button>
             <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px;margin-right:2px" onclick="editPurchase('${k}')">編集</button>
             <button class="btn btn-danger btn-sm" style="padding:2px 5px;font-size:10px" onclick="purDeleteOne('${k}')">×</button>
           </td>
@@ -4338,10 +4338,12 @@ function copyOutRow(btn) {
   copyRowTSV(btn, [parts.join(' / ')]);
 }
 
-// ── 購入品費行コピー：商品名 / 数量 ──
+// ── 購入品費行コピー：品番(品名) / 商品名 / 数量 ──
 function copyPurRow(btn) {
   const d = btn.dataset;
-  const parts = [d.name, d.qty].filter(Boolean);
+  const mold = findMoldByNo(d.moldno||'');
+  const moldInfo = mold ? [mold.partNo, mold.partName].filter(Boolean).join(' / ') : (d.partno||'');
+  const parts = [moldInfo, d.name, d.qty].filter(Boolean);
   copyRowTSV(btn, [parts.join(' / ')]);
 }
 
