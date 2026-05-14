@@ -1724,6 +1724,67 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
 <!-- TOAST -->
 <div id="toast"></div>
 
+<!-- ② 品目直接編集モーダル -->
+<div class="modal-overlay" id="compareItemModal">
+  <div class="modal" style="width:min(500px,95vw)">
+    <div class="modal-head">
+      <div class="modal-title">品目の詳細を編集（②比較表から直接編集）</div>
+      <button class="close-btn" onclick="closeCompareItemModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="cim_key">
+      <input type="hidden" id="cim_idx">
+      <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="form-group" style="grid-column:1/-1">
+          <label class="form-label">名称</label>
+          <input class="form-input" id="cim_name" placeholder="名称">
+        </div>
+        <div class="form-group">
+          <label class="form-label">数量</label>
+          <input class="form-input" id="cim_qty" type="number" min="1" placeholder="1">
+        </div>
+        <div class="form-group">
+          <label class="form-label">材質</label>
+          <input class="form-input" id="cim_material" placeholder="SS400">
+        </div>
+        <div class="form-group">
+          <label class="form-label">X 長さ (mm)</label>
+          <input class="form-input" id="cim_sizeX" type="number" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Y 幅 (mm)</label>
+          <input class="form-input" id="cim_sizeY" type="number" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Z 厚さ (mm)</label>
+          <input class="form-input" id="cim_sizeZ" type="number" placeholder="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">仕上</label>
+          <select class="form-select" id="cim_finish">
+            <option value="6F">6F</option>
+            <option value="4F">4F</option>
+            <option value="4F（2面）">4F（2面）</option>
+            <option value="6F（全面）">6F（全面）</option>
+            <option value="▽▽▽">▽▽▽</option>
+            <option value="▽▽">▽▽</option>
+            <option value="黒皮">黒皮</option>
+            <option value="ダイ">ダイ</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group" style="margin-top:8px">
+        <label class="form-label">備考</label>
+        <input class="form-input" id="cim_note" placeholder="備考">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeCompareItemModal()">キャンセル</button>
+      <button class="btn btn-primary" onclick="saveCompareItemEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ═══════════════════════════════════════════════
 // CONFIG & STATE
@@ -3134,9 +3195,16 @@ function addQuoteRequestItem() {
 
   // 重量は自動計算（手入力がある場合のみ）
   const weightVal = document.getElementById('qf_weight')?.value.trim() || '';
-  quoteItems.push({ moldNo, partNo, dwgNo, name, qty, material, itemMatNo, weight: weightVal,
+  const _newItem = { moldNo, partNo, dwgNo, name, qty, material, itemMatNo, weight: weightVal,
     size, sizeX, sizeY, sizeZ, fX, fY, fZ, finish, note,
-    katakiri, tsuri, noteExtra });
+    katakiri, tsuri, noteExtra };
+  if (_editingQuoteItemIndex >= 0) {
+    // 編集モード：元の位置に挿入（末尾追加しない）
+    quoteItems.splice(_editingQuoteItemIndex, 0, _newItem);
+    _editingQuoteItemIndex = -1;
+  } else {
+    quoteItems.push(_newItem);
+  }
   renderQuoteItemTable();
 
   // 連続入力モードの場合は材質以降を保持
@@ -3453,7 +3521,9 @@ function generateQuotePrint() {
 
 
 // ── 見積待ちとして保存 ──
-let _editingQuoteKey = '';  // 再編集中の見積キー
+let _editingQuoteKey = '';        // 再編集中の見積キー
+let _editingQuoteItemIndex = -1; // ①品目リスト内の編集位置（splice後に同位置に挿入するため）
+let _originalItemIndices   = []; // reopenQuote時の元インデックス対応（quotes再マップ用）
 
 async function saveQuoteRequest() {
   if (!quoteItems.length) { toast('品目を追加してください', 'error'); return; }
@@ -3477,13 +3547,38 @@ async function saveQuoteRequest() {
   const moldPartNo = moldData3?.partNo   || '';
   const partName   = moldData3?.partName || '';
 
+  // 再編集時：quotesのインデックスを新しいitems順にリマップ
+  let remappedQuotes = existing.quotes || {};
+  if (isEdit && _originalItemIndices.length > 0) {
+    const allSups = getSuppliers().map(s => s.id);
+    const newQuotes = {};
+    quoteItems.forEach((_, newIdx) => {
+      const oldIdx = _originalItemIndices[newIdx] ?? newIdx;
+      allSups.forEach(supId => {
+        const oldQKey = key + '_' + oldIdx + '_' + supId;
+        const newQKey = key + '_' + newIdx + '_' + supId;
+        if (remappedQuotes[oldQKey]) newQuotes[newQKey] = remappedQuotes[oldQKey];
+      });
+    });
+    // 発注済み行のquotesはそのまま保持
+    Object.keys(remappedQuotes).forEach(k => {
+      if (!newQuotes[k]) {
+        const parts = k.split('_');
+        const oldIdx = parseInt(parts[parts.length - 2]);
+        if (!_originalItemIndices.includes(oldIdx)) newQuotes[k] = remappedQuotes[k];
+      }
+    });
+    remappedQuotes = newQuotes;
+    _originalItemIndices = [];
+  }
+
   const record = {
     ...existing,
     date, moldNo: inferredMN||moldNo, partNo, moldPartNo, partName,
     items:     [...quoteItems],
     suppliers: toList,
     status:    '見積待ち',
-    quotes:    existing.quotes || {},
+    quotes:    remappedQuotes,
     decided:   existing.decided || null,
     itemDecided: existing.itemDecided || {}
   };
@@ -3609,6 +3704,9 @@ function renderCompare() {
           <select class="filter-select" style="font-size:11px;width:105px;padding:4px 6px"
             onchange="setItemDecided('${key}',${i},this.value)">${decidedOpts}</select>
         </td>
+        <td style="padding:4px 6px;text-align:center">
+          <button class="btn btn-secondary btn-sm" style="padding:3px 8px;font-size:12px" title="品目を直接編集" onclick="openCompareItemEdit('${key}',${i})">✏</button>
+        </td>
       </tr>`;
     }).join('');
 
@@ -3656,6 +3754,7 @@ function renderCompare() {
               <th style="padding:7px 6px;color:var(--green)">最安値</th>
               <th style="padding:7px 6px;color:var(--red)">差額/比率</th>
               <th style="padding:7px 6px">発注先</th>
+              <th style="padding:7px 4px;width:36px;text-align:center">編集</th>
             </tr>
           </thead>
           <tbody>${itemRows}</tbody>
@@ -3960,7 +4059,12 @@ async function reopenQuote(reqKey) {
   _editingQuoteKey = reqKey;
   // 品目リストに読み込む
   const orderedItems = rec.orderedItems || {};
-  quoteItems = (rec.items||[]).map((it,i)=>(orderedItems[i]||orderedItems[String(i)])?null:{...it}).filter(Boolean);
+  _originalItemIndices = [];
+  quoteItems = (rec.items||[]).map((it,i) => {
+    if (orderedItems[i] || orderedItems[String(i)]) return null;
+    _originalItemIndices.push(i);
+    return {...it};
+  }).filter(Boolean);
 
   // 金型NOと材料管理NOをフォームにセット
   // rec.moldNoがない場合はitemsのitemMatNoから推定
@@ -6229,7 +6333,8 @@ function editQuoteItem(i) {
   const cbZ = document.getElementById('qf_fZ'); if(cbZ) cbZ.checked = r.fZ||false;
   const cbK = document.getElementById('qf_katakiri'); if(cbK) cbK.checked = r.katakiri||false;
   const cbT = document.getElementById('qf_tsuri');    if(cbT) cbT.checked = r.tsuri||false;
-  // 削除してから再追加
+  // 元の位置を記憶してから削除（addQuoteRequestItem で同位置に挿入）
+  _editingQuoteItemIndex = i;
   quoteItems.splice(i, 1);
   renderQuoteItemTable();
   toast('フォームに読み込みました。修正後「品目リストへ追加」を押してください', 'success');
@@ -6999,6 +7104,55 @@ async function matBulkSetArrivalDate() {
   await writeToFirebase('materials', DB.materials);
   toast(checks.length + '件の入荷予定日を ' + date + ' に設定しました', 'success');
   renderMaterials();
+}
+
+// ── ② 品目直接編集モーダル ──
+function openCompareItemEdit(reqKey, itemIdx) {
+  const rec = DB.quoteRequests?.[reqKey];
+  if (!rec) return;
+  const item = rec.items?.[itemIdx];
+  if (!item) return;
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
+  set('cim_key',      reqKey);
+  set('cim_idx',      itemIdx);
+  set('cim_name',     item.name);
+  set('cim_qty',      item.qty || 1);
+  set('cim_material', item.material);
+  set('cim_sizeX',    item.sizeX);
+  set('cim_sizeY',    item.sizeY);
+  set('cim_sizeZ',    item.sizeZ);
+  const finSel = document.getElementById('cim_finish');
+  if (finSel) finSel.value = item.finish || '6F';
+  set('cim_note', item.noteExtra || item.note || '');
+  document.getElementById('compareItemModal').classList.add('open');
+}
+
+function closeCompareItemModal() {
+  document.getElementById('compareItemModal').classList.remove('open');
+}
+
+async function saveCompareItemEdit() {
+  const reqKey  = document.getElementById('cim_key').value;
+  const itemIdx = parseInt(document.getElementById('cim_idx').value);
+  const rec = DB.quoteRequests?.[reqKey];
+  if (!rec || !rec.items?.[itemIdx]) { toast('データが見つかりません', 'error'); return; }
+
+  const item    = rec.items[itemIdx];
+  item.name     = document.getElementById('cim_name').value.trim();
+  item.qty      = parseInt(document.getElementById('cim_qty').value) || 1;
+  item.material = document.getElementById('cim_material').value.trim();
+  item.sizeX    = document.getElementById('cim_sizeX').value.trim();
+  item.sizeY    = document.getElementById('cim_sizeY').value.trim();
+  item.sizeZ    = document.getElementById('cim_sizeZ').value.trim();
+  item.finish   = document.getElementById('cim_finish').value;
+  item.note     = document.getElementById('cim_note').value.trim();
+  item.noteExtra = item.note;
+  item.size     = [item.sizeX, item.sizeY, item.sizeZ].filter(Boolean).join(' × ');
+
+  await writeToFirebase('quoteRequests', DB.quoteRequests);
+  closeCompareItemModal();
+  renderCompare();
+  toast('品目を更新しました', 'success');
 }
 
 // ── Close modal on overlay click ──
