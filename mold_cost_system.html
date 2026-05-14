@@ -184,7 +184,7 @@
     background: var(--bg2);
     border: 1px solid var(--border);
     border-radius:8px;
-    overflow:hidden;
+    overflow: clip; /* hidden→clip: 角丸クリップを維持しつつ sticky が効く */
   }
 
   .table-header {
@@ -207,6 +207,10 @@
     background:var(--bg3);
     border-bottom:1px solid var(--border);
     white-space:nowrap;
+    position: sticky;
+    top: 98px; /* header(56px) + nav(42px) */
+    z-index: 20;
+    box-shadow: 0 1px 0 var(--border2);
   }
   tbody tr {
     border-bottom:1px solid var(--border);
@@ -608,7 +612,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.14-1</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.14-2</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -662,7 +666,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
       </div>
     </div>
 
-    <!-- 原価進捗 上位10件 -->
+    <!-- 原価進捗 製作中全件 -->
     <div class="table-wrap">
       <div class="table-header">
         <div class="table-title">原価進捗 — 製作中金型</div>
@@ -2224,7 +2228,7 @@ function renderDashboard() {
 
   // 管理NO昇順でソート
   active.sort(([,a],[,b]) => (a.no||'').localeCompare(b.no||'', 'ja', {numeric:true}));
-  const rows = active.slice(0,10);
+  const rows = active;
   document.getElementById('dashTableCount').textContent = `${active.length}件`;
 
   if (rows.length === 0) {
