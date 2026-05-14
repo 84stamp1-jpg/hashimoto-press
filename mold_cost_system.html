@@ -608,7 +608,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.13-8</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.14-1</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -2441,6 +2441,14 @@ function renderMaterials() {
   );
   if (moldFil) entries = entries.filter(([,r]) => r.moldNo === moldFil);
   if (dateFil) entries = entries.filter(([,r]) => (r.month||'').startsWith(dateFil));
+  // 発注確定日の降順（confirmedAt優先、なければmonth）→ 同日内は管理NO（partNo）の昇順
+  entries.sort(([,a], [,b]) => {
+    const da = a.confirmedAt || a.month || '', db = b.confirmedAt || b.month || '';
+    if (db > da) return 1;
+    if (db < da) return -1;
+    const pa = a.partNo || a.moldNo || '', pb = b.partNo || b.moldNo || '';
+    return pa.localeCompare(pb, 'ja', { numeric: true });
+  });
   const total = entries.reduce((s,[,r])=>s+(r.amount||0),0);
   document.getElementById('matCount').textContent = entries.length + '件 / ¥' + fmt(total);
   if (!entries.length) { document.getElementById('matTableBody').innerHTML = '<div class="empty"><div class="empty-icon">🔩</div>データなし</div>'; return; }
@@ -3965,6 +3973,7 @@ async function addToMaterials(reqKey, supId, indices) {
     const month = rec.date ? rec.date.slice(0,7) : new Date().toISOString().slice(0,7);
     DB.materials[matKey] = {
       month,
+      confirmedAt: new Date().toISOString().slice(0,10),
       moldNo:   item.moldNo   || rec.moldNo || '',
       partNo:   item.itemMatNo || rec.partNo || '',
       name:     item.name     || '',
@@ -6403,6 +6412,7 @@ async function confirmCheckedItems(reqKey) {
     const matKey = 'mat_order_' + reqKey + '_' + i;
     DB.materials[matKey] = {
       month,
+      confirmedAt: new Date().toISOString().slice(0,10),
       moldNo:   item.moldNo   || rec.moldNo || '',
       partNo:   item.itemMatNo || item.partNo || rec.partNo || '',
       name:     item.name     || '',
