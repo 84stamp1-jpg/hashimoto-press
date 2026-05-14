@@ -622,7 +622,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.14-2</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.15-2</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -3279,10 +3279,15 @@ function renderQuoteItemTable() {
       '<div class="empty"><div class="empty-icon">📋</div>品目を追加してください</div>';
     return;
   }
+  const _allInc  = quoteItems.every(r => r.include !== false);
+  const _someInc = quoteItems.some(r => r.include !== false);
   document.getElementById('quoteItemTable').innerHTML = `
     <table>
       <thead><tr>
-        <th style="width:36px" title="依頼書に含める">含</th>
+        <th style="width:36px;text-align:center" title="全選択/全解除">
+          <input type="checkbox" id="qiAllCheck" ${_allInc ? 'checked' : ''}
+            onchange="toggleAllItemInclude(this.checked)" title="全選択/全解除">
+        </th>
         <th>No.</th>
         <th>管理NO.</th>
         <th>名称</th>
@@ -3329,6 +3334,14 @@ function renderQuoteItemTable() {
       }).join('')}
       </tbody>
     </table>`;
+  // indeterminate（一部のみ選択）状態をセット
+  const hdrCb = document.getElementById('qiAllCheck');
+  if (hdrCb) hdrCb.indeterminate = _someInc && !_allInc;
+}
+
+function toggleAllItemInclude(checked) {
+  quoteItems.forEach(it => { it.include = checked; });
+  renderQuoteItemTable();
 }
 
 // ── Excelファイル取込 ──
@@ -3381,15 +3394,16 @@ function parseMaterialExcel(buf) {
     const r = rows[i];
     if (!r[0] || !String(r[0]).match(/^P-/)) continue;
 
+    const trimNum  = v => { const n = parseFloat(v); return (!isNaN(n) && v !== '' && v !== null) ? String(n) : String(v||''); };
     const dwgNo    = String(r[0] || '');
     const name     = String(r[1] || '');
     const material = String(r[2] || '');
     const noteRaw  = String(r[3] || '');
-    const sizeX    = String(r[4] || '');
+    const sizeX    = trimNum(r[4]);
     const xF       = r[5];
-    const sizeY    = String(r[6] || '');
+    const sizeY    = trimNum(r[6]);
     const yF       = r[7];
-    const sizeZ    = String(r[8] || '');
+    const sizeZ    = trimNum(r[8]);
     const zF       = r[9];
     const finishExplicit = r[10] ? String(r[10]) : null;
     const qtyRaw   = r[11];
@@ -3597,7 +3611,7 @@ async function saveQuoteRequest() {
   const record = {
     ...existing,
     date, moldNo: inferredMN||moldNo, partNo, moldPartNo, partName,
-    items:     [...quoteItems],
+    items:     quoteItems.filter(it => it.include !== false),
     suppliers: toList,
     status:    '見積待ち',
     quotes:    remappedQuotes,
@@ -3879,21 +3893,28 @@ async function updateQuote(reqKey, itemIdx, supId, field, value) {
 // 最安値のサプライヤーを発注先に自動セット
 function autoSetCheapestSupplier(rec, reqKey, itemIdx) {
   const sups = rec.suppliers || [];
-  let minPrice = Infinity, minSup = '';
-  for (const sid of sups) {
-    const up = parseFloat(rec.quotes?.[reqKey+'_'+itemIdx+'_'+sid]?.unitPrice || 0);
-    if (up > 0 && up < minPrice) { minPrice = up; minSup = sid; }
-  }
-  if (minSup) {
-    if (!rec.itemDecided) rec.itemDecided = {};
-    // すでに手動選択済みなら上書きしない（手動 > 自動）
-    if (!rec.itemDecided[itemIdx]) {
-      rec.itemDecided[itemIdx] = minSup;
-    } else {
-      // 全社の値が揃ったら最安値に更新
-      const allFilled = sups.every(sid => parseFloat(rec.quotes?.[reqKey+'_'+itemIdx+'_'+sid]?.unitPrice||0) > 0);
-      if (allFilled) rec.itemDecided[itemIdx] = minSup;
-    }
+  const valid = sups
+    .map(sid => ({ sid, price: parseFloat(rec.quotes?.[reqKey+'_'+itemIdx+'_'+sid]?.unitPrice || 0) }))
+    .filter(p => p.price > 0);
+
+  // 比較できる見積が2社以上ないと自動設定しない（差額比率が「—」になるケース）
+  if (valid.length < 2) return;
+
+  const prices = valid.map(p => p.price);
+  const minPrice = Math.min(...prices);
+  const maxPrice = Math.max(...prices);
+
+  // 全社同額（差額「—」）の場合も自動設定しない
+  if (maxPrice === minPrice) return;
+
+  const minSup = valid.find(p => p.price === minPrice).sid;
+  if (!rec.itemDecided) rec.itemDecided = {};
+  if (!rec.itemDecided[itemIdx]) {
+    rec.itemDecided[itemIdx] = minSup;
+  } else {
+    // 全社の値が揃ったら最安値に更新
+    const allFilled = sups.every(sid => parseFloat(rec.quotes?.[reqKey+'_'+itemIdx+'_'+sid]?.unitPrice||0) > 0);
+    if (allFilled) rec.itemDecided[itemIdx] = minSup;
   }
 }
 
@@ -6682,6 +6703,7 @@ function renderOrderPage() {
     const realSid = sid === '__none__' ? '' : sid;
     const sup = supMap[realSid] || { name: realSid || '（発注先未設定）', person:'', fax:'', email:'' };
 
+    const ckGroup = `${key}__${realSid}`;
     const itemRows = sitems.map(item => {
       const _fX = item.fX||false, _fY = item.fY||false, _fZ = item.fZ||false;
       const sizeCell = (v, f) => {
@@ -6691,6 +6713,11 @@ function renderOrderPage() {
       };
       return `
         <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:4px 6px;text-align:center;width:32px">
+            <input type="checkbox" class="order-item-check" checked
+              data-group="${ckGroup}" data-key="${key}" data-sid="${realSid}" data-idx="${item.idx}"
+              onchange="onOrderItemCheck('${ckGroup}')">
+          </td>
           <td class="mono" style="padding:5px 8px;font-weight:600;color:var(--accent)">${item.itemMatNo||item.moldNo||''}</td>
           <td style="padding:5px 8px">${item.name||''}</td>
           <td class="mono" style="padding:5px 6px;text-align:center">${item.qty||1}</td>
@@ -6727,7 +6754,7 @@ function renderOrderPage() {
             <input type="checkbox" ${isHidden?'checked':''} onchange="toggleOrderHide('${batchKey}','${realSid}',this.checked,'${key}')">
             <span>非表示にする</span>
           </label>
-          <button class="btn btn-primary btn-sm" onclick="printOrder('${key}','${realSid}',${JSON.stringify(sitems.map(it=>it.idx))})">🖨 注文書を印刷</button>
+          <button class="btn btn-primary btn-sm" id="btnPrintOrder_${ckGroup}" onclick="printOrderSelected('${key}','${realSid}','${ckGroup}')">🖨 選択して印刷</button>
           <button class="btn btn-secondary btn-sm" style="background:#f0f9ff;color:#0369a1;border:1px solid #bae6fd" onclick="toggleQuoteDetail('detail_${key}_${realSid}')">📊 見積比較を見る</button>
           <button class="btn btn-secondary btn-sm" style="background:#ecfdf5;color:#059669;border:1px solid #6ee7b7;font-size:11px" onclick="addToMaterials('${key}','${realSid}',${JSON.stringify(sitems.map(it=>it.idx))})">📦 材料費に追加</button>
           <button class="btn btn-secondary btn-sm" style="font-size:11px" onclick="goBackToCompareForSupplier('${key}')">↩ 比較に戻す</button>
@@ -6736,6 +6763,10 @@ function renderOrderPage() {
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:12px">
           <thead><tr style="background:var(--bg3)">
+            <th style="padding:7px 4px;width:32px;text-align:center">
+              <input type="checkbox" id="chkAll_order_${ckGroup}" checked title="全選択/解除"
+                onchange="toggleOrderItemsCheck('${ckGroup}',this.checked)">
+            </th>
             <th style="padding:7px 8px">管理NO.</th>
             <th style="padding:7px 8px">名称</th>
             <th style="padding:7px 6px;text-align:center">数量</th>
@@ -6797,6 +6828,34 @@ function renderOrderPage() {
   }).join('');
 }
 
+
+// ── 注文書：品目選択印刷 ──
+function toggleOrderItemsCheck(group, checked) {
+  document.querySelectorAll(`.order-item-check[data-group="${group}"]`)
+    .forEach(cb => cb.checked = checked);
+  onOrderItemCheck(group);
+}
+
+function onOrderItemCheck(group) {
+  const all  = document.querySelectorAll(`.order-item-check[data-group="${group}"]`);
+  const chkd = document.querySelectorAll(`.order-item-check[data-group="${group}"]:checked`);
+  const hdr  = document.getElementById('chkAll_order_' + group);
+  if (hdr) {
+    hdr.checked       = chkd.length === all.length;
+    hdr.indeterminate = chkd.length > 0 && chkd.length < all.length;
+  }
+  const btn = document.getElementById('btnPrintOrder_' + group);
+  if (btn) btn.textContent = chkd.length === all.length
+    ? '🖨 選択して印刷'
+    : `🖨 選択して印刷（${chkd.length}/${all.length}件）`;
+}
+
+function printOrderSelected(reqKey, supId, group) {
+  const checked = document.querySelectorAll(`.order-item-check[data-group="${group}"]:checked`);
+  if (!checked.length) { toast('印刷する品目にチェックを入れてください', 'error'); return; }
+  const indices = Array.from(checked).map(cb => parseInt(cb.dataset.idx));
+  printOrder(reqKey, supId, indices);
+}
 
 // 発注単価の更新
 async function updateOrderPrice(reqKey, itemIdx, supId, value) {
