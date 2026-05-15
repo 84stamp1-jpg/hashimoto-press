@@ -622,7 +622,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.15-5</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.15-7</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -1264,6 +1264,13 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     </div>
 
     <div class="config-box">
+      <div class="config-title">🏷 客先カラー設定（背表紙）</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:12px">得意先ごとに背表紙の色を設定します。背表紙印刷時に金型を選択すると自動で適用されます。</div>
+      <div id="clientColorList"><div style="font-size:12px;color:var(--text3)">読込中...</div></div>
+      <button class="btn btn-secondary btn-sm" style="margin-top:10px" onclick="renderClientColorSettings()">🔄 更新</button>
+    </div>
+
+    <div class="config-box">
       <div class="config-title">💾 データ管理</div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
         <button class="btn btn-secondary" onclick="exportAllData()">📤 全データエクスポート（JSON）</button>
@@ -1833,7 +1840,8 @@ let cfg = {
   appId: '',
   ktDomain: 'hashimoto-kogyo.cybozu.com',
   ktApp: '',
-  ktToken: ''
+  ktToken: '',
+  clientColors: {}
 };
 
 let db = null;
@@ -2134,7 +2142,7 @@ function showPage(name) {
     purchase:  renderPurchase,
     labor:     renderLabor,
     import:    renderImport,
-    settings:  () => {}
+    settings:  () => { renderClientColorSettings(); }
   };
   if (renders[name]) renders[name]();
   if (name === 'settings') { renderSupplierSettingList(); }
@@ -2946,24 +2954,100 @@ function closeModal(id) {
 }
 
 // ── 背表紙印刷 ──────────────────────────────────
-const _spineLabelColors = ['#1a56db','#c81e1e','#057a55','#9f1ab1','#c27803','#374151'];
+const _spinePalette = [
+  { c:'#E53E3E', n:'赤'     },
+  { c:'#FF8C00', n:'橙'     },
+  { c:'#ECC94B', n:'黄'     },
+  { c:'#38A169', n:'緑'     },
+  { c:'#00B5CC', n:'水色'   },
+  { c:'#3182CE', n:'青'     },
+  { c:'#2B4C8C', n:'紺'     },
+  { c:'#805AD5', n:'紫'     },
+  { c:'#D53F8C', n:'ピンク' },
+  { c:'#744210', n:'茶'     },
+];
+let _spineSelColors = ['#E53E3E','#3182CE','#38A169','#805AD5'];
 const _esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function selectSpineColor(slot, color) {
+  _spineSelColors[slot - 1] = color;
+  document.querySelectorAll(`.sl-sw-${slot}`).forEach(el => {
+    const sel = el.dataset.c === color;
+    el.style.outline = sel ? '3px solid #1e293b' : '2px solid transparent';
+    el.style.outlineOffset = sel ? '2px' : '0';
+    el.style.transform = sel ? 'scale(1.15)' : 'scale(1)';
+  });
+}
+
+function onSlotMoldChange(slot) {
+  const moldNo = document.getElementById(`slMold${slot}`).value;
+  if (!moldNo) return;
+  const m = Object.values(DB.molds).find(x => x.no === moldNo);
+  if (!m || !m.client) return;
+  const color = (cfg.clientColors || {})[m.client];
+  if (color) selectSpineColor(slot, color);
+}
+
+function renderClientColorSettings() {
+  const clients = [...new Set(Object.values(DB.molds).map(m => m.client).filter(Boolean))].sort((a,b) => a.localeCompare(b,'ja'));
+  const el = document.getElementById('clientColorList');
+  if (!el) return;
+  if (clients.length === 0) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--text3)">金型一覧に得意先が登録されていません</div>';
+    return;
+  }
+  const colors = cfg.clientColors || {};
+  el.innerHTML = clients.map(client => {
+    const cur = colors[client] || '';
+    const preview = cur
+      ? `<div style="width:20px;height:20px;border-radius:4px;background:${cur};border:1px solid rgba(0,0,0,0.15);flex-shrink:0"></div>`
+      : `<div style="width:20px;height:20px;border-radius:4px;border:1px dashed #ccc;flex-shrink:0"></div>`;
+    const swatches = _spinePalette.map(p => {
+      const sel = cur === p.c;
+      return `<div title="${p.n}" onclick="setClientColor('${_esc(client)}','${p.c}')"
+        style="width:24px;height:24px;border-radius:5px;background:${p.c};cursor:pointer;transition:all 0.15s;
+               outline:${sel?'3px solid #1e293b':'2px solid transparent'};outline-offset:${sel?'2px':'0'};
+               transform:${sel?'scale(1.15)':'scale(1)'}"></div>`;
+    }).join('');
+    return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;padding:8px 12px;background:var(--bg3);border-radius:6px;border:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:8px;min-width:180px">${preview}<span style="font-size:12px;font-weight:600">${_esc(client)}</span></div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap">${swatches}</div>
+    </div>`;
+  }).join('');
+}
+
+function setClientColor(client, color) {
+  if (!cfg.clientColors) cfg.clientColors = {};
+  cfg.clientColors[client] = color;
+  localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
+  renderClientColorSettings();
+}
 
 function openSpineLabelModal() {
   const molds = Object.values(DB.molds).sort((a,b) => (a.no||'').localeCompare(b.no||'', 'ja', {numeric:true}));
   const opts = molds.map(m => `<option value="${_esc(m.no)}">${_esc(m.no)}　${_esc(m.partNo||'')}　${_esc(m.partName||'')}</option>`).join('');
   let html = '';
   for (let i = 1; i <= 4; i++) {
-    const defColor = _spineLabelColors[(i - 1) % _spineLabelColors.length];
+    const swatches = _spinePalette.map(p => {
+      const sel = _spineSelColors[i-1] === p.c;
+      return `<div class="sl-sw-${i}" data-c="${p.c}" title="${p.n}" onclick="selectSpineColor(${i},'${p.c}')"
+        style="width:26px;height:26px;border-radius:5px;background:${p.c};cursor:pointer;transition:all 0.15s;
+               outline:${sel?'3px solid #1e293b':'2px solid transparent'};outline-offset:${sel?'2px':'0'};
+               transform:${sel?'scale(1.15)':'scale(1)'}"></div>`;
+    }).join('');
     html += `
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding:10px 12px;background:var(--bg3);border-radius:8px;border:1px solid var(--border)">
-      <div style="font-size:13px;font-weight:700;color:var(--accent);min-width:36px;text-align:center">${i}</div>
-      <select class="form-select" id="slMold${i}" style="flex:1;min-width:0">
-        <option value="">── 選択なし ──</option>
-        ${opts}
-      </select>
-      <label style="font-size:11px;color:var(--text2);white-space:nowrap">上部色</label>
-      <input type="color" id="slColor${i}" value="${defColor}" style="width:38px;height:34px;border:1px solid var(--border2);border-radius:6px;padding:2px;cursor:pointer">
+    <div style="margin-bottom:10px;padding:10px 12px;background:var(--bg3);border-radius:8px;border:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <div style="font-size:13px;font-weight:700;color:var(--accent);min-width:36px;text-align:center">${i}</div>
+        <select class="form-select" id="slMold${i}" style="flex:1;min-width:0" onchange="onSlotMoldChange(${i})">
+          <option value="">── 選択なし ──</option>
+          ${opts}
+        </select>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;padding-left:46px;flex-wrap:wrap">
+        <span style="font-size:11px;color:var(--text2);margin-right:2px">上部色：</span>
+        ${swatches}
+      </div>
     </div>`;
   }
   document.getElementById('spineLabelSlots').innerHTML = html;
@@ -2974,7 +3058,7 @@ function printSpineLabels() {
   const slots = [];
   for (let i = 1; i <= 4; i++) {
     const moldNo = document.getElementById(`slMold${i}`).value;
-    const color  = document.getElementById(`slColor${i}`).value;
+    const color  = _spineSelColors[i - 1];
     if (moldNo) {
       const m = Object.values(DB.molds).find(x => x.no === moldNo);
       if (m) slots.push({ no: m.no, partNo: m.partNo||'', partName: m.partName||'', color });
