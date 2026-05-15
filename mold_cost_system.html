@@ -622,7 +622,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.15-2</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.15-3</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -745,6 +745,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
       <div class="table-header">
         <div class="table-title">金型リスト</div>
         <div class="table-count" id="moldCount"></div>
+        <button class="btn btn-secondary btn-sm" onclick="openSpineLabelModal()" style="margin-left:auto">🏷 背表紙印刷</button>
       </div>
       <div id="moldTableBody">
         <div class="loading"><div class="spin"></div>データ読込中...</div>
@@ -1795,6 +1796,26 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="modal-foot">
       <button class="btn btn-secondary" onclick="closeCompareItemModal()">キャンセル</button>
       <button class="btn btn-primary" onclick="saveCompareItemEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ 背表紙印刷モーダル ═══ -->
+<div class="modal-overlay" id="spineLabelModal">
+  <div class="modal" style="width:min(640px,96vw)">
+    <div class="modal-head">
+      <div class="modal-title">🏷 背表紙印刷</div>
+      <button class="close-btn" onclick="closeModal('spineLabelModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:11px;color:var(--text2);margin-bottom:14px;padding:8px 10px;background:var(--bg3);border-radius:6px;border-left:3px solid var(--accent)">
+        印刷する金型を最大4つ選択してください。A4用紙に背表紙が印刷されます。上部の色はメーカーごとに変更できます。
+      </div>
+      <div id="spineLabelSlots"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-secondary" onclick="closeModal('spineLabelModal')">キャンセル</button>
+      <button class="btn btn-primary" onclick="printSpineLabels()">🖨 印刷プレビュー</button>
     </div>
   </div>
 </div>
@@ -2923,6 +2944,88 @@ function logImport(type, count) {
 function closeModal(id) {
   document.getElementById(id).classList.remove('open');
 }
+
+// ── 背表紙印刷 ──────────────────────────────────
+const _spineLabelColors = ['#1a56db','#c81e1e','#057a55','#9f1ab1','#c27803','#374151'];
+const _esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function openSpineLabelModal() {
+  const molds = Object.values(DB.molds).sort((a,b) => (a.no||'').localeCompare(b.no||'', 'ja', {numeric:true}));
+  const opts = molds.map(m => `<option value="${_esc(m.no)}">${_esc(m.no)}　${_esc(m.partNo||'')}　${_esc(m.partName||'')}</option>`).join('');
+  let html = '';
+  for (let i = 1; i <= 4; i++) {
+    const defColor = _spineLabelColors[(i - 1) % _spineLabelColors.length];
+    html += `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;padding:10px 12px;background:var(--bg3);border-radius:8px;border:1px solid var(--border)">
+      <div style="font-size:13px;font-weight:700;color:var(--accent);min-width:36px;text-align:center">${i}</div>
+      <select class="form-select" id="slMold${i}" style="flex:1;min-width:0">
+        <option value="">── 選択なし ──</option>
+        ${opts}
+      </select>
+      <label style="font-size:11px;color:var(--text2);white-space:nowrap">上部色</label>
+      <input type="color" id="slColor${i}" value="${defColor}" style="width:38px;height:34px;border:1px solid var(--border2);border-radius:6px;padding:2px;cursor:pointer">
+    </div>`;
+  }
+  document.getElementById('spineLabelSlots').innerHTML = html;
+  document.getElementById('spineLabelModal').classList.add('open');
+}
+
+function printSpineLabels() {
+  const slots = [];
+  for (let i = 1; i <= 4; i++) {
+    const moldNo = document.getElementById(`slMold${i}`).value;
+    const color  = document.getElementById(`slColor${i}`).value;
+    if (moldNo) {
+      const m = Object.values(DB.molds).find(x => x.no === moldNo);
+      if (m) slots.push({ no: m.no, partNo: m.partNo||'', partName: m.partName||'', color });
+      else slots.push(null);
+    } else {
+      slots.push(null);
+    }
+  }
+  if (slots.every(s => !s)) { alert('金型を1つ以上選択してください'); return; }
+
+  const labelHtml = slots.map(l => {
+    if (!l) return `<div class="lbl lbl-empty"></div>`;
+    const safeNo   = l.no.replace(/</g,'&lt;');
+    const safePNo  = l.partNo.replace(/</g,'&lt;');
+    const safePNm  = l.partName.replace(/</g,'&lt;');
+    return `<div class="lbl">
+      <div class="lbl-top" style="background:${l.color}"></div>
+      <div class="lbl-mngno">${safeNo}</div>
+      <div class="lbl-body">
+        <div class="lbl-partname">${safePNm}</div>
+        <div class="lbl-partno">${safePNo}</div>
+      </div>
+      <div class="lbl-bottom">橋本工業</div>
+    </div>`;
+  }).join('');
+
+  const win = window.open('', '_blank', 'width=800,height=900');
+  win.document.write(`<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>背表紙</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+<style>
+@page { size: A4 portrait; margin: 8mm; }
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Noto Sans JP','MS Gothic',sans-serif; background:#fff; }
+.page { display:flex; flex-direction:row; justify-content:center; align-items:flex-start; gap:4mm; padding:2mm 0; }
+.lbl { width:44mm; min-height:275mm; border:1px dashed #aaa; display:flex; flex-direction:column; overflow:hidden; }
+.lbl-empty { width:44mm; min-height:275mm; border:1px dashed #e0e0e0; }
+.lbl-top { height:18mm; flex-shrink:0; }
+.lbl-mngno { padding:4mm 2mm; text-align:center; font-size:20pt; font-weight:700; letter-spacing:0.05em; border-bottom:1px solid #ddd; flex-shrink:0; word-break:break-all; }
+.lbl-body { flex:1; padding:5mm 3mm; display:flex; flex-direction:column; gap:0; }
+.lbl-partname { flex:1; font-size:10pt; text-align:center; word-break:break-all; line-height:1.6; display:flex; align-items:center; justify-content:center; }
+.lbl-partno { font-size:13pt; font-weight:700; text-align:center; word-break:break-all; line-height:1.4; padding-top:4mm; border-top:1px solid #eee; }
+.lbl-bottom { height:12mm; border-top:1px solid #ddd; display:flex; align-items:center; justify-content:center; font-size:8pt; color:#666; flex-shrink:0; }
+@media print { .lbl, .lbl-empty { page-break-inside:avoid; } }
+</style></head><body>
+<div class="page">${labelHtml}</div>
+<script>window.onload=function(){ window.print(); };<\/script>
+</body></html>`);
+  win.document.close();
+}
+// ────────────────────────────────────────────────
 
 function openMoldModal() {
   editingMoldKey = null;
