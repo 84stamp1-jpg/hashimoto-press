@@ -1027,135 +1027,109 @@ function renderByTeam(rows){
 
 function makeGroupCard(g,allDates){
   var recs=g.recs;
-  // 同じ製造番号・同工順のレコードを集計
-  var allRecs=ALL_RECORDS.filter(function(r){return r[13]===g.seizoNo&&String(r[14])===String(g.junjo);});
-  var kannoRecs=allRecs.filter(function(r){return r[7]==='完納';});
-  // 工順別に累計を計算
-  var junjoTotals={};
+  // 同製造番号の全工順レコードを取得
+  var allRecs=ALL_RECORDS.filter(function(r){return r[13]===g.seizoNo;});
+
+  // 工順ごとにレコードをグループ化
+  var junjoMap={}, junjoOrder=[];
   allRecs.forEach(function(r){
-    var j=r[14]||'?';
-    if(!junjoTotals[j]) junjoTotals[j]={ryohin:0,chukan:0,ng:0,hokyu:0,sonota:0,shiji:0};
-    if(r[7]!=='中間実績') junjoTotals[j].ryohin+=parseInt(r[5]||0)||0;
-    else junjoTotals[j].chukan+=parseInt(r[5]||0)||0;
-    junjoTotals[j].ng+=parseInt(r[6]||0)||0;
-    junjoTotals[j].hokyu+=parseInt(r[17]||0)||0;
-    junjoTotals[j].sonota+=parseInt(r[18]||0)||0;
+    var j=String(r[14]||'?');
+    if(!junjoMap[j]){junjoMap[j]=[];junjoOrder.push(j);}
+    junjoMap[j].push(r);
   });
-  // SAKUYO から工順別指示数を取得
+  junjoOrder.sort(function(a,b){return parseInt(a)-parseInt(b);});
+
+  // 工順ごとの集計
+  var junjoTotals={};
+  junjoOrder.forEach(function(j){
+    var jrecs=junjoMap[j];
+    var kannoRecs=jrecs.filter(function(r){return r[7]==='完納';});
+    var ryohin=0,chukan=0,ng=0,hokyu=0,sonota=0,shiji=0;
+    jrecs.forEach(function(r){
+      if(r[7]!=='中間実績') ryohin+=parseInt(r[5]||0)||0;
+      else chukan+=parseInt(r[5]||0)||0;
+      ng+=parseInt(r[6]||0)||0;
+      hokyu+=parseInt(r[17]||0)||0;
+      sonota+=parseInt(r[18]||0)||0;
+    });
+    if(SAKUYO) SAKUYO.forEach(function(s){
+      if(s.seizoNo===g.seizoNo&&String(s.junjo)===j) shiji=parseInt(s.shiji)||0;
+    });
+    var kosei='';
+    if(SAKUYO) SAKUYO.forEach(function(s){
+      if(s.seizoNo===g.seizoNo&&String(s.junjo)===j) kosei=s.kosei||'';
+    });
+    var hasKanno=kannoRecs.length>0;
+    var allDone=hasKanno&&kannoRecs.every(function(r){return (r[12]||'未')==='済';});
+    // 最新レコードの材料残
+    var sortedJ=jrecs.slice().sort(function(a,b){return String(b[0]).localeCompare(String(a[0]));});
+    var latestZairyo=sortedJ[0][8]||'';
+    var hasZairyo=latestZairyo!=='なし'&&jrecs.some(function(r){return r[8]==='あり';});
+    // メモ
+    var memos=jrecs.map(function(r){return r[9]||'';}).filter(function(m){return m&&m.indexOf('http')!==0;});
+    memos=memos.filter(function(v,i,a){return a.indexOf(v)===i;});
+    var sonotaMemos=jrecs.map(function(r){return r[19]||'';}).filter(function(m){return m&&m.trim();});
+    sonotaMemos=sonotaMemos.filter(function(v,i,a){return a.indexOf(v)===i;});
+    junjoTotals[j]={ryohin:ryohin,chukan:chukan,ng:ng,hokyu:hokyu,sonota:sonota,
+      shiji:shiji,kosei:kosei,hasKanno:hasKanno,allDone:allDone,
+      kannoRecs:kannoRecs,hasZairyo:hasZairyo,memos:memos,sonotaMemos:sonotaMemos,
+      jrecs:jrecs};
+  });
+
+  // 全工順合計
+  var ryohinTotal=junjoOrder.reduce(function(s,j){return s+junjoTotals[j].ryohin;},0);
+  var ngAllTotal=junjoOrder.reduce(function(s,j){
+    var jt=junjoTotals[j]; return s+jt.ng+jt.hokyu+jt.sonota;},0);
+  var hasAnyKanno=junjoOrder.some(function(j){return junjoTotals[j].hasKanno;});
+  var allDoneAll=hasAnyKanno&&junjoOrder.every(function(j){
+    var jt=junjoTotals[j]; return !jt.hasKanno||jt.allDone;});
+
+  // 指示数（工順1基準）
+  var shiji=0;
   if(SAKUYO) SAKUYO.forEach(function(s){
-    if(s.seizoNo===g.seizoNo&&junjoTotals[s.junjo]){
-      junjoTotals[s.junjo].shiji=parseInt(s.shiji)||0;
-    }
+    if(s.seizoNo===g.seizoNo&&String(s.junjo)==='1') shiji=parseInt(s.shiji)||0;
   });
-  // 全工順の合計
-  var ryohinTotal=Object.values(junjoTotals).reduce(function(s,v){return s+v.ryohin;},0);
-  var chukanTotal=Object.values(junjoTotals).reduce(function(s,v){return s+v.chukan;},0);
-  var ngTotal=Object.values(junjoTotals).reduce(function(s,v){return s+v.ng;},0);
-  var hokyuTotal=Object.values(junjoTotals).reduce(function(s,v){return s+v.hokyu;},0);
-  var sonotaTotal=Object.values(junjoTotals).reduce(function(s,v){return s+v.sonota;},0);
-  var ngAllTotal=ngTotal+hokyuTotal+sonotaTotal;
-  var shiji=parseInt(g.shiji||0)||0;
-  if(SAKUYO)SAKUYO.forEach(function(s){if(s.seizoNo===g.seizoNo&&s.junjo==g.junjo)shiji=s.shiji||shiji;});
+  if(!shiji&&junjoOrder.length>0) shiji=junjoTotals[junjoOrder[0]].shiji;
   var pct=shiji>0?Math.min(100,Math.round(ryohinTotal/shiji*100)):0;
-  var hasKanno=kannoRecs.length>0;
-  var allDone=hasKanno&&kannoRecs.every(function(r){return (r[12]||'未')==='済';});
-  var isChukan=!hasKanno&&recs.every(function(r){return r[7]==='中間実績';});
+
+  // カード本体
   var div=document.createElement('div');
-  div.className='rec '+(allDone?'done':(hasKanno?'kanno-pending':(isChukan?'chukan':'pending')));
-  // ヘッダ
+  var isChukan=!hasAnyKanno&&allRecs.every(function(r){return r[7]==='中間実績';});
+  div.className='rec '+(allDoneAll?'done':(hasAnyKanno?'kanno-pending':(isChukan?'chukan':'pending')));
+
+  // ヘッダ（品番・時刻）
   var top=document.createElement('div');top.className='rec-top';
   var no=document.createElement('div');no.className='rec-no';no.textContent=g.hinban||'（部品番号なし）';
   var times=recs.map(function(r){return (r[0]||'').slice(11,16);}).filter(Boolean);
   var tm=document.createElement('div');tm.className='rec-time';
   tm.textContent=times.length>1?times[0]+'〜'+times[times.length-1]:(times[0]||'');
   top.appendChild(no);top.appendChild(tm);div.appendChild(top);
-  // 品名・作業者
-  var ops=[].concat.apply([],recs.map(function(r){return r[4]||'';})).filter(Boolean);
+
+  // 品名・作業者（全工順から収集）
+  var ops=allRecs.map(function(r){return r[4]||'';}).filter(Boolean);
   ops=ops.filter(function(v,i,a){return a.indexOf(v)===i;});
   var nm=document.createElement('div');nm.className='rec-name';
   nm.textContent=(g.hinmei||'')+'　';
   var opsp=document.createElement('span');opsp.style.cssText='color:#666;font-size:11px';
   opsp.textContent=ops.join('・');nm.appendChild(opsp);div.appendChild(nm);
-  // 製造番号・工順・工程・納期
+
+  // 製造番号・納期（共通）
   var meta=document.createElement('div');meta.style.cssText='font-size:11px;color:#555;margin-top:3px;display:flex;gap:6px;flex-wrap:wrap';
   if(g.seizoNo){var m1=document.createElement('span');m1.textContent='製造番号: '+g.seizoNo;meta.appendChild(m1);}
-  // 複数工順がある場合は全工順を表示
-  var junjos=[...new Set(g.recs.map(function(r){return r[14]||'';}))].filter(Boolean).sort();
-  if(junjos.length>0){var m2=document.createElement('span');m2.textContent='工順: '+junjos.join(',');meta.appendChild(m2);}
-  var kosei=[...new Set(g.recs.map(function(r){return r[15]||'';}))].filter(Boolean);
-  if(kosei.length>0){var m3=document.createElement('span');m3.textContent=kosei.join('/');meta.appendChild(m3);}
-  if(shiji){var m4=document.createElement('span');m4.textContent='指示: '+shiji+'個';meta.appendChild(m4);}
-  if(SAKUYO&&g.seizoNo){SAKUYO.forEach(function(s){if(s.seizoNo===g.seizoNo&&s.junjo==g.junjo&&s['納期']){var m5=document.createElement('span');m5.style.cssText='color:#E24B4A;font-weight:700';m5.textContent='納期: '+s['納期'];meta.appendChild(m5);}});}
+  var nouki='';
+  if(SAKUYO) SAKUYO.forEach(function(s){if(s.seizoNo===g.seizoNo&&s['納期']) nouki=s['納期'];});
+  if(nouki){var m5=document.createElement('span');m5.style.cssText='color:#E24B4A;font-weight:700';m5.textContent='納期: '+nouki;meta.appendChild(m5);}
   div.appendChild(meta);
-  // 累計タグ
-  var tags=document.createElement('div');tags.className='rec-tags';tags.style.marginTop='6px';
+
+  // プログレスバー（全工順合計）
+  var tags0=document.createElement('div');tags0.className='rec-tags';tags0.style.marginTop='6px';
   var t1=document.createElement('span');t1.className='tag t-ryohin';
-  t1.textContent='良品累計: '+ryohinTotal+'個'+(chukanTotal>0?' (+中間'+chukanTotal+'個)':'');
-  tags.appendChild(t1);
+  t1.textContent='良品累計: '+ryohinTotal+'個';tags0.appendChild(t1);
   if(ngAllTotal>0){
     var t2=document.createElement('span');t2.className='tag t-ng-cum';
-    var ngDetail='不良累計: '+ngAllTotal+'個';
-    var parts=[];
-    if(ngTotal>0) parts.push('不良'+ngTotal);
-    if(hokyuTotal>0) parts.push('保留'+hokyuTotal);
-    if(sonotaTotal>0) parts.push('その他'+sonotaTotal);
-    if(parts.length>1) ngDetail+=' ('+parts.join('/')+')';
-    t2.textContent=ngDetail;tags.appendChild(t2);
+    t2.textContent='不良累計: '+ngAllTotal+'個';tags0.appendChild(t2);
   }
-  // 当日の実績区分タグを表示（明細を開かなくてもわかるように）
-  var todayKubuns=recs.map(function(r){return r[7]||'';}).filter(function(v,i,a){return v&&a.indexOf(v)===i;});
-  todayKubuns.forEach(function(k){
-    var kt=document.createElement('span');
-    kt.className='tag '+(k==='完納'?'tag-kanno':(k==='分納'?'tag-bunno':'tag-chukan'));
-    kt.textContent=k;tags.appendChild(kt);
-  });
-  if(!allDone&&hasKanno){var t3=document.createElement('span');t3.className='tag t-alert';t3.style.animation='pulse 1.5s infinite';t3.textContent='⚠️ システム入力待ち';tags.appendChild(t3);}
-  // 材料残あり表示：最新レコードが「なし」なら表示しない
-  var hasZairyo=false;
-  if(allRecs.length>0){
-    // 送信日時(r[0])で降順ソートして最新レコードを取得
-    var sortedRecs=allRecs.slice().sort(function(a,b){return String(b[0]).localeCompare(String(a[0]));});
-    var latestZairyo=sortedRecs[0][8]||'';
-    // 最新が「なし」でなければ「あり」のものがあれば表示
-    if(latestZairyo!=='なし'){
-      hasZairyo=allRecs.some(function(r){return r[8]==='あり';});
-    }
-  }
-  if(hasZairyo){var tz=document.createElement('span');tz.className='tag';tz.style.cssText='background:#E1F5EE;color:#0F6E56;';tz.textContent='📦 材料残あり';tags.appendChild(tz);}
-  // メモ（不良内容・特記事項）- 全日付のレコードから取得
-  var allMemos=allRecs.map(function(r){return r[9]||'';}).filter(function(m){return m&&m.indexOf('http')!==0;});
-  var uniqMemos=allMemos.filter(function(m,i){return allMemos.indexOf(m)===i;});
-  uniqMemos.forEach(function(memo){
-    var tm=document.createElement('div');
-    tm.style.cssText='font-size:11px;color:#555;margin-top:5px;padding:3px 8px;background:#fff8e1;border-left:3px solid #f9a825;border-radius:0 4px 4px 0;';
-    tm.textContent='📝 メモ: '+memo;
-    tags.appendChild(tm);
-  });
-  // その他メモ（r[19]）- 全日付のレコードから取得
-  var allSonotaMemos=allRecs.map(function(r){return r[19]||'';}).filter(function(m){return m&&m.trim()!=='';});
-  var uniqSonotaMemos=allSonotaMemos.filter(function(m,i){return allSonotaMemos.indexOf(m)===i;});
-  uniqSonotaMemos.forEach(function(memo){
-    var tm=document.createElement('div');
-    tm.style.cssText='font-size:11px;color:#555;margin-top:5px;padding:3px 8px;background:#f3e5f5;border-left:3px solid #8e24aa;border-radius:0 4px 4px 0;';
-    tm.textContent='📋 その他: '+memo;
-    tags.appendChild(tm);
-  });
-  div.appendChild(tags);
-  // 工順別累計パネル
-  var junjoKeys=Object.keys(junjoTotals).sort();
-  if(junjoKeys.length>1){
-    junjoKeys.forEach(function(j){
-      var jt=junjoTotals[j];
-      var jDiv=document.createElement('div');
-      jDiv.style.cssText='font-size:11px;color:#555;margin-top:4px;background:#f8f9fa;border-radius:6px;padding:5px 8px;display:flex;justify-content:space-between';
-      var jShiji=jt.shiji;
-      var jPct=jShiji>0?Math.min(100,Math.round(jt.ryohin/jShiji*100)):0;
-      jDiv.innerHTML='<span style="font-weight:700">工順'+j+'</span>'
-        +'<span>良品: '+jt.ryohin+'個'+(jShiji?' / 指示: '+jShiji+'個 ('+jPct+'%)':'')+'</span>';
-      div.appendChild(jDiv);
-    });
-  }
-  // プログレスバー
+  div.appendChild(tags0);
   if(shiji>0){
     var bw=document.createElement('div');bw.className='cum-bar-bg';
     var bf=document.createElement('div');bf.className='cum-bar-fg';bf.style.width=pct+'%';
@@ -1164,74 +1138,123 @@ function makeGroupCard(g,allDates){
     bn.innerHTML='<span>良品累計 '+ryohinTotal+'個</span><span>指示 '+shiji+'個 ('+pct+'%)</span>';
     div.appendChild(bn);
   }
-  // 他日付含む注記
-  if(!allDates&&allRecs.length>recs.length){
-    var nt=document.createElement('div');nt.style.cssText='font-size:10px;color:#888;margin-top:3px';
-    nt.textContent='※ 累計は全日付('+allRecs.length+'件)を含む';div.appendChild(nt);
-  }
-  // 折りたたみ明細
-  var toggle=document.createElement('span');toggle.className='grp-toggle';
-  toggle.textContent='▼ 明細'+recs.length+'件を表示';
-  var detail=document.createElement('div');detail.className='grp-detail';
-  toggle.addEventListener('click',function(){
-    var open=detail.style.display==='none'||detail.style.display==='';
-    detail.style.display=open?'block':'none';
-    toggle.textContent=(open?'▲ ':'▼ ')+'明細'+toggleLabel+'件（全日付）を'+(open?'非表示':'表示');
-  });
-  div.appendChild(toggle);
-  // 常に全日付・同工順の明細を表示
-  var detailRecs=allRecs;
-  var toggleLabel=allRecs.length;
-  toggle.textContent='▼ 明細'+toggleLabel+'件を表示（全日付）';
-  detailRecs.forEach(function(r){
-    var sr=document.createElement('div');sr.className='sub-rec';
-    var klass=r[7]==='完納'?'lbl-k':(r[7]==='分納'?'lbl-b':'lbl-c');
-    var sr_top=document.createElement('div');sr_top.className='sub-row';
-    var sr_l=document.createElement('span');
-    sr_l.innerHTML='<span class="lbl '+klass+'">'+(r[7]||'')+'</span>'+(r[4]||'')
-      +'&nbsp;<span style="color:#888;font-size:10px">'+r[1]+' '+(r[0]||'').slice(11,16)+'</span>';
-    var sr_r=document.createElement('span');sr_r.style.fontWeight='700';
-    var ngParts=[];
-    if(parseInt(r[6]||0)>0) ngParts.push('不良:'+r[6]);
-    if(parseInt(r[17]||0)>0) ngParts.push('保留:'+r[17]);
-    if(parseInt(r[18]||0)>0) ngParts.push('その他:'+r[18]);
-    sr_r.textContent='良品:'+(r[5]||0)+(ngParts.length>0?' '+ngParts.join('/'):'');
-    sr_top.appendChild(sr_l);sr_top.appendChild(sr_r);sr.appendChild(sr_top);
-    // 材料残あり表示
-    if(r[8]==='あり'){var zTag=document.createElement('span');zTag.style.cssText='display:inline-block;font-size:10px;background:#E1F5EE;color:#0F6E56;border-radius:4px;padding:1px 6px;margin-top:3px;margin-right:4px;';zTag.textContent='📦 材料残あり';sr.appendChild(zTag);}
-    // メモ表示
-    if(r[9]&&r[9].indexOf('http')!==0){var mo=document.createElement('div');mo.style.cssText='font-size:11px;color:#555;margin-top:4px;padding:3px 8px;background:#fff8e1;border-left:3px solid #f9a825;border-radius:0 4px 4px 0;';mo.textContent='📝 メモ: '+r[9];sr.appendChild(mo);}
-    // その他メモ表示
-    if(r[19]&&String(r[19]).trim()){var sm=document.createElement('div');sm.style.cssText='font-size:11px;color:#555;margin-top:4px;padding:3px 8px;background:#f3e5f5;border-left:3px solid #8e24aa;border-radius:0 4px 4px 0;';sm.textContent='📋 その他: '+r[19];sr.appendChild(sm);}
-    // アクション
-    var sa=document.createElement('div');sa.style.cssText='display:flex;gap:5px;margin-top:5px;flex-wrap:wrap';
-    var urls=(r[10]||'').split('|').filter(function(u){return u.indexOf('https://drive.google.com/file/d/')===0;});
-    urls.forEach(function(url,i){var a=document.createElement('a');a.className='rec-link';a.style.cssText='font-size:11px;padding:3px 8px';a.href=url;a.target='_blank';a.textContent='📄'+(urls.length>1?(i+1):'');sa.appendChild(a);});
-    var eb=document.createElement('button');eb.className='edit-btn';eb.style.cssText='font-size:11px;padding:3px 8px';eb.textContent='✏️';
-    (function(row){eb.addEventListener('click',function(e){e.stopPropagation();openEditModal(row);});})(r);sa.appendChild(eb);
-    var db=document.createElement('button');db.className='del-btn';db.style.cssText='font-size:11px;padding:3px 8px';db.textContent='🗑️';
-    (function(row){db.addEventListener('click',function(){openDelModal(row);});})(r);sa.appendChild(db);
-    sr.appendChild(sa);detail.appendChild(sr);
-  });
-  div.appendChild(detail);
-  // 入力済みボタン（完納のみ）
-  if(hasKanno&&!allDone){
-    var ga=document.createElement('div');ga.className='rec-actions';
-    var mb=document.createElement('button');mb.className='mark-btn';mb.textContent='✓ 入力済みにする';
-    var krecs=kannoRecs.filter(function(r){return (r[12]||'未')==='未';});
-    (function(kr){
-      mb.addEventListener('click',function(){
-        mb.disabled=true;mb.textContent='更新中...';
-        var done=0;
-        kr.forEach(function(r){
-          gasPost('markAsInputted', {rowNum: parseInt(r[r.length-1])}, function(res){
-            done++;if(done===kr.length){if(res.ok)loadRecords();else{alert('エラー');mb.disabled=false;mb.textContent='✓ 入力済みにする';}}
-          }, function(e){ done++;alert('エラー: '+e.message); });
-        });
+
+  // ── 工順ごとのセクション ──
+  junjoOrder.forEach(function(j){
+    var jt=junjoTotals[j];
+    var sec=document.createElement('div');
+    sec.style.cssText='margin-top:8px;border-top:1px solid #e0e0e0;padding-top:6px;';
+
+    // 工順ヘッダ
+    var jHdr=document.createElement('div');
+    jHdr.style.cssText='font-size:11px;font-weight:700;color:#1F4E79;margin-bottom:4px;';
+    jHdr.textContent='── 工順'+j+(jt.kosei?' '+jt.kosei:'')
+      +' 指示: '+jt.shiji+'個 ──';
+    sec.appendChild(jHdr);
+
+    // 工順タグ
+    var jTags=document.createElement('div');jTags.className='rec-tags';
+
+    // 実績区分タグ（完納があれば完納のみ、なければ全区分）
+    var jKubuns=jt.jrecs.map(function(r){return r[7]||'';})
+      .filter(function(v,i,a){return v&&a.indexOf(v)===i;});
+    if(jt.hasKanno){
+      var kt=document.createElement('span');kt.className='tag tag-kanno';kt.textContent='完納';jTags.appendChild(kt);
+    } else {
+      jKubuns.forEach(function(k){
+        var kt=document.createElement('span');
+        kt.className='tag '+(k==='分納'?'tag-bunno':'tag-chukan');
+        kt.textContent=k;jTags.appendChild(kt);
       });
-    })(krecs);
-    ga.appendChild(mb);div.appendChild(ga);
-  }
+    }
+
+    // システム入力待ち
+    if(!jt.allDone&&jt.hasKanno){
+      var t3=document.createElement('span');t3.className='tag t-alert';
+      t3.style.animation='pulse 1.5s infinite';t3.textContent='⚠️ システム入力待ち';jTags.appendChild(t3);
+    }
+    // 材料残
+    if(jt.hasZairyo){
+      var tz=document.createElement('span');tz.className='tag';
+      tz.style.cssText='background:#E1F5EE;color:#0F6E56;';tz.textContent='📦 材料残あり';jTags.appendChild(tz);
+    }
+    sec.appendChild(jTags);
+
+    // メモ
+    jt.memos.forEach(function(memo){
+      var tm=document.createElement('div');
+      tm.style.cssText='font-size:11px;color:#555;margin-top:4px;padding:3px 8px;background:#fff8e1;border-left:3px solid #f9a825;border-radius:0 4px 4px 0;';
+      tm.textContent='📝 メモ: '+memo;sec.appendChild(tm);
+    });
+    jt.sonotaMemos.forEach(function(memo){
+      var tm=document.createElement('div');
+      tm.style.cssText='font-size:11px;color:#555;margin-top:4px;padding:3px 8px;background:#f3e5f5;border-left:3px solid #8e24aa;border-radius:0 4px 4px 0;';
+      tm.textContent='📋 その他: '+memo;sec.appendChild(tm);
+    });
+
+    // 明細折りたたみ
+    var jToggle=document.createElement('span');jToggle.className='grp-toggle';
+    var jDetail=document.createElement('div');jDetail.className='grp-detail';
+    var jLabel=jt.jrecs.length;
+    jToggle.textContent='▼ 明細'+jLabel+'件を表示（全日付）';
+    jToggle.addEventListener('click',function(){
+      var open=jDetail.style.display==='none'||jDetail.style.display==='';
+      jDetail.style.display=open?'block':'none';
+      jToggle.textContent=(open?'▲ ':'▼ ')+'明細'+jLabel+'件（全日付）を'+(open?'非表示':'表示');
+    });
+    sec.appendChild(jToggle);
+
+    // 明細レコード
+    jt.jrecs.forEach(function(r){
+      var sr=document.createElement('div');sr.className='sub-rec';
+      var klass=r[7]==='完納'?'lbl-k':(r[7]==='分納'?'lbl-b':'lbl-c');
+      var sr_top=document.createElement('div');sr_top.className='sub-row';
+      var sr_l=document.createElement('span');
+      sr_l.innerHTML='<span class="lbl '+klass+'">'+(r[7]||'')+'</span>'+(r[4]||'')
+        +'&nbsp;<span style="color:#888;font-size:10px">'+r[1]+' '+(r[0]||'').slice(11,16)+'</span>';
+      var sr_r=document.createElement('span');sr_r.style.fontWeight='700';
+      var ngParts=[];
+      if(parseInt(r[6]||0)>0) ngParts.push('不良:'+r[6]);
+      if(parseInt(r[17]||0)>0) ngParts.push('保留:'+r[17]);
+      if(parseInt(r[18]||0)>0) ngParts.push('その他:'+r[18]);
+      sr_r.textContent='良品:'+(r[5]||0)+(ngParts.length?' '+ngParts.join('/'):' ');
+      sr_top.appendChild(sr_l);sr_top.appendChild(sr_r);sr.appendChild(sr_top);
+      if(r[8]==='あり'){var zTag=document.createElement('span');zTag.style.cssText='display:inline-block;font-size:10px;background:#E1F5EE;color:#0F6E56;border-radius:4px;padding:1px 6px;margin-top:3px;margin-right:4px;';zTag.textContent='📦 材料残あり';sr.appendChild(zTag);}
+      if(r[9]&&r[9].indexOf('http')!==0){var mo=document.createElement('div');mo.style.cssText='font-size:11px;color:#555;margin-top:4px;padding:3px 8px;background:#fff8e1;border-left:3px solid #f9a825;border-radius:0 4px 4px 0;';mo.textContent='📝 メモ: '+r[9];sr.appendChild(mo);}
+      if(r[19]&&String(r[19]).trim()){var sm=document.createElement('div');sm.style.cssText='font-size:11px;color:#555;margin-top:4px;padding:3px 8px;background:#f3e5f5;border-left:3px solid #8e24aa;border-radius:0 4px 4px 0;';sm.textContent='📋 その他: '+r[19];sr.appendChild(sm);}
+      var sa=document.createElement('div');sa.style.cssText='display:flex;gap:5px;margin-top:5px;flex-wrap:wrap';
+      var urls=(r[10]||'').split('|').filter(function(u){return u.indexOf('https://drive.google.com/file/d/')===0;});
+      urls.forEach(function(url,i){var a=document.createElement('a');a.className='rec-link';a.style.cssText='font-size:11px;padding:3px 8px';a.href=url;a.target='_blank';a.textContent='📄'+(urls.length>1?(i+1):'');sa.appendChild(a);});
+      var eb=document.createElement('button');eb.className='edit-btn';eb.style.cssText='font-size:11px;padding:3px 8px';eb.textContent='✏️';
+      (function(row){eb.addEventListener('click',function(e){e.stopPropagation();openEditModal(row);});})(r);sa.appendChild(eb);
+      var db=document.createElement('button');db.className='del-btn';db.style.cssText='font-size:11px;padding:3px 8px';db.textContent='🗑️';
+      (function(row){db.addEventListener('click',function(){openDelModal(row);});})(r);sa.appendChild(db);
+      sr.appendChild(sa);jDetail.appendChild(sr);
+    });
+    sec.appendChild(jDetail);
+
+    // 入力済みボタン（完納かつ未入力の工順のみ）
+    if(jt.hasKanno&&!jt.allDone){
+      var ga=document.createElement('div');ga.className='rec-actions';
+      var mb=document.createElement('button');mb.className='mark-btn';mb.textContent='✓ 入力済みにする';
+      var krecs=jt.kannoRecs.filter(function(r){return (r[12]||'未')==='未';});
+      (function(kr,btn){
+        btn.addEventListener('click',function(){
+          btn.disabled=true;btn.textContent='更新中...';
+          var done=0;
+          kr.forEach(function(r){
+            gasPost('markAsInputted',{rowNum:parseInt(r[r.length-1])},function(res){
+              done++;if(done===kr.length){if(res.ok)loadRecords();else{alert('エラー');btn.disabled=false;btn.textContent='✓ 入力済みにする';}}
+            },function(e){done++;alert('エラー: '+e.message);});
+          });
+        });
+      })(krecs,mb);
+      ga.appendChild(mb);sec.appendChild(ga);
+    }
+    div.appendChild(sec);
+  });
+
+  div.appendChild(document.createElement('div')); // 末尾スペーサー
   return div;
 }
 
