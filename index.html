@@ -209,10 +209,16 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
           <option value="">-- 品番を選択 --</option>
         </select>
       </div>
-      <div class="fg2">
+      <div class="fg3">
         <div class="fi">
-          <label>計画数</label>
+          <label>計画数（標準CT基準）</label>
           <input type="number" id="iPlan" placeholder="自動入力" min="0">
+          <div class="hint" id="iStdCT" style="color:#e67e22;font-weight:500;"></div>
+        </div>
+        <div class="fi">
+          <label>修正計画数 <span style="font-size:9px;color:#e67e22;">材料変更時</span></label>
+          <input type="number" id="iRevised" placeholder="変更なければ空欄" min="0">
+          <div class="hint">材料が増減した場合のみ入力</div>
         </div>
         <div class="fi">
           <label>実績数</label>
@@ -345,18 +351,28 @@ const fmtTs=ts=>(!ts||ts===0)?'--:--':`${String(new Date(ts).getHours()).padStar
 const timeToH=t=>{if(!t)return null;const p=t.split(':');return +p[0]+ +p[1]/60;};
 const timeToMin=t=>{if(!t||t==='')return null;const p=t.split(':');return +p[0]*60+(+p[1]|0);};
 
-// ライン達成率計算（現時点案分方式）
-// 現在時刻までに「着手済みまたは開始時刻を過ぎた品番」のみ対象
-// 達成率 = Σ(実績数 × 計画CT) / 現時点の計画稼働時間 × 100
+// ライン達成率計算
+// CT達成率 = 計画CT / 実績CT の加重平均（標準時間をどれだけ達成しているか）
+// 見込み完了時刻 = 現在時刻 + 残作業計画時間 ÷ CT達成率
 function calcLineRate(l){
   const jobs=(l.jobs||[]).filter(j=>j.plan>0&&j.start&&j.end&&!j.history);
   if(!jobs.length) return null;
 
-  const updT=l.updatedAt>0?new Date(l.updatedAt):new Date();
+  const now=new Date();
+  const nowMin=now.getHours()*60+now.getMinutes();
+  const updT=l.updatedAt>0?new Date(l.updatedAt):now;
   const updMin=updT.getHours()*60+updT.getMinutes();
 
   let ctRateSum=0, ctRateCnt=0;
-  let actualValueSum=0, planValueSum=0;
+  let remainingPlanMin=0;
+
+  // 現在稼働中jobを特定（関数外で一度だけ計算）
+  const curActiveJob=(function(){
+    let ci=jobs.findIndex(jj=>jj.part===l.part&&l.workStart&&jj.actualStart===l.workStart);
+    if(ci<0) ci=jobs.findIndex(jj=>jj.part===l.part&&jj.status==='running');
+    if(ci<0) ci=jobs.findIndex(jj=>jj.part===l.part&&jj.plan>0);
+    return ci>=0?jobs[ci]:null;
+  })();
 
   jobs.forEach(function(j){
     const sm=timeToMin(j.start);
@@ -367,36 +383,49 @@ function calcLineRate(l){
     const planCT=planNetJ/j.plan;
 
     const jActCount=j.actualCount||0;
-    // workStartとseqで現在稼働中jobを正確に判定
-    const curActiveJob=(function(){
-      let ci=jobs.findIndex(jj=>jj.part===l.part&&l.workStart&&jj.actualStart===l.workStart);
-      if(ci<0) ci=jobs.findIndex(jj=>jj.part===l.part&&jj.status==='running');
-      if(ci<0) ci=jobs.findIndex(jj=>jj.part===l.part&&jj.plan>0);
-      return ci>=0?jobs[ci]:null;
-    })();
     const isCurrentJob=curActiveJob&&(j.seq?j.seq===curActiveJob.seq:j===curActiveJob);
     const jAct=isCurrentJob&&(l.actual||0)>jActCount?(l.actual||0):jActCount;
 
-    planValueSum+=planNetJ;
-
-    if(jAct<=0) return;
-
-    const wsJ=timeToMin(isCurrentJob?(l.workStart||j.actualStart||j.start):(j.actualStart||j.start));
-    const weJ=isCurrentJob
-      ?(l.workEnd&&l.workEnd!==''?timeToMin(l.workEnd):updMin)
-      :(j.actualEnd&&j.actualEnd!==''?timeToMin(j.actualEnd):updMin);
-    const actualNetJ=wsJ&&weJ?netMins(wsJ,weJ):0;
-    if(actualNetJ>0){
-      ctRateSum+=jAct*planCT/actualNetJ;
-      ctRateCnt++;
+    if(jAct>0){
+      const wsJ=timeToMin(isCurrentJob?(l.workStart||j.actualStart||j.start):(j.actualStart||j.start));
+      const weJ=isCurrentJob
+        ?(l.workEnd&&l.workEnd!==''?timeToMin(l.workEnd):updMin)
+        :(j.actualEnd&&j.actualEnd!==''?timeToMin(j.actualEnd):updMin);
+      const actualNetJ=wsJ&&weJ?netMins(wsJ,weJ):0;
+      if(actualNetJ>0){
+        ctRateSum+=jAct*planCT/actualNetJ;
+        ctRateCnt++;
+      }
+      // 未完了jobの残り作業時間を加算（修正計画数があればそちらを使用、標準CTは不変）
+      const isDone=j.status==='done'||(j.actualEnd&&j.actualEnd!=='');
+      if(!isDone){
+        const effectivePlan=j.revisedPlan||j.plan;
+        const rem=Math.max(0,effectivePlan-jAct);
+        remainingPlanMin+=rem*planCT;
+      }
+    } else {
+      // 未着手jobは修正計画数ベースの時間を残り時間に加算
+      const effectivePlan=j.revisedPlan||j.plan;
+      remainingPlanMin+=effectivePlan*planCT;
     }
-    actualValueSum+=jAct*planCT;
   });
 
   const ctRate=ctRateCnt>0?Math.round(ctRateSum/ctRateCnt*100):null;
-  const planRate=planValueSum>0?Math.round(actualValueSum/planValueSum*100):null;
-  if(ctRate===null&&planRate===null) return null;
-  return {ctRate, planRate};
+
+  // 見込み完了時刻：残り計画時間をCT達成率で補正して計算
+  let estFinish=null;
+  const lastJob=jobs[jobs.length-1];
+  const planEndTime=lastJob&&lastJob.end?lastJob.end:null;
+  if(remainingPlanMin<=0&&ctRateCnt>0){
+    estFinish='完了';
+  } else if(remainingPlanMin>0&&ctRate&&ctRate>0){
+    const adjustedMin=remainingPlanMin*(100/ctRate);
+    const estM=nowMin+Math.round(adjustedMin);
+    estFinish=String(Math.floor(estM/60)).padStart(2,'0')+':'+String(estM%60).padStart(2,'0');
+  }
+
+  if(ctRate===null&&estFinish===null) return null;
+  return {ctRate, estFinish, planEndTime};
 }
 // 休憩時間帯（分単位）
 const BREAKS=[[600,610],[730,770],[890,900],[1020,1030]]; // 10:00-10:10, 12:10-12:50, 14:50-15:00, 17:00-17:10
@@ -615,21 +644,21 @@ function renderBoard(){
         const cur=(jIdx===curJobIdx);
         // 常にjobレベルのactualCountを使用（lineレベルに依存しない）
         const jAct=j.actualCount||0;
-        // CT達成率：計画CT vs 実績CT
+        // CT達成率：標準CT vs 実績CT（「この個数を作るのに標準通りの時間か」）
         let jR=null, rc='none';
         if(jAct>0&&j.plan>0&&j.start&&j.end){
-          // 目標CT個数 = 経過正味時間 ÷ 計画CT
-          const planMin2=timeToMin(j.end)-timeToMin(j.start);
-          const planCT2=planMin2>0?planMin2/j.plan:0; // 分/個（計画CT）
+          const sm2=timeToMin(j.start), em2=timeToMin(j.end);
+          const planNetJ2=sm2&&em2?netMins(sm2,em2):0;
+          const standardCT2=planNetJ2>0?planNetJ2/j.plan:0; // 標準CT（分/個）
           const jWS2=cur?(l.workStart||j.actualStart||j.start):(j.actualStart||j.start);
           const jWE2=cur?(l.workEnd&&l.workEnd!==''?l.workEnd:(j.actualEnd||'')):(j.actualEnd||'');
           const wsM2=timeToMin(jWS2);
           const weM2=jWE2&&jWE2!==''?timeToMin(jWE2):(new Date().getHours()*60+new Date().getMinutes());
-          const actMin2=wsM2&&weM2?netMins(wsM2,weM2):0;
-          const targetCnt2=planCT2>0&&actMin2>0?Math.round(actMin2/planCT2):0;
-          if(targetCnt2>0){
-            jR=Math.round(jAct/targetCnt2*100);
-          } else {
+          const actNetJ2=wsM2&&weM2?netMins(wsM2,weM2):0;
+          // CT達成率 = (実績数×標準CT) ÷ 実績時間 × 100
+          if(standardCT2>0&&actNetJ2>0){
+            jR=Math.round(jAct*standardCT2/actNetJ2*100);
+          } else if(j.plan>0){
             jR=Math.round(jAct/j.plan*100);
           }
           rc=jR>=95?'ok':jR>=80?'wn':'ng';
@@ -661,18 +690,39 @@ function renderBoard(){
           const pl=(pd>=0?'+':'')+pd.toLocaleString()+'個/h';
           jpStr='<br><span style="font-size:9px;color:#555;">⚡'+pi.pace.toLocaleString()+'個/h <span style="color:'+pc+'">('+pl+')</span></span>';
         }
-        // grid 3列: 連番(18px) | 品番(140px) | 残り(数量・時間・段取り)
-          // 2行目: 空 | 空 | 履歴
+        // grid 3列: 連番(18px) | 品番(140px) | 残り(数量・時間・実績)
+          // 2行目: 空 | 段取り情報 | 空
+          // 3行目: 空 | 空 | 履歴
           const timeInfo=(j.start&&j.end?j.start+'〜'+j.end:'-');
-          const tStr=tParts.length?'<span style="font-size:9px;color:#999;">'+tParts.join(' ')+'</span>':'';
-          const col3='<span class="sq">'+j.plan.toLocaleString()+'個</span>'+
+          // 標準CT（個/h）計算
+          const sm3=timeToMin(j.start),em3=timeToMin(j.end);
+          const planNet3=sm3&&em3?netMins(sm3,em3):0;
+          const stdRate3=planNet3>0?Math.round(j.plan/planNet3*60):0;
+          const stdCTStr=stdRate3>0?'<span style="font-size:9px;color:#aaa;margin-left:3px;">標準'+stdRate3+'個/h</span>':'';
+          // 修正計画数表示
+          const effPlan=j.revisedPlan||j.plan;
+          const planDisp=j.revisedPlan&&j.revisedPlan!==j.plan
+            ?j.plan.toLocaleString()+'<span style="color:#e67e22;font-size:10px;margin-left:2px;">→'+j.revisedPlan.toLocaleString()+'</span>'
+            :j.plan.toLocaleString();
+          const col3='<span class="sq">'+planDisp+'個</span>'+stdCTStr+
             (jAct>0?'<span class="sa '+rc+'">'+jAct.toLocaleString()+'個</span>':'<span class="sa none">-</span>')+
             '<span style="font-size:10px;color:#aaa;white-space:nowrap;">'+timeInfo+'</span>'+
-            tStr+jpStr;
+            jpStr;
+          // 2行目：段取り時間・作業開始・終了を品番列下に表示
+          const setupParts2=[];
+          if(jSetupMin>0) setupParts2.push('🔧 段取 '+jSetupMin+'分');
+          if(jWS) setupParts2.push('開始 '+jWS);
+          if(jWE) setupParts2.push('終了 '+jWE);
+          const setupRow2=setupParts2.join('  ');
           sched+='<div class="sr'+(cur?' cur':'')+'">'+
             '<span class="sn">'+j.seq+'</span>'+
             '<span class="sp">'+(cur?'▶ ':'')+j.part+'</span>'+
             '<span style="display:flex;flex-wrap:wrap;align-items:baseline;gap:3px;min-width:0;">'+col3+'</span>'+
+            (setupRow2?
+              '<span></span>'+
+              '<span style="font-size:9px;color:#999;padding-top:1px;white-space:nowrap;">'+setupRow2+'</span>'+
+              '<span></span>'
+            :'')+
             (snapDisp?
               '<span></span>'+'<span></span>'+
               '<span style="font-size:9px;line-height:1.8;display:flex;flex-wrap:wrap;gap:0 2px;min-width:0;">'+snapDisp+'</span>'
@@ -695,8 +745,8 @@ function renderBoard(){
       (function(){
         var lr=calcLineRate(l);
         if(!lr) return '';
-        var ctR=lr.ctRate, planR=lr.planRate;
-        if(ctR===null&&planR===null) return '';
+        var ctR=lr.ctRate, estF=lr.estFinish, planEnd=lr.planEndTime;
+        if(ctR===null&&estF===null) return '';
         function rateBox(label, val, sub){
           if(val===null) return '';
           var col=val>=95?'#27ae60':val>=80?'#e67e22':'#e74c3c';
@@ -710,9 +760,31 @@ function renderBoard(){
             '<div style="font-size:9px;color:#888;">'+sub+'</div>'+
           '</div>';
         }
+        function estBox(estF, planEnd){
+          if(!estF) return '';
+          if(estF==='完了'){
+            return '<div style="flex:1;background:rgba(39,174,96,0.08);border-radius:6px;padding:6px 8px;">'+
+              '<div style="font-size:9px;color:#888;margin-bottom:2px;">見込み完了</div>'+
+              '<div style="font-size:18px;font-weight:700;color:#27ae60;">✓ 完了</div>'+
+              '<div style="font-size:9px;color:#888;">全工程終了</div>'+
+            '</div>';
+          }
+          var em=timeToMin(estF);
+          var pm=planEnd?timeToMin(planEnd):null;
+          var diff=(em!==null&&pm!==null)?(em-pm):null;
+          var col=diff===null?'#888':diff<=0?'#27ae60':diff<=15?'#e67e22':'#e74c3c';
+          var diffStr=diff===null?'':(diff===0?'計画通り':diff<0?(Math.abs(diff)+'分早く終わる予定'):('+'+diff+'分遅れる見込み'));
+          return '<div style="flex:1;background:rgba(0,0,0,0.04);border-radius:6px;padding:6px 8px;">'+
+            '<div style="font-size:9px;color:#888;margin-bottom:2px;">見込み完了時刻</div>'+
+            '<div style="font-size:18px;font-weight:700;color:'+col+';">'+estF+'</div>'+
+            '<div style="font-size:9px;color:'+col+';">'+
+              (planEnd?'計画 '+planEnd+(diffStr?' ／ '+diffStr:''):'計画終了時刻なし')+
+            '</div>'+
+          '</div>';
+        }
         return '<div style="display:flex;gap:6px;margin-bottom:8px;">'+
-          rateBox('CT達成率（作業効率）', ctR, '速く作れているか')+
-          rateBox('計画達成率（計画数比）', planR, '計画数に対して今どこか')+
+          rateBox('CT達成率（標準時間比）', ctR, '標準時間をどれだけ達成しているか')+
+          estBox(estF, planEnd)+
         '</div>';
       })()+
       '<div class="pb"><div class="pb-f '+s.bar+'" style="width:'+barW+'%"></div></div>'+
@@ -875,11 +947,22 @@ function restoreJobFields(lineId, partVal, startVal, seqVal){
   const wsVal=isActivePart?(l.workStart||''):(job&&job.actualStart||'');
   const weVal=isActivePart?(l.workEnd||''):(job&&job.actualEnd||'');
   document.getElementById('iActual').value=actVal;
+  document.getElementById('iRevised').value=(job&&job.revisedPlan>0)?job.revisedPlan:'';
   document.getElementById('iNote').value=isActivePart?(l.note||''):'';
   document.getElementById('iSS').value=ssVal;
   document.getElementById('iSE').value=seVal;
   document.getElementById('iWS').value=wsVal;
   document.getElementById('iWE').value=weVal;
+  // 標準CT表示（計画数÷計画時間）
+  const stdCtEl=document.getElementById('iStdCT');
+  if(job&&job.plan>0&&job.start&&job.end){
+    const smC=timeToMin(job.start),emC=timeToMin(job.end);
+    const planNetC=smC&&emC?netMins(smC,emC):0;
+    const stdRate=planNetC>0?Math.round(job.plan/planNetC*60):0;
+    stdCtEl.textContent=stdRate>0?('標準 '+stdRate+'個/h'):'';
+  } else {
+    stdCtEl.textContent='';
+  }
 }
 window.onLineSel=function(){
   const id=document.getElementById('iLine').value;
@@ -891,10 +974,12 @@ window.onLineSel=function(){
   if(_lastLineId!==''&&_lastLineId!==id){
     document.getElementById('iActual').value='';
     document.getElementById('iPlan').value='';
+    document.getElementById('iRevised').value='';
     document.getElementById('iNote').value='';
     document.getElementById('iSS').value='';
     document.getElementById('iWS').value='';
     document.getElementById('iWE').value='';
+    document.getElementById('iStdCT').textContent='';
   }
   // 現在の品番を選択してFirebase値を復元
   const cur=lines[id]?.part;
@@ -957,6 +1042,7 @@ window.doSub=function(){
     const part=document.getElementById('iPart').value;
     const plan=parseInt(document.getElementById('iPlan').value);
     const actual=parseInt(document.getElementById('iActual').value);
+    const revised=parseInt(document.getElementById('iRevised').value);
     const note=document.getElementById('iNote').value;
     const ss=document.getElementById('iSS').value;
     const se=document.getElementById('iSE').value;
@@ -1028,10 +1114,10 @@ window.doSub=function(){
         let snapRate=null;
         if(smSnap&&emSnap&&wsSnap&&smSnap<emSnap){
           const planNetSnap=netMins(smSnap,emSnap);
-          const planCTSnap=planNetSnap>0?planNetSnap/j.plan:0;
-          const elapsedSnap=netMins(wsSnap,Math.min(snapMin,emSnap));
-          const targetSnap=planCTSnap>0?Math.round(elapsedSnap/planCTSnap):0;
-          snapRate=targetSnap>0?Math.round(actVal/targetSnap*100):Math.round(actVal/j.plan*100);
+          const standardCTSnap=planNetSnap>0?planNetSnap/j.plan:0; // 標準CT（分/個）
+          const elapsedSnap=netMins(wsSnap,snapMin); // 実際に作業した時間
+          // CT達成率 = (実績数×標準CT) ÷ 実績時間 × 100
+          snapRate=standardCTSnap>0&&elapsedSnap>0?Math.round(actVal*standardCTSnap/elapsedSnap*100):Math.round(actVal/j.plan*100);
         } else {
           snapRate=Math.round(actVal/j.plan*100);
         }
@@ -1053,6 +1139,7 @@ window.doSub=function(){
         actualStart:ws,
         actualEnd:we,
         actualCount:actVal,
+        revisedPlan:(!isNaN(revised)&&revised>0)?revised:(j.revisedPlan||null),
         setupActualMin:setupMin!==null?setupMin:(j.setupActualMin||0),
         paceInfo,
         snapHistory,
