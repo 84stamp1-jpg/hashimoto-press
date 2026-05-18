@@ -708,9 +708,14 @@ function renderBoard(){
             (jAct>0?'<span class="sa '+rc+'">'+jAct.toLocaleString()+'個</span>':'<span class="sa none">-</span>')+
             '<span style="font-size:10px;color:#aaa;white-space:nowrap;">'+timeInfo+'</span>'+
             jpStr;
-          // 2行目：段取り時間・作業開始・終了を品番列下に表示
+          // 2行目：段取り時間（標準比率付き）・作業開始・終了を品番列下に表示
           const setupParts2=[];
-          if(jSetupMin>0) setupParts2.push('🔧 段取 '+jSetupMin+'分');
+          if(jSetupMin>0){
+            const stdSU=sets[id]||60;
+            const suR2=Math.round(stdSU/jSetupMin*100);
+            const suCol2=suR2>=95?'#27ae60':suR2>=80?'#e67e22':'#c0392b';
+            setupParts2.push('<span style="color:'+suCol2+';">🔧 段取 '+jSetupMin+'分／標準'+stdSU+'分 ('+suR2+'%)</span>');
+          }
           if(jWS) setupParts2.push('開始 '+jWS);
           if(jWE) setupParts2.push('終了 '+jWE);
           const setupRow2=setupParts2.join('  ');
@@ -862,35 +867,47 @@ window.openModal=function(id){
   const l=lines[id];if(!l)return;
   document.getElementById('mttl').textContent=l.name+' 工程詳細';
   const jobs=(l.jobs||[]).filter(j=>j.plan>0);
-  let h=`<table class="jtbl"><thead><tr><th>#</th><th>品番</th><th>計画数</th><th>実績数</th><th>達成率</th><th>予定時間</th><th>実績時間</th><th></th></tr></thead><tbody>`;
-  if(!jobs.length){h+='<tr><td colspan="8" style="padding:16px;color:#aaa;text-align:center;">工程データなし</td></tr>';}
+  const stdSetup=sets[id]||60;
+  let h=`<table class="jtbl"><thead><tr><th>#</th><th>品番</th><th>計画数</th><th>実績数</th><th>CT達成率</th><th>段取り<br><span style="font-weight:400;color:#aaa;">標準${stdSetup}分</span></th><th>予定時間</th><th>実績時間</th><th></th></tr></thead><tbody>`;
+  if(!jobs.length){h+='<tr><td colspan="9" style="padding:16px;color:#aaa;text-align:center;">工程データなし</td></tr>';}
   jobs.forEach(j=>{
     const isCur=j.part===l.part;
     const a=isCur?l.actual:(j.actualCount||0);
-    const r=j.plan>0?Math.round(a/j.plan*100):null;
-    const rc=r===null?'':r>=90?'c-ok':r>=75?'c-wn':'c-ng';
+    // CT達成率：(実績数×標準CT) ÷ 実績時間 × 100
+    const sm2=timeToMin(j.start),em2=timeToMin(j.end);
+    const planNet2=sm2&&em2?netMins(sm2,em2):0;
+    const stdCT2=planNet2>0&&j.plan>0?planNet2/j.plan:0;
+    const jWS2=isCur?(l.workStart||j.actualStart||''):(j.actualStart||'');
+    const jWE2=isCur?(l.workEnd&&l.workEnd!==''?l.workEnd:(j.actualEnd||'')):(j.actualEnd||'');
+    const wsM2=timeToMin(jWS2);
+    const weM2=jWE2&&jWE2!==''?timeToMin(jWE2):(isCur&&a>0?(new Date().getHours()*60+new Date().getMinutes()):null);
+    const actNet2=wsM2&&weM2?netMins(wsM2,weM2):0;
+    const r=stdCT2>0&&actNet2>0&&a>0?Math.round(a*stdCT2/actNet2*100):(j.plan>0&&a>0?Math.round(a/j.plan*100):null);
+    const rc=r===null?'':r>=95?'c-ok':r>=80?'c-wn':'c-ng';
+    // 段取り達成率
+    const actSU=j.setupActualMin||0;
+    const suR=actSU>0?Math.round(stdSetup/actSU*100):null;
+    const suCol=suR===null?'#aaa':suR>=95?'#27ae60':suR>=80?'#e67e22':'#c0392b';
+    const suDisp=actSU>0
+      ?`<span style="color:${suCol};font-weight:700;">${actSU}分</span>`+
+       (suR!==null?`<span style="font-size:9px;color:${suCol};margin-left:3px;">(${suR}%)</span>`:'')
+      :'<span style="color:#ccc;">--</span>';
     const rowCls=isCur?'cur':(j.status==='done'?'dn':'');
     const aTime=j.actualStart&&j.actualEnd?j.actualStart+'〜'+j.actualEnd:'--';
     const pTime=j.start&&j.end?j.start+'〜'+j.end:'--';
-    const sm=j.setupActualMin?`<br><span style="font-size:9px;color:#888;">段取${j.setupActualMin}分</span>`:'';
     h+=`<tr class="${rowCls}">
       <td>${j.seq}</td>
-      <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${j.part}">${isCur?'▶ ':''}<b>${j.part}</b></td>
-      <td style="text-align:right;">${j.plan.toLocaleString()}</td>
+      <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${j.part}">${isCur?'▶ ':''}<b>${j.part}</b></td>
+      <td style="text-align:right;">${j.revisedPlan&&j.revisedPlan!==j.plan?j.plan.toLocaleString()+'<span style="color:#e67e22;font-size:9px;">→'+j.revisedPlan.toLocaleString()+'</span>':j.plan.toLocaleString()}</td>
       <td style="text-align:right;">${a>0?a.toLocaleString():'-'}</td>
-      <td style="min-width:60px;">${r!==null?`<div>${r}%</div><div class="pbsm"><div class="pbsm-f ${rc}" style="width:${Math.min(r,100)}%"></div></div>`:'--'}</td>
+      <td style="min-width:55px;">${r!==null?`<div style="font-weight:700;color:${r>=95?'#27ae60':r>=80?'#e67e22':'#c0392b'}">${r}%</div><div class="pbsm"><div class="pbsm-f ${rc}" style="width:${Math.min(r,100)}%"></div></div>`:'--'}</td>
+      <td style="min-width:70px;">${suDisp}</td>
       <td style="font-size:10px;color:#888;">${pTime}</td>
-      <td style="font-size:10px;color:#555;">${aTime}${sm}</td>
+      <td style="font-size:10px;color:#555;">${aTime}</td>
       <td><button class="btn-to-input" onclick="goToInput('${id}','${j.part}','${j.seq}','${j.start||''}');closeOvD();">入力</button></td>
     </tr>`;
   });
   h+='</tbody></table>';
-  if(jobs.length){
-    const tp=jobs.reduce((s,j)=>s+j.plan,0);
-    h+=`<div style="margin-top:10px;padding:8px 10px;background:#f8f7f2;border-radius:6px;font-size:12px;">
-      <b>本日合計</b>　計画：${tp.toLocaleString()}個　実績：${(l.actual||0).toLocaleString()}個　達成率：${tp>0?Math.round((l.actual||0)/tp*100)+'%':'--'}
-    </div>`;
-  }
   document.getElementById('mbody').innerHTML=h;
   document.getElementById('ov').classList.add('open');
 };
@@ -1303,18 +1320,31 @@ window.saveSnapshot=function(){
   altsDiv.innerHTML=document.getElementById('alts').innerHTML;
   ov.appendChild(altsDiv);
 
-  // ボード
+  // ボード＋アラートをスケール対象ラッパーで包む
+  const scaleWrap=document.createElement('div');
+  scaleWrap.id='print-scale';
+  scaleWrap.appendChild(altsDiv);
   const boardDiv=document.createElement('div');
-  boardDiv.style.cssText='display:grid;grid-template-columns:repeat(3,1fr);gap:8px;';
+  boardDiv.style.cssText='display:grid;grid-template-columns:repeat(3,1fr);gap:6px;';
   boardDiv.innerHTML=document.getElementById('lview').innerHTML;
-  ov.appendChild(boardDiv);
+  scaleWrap.appendChild(boardDiv);
+  ov.appendChild(scaleWrap);
 
   document.body.appendChild(ov);
 
-  // 印刷スタイル
+  // 印刷スタイル：A4横1ページに収まるようzoomで縮小
   const pStyle=document.createElement('style');
   pStyle.id='print-style';
-  pStyle.textContent='@media print{body>*:not(#print-ov){display:none!important;} #print-ov .print-bar button{display:none!important;} #print-ov{position:static!important;padding:8px!important;} #print-ov .print-bar{background:#1a1a1a!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}}';
+  pStyle.textContent=`@media print{
+    @page{size:A4 landscape;margin:5mm;}
+    body>*:not(#print-ov){display:none!important;}
+    #print-ov .print-bar button{display:none!important;}
+    #print-ov{position:static!important;padding:0!important;background:#f0efe8!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    #print-ov .print-bar{background:#1a1a1a!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;border-radius:0!important;margin-bottom:4px!important;padding:6px 12px!important;}
+    #print-scale{zoom:0.62;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .lcard{border-left-width:3px!important;}
+    .rate-bar-bg,.pb,.pbsm{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  }`;
   document.head.appendChild(pStyle);
 }
 
