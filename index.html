@@ -712,8 +712,8 @@ function renderBoard(){
           const setupParts2=[];
           if(jSetupMin>0){
             const stdSU=sets[id]||60;
-            const suR2=Math.round(stdSU/jSetupMin*100);
-            const suCol2=suR2>=95?'#27ae60':suR2>=80?'#e67e22':'#c0392b';
+            const suR2=Math.round(jSetupMin/stdSU*100);
+            const suCol2=suR2<=100?'#27ae60':suR2<=125?'#e67e22':'#c0392b';
             setupParts2.push('<span style="color:'+suCol2+';">🔧 段取 '+jSetupMin+'分／標準'+stdSU+'分 ('+suR2+'%)</span>');
           }
           if(jWS) setupParts2.push('開始 '+jWS);
@@ -884,10 +884,10 @@ window.openModal=function(id){
     const actNet2=wsM2&&weM2?netMins(wsM2,weM2):0;
     const r=stdCT2>0&&actNet2>0&&a>0?Math.round(a*stdCT2/actNet2*100):(j.plan>0&&a>0?Math.round(a/j.plan*100):null);
     const rc=r===null?'':r>=95?'c-ok':r>=80?'c-wn':'c-ng';
-    // 段取り達成率
+    // 段取り時間比率：実績÷標準（100%以下が良い）
     const actSU=j.setupActualMin||0;
-    const suR=actSU>0?Math.round(stdSetup/actSU*100):null;
-    const suCol=suR===null?'#aaa':suR>=95?'#27ae60':suR>=80?'#e67e22':'#c0392b';
+    const suR=actSU>0?Math.round(actSU/stdSetup*100):null;
+    const suCol=suR===null?'#aaa':suR<=100?'#27ae60':suR<=125?'#e67e22':'#c0392b';
     const suDisp=actSU>0
       ?`<span style="color:${suCol};font-weight:700;">${actSU}分</span>`+
        (suR!==null?`<span style="font-size:9px;color:${suCol};margin-left:3px;">(${suR}%)</span>`:'')
