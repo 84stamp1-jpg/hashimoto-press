@@ -669,7 +669,15 @@ function renderRequestList(){
     const tags=(r.kubunInputs||[]).map(ki=>`<span class="${tagCls(ki.name)}">${ki.name}</span>`).join('');
     const src=`<span class="src-tag src-${r.source}">${r.source}</span>`;
     const isSel=selReqId===r.id;
-    const amark=r.assigned?`<span class="badge ${r.assignee==='matsumoto'?'':'badge-warn'}" style="margin-left:auto;font-size:9px">${r.assignee==='matsumoto'?'松本':'松永'}</span>`:'';
+    // 割付済みタスクのステータスを取得
+    const assignedTask=r.assigned?getDate(curDate).find(t=>t.reqId===r.id):null;
+    const taskStatus=assignedTask?.actual?.status||'pending';
+    const statusBg=taskStatus==='done'?'#e5e7eb':taskStatus==='working'?'#dcfce7':'';
+    const statusColor=taskStatus==='done'?'var(--text3)':taskStatus==='working'?'var(--ok)':'';
+    const statusIcon=taskStatus==='done'?'✓ 完了':taskStatus==='working'?'▶ 作業中':'';
+    const amark=r.assigned
+      ?`<span class="badge ${r.assignee==='matsumoto'?'':'badge-warn'}" style="margin-left:auto;font-size:9px">${r.assignee==='matsumoto'?'松本':'松永'}${statusIcon?' | '+statusIcon:''}</span>`
+      :'';
 
     // 工数行
     const kRows=(r.kubunInputs||[]).map((ki,idx)=>{
@@ -694,7 +702,8 @@ function renderRequestList(){
       </div>`;
     }).join('');
 
-    return `<div class="card ${r.assigned?'done':''} ${isSel?'sel':''}" onclick="selReq('${r.id}')">
+    const cardStyle=taskStatus==='done'?'opacity:.4;filter:grayscale(.4)':taskStatus==='working'?'outline:2px solid var(--ok);box-shadow:0 0 10px rgba(22,163,74,.2)':'';
+    return `<div class="card ${r.assigned?'done':''} ${isSel?'sel':''}" style="${cardStyle}" onclick="selReq('${r.id}')">
       <div class="card-main">
         <div class="ctop">
           <span class="cnum">#${r.id}</span>
@@ -724,6 +733,7 @@ function renderRequestList(){
           <span class="tlabel">トライ時間(H)：</span>
           <input class="kcount" type="number" min="0" max="8" step="0.25" value="${r.trialH!=null?r.trialH:r.trialSteps>0?trialH(r.trialSteps):1.0}"
             onchange="updateTrialH('${r.id}',this.value)" placeholder="0.25単位"/>
+          <span style="font-size:9px;color:var(--text3);white-space:nowrap">1工程=1H<br>+0.5H/工程</span>
           <span class="khours" id="th_${r.id}">${r.trialH!=null?r.trialH:trialH(r.trialSteps||1)}H</span>
         </div>
         <div class="frow">
@@ -822,7 +832,7 @@ function pushTask(r,assignee,dateStr){
     hours:r.hours,assignee,moldType:r.moldType,
     trialSteps:r.trialSteps,deadline:r.deadline,
     planDate:dateStr,startMin:null,memo:'',
-    actual:{start:'',end:'',note:'',pauses:[],pausedAt:null}
+    actual:{start:'',end:'',note:'',pauses:[],pausedAt:null,status:'pending'}
   };
   if(!tasksByDate[dateStr])tasksByDate[dateStr]=[];
   tasksByDate[dateStr].push(task);
@@ -918,7 +928,7 @@ function renderGantt(){
 
       const rx=mx(t.startMin),rw=dw(t.startMin,repEnd);
       const res=[`<div class="gblock ${bc}" style="left:${rx}px;width:${rw}px"
-        onclick="openActModal('${t.id}')" title="${t.name}" style="top:3px;height:30px">
+        onclick="openActModal('${t.id}')" title="${t.name}" style="top:3px;height:30px${blockExtra}">
         <div class="blabel">${t.name}</div>
         <div class="btime">${fmtMin(t.startMin)}〜${fmtMin(repEnd)}</div>
       </div>`];
@@ -926,7 +936,7 @@ function renderGantt(){
       if(t.trialSteps>0&&trialEnd>repEnd){
         const tx=mx(repEnd),ttw=dw(repEnd,trialEnd);
         res.push(`<div class="gblock btrial" style="left:${tx}px;width:${ttw}px"
-          onclick="openActModal('${t.id}')" title="${t.name} トライ" style="top:3px;height:30px">
+          onclick="openActModal('${t.id}')" title="${t.name} トライ" style="top:3px;height:30px${blockExtra}">
           <div class="blabel">▶トライ</div>
           <div class="btime">${fmtMin(repEnd)}〜${fmtMin(trialEnd)}</div>
         </div>`);
@@ -1011,7 +1021,9 @@ function renderDetail(){
       ?'<div style="font-size:9px;color:var(--text3);margin-top:2px">停止: '+pauses.map(function(p){return p.from+'〜'+p.to}).join(' / ')+'</div>'
       :'';
 
-    html+='<div class="ditem" onclick="openActModal(\''+tid+'\')" style="cursor:pointer">'
+    const ds=t.actual?.status||'pending';
+    const dborder=ds==='working'?'border-left:3px solid var(--ok);background:rgba(22,163,74,.04)':ds==='done'?'opacity:.6;filter:grayscale(.3)':'';
+    html+='<div class="ditem" onclick="openActModal(\''+tid+'\')" style="cursor:pointer;'+dborder+'">'
       +'<div class="dcolor" style="background:'+color+'"></div>'
       +'<div class="dinfo">'
       +'<div class="dname">'+t.name+'</div>'
@@ -1030,6 +1042,27 @@ function renderDetail(){
   grid.innerHTML=html;
 }
 
+function setAct(id,type,val){
+  const t=getDate(curDate).find(x=>x.id===id);
+  if(!t)return;
+  t.actual[type]=val;
+  // 状態更新
+  if(type==='start') t.actual.status='working';
+  if(type==='end')   t.actual.status='done';
+  saveTasks();renderGantt();renderDetail();
+}
+function stampNow(id,type){
+  const n=new Date();
+  const v=p2(n.getHours())+':'+p2(n.getMinutes());
+  const t=getDate(curDate).find(x=>x.id===id);
+  if(!t)return;
+  t.actual[type]=v;
+  if(type==='start') t.actual.status='working';
+  if(type==='end')   t.actual.status='done';
+  const el=document.getElementById((type==='start'?'as_':'ae_')+id);
+  if(el)el.value=v;
+  saveTasks();renderGantt();renderDetail();
+}
 function togglePauseDetail(id){
   // 予実パネルの一時停止ボタン
   const tasks=getDate(curDate);
