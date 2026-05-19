@@ -370,6 +370,17 @@ header{background:var(--panel);border-bottom:1px solid var(--border);padding:0 1
       <div class="frow"><label class="flabel">備考・申し送り</label><input class="finput" id="inActNote" placeholder="例: 刃合わせに時間がかかった"/></div>
     </div>
 
+    <!-- 一時停止 -->
+    <div class="yj-section">
+      <div class="yj-sec-title">⏸ 一時停止ログ</div>
+      <div style="display:flex;gap:6px;margin-bottom:6px">
+        <button class="btn btn-secondary btn-sm" id="pauseBtn" onclick="togglePause()" style="flex:1">⏸ 一時停止</button>
+        <span id="pauseStatus" style="font-size:11px;color:var(--text2);align-self:center"></span>
+      </div>
+      <div id="pauseLog" style="font-size:10px;color:var(--text2);line-height:1.8"></div>
+      <div id="pauseTotalRow" style="display:none;font-size:11px;font-weight:600;color:var(--warn);margin-top:4px"></div>
+    </div>
+
     <div class="mfooter">
       <button class="btn btn-danger btn-sm" onclick="deleteTaskModal()">削除</button>
       <button class="btn btn-secondary btn-sm" onclick="openEditFromAct()">⚙ 工数編集</button>
@@ -457,23 +468,23 @@ function tagCls(k){
 
 // ===== 工数計算 =====
 function calcH(kubunInputs, moldType, trialSteps){
-  const carry=moldType==='prog'?1.5:1.0;
+  const carry=moldType==='prog'?1.5:moldType==='none'?0:1.0;
   let work=0;
   (kubunInputs||[]).forEach(ki=>{
     const key=ki.key||nk(ki.name);
     const m=TM[key]||TM.custom;
-    const u=Math.max(0,ki.units||1);
+    const u=Math.max(0,ki.units||0);  // 0を許容
     if(m.isMaint){
-      work+=(moldType==='prog'?m.hp:m.hs)*u;
+      work+=(moldType==='prog'?m.hp:m.hs)*Math.max(1,u);
     } else if(key==='scrap'){
       work+=u>0?m.hpu+(u-1)*m.extra:0;
     } else if(m.pu){
-      work+=m.hpu*u;
+      work+=m.hpu*u;  // 箇所数0なら0H
     } else {
       work+=m.hpu;
     }
   });
-  if(work===0) work=1.0;
+  // workが0かつtrialあり→搬入+トライのみ（トライ専用作業）
   const trial=trialSteps<=0?0:1.0+Math.max(0,trialSteps-1)*0.5;
   return Math.round((carry+work+trial)*10)/10;
 }
@@ -666,6 +677,7 @@ function renderRequestList(){
         <div class="carry-row">
           <span style="font-size:11px;color:var(--text2)">型種別：</span>
           <select class="mtype-sel" onchange="updateMold('${r.id}',this.value)">
+            <option value="none"   ${r.moldType==='none'?'selected':''}>なし（搬入0H）</option>
             <option value="single" ${r.moldType==='single'?'selected':''}>単発（搬入1.0H）</option>
             <option value="prog"   ${r.moldType==='prog'?'selected':''}>順送PRG（搬入1.5H）</option>
           </select>
@@ -762,7 +774,7 @@ function pushTask(r,assignee,dateStr){
     hours:r.hours,assignee,moldType:r.moldType,
     trialSteps:r.trialSteps,deadline:r.deadline,
     planDate:dateStr,startMin:null,memo:'',
-    actual:{start:'',end:'',note:''}
+    actual:{start:'',end:'',note:'',pauses:[],pausedAt:null}
   };
   if(!tasksByDate[dateStr])tasksByDate[dateStr]=[];
   tasksByDate[dateStr].push(task);
@@ -772,7 +784,7 @@ function assignTo(rid,assignee){
   const r=requests.find(x=>x.id===rid);if(!r||r.assigned)return;
   pushTask(r,assignee,curDate);
   r.assigned=true;r.assignee=assignee;
-  autoArrange(curDate);selReqId=null;
+  autoArrange(curDate);saveTasks();selReqId=null;
   renderRequestList();renderGantt();renderDetail();
 }
 function autoAll(){
@@ -782,7 +794,7 @@ function autoAll(){
     const a=i%2===0?'matsumoto':'matsunaga';
     pushTask(r,a,curDate);r.assigned=true;r.assignee=a;
   });
-  autoArrange(curDate);renderRequestList();renderGantt();renderDetail();
+  autoArrange(curDate);saveTasks();renderRequestList();renderGantt();renderDetail();
 }
 
 // ===== 時間計算 =====
@@ -951,6 +963,12 @@ function openActModal(id){
   document.getElementById('inActE').value=t.actual.end||'';
   document.getElementById('inActNote').value=t.actual.note||'';
   updateYjDiff(t);
+  // 一時停止UI初期化
+  renderPauseLog(t);
+  const isPaused = !!t.actual.pausedAt;
+  document.getElementById('pauseBtn').textContent = isPaused ? '▶ 再開' : '⏸ 一時停止';
+  document.getElementById('pauseBtn').style.background = isPaused ? 'var(--trial-bg)' : '';
+  document.getElementById('pauseStatus').textContent = isPaused ? `一時停止中 (${t.actual.pausedAt})` : '';
   document.getElementById('actModal').classList.add('open');
 }
 function updateYjDiff(t){
@@ -971,12 +989,53 @@ function stampNowModal(type){
   const t=getDate(curDate).find(x=>x.id===actTaskId);
   if(t){t.actual[type]=v;updateYjDiff(t)}
 }
+function togglePause(){
+  const t=getDate(curDate).find(x=>x.id===actTaskId);if(!t)return;
+  const now=new Date();
+  const v=`${p2(now.getHours())}:${p2(now.getMinutes())}`;
+  if(!t.actual.pauses) t.actual.pauses=[];
+  if(t.actual.pausedAt){
+    // 再開
+    t.actual.pauses.push({from:t.actual.pausedAt, to:v});
+    t.actual.pausedAt=null;
+    document.getElementById('pauseBtn').textContent='⏸ 一時停止';
+    document.getElementById('pauseBtn').style.background='';
+    document.getElementById('pauseStatus').textContent='';
+  } else {
+    // 一時停止
+    t.actual.pausedAt=v;
+    document.getElementById('pauseBtn').textContent='▶ 再開';
+    document.getElementById('pauseBtn').style.background='var(--trial-bg)';
+    document.getElementById('pauseStatus').textContent=`一時停止中 (${v})`;
+  }
+  renderPauseLog(t);
+  saveTasks();
+}
+function renderPauseLog(t){
+  const pauses=t.actual.pauses||[];
+  const logEl=document.getElementById('pauseLog');
+  const totalEl=document.getElementById('pauseTotalRow');
+  if(!pauses.length){
+    logEl.textContent='一時停止の記録なし';
+    totalEl.style.display='none';
+    return;
+  }
+  let totalMin=0;
+  logEl.innerHTML=pauses.map((p,i)=>{
+    const fm=minToMs(p.from),tm=minToMs(p.to);
+    const dur=fm!=null&&tm!=null?tm-fm:0;
+    totalMin+=dur;
+    return `${i+1}. ${p.from}〜${p.to}（${dur}分）`;
+  }).join('<br>');
+  totalEl.style.display='block';
+  totalEl.textContent=`合計停止時間: ${totalMin}分（実作業から除外してください）`;
+}
 function saveActual(){
   const t=getDate(curDate).find(x=>x.id===actTaskId);if(!t)return;
   t.actual.start=document.getElementById('inActS').value;
   t.actual.end=document.getElementById('inActE').value;
   t.actual.note=document.getElementById('inActNote').value;
-  closeActModal();renderGantt();renderDetail();
+  saveTasks();closeActModal();renderGantt();renderDetail();
 }
 function closeActModal(){document.getElementById('actModal').classList.remove('open');actTaskId=null}
 function openEditFromAct(){
@@ -1000,6 +1059,7 @@ function deleteTaskModal(){
     const r=requests.find(x=>x.id===t.reqId);
     if(r){r.assigned=false;r.assignee=null}
     tasksByDate[curDate]=(tasksByDate[curDate]||[]).filter(x=>x.id!==actTaskId);
+  saveTasks();
     autoArrange(curDate);
   }
   closeActModal();renderRequestList();renderGantt();renderDetail();
@@ -1015,7 +1075,7 @@ function saveEdit(){
   if(st){const[h,m]=st.split(':').map(Number);t.startMin=h*60+m}
   t.assignee=document.getElementById('eAssign').value;
   t.memo=document.getElementById('eMemo').value;
-  autoArrange(curDate);closeEditModal();renderGantt();renderDetail();
+  autoArrange(curDate);saveTasks();closeEditModal();renderGantt();renderDetail();
 }
 function closeEditModal(){document.getElementById('editModal').classList.remove('open');editTaskId=null}
 
@@ -1051,7 +1111,44 @@ document.getElementById('actModal').addEventListener('click',function(e){if(e.ta
 document.getElementById('editModal').addEventListener('click',function(e){if(e.target===this)closeEditModal()});
 document.getElementById('mDL').value=todayStr();
 
-requestAnimationFrame(()=>{buildDateNav();loadKintone()});
+// ===== localStorage 保存・読み込み =====
+const STORAGE_KEY = 'moldRepairPlan_tasks';
+
+function saveTasks(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(tasksByDate));
+  }catch(e){ console.log('save error:',e); }
+}
+
+function loadSavedTasks(){
+  try{
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if(saved){
+      const parsed = JSON.parse(saved);
+      // 今日以降のデータのみ復元
+      const today = todayStr();
+      Object.keys(parsed).forEach(ds=>{
+        if(ds >= today) tasksByDate[ds] = parsed[ds];
+      });
+      console.log('計画を復元しました');
+    }
+  }catch(e){ console.log('load error:',e); }
+}
+
+function clearSavedTasks(){
+  if(confirm('保存された計画を全てクリアしますか？')){
+    localStorage.removeItem(STORAGE_KEY);
+    tasksByDate={};
+    renderReqList();renderGantt();
+    alert('クリアしました');
+  }
+}
+
+requestAnimationFrame(()=>{
+  buildDateNav();
+  loadSavedTasks();  // 保存済み計画を先に復元
+  loadKintone();     // その後kintoneからデータ取得
+});
 </script>
 </body>
 </html>
