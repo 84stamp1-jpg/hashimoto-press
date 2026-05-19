@@ -519,15 +519,39 @@ function shiftWeek(dir){weekStart=addDays(weekStart,dir*7);buildDateNav()}
 // ===== kintone =====
 async function loadKintone(){
   document.getElementById('reqList').innerHTML='<div class="loading"><div class="spinner"></div>kintoneから取得中...</div>';
-  try{
-    // ステータスが「完了」以外を取得、完了希望日(日付_0)昇順
-    const q=encodeURIComponent('ステータス not in ("完了") order by 日付_0 asc limit 100');
-    const res=await fetch(`${GAS_URL}?app=${APP_ID}&query=${q}`);
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const data=await res.json();
-    if(data.records?.length>0){importKintone(data.records);return}
-  }catch(e){console.log('kintone取得失敗:',e)}
-  loadSample();
+  // JSONP方式でCORSを回避
+  const callbackName = 'kintoneCallback_' + Date.now();
+  const q = encodeURIComponent('ステータス not in ("完了") order by 日付_0 asc limit 100');
+  const url = `${GAS_URL}?app=${APP_ID}&query=${q}&callback=${callbackName}`;
+
+  const timeout = setTimeout(()=>{
+    console.log('kintone取得タイムアウト');
+    cleanup();
+    loadSample();
+  }, 15000);
+
+  function cleanup(){
+    clearTimeout(timeout);
+    delete window[callbackName];
+    const s = document.getElementById('jsonp_mold');
+    if(s) s.remove();
+  }
+
+  window[callbackName] = function(data){
+    cleanup();
+    if(data.records?.length > 0){
+      importKintone(data.records);
+    } else {
+      console.log('kintone: レコードなし or エラー', data);
+      loadSample();
+    }
+  };
+
+  const script = document.createElement('script');
+  script.id = 'jsonp_mold';
+  script.src = url;
+  script.onerror = ()=>{ cleanup(); loadSample(); };
+  document.head.appendChild(script);
 }
 
 function importKintone(records){
