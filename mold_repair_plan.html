@@ -1,0 +1,1376 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>金型改修計画表</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Share+Tech+Mono&display=swap');
+
+  :root {
+    --bg: #0f1117;
+    --panel: #1a1d27;
+    --panel2: #222536;
+    --border: #2e3248;
+    --accent: #4f8ef7;
+    --accent2: #f7914f;
+    --accent3: #4fc9a4;
+    --warn: #f7c94f;
+    --danger: #f74f4f;
+    --text: #e8eaf0;
+    --text2: #8890a8;
+    --matsumoto: #4f8ef7;
+    --matsunaga: #f7914f;
+    --trial: #4fc9a4;
+    --custom: #c084fc;
+    --font: 'Noto Sans JP', sans-serif;
+    --mono: 'Share Tech Mono', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ===== HEADER ===== */
+  header {
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  header h1 {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--text);
+  }
+  header .date-display {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent);
+    background: rgba(79,142,247,0.1);
+    border: 1px solid rgba(79,142,247,0.3);
+    padding: 3px 10px;
+    border-radius: 4px;
+  }
+  .header-right {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .btn {
+    font-family: var(--font);
+    font-size: 12px;
+    font-weight: 500;
+    padding: 6px 14px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: #3a7de8; }
+  .btn-secondary { background: var(--panel2); color: var(--text); border: 1px solid var(--border); }
+  .btn-secondary:hover { background: var(--border); }
+  .btn-danger { background: rgba(247,79,79,0.15); color: var(--danger); border: 1px solid rgba(247,79,79,0.3); }
+  .btn-sm { padding: 4px 10px; font-size: 11px; }
+  .btn-icon { padding: 5px 8px; }
+
+  /* ===== LAYOUT ===== */
+  .app-layout {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    height: calc(100vh - 49px);
+  }
+
+  /* ===== LEFT PANEL: 依頼一覧 ===== */
+  .left-panel {
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .panel-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .panel-title {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text2);
+  }
+  .badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 10px;
+    background: rgba(79,142,247,0.2);
+    color: var(--accent);
+    border: 1px solid rgba(79,142,247,0.3);
+  }
+  .badge-warn { background: rgba(247,201,79,0.2); color: var(--warn); border-color: rgba(247,201,79,0.3); }
+
+  .request-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+  }
+  .request-list::-webkit-scrollbar { width: 4px; }
+  .request-list::-webkit-scrollbar-track { background: transparent; }
+  .request-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .request-card {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+    position: relative;
+  }
+  .request-card:hover { border-color: var(--accent); }
+  .request-card.assigned { opacity: 0.5; }
+  .request-card.selected { border-color: var(--accent); background: rgba(79,142,247,0.08); }
+
+  .card-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .card-num {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text2);
+    flex-shrink: 0;
+    padding-top: 1px;
+  }
+  .card-title {
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.3;
+    flex: 1;
+  }
+  .card-process {
+    font-size: 10px;
+    color: var(--text2);
+    margin-bottom: 5px;
+    padding-left: 22px;
+  }
+  .card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding-left: 22px;
+    margin-bottom: 6px;
+  }
+  .tag {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 3px;
+    background: rgba(79,201,164,0.15);
+    color: var(--accent3);
+    border: 1px solid rgba(79,201,164,0.3);
+  }
+  .tag-custom { background: rgba(192,132,252,0.15); color: var(--custom); border-color: rgba(192,132,252,0.3); }
+  .tag-bari { background: rgba(247,201,79,0.15); color: var(--warn); border-color: rgba(247,201,79,0.3); }
+
+  .card-bottom {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding-left: 22px;
+  }
+  .card-time {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .card-deadline {
+    font-size: 10px;
+    color: var(--text2);
+    margin-left: auto;
+  }
+  .deadline-urgent { color: var(--danger); }
+  .deadline-near { color: var(--warn); }
+
+  .assign-btns {
+    display: flex;
+    gap: 4px;
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+    background: var(--panel);
+  }
+  .assign-btn {
+    flex: 1;
+    padding: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: var(--font);
+  }
+  .assign-m { background: rgba(79,142,247,0.2); color: var(--matsumoto); border: 1px solid rgba(79,142,247,0.4); }
+  .assign-m:hover { background: rgba(79,142,247,0.35); }
+  .assign-n { background: rgba(247,145,79,0.2); color: var(--matsunaga); border: 1px solid rgba(247,145,79,0.4); }
+  .assign-n:hover { background: rgba(247,145,79,0.35); }
+
+  /* 手動追加フォーム */
+  .manual-add {
+    border-top: 1px solid var(--border);
+    padding: 10px;
+    flex-shrink: 0;
+  }
+  .manual-add-toggle {
+    width: 100%;
+    text-align: center;
+    font-size: 11px;
+    color: var(--text2);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.15s;
+    background: transparent;
+    border: 1px dashed var(--border);
+  }
+  .manual-add-toggle:hover { border-color: var(--accent); color: var(--accent); }
+  .manual-form { display: none; margin-top: 8px; }
+  .manual-form.open { display: block; }
+  .form-row { margin-bottom: 6px; }
+  .form-label { font-size: 10px; color: var(--text2); margin-bottom: 3px; display: block; }
+  .form-input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: var(--font);
+    font-size: 12px;
+    padding: 5px 8px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .form-input:focus { border-color: var(--accent); }
+  .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+
+  /* ===== RIGHT PANEL: ガント ===== */
+  .right-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  .gantt-controls {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    background: var(--panel);
+  }
+  .gantt-legend {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-left: auto;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: var(--text2);
+  }
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+  }
+
+  /* ===== GANTT CHART ===== */
+  .gantt-wrap {
+    flex: 1;
+    overflow: auto;
+    padding: 12px 16px;
+  }
+  .gantt-wrap::-webkit-scrollbar { height: 6px; width: 4px; }
+  .gantt-wrap::-webkit-scrollbar-track { background: transparent; }
+  .gantt-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .gantt-container {
+    min-width: 900px;
+  }
+
+  /* 時間軸ヘッダー */
+  .gantt-header {
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    margin-bottom: 4px;
+  }
+  .gantt-header-label {
+    font-size: 10px;
+    color: var(--text2);
+    text-align: center;
+    font-family: var(--mono);
+  }
+  .time-ruler {
+    position: relative;
+    height: 24px;
+  }
+  .time-tick {
+    position: absolute;
+    top: 0;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text2);
+    transform: translateX(-50%);
+    white-space: nowrap;
+  }
+
+  /* 担当者行 */
+  .gantt-row {
+    display: grid;
+    grid-template-columns: 80px 1fr;
+    margin-bottom: 6px;
+  }
+  .gantt-row-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    border-radius: 4px 0 0 4px;
+    padding: 4px;
+    min-height: 52px;
+  }
+  .label-matsumoto {
+    background: rgba(79,142,247,0.15);
+    color: var(--matsumoto);
+    border: 1px solid rgba(79,142,247,0.3);
+    border-right: none;
+  }
+  .label-matsunaga {
+    background: rgba(247,145,79,0.15);
+    color: var(--matsunaga);
+    border: 1px solid rgba(247,145,79,0.3);
+    border-right: none;
+  }
+
+  .gantt-track {
+    position: relative;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 0 4px 4px 0;
+    min-height: 52px;
+    overflow: visible;
+  }
+
+  /* グリッド線 */
+  .gantt-grid {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+  }
+  .grid-line {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 1px;
+    background: var(--border);
+    opacity: 0.5;
+  }
+  .grid-line.hour { opacity: 1; }
+
+  /* 休憩ゾーン */
+  .break-zone {
+    position: absolute;
+    top: 0; bottom: 0;
+    background: repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 3px,
+      rgba(255,255,255,0.02) 3px,
+      rgba(255,255,255,0.02) 6px
+    );
+    border-left: 1px dashed rgba(255,255,255,0.1);
+    border-right: 1px dashed rgba(255,255,255,0.1);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* 作業ブロック */
+  .gantt-block {
+    position: absolute;
+    top: 4px;
+    height: calc(100% - 8px);
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0 6px;
+    overflow: hidden;
+    transition: filter 0.15s, transform 0.1s;
+    z-index: 2;
+    border: 1px solid transparent;
+    min-width: 20px;
+  }
+  .gantt-block:hover {
+    filter: brightness(1.2);
+    transform: scaleY(1.03);
+    z-index: 10;
+  }
+  .block-m {
+    background: rgba(79,142,247,0.35);
+    border-color: rgba(79,142,247,0.6);
+  }
+  .block-n {
+    background: rgba(247,145,79,0.35);
+    border-color: rgba(247,145,79,0.6);
+  }
+  .block-trial {
+    background: rgba(79,201,164,0.35);
+    border-color: rgba(79,201,164,0.6);
+  }
+  .block-custom {
+    background: rgba(192,132,252,0.35);
+    border-color: rgba(192,132,252,0.6);
+  }
+  .block-label {
+    font-size: 9px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+  }
+  .block-time {
+    font-family: var(--mono);
+    font-size: 8px;
+    opacity: 0.8;
+    white-space: nowrap;
+  }
+
+  /* ===== 詳細パネル（右下） ===== */
+  .detail-panel {
+    border-top: 1px solid var(--border);
+    background: var(--panel);
+    padding: 10px 16px;
+    flex-shrink: 0;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+  .detail-panel::-webkit-scrollbar { width: 4px; }
+  .detail-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .detail-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text2);
+    letter-spacing: 0.08em;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+  }
+  .detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 8px;
+  }
+  .detail-item {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .detail-item:hover { border-color: var(--accent); }
+  .detail-item-color {
+    width: 8px;
+    height: 30px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+  .detail-item-info { flex: 1; min-width: 0; }
+  .detail-item-name {
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .detail-item-meta {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text2);
+  }
+  .actual-input {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    margin-top: 4px;
+  }
+  .actual-time-input {
+    font-family: var(--mono);
+    font-size: 10px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 3px;
+    padding: 2px 5px;
+    width: 52px;
+    text-align: center;
+    outline: none;
+  }
+  .actual-time-input:focus { border-color: var(--accent3); }
+  .actual-btn {
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: none;
+    cursor: pointer;
+    font-family: var(--font);
+    font-weight: 600;
+  }
+  .actual-btn-start { background: rgba(79,201,164,0.2); color: var(--accent3); border: 1px solid rgba(79,201,164,0.4); }
+  .actual-btn-end { background: rgba(247,79,79,0.2); color: var(--danger); border: 1px solid rgba(247,79,79,0.4); }
+
+  /* ===== MODAL ===== */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+    width: 420px;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+  .modal-title {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .modal-footer {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 14px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* ===== ローディング ===== */
+  .loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text2);
+    padding: 12px;
+  }
+  .spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .empty-state {
+    text-align: center;
+    padding: 30px 20px;
+    color: var(--text2);
+    font-size: 12px;
+  }
+
+  /* ===== 印刷 ===== */
+  @media print {
+    body { background: #fff; color: #000; }
+    header, .left-panel, .gantt-controls, .detail-panel { display: none !important; }
+    .app-layout { grid-template-columns: 1fr; }
+    .right-panel { overflow: visible; }
+    .gantt-wrap { overflow: visible; padding: 0; }
+    .gantt-container { min-width: unset; }
+    .gantt-track, .gantt-row-label { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  }
+
+  /* チェックボックス風の割付済みマーク */
+  .assigned-badge {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: 10px;
+    font-weight: 700;
+  }
+  .assigned-m { background: rgba(79,142,247,0.2); color: var(--matsumoto); }
+  .assigned-n { background: rgba(247,145,79,0.2); color: var(--matsunaga); }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <h1>⚙ 金型改修計画表</h1>
+  <div class="date-display" id="dateDisplay"></div>
+  <div class="header-right">
+    <button class="btn btn-secondary btn-sm" onclick="loadKintone()">🔄 kintone同期</button>
+    <button class="btn btn-secondary btn-sm" onclick="autoSchedule()">⚡ 自動配置</button>
+    <button class="btn btn-primary btn-sm" onclick="window.print()">🖨 印刷</button>
+  </div>
+</header>
+
+<div class="app-layout">
+  <!-- LEFT: 依頼一覧 -->
+  <div class="left-panel">
+    <div class="panel-header">
+      <span class="panel-title">改修依頼一覧</span>
+      <span class="badge" id="unassignedBadge">0件</span>
+      <span class="badge badge-warn" id="urgentBadge" style="display:none">⚠ 急</span>
+    </div>
+
+    <div class="request-list" id="requestList">
+      <div class="loading"><div class="spinner"></div>kintoneから取得中...</div>
+    </div>
+
+    <!-- 選択中カードの割付ボタン -->
+    <div class="assign-btns" id="assignBtns" style="display:none">
+      <button class="assign-btn assign-m" onclick="assignTo('matsumoto')">松本に割付</button>
+      <button class="assign-btn assign-n" onclick="assignTo('matsunaga')">松永に割付</button>
+    </div>
+
+    <!-- 手動追加 -->
+    <div class="manual-add">
+      <button class="manual-add-toggle" onclick="toggleManualForm()">＋ 任意作業を追加</button>
+      <div class="manual-form" id="manualForm">
+        <div class="form-row">
+          <label class="form-label">品番 / 作業内容</label>
+          <input class="form-input" id="manualName" placeholder="例: ABC-123 バリ取り" />
+        </div>
+        <div class="form-row-2">
+          <div>
+            <label class="form-label">改修区分</label>
+            <select class="form-input" id="manualCategory">
+              <option value="custom">任意</option>
+              <option value="bari">バリ改修</option>
+              <option value="seido">精度調整</option>
+              <option value="spare">スペア交換</option>
+              <option value="height">ハイト合わせ</option>
+              <option value="scrap">スクラップ処理</option>
+              <option value="maint">定期メンテ</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label">所要時間(H)</label>
+            <input class="form-input" id="manualHours" type="number" min="0.5" max="12" step="0.5" value="1.0" />
+          </div>
+        </div>
+        <div class="form-row-2">
+          <div>
+            <label class="form-label">納期</label>
+            <input class="form-input" id="manualDeadline" type="date" />
+          </div>
+          <div>
+            <label class="form-label">単発/順送</label>
+            <select class="form-input" id="manualMoldType">
+              <option value="single">単発</option>
+              <option value="prog">順送</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:6px">
+          <button class="btn btn-primary btn-sm" style="width:100%" onclick="addManualRequest()">追加</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: ガント -->
+  <div class="right-panel">
+    <div class="gantt-controls">
+      <span style="font-size:12px;color:var(--text2)">作業開始 08:10 ／ 休憩4回</span>
+      <div class="gantt-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--matsumoto)"></div>松本</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--matsunaga)"></div>松永</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--trial)"></div>トライ</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--custom)"></div>任意</div>
+        <div class="legend-item" style="color:var(--text2);font-size:10px">░░ 休憩</div>
+      </div>
+    </div>
+
+    <div class="gantt-wrap">
+      <div class="gantt-container" id="ganttContainer">
+        <!-- JS生成 -->
+      </div>
+    </div>
+
+    <!-- 詳細・実績パネル -->
+    <div class="detail-panel">
+      <div class="detail-title">本日の作業詳細 / 実績記録</div>
+      <div class="detail-grid" id="detailGrid">
+        <div class="empty-state">作業を割付けると表示されます</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 編集モーダル -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <div class="modal-title" id="editModalTitle">作業詳細の編集</div>
+    <div class="form-row">
+      <label class="form-label">品番 / 作業名</label>
+      <input class="form-input" id="editName" />
+    </div>
+    <div class="form-row">
+      <label class="form-label">改修区分・内容</label>
+      <input class="form-input" id="editCategory" />
+    </div>
+    <div class="form-row-2">
+      <div>
+        <label class="form-label">所要時間 (H)</label>
+        <input class="form-input" id="editHours" type="number" min="0.5" max="12" step="0.5" />
+      </div>
+      <div>
+        <label class="form-label">トライ工程数</label>
+        <input class="form-input" id="editTrialSteps" type="number" min="0" max="5" step="1" value="1" />
+      </div>
+    </div>
+    <div class="form-row-2">
+      <div>
+        <label class="form-label">予定開始</label>
+        <input class="form-input" id="editStartTime" type="time" step="600" />
+      </div>
+      <div>
+        <label class="form-label">担当者</label>
+        <select class="form-input" id="editAssignee">
+          <option value="matsumoto">松本</option>
+          <option value="matsunaga">松永</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <label class="form-label">メモ</label>
+      <input class="form-input" id="editMemo" placeholder="任意" />
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" onclick="deleteTask()">削除</button>
+      <button class="btn btn-secondary btn-sm" onclick="closeModal()">キャンセル</button>
+      <button class="btn btn-primary btn-sm" onclick="saveEdit()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== 設定 =====
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbwhW0jn30gacz6dGaSKdoSoky3XNFSThmu57Dar1X1w5zGG2OvpgVeGuMyPzrVAXl3X/exec';
+const KINTONE_APP_ID = 6;
+
+// 作業時間設定
+const WORK_START = 8 * 60 + 10; // 8:10
+const WORK_END   = 20 * 60;     // 20:00
+const BREAKS = [
+  { start: 10*60+0,  end: 10*60+10 },
+  { start: 12*60+10, end: 12*60+50 },
+  { start: 14*60+50, end: 15*60+0  },
+  { start: 17*60+0,  end: 17*60+10 },
+];
+const TOTAL_MINUTES = WORK_END - WORK_START;
+const BREAK_TOTAL = BREAKS.reduce((s,b)=>s+(b.end-b.start),0);
+
+// 改修時間マスタ（kintone値をベースに調整可）
+const TIME_MASTER = {
+  'bari':   { label:'バリ改修',    base:3.0, perUnit:true },
+  'seido':  { label:'精度調整',    base:1.0, perUnit:false },
+  'spare':  { label:'スペア交換',  base:0.5, perUnit:false },
+  'height': { label:'ハイト合わせ',base:4.0, perUnit:false },
+  'scrap':  { label:'スクラップ',  base:1.0, perUnit:true, extra:0.5 },
+  'maint':  { label:'定期メンテ',  base:null, single:1.0, prog:2.0 },
+  'custom': { label:'任意',        base:null },
+};
+// 搬入・バラシ時間
+function getCarryTime(moldType){ return moldType==='prog'?1.5:1.0; }
+// トライ時間
+function getTrialTime(steps){ return steps<=0?0: 1.0+(Math.max(0,steps-1)*0.5); }
+
+// ===== 状態管理 =====
+let requests = [];      // 依頼リスト
+let tasks = [];         // 割付済みタスク
+let selectedReqId = null;
+let editingTaskId = null;
+
+// ===== 日付表示 =====
+function initDate(){
+  const d = new Date();
+  const w = ['日','月','火','水','木','金','土'];
+  document.getElementById('dateDisplay').textContent =
+    `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} (${w[d.getDay()]})`;
+  // 手動追加フォームのデフォルト納期を今日に
+  const today = d.toISOString().slice(0,10);
+  document.getElementById('manualDeadline').value = today;
+}
+
+// ===== kintone取得 =====
+async function loadKintone(){
+  document.getElementById('requestList').innerHTML = '<div class="loading"><div class="spinner"></div>kintoneから取得中...</div>';
+  try {
+    const params = new URLSearchParams({
+      app: KINTONE_APP_ID,
+      query: 'ステータス not in ("完了") order by 納期 asc limit 50'
+    });
+    const res = await fetch(`${GAS_URL}?${params}`);
+    const data = await res.json();
+    if(data.records && data.records.length > 0){
+      processKintoneRecords(data.records);
+    } else {
+      // kintone未接続時はサンプルデータ
+      loadSampleData();
+    }
+  } catch(e) {
+    console.log('kintone取得失敗（サンプル表示）:', e);
+    loadSampleData();
+  }
+}
+
+function processKintoneRecords(records){
+  requests = records.map((r,i)=>{
+    const hinban = r['ルックアップ_1']?.value || '';
+    const hinmei = r['文字列__1行__0']?.value || '';
+    const kosei1 = r['ドロップダウン_10']?.value || '';
+    const kosei2 = r['ドロップダウン_11']?.value || '';
+    const kubun  = r['複数選択']?.value || [];
+    const deadline = r['納期']?.value || '';
+    const moldType = r['型種別']?.value === '順送' ? 'prog' : 'single';
+    const units = parseInt(r['箇所数']?.value||'1')||1;
+
+    const hours = calcTotalHours(kubun, moldType, units, 1);
+    return {
+      id: r.$id?.value || String(i),
+      hinban, hinmei,
+      process: [kosei1,kosei2].filter(Boolean).join(' / '),
+      kubun, moldType, units,
+      hours, deadline,
+      trialSteps: 1,
+      assigned: false,
+      assignee: null,
+      source: 'kintone'
+    };
+  });
+  renderRequestList();
+  renderGantt();
+}
+
+function loadSampleData(){
+  // サンプルデータ（kintone未接続時）
+  const today = new Date();
+  const fmt = (d)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const tomorrow = new Date(today); tomorrow.setDate(today.getDate()+1);
+  const dayafter = new Date(today); dayafter.setDate(today.getDate()+2);
+
+  requests = [
+    { id:'1', hinban:'HB-2541', hinmei:'フランジブラケット', process:'プレスA / 曲げ工程', kubun:['バリ改修'], moldType:'single', units:2, hours:0, deadline:fmt(today), trialSteps:1, assigned:false, assignee:null, source:'sample' },
+    { id:'2', hinban:'HB-1832', hinmei:'サポートプレート', process:'プレスB', kubun:['精度調整'], moldType:'prog', units:1, hours:0, deadline:fmt(today), trialSteps:2, assigned:false, assignee:null, source:'sample' },
+    { id:'3', hinban:'HC-0921', hinmei:'ブラケットASSY', process:'順送プレス', kubun:['スペア交換'], moldType:'prog', units:1, hours:0, deadline:fmt(tomorrow), trialSteps:1, assigned:false, assignee:null, source:'sample' },
+    { id:'4', hinban:'HB-3310', hinmei:'ロアーアーム', process:'プレスC / 穴あけ', kubun:['ハイト合わせ'], moldType:'single', units:1, hours:0, deadline:fmt(tomorrow), trialSteps:1, assigned:false, assignee:null, source:'sample' },
+    { id:'5', hinban:'HD-0112', hinmei:'カバープレート', process:'定期点検', kubun:['定期メンテ'], moldType:'prog', units:1, hours:0, deadline:fmt(dayafter), trialSteps:0, assigned:false, assignee:null, source:'sample' },
+  ];
+  // 時間計算
+  requests.forEach(r=>{
+    r.hours = calcTotalHours(r.kubun, r.moldType, r.units, r.trialSteps);
+  });
+  renderRequestList();
+  renderGantt();
+}
+
+// ===== 時間計算 =====
+function calcTotalHours(kubunList, moldType, units, trialSteps){
+  const carry = getCarryTime(moldType);
+  let work = 0;
+  (kubunList||[]).forEach(k=>{
+    const key = normalizeKubun(k);
+    const m = TIME_MASTER[key];
+    if(!m) { work += 1.0; return; }
+    if(key==='bari')   work += m.base * units;
+    else if(key==='scrap') work += m.base + Math.max(0,units-1)*m.extra;
+    else if(key==='maint') work += moldType==='prog'?m.prog:m.single;
+    else if(m.base) work += m.base;
+    else work += 1.0;
+  });
+  if(work===0) work = 1.0;
+  const trial = getTrialTime(trialSteps||1);
+  return Math.round((carry + work + trial)*10)/10;
+}
+
+function normalizeKubun(v){
+  if(!v) return 'custom';
+  const map = {
+    'バリ改修':'bari','バリ':'bari',
+    '精度調整':'seido','精度':'seido',
+    'スペア交換':'spare','スペア':'spare',
+    'ハイト合わせ':'height','ハイト':'height',
+    'スクラップ処理':'scrap','スクラップ':'scrap',
+    'シューター作成':'scrap',
+    '定期メンテ':'maint','定期':'maint','定期メンテナンス':'maint',
+  };
+  return map[v] || 'custom';
+}
+
+function getTagClass(k){
+  const key = normalizeKubun(k);
+  if(key==='bari') return 'tag tag-bari';
+  if(key==='custom') return 'tag tag-custom';
+  return 'tag';
+}
+
+// ===== 依頼一覧レンダリング =====
+function renderRequestList(){
+  const list = document.getElementById('requestList');
+  const today = new Date().toISOString().slice(0,10);
+
+  const unassigned = requests.filter(r=>!r.assigned);
+  document.getElementById('unassignedBadge').textContent = `${unassigned.length}件`;
+
+  const urgent = unassigned.filter(r=>r.deadline<=today);
+  const urgentBadge = document.getElementById('urgentBadge');
+  if(urgent.length>0){ urgentBadge.style.display=''; urgentBadge.textContent=`⚠ 急 ${urgent.length}`; }
+  else urgentBadge.style.display='none';
+
+  if(requests.length===0){
+    list.innerHTML='<div class="empty-state">依頼がありません</div>'; return;
+  }
+
+  list.innerHTML = requests.map(r=>{
+    const dl = r.deadline;
+    const dlClass = dl < today ? 'deadline-urgent' : dl === today ? 'deadline-near' : '';
+    const dlLabel = dl ? `納期: ${dl}` : '';
+    const kubunTags = (r.kubun||[]).map(k=>`<span class="${getTagClass(k)}">${k}</span>`).join('');
+    const assignedMark = r.assigned ? `<span class="assigned-badge assigned-${r.assignee==='matsumoto'?'m':'n'}">${r.assignee==='matsumoto'?'松本':'松永'}</span>` : '';
+    return `
+    <div class="request-card ${r.assigned?'assigned':''} ${selectedReqId===r.id?'selected':''}"
+         onclick="selectRequest('${r.id}')" style="position:relative">
+      ${assignedMark}
+      <div class="card-top">
+        <span class="card-num">#${r.id}</span>
+        <span class="card-title">${r.hinban}${r.hinmei?' / '+r.hinmei:''}</span>
+      </div>
+      ${r.process?`<div class="card-process">${r.process}</div>`:''}
+      ${kubunTags?`<div class="card-tags">${kubunTags}</div>`:''}
+      <div class="card-bottom">
+        <span class="card-time">⏱ ${r.hours}H</span>
+        ${dlLabel?`<span class="card-deadline ${dlClass}">${dlLabel}</span>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function selectRequest(id){
+  selectedReqId = id;
+  renderRequestList();
+  const r = requests.find(x=>x.id===id);
+  document.getElementById('assignBtns').style.display = (r && !r.assigned) ? 'flex' : 'none';
+}
+
+function assignTo(assignee){
+  if(!selectedReqId) return;
+  const r = requests.find(x=>x.id===selectedReqId);
+  if(!r || r.assigned) return;
+
+  // タスクとして追加
+  const task = {
+    id: 'task_'+Date.now(),
+    reqId: r.id,
+    name: r.hinban + (r.hinmei?' '+r.hinmei:''),
+    kubun: r.kubun,
+    hours: r.hours,
+    assignee: assignee,
+    moldType: r.moldType,
+    trialSteps: r.trialSteps,
+    deadline: r.deadline,
+    startMin: null,   // 自動配置で決定
+    memo: '',
+    actual: { start:'', end:'' }
+  };
+  tasks.push(task);
+  r.assigned = true;
+  r.assignee = assignee;
+
+  autoArrange();
+  selectedReqId = null;
+  document.getElementById('assignBtns').style.display='none';
+  renderRequestList();
+  renderGantt();
+  renderDetail();
+}
+
+// ===== 自動スケジュール（全未割付を自動配置） =====
+function autoSchedule(){
+  const unassigned = requests.filter(r=>!r.assigned);
+  if(unassigned.length===0){ alert('未割付の依頼がありません'); return; }
+
+  // 納期順に並んでいる前提で交互に割付
+  unassigned.forEach((r,i)=>{
+    const assignee = i%2===0 ? 'matsumoto' : 'matsunaga';
+    const task = {
+      id: 'task_'+Date.now()+'_'+i,
+      reqId: r.id,
+      name: r.hinban + (r.hinmei?' '+r.hinmei:''),
+      kubun: r.kubun,
+      hours: r.hours,
+      assignee, moldType: r.moldType, trialSteps: r.trialSteps,
+      deadline: r.deadline, startMin: null, memo: '',
+      actual: { start:'', end:'' }
+    };
+    tasks.push(task);
+    r.assigned = true;
+    r.assignee = assignee;
+  });
+  autoArrange();
+  renderRequestList();
+  renderGantt();
+  renderDetail();
+}
+
+// ===== タスクの時間自動配置 =====
+function autoArrange(){
+  const assignees = ['matsumoto','matsunaga'];
+  assignees.forEach(a=>{
+    const myTasks = tasks.filter(t=>t.assignee===a);
+    let cursor = WORK_START; // 分単位
+    myTasks.forEach(t=>{
+      cursor = nextAvailableStart(cursor);
+      t.startMin = cursor;
+      cursor = addWorkMinutes(cursor, Math.round(t.hours * 60));
+    });
+  });
+}
+
+// 休憩をスキップして開始可能な時刻を返す
+function nextAvailableStart(min){
+  let m = Math.max(min, WORK_START);
+  // 休憩中なら休憩終了後に
+  for(const b of BREAKS){
+    if(m >= b.start && m < b.end) m = b.end;
+  }
+  return m;
+}
+
+// 作業時間(分)を加算（休憩は自動スキップ）
+function addWorkMinutes(startMin, workMin){
+  let cur = startMin;
+  let remaining = workMin;
+  while(remaining > 0){
+    // 次の休憩までの余裕
+    let nextBreak = WORK_END;
+    for(const b of BREAKS){
+      if(b.start > cur){ nextBreak = Math.min(nextBreak, b.start); break; }
+    }
+    const avail = nextBreak - cur;
+    if(avail >= remaining){
+      cur += remaining;
+      remaining = 0;
+    } else {
+      remaining -= avail;
+      cur = nextBreak;
+      // 休憩終了まで進む
+      for(const b of BREAKS){
+        if(b.start === cur){ cur = b.end; break; }
+      }
+    }
+  }
+  return cur;
+}
+
+// ===== ガントチャート描画 =====
+function renderGantt(){
+  const container = document.getElementById('ganttContainer');
+  const trackWidth = container.parentElement.clientWidth - 80 - 32 - 30 || 700;
+
+  // 時間→ピクセル変換（休憩込みで均等）
+  const minToX = (min) => {
+    const elapsed = Math.max(0, min - WORK_START);
+    return (elapsed / TOTAL_MINUTES) * trackWidth;
+  };
+  const durToW = (startMin, endMin) => {
+    return Math.max(2, minToX(endMin) - minToX(startMin));
+  };
+
+  // ガントヘッダー（時間軸）
+  const hours = [];
+  for(let h=8;h<=20;h++) hours.push(h);
+  const ticks = hours.map(h=>{
+    const m = h*60;
+    if(m < WORK_START || m > WORK_END) return '';
+    const x = minToX(m);
+    return `<div class="time-tick" style="left:${x}px">${String(h).padStart(2,'0')}:00</div>`;
+  }).join('');
+
+  // グリッド線
+  const gridLines = hours.map(h=>{
+    const m = h*60;
+    if(m < WORK_START || m > WORK_END) return '';
+    const x = minToX(m);
+    return `<div class="grid-line hour" style="left:${x}px"></div>`;
+  }).join('');
+
+  // 休憩ゾーン
+  const breakZones = BREAKS.map(b=>{
+    const x = minToX(b.start);
+    const w = minToX(b.end) - minToX(b.start);
+    return `<div class="break-zone" style="left:${x}px;width:${w}px"></div>`;
+  }).join('');
+
+  // 担当者行
+  const rows = ['matsumoto','matsunaga'].map(assignee=>{
+    const label = assignee==='matsumoto'?'松本':'松永';
+    const labelClass = assignee==='matsumoto'?'label-matsumoto':'label-matsunaga';
+
+    const myTasks = tasks.filter(t=>t.assignee===assignee);
+    const blocks = myTasks.map(t=>{
+      if(t.startMin===null) return '';
+      const workMin = Math.round(t.hours * 60);
+      const endMin = addWorkMinutes(t.startMin, workMin);
+
+      // 改修ブロック（搬入+改修）
+      const repairMin = Math.round((t.hours - getTrialTime(t.trialSteps)) * 60);
+      const repairEndMin = addWorkMinutes(t.startMin, repairMin);
+      const trialStartMin = repairEndMin;
+      const trialEndMin = endMin;
+
+      const blockClass = assignee==='matsumoto'?'block-m':'block-n';
+      const isTrial = t.trialSteps>0;
+
+      const rx = minToX(t.startMin);
+      const rw = durToW(t.startMin, repairEndMin);
+
+      let html = `<div class="gantt-block ${blockClass}"
+        style="left:${rx}px;width:${rw}px"
+        onclick="openEditModal('${t.id}')" title="${t.name}">
+        <div class="block-label">${t.name}</div>
+        <div class="block-time">${fmtMin(t.startMin)}〜${fmtMin(repairEndMin)}</div>
+      </div>`;
+
+      if(isTrial && trialEndMin > trialStartMin){
+        const tx = minToX(trialStartMin);
+        const tw = durToW(trialStartMin, trialEndMin);
+        html += `<div class="gantt-block block-trial"
+          style="left:${tx}px;width:${tw}px"
+          onclick="openEditModal('${t.id}')" title="${t.name} トライ">
+          <div class="block-label">▶ トライ</div>
+          <div class="block-time">${fmtMin(trialStartMin)}〜${fmtMin(trialEndMin)}</div>
+        </div>`;
+      }
+      return html;
+    }).join('');
+
+    return `
+    <div class="gantt-row">
+      <div class="gantt-row-label ${labelClass}">${label}</div>
+      <div class="gantt-track" style="width:${trackWidth}px">
+        <div class="gantt-grid">${gridLines}${breakZones}</div>
+        ${blocks}
+      </div>
+    </div>`;
+  }).join('');
+
+  container.innerHTML = `
+  <div class="gantt-header">
+    <div></div>
+    <div class="time-ruler" style="width:${trackWidth}px">${ticks}</div>
+  </div>
+  ${rows}`;
+}
+
+function fmtMin(m){
+  const h = Math.floor(m/60);
+  const min = m%60;
+  return `${String(h).padStart(2,'0')}:${String(min).padStart(2,'0')}`;
+}
+
+// ===== 詳細・実績パネル =====
+function renderDetail(){
+  const grid = document.getElementById('detailGrid');
+  if(tasks.length===0){
+    grid.innerHTML='<div class="empty-state">作業を割付けると表示されます</div>'; return;
+  }
+  grid.innerHTML = tasks.map(t=>{
+    const color = t.assignee==='matsumoto'?'var(--matsumoto)':'var(--matsunaga)';
+    const endMin = t.startMin!==null ? addWorkMinutes(t.startMin, Math.round(t.hours*60)) : null;
+    const timeRange = t.startMin!==null ? `${fmtMin(t.startMin)} 〜 ${fmtMin(endMin)}` : '未配置';
+    return `
+    <div class="detail-item" onclick="openEditModal('${t.id}')">
+      <div class="detail-item-color" style="background:${color}"></div>
+      <div class="detail-item-info">
+        <div class="detail-item-name">${t.name}</div>
+        <div class="detail-item-meta">${timeRange} ／ ${t.hours}H</div>
+        <div class="actual-input" onclick="event.stopPropagation()">
+          <input class="actual-time-input" id="act_start_${t.id}" placeholder="開始" value="${t.actual.start}"
+            onchange="setActual('${t.id}','start',this.value)" />
+          <button class="actual-btn actual-btn-start" onclick="stampNow('${t.id}','start')">▶</button>
+          <input class="actual-time-input" id="act_end_${t.id}" placeholder="終了" value="${t.actual.end}"
+            onchange="setActual('${t.id}','end',this.value)" />
+          <button class="actual-btn actual-btn-end" onclick="stampNow('${t.id}','end')">■</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function stampNow(taskId, type){
+  const t = tasks.find(x=>x.id===taskId);
+  if(!t) return;
+  const now = new Date();
+  const val = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  t.actual[type] = val;
+  document.getElementById(`act_${type}_${taskId}`).value = val;
+}
+function setActual(taskId, type, val){
+  const t = tasks.find(x=>x.id===taskId);
+  if(t) t.actual[type] = val;
+}
+
+// ===== 編集モーダル =====
+function openEditModal(taskId){
+  const t = tasks.find(x=>x.id===taskId);
+  if(!t) return;
+  editingTaskId = taskId;
+  document.getElementById('editModalTitle').textContent = `編集: ${t.name}`;
+  document.getElementById('editName').value = t.name;
+  document.getElementById('editCategory').value = (t.kubun||[]).join(', ');
+  document.getElementById('editHours').value = t.hours;
+  document.getElementById('editTrialSteps').value = t.trialSteps||1;
+  document.getElementById('editStartTime').value = t.startMin!==null ? fmtMin(t.startMin) : '08:10';
+  document.getElementById('editAssignee').value = t.assignee;
+  document.getElementById('editMemo').value = t.memo||'';
+  document.getElementById('editModal').classList.add('open');
+}
+function closeModal(){ document.getElementById('editModal').classList.remove('open'); editingTaskId=null; }
+function saveEdit(){
+  if(!editingTaskId) return;
+  const t = tasks.find(x=>x.id===editingTaskId);
+  if(!t) return;
+  t.name = document.getElementById('editName').value;
+  t.kubun = document.getElementById('editCategory').value.split(/[,、]/).map(s=>s.trim()).filter(Boolean);
+  t.hours = parseFloat(document.getElementById('editHours').value)||1.0;
+  t.trialSteps = parseInt(document.getElementById('editTrialSteps').value)||1;
+  const st = document.getElementById('editStartTime').value;
+  if(st){
+    const [hh,mm] = st.split(':').map(Number);
+    t.startMin = hh*60+mm;
+  }
+  t.assignee = document.getElementById('editAssignee').value;
+  t.memo = document.getElementById('editMemo').value;
+  // 後続タスクを再配置
+  autoArrange();
+  closeModal();
+  renderGantt();
+  renderDetail();
+}
+function deleteTask(){
+  if(!editingTaskId) return;
+  const t = tasks.find(x=>x.id===editingTaskId);
+  if(t){
+    // 依頼を未割付に戻す
+    const r = requests.find(x=>x.id===t.reqId);
+    if(r){ r.assigned=false; r.assignee=null; }
+    tasks = tasks.filter(x=>x.id!==editingTaskId);
+    autoArrange();
+  }
+  closeModal();
+  renderRequestList();
+  renderGantt();
+  renderDetail();
+}
+
+// ===== 手動追加 =====
+function toggleManualForm(){
+  document.getElementById('manualForm').classList.toggle('open');
+}
+function addManualRequest(){
+  const name = document.getElementById('manualName').value.trim();
+  if(!name){ alert('品番/作業内容を入力してください'); return; }
+  const category = document.getElementById('manualCategory').value;
+  const hours = parseFloat(document.getElementById('manualHours').value)||1.0;
+  const deadline = document.getElementById('manualDeadline').value;
+  const moldType = document.getElementById('manualMoldType').value;
+  const kubunLabel = TIME_MASTER[category]?.label || '任意';
+
+  const req = {
+    id: 'manual_'+Date.now(),
+    hinban: name, hinmei: '',
+    process: '',
+    kubun: [kubunLabel],
+    moldType, units:1,
+    hours,
+    deadline,
+    trialSteps: 1,
+    assigned: false, assignee: null,
+    source: 'manual'
+  };
+  // 納期順に挿入
+  requests.push(req);
+  requests.sort((a,b)=>a.deadline.localeCompare(b.deadline));
+
+  document.getElementById('manualName').value='';
+  toggleManualForm();
+  renderRequestList();
+}
+
+// ===== リサイズ対応 =====
+window.addEventListener('resize', ()=>{ renderGantt(); });
+
+// ===== 初期化 =====
+initDate();
+loadKintone();
+
+// モーダル外クリックで閉じる
+document.getElementById('editModal').addEventListener('click', function(e){
+  if(e.target===this) closeModal();
+});
+</script>
+</body>
+</html>
