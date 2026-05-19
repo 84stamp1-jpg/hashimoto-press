@@ -6,368 +6,238 @@
 <title>金型改修計画表</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap');
+:root{
+  --bg:#f0f2f7;--panel:#fff;--panel2:#f7f8fc;--border:#dde1ed;--border2:#c8cede;
+  --text:#1a1f36;--text2:#6b7394;--text3:#9aa0bc;
+  --accent:#3b6ef8;--accent-bg:#ebf0ff;
+  --m:#2563eb;--m-bg:#dbeafe;--m-bd:#93c5fd;
+  --n:#ea6c0a;--n-bg:#fff0e0;--n-bd:#fdba74;
+  --trial:#059669;--trial-bg:#d1fae5;--trial-bd:#6ee7b7;
+  --custom:#7c3aed;--custom-bg:#ede9fe;--custom-bd:#c4b5fd;
+  --warn:#d97706;--warn-bg:#fef3c7;
+  --danger:#dc2626;--danger-bg:#fee2e2;
+  --ok:#16a34a;--ok-bg:#f0fdf4;
+  --shadow:0 1px 4px rgba(0,0,0,.08),0 0 0 1px rgba(0,0,0,.04);
+  --shadow-lg:0 4px 20px rgba(0,0,0,.12);
+  --r:8px;--font:'Noto Sans JP',sans-serif;--mono:'JetBrains Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh}
 
-:root {
-  --bg:        #f0f2f7;
-  --panel:     #ffffff;
-  --panel2:    #f7f8fc;
-  --border:    #dde1ed;
-  --border2:   #c8cede;
-  --text:      #1a1f36;
-  --text2:     #6b7394;
-  --text3:     #9aa0bc;
-  --accent:    #3b6ef8;
-  --accent-bg: #ebf0ff;
-  --matsumoto: #2563eb;
-  --matsumoto-bg: #dbeafe;
-  --matsunaga: #ea6c0a;
-  --matsunaga-bg: #fff0e0;
-  --trial:     #059669;
-  --trial-bg:  #d1fae5;
-  --custom:    #7c3aed;
-  --custom-bg: #ede9fe;
-  --warn:      #d97706;
-  --warn-bg:   #fef3c7;
-  --danger:    #dc2626;
-  --danger-bg: #fee2e2;
-  --success:   #16a34a;
-  --shadow:    0 1px 4px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,0,0,0.04);
-  --shadow-lg: 0 4px 20px rgba(0,0,0,0.12);
-  --radius:    8px;
-  --font:      'Noto Sans JP', sans-serif;
-  --mono:      'JetBrains Mono', monospace;
-}
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; }
+/* HEADER */
+header{background:var(--panel);border-bottom:1px solid var(--border);padding:0 16px;height:50px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:100;box-shadow:0 1px 6px rgba(0,0,0,.06)}
+.logo{font-size:14px;font-weight:700;display:flex;align-items:center;gap:5px;white-space:nowrap}
+.logo span{color:var(--accent)}
+.date-nav{display:flex;align-items:center;gap:3px;background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:3px;flex-shrink:0}
+.date-btn{padding:4px 8px;border-radius:5px;border:none;background:transparent;cursor:pointer;font-size:11px;color:var(--text2);transition:all .15s;white-space:nowrap;font-family:var(--font)}
+.date-btn:hover{background:var(--panel);color:var(--text)}
+.date-btn.today{background:var(--accent);color:#fff;font-weight:700}
+.nav-arrow{font-size:14px;color:var(--text2);cursor:pointer;padding:3px 6px;border-radius:4px;border:none;background:transparent}
+.nav-arrow:hover{background:var(--panel)}
+.hdr-right{margin-left:auto;display:flex;gap:6px;align-items:center}
+.btn{font-family:var(--font);font-size:12px;font-weight:500;padding:6px 12px;border-radius:6px;border:none;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:4px;white-space:nowrap}
+.btn-primary{background:var(--accent);color:#fff;box-shadow:0 1px 4px rgba(59,110,248,.3)}
+.btn-primary:hover{background:#2f5ee0}
+.btn-secondary{background:var(--panel);color:var(--text);border:1px solid var(--border)}
+.btn-secondary:hover{background:var(--bg)}
+.btn-danger{background:var(--danger-bg);color:var(--danger);border:1px solid #fca5a5}
+.btn-sm{padding:4px 9px;font-size:11px}
 
-/* ===== HEADER ===== */
-header {
-  background: var(--panel);
-  border-bottom: 1px solid var(--border);
-  padding: 0 20px;
-  height: 52px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  box-shadow: 0 1px 6px rgba(0,0,0,0.06);
-}
-.logo { font-size: 15px; font-weight: 700; color: var(--text); display:flex; align-items:center; gap:6px; }
-.logo span { color: var(--accent); }
+/* LAYOUT */
+.layout{display:grid;grid-template-columns:360px 1fr;height:calc(100vh - 50px)}
 
-/* 日付ナビ */
-.date-nav {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 3px;
-}
-.date-btn {
-  padding: 4px 8px;
-  border-radius: 5px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-size: 12px;
-  color: var(--text2);
-  transition: all 0.15s;
-}
-.date-btn:hover { background: var(--panel); color: var(--text); }
-.date-btn.today { background: var(--accent); color: #fff; font-weight: 600; }
-.date-nav-arrow { font-size: 14px; color: var(--text2); cursor: pointer; padding: 3px 6px; border-radius:4px; border:none; background:transparent; }
-.date-nav-arrow:hover { background: var(--panel); }
-.header-right { margin-left: auto; display: flex; gap: 6px; align-items: center; }
-.btn {
-  font-family: var(--font); font-size: 12px; font-weight: 500;
-  padding: 6px 13px; border-radius: 6px; border: none; cursor: pointer;
-  transition: all 0.15s; display: flex; align-items: center; gap: 5px; white-space: nowrap;
-}
-.btn-primary { background: var(--accent); color: #fff; box-shadow: 0 1px 4px rgba(59,110,248,0.3); }
-.btn-primary:hover { background: #2f5ee0; }
-.btn-secondary { background: var(--panel); color: var(--text); border: 1px solid var(--border); }
-.btn-secondary:hover { background: var(--bg); }
-.btn-ghost { background: transparent; color: var(--text2); border: 1px solid transparent; }
-.btn-ghost:hover { background: var(--bg); border-color: var(--border); }
-.btn-danger { background: var(--danger-bg); color: var(--danger); border: 1px solid #fca5a5; }
-.btn-sm { padding: 4px 10px; font-size: 11px; }
+/* LEFT */
+.left{background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+.ph{padding:9px 13px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:7px;flex-shrink:0;background:var(--panel2)}
+.ptitle{font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--text2);text-transform:uppercase}
+.badge{font-size:10px;padding:2px 7px;border-radius:10px;font-weight:600;background:var(--accent-bg);color:var(--accent);border:1px solid #c7d7fd}
+.badge-warn{background:var(--warn-bg);color:var(--warn);border-color:#fde68a}
+.badge-ok{background:var(--ok-bg);color:var(--ok);border-color:#86efac}
+.req-list{flex:1;overflow-y:auto;padding:7px}
+.req-list::-webkit-scrollbar{width:4px}
+.req-list::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
 
-/* ===== LAYOUT ===== */
-.app-layout {
-  display: grid;
-  grid-template-columns: 360px 1fr;
-  height: calc(100vh - 52px);
-}
+/* REQUEST CARD */
+.card{background:var(--panel);border:1.5px solid var(--border);border-radius:var(--r);margin-bottom:6px;cursor:pointer;transition:all .15s;overflow:hidden}
+.card:hover{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg)}
+.card.sel{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-bg)}
+.card.done{opacity:.5}
+.card-main{padding:9px 11px}
+.ctop{display:flex;align-items:flex-start;gap:6px;margin-bottom:3px}
+.cnum{font-family:var(--mono);font-size:9px;color:var(--text3);padding-top:2px;flex-shrink:0}
+.ctitle{font-size:13px;font-weight:600;line-height:1.4;flex:1}
+.cproc{font-size:10px;color:var(--text2);margin-bottom:4px;padding-left:19px}
+.ctags{display:flex;flex-wrap:wrap;gap:3px;padding-left:19px;margin-bottom:5px}
+.tag{font-size:10px;font-weight:500;padding:2px 6px;border-radius:4px;background:var(--trial-bg);color:var(--trial);border:1px solid var(--trial-bd)}
+.tag-bari{background:var(--warn-bg);color:#92400e;border-color:#fde68a}
+.tag-seido{background:var(--accent-bg);color:#1e40af;border-color:#c7d7fd}
+.tag-maint{background:var(--ok-bg);color:var(--ok);border-color:#86efac}
+.tag-custom{background:var(--custom-bg);color:var(--custom);border-color:var(--custom-bd)}
+.cbot{display:flex;align-items:center;gap:7px;padding-left:19px}
+.ctime{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--accent)}
+.cdl{font-size:10px;color:var(--text2);margin-left:auto}
+.cdl-u{color:var(--danger);font-weight:600}
+.cdl-n{color:var(--warn);font-weight:600}
 
-/* ===== LEFT PANEL ===== */
-.left-panel {
-  background: var(--panel);
-  border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-.panel-header {
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-  background: var(--panel2);
-}
-.panel-title { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; color: var(--text2); text-transform: uppercase; }
-.badge {
-  font-size: 10px; padding: 2px 8px; border-radius: 10px; font-weight: 600;
-  background: var(--accent-bg); color: var(--accent); border: 1px solid #c7d7fd;
-}
-.badge-warn { background: var(--warn-bg); color: var(--warn); border-color: #fde68a; }
-.badge-ok { background: var(--trial-bg); color: var(--trial); border-color: #a7f3d0; }
+/* CARD DETAIL */
+.card-det{border-top:1px solid var(--border);background:#fafbff;padding:9px 11px;display:none}
+.card.sel .card-det{display:block}
+.det-sec{font-size:10px;font-weight:700;color:var(--text2);letter-spacing:.06em;margin-bottom:6px}
+/* 複合改修エリア */
+.kubun-area{margin-bottom:8px}
+.kubun-line{display:grid;grid-template-columns:1fr auto 60px 20px;gap:4px;align-items:center;margin-bottom:4px}
+.kubun-sel{font-family:var(--font);font-size:11px;border:1px solid var(--border);border-radius:4px;padding:3px 5px;background:var(--panel);color:var(--text);outline:none;width:100%}
+.kubun-sel:focus{border-color:var(--accent)}
+.kcount{font-family:var(--mono);font-size:11px;width:44px;text-align:center;border:1px solid var(--border);border-radius:4px;padding:3px 4px;background:var(--panel);color:var(--text);outline:none}
+.kcount:focus{border-color:var(--accent)}
+.khours{font-family:var(--mono);font-size:10px;color:var(--text2);text-align:right;width:60px}
+.kdel{background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;padding:0;line-height:1}
+.kdel:hover{color:var(--danger)}
+.add-kubun-row{display:flex;gap:5px;margin-bottom:8px}
+.add-kubun-btn{font-size:10px;padding:3px 8px;border-radius:4px;border:1.5px dashed var(--border2);background:transparent;color:var(--text2);cursor:pointer;transition:all .15s;font-family:var(--font)}
+.add-kubun-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-bg)}
+/* 任意入力 */
+.custom-note{width:100%;font-size:11px;border:1px solid var(--border);border-radius:4px;padding:4px 7px;background:var(--panel);color:var(--text);font-family:var(--font);outline:none;margin-bottom:7px;resize:vertical;min-height:32px}
+.custom-note:focus{border-color:var(--accent)}
+/* 型種別・トライ */
+.carry-row{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.mtype-sel{font-family:var(--font);font-size:11px;border:1px solid var(--border);border-radius:4px;padding:3px 6px;background:var(--panel);color:var(--text);outline:none}
+.trial-row{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.tlabel{font-size:11px;color:var(--text2);flex:1}
+/* 合計 */
+.total-box{display:flex;align-items:center;justify-content:space-between;background:var(--accent-bg);border-radius:5px;padding:5px 9px;margin-bottom:7px}
+.total-label{font-size:11px;color:var(--accent);font-weight:700}
+.total-val{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--accent)}
+.assign-row{display:flex;gap:5px}
+.assign-btn{flex:1;padding:7px;font-size:12px;font-weight:700;border-radius:6px;border:none;cursor:pointer;transition:all .15s;font-family:var(--font)}
+.ab-m{background:var(--m-bg);color:var(--m);border:1.5px solid var(--m-bd)}
+.ab-m:hover{background:#bfdbfe}
+.ab-n{background:var(--n-bg);color:var(--n);border:1.5px solid var(--n-bd)}
+.ab-n:hover{background:#fed7aa}
 
-.request-list { flex: 1; overflow-y: auto; padding: 8px; }
-.request-list::-webkit-scrollbar { width: 4px; }
-.request-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+/* MANUAL ADD */
+.manual{border-top:1px solid var(--border);padding:8px;flex-shrink:0;background:var(--panel2)}
+.mtoggle{width:100%;text-align:center;font-size:11px;color:var(--text2);cursor:pointer;padding:5px;border-radius:5px;background:transparent;border:1.5px dashed var(--border2);transition:all .15s;font-family:var(--font)}
+.mtoggle:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-bg)}
+.mform{display:none;margin-top:8px}
+.mform.open{display:block}
+.frow{margin-bottom:5px}
+.flabel{font-size:10px;font-weight:600;color:var(--text2);margin-bottom:3px;display:block}
+.finput{width:100%;background:var(--panel);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:var(--font);font-size:12px;padding:5px 8px;outline:none;transition:border-color .15s}
+.finput:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg)}
+.f2col{display:grid;grid-template-columns:1fr 1fr;gap:5px}
 
-/* ===== REQUEST CARD ===== */
-.request-card {
-  background: var(--panel);
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius);
-  margin-bottom: 6px;
-  cursor: pointer;
-  transition: all 0.15s;
-  overflow: hidden;
-}
-.request-card:hover { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); }
-.request-card.selected { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); }
-.request-card.assigned { opacity: 0.55; }
-.request-card.assigned:hover { opacity: 0.75; }
+/* RIGHT */
+.right{display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+.gctrl{padding:9px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0;background:var(--panel);box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.ginfo{font-size:11px;color:var(--text2)}
+.glegend{display:flex;gap:10px;align-items:center;margin-left:auto}
+.legitem{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text2)}
+.legdot{width:10px;height:10px;border-radius:3px}
 
-.card-main { padding: 10px 12px; }
-.card-top { display: flex; align-items: flex-start; gap: 7px; margin-bottom: 4px; }
-.card-num { font-family: var(--mono); font-size: 9px; color: var(--text3); padding-top: 2px; flex-shrink: 0; }
-.card-title { font-size: 13px; font-weight: 600; line-height: 1.4; flex: 1; }
-.card-process { font-size: 10px; color: var(--text2); margin-bottom: 5px; padding-left: 20px; }
-.card-tags { display: flex; flex-wrap: wrap; gap: 3px; padding-left: 20px; margin-bottom: 6px; }
-.tag {
-  font-size: 10px; font-weight: 500; padding: 2px 7px; border-radius: 4px;
-  background: var(--trial-bg); color: var(--trial); border: 1px solid #a7f3d0;
-}
-.tag-bari { background: var(--warn-bg); color: #92400e; border-color: #fde68a; }
-.tag-seido { background: var(--accent-bg); color: #1e40af; border-color: #c7d7fd; }
-.tag-maint { background: #f0fdf4; color: var(--success); border-color: #86efac; }
-.tag-custom { background: var(--custom-bg); color: var(--custom); border-color: #c4b5fd; }
+/* GANTT */
+.gwrap{flex:1;overflow:auto;padding:12px 14px}
+.gwrap::-webkit-scrollbar{height:6px;width:4px}
+.gwrap::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+.gcont{min-width:820px}
+.ghdr{display:grid;grid-template-columns:72px 1fr;margin-bottom:5px}
+.gruler{position:relative;height:20px}
+.gtick{position:absolute;top:0;font-family:var(--mono);font-size:10px;color:var(--text3);transform:translateX(-50%);white-space:nowrap}
+.grow{display:grid;grid-template-columns:72px 1fr;margin-bottom:6px}
+.glabel{display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border-radius:6px 0 0 6px;padding:3px;min-height:52px;letter-spacing:.03em}
+.lm{background:var(--m-bg);color:var(--m);border:1px solid var(--m-bd);border-right:none}
+.ln{background:var(--n-bg);color:var(--n);border:1px solid var(--n-bd);border-right:none}
+.gtrack{position:relative;background:var(--panel);border:1px solid var(--border);border-radius:0 6px 6px 0;min-height:52px;box-shadow:var(--shadow)}
+.ggrid{position:absolute;inset:0;pointer-events:none}
+.gline{position:absolute;top:0;bottom:0;width:1px;background:var(--border)}
+.gline.h{background:var(--border2)}
+.bzone{position:absolute;top:0;bottom:0;background:repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(0,0,0,.025) 4px,rgba(0,0,0,.025) 8px);border-left:1px dashed var(--border2);border-right:1px dashed var(--border2);pointer-events:none;z-index:1}
 
-.card-time-row { display: flex; align-items: center; gap: 8px; padding-left: 20px; }
-.card-time { font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--accent); }
-.card-deadline { font-size: 10px; color: var(--text2); margin-left: auto; }
-.deadline-urgent { color: var(--danger); font-weight: 600; }
-.deadline-near { color: var(--warn); font-weight: 600; }
+/* GANTT BLOCKS */
+.gblock{position:absolute;top:4px;height:calc(100% - 8px);border-radius:5px;cursor:pointer;display:flex;flex-direction:column;justify-content:center;padding:0 6px;overflow:hidden;transition:filter .12s,transform .1s,box-shadow .12s;z-index:2;border:1px solid transparent;min-width:18px}
+.gblock:hover{filter:brightness(.9);transform:scaleY(1.04);z-index:10;box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.bm{background:var(--m-bg);border-color:var(--m-bd)}
+.bn{background:var(--n-bg);border-color:var(--n-bd)}
+.btrial{background:var(--trial-bg);border-color:var(--trial-bd)}
+.bcustom{background:var(--custom-bg);border-color:var(--custom-bd)}
+.blabel{font-size:9px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3}
+.btime{font-family:var(--mono);font-size:8px;white-space:nowrap}
+.bm .blabel,.bm .btime{color:var(--m)}
+.bn .blabel,.bn .btime{color:var(--n)}
+.btrial .blabel,.btrial .btime{color:var(--trial)}
+.bcustom .blabel,.bcustom .btime{color:var(--custom)}
 
-/* ===== 工数入力エリア ===== */
-.card-detail {
-  border-top: 1px solid var(--border);
-  background: #fafbff;
-  padding: 8px 12px;
-  display: none;
-}
-.request-card.selected .card-detail { display: block; }
-.detail-label { font-size: 10px; font-weight: 700; color: var(--text2); margin-bottom: 6px; letter-spacing: 0.05em; }
-.kubun-rows { display: flex; flex-direction: column; gap: 5px; margin-bottom: 8px; }
-.kubun-row { display: flex; align-items: center; gap: 6px; }
-.kubun-name { font-size: 11px; flex: 1; color: var(--text); }
-.kubun-count {
-  font-family: var(--mono); font-size: 11px; width: 44px; text-align: center;
-  border: 1px solid var(--border); border-radius: 4px; padding: 3px 4px;
-  background: var(--panel); color: var(--text); outline: none;
-}
-.kubun-count:focus { border-color: var(--accent); }
-.kubun-hours { font-family: var(--mono); font-size: 10px; color: var(--text2); width: 36px; text-align: right; }
-.kubun-check { width: 14px; height: 14px; cursor: pointer; accent-color: var(--accent); }
-.carry-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
-.mold-type-sel {
-  font-family: var(--font); font-size: 11px; border: 1px solid var(--border);
-  border-radius: 4px; padding: 3px 6px; background: var(--panel); color: var(--text); outline: none;
-}
-.mold-type-sel:focus { border-color: var(--accent); }
-.total-hours-row {
-  display: flex; align-items: center; justify-content: space-between;
-  background: var(--accent-bg); border-radius: 5px; padding: 5px 8px;
-  margin-bottom: 7px;
-}
-.total-hours-label { font-size: 11px; color: var(--accent); font-weight: 700; }
-.total-hours-val { font-family: var(--mono); font-size: 13px; font-weight: 700; color: var(--accent); }
-.trial-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
-.trial-label { font-size: 11px; color: var(--text2); flex: 1; }
-.assign-btn-row { display: flex; gap: 5px; }
-.assign-card-btn {
-  flex: 1; padding: 7px; font-size: 12px; font-weight: 700;
-  border-radius: 6px; border: none; cursor: pointer; transition: all 0.15s; font-family: var(--font);
-}
-.assign-m { background: var(--matsumoto-bg); color: var(--matsumoto); border: 1.5px solid #93c5fd; }
-.assign-m:hover { background: #bfdbfe; }
-.assign-n { background: var(--matsunaga-bg); color: var(--matsunaga); border: 1.5px solid #fdba74; }
-.assign-n:hover { background: #fed7aa; }
+/* 実績オーバーレイ（予実） */
+.gblock-actual{position:absolute;top:4px;height:calc(100% - 8px);border-radius:5px;z-index:3;pointer-events:none;opacity:.55;border:2px solid transparent}
+.actual-m{background:var(--m);border-color:var(--m)}
+.actual-n{background:var(--n);border-color:var(--n)}
 
-/* 手動追加 */
-.manual-add { border-top: 1px solid var(--border); padding: 8px; flex-shrink: 0; background: var(--panel2); }
-.manual-toggle {
-  width: 100%; text-align: center; font-size: 11px; color: var(--text2);
-  cursor: pointer; padding: 5px; border-radius: 5px; background: transparent;
-  border: 1.5px dashed var(--border2); transition: all 0.15s;
-}
-.manual-toggle:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
-.manual-form { display: none; margin-top: 8px; }
-.manual-form.open { display: block; }
-.form-row { margin-bottom: 6px; }
-.form-label { font-size: 10px; font-weight: 600; color: var(--text2); margin-bottom: 3px; display: block; }
-.form-input {
-  width: 100%; background: var(--panel); border: 1px solid var(--border);
-  border-radius: 5px; color: var(--text); font-family: var(--font);
-  font-size: 12px; padding: 5px 8px; outline: none; transition: border-color 0.15s;
-}
-.form-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-bg); }
-.form-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+/* DETAIL PANEL */
+.dpanel{border-top:1px solid var(--border);background:var(--panel);padding:9px 14px;flex-shrink:0;max-height:200px;overflow-y:auto}
+.dpanel::-webkit-scrollbar{width:4px}
+.dpanel::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.dphdr{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.dptitle{font-size:10px;font-weight:700;color:var(--text2);letter-spacing:.1em;text-transform:uppercase}
+.dgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:5px}
+.ditem{background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:7px 9px;display:flex;align-items:stretch;gap:7px;cursor:pointer;transition:border-color .15s}
+.ditem:hover{border-color:var(--accent)}
+.dcolor{width:4px;border-radius:2px;flex-shrink:0}
+.dinfo{flex:1;min-width:0}
+.dname{font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
+.dmeta{font-family:var(--mono);font-size:10px;color:var(--text2);margin-bottom:3px}
+/* 予実インジケーター */
+.yojitsu{display:flex;align-items:center;gap:5px;margin-bottom:4px;font-size:10px}
+.yj-bar{flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden;position:relative}
+.yj-plan{position:absolute;left:0;top:0;height:100%;background:var(--accent-bg);border:1px solid var(--m-bd);border-radius:3px}
+.yj-actual{position:absolute;left:0;top:0;height:100%;background:var(--m);border-radius:3px;opacity:.7}
+.yj-label{font-family:var(--mono);font-size:9px;color:var(--text2);white-space:nowrap}
+.yj-over{color:var(--danger)}
+.actual-row{display:flex;gap:4px;align-items:center}
+.ainput{font-family:var(--mono);font-size:10px;background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:3px;padding:2px 5px;width:52px;text-align:center;outline:none}
+.ainput:focus{border-color:var(--accent)}
+.sbtn{font-size:9px;padding:2px 6px;border-radius:3px;border:none;cursor:pointer;font-family:var(--font);font-weight:700}
+.sbtn-s{background:var(--trial-bg);color:var(--trial);border:1px solid var(--trial-bd)}
+.sbtn-e{background:var(--danger-bg);color:var(--danger);border:1px solid #fca5a5}
+.empty{text-align:center;padding:20px;color:var(--text3);font-size:12px}
 
-/* ===== RIGHT PANEL ===== */
-.right-panel { display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
+/* MODAL */
+.moverlay{display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:200;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+.moverlay.open{display:flex}
+.mdlg{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:18px;width:460px;max-height:88vh;overflow-y:auto;box-shadow:var(--shadow-lg)}
+.mdlg::-webkit-scrollbar{width:4px}
+.mdlg::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.mtitle{font-size:14px;font-weight:700;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+.mfooter{display:flex;gap:7px;justify-content:flex-end;margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}
 
-.gantt-controls {
-  padding: 10px 16px; border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; gap: 12px; flex-shrink: 0;
-  background: var(--panel); box-shadow: 0 1px 4px rgba(0,0,0,0.04);
-}
-.gantt-info { font-size: 11px; color: var(--text2); }
-.gantt-legend { display: flex; gap: 12px; align-items: center; margin-left: auto; }
-.legend-item { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text2); }
-.legend-dot { width: 10px; height: 10px; border-radius: 3px; }
+/* 予実モーダル専用 */
+.yj-section{background:var(--panel2);border-radius:6px;padding:10px 12px;margin-bottom:10px;border:1px solid var(--border)}
+.yj-sec-title{font-size:11px;font-weight:700;color:var(--text2);margin-bottom:8px}
+.yj-times{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.yj-time-block{background:var(--panel);border-radius:5px;padding:7px 9px;border:1px solid var(--border)}
+.yj-time-label{font-size:10px;color:var(--text2);margin-bottom:4px}
+.yj-time-val{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--text)}
+.yj-diff{font-size:11px;padding:4px 8px;border-radius:4px;text-align:center;font-weight:600;margin-top:8px}
+.yj-diff-ok{background:var(--trial-bg);color:var(--trial)}
+.yj-diff-over{background:var(--danger-bg);color:var(--danger)}
+.yj-diff-none{background:var(--bg);color:var(--text2)}
 
-/* ===== GANTT ===== */
-.gantt-wrap { flex: 1; overflow: auto; padding: 14px 16px; }
-.gantt-wrap::-webkit-scrollbar { height: 6px; width: 4px; }
-.gantt-wrap::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
-.gantt-container { min-width: 860px; }
+/* SOURCE TAG */
+.src-tag{font-size:9px;padding:1px 5px;border-radius:3px}
+.src-kintone{background:#e0f2fe;color:#0369a1}
+.src-manual{background:var(--custom-bg);color:var(--custom)}
+.src-sample{background:var(--bg);color:var(--text3)}
 
-.gantt-header { display: grid; grid-template-columns: 76px 1fr; margin-bottom: 6px; }
-.time-ruler { position: relative; height: 22px; }
-.time-tick { position: absolute; top: 0; font-family: var(--mono); font-size: 10px; color: var(--text3); transform: translateX(-50%); white-space: nowrap; }
+.loading{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);padding:20px}
+.spinner{width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 
-.gantt-row { display: grid; grid-template-columns: 76px 1fr; margin-bottom: 8px; }
-.gantt-row-label {
-  display: flex; align-items: center; justify-content: center;
-  font-size: 12px; font-weight: 700; border-radius: 6px 0 0 6px;
-  padding: 4px; min-height: 56px; letter-spacing: 0.03em;
-}
-.label-m { background: var(--matsumoto-bg); color: var(--matsumoto); border: 1px solid #93c5fd; border-right: none; }
-.label-n { background: var(--matsunaga-bg); color: var(--matsunaga); border: 1px solid #fdba74; border-right: none; }
-
-.gantt-track {
-  position: relative; background: var(--panel);
-  border: 1px solid var(--border); border-radius: 0 6px 6px 0;
-  min-height: 56px; box-shadow: var(--shadow);
-}
-.gantt-grid { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; }
-.grid-line { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border); }
-.grid-line.hour { background: var(--border2); }
-
-.break-zone {
-  position: absolute; top: 0; bottom: 0;
-  background: repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(0,0,0,0.025) 4px, rgba(0,0,0,0.025) 8px);
-  border-left: 1px dashed var(--border2); border-right: 1px dashed var(--border2);
-  pointer-events: none; z-index: 1;
-}
-
-.gantt-block {
-  position: absolute; top: 5px; height: calc(100% - 10px);
-  border-radius: 5px; cursor: pointer; display: flex; flex-direction: column;
-  justify-content: center; padding: 0 7px; overflow: hidden;
-  transition: filter 0.12s, transform 0.1s, box-shadow 0.12s;
-  z-index: 2; border: 1px solid transparent; min-width: 22px;
-}
-.gantt-block:hover { filter: brightness(0.92); transform: scaleY(1.04); z-index: 10; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
-.block-m { background: var(--matsumoto-bg); border-color: #93c5fd; }
-.block-n { background: var(--matsunaga-bg); border-color: #fdba74; }
-.block-trial { background: var(--trial-bg); border-color: #6ee7b7; }
-.block-custom { background: var(--custom-bg); border-color: #c4b5fd; }
-.block-label { font-size: 9px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); line-height: 1.3; }
-.block-time { font-family: var(--mono); font-size: 8px; color: var(--text2); white-space: nowrap; }
-.block-m .block-label, .block-m .block-time { color: var(--matsumoto); }
-.block-n .block-label, .block-n .block-time { color: var(--matsunaga); }
-.block-trial .block-label, .block-trial .block-time { color: var(--trial); }
-.block-custom .block-label, .block-custom .block-time { color: var(--custom); }
-
-/* ===== 実績パネル ===== */
-.detail-panel {
-  border-top: 1px solid var(--border); background: var(--panel);
-  padding: 10px 16px; flex-shrink: 0; max-height: 200px; overflow-y: auto;
-}
-.detail-panel::-webkit-scrollbar { width: 4px; }
-.detail-panel::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
-.detail-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.detail-title { font-size: 11px; font-weight: 700; color: var(--text2); letter-spacing: 0.08em; text-transform: uppercase; }
-.detail-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; }
-.detail-item {
-  background: var(--panel2); border: 1px solid var(--border); border-radius: 6px;
-  padding: 8px 10px; display: flex; align-items: stretch; gap: 8px;
-  cursor: pointer; transition: border-color 0.15s;
-}
-.detail-item:hover { border-color: var(--accent); }
-.detail-color { width: 4px; border-radius: 2px; flex-shrink: 0; }
-.detail-info { flex: 1; min-width: 0; }
-.detail-name { font-size: 11px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; }
-.detail-meta { font-family: var(--mono); font-size: 10px; color: var(--text2); margin-bottom: 4px; }
-.actual-row { display: flex; gap: 4px; align-items: center; }
-.actual-input {
-  font-family: var(--mono); font-size: 10px; background: var(--panel);
-  border: 1px solid var(--border); color: var(--text); border-radius: 3px;
-  padding: 2px 5px; width: 52px; text-align: center; outline: none;
-}
-.actual-input:focus { border-color: var(--accent); }
-.stamp-btn {
-  font-size: 9px; padding: 2px 6px; border-radius: 3px; border: none;
-  cursor: pointer; font-family: var(--font); font-weight: 700;
-}
-.stamp-s { background: var(--trial-bg); color: var(--trial); border: 1px solid #6ee7b7; }
-.stamp-e { background: var(--danger-bg); color: var(--danger); border: 1px solid #fca5a5; }
-.empty-state { text-align: center; padding: 20px; color: var(--text3); font-size: 12px; }
-
-/* ===== MODAL ===== */
-.modal-overlay {
-  display: none; position: fixed; inset: 0;
-  background: rgba(15,23,42,0.4); z-index: 200; align-items: center; justify-content: center;
-  backdrop-filter: blur(2px);
-}
-.modal-overlay.open { display: flex; }
-.modal {
-  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
-  padding: 20px; width: 420px; max-height: 85vh; overflow-y: auto;
-  box-shadow: var(--shadow-lg);
-}
-.modal-title { font-size: 14px; font-weight: 700; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
-.modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); }
-
-/* ローディング */
-.loading { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text2); padding: 20px; }
-.spinner { width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* kintoneソース表示 */
-.source-tag { font-size: 9px; padding: 1px 5px; border-radius: 3px; }
-.source-kintone { background: #e0f2fe; color: #0369a1; }
-.source-manual { background: var(--custom-bg); color: var(--custom); }
-.source-sample { background: var(--bg); color: var(--text3); }
-
-@media print {
-  body { background: #fff; }
-  header, .left-panel, .gantt-controls, .detail-panel { display: none !important; }
-  .app-layout { grid-template-columns: 1fr; height: auto; }
-  .right-panel { overflow: visible; height: auto; }
-  .gantt-wrap { overflow: visible; padding: 8px; }
-  .gantt-container { min-width: unset; }
+@media print{
+  body{background:#fff}
+  header,.left,.gctrl,.dpanel{display:none!important}
+  .layout{grid-template-columns:1fr;height:auto}
+  .right{overflow:visible;height:auto}
+  .gwrap{overflow:visible;padding:6px}
+  .gcont{min-width:unset}
 }
 </style>
 </head>
@@ -375,106 +245,159 @@ header {
 
 <header>
   <div class="logo">⚙ <span>金型</span>改修計画表</div>
-
-  <!-- 週間日付ナビ -->
   <div class="date-nav" id="dateNav">
-    <button class="date-nav-arrow" onclick="shiftWeek(-1)">‹</button>
-    <!-- JS生成 -->
-    <button class="date-nav-arrow" onclick="shiftWeek(1)">›</button>
+    <button class="nav-arrow" onclick="shiftWeek(-1)">‹</button>
+    <button class="nav-arrow" onclick="shiftWeek(1)">›</button>
   </div>
-
-  <div class="header-right">
+  <div class="hdr-right">
     <button class="btn btn-secondary btn-sm" onclick="loadKintone()">🔄 kintone同期</button>
-    <button class="btn btn-secondary btn-sm" onclick="autoScheduleAll()">⚡ 自動配置</button>
+    <button class="btn btn-secondary btn-sm" onclick="autoAll()">⚡ 自動配置</button>
     <button class="btn btn-primary btn-sm" onclick="window.print()">🖨 印刷</button>
   </div>
 </header>
 
-<div class="app-layout">
+<div class="layout">
   <!-- LEFT -->
-  <div class="left-panel">
-    <div class="panel-header">
-      <span class="panel-title">改修依頼一覧</span>
-      <span class="badge" id="unassignedBadge">0件</span>
-      <span class="badge badge-warn" id="urgentBadge" style="display:none">⚠ 急</span>
-      <span class="badge badge-ok" id="assignedBadge" style="display:none">✓ 割付済</span>
+  <div class="left">
+    <div class="ph">
+      <span class="ptitle">改修依頼一覧</span>
+      <span class="badge" id="bdgU">0件</span>
+      <span class="badge badge-warn" id="bdgW" style="display:none">⚠急</span>
+      <span class="badge badge-ok"   id="bdgA" style="display:none">✓割付済</span>
     </div>
-    <div class="request-list" id="requestList">
+    <div class="req-list" id="reqList">
       <div class="loading"><div class="spinner"></div>kintoneから取得中...</div>
     </div>
-    <div class="manual-add">
-      <button class="manual-toggle" onclick="toggleManualForm()">＋ 任意作業を追加</button>
-      <div class="manual-form" id="manualForm">
-        <div class="form-row"><label class="form-label">品番 / 作業内容</label><input class="form-input" id="mName" placeholder="例: ABC-123 バリ取り" /></div>
-        <div class="form-2col">
-          <div class="form-row"><label class="form-label">改修区分</label>
-            <select class="form-input" id="mCat">
-              <option value="bari">バリ改修 (3.0H/箇所)</option>
-              <option value="seido">精度調整 (1.0H/箇所)</option>
-              <option value="taikyuu">耐久性不足 (4.0H)</option>
-              <option value="mistake">作業ミス (2.0H)</option>
-              <option value="spare">スペア交換 (0.5H)</option>
-              <option value="height">ハイト合わせ (4.0H)</option>
+    <div class="manual">
+      <button class="mtoggle" onclick="toggleMF()">＋ 任意作業を追加</button>
+      <div class="mform" id="mForm">
+        <div class="frow"><label class="flabel">品番 / 作業内容</label><input class="finput" id="mName" placeholder="例: ABC-123 バリ取り"/></div>
+        <div class="f2col">
+          <div class="frow"><label class="flabel">改修区分</label>
+            <select class="finput" id="mCat">
+              <option value="bari">バリ改修 (3H/箇所)</option>
+              <option value="seido">精度調整 (1H/箇所)</option>
+              <option value="taikyuu">耐久性不足 (4H)</option>
+              <option value="mistake">作業ミス (2H)</option>
+              <option value="spare">スペア交換 (0.5H/個)</option>
+              <option value="height">ハイト合わせ (4H)</option>
               <option value="maint">定期メンテ</option>
               <option value="custom">任意</option>
-            </select>
-          </div>
-          <div class="form-row"><label class="form-label">箇所数/型数</label><input class="form-input" id="mUnits" type="number" min="1" max="20" value="1" /></div>
+            </select></div>
+          <div class="frow"><label class="flabel">箇所数/個数</label><input class="finput" id="mUnits" type="number" min="1" max="30" value="1"/></div>
         </div>
-        <div class="form-2col">
-          <div class="form-row"><label class="form-label">型種別</label>
-            <select class="form-input" id="mMoldType"><option value="single">単発</option><option value="prog">順送(PRG)</option></select>
-          </div>
-          <div class="form-row"><label class="form-label">納期</label><input class="form-input" id="mDeadline" type="date" /></div>
+        <div class="f2col">
+          <div class="frow"><label class="flabel">型種別</label>
+            <select class="finput" id="mMold"><option value="single">単発</option><option value="prog">順送(PRG)</option></select></div>
+          <div class="frow"><label class="flabel">納期</label><input class="finput" id="mDL" type="date"/></div>
         </div>
-        <div class="form-row"><label class="form-label">品名（任意）</label><input class="form-input" id="mHinmei" placeholder="例: フランジブラケット" /></div>
-        <button class="btn btn-primary" style="width:100%;margin-top:4px" onclick="addManualRequest()">追加</button>
+        <div class="frow"><label class="flabel">品名（任意）</label><input class="finput" id="mHinmei" placeholder="例: フランジブラケット"/></div>
+        <button class="btn btn-primary" style="width:100%;margin-top:4px" onclick="addManual()">追加</button>
       </div>
     </div>
   </div>
 
   <!-- RIGHT -->
-  <div class="right-panel">
-    <div class="gantt-controls">
-      <span class="gantt-info">⏰ 作業開始 08:10 ／ 休憩 10:00・12:10・14:50・17:00</span>
-      <div class="gantt-legend">
-        <div class="legend-item"><div class="legend-dot" style="background:var(--matsumoto)"></div>松本</div>
-        <div class="legend-item"><div class="legend-dot" style="background:var(--matsunaga)"></div>松永</div>
-        <div class="legend-item"><div class="legend-dot" style="background:var(--trial)"></div>トライ</div>
-        <div class="legend-item"><div class="legend-dot" style="background:var(--custom)"></div>任意</div>
+  <div class="right">
+    <div class="gctrl">
+      <span class="ginfo">⏰ 作業開始 08:10 ／ 休憩 10:00・12:10・14:50・17:00</span>
+      <div class="glegend">
+        <div class="legitem"><div class="legdot" style="background:var(--m)"></div>松本</div>
+        <div class="legitem"><div class="legdot" style="background:var(--n)"></div>松永</div>
+        <div class="legitem"><div class="legdot" style="background:var(--trial)"></div>トライ</div>
+        <div class="legitem"><div class="legdot" style="background:var(--m);opacity:.6;border:1px solid var(--m)"></div>実績</div>
       </div>
     </div>
-    <div class="gantt-wrap"><div class="gantt-container" id="ganttContainer"></div></div>
-    <div class="detail-panel">
-      <div class="detail-header">
-        <span class="detail-title">実績記録</span>
-        <span id="detailDateLabel" style="font-size:11px;color:var(--text2)"></span>
+    <div class="gwrap"><div class="gcont" id="gcont"></div></div>
+    <div class="dpanel">
+      <div class="dphdr">
+        <span class="dptitle">予実管理</span>
+        <span id="dpDate" style="font-size:11px;color:var(--text2)"></span>
       </div>
-      <div class="detail-grid" id="detailGrid"><div class="empty-state">作業を割付けると表示されます</div></div>
+      <div class="dgrid" id="dgrid"><div class="empty">作業を割付けると表示されます</div></div>
     </div>
   </div>
 </div>
 
-<!-- 編集モーダル -->
-<div class="modal-overlay" id="editModal">
-  <div class="modal">
-    <div class="modal-title" id="editModalTitle">作業詳細の編集</div>
-    <div class="form-row"><label class="form-label">品番 / 作業名</label><input class="form-input" id="eName" /></div>
-    <div class="form-row"><label class="form-label">改修区分・内容</label><input class="form-input" id="eCategory" placeholder="カンマ区切りで複数入力可" /></div>
-    <div class="form-2col">
-      <div class="form-row"><label class="form-label">合計工数 (H)</label><input class="form-input" id="eHours" type="number" min="0.5" max="20" step="0.5" /></div>
-      <div class="form-row"><label class="form-label">トライ工程数</label><input class="form-input" id="eTrialSteps" type="number" min="0" max="5" step="1" /></div>
+<!-- 実績入力モーダル -->
+<div class="moverlay" id="actModal">
+  <div class="mdlg">
+    <div class="mtitle" id="actTitle">実績記録 / 予実確認</div>
+
+    <!-- 予実サマリー -->
+    <div class="yj-section">
+      <div class="yj-sec-title">📊 予定 vs 実績</div>
+      <div class="yj-times">
+        <div class="yj-time-block">
+          <div class="yj-time-label">予定 開始</div>
+          <div class="yj-time-val" id="planStart">—</div>
+        </div>
+        <div class="yj-time-block">
+          <div class="yj-time-label">予定 終了</div>
+          <div class="yj-time-val" id="planEnd">—</div>
+        </div>
+        <div class="yj-time-block">
+          <div class="yj-time-label">実績 開始</div>
+          <div class="yj-time-val" id="actStart2" style="color:var(--m)">未記録</div>
+        </div>
+        <div class="yj-time-block">
+          <div class="yj-time-label">実績 終了</div>
+          <div class="yj-time-val" id="actEnd2" style="color:var(--m)">未記録</div>
+        </div>
+      </div>
+      <div class="yj-diff yj-diff-none" id="yjDiff">実績を入力すると差異が表示されます</div>
     </div>
-    <div class="form-2col">
-      <div class="form-row"><label class="form-label">予定開始</label><input class="form-input" id="eStart" type="time" step="600" /></div>
-      <div class="form-row"><label class="form-label">担当者</label>
-        <select class="form-input" id="eAssignee"><option value="matsumoto">松本</option><option value="matsunaga">松永</option></select>
+
+    <!-- 実績入力 -->
+    <div class="yj-section">
+      <div class="yj-sec-title">✏️ 実績時刻入力</div>
+      <div class="f2col" style="margin-bottom:8px">
+        <div>
+          <label class="flabel">実績 開始時刻</label>
+          <div style="display:flex;gap:5px;align-items:center">
+            <input class="finput" id="inActS" type="time" step="60" style="flex:1"/>
+            <button class="sbtn sbtn-s" onclick="stampNowModal('start')">▶ 今</button>
+          </div>
+        </div>
+        <div>
+          <label class="flabel">実績 終了時刻</label>
+          <div style="display:flex;gap:5px;align-items:center">
+            <input class="finput" id="inActE" type="time" step="60" style="flex:1"/>
+            <button class="sbtn sbtn-e" onclick="stampNowModal('end')">■ 今</button>
+          </div>
+        </div>
+      </div>
+      <div class="frow"><label class="flabel">備考・申し送り</label><input class="finput" id="inActNote" placeholder="例: 刃合わせに時間がかかった"/></div>
+    </div>
+
+    <div class="mfooter">
+      <button class="btn btn-danger btn-sm" onclick="deleteTaskModal()">削除</button>
+      <button class="btn btn-secondary btn-sm" onclick="openEditFromAct()">⚙ 工数編集</button>
+      <button class="btn btn-secondary btn-sm" onclick="closeActModal()">閉じる</button>
+      <button class="btn btn-primary btn-sm" onclick="saveActual()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 工数編集モーダル -->
+<div class="moverlay" id="editModal">
+  <div class="mdlg">
+    <div class="mtitle" id="editTitle">工数編集</div>
+    <div class="frow"><label class="flabel">品番 / 作業名</label><input class="finput" id="eName"/></div>
+    <div class="frow"><label class="flabel">改修区分・内容</label><input class="finput" id="eCat" placeholder="表示用（参考）"/></div>
+    <div class="f2col">
+      <div class="frow"><label class="flabel">合計工数 (H)</label><input class="finput" id="eHours" type="number" min=".5" max="20" step=".5"/></div>
+      <div class="frow"><label class="flabel">トライ工程数</label><input class="finput" id="eTrials" type="number" min="0" max="5"/></div>
+    </div>
+    <div class="f2col">
+      <div class="frow"><label class="flabel">予定開始</label><input class="finput" id="eStart" type="time" step="600"/></div>
+      <div class="frow"><label class="flabel">担当者</label>
+        <select class="finput" id="eAssign"><option value="matsumoto">松本</option><option value="matsunaga">松永</option></select>
       </div>
     </div>
-    <div class="form-row"><label class="form-label">メモ</label><input class="form-input" id="eMemo" placeholder="任意" /></div>
-    <div class="modal-footer">
-      <button class="btn btn-danger btn-sm" onclick="deleteTask()">削除</button>
-      <button class="btn btn-secondary btn-sm" onclick="closeModal()">キャンセル</button>
+    <div class="frow"><label class="flabel">メモ</label><input class="finput" id="eMemo"/></div>
+    <div class="mfooter">
+      <button class="btn btn-secondary btn-sm" onclick="closeEditModal()">キャンセル</button>
       <button class="btn btn-primary btn-sm" onclick="saveEdit()">保存</button>
     </div>
   </div>
@@ -482,23 +405,13 @@ header {
 
 <script>
 // ===== CONFIG =====
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbwhW0jn30gacz6dGaSKdoSoky3XNFSThmu57Dar1X1w5zGG2OvpgVeGuMyPzrVAXl3X/exec';
-const APP_ID = 6;
-
-// 作業時間設定
-const WORK_START = 8*60+10;
-const WORK_END   = 20*60;
-const BREAKS = [
-  {s:10*60+0,  e:10*60+10},
-  {s:12*60+10, e:12*60+50},
-  {s:14*60+50, e:15*60+0},
-  {s:17*60+0,  e:17*60+10},
-];
-const TOTAL_MIN = WORK_END - WORK_START;
+const GAS_URL='https://script.google.com/macros/s/AKfycbwhW0jn30gacz6dGaSKdoSoky3XNFSThmu57Dar1X1w5zGG2OvpgVeGuMyPzrVAXl3X/exec';
+const APP_ID=6;
+const WORK_START=8*60+10,WORK_END=20*60,TOTAL_MIN=WORK_END-WORK_START;
+const BREAKS=[{s:600,e:610},{s:730,e:770},{s:890,e:900},{s:1020,e:1030}];
 
 // ===== 改修区分マスタ =====
-// kintoneの値 → 内部キー
-const KUBUN_MAP = {
+const KMAP={
   'バリ改修':'bari','バリ':'bari',
   'シワ':'seido','キレツ':'seido','外観不良':'seido','精度不良':'seido','精度調整':'seido','精度':'seido',
   '耐久性不足':'taikyuu','耐久性':'taikyuu',
@@ -508,450 +421,462 @@ const KUBUN_MAP = {
   'スクラップ処理':'scrap','スクラップ':'scrap','シューター作成':'scrap',
   '定期メンテ':'maint','定期':'maint','定期メンテナンス':'maint',
 };
-// 内部キー → 標準時間情報
-const TIME_MASTER = {
-  bari:    {label:'バリ改修',    hPerUnit:3.0, perUnit:true},
-  seido:   {label:'精度調整',    hPerUnit:1.0, perUnit:true},
-  taikyuu: {label:'耐久性不足',  hPerUnit:4.0, perUnit:true},
-  mistake: {label:'作業ミス',    hPerUnit:2.0, perUnit:false},
-  spare:   {label:'スペア交換',  hPerUnit:0.5, perUnit:false},
-  height:  {label:'ハイト合わせ',hPerUnit:4.0, perUnit:false},
-  scrap:   {label:'スクラップ',  hPerUnit:1.0, perUnit:true, extra:0.5},
-  maint:   {label:'定期メンテ',  hSingle:1.0, hProg:2.0, isMaint:true},
-  custom:  {label:'任意',        hPerUnit:1.0, perUnit:false},
+const TM={
+  bari:   {label:'バリ改修',    hpu:3.0, pu:true},
+  seido:  {label:'精度調整',    hpu:1.0, pu:true},
+  taikyuu:{label:'耐久性不足',  hpu:4.0, pu:true},
+  mistake:{label:'作業ミス',    hpu:2.0, pu:true},
+  spare:  {label:'スペア交換',  hpu:0.5, pu:true},   // ← perUnit:true に修正
+  height: {label:'ハイト合わせ',hpu:4.0, pu:false},
+  scrap:  {label:'スクラップ',  hpu:1.0, pu:true, extra:.5},
+  maint:  {label:'定期メンテ',  hs:1.0,  hp:2.0,  isMaint:true},
+  custom: {label:'任意',        hpu:1.0, pu:true},
 };
+// 選択肢リスト（カード内セレクトに使用）
+const KUBUN_OPTIONS=[
+  {k:'bari',  label:'バリ改修'},
+  {k:'seido', label:'精度調整（シワ/キレツ/外観/精度不良）'},
+  {k:'taikyuu',label:'耐久性不足'},
+  {k:'mistake',label:'作業ミス'},
+  {k:'spare', label:'スペア交換'},
+  {k:'height',label:'ハイト合わせ'},
+  {k:'scrap', label:'スクラップ処理'},
+  {k:'maint', label:'定期メンテ'},
+  {k:'custom',label:'任意（自由入力）'},
+];
 
-function normKubun(v){ return KUBUN_MAP[v?.trim()] || 'custom'; }
-function tagClass(k){
-  const key = normKubun(k);
+function nk(v){return KMAP[v?.trim()]||'custom'}
+function tagCls(k){
+  const key=nk(k);
   if(key==='bari') return 'tag tag-bari';
-  if(key==='seido'||key==='taikyuu'||key==='mistake') return 'tag tag-seido';
+  if(['seido','taikyuu','mistake'].includes(key)) return 'tag tag-seido';
   if(key==='maint') return 'tag tag-maint';
   if(key==='custom') return 'tag tag-custom';
   return 'tag';
 }
 
-// 工数計算（詳細inputから）
-function calcHoursFromInputs(kubunInputs, moldType, trialSteps){
-  let carry = moldType==='prog'?1.5:1.0;
-  let work = 0;
-  kubunInputs.forEach(ki=>{
-    const key = normKubun(ki.name);
-    const m = TIME_MASTER[key];
-    if(!m){ work+=ki.units*1.0; return; }
-    if(m.isMaint){ work += moldType==='prog'?m.hProg*ki.units:m.hSingle*ki.units; }
-    else if(key==='scrap'){ work += ki.units>0? m.hPerUnit+(ki.units-1)*m.extra:0; }
-    else if(m.perUnit){ work += m.hPerUnit * ki.units; }
-    else { work += m.hPerUnit; }
+// ===== 工数計算 =====
+function calcH(kubunInputs, moldType, trialSteps){
+  const carry=moldType==='prog'?1.5:1.0;
+  let work=0;
+  (kubunInputs||[]).forEach(ki=>{
+    const key=ki.key||nk(ki.name);
+    const m=TM[key]||TM.custom;
+    const u=Math.max(0,ki.units||1);
+    if(m.isMaint){
+      work+=(moldType==='prog'?m.hp:m.hs)*u;
+    } else if(key==='scrap'){
+      work+=u>0?m.hpu+(u-1)*m.extra:0;
+    } else if(m.pu){
+      work+=m.hpu*u;
+    } else {
+      work+=m.hpu;
+    }
   });
   if(work===0) work=1.0;
-  const trial = calcTrial(trialSteps||1);
+  const trial=trialSteps<=0?0:1.0+Math.max(0,trialSteps-1)*0.5;
   return Math.round((carry+work+trial)*10)/10;
 }
-function calcTrial(steps){ return steps<=0?0:1.0+Math.max(0,steps-1)*0.5; }
-function carryTime(t){ return t==='prog'?1.5:1.0; }
+function trialH(s){return s<=0?0:1.0+Math.max(0,s-1)*0.5}
+function unitH(ki,moldType){
+  const key=ki.key||nk(ki.name);
+  const m=TM[key]||TM.custom;
+  if(m.isMaint) return moldType==='prog'?m.hp:m.hs;
+  return m.hpu;
+}
 
 // ===== 状態 =====
-let requests = [];
-// 日付別タスク: { 'YYYY-MM-DD': [{...}] }
-let tasksByDate = {};
-let selectedReqId = null;
-let editingTaskId = null;
+let requests=[], tasksByDate={}, selReqId=null, actTaskId=null, editTaskId=null;
+let weekStart=getMonday(new Date()), curDate=todayStr();
 
-// 週開始日
-let weekStart = getMonday(new Date());
-let currentDate = todayStr();
-
-function todayStr(){
-  const d=new Date();
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-}
-function getMonday(d){
-  const day = d.getDay();
-  const diff = day===0?-6:1-day;
-  const m = new Date(d); m.setDate(d.getDate()+diff); return m;
-}
-function addDays(d,n){ const r=new Date(d); r.setDate(r.getDate()+n); return r; }
-function fmt(d){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
-function fmtDisp(d){
-  const w=['日','月','火','水','木','金','土'];
-  return `${d.getMonth()+1}/${d.getDate()} (${w[d.getDay()]})`;
-}
-function fmtMin(m){ return `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; }
+// ===== 日付ユーティリティ =====
+function todayStr(){const d=new Date();return fmt(d)}
+function fmt(d){return`${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`}
+function fmtDisp(d){const w=['日','月','火','水','木','金','土'];return`${d.getMonth()+1}/${d.getDate()}(${w[d.getDay()]})`}
+function fmtMin(m){return`${p2(Math.floor(m/60))}:${p2(m%60)}`}
+function p2(n){return String(n).padStart(2,'0')}
+function addDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r}
+function getMonday(d){const day=d.getDay();const diff=day===0?-6:1-day;const m=new Date(d);m.setDate(d.getDate()+diff);return m}
+function minToMs(s){if(!s)return null;const[h,m]=s.split(':').map(Number);return h*60+m}
 
 // ===== 週ナビ =====
 function buildDateNav(){
-  const nav = document.getElementById('dateNav');
-  // 既存の日付ボタンだけ削除（矢印ボタンは残す）
+  const nav=document.getElementById('dateNav');
   nav.querySelectorAll('.date-btn').forEach(b=>b.remove());
-  const lastArrow = nav.querySelector('.date-nav-arrow:last-child');
-
+  const lastArrow=nav.querySelector('.nav-arrow:last-child');
   for(let i=0;i<7;i++){
-    const d = addDays(weekStart,i);
-    const ds = fmt(d);
-    const btn = document.createElement('button');
-    btn.className = 'date-btn' + (ds===currentDate?' today':'');
-    btn.textContent = fmtDisp(d);
-    btn.onclick = ()=>{ currentDate=ds; buildDateNav(); renderGantt(); renderDetail(); };
-    nav.insertBefore(btn, lastArrow);
+    const d=addDays(weekStart,i);const ds=fmt(d);
+    const btn=document.createElement('button');
+    btn.className='date-btn'+(ds===curDate?' today':'');
+    btn.textContent=fmtDisp(d);
+    btn.onclick=()=>{curDate=ds;buildDateNav();renderGantt();renderDetail()};
+    nav.insertBefore(btn,lastArrow);
   }
-  document.getElementById('detailDateLabel').textContent = currentDate;
+  document.getElementById('dpDate').textContent=curDate;
 }
-function shiftWeek(dir){
-  weekStart = addDays(weekStart, dir*7);
-  buildDateNav();
-}
+function shiftWeek(dir){weekStart=addDays(weekStart,dir*7);buildDateNav()}
 
 // ===== kintone =====
 async function loadKintone(){
-  document.getElementById('requestList').innerHTML='<div class="loading"><div class="spinner"></div>kintoneから取得中...</div>';
-  try {
-    const params = new URLSearchParams({
-      app: APP_ID,
-      query: 'order by $id asc limit 50'
-    });
-    const res = await fetch(`${GAS_URL}?${params}`);
+  document.getElementById('reqList').innerHTML='<div class="loading"><div class="spinner"></div>kintoneから取得中...</div>';
+  try{
+    const q=encodeURIComponent('order by $id asc limit 50');
+    const res=await fetch(`${GAS_URL}?app=${APP_ID}&query=${q}`);
     if(!res.ok) throw new Error('HTTP '+res.status);
-    const data = await res.json();
-    if(data.records && data.records.length>0){
-      importKintone(data.records); return;
-    }
-  } catch(e){ console.log('kintone取得失敗:', e); }
+    const data=await res.json();
+    if(data.records?.length>0){importKintone(data.records);return}
+  }catch(e){console.log('kintone取得失敗:',e)}
   loadSample();
 }
 
 function importKintone(records){
-  requests = records.map(r=>{
-    const hinban  = r['ルックアップ_1']?.value||'';
-    const hinmei  = r['文字列__1行__0']?.value||'';
-    const proc1   = r['ドロップダウン_10']?.value||'';
-    const proc2   = r['ドロップダウン_11']?.value||'';
-    const kubun   = (r['複数選択']?.value||[]);
-    const deadline= r['納期']?.value||todayStr();
-    const moldType= (r['型種別']?.value||'').includes('順送')?'prog':'single';
-
-    // 改修区分ごとの初期入力行を生成
-    const kubunInputs = kubun.length>0
-      ? kubun.map(k=>({name:k, units:1, key:normKubun(k)}))
-      : [{name:'作業', units:1, key:'custom'}];
-
-    const trialSteps = 1;
-    const hours = calcHoursFromInputs(kubunInputs, moldType, trialSteps);
-
-    return {
-      id: r.$id?.value||String(Math.random()),
-      hinban, hinmei,
-      process:[proc1,proc2].filter(Boolean).join(' / '),
-      kubunInputs, moldType, trialSteps, hours,
-      deadline, assigned:false, assignee:null, source:'kintone'
+  requests=records.map(r=>{
+    const hinban=r['ルックアップ_1']?.value||'';
+    const hinmei=r['文字列__1行__0']?.value||'';
+    const proc1=r['ドロップダウン_10']?.value||'';
+    const proc2=r['ドロップダウン_11']?.value||'';
+    const kubunRaw=(r['複数選択']?.value||[]);
+    const deadline=r['納期']?.value||todayStr();
+    const moldType=(r['型種別']?.value||'').includes('順送')?'prog':'single';
+    const kubunInputs=kubunRaw.length>0
+      ?kubunRaw.map(k=>({name:k,units:1,key:nk(k)}))
+      :[{name:'作業',units:1,key:'custom'}];
+    return{
+      id:r.$id?.value||String(Math.random()),
+      hinban,hinmei,process:[proc1,proc2].filter(Boolean).join(' / '),
+      kubunInputs,moldType,trialSteps:1,
+      hours:calcH(kubunInputs,moldType,1),
+      deadline,assigned:false,assignee:null,source:'kintone',note:''
     };
   });
   requests.sort((a,b)=>a.deadline.localeCompare(b.deadline));
-  renderRequestList();
-  autoArrange(currentDate);
-  renderGantt();
-  renderDetail();
+  renderRequestList();autoArrange(curDate);renderGantt();renderDetail();
 }
 
 function loadSample(){
-  const t=todayStr(), t1=fmt(addDays(new Date(),1)), t2=fmt(addDays(new Date(),2));
-  const base = [
-    {id:'1',hinban:'HB-2541',hinmei:'フランジブラケット',process:'プレスA / 曲げ',kubunInputs:[{name:'バリ改修',units:2,key:'bari'}],moldType:'single',trialSteps:1,deadline:t,source:'sample'},
+  const t=todayStr(),t1=fmt(addDays(new Date(),1)),t2=fmt(addDays(new Date(),2));
+  const base=[
+    {id:'1',hinban:'HB-2541',hinmei:'フランジブラケット',process:'プレスA/曲げ',kubunInputs:[{name:'バリ改修',units:2,key:'bari'}],moldType:'single',trialSteps:1,deadline:t,source:'sample'},
     {id:'2',hinban:'HB-1832',hinmei:'サポートプレート',process:'プレスB',kubunInputs:[{name:'精度不良',units:1,key:'seido'}],moldType:'prog',trialSteps:2,deadline:t,source:'sample'},
-    {id:'3',hinban:'HC-0921',hinmei:'ブラケットASSY',process:'順送プレス',kubunInputs:[{name:'スペア交換',units:1,key:'spare'}],moldType:'prog',trialSteps:1,deadline:t1,source:'sample'},
+    {id:'3',hinban:'HC-0921',hinmei:'ブラケットASSY',process:'順送プレス',kubunInputs:[{name:'スペア交換',units:3,key:'spare'},{name:'バリ改修',units:1,key:'bari'}],moldType:'prog',trialSteps:1,deadline:t1,source:'sample'},
     {id:'4',hinban:'HB-3310',hinmei:'ロアーアーム',process:'プレスC',kubunInputs:[{name:'耐久性不足',units:1,key:'taikyuu'}],moldType:'single',trialSteps:1,deadline:t1,source:'sample'},
     {id:'5',hinban:'HD-0112',hinmei:'カバープレート',process:'定期点検',kubunInputs:[{name:'定期メンテ',units:2,key:'maint'}],moldType:'prog',trialSteps:0,deadline:t2,source:'sample'},
   ];
-  requests = base.map(r=>({...r, hours:calcHoursFromInputs(r.kubunInputs,r.moldType,r.trialSteps), assigned:false, assignee:null}));
-  renderRequestList();
-  // サンプル：当日分を自動割付してガントに表示
+  requests=base.map(r=>({...r,hours:calcH(r.kubunInputs,r.moldType,r.trialSteps),assigned:false,assignee:null,note:''}));
+  // 当日納期分を自動割付
   requests.filter(r=>r.deadline===t).forEach((r,i)=>{
     const assignee=i%2===0?'matsumoto':'matsunaga';
-    const task={
-      id:'t'+Date.now()+'_'+i, reqId:r.id,
-      name:r.hinban+(r.hinmei?' '+r.hinmei:''),
-      kubun:r.kubunInputs.map(k=>k.name),
-      hours:r.hours, assignee, moldType:r.moldType,
-      trialSteps:r.trialSteps, deadline:r.deadline,
-      planDate:currentDate, startMin:null, memo:'',
-      actual:{start:'',end:''}
-    };
-    if(!tasksByDate[currentDate]) tasksByDate[currentDate]=[];
-    tasksByDate[currentDate].push(task);
-    r.assigned=true; r.assignee=assignee;
+    pushTask(r,assignee,t);r.assigned=true;r.assignee=assignee;
   });
-  autoArrange(currentDate);
-  renderRequestList();
-  renderGantt();
-  renderDetail();
+  autoArrange(curDate);
+  renderRequestList();renderGantt();renderDetail();
 }
 
-// ===== 依頼一覧描画 =====
+// ===== 依頼カード描画 =====
 function renderRequestList(){
-  const today = todayStr();
-  const unassigned = requests.filter(r=>!r.assigned);
-  const assigned   = requests.filter(r=>r.assigned);
-  const urgent     = unassigned.filter(r=>r.deadline<=today);
+  const today=todayStr();
+  const ua=requests.filter(r=>!r.assigned),aa=requests.filter(r=>r.assigned);
+  const urg=ua.filter(r=>r.deadline<=today);
+  document.getElementById('bdgU').textContent=`${ua.length}件`;
+  const bw=document.getElementById('bdgW');
+  urg.length?Object.assign(bw,{style:'',textContent:`⚠急 ${urg.length}`}):(bw.style.display='none');
+  const ba=document.getElementById('bdgA');
+  aa.length?Object.assign(ba,{style:'',textContent:`✓${aa.length}件`}):(ba.style.display='none');
 
-  document.getElementById('unassignedBadge').textContent=`${unassigned.length}件`;
-  const ub=document.getElementById('urgentBadge');
-  if(urgent.length>0){ub.style.display='';ub.textContent=`⚠ 急 ${urgent.length}`;}else ub.style.display='none';
-  const ab=document.getElementById('assignedBadge');
-  if(assigned.length>0){ab.style.display='';ab.textContent=`✓ ${assigned.length}件`;}else ab.style.display='none';
+  if(!requests.length){document.getElementById('reqList').innerHTML='<div class="empty">依頼がありません</div>';return}
 
-  if(!requests.length){
-    document.getElementById('requestList').innerHTML='<div class="empty-state">依頼がありません</div>'; return;
-  }
+  document.getElementById('reqList').innerHTML=requests.map(r=>{
+    const dl=r.deadline,dlCls=dl<today?'cdl-u':dl===today?'cdl-n':'';
+    const tags=(r.kubunInputs||[]).map(ki=>`<span class="${tagCls(ki.name)}">${ki.name}</span>`).join('');
+    const src=`<span class="src-tag src-${r.source}">${r.source}</span>`;
+    const isSel=selReqId===r.id;
+    const amark=r.assigned?`<span class="badge ${r.assignee==='matsumoto'?'':'badge-warn'}" style="margin-left:auto;font-size:9px">${r.assignee==='matsumoto'?'松本':'松永'}</span>`:'';
 
-  document.getElementById('requestList').innerHTML = requests.map(r=>{
-    const dl=r.deadline;
-    const dlCls=dl<today?'deadline-urgent':dl===today?'deadline-near':'';
-    const tags=(r.kubunInputs||[]).map(ki=>`<span class="${tagClass(ki.name)}">${ki.name}</span>`).join('');
-    const srcTag=`<span class="source-tag source-${r.source}">${r.source}</span>`;
-    const isSel=selectedReqId===r.id;
-
-    // 工数入力エリア（選択時のみ表示）
-    const kubunRows=(r.kubunInputs||[]).map((ki,idx)=>{
-      const m=TIME_MASTER[ki.key||normKubun(ki.name)]||{hPerUnit:1,perUnit:false};
-      const unitH=m.isMaint?(r.moldType==='prog'?m.hProg:m.hSingle):m.hPerUnit;
-      const totalH=m.perUnit||m.isMaint?Math.round(unitH*(ki.units||1)*10)/10:unitH;
-      const label=m.perUnit||m.isMaint?`${unitH}H/箇所`:`${unitH}H`;
-      return `<div class="kubun-row">
-        <span class="kubun-name">${ki.name}</span>
-        <input class="kubun-count" type="number" min="0" max="20" value="${ki.units||1}"
-          onchange="updateKubunUnits('${r.id}',${idx},this.value)" />
-        <span class="kubun-hours" id="kh_${r.id}_${idx}">${totalH}H</span>
+    // 工数行
+    const kRows=(r.kubunInputs||[]).map((ki,idx)=>{
+      const uh=unitH(ki,r.moldType);
+      const totH=Math.round(uh*(ki.units||1)*10)/10;
+      const labelText=TM[ki.key||nk(ki.name)]?.label||ki.name;
+      return `<div class="kubun-line">
+        <select class="kubun-sel" onchange="updateKubunKey('${r.id}',${idx},this.value)">
+          ${KUBUN_OPTIONS.map(o=>`<option value="${o.k}" ${(ki.key||nk(ki.name))===o.k?'selected':''}>${o.label}</option>`).join('')}
+        </select>
+        <input class="kcount" type="number" min="0" max="30" value="${ki.units||1}"
+          onchange="updateKubunUnits('${r.id}',${idx},this.value)"/>
+        <span class="khours" id="kh_${r.id}_${idx}">${totH}H</span>
+        <button class="kdel" onclick="removeKubun('${r.id}',${idx})">✕</button>
       </div>`;
     }).join('');
 
-    const assignMark=r.assigned?`<span class="badge ${r.assignee==='matsumoto'?'':'badge-warn'}" style="margin-left:auto">${r.assignee==='matsumoto'?'松本':'松永'}</span>`:'';
-
-    return `<div class="request-card ${r.assigned?'assigned':''} ${isSel?'selected':''}" onclick="selectRequest('${r.id}')">
+    return `<div class="card ${r.assigned?'done':''} ${isSel?'sel':''}" onclick="selReq('${r.id}')">
       <div class="card-main">
-        <div class="card-top">
-          <span class="card-num">#${r.id}</span>
-          <span class="card-title">${r.hinban}${r.hinmei?' / '+r.hinmei:''}</span>
-          ${srcTag}${assignMark}
+        <div class="ctop">
+          <span class="cnum">#${r.id}</span>
+          <span class="ctitle">${r.hinban}${r.hinmei?' / '+r.hinmei:''}</span>
+          ${src}${amark}
         </div>
-        ${r.process?`<div class="card-process">${r.process}</div>`:''}
-        <div class="card-tags">${tags}</div>
-        <div class="card-time-row">
-          <span class="card-time">⏱ ${r.hours}H</span>
-          ${dl?`<span class="card-deadline ${dlCls}">納期 ${dl}</span>`:''}
-        </div>
+        ${r.process?`<div class="cproc">${r.process}</div>`:''}
+        <div class="ctags">${tags}</div>
+        <div class="cbot"><span class="ctime">⏱ ${r.hours}H</span>${dl?`<span class="cdl ${dlCls}">納期 ${dl}</span>`:''}</div>
       </div>
-      <div class="card-detail" onclick="event.stopPropagation()">
-        <div class="detail-label">工数積算</div>
+      <div class="card-det" onclick="event.stopPropagation()">
+        <div class="det-sec">工数積算</div>
         <div class="carry-row">
           <span style="font-size:11px;color:var(--text2)">型種別：</span>
-          <select class="mold-type-sel" onchange="updateMoldType('${r.id}',this.value)">
-            <option value="single" ${r.moldType==='single'?'selected':''}>単発 (搬入1.0H)</option>
-            <option value="prog"   ${r.moldType==='prog'?'selected':''}>順送PRG (搬入1.5H)</option>
+          <select class="mtype-sel" onchange="updateMold('${r.id}',this.value)">
+            <option value="single" ${r.moldType==='single'?'selected':''}>単発（搬入1.0H）</option>
+            <option value="prog"   ${r.moldType==='prog'?'selected':''}>順送PRG（搬入1.5H）</option>
           </select>
         </div>
-        <div class="kubun-rows">${kubunRows}</div>
+        <div class="kubun-area" id="ka_${r.id}">${kRows}</div>
+        <div class="add-kubun-row">
+          <button class="add-kubun-btn" onclick="addKubun('${r.id}')">＋ 改修内容を追加</button>
+        </div>
         <div class="trial-row">
-          <span class="trial-label">トライ工程数：</span>
-          <input class="kubun-count" type="number" min="0" max="5" value="${r.trialSteps||1}"
-            onchange="updateTrialSteps('${r.id}',this.value)" />
-          <span class="kubun-hours" id="trialH_${r.id}">${calcTrial(r.trialSteps||1)}H</span>
+          <span class="tlabel">トライ工程数：</span>
+          <input class="kcount" type="number" min="0" max="5" value="${r.trialSteps||1}"
+            onchange="updateTrial('${r.id}',this.value)"/>
+          <span class="khours" id="th_${r.id}">${trialH(r.trialSteps||1)}H</span>
         </div>
-        <div class="total-hours-row">
-          <span class="total-hours-label">合計工数</span>
-          <span class="total-hours-val" id="totalH_${r.id}">${r.hours}H</span>
+        <div class="frow">
+          <label class="flabel">備考・任意メモ</label>
+          <textarea class="custom-note" id="note_${r.id}" placeholder="例: 刃先欠け有り、寸法要確認"
+            onchange="updateNote('${r.id}',this.value)">${r.note||''}</textarea>
         </div>
-        ${!r.assigned?`<div class="assign-btn-row">
-          <button class="assign-card-btn assign-m" onclick="assignTo('${r.id}','matsumoto')">松本に割付</button>
-          <button class="assign-card-btn assign-n" onclick="assignTo('${r.id}','matsunaga')">松永に割付</button>
+        <div class="total-box">
+          <span class="total-label">合計工数</span>
+          <span class="total-val" id="tot_${r.id}">${r.hours}H</span>
+        </div>
+        ${!r.assigned?`<div class="assign-row">
+          <button class="assign-btn ab-m" onclick="assignTo('${r.id}','matsumoto')">松本に割付</button>
+          <button class="assign-btn ab-n" onclick="assignTo('${r.id}','matsunaga')">松永に割付</button>
         </div>`:`<div style="text-align:center;font-size:11px;color:var(--text2);padding:4px">割付済（ブロックをクリックで編集）</div>`}
       </div>
     </div>`;
   }).join('');
 }
 
-function selectRequest(id){
-  selectedReqId = selectedReqId===id ? null : id;
+function selReq(id){selReqId=selReqId===id?null:id;renderRequestList()}
+
+// ===== 工数更新関数 =====
+function updateKubunKey(rid,idx,val){
+  const r=requests.find(x=>x.id===rid);if(!r)return;
+  r.kubunInputs[idx].key=val;
+  r.kubunInputs[idx].name=TM[val]?.label||val;
+  refreshH(r);
+}
+function updateKubunUnits(rid,idx,val){
+  const r=requests.find(x=>x.id===rid);if(!r)return;
+  r.kubunInputs[idx].units=Math.max(0,parseInt(val)||0);
+  refreshH(r);
+}
+function addKubun(rid){
+  const r=requests.find(x=>x.id===rid);if(!r)return;
+  r.kubunInputs.push({name:'バリ改修',units:1,key:'bari'});
+  refreshH(r);
+  renderRequestList();
+  // 追加後も展開維持
+  selReqId=rid;
   renderRequestList();
 }
-
-// 工数更新
-function updateKubunUnits(reqId, idx, val){
-  const r=requests.find(x=>x.id===reqId); if(!r) return;
-  r.kubunInputs[idx].units=Math.max(0,parseInt(val)||0);
-  refreshHours(r);
+function removeKubun(rid,idx){
+  const r=requests.find(x=>x.id===rid);if(!r)return;
+  if(r.kubunInputs.length<=1){alert('最低1つ必要です');return}
+  r.kubunInputs.splice(idx,1);
+  refreshH(r);renderRequestList();selReqId=rid;renderRequestList();
 }
-function updateMoldType(reqId, val){
-  const r=requests.find(x=>x.id===reqId); if(!r) return;
-  r.moldType=val; refreshHours(r);
-}
-function updateTrialSteps(reqId, val){
-  const r=requests.find(x=>x.id===reqId); if(!r) return;
+function updateMold(rid,val){const r=requests.find(x=>x.id===rid);if(!r)return;r.moldType=val;refreshH(r)}
+function updateTrial(rid,val){
+  const r=requests.find(x=>x.id===rid);if(!r)return;
   r.trialSteps=Math.max(0,parseInt(val)||0);
-  const tEl=document.getElementById('trialH_'+reqId);
-  if(tEl) tEl.textContent=calcTrial(r.trialSteps)+'H';
-  refreshHours(r);
+  const el=document.getElementById('th_'+rid);if(el)el.textContent=trialH(r.trialSteps)+'H';
+  refreshH(r);
 }
-function refreshHours(r){
-  r.hours=calcHoursFromInputs(r.kubunInputs,r.moldType,r.trialSteps);
-  const el=document.getElementById('totalH_'+r.id);
-  if(el) el.textContent=r.hours+'H';
+function updateNote(rid,val){const r=requests.find(x=>x.id===rid);if(r)r.note=val}
+function refreshH(r){
+  r.hours=calcH(r.kubunInputs,r.moldType,r.trialSteps);
+  const el=document.getElementById('tot_'+r.id);if(el)el.textContent=r.hours+'H';
+  // 単位表示更新
+  (r.kubunInputs||[]).forEach((ki,idx)=>{
+    const uh=unitH(ki,r.moldType);
+    const tot=Math.round(uh*(ki.units||1)*10)/10;
+    const el2=document.getElementById(`kh_${r.id}_${idx}`);if(el2)el2.textContent=tot+'H';
+  });
   // 割付済みなら再配置
   if(r.assigned){
-    const t=getTasksForDate(currentDate).find(t=>t.reqId===r.id);
-    if(t){ t.hours=r.hours; t.trialSteps=r.trialSteps; autoArrange(currentDate); renderGantt(); renderDetail(); }
+    const tasks=getDate(curDate);
+    const t=tasks.find(t=>t.reqId===r.id);
+    if(t){t.hours=r.hours;t.trialSteps=r.trialSteps;autoArrange(curDate);renderGantt();renderDetail()}
   }
 }
 
 // ===== 割付 =====
-function assignTo(reqId, assignee){
-  const r=requests.find(x=>x.id===reqId); if(!r||r.assigned) return;
+function pushTask(r,assignee,dateStr){
   const task={
-    id:'t'+Date.now(),
+    id:'t'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
     reqId:r.id,
     name:r.hinban+(r.hinmei?' '+r.hinmei:''),
     kubun:r.kubunInputs.map(k=>k.name),
-    hours:r.hours,
-    assignee,
-    moldType:r.moldType,
-    trialSteps:r.trialSteps,
-    deadline:r.deadline,
-    planDate:currentDate,
-    startMin:null,
-    memo:'',
-    actual:{start:'',end:''}
+    hours:r.hours,assignee,moldType:r.moldType,
+    trialSteps:r.trialSteps,deadline:r.deadline,
+    planDate:dateStr,startMin:null,memo:'',
+    actual:{start:'',end:'',note:''}
   };
-  if(!tasksByDate[currentDate]) tasksByDate[currentDate]=[];
-  tasksByDate[currentDate].push(task);
-  r.assigned=true; r.assignee=assignee;
-  autoArrange(currentDate);
-  selectedReqId=null;
-  renderRequestList();
-  renderGantt();
-  renderDetail();
+  if(!tasksByDate[dateStr])tasksByDate[dateStr]=[];
+  tasksByDate[dateStr].push(task);
+  return task;
 }
-
-function autoScheduleAll(){
-  const unassigned=requests.filter(r=>!r.assigned);
-  if(!unassigned.length){alert('未割付の依頼がありません');return;}
-  unassigned.forEach((r,i)=>{
-    const assignee=i%2===0?'matsumoto':'matsunaga';
-    const task={
-      id:'t'+Date.now()+'_'+i, reqId:r.id,
-      name:r.hinban+(r.hinmei?' '+r.hinmei:''),
-      kubun:r.kubunInputs.map(k=>k.name),
-      hours:r.hours, assignee, moldType:r.moldType,
-      trialSteps:r.trialSteps, deadline:r.deadline,
-      planDate:currentDate, startMin:null, memo:'',
-      actual:{start:'',end:''}
-    };
-    if(!tasksByDate[currentDate]) tasksByDate[currentDate]=[];
-    tasksByDate[currentDate].push(task);
-    r.assigned=true; r.assignee=assignee;
+function assignTo(rid,assignee){
+  const r=requests.find(x=>x.id===rid);if(!r||r.assigned)return;
+  pushTask(r,assignee,curDate);
+  r.assigned=true;r.assignee=assignee;
+  autoArrange(curDate);selReqId=null;
+  renderRequestList();renderGantt();renderDetail();
+}
+function autoAll(){
+  const ua=requests.filter(r=>!r.assigned);
+  if(!ua.length){alert('未割付の依頼がありません');return}
+  ua.forEach((r,i)=>{
+    const a=i%2===0?'matsumoto':'matsunaga';
+    pushTask(r,a,curDate);r.assigned=true;r.assignee=a;
   });
-  autoArrange(currentDate);
-  renderRequestList(); renderGantt(); renderDetail();
+  autoArrange(curDate);renderRequestList();renderGantt();renderDetail();
 }
 
 // ===== 時間計算 =====
-function nextAvail(min){ let m=Math.max(min,WORK_START); for(const b of BREAKS){if(m>=b.s&&m<b.e)m=b.e;} return m; }
-function addWork(startMin,workMin){
-  let cur=startMin,rem=workMin;
+function nextAvail(m){
+  let v=Math.max(m,WORK_START);
+  for(const b of BREAKS){if(v>=b.s&&v<b.e)v=b.e}return v;
+}
+function addWork(start,workMin){
+  let cur=start,rem=workMin;
   while(rem>0){
     let nb=WORK_END;
-    for(const b of BREAKS){ if(b.s>cur){nb=Math.min(nb,b.s);break;} }
-    const avail=nb-cur;
-    if(avail>=rem){cur+=rem;rem=0;}
-    else{rem-=avail;cur=nb;for(const b of BREAKS){if(b.s===cur){cur=b.e;break;}}}
+    for(const b of BREAKS){if(b.s>cur){nb=Math.min(nb,b.s);break}}
+    const av=nb-cur;
+    if(av>=rem){cur+=rem;rem=0}
+    else{rem-=av;cur=nb;for(const b of BREAKS){if(b.s===cur){cur=b.e;break}}}
   }
   return cur;
 }
-
-function autoArrange(dateStr){
-  const tasks=getTasksForDate(dateStr);
+function autoArrange(ds){
+  const tasks=getDate(ds);
   ['matsumoto','matsunaga'].forEach(a=>{
-    let cursor=WORK_START;
+    let cur=WORK_START;
     tasks.filter(t=>t.assignee===a).forEach(t=>{
-      cursor=nextAvail(cursor);
-      t.startMin=cursor;
-      cursor=addWork(cursor,Math.round(t.hours*60));
+      cur=nextAvail(cur);t.startMin=cur;
+      cur=addWork(cur,Math.round(t.hours*60));
     });
   });
 }
+function getDate(ds){return tasksByDate[ds]||[]}
 
-function getTasksForDate(ds){ return tasksByDate[ds]||[]; }
-
-// ===== ガント =====
+// ===== ガント描画 =====
 function renderGantt(){
-  const container=document.getElementById('ganttContainer');
-  const wrap = container.parentElement;
-  // paddingを除いた実幅を取得（最低600px保証）
-  const wrapW = wrap.getBoundingClientRect().width || wrap.offsetWidth || 800;
-  const trackWidth = Math.max(600, wrapW - 76 - 32 - 24);
-  const minToX=m=>(Math.max(0,m-WORK_START)/TOTAL_MIN)*trackWidth;
-  const durW=(s,e)=>Math.max(4,minToX(e)-minToX(s));
+  const cont=document.getElementById('gcont');
+  const wrap=cont.parentElement;
+  const tw=Math.max(600,wrap.getBoundingClientRect().width-72-28-20);
+  const mx=m=>(Math.max(0,m-WORK_START)/TOTAL_MIN)*tw;
+  const dw=(s,e)=>Math.max(4,mx(e)-mx(s));
 
-  // 時間目盛り
-  const ticks=[]; for(let h=8;h<=20;h++){const m=h*60;if(m<WORK_START||m>WORK_END)continue;ticks.push(`<div class="time-tick" style="left:${minToX(m)}px">${String(h).padStart(2,'0')}:00</div>`);}
+  const ticks=[];
+  for(let h=8;h<=20;h++){const m=h*60;if(m<WORK_START||m>WORK_END)continue;ticks.push(`<div class="gtick" style="left:${mx(m)}px">${p2(h)}:00</div>`)}
 
-  // グリッド＋休憩
-  const gridH=[]; for(let h=8;h<=20;h++){const m=h*60;if(m<WORK_START||m>WORK_END)continue;gridH.push(`<div class="grid-line hour" style="left:${minToX(m)}px"></div>`);}
-  const bz=BREAKS.map(b=>`<div class="break-zone" style="left:${minToX(b.s)}px;width:${durW(b.s,b.e)}px"></div>`).join('');
-  const grid=`<div class="gantt-grid">${gridH.join('')}${bz}</div>`;
+  const glines=[];
+  for(let h=8;h<=20;h++){const m=h*60;if(m<WORK_START||m>WORK_END)continue;glines.push(`<div class="gline h" style="left:${mx(m)}px"></div>`)}
+  const bzs=BREAKS.map(b=>`<div class="bzone" style="left:${mx(b.s)}px;width:${dw(b.s,b.e)}px"></div>`).join('');
+  const grid=`<div class="ggrid">${glines.join('')}${bzs}</div>`;
 
-  const tasks=getTasksForDate(currentDate);
+  const tasks=getDate(curDate);
 
   const rows=['matsumoto','matsunaga'].map(a=>{
-    const label=a==='matsumoto'?'松本':'松永';
-    const lc=a==='matsumoto'?'label-m':'label-n';
+    const lbl=a==='matsumoto'?'松本':'松永';
+    const lc=a==='matsumoto'?'lm':'ln';
     const myTasks=tasks.filter(t=>t.assignee===a);
-    const blocks=myTasks.map(t=>{
-      if(t.startMin===null) return '';
-      const repMin=Math.round((t.hours-calcTrial(t.trialSteps))*60);
+
+    const blocks=myTasks.flatMap(t=>{
+      if(t.startMin===null)return[];
+      const repMin=Math.round((t.hours-trialH(t.trialSteps))*60);
       const repEnd=addWork(t.startMin,repMin);
-      const trialEnd=addWork(repEnd,Math.round(calcTrial(t.trialSteps)*60));
-      const bc=a==='matsumoto'?'block-m':'block-n';
-      const rx=minToX(t.startMin), rw=durW(t.startMin,repEnd);
-      let html=`<div class="gantt-block ${bc}" style="left:${rx}px;width:${rw}px" onclick="openEditModal('${t.id}')" title="${t.name}">
-        <div class="block-label">${t.name}</div>
-        <div class="block-time">${fmtMin(t.startMin)}〜${fmtMin(repEnd)}</div>
-      </div>`;
+      const trialEnd=addWork(repEnd,Math.round(trialH(t.trialSteps)*60));
+      const bc=a==='matsumoto'?'bm':'bn';
+
+      const rx=mx(t.startMin),rw=dw(t.startMin,repEnd);
+      const res=[`<div class="gblock ${bc}" style="left:${rx}px;width:${rw}px"
+        onclick="openActModal('${t.id}')" title="${t.name}">
+        <div class="blabel">${t.name}</div>
+        <div class="btime">${fmtMin(t.startMin)}〜${fmtMin(repEnd)}</div>
+      </div>`];
+
       if(t.trialSteps>0&&trialEnd>repEnd){
-        const tx=minToX(repEnd),tw=durW(repEnd,trialEnd);
-        html+=`<div class="gantt-block block-trial" style="left:${tx}px;width:${tw}px" onclick="openEditModal('${t.id}')" title="${t.name} トライ">
-          <div class="block-label">▶ トライ</div>
-          <div class="block-time">${fmtMin(repEnd)}〜${fmtMin(trialEnd)}</div>
-        </div>`;
+        const tx=mx(repEnd),ttw=dw(repEnd,trialEnd);
+        res.push(`<div class="gblock btrial" style="left:${tx}px;width:${ttw}px"
+          onclick="openActModal('${t.id}')" title="${t.name} トライ">
+          <div class="blabel">▶トライ</div>
+          <div class="btime">${fmtMin(repEnd)}〜${fmtMin(trialEnd)}</div>
+        </div>`);
       }
-      return html;
-    }).join('');
-    return `<div class="gantt-row">
-      <div class="gantt-row-label ${lc}">${label}</div>
-      <div class="gantt-track" style="width:${trackWidth}px">${grid}${blocks}</div>
+
+      // 実績オーバーレイ
+      const as=minToMs(t.actual.start),ae=minToMs(t.actual.end);
+      if(as!==null&&ae!==null&&ae>as){
+        const ox=mx(as),ow=dw(as,ae);
+        const oc=a==='matsumoto'?'actual-m':'actual-n';
+        res.push(`<div class="gblock-actual ${oc}" style="left:${ox}px;width:${ow}px" title="実績: ${t.actual.start}〜${t.actual.end}"></div>`);
+      }
+      return res;
+    });
+
+    return`<div class="grow">
+      <div class="glabel ${lc}">${lbl}</div>
+      <div class="gtrack" style="width:${tw}px">${grid}${blocks.join('')}</div>
     </div>`;
   }).join('');
 
-  container.innerHTML=`<div class="gantt-header"><div></div><div class="time-ruler" style="width:${trackWidth}px">${ticks.join('')}</div></div>${rows}`;
+  cont.innerHTML=`<div class="ghdr"><div></div><div class="gruler" style="width:${tw}px">${ticks.join('')}</div></div>${rows}`;
 }
 
-// ===== 詳細 =====
+// ===== 予実パネル =====
 function renderDetail(){
-  const tasks=getTasksForDate(currentDate);
-  const grid=document.getElementById('detailGrid');
-  if(!tasks.length){grid.innerHTML='<div class="empty-state">作業を割付けると表示されます</div>';return;}
+  const tasks=getDate(curDate);
+  const grid=document.getElementById('dgrid');
+  if(!tasks.length){grid.innerHTML='<div class="empty">作業を割付けると表示されます</div>';return}
+
   grid.innerHTML=tasks.map(t=>{
-    const color=t.assignee==='matsumoto'?'var(--matsumoto)':'var(--matsunaga)';
-    const endMin=t.startMin!=null?addWork(t.startMin,Math.round(t.hours*60)):null;
-    const tr=t.startMin!=null?`${fmtMin(t.startMin)} 〜 ${fmtMin(endMin)}`:'未配置';
-    return `<div class="detail-item" onclick="openEditModal('${t.id}')">
-      <div class="detail-color" style="background:${color}"></div>
-      <div class="detail-info">
-        <div class="detail-name">${t.name}</div>
-        <div class="detail-meta">${tr} / ${t.hours}H</div>
+    const color=t.assignee==='matsumoto'?'var(--m)':'var(--n)';
+    const planEndMin=t.startMin!=null?addWork(t.startMin,Math.round(t.hours*60)):null;
+    const tr=t.startMin!=null?`${fmtMin(t.startMin)}〜${fmtMin(planEndMin)}`:'未配置';
+    const planMinutes=t.startMin!=null?Math.round(t.hours*60):null;
+
+    // 予実バー
+    const as=minToMs(t.actual.start),ae=minToMs(t.actual.end);
+    let yjHtml='';
+    if(planMinutes&&as!==null){
+      const actMin=ae!==null?(ae-as):(new Date().getHours()*60+new Date().getMinutes()-as);
+      const pct=Math.min(100,Math.round((actMin/planMinutes)*100));
+      const over=ae!==null&&actMin>planMinutes;
+      yjHtml=`<div class="yojitsu">
+        <div class="yj-bar">
+          <div class="yj-plan" style="width:100%"></div>
+          <div class="yj-actual" style="width:${pct}%;background:${over?'var(--danger)':'var(--m)'}"></div>
+        </div>
+        <span class="yj-label ${over?'yj-over':''}">${pct}%</span>
+      </div>`;
+    }
+
+    return`<div class="ditem" onclick="openActModal('${t.id}')">
+      <div class="dcolor" style="background:${color}"></div>
+      <div class="dinfo">
+        <div class="dname">${t.name}</div>
+        <div class="dmeta">${tr} / ${t.hours}H</div>
+        ${yjHtml}
         <div class="actual-row" onclick="event.stopPropagation()">
-          <input class="actual-input" id="as_${t.id}" placeholder="開始" value="${t.actual.start}" onchange="setActual('${t.id}','start',this.value)" />
-          <button class="stamp-btn stamp-s" onclick="stampNow('${t.id}','start')">▶</button>
-          <input class="actual-input" id="ae_${t.id}" placeholder="終了" value="${t.actual.end}" onchange="setActual('${t.id}','end',this.value)" />
-          <button class="stamp-btn stamp-e" onclick="stampNow('${t.id}','end')">■</button>
+          <input class="ainput" id="as_${t.id}" placeholder="開始" value="${t.actual.start}"
+            onchange="setAct('${t.id}','start',this.value)"/>
+          <button class="sbtn sbtn-s" onclick="stampNow('${t.id}','start')">▶</button>
+          <input class="ainput" id="ae_${t.id}" placeholder="終了" value="${t.actual.end}"
+            onchange="setAct('${t.id}','end',this.value)"/>
+          <button class="sbtn sbtn-e" onclick="stampNow('${t.id}','end')">■</button>
         </div>
       </div>
     </div>`;
@@ -959,98 +884,132 @@ function renderDetail(){
 }
 
 function stampNow(id,type){
-  const t=getTasksForDate(currentDate).find(x=>x.id===id); if(!t) return;
-  const n=new Date();
-  const v=`${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
+  const t=getDate(curDate).find(x=>x.id===id);if(!t)return;
+  const n=new Date();const v=`${p2(n.getHours())}:${p2(n.getMinutes())}`;
   t.actual[type]=v;
-  document.getElementById((type==='start'?'as_':'ae_')+id).value=v;
+  const el=document.getElementById((type==='start'?'as_':'ae_')+id);
+  if(el)el.value=v;
+  renderGantt();renderDetail();
 }
-function setActual(id,type,val){
-  const t=getTasksForDate(currentDate).find(x=>x.id===id); if(t) t.actual[type]=val;
+function setAct(id,type,val){
+  const t=getDate(curDate).find(x=>x.id===id);if(t){t.actual[type]=val;renderGantt();renderDetail()}
 }
 
-// ===== モーダル =====
-function openEditModal(id){
-  const t=getTasksForDate(currentDate).find(x=>x.id===id); if(!t) return;
-  editingTaskId=id;
-  document.getElementById('editModalTitle').textContent='編集: '+t.name;
+// ===== 実績モーダル =====
+function openActModal(id){
+  const t=getDate(curDate).find(x=>x.id===id);if(!t)return;
+  actTaskId=id;
+  document.getElementById('actTitle').textContent=t.name;
+  const planEndMin=t.startMin!=null?addWork(t.startMin,Math.round(t.hours*60)):null;
+  document.getElementById('planStart').textContent=t.startMin!=null?fmtMin(t.startMin):'—';
+  document.getElementById('planEnd').textContent=planEndMin!=null?fmtMin(planEndMin):'—';
+  document.getElementById('actStart2').textContent=t.actual.start||'未記録';
+  document.getElementById('actEnd2').textContent=t.actual.end||'未記録';
+  document.getElementById('inActS').value=t.actual.start||'';
+  document.getElementById('inActE').value=t.actual.end||'';
+  document.getElementById('inActNote').value=t.actual.note||'';
+  updateYjDiff(t);
+  document.getElementById('actModal').classList.add('open');
+}
+function updateYjDiff(t){
+  const as=minToMs(t.actual.start),ae=minToMs(t.actual.end);
+  const planEndMin=t.startMin!=null?addWork(t.startMin,Math.round(t.hours*60)):null;
+  const el=document.getElementById('yjDiff');
+  if(as===null||ae===null||t.startMin===null){el.className='yj-diff yj-diff-none';el.textContent='実績を入力すると差異が表示されます';return}
+  const planMin=planEndMin-t.startMin;const actMin=ae-as;
+  const diff=actMin-planMin;
+  if(diff>0){el.className='yj-diff yj-diff-over';el.textContent=`⚠ 計画より ${Math.abs(diff)}分 超過（計画${planMin}分→実績${actMin}分）`}
+  else if(diff<0){el.className='yj-diff yj-diff-ok';el.textContent=`✓ 計画より ${Math.abs(diff)}分 早く完了（計画${planMin}分→実績${actMin}分）`}
+  else{el.className='yj-diff yj-diff-ok';el.textContent='✓ 計画通り完了'}
+}
+function stampNowModal(type){
+  const n=new Date();const v=`${p2(n.getHours())}:${p2(n.getMinutes())}`;
+  document.getElementById(type==='start'?'inActS':'inActE').value=v;
+  // リアルタイム差異更新
+  const t=getDate(curDate).find(x=>x.id===actTaskId);
+  if(t){t.actual[type]=v;updateYjDiff(t)}
+}
+function saveActual(){
+  const t=getDate(curDate).find(x=>x.id===actTaskId);if(!t)return;
+  t.actual.start=document.getElementById('inActS').value;
+  t.actual.end=document.getElementById('inActE').value;
+  t.actual.note=document.getElementById('inActNote').value;
+  closeActModal();renderGantt();renderDetail();
+}
+function closeActModal(){document.getElementById('actModal').classList.remove('open');actTaskId=null}
+function openEditFromAct(){
+  const id=actTaskId;closeActModal();
+  const t=getDate(curDate).find(x=>x.id===id);if(!t)return;
+  editTaskId=id;
+  document.getElementById('editTitle').textContent='工数編集: '+t.name;
   document.getElementById('eName').value=t.name;
-  document.getElementById('eCategory').value=(t.kubun||[]).join(', ');
+  document.getElementById('eCat').value=(t.kubun||[]).join(', ');
   document.getElementById('eHours').value=t.hours;
-  document.getElementById('eTrialSteps').value=t.trialSteps||1;
+  document.getElementById('eTrials').value=t.trialSteps||1;
   document.getElementById('eStart').value=t.startMin!=null?fmtMin(t.startMin):'08:10';
-  document.getElementById('eAssignee').value=t.assignee;
+  document.getElementById('eAssign').value=t.assignee;
   document.getElementById('eMemo').value=t.memo||'';
   document.getElementById('editModal').classList.add('open');
 }
-function closeModal(){ document.getElementById('editModal').classList.remove('open'); editingTaskId=null; }
-function saveEdit(){
-  if(!editingTaskId) return;
-  const tasks=getTasksForDate(currentDate);
-  const t=tasks.find(x=>x.id===editingTaskId); if(!t) return;
-  t.name=document.getElementById('eName').value;
-  t.kubun=document.getElementById('eCategory').value.split(/[,、]/).map(s=>s.trim()).filter(Boolean);
-  t.hours=parseFloat(document.getElementById('eHours').value)||1.0;
-  t.trialSteps=parseInt(document.getElementById('eTrialSteps').value)||1;
-  const st=document.getElementById('eStart').value;
-  if(st){const[hh,mm]=st.split(':').map(Number);t.startMin=hh*60+mm;}
-  t.assignee=document.getElementById('eAssignee').value;
-  t.memo=document.getElementById('eMemo').value;
-  autoArrange(currentDate);
-  closeModal(); renderGantt(); renderDetail();
-}
-function deleteTask(){
-  if(!editingTaskId) return;
-  const tasks=getTasksForDate(currentDate);
-  const t=tasks.find(x=>x.id===editingTaskId);
+function deleteTaskModal(){
+  if(!actTaskId)return;
+  const t=getDate(curDate).find(x=>x.id===actTaskId);
   if(t){
     const r=requests.find(x=>x.id===t.reqId);
-    if(r){r.assigned=false;r.assignee=null;}
-    tasksByDate[currentDate]=tasks.filter(x=>x.id!==editingTaskId);
-    autoArrange(currentDate);
+    if(r){r.assigned=false;r.assignee=null}
+    tasksByDate[curDate]=(tasksByDate[curDate]||[]).filter(x=>x.id!==actTaskId);
+    autoArrange(curDate);
   }
-  closeModal(); renderRequestList(); renderGantt(); renderDetail();
+  closeActModal();renderRequestList();renderGantt();renderDetail();
 }
+function saveEdit(){
+  if(!editTaskId)return;
+  const t=getDate(curDate).find(x=>x.id===editTaskId);if(!t)return;
+  t.name=document.getElementById('eName').value;
+  t.kubun=document.getElementById('eCat').value.split(/[,、]/).map(s=>s.trim()).filter(Boolean);
+  t.hours=parseFloat(document.getElementById('eHours').value)||1.0;
+  t.trialSteps=parseInt(document.getElementById('eTrials').value)||1;
+  const st=document.getElementById('eStart').value;
+  if(st){const[h,m]=st.split(':').map(Number);t.startMin=h*60+m}
+  t.assignee=document.getElementById('eAssign').value;
+  t.memo=document.getElementById('eMemo').value;
+  autoArrange(curDate);closeEditModal();renderGantt();renderDetail();
+}
+function closeEditModal(){document.getElementById('editModal').classList.remove('open');editTaskId=null}
 
 // ===== 手動追加 =====
-function toggleManualForm(){ document.getElementById('manualForm').classList.toggle('open'); }
-function addManualRequest(){
+function toggleMF(){document.getElementById('mForm').classList.toggle('open')}
+function addManual(){
   const name=document.getElementById('mName').value.trim();
-  if(!name){alert('品番/作業内容を入力してください');return;}
+  if(!name){alert('品番/作業内容を入力してください');return}
   const cat=document.getElementById('mCat').value;
   const units=parseInt(document.getElementById('mUnits').value)||1;
-  const moldType=document.getElementById('mMoldType').value;
-  const deadline=document.getElementById('mDeadline').value||todayStr();
+  const moldType=document.getElementById('mMold').value;
+  const deadline=document.getElementById('mDL').value||todayStr();
   const hinmei=document.getElementById('mHinmei').value.trim();
-  const m=TIME_MASTER[cat]||{hPerUnit:1,perUnit:false};
-  const kubunLabel=m.label||'任意';
-  const kubunInputs=[{name:kubunLabel,units,key:cat}];
-  const trialSteps=1;
-  const hours=calcHoursFromInputs(kubunInputs,moldType,trialSteps);
+  const label=TM[cat]?.label||'任意';
+  const kubunInputs=[{name:label,units,key:cat}];
   const req={
-    id:'m'+Date.now(), hinban:name, hinmei, process:'',
-    kubunInputs, moldType, trialSteps, hours, deadline,
-    assigned:false, assignee:null, source:'manual'
+    id:'m'+Date.now(),hinban:name,hinmei,process:'',
+    kubunInputs,moldType,trialSteps:1,
+    hours:calcH(kubunInputs,moldType,1),
+    deadline,assigned:false,assignee:null,source:'manual',note:''
   };
   requests.push(req);
   requests.sort((a,b)=>a.deadline.localeCompare(b.deadline));
   document.getElementById('mName').value='';
   document.getElementById('mHinmei').value='';
-  toggleManualForm();
-  renderRequestList();
+  toggleMF();renderRequestList();
 }
 
 // ===== 初期化 =====
-let resizeTimer;
-window.addEventListener('resize',()=>{ clearTimeout(resizeTimer); resizeTimer=setTimeout(()=>renderGantt(),100); });
-document.getElementById('editModal').addEventListener('click',function(e){if(e.target===this)closeModal();});
-document.getElementById('mDeadline').value=todayStr();
+let rTimer;
+window.addEventListener('resize',()=>{clearTimeout(rTimer);rTimer=setTimeout(()=>renderGantt(),100)});
+document.getElementById('actModal').addEventListener('click',function(e){if(e.target===this)closeActModal()});
+document.getElementById('editModal').addEventListener('click',function(e){if(e.target===this)closeEditModal()});
+document.getElementById('mDL').value=todayStr();
 
-// DOMレイアウト確定後に実行
-requestAnimationFrame(()=>{
-  buildDateNav();
-  loadKintone();
-});
+requestAnimationFrame(()=>{buildDateNav();loadKintone()});
 </script>
 </body>
 </html>
