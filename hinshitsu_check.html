@@ -1121,22 +1121,24 @@ function makeGroupCard(g,allDates){
   if(nouki){var m5=document.createElement('span');m5.style.cssText='color:#E24B4A;font-weight:700';m5.textContent='納期: '+nouki;meta.appendChild(m5);}
   div.appendChild(meta);
 
-  // プログレスバー（全工順合計）
-  var tags0=document.createElement('div');tags0.className='rec-tags';tags0.style.marginTop='6px';
-  var t1=document.createElement('span');t1.className='tag t-ryohin';
-  t1.textContent='良品累計: '+ryohinTotal+'個';tags0.appendChild(t1);
-  if(ngAllTotal>0){
-    var t2=document.createElement('span');t2.className='tag t-ng-cum';
-    t2.textContent='不良累計: '+ngAllTotal+'個';tags0.appendChild(t2);
-  }
-  div.appendChild(tags0);
-  if(shiji>0){
-    var bw=document.createElement('div');bw.className='cum-bar-bg';
-    var bf=document.createElement('div');bf.className='cum-bar-fg';bf.style.width=pct+'%';
-    bw.appendChild(bf);div.appendChild(bw);
-    var bn=document.createElement('div');bn.className='cum-nums';
-    bn.innerHTML='<span>良品累計 '+ryohinTotal+'個</span><span>指示 '+shiji+'個 ('+pct+'%)</span>';
-    div.appendChild(bn);
+  // 工順が1つの場合のみ全体累計を表示（複数工順は各セクションで表示）
+  if(junjoOrder.length===1){
+    var tags0=document.createElement('div');tags0.className='rec-tags';tags0.style.marginTop='6px';
+    var t1=document.createElement('span');t1.className='tag t-ryohin';
+    t1.textContent='良品累計: '+ryohinTotal+'個';tags0.appendChild(t1);
+    if(ngAllTotal>0){
+      var t2=document.createElement('span');t2.className='tag t-ng-cum';
+      t2.textContent='不良累計: '+ngAllTotal+'個';tags0.appendChild(t2);
+    }
+    div.appendChild(tags0);
+    if(shiji>0){
+      var bw=document.createElement('div');bw.className='cum-bar-bg';
+      var bf=document.createElement('div');bf.className='cum-bar-fg';bf.style.width=pct+'%';
+      bw.appendChild(bf);div.appendChild(bw);
+      var bn=document.createElement('div');bn.className='cum-nums';
+      bn.innerHTML='<span>良品累計 '+ryohinTotal+'個</span><span>指示 '+shiji+'個 ('+pct+'%)</span>';
+      div.appendChild(bn);
+    }
   }
 
   // ── 工順ごとのセクション ──
@@ -1151,6 +1153,36 @@ function makeGroupCard(g,allDates){
     jHdr.textContent='── 工順'+j+(jt.kosei?' '+jt.kosei:'')
       +' 指示: '+jt.shiji+'個 ──';
     sec.appendChild(jHdr);
+
+    // 工順別良品累計・不良累計タグ（複数工順の場合のみ）
+    if(junjoOrder.length>1){
+      var jCumTags=document.createElement('div');jCumTags.className='rec-tags';jCumTags.style.marginBottom='4px';
+      var jT1=document.createElement('span');jT1.className='tag t-ryohin';
+      jT1.textContent='良品累計: '+jt.ryohin+'個'+(jt.chukan>0?' (+中間'+jt.chukan+'個)':'');
+      jCumTags.appendChild(jT1);
+      var jNgAll=jt.ng+jt.hokyu+jt.sonota;
+      if(jNgAll>0){
+        var jT2=document.createElement('span');jT2.className='tag t-ng-cum';
+        var jNgDetail='不良累計: '+jNgAll+'個';
+        var jParts=[];
+        if(jt.ng>0) jParts.push('不良'+jt.ng);
+        if(jt.hokyu>0) jParts.push('保留'+jt.hokyu);
+        if(jt.sonota>0) jParts.push('その他'+jt.sonota);
+        if(jParts.length>1) jNgDetail+=' ('+jParts.join('/')+')';
+        jT2.textContent=jNgDetail;jCumTags.appendChild(jT2);
+      }
+      sec.appendChild(jCumTags);
+      // 工順別プログレスバー
+      if(jt.shiji>0){
+        var jPct=Math.min(100,Math.round(jt.ryohin/jt.shiji*100));
+        var jBw=document.createElement('div');jBw.className='cum-bar-bg';
+        var jBf=document.createElement('div');jBf.className='cum-bar-fg';jBf.style.width=jPct+'%';
+        jBw.appendChild(jBf);sec.appendChild(jBw);
+        var jBn=document.createElement('div');jBn.className='cum-nums';
+        jBn.innerHTML='<span>良品累計 '+jt.ryohin+'個</span><span>指示 '+jt.shiji+'個 ('+jPct+'%)</span>';
+        sec.appendChild(jBn);
+      }
+    }
 
     // 工順タグ
     var jTags=document.createElement('div');jTags.className='rec-tags';
