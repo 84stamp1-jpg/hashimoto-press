@@ -921,22 +921,26 @@ function renderGantt(){
 
     const blocks=myTasks.flatMap(t=>{
       if(t.startMin===null)return[];
+      const tStatus=t.actual?.status||'pending';
+      const isWorking=tStatus==='working';
+      const isDone=tStatus==='done';
+      const blockStyle=isWorking?';outline:2px solid var(--ok);z-index:5':isDone?';opacity:.55':'';
       const repMin=Math.round((t.hours-trialH(t.trialSteps))*60);
       const repEnd=addWork(t.startMin,repMin);
       const trialEnd=addWork(repEnd,Math.round(trialH(t.trialSteps)*60));
       const bc=a==='matsumoto'?'bm':'bn';
 
       const rx=mx(t.startMin),rw=dw(t.startMin,repEnd);
-      const res=[`<div class="gblock ${bc}" style="left:${rx}px;width:${rw}px"
-        onclick="openActModal('${t.id}')" title="${t.name}" style="top:3px;height:30px${blockExtra}">
+      const res=[`<div class="gblock ${bc}" style="left:${rx}px;width:${rw}px;top:3px;height:30px${blockStyle}"
+        onclick="openActModal('${t.id}')" title="${t.name}">
         <div class="blabel">${t.name}</div>
         <div class="btime">${fmtMin(t.startMin)}〜${fmtMin(repEnd)}</div>
       </div>`];
 
       if(t.trialSteps>0&&trialEnd>repEnd){
         const tx=mx(repEnd),ttw=dw(repEnd,trialEnd);
-        res.push(`<div class="gblock btrial" style="left:${tx}px;width:${ttw}px"
-          onclick="openActModal('${t.id}')" title="${t.name} トライ" style="top:3px;height:30px${blockExtra}">
+        res.push(`<div class="gblock btrial" style="left:${tx}px;width:${ttw}px;top:3px;height:30px${blockStyle}"
+          onclick="openActModal('${t.id}')" title="${t.name} トライ">
           <div class="blabel">▶トライ</div>
           <div class="btime">${fmtMin(repEnd)}〜${fmtMin(trialEnd)}</div>
         </div>`);
@@ -1253,6 +1257,13 @@ const STORAGE_KEY = 'moldRepairPlan_tasks';
 
 function saveTasks(){
   try{
+    // 過去3日分のみ保存（それ以前は削除）
+    const cutoff=fmt(addDays(new Date(),-3));
+    const filtered={};
+    Object.keys(tasksByDate).forEach(ds=>{
+      if(ds>=cutoff) filtered[ds]=tasksByDate[ds];
+    });
+    tasksByDate=filtered;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(tasksByDate));
   }catch(e){ console.log('save error:',e); }
 }
