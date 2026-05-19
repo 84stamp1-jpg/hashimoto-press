@@ -582,10 +582,9 @@ function fmtMin(m){ return `${String(Math.floor(m/60)).padStart(2,'0')}:${String
 // ===== 週ナビ =====
 function buildDateNav(){
   const nav = document.getElementById('dateNav');
-  // 最初のボタンと最後のボタンを保持
-  const arrows = nav.querySelectorAll('.date-nav-arrow');
-  nav.innerHTML = '';
-  nav.appendChild(arrows[0]);
+  // 既存の日付ボタンだけ削除（矢印ボタンは残す）
+  nav.querySelectorAll('.date-btn').forEach(b=>b.remove());
+  const lastArrow = nav.querySelector('.date-nav-arrow:last-child');
 
   for(let i=0;i<7;i++){
     const d = addDays(weekStart,i);
@@ -594,9 +593,8 @@ function buildDateNav(){
     btn.className = 'date-btn' + (ds===currentDate?' today':'');
     btn.textContent = fmtDisp(d);
     btn.onclick = ()=>{ currentDate=ds; buildDateNav(); renderGantt(); renderDetail(); };
-    nav.appendChild(btn);
+    nav.insertBefore(btn, lastArrow);
   }
-  nav.appendChild(arrows[1]);
   document.getElementById('detailDateLabel').textContent = currentDate;
 }
 function shiftWeek(dir){
@@ -650,7 +648,9 @@ function importKintone(records){
   });
   requests.sort((a,b)=>a.deadline.localeCompare(b.deadline));
   renderRequestList();
+  autoArrange(currentDate);
   renderGantt();
+  renderDetail();
 }
 
 function loadSample(){
@@ -664,7 +664,26 @@ function loadSample(){
   ];
   requests = base.map(r=>({...r, hours:calcHoursFromInputs(r.kubunInputs,r.moldType,r.trialSteps), assigned:false, assignee:null}));
   renderRequestList();
+  // サンプル：当日分を自動割付してガントに表示
+  requests.filter(r=>r.deadline===t).forEach((r,i)=>{
+    const assignee=i%2===0?'matsumoto':'matsunaga';
+    const task={
+      id:'t'+Date.now()+'_'+i, reqId:r.id,
+      name:r.hinban+(r.hinmei?' '+r.hinmei:''),
+      kubun:r.kubunInputs.map(k=>k.name),
+      hours:r.hours, assignee, moldType:r.moldType,
+      trialSteps:r.trialSteps, deadline:r.deadline,
+      planDate:currentDate, startMin:null, memo:'',
+      actual:{start:'',end:''}
+    };
+    if(!tasksByDate[currentDate]) tasksByDate[currentDate]=[];
+    tasksByDate[currentDate].push(task);
+    r.assigned=true; r.assignee=assignee;
+  });
+  autoArrange(currentDate);
+  renderRequestList();
   renderGantt();
+  renderDetail();
 }
 
 // ===== 依頼一覧描画 =====
@@ -864,7 +883,10 @@ function getTasksForDate(ds){ return tasksByDate[ds]||[]; }
 // ===== ガント =====
 function renderGantt(){
   const container=document.getElementById('ganttContainer');
-  const trackWidth=Math.max(600, container.parentElement.clientWidth-76-32-20);
+  const wrap = container.parentElement;
+  // paddingを除いた実幅を取得（最低600px保証）
+  const wrapW = wrap.getBoundingClientRect().width || wrap.offsetWidth || 800;
+  const trackWidth = Math.max(600, wrapW - 76 - 32 - 24);
   const minToX=m=>(Math.max(0,m-WORK_START)/TOTAL_MIN)*trackWidth;
   const durW=(s,e)=>Math.max(4,minToX(e)-minToX(s));
 
@@ -1019,12 +1041,16 @@ function addManualRequest(){
 }
 
 // ===== 初期化 =====
-window.addEventListener('resize',()=>renderGantt());
+let resizeTimer;
+window.addEventListener('resize',()=>{ clearTimeout(resizeTimer); resizeTimer=setTimeout(()=>renderGantt(),100); });
 document.getElementById('editModal').addEventListener('click',function(e){if(e.target===this)closeModal();});
 document.getElementById('mDeadline').value=todayStr();
 
-buildDateNav();
-loadKintone();
+// DOMレイアウト確定後に実行
+requestAnimationFrame(()=>{
+  buildDateNav();
+  loadKintone();
+});
 </script>
 </body>
 </html>
