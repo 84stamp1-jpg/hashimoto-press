@@ -620,7 +620,11 @@ function importKintone(records){
   });
   requests.sort((a,b)=>a.deadline.localeCompare(b.deadline));
   syncAssignedState();
-  renderRequestList();autoArrange(curDate);renderGantt();renderDetail();
+  autoArrange(curDate);
+  requestAnimationFrame(()=>{
+    renderRequestList();
+    requestAnimationFrame(()=>{ renderGantt(); renderDetail(); });
+  });
 }
 
 function loadSample(){
@@ -655,7 +659,12 @@ function renderRequestList(){
 
   if(!requests.length){document.getElementById('reqList').innerHTML='<div class="empty">依頼がありません</div>';return}
 
-  document.getElementById('reqList').innerHTML=requests.map(r=>{
+  // 大量データでのフリーズ防止: 表示数を制限
+  const MAX_DISPLAY=_showAll?requests.length:50;
+  const displayReqs=requests.slice(0,MAX_DISPLAY);
+  const moreCount=requests.length-MAX_DISPLAY;
+
+  document.getElementById('reqList').innerHTML=displayReqs.map(r=>{
     const dl=r.deadline,dlCls=dl<today?'cdl-u':dl===today?'cdl-n':'';
     const tags=(r.kubunInputs||[]).map(ki=>`<span class="${tagCls(ki.name)}">${ki.name}</span>`).join('');
     const src=`<span class="src-tag src-${r.source}">${r.source}</span>`;
@@ -728,8 +737,11 @@ function renderRequestList(){
         </div>`:`<div style="text-align:center;font-size:11px;color:var(--text2);padding:4px">割付済（ブロックをクリックで編集）</div>`}
       </div>
     </div>`;
-  }).join('');
+  }).join('')+(moreCount>0?`<div class='empty' style='cursor:pointer;color:var(--accent)' onclick='showAllReqs()'>▼ 残り${moreCount}件を表示</div>`:'')+
+    (requests.length>MAX_DISPLAY?`<div class='empty' style='font-size:10px'>※全${requests.length}件中${Math.min(MAX_DISPLAY,requests.length)}件表示</div>`:'');
 }
+let _showAll=false;
+function showAllReqs(){_showAll=true;const MAX_DISPLAY=requests.length;renderRequestList()}
 
 function selReq(id){selReqId=selReqId===id?null:id;renderRequestList()}
 
@@ -750,8 +762,6 @@ function addKubun(rid){
   const r=requests.find(x=>x.id===rid);if(!r)return;
   r.kubunInputs.push({name:'バリ改修',units:1,key:'bari'});
   refreshH(r);
-  renderRequestList();
-  // 追加後も展開維持
   selReqId=rid;
   renderRequestList();
 }
@@ -759,7 +769,9 @@ function removeKubun(rid,idx){
   const r=requests.find(x=>x.id===rid);if(!r)return;
   if(r.kubunInputs.length<=1){alert('最低1つ必要です');return}
   r.kubunInputs.splice(idx,1);
-  refreshH(r);renderRequestList();selReqId=rid;renderRequestList();
+  selReqId=rid;
+  refreshH(r);
+  renderRequestList();
 }
 function updateMold(rid,val){const r=requests.find(x=>x.id===rid);if(!r)return;r.moldType=val;refreshH(r)}
 function updateTrial(rid,val){
@@ -785,11 +797,14 @@ function refreshH(r){
     const tot=Math.round(uh*(ki.units||1)*10)/10;
     const el2=document.getElementById(`kh_${r.id}_${idx}`);if(el2)el2.textContent=tot+'H';
   });
-  // 割付済みなら再配置
+  // 割付済みなら再配置（デバウンス: 300ms）
   if(r.assigned){
-    const tasks=getDate(curDate);
-    const t=tasks.find(t=>t.reqId===r.id);
-    if(t){t.hours=r.hours;t.trialSteps=r.trialSteps;autoArrange(curDate);renderGantt();renderDetail()}
+    clearTimeout(r._refreshTimer);
+    r._refreshTimer=setTimeout(()=>{
+      const tasks=getDate(curDate);
+      const t=tasks.find(t=>t.reqId===r.id);
+      if(t){t.hours=r.hours;t.trialSteps=r.trialSteps;autoArrange(curDate);renderGantt();renderDetail()}
+    },300);
   }
 }
 
@@ -819,11 +834,21 @@ function assignTo(rid,assignee){
 function autoAll(){
   const ua=requests.filter(r=>!r.assigned);
   if(!ua.length){alert('未割付の依頼がありません');return}
+  // バッチ処理: 一度に全部処理してからまとめてrender
   ua.forEach((r,i)=>{
     const a=i%2===0?'matsumoto':'matsunaga';
     pushTask(r,a,curDate);r.assigned=true;r.assignee=a;
   });
-  autoArrange(curDate);saveTasks();renderRequestList();renderGantt();renderDetail();
+  autoArrange(curDate);
+  saveTasks();
+  // renderを非同期で実行してUIフリーズを防止
+  requestAnimationFrame(()=>{
+    renderRequestList();
+    requestAnimationFrame(()=>{
+      renderGantt();
+      renderDetail();
+    });
+  });
 }
 
 // ===== 時間計算 =====
@@ -929,7 +954,7 @@ function renderGantt(){
 
   // 仕切り線をgridに追加
 const divLine=`<div style='position:absolute;left:0;right:0;top:34px;height:1px;background:var(--border);pointer-events:none;z-index:1'></div>`;
-const gridWithDiv=grid+divLine;
+  const gridWithDiv=grid+divLine;
   cont.innerHTML=`<div class="ghdr"><div></div><div class="gruler" style="width:${tw}px">${ticks.join('')}</div></div>${rows}`;
 }
 
