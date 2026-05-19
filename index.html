@@ -420,7 +420,7 @@ function calcLineRate(l){
     estFinish='完了';
   } else if(remainingPlanMin>0&&ctRate&&ctRate>0){
     const adjustedMin=remainingPlanMin*(100/ctRate);
-    const estM=nowMin+Math.round(adjustedMin);
+    const estM=updMin+Math.round(adjustedMin);
     estFinish=String(Math.floor(estM/60)).padStart(2,'0')+':'+String(estM%60).padStart(2,'0');
   }
 
@@ -597,12 +597,16 @@ function renderBoard(){
     }
     const pRows=[];
     if(l.prev2UpdatedAt>0&&l.prevUpdatedAt>l.prev2UpdatedAt){
-      const d1=(l.prevActual||0)-(l.prev2Actual||0),m1=(l.prevUpdatedAt-l.prev2UpdatedAt)/60000;
-      if(m1>0&&d1>=0) pRows.push('前回: '+mkPace(Math.round(d1/m1*60)));
+      const d1=(l.prevActual||0)-(l.prev2Actual||0);
+      const t1a=new Date(l.prev2UpdatedAt),t1b=new Date(l.prevUpdatedAt);
+      const n1=netMins(t1a.getHours()*60+t1a.getMinutes(),t1b.getHours()*60+t1b.getMinutes());
+      if(n1>0&&d1>=0) pRows.push('前回: '+mkPace(Math.round(d1/n1*60)));
     }
     if(l.prevUpdatedAt>0&&l.updatedAt>l.prevUpdatedAt){
-      const d2=partActual-(l.prevActual||0),m2=(l.updatedAt-l.prevUpdatedAt)/60000;
-      if(m2>0&&d2>=0) pRows.push('今回: '+mkPace(Math.round(d2/m2*60)));
+      const d2=partActual-(l.prevActual||0);
+      const t2a=new Date(l.prevUpdatedAt),t2b=new Date(l.updatedAt);
+      const n2=netMins(t2a.getHours()*60+t2a.getMinutes(),t2b.getHours()*60+t2b.getMinutes());
+      if(n2>0&&d2>=0) pRows.push('今回: '+mkPace(Math.round(d2/n2*60)));
     }
     if(partActual>0&&cjP){
       const wsM=timeToMin(l.workStart||cjP.start);
@@ -803,7 +807,7 @@ function renderBoard(){
       // 数値ボックス：稼働中のみ表示（未開始・完了・計画時間外は非表示）
       ((pr&&(pr.phase==='before'||pr.phase==='done'))||(!l.workStart&&!l.actual)?'':(
       '<div class="nums">'+
-        '<div class="nb"><div class="nv">'+(l.plan>0?l.plan.toLocaleString():'-')+'</div><div class="nl">計画（全体）</div></div>'+
+        '<div class="nb"><div class="nv">'+(cjCT?(cjCT.revisedPlan||cjCT.plan).toLocaleString():(l.plan>0?l.plan.toLocaleString():'-'))+'</div><div class="nl">計画（全体）</div></div>'+
         (proRataDisp?'<div class="nb"><div class="nv" style="font-size:11px;color:#e67e22;">'+proRataDisp+'</div><div class="nl">現時点の目標</div></div>':'')+
         '<div class="nb"><div class="nv">'+(partActual>0?partActual.toLocaleString():'-')+'</div><div class="nl">実績</div></div>'+
         '<div class="nb"><div class="nv">'+proRateDisp+'</div><div class="nl">達成率</div></div>'+
