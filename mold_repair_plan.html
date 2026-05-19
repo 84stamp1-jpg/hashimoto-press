@@ -966,11 +966,13 @@ function renderDetail(){
   if(dpDate) dpDate.textContent=curDate;
   if(!tasks.length){grid.innerHTML='<div class="empty">作業を割付けると表示されます</div>';return}
 
-  const html=tasks.map(t=>{
+  let html='';
+  tasks.forEach(function(t){
     const color=t.assignee==='matsumoto'?'var(--m)':'var(--n)';
     const planEndMin=t.startMin!=null?addWork(t.startMin,Math.round(t.hours*60)):null;
     const planStr=t.startMin!=null?fmtMin(t.startMin)+'〜'+fmtMin(planEndMin):'未配置';
     const planMin=t.startMin!=null?Math.round(t.hours*60):null;
+    const tid=t.id;
 
     // 予実バー
     const as=minToMs(t.actual.start), ae=minToMs(t.actual.end);
@@ -982,102 +984,48 @@ function renderDetail(){
       const overMin=over?actMin-planMin:0;
       const barPct=Math.min(100,Math.round(Math.min(actMin,planMin)/planMin*100));
       const barColor=over?'var(--danger)':'var(--ok)';
-      const overBar=over?'<div style="position:absolute;left:100%;top:0;bottom:0;width:'+Math.min(overMin/planMin*100,50)+'%;background:var(--danger);opacity:.7;border-radius:0 3px 3px 0"></div>':'';
       const diffTxt=over?' (+'+overMin+'分超過)':'';
       const lblCls=over?'yj-over':'';
       yjHtml='<div class="yojitsu">'
         +'<div class="yj-bar" style="position:relative">'
         +'<div class="yj-plan" style="width:100%"></div>'
         +'<div class="yj-actual" style="width:'+barPct+'%;background:'+barColor+'"></div>'
-        +overBar
+        +(over?'<div style="position:absolute;left:100%;top:0;bottom:0;width:'+Math.min(overMin/planMin*100,50)+'%;background:var(--danger);opacity:.7;border-radius:0 3px 3px 0"></div>':'')
         +'</div>'
         +'<span class="yj-label '+lblCls+'">'+rawPct+'%'+diffTxt+'</span>'
         +'</div>';
     }
 
-    // 一時停止ボタン
+    // 一時停止
     const isPaused=!!t.actual.pausedAt;
     const pauseBg=isPaused?'var(--trial-bg)':'var(--warn-bg)';
     const pauseColor=isPaused?'var(--ok)':'var(--warn)';
     const pauseBorder=isPaused?'var(--trial-bd)':'#fde68a';
     const pauseLabel=isPaused?'▶再開':'⏸停止';
-
-    // 停止ログ
     const pauses=t.actual.pauses||[];
     const pauseLog=pauses.length>0
-      ?'<div style="font-size:9px;color:var(--text3);margin-top:2px">停止: '+pauses.map(p=>p.from+'〜'+p.to).join(' / ')+'</div>'
+      ?'<div style="font-size:9px;color:var(--text3);margin-top:2px">停止: '+pauses.map(function(p){return p.from+'〜'+p.to}).join(' / ')+'</div>'
       :'';
 
-    return '<div class="ditem" onclick="openActModal(''+t.id+'')"><div class="dcolor" style="background:'+color+'"></div><div class="dinfo">'
+    html+='<div class="ditem" onclick="openActModal(this.dataset.tid)" data-tid="'+tid+'">'
+      +'<div class="dcolor" style="background:'+color+'"></div>'
+      +'<div class="dinfo">'
       +'<div class="dname">'+t.name+'</div>'
       +'<div class="dmeta">'+planStr+' / '+t.hours+'H</div>'
       +yjHtml
       +'<div class="actual-row" onclick="event.stopPropagation()">'
-      +'<input class="ainput" id="as_'+t.id+'" placeholder="開始" value="'+(t.actual.start||'')+'" onchange="setAct(''+t.id+'','start',this.value)"/>'
-      +'<button class="sbtn sbtn-s" onclick="stampNow(''+t.id+'','start')">▶</button>'
-      +'<button class="sbtn" id="pb_'+t.id+'" style="background:'+pauseBg+';color:'+pauseColor+';border:1px solid '+pauseBorder+'" onclick="togglePauseDetail(''+t.id+'')">'+pauseLabel+'</button>'
-      +'<input class="ainput" id="ae_'+t.id+'" placeholder="終了" value="'+(t.actual.end||'')+'" onchange="setAct(''+t.id+'','end',this.value)"/>'
-      +'<button class="sbtn sbtn-e" onclick="stampNow(''+t.id+'','end')">■</button>'
+      +'<input class="ainput" id="as_'+tid+'" placeholder="開始" value="'+(t.actual.start||'')+'" onchange="setAct(this.dataset.tid,\'start\',this.value)" data-tid="'+tid+'"/>'
+      +'<button class="sbtn sbtn-s" onclick="stampNow(this.dataset.tid,\'start\')" data-tid="'+tid+'">▶</button>'
+      +'<button class="sbtn" id="pb_'+tid+'" style="background:'+pauseBg+';color:'+pauseColor+';border:1px solid '+pauseBorder+'" onclick="togglePauseDetail(this.dataset.tid)" data-tid="'+tid+'">'+pauseLabel+'</button>'
+      +'<input class="ainput" id="ae_'+tid+'" placeholder="終了" value="'+(t.actual.end||'')+'" onchange="setAct(this.dataset.tid,\'end\',this.value)" data-tid="'+tid+'"/>'
+      +'<button class="sbtn sbtn-e" onclick="stampNow(this.dataset.tid,\'end\')" data-tid="'+tid+'">■</button>'
       +'</div>'
       +pauseLog
       +'</div></div>';
-  }).join('');
-
+  });
   grid.innerHTML=html;
 }
 
-function stampNow(id,type){
-  const t=getDate(curDate).find(x=>x.id===id);if(!t)return;
-  const n=new Date();const v=`${p2(n.getHours())}:${p2(n.getMinutes())}`;
-  t.actual[type]=v;
-  const el=document.getElementById((type==='start'?'as_':'ae_')+id);
-  if(el)el.value=v;
-  renderGantt();renderDetail();
-}
-function setAct(id,type,val){
-  const t=getDate(curDate).find(x=>x.id===id);if(t){t.actual[type]=val;renderGantt();renderDetail()}
-}
-
-// ===== 実績モーダル =====
-function openActModal(id){
-  const t=getDate(curDate).find(x=>x.id===id);if(!t)return;
-  actTaskId=id;
-  document.getElementById('actTitle').textContent=t.name;
-  const planEndMin=t.startMin!=null?addWork(t.startMin,Math.round(t.hours*60)):null;
-  document.getElementById('planStart').textContent=t.startMin!=null?fmtMin(t.startMin):'—';
-  document.getElementById('planEnd').textContent=planEndMin!=null?fmtMin(planEndMin):'—';
-  document.getElementById('actStart2').textContent=t.actual.start||'未記録';
-  document.getElementById('actEnd2').textContent=t.actual.end||'未記録';
-  document.getElementById('inActS').value=t.actual.start||'';
-  document.getElementById('inActE').value=t.actual.end||'';
-  document.getElementById('inActNote').value=t.actual.note||'';
-  updateYjDiff(t);
-  // 一時停止UI初期化
-  renderPauseLog(t);
-  const isPaused = !!t.actual.pausedAt;
-  document.getElementById('pauseBtn').textContent = isPaused ? '▶ 再開' : '⏸ 一時停止';
-  document.getElementById('pauseBtn').style.background = isPaused ? 'var(--trial-bg)' : '';
-  document.getElementById('pauseStatus').textContent = isPaused ? `一時停止中 (${t.actual.pausedAt})` : '';
-  document.getElementById('actModal').classList.add('open');
-}
-function updateYjDiff(t){
-  const as=minToMs(t.actual.start),ae=minToMs(t.actual.end);
-  const planEndMin=t.startMin!=null?addWork(t.startMin,Math.round(t.hours*60)):null;
-  const el=document.getElementById('yjDiff');
-  if(as===null||ae===null||t.startMin===null){el.className='yj-diff yj-diff-none';el.textContent='実績を入力すると差異が表示されます';return}
-  const planMin=planEndMin-t.startMin;const actMin=ae-as;
-  const diff=actMin-planMin;
-  if(diff>0){el.className='yj-diff yj-diff-over';el.textContent=`⚠ 計画より ${Math.abs(diff)}分 超過（計画${planMin}分→実績${actMin}分）`}
-  else if(diff<0){el.className='yj-diff yj-diff-ok';el.textContent=`✓ 計画より ${Math.abs(diff)}分 早く完了（計画${planMin}分→実績${actMin}分）`}
-  else{el.className='yj-diff yj-diff-ok';el.textContent='✓ 計画通り完了'}
-}
-function stampNowModal(type){
-  const n=new Date();const v=`${p2(n.getHours())}:${p2(n.getMinutes())}`;
-  document.getElementById(type==='start'?'inActS':'inActE').value=v;
-  // リアルタイム差異更新
-  const t=getDate(curDate).find(x=>x.id===actTaskId);
-  if(t){t.actual[type]=v;updateYjDiff(t)}
-}
 function togglePauseDetail(id){
   // 予実パネルの一時停止ボタン
   const tasks=getDate(curDate);
