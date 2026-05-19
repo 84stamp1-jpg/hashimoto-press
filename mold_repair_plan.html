@@ -894,6 +894,9 @@ function renderGantt(){
   for(let h=8;h<=20;h++){const m=h*60;if(m<WORK_START||m>WORK_END)continue;glines.push(`<div class="gline h" style="left:${mx(m)}px"></div>`)}
   const bzs=BREAKS.map(b=>`<div class="bzone" style="left:${mx(b.s)}px;width:${dw(b.s,b.e)}px"></div>`).join('');
   const grid=`<div class="ggrid">${glines.join('')}${bzs}</div>`;
+  // 仕切り線（予定と実績の境界線）
+  const divLine=`<div style='position:absolute;left:0;right:0;top:34px;height:1px;background:var(--border);pointer-events:none;z-index:1'></div>`;
+  const gridWithDiv=grid+divLine;
 
   const tasks=getDate(curDate);
 
@@ -952,9 +955,6 @@ function renderGantt(){
     </div>`;
   }).join('');
 
-  // 仕切り線をgridに追加
-const divLine=`<div style='position:absolute;left:0;right:0;top:34px;height:1px;background:var(--border);pointer-events:none;z-index:1'></div>`;
-  const gridWithDiv=grid+divLine;
   cont.innerHTML=`<div class="ghdr"><div></div><div class="gruler" style="width:${tw}px">${ticks.join('')}</div></div>${rows}`;
 }
 
@@ -962,59 +962,68 @@ const divLine=`<div style='position:absolute;left:0;right:0;top:34px;height:1px;
 function renderDetail(){
   const tasks=getDate(curDate);
   const grid=document.getElementById('dgrid');
+  const dpDate=document.getElementById('dpDate');
+  if(dpDate) dpDate.textContent=curDate;
   if(!tasks.length){grid.innerHTML='<div class="empty">作業を割付けると表示されます</div>';return}
 
-  grid.innerHTML=tasks.map(t=>{
+  const html=tasks.map(t=>{
     const color=t.assignee==='matsumoto'?'var(--m)':'var(--n)';
     const planEndMin=t.startMin!=null?addWork(t.startMin,Math.round(t.hours*60)):null;
-    const tr=t.startMin!=null?`${fmtMin(t.startMin)}〜${fmtMin(planEndMin)}`:'未配置';
-    const planMinutes=t.startMin!=null?Math.round(t.hours*60):null;
+    const planStr=t.startMin!=null?fmtMin(t.startMin)+'〜'+fmtMin(planEndMin):'未配置';
+    const planMin=t.startMin!=null?Math.round(t.hours*60):null;
 
-    // 予実バー（超過時100%超表示）
-    const as=minToMs(t.actual.start),ae=minToMs(t.actual.end);
+    // 予実バー
+    const as=minToMs(t.actual.start), ae=minToMs(t.actual.end);
     let yjHtml='';
-    if(planMinutes&&as!==null){
+    if(planMin&&as!==null){
       const actMin=ae!==null?(ae-as):(new Date().getHours()*60+new Date().getMinutes()-as);
-      const rawPct=Math.round((actMin/planMinutes)*100);
-      const over=ae!==null&&actMin>planMinutes;
-      const overMin=over?actMin-planMinutes:0;
-      // バーは予定を基準に、実績が超過したら赤でオーバーフロー表示
-      const barPct=Math.min(100,Math.round((Math.min(actMin,planMinutes)/planMinutes)*100));
-      const overPct=over?Math.round((overMin/planMinutes)*100):0;
-      yjHtml=`<div class="yojitsu">
-        <div class="yj-bar" style="position:relative">
-          <div class="yj-plan" style="width:100%"></div>
-          <div class="yj-actual" style="width:${barPct}%;background:${over?'var(--danger)':'var(--ok)'}"></div>
-          ${over?`<div style="position:absolute;left:100%;top:0;bottom:0;width:${Math.min(overPct,50)}%;background:var(--danger);opacity:.7;border-radius:0 3px 3px 0"></div>`:''}
-        </div>
-        <span class="yj-label ${over?'yj-over':''}" title="${actMin}分 / 予定${planMinutes}分">
-          ${rawPct}%${over?` (+${overMin}分超過)`:''}
-        </span>
-      </div>`;
+      const rawPct=Math.round((actMin/planMin)*100);
+      const over=ae!==null&&actMin>planMin;
+      const overMin=over?actMin-planMin:0;
+      const barPct=Math.min(100,Math.round(Math.min(actMin,planMin)/planMin*100));
+      const barColor=over?'var(--danger)':'var(--ok)';
+      const overBar=over?'<div style="position:absolute;left:100%;top:0;bottom:0;width:'+Math.min(overMin/planMin*100,50)+'%;background:var(--danger);opacity:.7;border-radius:0 3px 3px 0"></div>':'';
+      const diffTxt=over?' (+'+overMin+'分超過)':'';
+      const lblCls=over?'yj-over':'';
+      yjHtml='<div class="yojitsu">'
+        +'<div class="yj-bar" style="position:relative">'
+        +'<div class="yj-plan" style="width:100%"></div>'
+        +'<div class="yj-actual" style="width:'+barPct+'%;background:'+barColor+'"></div>'
+        +overBar
+        +'</div>'
+        +'<span class="yj-label '+lblCls+'">'+rawPct+'%'+diffTxt+'</span>'
+        +'</div>';
     }
 
-    return`<div class="ditem" onclick="openActModal('${t.id}')">
-      <div class="dcolor" style="background:${color}"></div>
-      <div class="dinfo">
-        <div class="dname">${t.name}</div>
-        <div class="dmeta">${tr} / ${t.hours}H</div>
-        ${yjHtml}
-        <div class="actual-row" onclick="event.stopPropagation()">
-          <input class="ainput" id="as_${t.id}" placeholder="開始" value="${t.actual.start}"
-            onchange="setAct('${t.id}','start',this.value)"/>
-          <button class="sbtn sbtn-s" onclick="stampNow('${t.id}','start')">▶</button>
-          <button class="sbtn" id="pb_${t.id}" style="background:${t.actual.pausedAt?'var(--trial-bg)':'var(--warn-bg)'};color:${t.actual.pausedAt?'var(--ok)':'var(--warn)'};border:1px solid ${t.actual.pausedAt?'var(--trial-bd)':'#fde68a'}"
-            onclick="togglePauseDetail('${t.id}')">${t.actual.pausedAt?'▶再開':'⏸停止'}</button>
-          <input class="ainput" id="ae_${t.id}" placeholder="終了" value="${t.actual.end}"
-            onchange="setAct('${t.id}','end',this.value)"/>
-          <button class="sbtn sbtn-e" onclick="stampNow('${t.id}','end')">■</button>
-        </div>
-        ${(t.actual.pauses||[]).length?`<div style="font-size:9px;color:var(--text3);margin-top:2px">
-          停止:${(t.actual.pauses||[]).map(p=>p.from+'〜'+p.to).join(' / ')}
-        </div>`:''}
-      </div>
-    </div>`;
+    // 一時停止ボタン
+    const isPaused=!!t.actual.pausedAt;
+    const pauseBg=isPaused?'var(--trial-bg)':'var(--warn-bg)';
+    const pauseColor=isPaused?'var(--ok)':'var(--warn)';
+    const pauseBorder=isPaused?'var(--trial-bd)':'#fde68a';
+    const pauseLabel=isPaused?'▶再開':'⏸停止';
+
+    // 停止ログ
+    const pauses=t.actual.pauses||[];
+    const pauseLog=pauses.length>0
+      ?'<div style="font-size:9px;color:var(--text3);margin-top:2px">停止: '+pauses.map(p=>p.from+'〜'+p.to).join(' / ')+'</div>'
+      :'';
+
+    return '<div class="ditem" onclick="openActModal(''+t.id+'')"><div class="dcolor" style="background:'+color+'"></div><div class="dinfo">'
+      +'<div class="dname">'+t.name+'</div>'
+      +'<div class="dmeta">'+planStr+' / '+t.hours+'H</div>'
+      +yjHtml
+      +'<div class="actual-row" onclick="event.stopPropagation()">'
+      +'<input class="ainput" id="as_'+t.id+'" placeholder="開始" value="'+(t.actual.start||'')+'" onchange="setAct(''+t.id+'','start',this.value)"/>'
+      +'<button class="sbtn sbtn-s" onclick="stampNow(''+t.id+'','start')">▶</button>'
+      +'<button class="sbtn" id="pb_'+t.id+'" style="background:'+pauseBg+';color:'+pauseColor+';border:1px solid '+pauseBorder+'" onclick="togglePauseDetail(''+t.id+'')">'+pauseLabel+'</button>'
+      +'<input class="ainput" id="ae_'+t.id+'" placeholder="終了" value="'+(t.actual.end||'')+'" onchange="setAct(''+t.id+'','end',this.value)"/>'
+      +'<button class="sbtn sbtn-e" onclick="stampNow(''+t.id+'','end')">■</button>'
+      +'</div>'
+      +pauseLog
+      +'</div></div>';
   }).join('');
+
+  grid.innerHTML=html;
 }
 
 function stampNow(id,type){
