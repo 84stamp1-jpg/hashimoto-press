@@ -521,7 +521,7 @@ async function loadKintone(){
   document.getElementById('reqList').innerHTML='<div class="loading"><div class="spinner"></div>kintoneから取得中...</div>';
   // JSONP方式でCORSを回避
   const callbackName = 'kintoneCallback_' + Date.now();
-  const q = encodeURIComponent('ステータス not in ("完了") order by 日付_0 asc limit 100');
+  const q = encodeURIComponent('ステータス in ("依頼書発行","作業着手") order by 日付_0 asc limit 100');
   const url = `${GAS_URL}?app=${APP_ID}&query=${q}&callback=${callbackName}`;
 
   const timeout = setTimeout(()=>{
@@ -555,6 +555,11 @@ async function loadKintone(){
 }
 
 function importKintone(records){
+  // 完了系ステータスをJS側でも除外（kintoneクエリの漏れをカバー）
+  records = records.filter(r=>{
+    const st = r['ステータス']?.value||'';
+    return st==='依頼書発行' || st==='作業着手';
+  });
   requests=records.map(r=>{
     const hinban  = r['ルックアップ_1']?.value||'';
     const hinmei  = r['文字列__1行__0']?.value||'';    // 品名
