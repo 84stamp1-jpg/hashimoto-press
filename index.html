@@ -710,11 +710,18 @@ function renderBoard(){
             jpStr;
           // 2行目：段取り時間（標準比率付き）・作業開始・終了を品番列下に表示
           const setupParts2=[];
-          if(jSetupMin>0){
-            const stdSU=sets[id]||60;
-            const suR2=Math.round(jSetupMin/stdSU*100);
-            const suCol2=suR2<=100?'#27ae60':suR2<=125?'#e67e22':'#c0392b';
-            setupParts2.push('<span style="color:'+suCol2+';">🔧 段取 '+jSetupMin+'分／標準'+stdSU+'分 ('+suR2+'%)</span>');
+          {
+            const stdSU=sets[id]!==undefined?sets[id]:0;
+            if(jSetupMin>0){
+              // 実績あり：実績÷標準の比率を表示
+              const suR2=stdSU>0?Math.round(jSetupMin/stdSU*100):null;
+              const suCol2=suR2===null?'#999':suR2<=100?'#27ae60':suR2<=125?'#e67e22':'#c0392b';
+              const ratioStr=suR2!==null?' ('+suR2+'%)':'';
+              setupParts2.push('<span style="color:'+suCol2+';">🔧 段取 '+jSetupMin+'分／標準'+stdSU+'分'+ratioStr+'</span>');
+            } else {
+              // 実績なし：標準時間のみ表示（グレー）
+              setupParts2.push('<span style="color:#bbb;">🔧 標準 '+stdSU+'分</span>');
+            }
           }
           if(jWS) setupParts2.push('開始 '+jWS);
           if(jWE) setupParts2.push('終了 '+jWE);
