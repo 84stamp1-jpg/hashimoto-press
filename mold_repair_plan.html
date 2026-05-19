@@ -24,6 +24,8 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh}
 
+.act-bar-m{background:rgba(37,99,235,.3);border:1px solid var(--m-bd);color:var(--m)}
+.act-bar-n{background:rgba(234,108,10,.3);border:1px solid var(--n-bd);color:var(--n)}
 /* HEADER */
 header{background:var(--panel);border-bottom:1px solid var(--border);padding:0 16px;height:50px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:100;box-shadow:0 1px 6px rgba(0,0,0,.06)}
 .logo{font-size:14px;font-weight:700;display:flex;align-items:center;gap:5px;white-space:nowrap}
@@ -441,7 +443,7 @@ const TM={
   height: {label:'ハイト合わせ',hpu:4.0, pu:false},
   scrap:  {label:'スクラップ',  hpu:1.0, pu:true, extra:.5},
   maint:  {label:'定期メンテ',  hs:1.0,  hp:2.0,  isMaint:true},
-  custom: {label:'任意',        hpu:1.0, pu:true},
+  custom: {label:'任意（時間入力）', hpu:1.0, pu:true, isCustomH:true},
 };
 // 選択肢リスト（カード内セレクトに使用）
 const KUBUN_OPTIONS=[
@@ -478,17 +480,34 @@ function calcH(kubunInputs, moldType, trialSteps){
       work+=(moldType==='prog'?m.hp:m.hs)*Math.max(1,u);
     } else if(key==='scrap'){
       work+=u>0?m.hpu+(u-1)*m.extra:0;
+    } else if(m.isCustomH){
+      work+=u;  // customはunits自体が時間(H)
     } else if(m.pu){
-      work+=m.hpu*u;  // 箇所数0なら0H
+      work+=m.hpu*u;
     } else {
       work+=m.hpu;
     }
   });
-  // workが0かつtrialあり→搬入+トライのみ（トライ専用作業）
   const trial=trialSteps<=0?0:1.0+Math.max(0,trialSteps-1)*0.5;
   return Math.round((carry+work+trial)*10)/10;
 }
 function trialH(s){return s<=0?0:1.0+Math.max(0,s-1)*0.5}
+function calcHWithTrialH(kubunInputs, moldType, trialSteps, directTrialH){
+  const carry=moldType==='prog'?1.5:moldType==='none'?0:1.0;
+  let work=0;
+  (kubunInputs||[]).forEach(ki=>{
+    const key=ki.key||nk(ki.name);
+    const m=TM[key]||TM.custom;
+    const u=Math.max(0,ki.units||0);
+    if(m.isMaint){work+=(moldType==='prog'?m.hp:m.hs)*Math.max(1,u);}
+    else if(key==='scrap'){work+=u>0?m.hpu+(u-1)*m.extra:0;}
+    else if(m.isCustomH){work+=u;}  // custom: units=直接時間
+    else if(m.pu){work+=m.hpu*u;}
+    else{work+=m.hpu;}
+  });
+  const trial=directTrialH!=null?directTrialH:trialH(trialSteps||0);
+  return Math.round((carry+work+trial)*10)/10;
+}
 function unitH(ki,moldType){
   const key=ki.key||nk(ki.name);
   const m=TM[key]||TM.custom;
@@ -593,26 +612,27 @@ function importKintone(records){
       hinban, hinmei, client,
       process:[proc1,proc2].filter(Boolean).join(' / '),
       kubunInputs, moldType, trialSteps:1,
-      hours:calcH(kubunInputs,moldType,1),
+      hours:calcHWithTrialH(kubunInputs,moldType,1,null),
       deadline, status, note:noteRaw,
       assigned:false, assignee:null, source:'kintone',
       customMemo:'', extraH:0
     };
   });
   requests.sort((a,b)=>a.deadline.localeCompare(b.deadline));
+  syncAssignedState();
   renderRequestList();autoArrange(curDate);renderGantt();renderDetail();
 }
 
 function loadSample(){
   const t=todayStr(),t1=fmt(addDays(new Date(),1)),t2=fmt(addDays(new Date(),2));
   const base=[
-    {id:'1',hinban:'HB-2541',hinmei:'フランジブラケット',process:'プレスA/曲げ',kubunInputs:[{name:'バリ改修',units:2,key:'bari'}],moldType:'single',trialSteps:1,deadline:t,source:'sample'},
+    {id:'1',hinban:'HB-2541',hinmei:'フランジブラケット',process:'プレスA/曲げ',kubunInputs:[{name:'バリ改修',units:2,key:'bari'}],moldType:'single',trialSteps:1,deadline:t,kintoneNote:'成形工程でバリが多発。※TRY必要',source:'sample'},
     {id:'2',hinban:'HB-1832',hinmei:'サポートプレート',process:'プレスB',kubunInputs:[{name:'精度不良',units:1,key:'seido'}],moldType:'prog',trialSteps:2,deadline:t,source:'sample'},
     {id:'3',hinban:'HC-0921',hinmei:'ブラケットASSY',process:'順送プレス',kubunInputs:[{name:'スペア交換',units:3,key:'spare'},{name:'バリ改修',units:1,key:'bari'}],moldType:'prog',trialSteps:1,deadline:t1,source:'sample'},
     {id:'4',hinban:'HB-3310',hinmei:'ロアーアーム',process:'プレスC',kubunInputs:[{name:'耐久性不足',units:1,key:'taikyuu'}],moldType:'single',trialSteps:1,deadline:t1,source:'sample'},
     {id:'5',hinban:'HD-0112',hinmei:'カバープレート',process:'定期点検',kubunInputs:[{name:'定期メンテ',units:2,key:'maint'}],moldType:'prog',trialSteps:0,deadline:t2,source:'sample'},
   ];
-  requests=base.map(r=>({...r,hours:calcH(r.kubunInputs,r.moldType,r.trialSteps),assigned:false,assignee:null,note:''}));
+  requests=base.map(r=>({...r,hours:calcHWithTrialH(r.kubunInputs,r.moldType,r.trialSteps,null),assigned:false,assignee:null,note:''}));
   // 当日納期分を自動割付
   requests.filter(r=>r.deadline===t).forEach((r,i)=>{
     const assignee=i%2===0?'matsumoto':'matsunaga';
@@ -651,7 +671,8 @@ function renderRequestList(){
         <select class="kubun-sel" onchange="updateKubunKey('${r.id}',${idx},this.value)">
           ${KUBUN_OPTIONS.map(o=>`<option value="${o.k}" ${(ki.key||nk(ki.name))===o.k?'selected':''}>${o.label}</option>`).join('')}
         </select>
-        <input class="kcount" type="number" min="0" max="30" value="${ki.units||1}"
+        <input class="kcount" type="number" min="0" max="20" step="${(ki.key||nk(ki.name))==='custom'?0.25:1}" value="${ki.units||(ki.key||nk(ki.name))==='custom'?1.0:1}"
+          placeholder="${(ki.key||nk(ki.name))==='custom'?'時間H':'箇所数'}"
           onchange="updateKubunUnits('${r.id}',${idx},this.value)"/>
         <span class="khours" id="kh_${r.id}_${idx}">${totH}H</span>
         <button class="kdel" onclick="removeKubun('${r.id}',${idx})">✕</button>
@@ -668,7 +689,7 @@ function renderRequestList(){
         ${r.process?`<div class="cproc">${r.process}</div>`:''}
         ${r.client?`<div class="cproc" style="color:var(--accent);font-size:10px">🏭 ${r.client}</div>`:''}
         ${r.status?`<div class="cproc"><span style="font-size:9px;padding:1px 5px;border-radius:3px;background:var(--warn-bg);color:var(--warn);border:1px solid #fde68a">${r.status}</span></div>`:''}
-        ${r.note?`<div class="cproc" style="color:var(--text3);font-size:10px">📝 ${r.note.slice(0,45)}${r.note.length>45?'…':''}</div>`:''}
+        ${r.kintoneNote?`<div class="cproc" style="color:var(--text2);font-size:10px;font-style:italic">📋 ${r.kintoneNote.slice(0,60)}${r.kintoneNote.length>60?'…':''}</div>`:''}
         <div class="ctags">${tags}</div>
         <div class="cbot"><span class="ctime">⏱ ${r.hours}H</span>${dl?`<span class="cdl ${dlCls}">完了希望 ${dl}</span>`:''}</div>
       </div>
@@ -687,15 +708,15 @@ function renderRequestList(){
           <button class="add-kubun-btn" onclick="addKubun('${r.id}')">＋ 改修内容を追加</button>
         </div>
         <div class="trial-row">
-          <span class="tlabel">トライ工程数：</span>
-          <input class="kcount" type="number" min="0" max="5" value="${r.trialSteps||1}"
-            onchange="updateTrial('${r.id}',this.value)"/>
-          <span class="khours" id="th_${r.id}">${trialH(r.trialSteps||1)}H</span>
+          <span class="tlabel">トライ時間(H)：</span>
+          <input class="kcount" type="number" min="0" max="8" step="0.25" value="${r.trialH!=null?r.trialH:r.trialSteps>0?trialH(r.trialSteps):1.0}"
+            onchange="updateTrialH('${r.id}',this.value)" placeholder="0.25単位"/>
+          <span class="khours" id="th_${r.id}">${r.trialH!=null?r.trialH:trialH(r.trialSteps||1)}H</span>
         </div>
         <div class="frow">
           <label class="flabel">備考・任意メモ</label>
           <textarea class="custom-note" id="note_${r.id}" placeholder="例: 刃先欠け有り、寸法要確認"
-            onchange="updateNote('${r.id}',this.value)">${r.note||''}</textarea>
+            onchange="updateNote('${r.id}',this.value)">${r.customMemo||''}</textarea>
         </div>
         <div class="total-box">
           <span class="total-label">合計工数</span>
@@ -721,7 +742,8 @@ function updateKubunKey(rid,idx,val){
 }
 function updateKubunUnits(rid,idx,val){
   const r=requests.find(x=>x.id===rid);if(!r)return;
-  r.kubunInputs[idx].units=Math.max(0,parseInt(val)||0);
+  const isC=(r.kubunInputs[idx].key||nk(r.kubunInputs[idx].name))==='custom';
+  r.kubunInputs[idx].units=Math.max(0,isC?Math.round(parseFloat(val)*4)/4:parseInt(val)||0);
   refreshH(r);
 }
 function addKubun(rid){
@@ -746,9 +768,16 @@ function updateTrial(rid,val){
   const el=document.getElementById('th_'+rid);if(el)el.textContent=trialH(r.trialSteps)+'H';
   refreshH(r);
 }
-function updateNote(rid,val){const r=requests.find(x=>x.id===rid);if(r)r.note=val}
+function updateTrialH(rid,val){
+  const r=requests.find(x=>x.id===rid);if(!r)return;
+  r.trialH=Math.max(0,Math.round(parseFloat(val)*4)/4);
+  const el=document.getElementById('th_'+rid);if(el)el.textContent=r.trialH+'H';
+  refreshH(r);
+}
+function updateNote(rid,val){const r=requests.find(x=>x.id===rid);if(r)r.customMemo=val}
 function refreshH(r){
-  r.hours=calcH(r.kubunInputs,r.moldType,r.trialSteps);
+  const effectiveTrial=r.trialH!=null?r.trialH:null;
+  r.hours=calcHWithTrialH(r.kubunInputs,r.moldType,r.trialSteps,r.trialH);
   const el=document.getElementById('tot_'+r.id);if(el)el.textContent=r.hours+'H';
   // 単位表示更新
   (r.kubunInputs||[]).forEach((ki,idx)=>{
@@ -857,7 +886,7 @@ function renderGantt(){
 
       const rx=mx(t.startMin),rw=dw(t.startMin,repEnd);
       const res=[`<div class="gblock ${bc}" style="left:${rx}px;width:${rw}px"
-        onclick="openActModal('${t.id}')" title="${t.name}">
+        onclick="openActModal('${t.id}')" title="${t.name}" style="top:3px;height:30px">
         <div class="blabel">${t.name}</div>
         <div class="btime">${fmtMin(t.startMin)}〜${fmtMin(repEnd)}</div>
       </div>`];
@@ -865,28 +894,42 @@ function renderGantt(){
       if(t.trialSteps>0&&trialEnd>repEnd){
         const tx=mx(repEnd),ttw=dw(repEnd,trialEnd);
         res.push(`<div class="gblock btrial" style="left:${tx}px;width:${ttw}px"
-          onclick="openActModal('${t.id}')" title="${t.name} トライ">
+          onclick="openActModal('${t.id}')" title="${t.name} トライ" style="top:3px;height:30px">
           <div class="blabel">▶トライ</div>
           <div class="btime">${fmtMin(repEnd)}〜${fmtMin(trialEnd)}</div>
         </div>`);
       }
 
-      // 実績オーバーレイ
+      // 実績バー（下段）
       const as=minToMs(t.actual.start),ae=minToMs(t.actual.end);
+      const ay=35,ah=26; // 下段
       if(as!==null&&ae!==null&&ae>as){
-        const ox=mx(as),ow=dw(as,ae);
-        const oc=a==='matsumoto'?'actual-m':'actual-n';
-        res.push(`<div class="gblock-actual ${oc}" style="left:${ox}px;width:${ow}px" title="実績: ${t.actual.start}〜${t.actual.end}"></div>`);
+        const ox=mx(as),ow=Math.max(4,mx(ae)-mx(as));
+        const oc=a==='matsumoto'?'act-bar-m':'act-bar-n';
+        res.push(`<div class="${oc}" style="position:absolute;left:${ox}px;width:${ow}px;top:${ay}px;height:${ah}px;border-radius:4px;cursor:pointer;display:flex;align-items:center;padding:0 4px;overflow:hidden"
+          onclick="openActModal('${t.id}')" title="実績 ${t.actual.start}〜${t.actual.end}">
+          <span style="font-size:8px;font-weight:700;white-space:nowrap;overflow:hidden">実 ${t.actual.start}〜${t.actual.end}</span>
+        </div>`);
+      } else {
+        // 実績未入力：ストライプ
+        const planEnd=trialEnd>repEnd?trialEnd:repEnd;
+        const ox=mx(t.startMin),ow=Math.max(4,mx(planEnd)-mx(t.startMin));
+        res.push(`<div style="position:absolute;left:${ox}px;width:${ow}px;top:${ay}px;height:${ah}px;border-radius:4px;cursor:pointer;
+          background:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(0,0,0,.04) 3px,rgba(0,0,0,.04) 6px);
+          border:1px dashed var(--border2)" onclick="openActModal('${t.id}')" title="実績未入力"></div>`);
       }
       return res;
     });
 
     return`<div class="grow">
-      <div class="glabel ${lc}">${lbl}</div>
-      <div class="gtrack" style="width:${tw}px">${grid}${blocks.join('')}</div>
+      <div class="glabel ${lc}" style="min-height:68px">${lbl}</div>
+      <div class="gtrack" style="width:${tw}px;height:68px">${gridWithDiv}${blocks.join('')}</div>
     </div>`;
   }).join('');
 
+  // 仕切り線をgridに追加
+const divLine=`<div style='position:absolute;left:0;right:0;top:34px;height:1px;background:var(--border);pointer-events:none;z-index:1'></div>`;
+const gridWithDiv=grid+divLine;
   cont.innerHTML=`<div class="ghdr"><div></div><div class="gruler" style="width:${tw}px">${ticks.join('')}</div></div>${rows}`;
 }
 
@@ -902,19 +945,26 @@ function renderDetail(){
     const tr=t.startMin!=null?`${fmtMin(t.startMin)}〜${fmtMin(planEndMin)}`:'未配置';
     const planMinutes=t.startMin!=null?Math.round(t.hours*60):null;
 
-    // 予実バー
+    // 予実バー（超過時100%超表示）
     const as=minToMs(t.actual.start),ae=minToMs(t.actual.end);
     let yjHtml='';
     if(planMinutes&&as!==null){
       const actMin=ae!==null?(ae-as):(new Date().getHours()*60+new Date().getMinutes()-as);
-      const pct=Math.min(100,Math.round((actMin/planMinutes)*100));
+      const rawPct=Math.round((actMin/planMinutes)*100);
       const over=ae!==null&&actMin>planMinutes;
+      const overMin=over?actMin-planMinutes:0;
+      // バーは予定を基準に、実績が超過したら赤でオーバーフロー表示
+      const barPct=Math.min(100,Math.round((Math.min(actMin,planMinutes)/planMinutes)*100));
+      const overPct=over?Math.round((overMin/planMinutes)*100):0;
       yjHtml=`<div class="yojitsu">
-        <div class="yj-bar">
+        <div class="yj-bar" style="position:relative">
           <div class="yj-plan" style="width:100%"></div>
-          <div class="yj-actual" style="width:${pct}%;background:${over?'var(--danger)':'var(--m)'}"></div>
+          <div class="yj-actual" style="width:${barPct}%;background:${over?'var(--danger)':'var(--ok)'}"></div>
+          ${over?`<div style="position:absolute;left:100%;top:0;bottom:0;width:${Math.min(overPct,50)}%;background:var(--danger);opacity:.7;border-radius:0 3px 3px 0"></div>`:''}
         </div>
-        <span class="yj-label ${over?'yj-over':''}">${pct}%</span>
+        <span class="yj-label ${over?'yj-over':''}" title="${actMin}分 / 予定${planMinutes}分">
+          ${rawPct}%${over?` (+${overMin}分超過)`:''}
+        </span>
       </div>`;
     }
 
@@ -928,10 +978,15 @@ function renderDetail(){
           <input class="ainput" id="as_${t.id}" placeholder="開始" value="${t.actual.start}"
             onchange="setAct('${t.id}','start',this.value)"/>
           <button class="sbtn sbtn-s" onclick="stampNow('${t.id}','start')">▶</button>
+          <button class="sbtn" id="pb_${t.id}" style="background:${t.actual.pausedAt?'var(--trial-bg)':'var(--warn-bg)'};color:${t.actual.pausedAt?'var(--ok)':'var(--warn)'};border:1px solid ${t.actual.pausedAt?'var(--trial-bd)':'#fde68a'}"
+            onclick="togglePauseDetail('${t.id}')">${t.actual.pausedAt?'▶再開':'⏸停止'}</button>
           <input class="ainput" id="ae_${t.id}" placeholder="終了" value="${t.actual.end}"
             onchange="setAct('${t.id}','end',this.value)"/>
           <button class="sbtn sbtn-e" onclick="stampNow('${t.id}','end')">■</button>
         </div>
+        ${(t.actual.pauses||[]).length?`<div style="font-size:9px;color:var(--text3);margin-top:2px">
+          停止:${(t.actual.pauses||[]).map(p=>p.from+'〜'+p.to).join(' / ')}
+        </div>`:''}
       </div>
     </div>`;
   }).join('');
@@ -988,6 +1043,21 @@ function stampNowModal(type){
   // リアルタイム差異更新
   const t=getDate(curDate).find(x=>x.id===actTaskId);
   if(t){t.actual[type]=v;updateYjDiff(t)}
+}
+function togglePauseDetail(id){
+  // 予実パネルの一時停止ボタン
+  const tasks=getDate(curDate);
+  const t=tasks.find(x=>x.id===id);if(!t)return;
+  const now=new Date();
+  const v=`${p2(now.getHours())}:${p2(now.getMinutes())}`;
+  if(!t.actual.pauses)t.actual.pauses=[];
+  if(t.actual.pausedAt){
+    t.actual.pauses.push({from:t.actual.pausedAt,to:v});
+    t.actual.pausedAt=null;
+  } else {
+    t.actual.pausedAt=v;
+  }
+  saveTasks();renderDetail();renderGantt();
 }
 function togglePause(){
   const t=getDate(curDate).find(x=>x.id===actTaskId);if(!t)return;
@@ -1125,7 +1195,6 @@ function loadSavedTasks(){
     const saved = localStorage.getItem(STORAGE_KEY);
     if(saved){
       const parsed = JSON.parse(saved);
-      // 今日以降のデータのみ復元
       const today = todayStr();
       Object.keys(parsed).forEach(ds=>{
         if(ds >= today) tasksByDate[ds] = parsed[ds];
@@ -1133,6 +1202,16 @@ function loadSavedTasks(){
       console.log('計画を復元しました');
     }
   }catch(e){ console.log('load error:',e); }
+}
+
+// kintone読込後にlocalStorageの割付状態を反映
+function syncAssignedState(){
+  Object.values(tasksByDate).forEach(tasks=>{
+    (tasks||[]).forEach(t=>{
+      const r=requests.find(x=>x.id===t.reqId);
+      if(r){ r.assigned=true; r.assignee=t.assignee; }
+    });
+  });
 }
 
 function clearSavedTasks(){
