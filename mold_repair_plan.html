@@ -289,7 +289,7 @@ header{background:var(--panel);border-bottom:1px solid var(--border);padding:0 1
         <div class="f2col">
           <div class="frow"><label class="flabel">型種別</label>
             <select class="finput" id="mMold"><option value="single">単発</option><option value="prog">順送(PRG)</option></select></div>
-          <div class="frow"><label class="flabel">納期</label><input class="finput" id="mDL" type="date"/></div>
+          <div class="frow"><label class="flabel">完了希望日</label><input class="finput" id="mDL" type="date"/></div>
         </div>
         <div class="frow"><label class="flabel">品名（任意）</label><input class="finput" id="mHinmei" placeholder="例: フランジブラケット"/></div>
         <button class="btn btn-primary" style="width:100%;margin-top:4px" onclick="addManual()">追加</button>
@@ -520,7 +520,8 @@ function shiftWeek(dir){weekStart=addDays(weekStart,dir*7);buildDateNav()}
 async function loadKintone(){
   document.getElementById('reqList').innerHTML='<div class="loading"><div class="spinner"></div>kintoneから取得中...</div>';
   try{
-    const q=encodeURIComponent('order by $id asc limit 50');
+    // ステータスが「完了」以外を取得、完了希望日(日付_0)昇順
+    const q=encodeURIComponent('ステータス not in ("完了") order by 日付_0 asc limit 100');
     const res=await fetch(`${GAS_URL}?app=${APP_ID}&query=${q}`);
     if(!res.ok) throw new Error('HTTP '+res.status);
     const data=await res.json();
@@ -531,22 +532,31 @@ async function loadKintone(){
 
 function importKintone(records){
   requests=records.map(r=>{
-    const hinban=r['ルックアップ_1']?.value||'';
-    const hinmei=r['文字列__1行__0']?.value||'';
-    const proc1=r['ドロップダウン_10']?.value||'';
-    const proc2=r['ドロップダウン_11']?.value||'';
-    const kubunRaw=(r['複数選択']?.value||[]);
-    const deadline=r['納期']?.value||todayStr();
-    const moldType=(r['型種別']?.value||'').includes('順送')?'prog':'single';
+    const hinban  = r['ルックアップ_1']?.value||'';
+    const hinmei  = r['文字列__1行__0']?.value||'';    // 品名
+    const client  = r['文字列__1行__1']?.value||'';    // 得意先
+    const proc1   = r['ドロップダウン_10']?.value||''; // 工程名1
+    const proc2   = r['ドロップダウン_11']?.value||''; // 工程名2
+    const kubunRaw= r['複数選択']?.value||[];
+    const deadline= r['日付_0']?.value||todayStr();    // 完了希望日
+    const status  = r['ステータス']?.value||'';
+    const noteRaw = r['文字列__複数行__1']?.value||''; // 改修内容メモ
+    // 型種別: ドロップダウンフィールド
+    const moldTypeVal = r['ドロップダウン']?.value||'';
+    const moldType = moldTypeVal.includes('順送')||moldTypeVal.includes('PRG')?'prog':'single';
+
     const kubunInputs=kubunRaw.length>0
-      ?kubunRaw.map(k=>({name:k,units:1,key:nk(k)}))
-      :[{name:'作業',units:1,key:'custom'}];
+      ?kubunRaw.map(k=>({name:k,units:1,key:nk(k),customH:''}))
+      :[{name:'作業',units:1,key:'custom',customH:''}];
     return{
       id:r.$id?.value||String(Math.random()),
-      hinban,hinmei,process:[proc1,proc2].filter(Boolean).join(' / '),
-      kubunInputs,moldType,trialSteps:1,
+      hinban, hinmei, client,
+      process:[proc1,proc2].filter(Boolean).join(' / '),
+      kubunInputs, moldType, trialSteps:1,
       hours:calcH(kubunInputs,moldType,1),
-      deadline,assigned:false,assignee:null,source:'kintone',note:''
+      deadline, status, note:noteRaw,
+      assigned:false, assignee:null, source:'kintone',
+      customMemo:'', extraH:0
     };
   });
   requests.sort((a,b)=>a.deadline.localeCompare(b.deadline));
@@ -616,8 +626,11 @@ function renderRequestList(){
           ${src}${amark}
         </div>
         ${r.process?`<div class="cproc">${r.process}</div>`:''}
+        ${r.client?`<div class="cproc" style="color:var(--accent);font-size:10px">🏭 ${r.client}</div>`:''}
+        ${r.status?`<div class="cproc"><span style="font-size:9px;padding:1px 5px;border-radius:3px;background:var(--warn-bg);color:var(--warn);border:1px solid #fde68a">${r.status}</span></div>`:''}
+        ${r.note?`<div class="cproc" style="color:var(--text3);font-size:10px">📝 ${r.note.slice(0,45)}${r.note.length>45?'…':''}</div>`:''}
         <div class="ctags">${tags}</div>
-        <div class="cbot"><span class="ctime">⏱ ${r.hours}H</span>${dl?`<span class="cdl ${dlCls}">納期 ${dl}</span>`:''}</div>
+        <div class="cbot"><span class="ctime">⏱ ${r.hours}H</span>${dl?`<span class="cdl ${dlCls}">完了希望 ${dl}</span>`:''}</div>
       </div>
       <div class="card-det" onclick="event.stopPropagation()">
         <div class="det-sec">工数積算</div>
