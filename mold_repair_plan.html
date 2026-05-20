@@ -81,7 +81,9 @@ header{background:var(--panel);border-bottom:1px solid var(--border);padding:0 1
 .tag-custom{background:var(--custom-bg);color:var(--custom);border-color:var(--custom-bd)}
 .cbot{display:flex;align-items:center;gap:7px;padding-left:19px}
 .ctime{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--accent)}
-.cdl{font-size:10px;color:var(--text2);margin-left:auto}
+.cdl{font-size:10px;color:var(--text2)}
+.cdl-urgent{color:var(--danger);font-weight:700}
+.cdl-near{color:var(--warn);font-weight:700}
 .cdl-u{color:var(--danger);font-weight:600}
 .cdl-n{color:var(--warn);font-weight:600}
 
@@ -167,8 +169,8 @@ header{background:var(--panel);border-bottom:1px solid var(--border);padding:0 1
 .bn{background:var(--n-bg);border-color:var(--n-bd)}
 .btrial{background:var(--trial-bg);border-color:var(--trial-bd)}
 .bcustom{background:var(--custom-bg);border-color:var(--custom-bd)}
-.blabel{font-size:9px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.3}
-.btime{font-family:var(--mono);font-size:8px;white-space:nowrap}
+.blabel{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4}
+.btime{font-family:var(--mono);font-size:10px;white-space:nowrap;opacity:.9}
 .bm .blabel,.bm .btime{color:var(--m)}
 .bn .blabel,.bn .btime{color:var(--n)}
 .btrial .blabel,.btrial .btime{color:var(--trial)}
@@ -659,6 +661,8 @@ function importKintone(records){
     const proc2   = r['ドロップダウン_11']?.value||''; // 工程名2
     const kubunRaw= r['複数選択']?.value||[];
     const deadline= r['日付_0']?.value||todayStr();    // 完了希望日
+    const createdRaw = r['作成日時']?.value||'';       // 依頼日
+    const createdDate = createdRaw?createdRaw.slice(0,10):''; // YYYY-MM-DD
     const status  = r['ステータス']?.value||'';
     const noteRaw = r['文字列__複数行__1']?.value||''; // 改修内容メモ
     // 型種別: ドロップダウンフィールド
@@ -674,7 +678,7 @@ function importKintone(records){
       process:[proc1,proc2].filter(Boolean).join(' / '),
       kubunInputs, moldType, trialSteps:1,
       hours:calcHWithTrialH(kubunInputs,moldType,1,null),
-      deadline, status, kintoneNote:noteRaw, note:'',
+      deadline, status, createdDate, kintoneNote:noteRaw, note:'',
       assigned:false, assignee:null, source:'kintone',
       customMemo:'', extraH:0
     };
@@ -727,6 +731,8 @@ function renderRequestList(){
 
   document.getElementById('reqList').innerHTML=displayReqs.map(r=>{
     const dl=r.deadline,dlCls=dl<today?'cdl-u':dl===today?'cdl-n':'';
+    const tomorrow=fmt(addDays(new Date(),1));
+    const urgencyIcon=dl<today?'🔥':dl===today?'🔥':dl===tomorrow?'⚡':'';
     const tags=(r.kubunInputs||[]).map(ki=>`<span class="${tagCls(ki.name)}">${ki.name}</span>`).join('');
     const src=`<span class="src-tag src-${r.source}">${r.source}</span>`;
     const isSel=selReqId===r.id;
@@ -775,6 +781,13 @@ function renderRequestList(){
         ${r.client?'<div class="cproc" style="color:var(--accent);font-size:10px">🏭 '+r.client+'</div>':''}
         ${r.status?'<div class="cproc"><span style="font-size:9px;padding:1px 5px;border-radius:3px;background:var(--warn-bg);color:var(--warn);border:1px solid #fde68a">'+r.status+'</span></div>':''}
         ${r.kintoneNote?'<div style="margin:3px 0 4px 0;padding:4px 8px;background:#f0f4ff;border-left:3px solid var(--accent);border-radius:0 4px 4px 0;font-size:10px;color:var(--text2);line-height:1.4">📋 '+r.kintoneNote.slice(0,80)+(r.kintoneNote.length>80?'…':'')+'</div>':''}
+        <div class="cbot">
+          <span class="ctime">⏱ ${r.hours}H</span>
+          <div style="margin-left:auto;text-align:right">
+            ${dl?'<div class="cdl '+dlCls+'" style="font-size:11px;font-weight:700">'+urgencyIcon+'完了希望: '+dl+'</div>':''}
+            ${r.createdDate?'<div style="font-size:9px;color:var(--text3)">依頼日: '+r.createdDate+'</div>':''}
+          </div>
+        </div>
       </div>
       <div class="card-det" onclick="event.stopPropagation()">
         <div class="det-sec">工数積算</div>
