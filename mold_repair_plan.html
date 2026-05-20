@@ -142,15 +142,16 @@ header{background:var(--panel);border-bottom:1px solid var(--border);padding:0 1
 .legdot{width:10px;height:10px;border-radius:3px}
 
 /* GANTT */
-.gwrap{flex:1;overflow:auto;padding:12px 14px;overflow-x:auto;overflow-y:hidden}
+.gwrap{flex:1;overflow-x:auto;overflow-y:auto;padding:10px 12px;scroll-behavior:smooth}
 .gwrap::-webkit-scrollbar{height:6px;width:4px}
 .gwrap::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
 .gcont{min-width:820px}
-.ghdr{display:grid;grid-template-columns:72px 1fr;margin-bottom:5px}
+.ghdr{display:flex;margin-bottom:5px;position:sticky;top:0;z-index:11;background:var(--bg)}
+.ghdr>div:first-child{width:78px;min-width:78px;flex-shrink:0}
 .gruler{position:relative;height:20px}
 .gtick{position:absolute;top:0;font-family:var(--mono);font-size:10px;color:var(--text3);transform:translateX(-50%);white-space:nowrap}
 .grow{display:grid;grid-template-columns:72px 1fr;margin-bottom:6px}
-.glabel{display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border-radius:6px 0 0 6px;padding:3px;min-height:52px;letter-spacing:.03em}
+.glabel{display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border-radius:6px 0 0 6px;padding:3px;min-height:90px;letter-spacing:.03em;position:sticky;left:0;z-index:10;width:78px;min-width:78px;flex-shrink:0;box-shadow:2px 0 4px rgba(0,0,0,.06)}
 .lm{background:var(--m-bg);color:var(--m);border:1px solid var(--m-bd);border-right:none}
 .ln{background:var(--n-bg);color:var(--n);border:1px solid var(--n-bd);border-right:none}
 .gtrack{position:relative;background:var(--panel);border:1px solid var(--border);border-radius:0 6px 6px 0;min-height:52px;box-shadow:var(--shadow)}
@@ -962,12 +963,11 @@ function getDate(ds){return tasksByDate[ds]||[]}
 function renderGantt(){
   const cont=document.getElementById('gcont');
   const wrap=cont?cont.parentElement:document.querySelector('.gwrap');
-  // ガント幅: 17時まで画面いっぱい（gwrapの幅 - ラベル幅72px）
+  // ガント幅: 17:10（休憩終了）まで画面いっぱい
   const wrapW=(wrap?wrap.getBoundingClientRect().width:800);
-  const viewW=Math.max(500, wrapW-78);
-  // 17:00までの分数でピクセル計算
-  const VIEW_END=17*60;  // 17時
-  const VIEW_MIN=VIEW_END-WORK_START;  // 8:10〜17:00 = 530分
+  const viewW=Math.max(500, wrapW-82);  // ラベル幅分を引く
+  const VIEW_END=17*60+10;  // 17:10（休憩終了）
+  const VIEW_MIN=VIEW_END-WORK_START;  // 8:10〜17:10 = 540分
   const HOUR_PX=Math.floor(viewW/VIEW_MIN*60);  // 1時間のピクセル数
   const tw=(WORK_END-WORK_START)/60*HOUR_PX;  // 全体幅（20時まで）
   const mx=m=>(Math.max(0,m-WORK_START)/TOTAL_MIN)*tw;
@@ -1003,7 +1003,7 @@ function renderGantt(){
       const bc=a==='matsumoto'?'bm':'bn';
 
       const rx=mx(t.startMin),rw=dw(t.startMin,repEnd);
-      const res=[`<div class="gblock ${bc}${blockClass}" style="left:${rx}px;width:${rw}px;top:2px;height:32px${blockStyle}"
+      const res=[`<div class="gblock ${bc}${blockClass}" style="left:${rx}px;width:${rw}px;top:2px;height:42px${blockStyle}"
         onclick="openActModal('${t.id}')" title="${t.name}">
         <div class="blabel">${t.name}</div>
         <div class="btime">${fmtMin(t.startMin)}〜${fmtMin(repEnd)}</div>
@@ -1011,7 +1011,7 @@ function renderGantt(){
 
       if(t.trialSteps>0&&trialEnd>repEnd){
         const tx=mx(repEnd),ttw=dw(repEnd,trialEnd);
-        res.push(`<div class="gblock btrial${blockClass}" style="left:${tx}px;width:${ttw}px;top:2px;height:32px${blockStyle}"
+        res.push(`<div class="gblock btrial${blockClass}" style="left:${tx}px;width:${ttw}px;top:2px;height:42px${blockStyle}"
           onclick="openActModal('${t.id}')" title="${t.name} トライ">
           <div class="blabel">▶トライ</div>
           <div class="btime">${fmtMin(repEnd)}〜${fmtMin(trialEnd)}</div>
@@ -1020,7 +1020,7 @@ function renderGantt(){
 
       // 実績バー（下段）
       const as=minToMs(t.actual.start),ae=minToMs(t.actual.end);
-      const ay=37,ah=28;
+      const ay=48,ah=36;
       const planTotalMin=Math.round(t.hours*60);
       if(as!==null){
         // 作業中（開始のみ）または完了（開始+終了）
@@ -1058,8 +1058,8 @@ function renderGantt(){
     });
 
     return`<div class="grow">
-      <div class="glabel ${lc}" style="min-height:72px">${lbl}</div>
-      <div class="gtrack" style="width:${tw}px;height:72px">${gridWithDiv}${blocks.join('')}</div>
+      <div class="glabel ${lc}" style="min-height:90px;width:78px;min-width:78px;flex-shrink:0">${lbl}</div>
+      <div class="gtrack" style="width:${tw}px;height:90px">${gridWithDiv}${blocks.join('')}</div>
     </div>`;
   }).join('');
 
