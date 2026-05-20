@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型改修計画表</title>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap');
 :root{
@@ -420,6 +422,56 @@ header{background:var(--panel);border-bottom:1px solid var(--border);padding:0 1
 
 <script>
 // ===== CONFIG =====
+// ===== Firebase設定 =====
+const FB_URL='https://hashimoto-press-default-rtdb.asia-southeast1.firebasedatabase.app';
+const FB_PATH='/moldRepairPlan/tasks';
+let fbApp=null, fbDb=null, fbRef=null, fbListener=null;
+
+function initFirebase(){
+  try {
+    if(!firebase.apps.length){
+      fbApp = firebase.initializeApp({databaseURL: FB_URL});
+    } else {
+      fbApp = firebase.apps[0];
+    }
+    fbDb = firebase.database(fbApp);
+    fbRef = fbDb.ref(FB_PATH);
+    // リアルタイム受信
+    fbRef.on('value', snap=>{
+      const data = snap.val();
+      if(data){
+        // 3日以内のデータのみ取り込み
+        const cutoff=fmt(addDays(new Date(),-3));
+        Object.keys(data).forEach(ds=>{
+          if(ds>=cutoff) tasksByDate[ds]=data[ds];
+        });
+        // localStorageにも保存
+        try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(tasksByDate)); }catch(e){}
+        renderGantt(); renderDetail();
+        // requestsのassigned状態を同期
+        if(requests.length) syncAssignedState();
+      }
+    });
+    console.log('Firebase接続OK');
+  } catch(e) {
+    console.log('Firebase初期化失敗:', e);
+  }
+}
+
+function saveTasksToFirebase(){
+  if(!fbRef){ saveTasksToFirebase(); return; }
+  // 3日以内のみ保存
+  const cutoff=fmt(addDays(new Date(),-3));
+  const filtered={};
+  Object.keys(tasksByDate).forEach(ds=>{
+    if(ds>=cutoff) filtered[ds]=tasksByDate[ds];
+  });
+  tasksByDate=filtered;
+  fbRef.set(filtered).catch(e=>console.log('Firebase保存失敗:',e));
+  // localStorageにもバックアップ
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered)); }catch(e){}
+}
+
 const GAS_URL='https://script.google.com/macros/s/AKfycbyVyBCDB--oV8YUQhBIM-PoS9MMkUheYinHAl_GXArNWyoe9JXJG8MR0XVdNrf7SvaPZQ/exec';
 const APP_ID=6;
 const WORK_START=8*60+10,WORK_END=20*60,TOTAL_MIN=WORK_END-WORK_START;
@@ -844,7 +896,7 @@ function assignTo(rid,assignee){
   const r=requests.find(x=>x.id===rid);if(!r||r.assigned)return;
   pushTask(r,assignee,curDate);
   r.assigned=true;r.assignee=assignee;
-  autoArrange(curDate);saveTasks();selReqId=null;
+  autoArrange(curDate);saveTasksToFirebase();selReqId=null;
   renderRequestList();renderGantt();renderDetail();
 }
 function autoAll(){
@@ -856,7 +908,7 @@ function autoAll(){
     pushTask(r,a,curDate);r.assigned=true;r.assignee=a;
   });
   autoArrange(curDate);
-  saveTasks();
+  saveTasksToFirebase();
   // renderを非同期で実行してUIフリーズを防止
   requestAnimationFrame(()=>{
     renderRequestList();
@@ -899,7 +951,9 @@ function getDate(ds){return tasksByDate[ds]||[]}
 function renderGantt(){
   const cont=document.getElementById('gcont');
   const wrap=cont.parentElement;
-  const tw=Math.max(600,wrap.getBoundingClientRect().width-72-28-20);
+  // ガントは固定幅でスクロール対応（1時間=75px）
+  const HOUR_PX=75;
+  const tw=(WORK_END-WORK_START)/60*HOUR_PX;  // 11h50m分
   const mx=m=>(Math.max(0,m-WORK_START)/TOTAL_MIN)*tw;
   const dw=(s,e)=>Math.max(4,mx(e)-mx(s));
 
@@ -933,7 +987,7 @@ function renderGantt(){
       const bc=a==='matsumoto'?'bm':'bn';
 
       const rx=mx(t.startMin),rw=dw(t.startMin,repEnd);
-      const res=[`<div class="gblock ${bc}${blockClass}" style="left:${rx}px;width:${rw}px;top:3px;height:30px${blockStyle}"
+      const res=[`<div class="gblock ${bc}${blockClass}" style="left:${rx}px;width:${rw}px;top:2px;height:32px${blockStyle}"
         onclick="openActModal('${t.id}')" title="${t.name}">
         <div class="blabel">${t.name}</div>
         <div class="btime">${fmtMin(t.startMin)}〜${fmtMin(repEnd)}</div>
@@ -941,7 +995,7 @@ function renderGantt(){
 
       if(t.trialSteps>0&&trialEnd>repEnd){
         const tx=mx(repEnd),ttw=dw(repEnd,trialEnd);
-        res.push(`<div class="gblock btrial${blockClass}" style="left:${tx}px;width:${ttw}px;top:3px;height:30px${blockStyle}"
+        res.push(`<div class="gblock btrial${blockClass}" style="left:${tx}px;width:${ttw}px;top:2px;height:32px${blockStyle}"
           onclick="openActModal('${t.id}')" title="${t.name} トライ">
           <div class="blabel">▶トライ</div>
           <div class="btime">${fmtMin(repEnd)}〜${fmtMin(trialEnd)}</div>
@@ -950,21 +1004,21 @@ function renderGantt(){
 
       // 実績バー（下段）
       const as=minToMs(t.actual.start),ae=minToMs(t.actual.end);
-      const ay=35,ah=26;
+      const ay=37,ah=28;
       const planTotalMin=Math.round(t.hours*60);
       if(as!==null){
         // 作業中（開始のみ）または完了（開始+終了）
         const dispEnd=ae!==null?ae:new Date().getHours()*60+new Date().getMinutes();
         const actMin=dispEnd-as;
         const ox=mx(as);
-        const ow=Math.max(6,ae!==null?mx(ae)-mx(as):mx(dispEnd)-mx(as));
+        const ow=Math.max(30,ae!==null?mx(ae)-mx(as):mx(dispEnd)-mx(as));
         const oc=a==='matsumoto'?'act-bar-m':'act-bar-n';
         // 差異計算（予定終了 vs 実績終了）
         const planEndMin=addWork(t.startMin,planTotalMin);
         const diffMin=ae!==null?ae-planEndMin:null;
         const diffTxt=diffMin===null?'作業中':diffMin===0?'±0':diffMin>0?'+'+diffMin+'分遅':diffMin+'分早';
         const diffColor=diffMin===null?'#6b7394':diffMin>5?'var(--danger)':diffMin<-5?'var(--ok)':'var(--text2)';
-        const shortName=t.name.length>10?t.name.slice(0,10)+'…':t.name;
+        const shortName=t.name;  // 幅に応じてoverflowで制御
         const actBarDiv=document.createElement('div');
         actBarDiv.className=oc;
         actBarDiv.style.cssText='position:absolute;left:'+ox+'px;width:'+ow+'px;top:'+ay+'px;height:'+ah+'px;border-radius:4px;cursor:pointer;display:flex;align-items:center;padding:0 5px;overflow:hidden;gap:4px';
@@ -988,8 +1042,8 @@ function renderGantt(){
     });
 
     return`<div class="grow">
-      <div class="glabel ${lc}" style="min-height:68px">${lbl}</div>
-      <div class="gtrack" style="width:${tw}px;height:68px">${gridWithDiv}${blocks.join('')}</div>
+      <div class="glabel ${lc}" style="min-height:72px">${lbl}</div>
+      <div class="gtrack" style="width:${tw}px;height:72px">${gridWithDiv}${blocks.join('')}</div>
     </div>`;
   }).join('');
 
@@ -1047,9 +1101,9 @@ function renderDetail(){
 
     const ds=(t.actual?.start&&t.actual?.end)?'done':(t.actual?.start&&!t.actual?.end)?'working':(t.actual?.status||'pending');
     const dborder=ds==='working'
-      ?'border-left:4px solid var(--danger);background:linear-gradient(135deg,rgba(220,38,38,.04),rgba(220,38,38,.01));box-shadow:0 2px 8px rgba(220,38,38,.12)'
+      ?'border:2px solid var(--danger);border-radius:7px;background:linear-gradient(135deg,rgba(220,38,38,.05),rgba(220,38,38,.01));box-shadow:0 0 0 3px rgba(220,38,38,.1),0 2px 8px rgba(220,38,38,.15)'
       :ds==='done'
-      ?'opacity:.5;filter:grayscale(.2)'
+      ?'opacity:.45;filter:grayscale(.3)'
       :'';
     html+='<div class="ditem" onclick="openActModal(\''+tid+'\')" style="cursor:pointer;'+dborder+'">'
       +'<div class="dcolor" style="background:'+color+'"></div>'
@@ -1077,7 +1131,7 @@ function setAct(id,type,val){
   // 状態更新
   if(type==='start') t.actual.status='working';
   if(type==='end')   t.actual.status='done';
-  saveTasks();renderGantt();renderDetail();
+  saveTasksToFirebase();renderGantt();renderDetail();
 }
 function stampNow(id,type){
   const n=new Date();
@@ -1089,7 +1143,7 @@ function stampNow(id,type){
   if(type==='end')   t.actual.status='done';
   const el=document.getElementById((type==='start'?'as_':'ae_')+id);
   if(el)el.value=v;
-  saveTasks();renderGantt();renderDetail();
+  saveTasksToFirebase();renderGantt();renderDetail();
 }
 function togglePauseDetail(id){
   // 予実パネルの一時停止ボタン
@@ -1104,7 +1158,7 @@ function togglePauseDetail(id){
   } else {
     t.actual.pausedAt=v;
   }
-  saveTasks();renderDetail();renderGantt();
+  saveTasksToFirebase();renderDetail();renderGantt();
 }
 function togglePause(){
   const t=getDate(curDate).find(x=>x.id===actTaskId);if(!t)return;
@@ -1126,7 +1180,7 @@ function togglePause(){
     document.getElementById('pauseStatus').textContent=`一時停止中 (${v})`;
   }
   renderPauseLog(t);
-  saveTasks();
+  saveTasksToFirebase();
 }
 function renderPauseLog(t){
   const pauses=t.actual.pauses||[];
@@ -1200,7 +1254,7 @@ function saveActual(){
   t.actual.start=document.getElementById('inActS').value;
   t.actual.end=document.getElementById('inActE').value;
   t.actual.note=document.getElementById('inActNote').value;
-  saveTasks();closeActModal();renderGantt();renderDetail();
+  saveTasksToFirebase();closeActModal();renderGantt();renderDetail();
 }
 function closeActModal(){document.getElementById('actModal').classList.remove('open');actTaskId=null}
 function openEditFromAct(){
@@ -1224,7 +1278,7 @@ function deleteTaskModal(){
     const r=requests.find(x=>x.id===t.reqId);
     if(r){r.assigned=false;r.assignee=null}
     tasksByDate[curDate]=(tasksByDate[curDate]||[]).filter(x=>x.id!==actTaskId);
-  saveTasks();
+  saveTasksToFirebase();
     autoArrange(curDate);
   }
   closeActModal();renderRequestList();renderGantt();renderDetail();
@@ -1240,7 +1294,7 @@ function saveEdit(){
   if(st){const[h,m]=st.split(':').map(Number);t.startMin=h*60+m}
   t.assignee=document.getElementById('eAssign').value;
   t.memo=document.getElementById('eMemo').value;
-  autoArrange(curDate);saveTasks();closeEditModal();renderGantt();renderDetail();
+  autoArrange(curDate);saveTasksToFirebase();closeEditModal();renderGantt();renderDetail();
 }
 function closeEditModal(){document.getElementById('editModal').classList.remove('open');editTaskId=null}
 
@@ -1327,8 +1381,9 @@ function clearSavedTasks(){
 
 requestAnimationFrame(()=>{
   buildDateNav();
-  loadSavedTasks();  // 保存済み計画を先に復元
-  loadKintone();     // その後kintoneからデータ取得
+  loadSavedTasks();  // まずlocalStorageから復元
+  initFirebase();    // Firebase接続（リアルタイム同期）
+  loadKintone();     // kintoneからデータ取得
 });
 </script>
 </body>
