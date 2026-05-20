@@ -26,6 +26,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 
 .act-bar-m{background:rgba(37,99,235,.3);border:1px solid var(--m-bd);color:var(--m)}
 .act-bar-n{background:rgba(234,108,10,.3);border:1px solid var(--n-bd);color:var(--n)}
+@keyframes working-pulse{0%,100%{box-shadow:0 0 0 2px var(--ok)}50%{box-shadow:0 0 0 4px var(--ok),0 0 12px rgba(22,163,74,.4)}}
+.working-block{animation:working-pulse 1.8s ease-in-out infinite}
 /* HEADER */
 header{background:var(--panel);border-bottom:1px solid var(--border);padding:0 16px;height:50px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:100;box-shadow:0 1px 6px rgba(0,0,0,.06)}
 .logo{font-size:14px;font-weight:700;display:flex;align-items:center;gap:5px;white-space:nowrap}
@@ -924,14 +926,14 @@ function renderGantt(){
       const tStatus=t.actual?.status||'pending';
       const isWorking=tStatus==='working';
       const isDone=tStatus==='done';
-      const blockStyle=isWorking?';outline:2px solid var(--ok);z-index:5':isDone?';opacity:.55':'';
+      const blockStyle=isWorking?';z-index:5':isDone?';opacity:.55':'';  const blockClass=isWorking?' working-block':'';
       const repMin=Math.round((t.hours-trialH(t.trialSteps))*60);
       const repEnd=addWork(t.startMin,repMin);
       const trialEnd=addWork(repEnd,Math.round(trialH(t.trialSteps)*60));
       const bc=a==='matsumoto'?'bm':'bn';
 
       const rx=mx(t.startMin),rw=dw(t.startMin,repEnd);
-      const res=[`<div class="gblock ${bc}" style="left:${rx}px;width:${rw}px;top:3px;height:30px${blockStyle}"
+      const res=[`<div class="gblock ${bc}${blockClass}" style="left:${rx}px;width:${rw}px;top:3px;height:30px${blockStyle}"
         onclick="openActModal('${t.id}')" title="${t.name}">
         <div class="blabel">${t.name}</div>
         <div class="btime">${fmtMin(t.startMin)}〜${fmtMin(repEnd)}</div>
@@ -939,7 +941,7 @@ function renderGantt(){
 
       if(t.trialSteps>0&&trialEnd>repEnd){
         const tx=mx(repEnd),ttw=dw(repEnd,trialEnd);
-        res.push(`<div class="gblock btrial" style="left:${tx}px;width:${ttw}px;top:3px;height:30px${blockStyle}"
+        res.push(`<div class="gblock btrial${blockClass}" style="left:${tx}px;width:${ttw}px;top:3px;height:30px${blockStyle}"
           onclick="openActModal('${t.id}')" title="${t.name} トライ">
           <div class="blabel">▶トライ</div>
           <div class="btime">${fmtMin(repEnd)}〜${fmtMin(trialEnd)}</div>
@@ -948,21 +950,36 @@ function renderGantt(){
 
       // 実績バー（下段）
       const as=minToMs(t.actual.start),ae=minToMs(t.actual.end);
-      const ay=35,ah=26; // 下段
-      if(as!==null&&ae!==null&&ae>as){
-        const ox=mx(as),ow=Math.max(4,mx(ae)-mx(as));
+      const ay=35,ah=26;
+      const planTotalMin=Math.round(t.hours*60);
+      if(as!==null){
+        // 作業中（開始のみ）または完了（開始+終了）
+        const dispEnd=ae!==null?ae:new Date().getHours()*60+new Date().getMinutes();
+        const actMin=dispEnd-as;
+        const ox=mx(as);
+        const ow=Math.max(6,ae!==null?mx(ae)-mx(as):mx(dispEnd)-mx(as));
         const oc=a==='matsumoto'?'act-bar-m':'act-bar-n';
-        res.push(`<div class="${oc}" style="position:absolute;left:${ox}px;width:${ow}px;top:${ay}px;height:${ah}px;border-radius:4px;cursor:pointer;display:flex;align-items:center;padding:0 4px;overflow:hidden"
-          onclick="openActModal('${t.id}')" title="実績 ${t.actual.start}〜${t.actual.end}">
-          <span style="font-size:8px;font-weight:700;white-space:nowrap;overflow:hidden">実 ${t.actual.start}〜${t.actual.end}</span>
-        </div>`);
+        // 差異計算（予定終了 vs 実績終了）
+        const planEndMin=addWork(t.startMin,planTotalMin);
+        const diffMin=ae!==null?ae-planEndMin:null;
+        const diffTxt=diffMin===null?'作業中':diffMin===0?'±0':diffMin>0?'+'+diffMin+'分遅':diffMin+'分早';
+        const diffColor=diffMin===null?'#6b7394':diffMin>5?'var(--danger)':diffMin<-5?'var(--ok)':'var(--text2)';
+        const shortName=t.name.length>10?t.name.slice(0,10)+'…':t.name;
+        const actBarDiv=document.createElement('div');
+        actBarDiv.className=oc;
+        actBarDiv.style.cssText='position:absolute;left:'+ox+'px;width:'+ow+'px;top:'+ay+'px;height:'+ah+'px;border-radius:4px;cursor:pointer;display:flex;align-items:center;padding:0 5px;overflow:hidden;gap:4px';
+        actBarDiv.dataset.tid=t.id;
+        actBarDiv.title=t.name+' 実績: '+t.actual.start+'〜'+(t.actual.end||'進行中')+' ('+diffTxt+')';
+        actBarDiv.innerHTML='<span style="font-size:8px;font-weight:700;white-space:nowrap;overflow:hidden;flex:1">'+shortName+'</span>'
+          +'<span style="font-size:7px;color:'+diffColor+';white-space:nowrap;font-weight:700">'+diffTxt+'</span>';
+        actBarDiv.onclick=function(){openActModal(this.dataset.tid);};
+        res.push(actBarDiv.outerHTML);
       } else {
         // 実績未入力：ストライプ
         const planEnd=trialEnd>repEnd?trialEnd:repEnd;
         const ox=mx(t.startMin),ow=Math.max(4,mx(planEnd)-mx(t.startMin));
-        res.push(`<div style="position:absolute;left:${ox}px;width:${ow}px;top:${ay}px;height:${ah}px;border-radius:4px;cursor:pointer;
-          background:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(0,0,0,.04) 3px,rgba(0,0,0,.04) 6px);
-          border:1px dashed var(--border2)" onclick="openActModal('${t.id}')" title="実績未入力"></div>`);
+        const stripeId=t.id;
+        res.push('<div style="position:absolute;left:'+ox+'px;width:'+ow+'px;top:'+ay+'px;height:'+ah+'px;border-radius:4px;cursor:pointer;background:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(0,0,0,.04) 3px,rgba(0,0,0,.04) 6px);border:1px dashed var(--border2)" data-tid="'+stripeId+'" onclick="openActModal(this.dataset.tid)" title="実績未入力（クリックで入力）"></div>');
       }
       return res;
     });
@@ -1026,7 +1043,11 @@ function renderDetail(){
       :'';
 
     const ds=t.actual?.status||'pending';
-    const dborder=ds==='working'?'border-left:3px solid var(--ok);background:rgba(22,163,74,.04)':ds==='done'?'opacity:.6;filter:grayscale(.3)':'';
+    const dborder=ds==='working'
+      ?'border-left:4px solid var(--ok);background:linear-gradient(135deg,rgba(22,163,74,.06),rgba(22,163,74,.02));box-shadow:0 2px 8px rgba(22,163,74,.15)'
+      :ds==='done'
+      ?'opacity:.5;filter:grayscale(.2)'
+      :'';
     html+='<div class="ditem" onclick="openActModal(\''+tid+'\')" style="cursor:pointer;'+dborder+'">'
       +'<div class="dcolor" style="background:'+color+'"></div>'
       +'<div class="dinfo">'
