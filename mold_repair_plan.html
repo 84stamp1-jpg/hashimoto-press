@@ -142,7 +142,7 @@ header{background:var(--panel);border-bottom:1px solid var(--border);padding:0 1
 .legdot{width:10px;height:10px;border-radius:3px}
 
 /* GANTT */
-.gwrap{flex:1;overflow:auto;padding:12px 14px}
+.gwrap{flex:1;overflow:auto;padding:12px 14px;overflow-x:auto;overflow-y:hidden}
 .gwrap::-webkit-scrollbar{height:6px;width:4px}
 .gwrap::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
 .gcont{min-width:820px}
@@ -961,8 +961,10 @@ function getDate(ds){return tasksByDate[ds]||[]}
 // ===== ガント描画 =====
 function renderGantt(){
   const cont=document.getElementById('gcont');
-  // ガント幅: 17時まで画面いっぱい、それ以降スクロール
-  const viewW=Math.max(600, wrap.getBoundingClientRect().width-72-32-8);
+  const wrap=cont?cont.parentElement:document.querySelector('.gwrap');
+  // ガント幅: 17時まで画面いっぱい（gwrapの幅 - ラベル幅72px）
+  const wrapW=(wrap?wrap.getBoundingClientRect().width:800);
+  const viewW=Math.max(500, wrapW-78);
   // 17:00までの分数でピクセル計算
   const VIEW_END=17*60;  // 17時
   const VIEW_MIN=VIEW_END-WORK_START;  // 8:10〜17:00 = 530分
