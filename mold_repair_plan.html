@@ -437,20 +437,26 @@ function initFirebase(){
     fbDb = firebase.database(fbApp);
     fbRef = fbDb.ref(FB_PATH);
     // リアルタイム受信
+    let fbInitialized=false;
     fbRef.on('value', snap=>{
       const data = snap.val();
       if(data){
-        // 3日以内のデータのみ取り込み
         const cutoff=fmt(addDays(new Date(),-3));
+        let changed=false;
         Object.keys(data).forEach(ds=>{
-          if(ds>=cutoff) tasksByDate[ds]=data[ds];
+          if(ds>=cutoff){
+            const newStr=JSON.stringify(data[ds]);
+            const curStr=JSON.stringify(tasksByDate[ds]||{});
+            if(newStr!==curStr){ tasksByDate[ds]=data[ds]; changed=true; }
+          }
         });
-        // localStorageにも保存
         try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(tasksByDate)); }catch(e){}
-        renderGantt(); renderDetail();
-        // requestsのassigned状態を同期
-        if(requests.length) syncAssignedState();
+        if(changed){
+          if(requests.length) syncAssignedState();
+          requestAnimationFrame(()=>{ renderGantt(); renderDetail(); });
+        }
       }
+      fbInitialized=true;
     });
     console.log('Firebase接続OK');
   } catch(e) {
@@ -900,22 +906,27 @@ function assignTo(rid,assignee){
   renderRequestList();renderGantt();renderDetail();
 }
 function autoAll(){
+  if(!requests.length){
+    alert('kintoneのデータ取得中です。しばらく待ってから再試行してください。');return;
+  }
   const ua=requests.filter(r=>!r.assigned);
-  if(!ua.length){alert('未割付の依頼がありません');return}
-  // バッチ処理: 一度に全部処理してからまとめてrender
-  ua.forEach((r,i)=>{
-    const a=i%2===0?'matsumoto':'matsunaga';
+  if(!ua.length){
+    alert('未割付の依頼がありません。\n（全件が既に割付済みか、kintone同期ボタンを押してください）');return;
+  }
+  // 担当者に交互割付
+  let mIdx=0,nIdx=0;
+  ua.forEach(r=>{
+    // 既存タスクの末尾に追加（担当者の負荷を均等に）
+    const mTasks=getTasks(curDate).filter(t=>t.assignee==='matsumoto').length;
+    const nTasks=getTasks(curDate).filter(t=>t.assignee==='matsunaga').length;
+    const a=mTasks<=nTasks?'matsumoto':'matsunaga';
     pushTask(r,a,curDate);r.assigned=true;r.assignee=a;
   });
   autoArrange(curDate);
   saveTasksToFirebase();
-  // renderを非同期で実行してUIフリーズを防止
   requestAnimationFrame(()=>{
     renderRequestList();
-    requestAnimationFrame(()=>{
-      renderGantt();
-      renderDetail();
-    });
+    requestAnimationFrame(()=>{ renderGantt(); renderDetail(); });
   });
 }
 
@@ -950,10 +961,13 @@ function getDate(ds){return tasksByDate[ds]||[]}
 // ===== ガント描画 =====
 function renderGantt(){
   const cont=document.getElementById('gcont');
-  const wrap=cont.parentElement;
-  // ガントは固定幅でスクロール対応（1時間=75px）
-  const HOUR_PX=75;
-  const tw=(WORK_END-WORK_START)/60*HOUR_PX;  // 11h50m分
+  // ガント幅: 17時まで画面いっぱい、それ以降スクロール
+  const viewW=Math.max(600, wrap.getBoundingClientRect().width-72-32-8);
+  // 17:00までの分数でピクセル計算
+  const VIEW_END=17*60;  // 17時
+  const VIEW_MIN=VIEW_END-WORK_START;  // 8:10〜17:00 = 530分
+  const HOUR_PX=Math.floor(viewW/VIEW_MIN*60);  // 1時間のピクセル数
+  const tw=(WORK_END-WORK_START)/60*HOUR_PX;  // 全体幅（20時まで）
   const mx=m=>(Math.max(0,m-WORK_START)/TOTAL_MIN)*tw;
   const dw=(s,e)=>Math.max(4,mx(e)-mx(s));
 
