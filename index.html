@@ -343,7 +343,10 @@ onValue(ref(db,'lines'),s=>{
     console.error(e);
   }
 });
-onValue(ref(db,'settings'),s=>{if(s.val())sets={...SDEFS,...s.val()};});
+onValue(ref(db,'settings'),s=>{
+  if(s.val())sets={...SDEFS,...s.val()};
+  if(Object.keys(lines).length>0) renderBoard();
+});
 
 const rate=(p,a)=>p?Math.round(a/p*100):null;
 const elapsed=ts=>(!ts||ts===0)?9999:Math.round((Date.now()-ts)/60000);
@@ -685,14 +688,22 @@ function renderBoard(){
           });
           snapDisp='<span style="font-size:9px;color:#ddd;"> ▎ </span>'+snapParts2.join('<span style="color:#ddd;">→</span>');
         }
-        // 終了済み品番のペース表示
+        // 終了済み品番のペース表示：actualStart〜actualEndから毎回再計算（paceInfo保存値は使わない）
         let jpStr='';
-        if(j.paceInfo&&j.status==='done'){
-          const pi=j.paceInfo;
-          const pd=pi.pace-(pi.planPace||0);
-          const pc=pd>=0?'#27ae60':'#c0392b';
-          const pl=(pd>=0?'+':'')+pd.toLocaleString()+'個/h';
-          jpStr='<br><span style="font-size:9px;color:#555;">⚡'+pi.pace.toLocaleString()+'個/h <span style="color:'+pc+'">('+pl+')</span></span>';
+        if(j.status==='done'){
+          const wsJP=timeToMin(j.actualStart||j.start||'');
+          const weJP=timeToMin(j.actualEnd||'');
+          const netJP=wsJP&&weJP?netMins(wsJP,weJP):0;
+          const jActJP=j.actualCount||0;
+          if(netJP>0&&jActJP>0){
+            const pace=Math.round(jActJP/netJP*60);
+            const smJP=timeToMin(j.start||''),emJP=timeToMin(j.end||'');
+            const planNetJP=smJP&&emJP?netMins(smJP,emJP):0;
+            const planPaceJP=planNetJP>0?Math.round(j.plan/planNetJP*60):0;
+            const pd=pace-planPaceJP;
+            const pc=pd>=0?'#27ae60':'#c0392b';
+            jpStr='<br><span style="font-size:9px;color:#555;">⚡'+pace.toLocaleString()+'個/h <span style="color:'+pc+'">'+(pd>=0?'+':'')+pd.toLocaleString()+'個/h</span></span>';
+          }
         }
         // grid 3列: 連番(18px) | 品番(140px) | 残り(数量・時間・実績)
           // 2行目: 空 | 段取り情報 | 空
