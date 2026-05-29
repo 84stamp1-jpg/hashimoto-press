@@ -622,7 +622,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.15-11</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.15-12</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -2525,11 +2525,17 @@ function renderMaterials() {
       + matMonths.map(m=>`<option value="${m}"${m===cur?' selected':''}>${m}</option>`).join('');
   }
   let entries = Object.entries(DB.materials);
-  if (search)  entries = entries.filter(([,r]) =>
-    (r.partNo||'').toLowerCase().includes(search) ||
-    (r.name||'').toLowerCase().includes(search) ||
-    (r.moldNo||'').toLowerCase().includes(search)
-  );
+  if (search) {
+    const _mc = {};
+    const _mi = no => { if (!_mc[no]) { const m = findMoldByNo(no); _mc[no] = { p:(m?.partNo||'').toLowerCase(), n:(m?.partName||'').toLowerCase() }; } return _mc[no]; };
+    entries = entries.filter(([,r]) => {
+      const mi = _mi(r.moldNo);
+      return (r.partNo||'').toLowerCase().includes(search) ||
+             (r.name||'').toLowerCase().includes(search)   ||
+             (r.moldNo||'').toLowerCase().includes(search) ||
+             mi.p.includes(search) || mi.n.includes(search);
+    });
+  }
   if (moldFil) entries = entries.filter(([,r]) => r.moldNo === moldFil);
   if (dateFil === 'nodate') entries = entries.filter(([,r]) => !(r.month||'').trim());
   else if (dateFil)         entries = entries.filter(([,r]) => (r.month||'').startsWith(dateFil));
@@ -2746,11 +2752,17 @@ function renderOutsource() {
   const mCur = mSel?.value;
   if (mSel) mSel.innerHTML = '<option value="">全月</option>' + months.map(m=>`<option value="${m}"${m===mCur?' selected':''}>${m}</option>`).join('');
   let entries = Object.entries(DB.outsource);
-  if (search) entries = entries.filter(([,r]) =>
-    (r.partNo||'').toLowerCase().includes(search) ||
-    (r.supplier||'').toLowerCase().includes(search) ||
-    (r.moldNo||'').toLowerCase().includes(search)
-  );
+  if (search) {
+    const _mc = {};
+    const _mi = no => { if (!_mc[no]) { const m = findMoldByNo(no); _mc[no] = { p:(m?.partNo||'').toLowerCase(), n:(m?.partName||'').toLowerCase() }; } return _mc[no]; };
+    entries = entries.filter(([,r]) => {
+      const mi = _mi(r.moldNo);
+      return (r.partNo||'').toLowerCase().includes(search)   ||
+             (r.supplier||'').toLowerCase().includes(search) ||
+             (r.moldNo||'').toLowerCase().includes(search)   ||
+             mi.p.includes(search) || mi.n.includes(search);
+    });
+  }
   if (month) entries = entries.filter(([,r]) => (r.month||'').slice(0,7) === month);
   document.getElementById('outCount').textContent = entries.length + '件 / ¥' + fmt(entries.reduce((s,[,r])=>s+(r.total||0),0));
   const _outMonthLabel = month ? month.replace(/^(\d{4})-(\d{2})$/,'$1年$2月') : '全期間';
@@ -2806,11 +2818,17 @@ function renderPurchase() {
   const mCur = mSel?.value;
   if (mSel) mSel.innerHTML = '<option value="">全月</option>' + months.map(m=>`<option value="${m}"${m===mCur?' selected':''}>${m}</option>`).join('');
   let entries = Object.entries(DB.purchase);
-  if (search) entries = entries.filter(([,r]) =>
-    (r.partNo||'').toLowerCase().includes(search) ||
-    (r.name||'').toLowerCase().includes(search) ||
-    (r.moldNo||'').toLowerCase().includes(search)
-  );
+  if (search) {
+    const _mc = {};
+    const _mi = no => { if (!_mc[no]) { const m = findMoldByNo(no); _mc[no] = { p:(m?.partNo||'').toLowerCase(), n:(m?.partName||'').toLowerCase() }; } return _mc[no]; };
+    entries = entries.filter(([,r]) => {
+      const mi = _mi(r.moldNo);
+      return (r.partNo||'').toLowerCase().includes(search) ||
+             (r.name||'').toLowerCase().includes(search)   ||
+             (r.moldNo||'').toLowerCase().includes(search) ||
+             mi.p.includes(search) || mi.n.includes(search);
+    });
+  }
   if (month) entries = entries.filter(([,r]) => (r.month||'').replace(/\//g,'-').slice(0,7) === month);
   document.getElementById('purCount').textContent = entries.length + '件 / ¥' + fmt(entries.reduce((s,[,r])=>s+(r.total||0),0));
   const _purMonthLabel = month ? month.replace(/^(\d{4})-(\d{2})$/,'$1年$2月') : '全期間';
