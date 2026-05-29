@@ -1544,10 +1544,26 @@ window.saveGroups=function(){
       skipNoTime:(document.getElementById(`mp-${gi}-skipnot`)?.checked!==false)
     };
   });
+  // ライン表示名を Firebase lines/{id}/name へ書き込む
+  const lineNameUpd={};
+  groupCfg.forEach((g,gi)=>{
+    (g.ids||[]).forEach((id,li)=>{
+      const lnInp=document.getElementById(`gln-${gi}-${li}`);
+      if(lnInp&&lnInp.value.trim()){
+        const newName=lnInp.value.trim();
+        lineNameUpd['lines/'+id+'/name']=newName;
+        if(lines[id]) lines[id]={...lines[id],name:newName};
+        else lines[id]={name:newName,status:'waiting',plan:0,actual:0,updatedAt:0,jobs:[]};
+      }
+    });
+  });
   const allIds=getAllIDS();
   const stNs={};allIds.forEach(id=>{const v=parseInt(document.getElementById('st-'+id)?.value);stNs[id]=isNaN(v)?(sets[id]||45):v;});
   const saveObj={groups:groupCfg.map(g=>({gid:g.gid,label:g.label,ids:[...g.ids],importMap:g.importMap||{}})),setupTimes:stNs};
+  // settings全体を上書き保存
   set(ref(db,'settings'),saveObj);
+  // ライン表示名を個別パスで更新
+  if(Object.keys(lineNameUpd).length) update(ref(db),lineNameUpd);
   const m=document.getElementById('gmsg');m.textContent='保存しました ✓';setTimeout(()=>{m.textContent='';},2000);
   updateLineSelects();
   renderGroupTabs();
