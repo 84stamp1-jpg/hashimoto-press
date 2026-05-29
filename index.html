@@ -309,10 +309,6 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
           <label>グループ</label>
           <select id="impGrp" onchange="onImpGrpSel()"></select>
         </div>
-        <div class="fi">
-          <label>インポート先ライン</label>
-          <select id="impLine"></select>
-        </div>
       </div>
       <div class="fi" style="margin-bottom:9px;">
         <label>Excelファイル選択</label>
@@ -1404,19 +1400,47 @@ window.renderGrpMgr=function(){
       </div>
       <button class="btn-add-line" onclick="addLineToGroup(${gi})">＋ ラインを追加</button>
       <details style="margin-top:8px;">
-        <summary style="font-size:11px;color:#888;cursor:pointer;padding:4px 0;">📋 Excelインポート列設定</summary>
+        <summary style="font-size:11px;color:#888;cursor:pointer;padding:4px 0;">📋 Excelインポート設定</summary>
         <div style="background:#f8f7f2;border-radius:6px;padding:10px;margin-top:6px;font-size:11px;">
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
-            <div><label style="color:#888;display:block;margin-bottom:2px;">シート番号</label><input type="number" id="mp-${gi}-sheet" value="${mp.sheet||1}" min="1" style="width:60px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;"></div>
-            <div><label style="color:#888;display:block;margin-bottom:2px;">ヘッダー行</label><input type="number" id="mp-${gi}-hrow" value="${mp.headerRow||1}" min="0" style="width:60px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;"><span style="color:#aaa;margin-left:4px;">0=なし</span></div>
+          <!-- モード選択 -->
+          <div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #e8e8e8;">
+            <div style="color:#888;margin-bottom:4px;font-weight:700;">インポート方式</div>
+            <label style="margin-right:16px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
+              <input type="radio" name="mp-${gi}-mode" value="sheet" ${(mp.mode||'sheet')==='sheet'?'checked':''} onchange="onImpModeChange(${gi})"> シートで分ける<span style="color:#aaa;font-size:10px;">（プレスチーム）</span>
+            </label>
+            <label style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
+              <input type="radio" name="mp-${gi}-mode" value="filter" ${mp.mode==='filter'?'checked':''} onchange="onImpModeChange(${gi})"> 列でフィルタリング<span style="color:#aaa;font-size:10px;">（別チーム）</span>
+            </label>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
-            <div><label style="color:#888;display:block;margin-bottom:2px;">品番 列</label><input type="text" id="mp-${gi}-part" value="${mp.partCol||'A'}" placeholder="A" style="width:50px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
-            <div><label style="color:#888;display:block;margin-bottom:2px;">計画数 列</label><input type="text" id="mp-${gi}-plan" value="${mp.planCol||'B'}" placeholder="B" style="width:50px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
-            <div><label style="color:#888;display:block;margin-bottom:2px;">開始時刻 列</label><input type="text" id="mp-${gi}-start" value="${mp.startCol||'C'}" placeholder="C" style="width:50px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
-            <div><label style="color:#888;display:block;margin-bottom:2px;">終了時刻 列</label><input type="text" id="mp-${gi}-end" value="${mp.endCol||'D'}" placeholder="D" style="width:50px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
+          <!-- 共通列設定 -->
+          <div style="margin-bottom:8px;">
+            <div style="color:#888;margin-bottom:4px;">列設定（共通）</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
+              <div><label style="color:#888;display:block;margin-bottom:2px;">ヘッダー行</label><input type="number" id="mp-${gi}-hrow" value="${mp.headerRow||1}" min="0" style="width:55px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;"><span style="color:#aaa;margin-left:3px;">0=なし</span></div>
+              <div><label style="color:#888;display:block;margin-bottom:2px;">品番 列</label><input type="text" id="mp-${gi}-part" value="${mp.partCol||'A'}" placeholder="A" style="width:45px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
+              <div><label style="color:#888;display:block;margin-bottom:2px;">計画数 列</label><input type="text" id="mp-${gi}-plan" value="${mp.planCol||'B'}" placeholder="B" style="width:45px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
+              <div><label style="color:#888;display:block;margin-bottom:2px;">開始時刻 列</label><input type="text" id="mp-${gi}-start" value="${mp.startCol||'C'}" placeholder="C" style="width:45px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
+              <div><label style="color:#888;display:block;margin-bottom:2px;">終了時刻 列</label><input type="text" id="mp-${gi}-end" value="${mp.endCol||'D'}" placeholder="D" style="width:45px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
+            </div>
           </div>
-          <div><label style="color:#888;display:block;margin-bottom:2px;">ライン名 列 <span style="color:#aaa;">（複数ライン混在の場合）</span></label><input type="text" id="mp-${gi}-line" value="${mp.lineCol||''}" placeholder="空欄=単一ライン" style="width:90px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
+          <!-- シートモード設定 -->
+          <div id="mp-${gi}-sheet-block" style="display:${(mp.mode||'sheet')==='sheet'?'block':'none'};">
+            <div style="color:#888;margin-bottom:4px;">ライン別シート番号</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+              ${(g.ids||[]).map(id=>`<div style="display:flex;align-items:center;gap:5px;"><span style="min-width:56px;color:#555;">${getLineName(id)}</span><span style="color:#aaa;">シート</span><input type="number" id="mp-${gi}-sh-${id}" value="${(mp.lineSheets||{})[id]||1}" min="1" style="width:46px;padding:3px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;"></div>`).join('')}
+            </div>
+          </div>
+          <!-- フィルターモード設定 -->
+          <div id="mp-${gi}-filter-block" style="display:${mp.mode==='filter'?'block':'none'};">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:6px;">
+              <div><label style="color:#888;display:block;margin-bottom:2px;">フィルタ シート番号</label><input type="number" id="mp-${gi}-fsheet" value="${mp.filterSheet||1}" min="1" style="width:55px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;"></div>
+              <div><label style="color:#888;display:block;margin-bottom:2px;">フィルタ 列</label><input type="text" id="mp-${gi}-fcol" value="${mp.filterCol||'A'}" placeholder="A" style="width:45px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
+            </div>
+            <div style="color:#888;margin-bottom:4px;">ライン別フィルタ値<span style="color:#aaa;margin-left:4px;">（A列の作業者名など）</span></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+              ${(g.ids||[]).map(id=>`<div style="display:flex;align-items:center;gap:5px;"><span style="min-width:56px;color:#555;">${getLineName(id)}</span><input type="text" id="mp-${gi}-fv-${id}" value="${(mp.filterValues||{})[id]||''}" placeholder="フィルタ値" style="width:80px;padding:3px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;"></div>`).join('')}
+            </div>
+          </div>
         </div>
       </details>
     </div>`;
@@ -1458,14 +1482,22 @@ window.saveGroups=function(){
     const inp=document.getElementById('gname-'+gi);
     if(inp) g.label=inp.value.trim()||g.label;
     const readV=(sfx,def)=>{const e=document.getElementById(`mp-${gi}-${sfx}`);return e?e.value.trim()||def:def;};
+    const mode=(document.querySelector(`input[name="mp-${gi}-mode"]:checked`)?.value)||'sheet';
+    const lineSheets={};
+    (g.ids||[]).forEach(id=>{const v=parseInt(document.getElementById(`mp-${gi}-sh-${id}`)?.value)||1;lineSheets[id]=v;});
+    const filterValues={};
+    (g.ids||[]).forEach(id=>{filterValues[id]=(document.getElementById(`mp-${gi}-fv-${id}`)?.value||'').trim();});
     g.importMap={
-      sheet:parseInt(readV('sheet','1'))||1,
+      mode,
       headerRow:parseInt(readV('hrow','1'))||0,
       partCol:readV('part','A').toUpperCase(),
       planCol:readV('plan','B').toUpperCase(),
       startCol:readV('start','C').toUpperCase(),
       endCol:readV('end','D').toUpperCase(),
-      lineCol:readV('line','').toUpperCase()
+      lineSheets,
+      filterSheet:parseInt(document.getElementById(`mp-${gi}-fsheet`)?.value)||1,
+      filterCol:(document.getElementById(`mp-${gi}-fcol`)?.value||'A').toUpperCase(),
+      filterValues
     };
   });
   const allIds=getAllIDS();
@@ -1477,6 +1509,13 @@ window.saveGroups=function(){
   renderGroupTabs();
 };
 
+window.onImpModeChange=function(gi){
+  const mode=document.querySelector(`input[name="mp-${gi}-mode"]:checked`)?.value||'sheet';
+  const shBlk=document.getElementById(`mp-${gi}-sheet-block`);
+  const fiBlk=document.getElementById(`mp-${gi}-filter-block`);
+  if(shBlk) shBlk.style.display=mode==='sheet'?'block':'none';
+  if(fiBlk) fiBlk.style.display=mode==='filter'?'block':'none';
+};
 let _swSkipLineSel=false;
 window.sw=function(tab){
   ['board','input','import','settings'].forEach(t=>document.getElementById('tab-'+t).style.display=t===tab?'block':'none');
@@ -1511,7 +1550,7 @@ function parseTime(v){
   if(m1) return String(parseInt(m1[1])).padStart(2,'0')+':'+m1[2];
   return '';
 }
-let _impParsedJobs=[]; // プレビュー中のパース済みデータ
+let _impParsedJobs={}; // プレビュー中のパース済みデータ {lineId:[...jobs]}
 
 function renderImpGrpSel(){
   const sel=document.getElementById('impGrp');
@@ -1522,16 +1561,22 @@ function renderImpGrpSel(){
 window.onImpGrpSel=function(){
   const gi=parseInt(document.getElementById('impGrp').value);
   const g=groupCfg[gi]||groupCfg[0];
-  const lineSel=document.getElementById('impLine');
-  lineSel.innerHTML=(g.ids||[]).map(id=>`<option value="${id}">${getLineName(id)}</option>`).join('');
-  // マッピング情報を表示
   const mp=g.importMap||{};
   const info=document.getElementById('impMapInfo');
   if(mp.partCol){
     info.style.display='block';
-    info.innerHTML=`列設定：品番<b>${mp.partCol}</b> 計画数<b>${mp.planCol}</b> 開始<b>${mp.startCol}</b> 終了<b>${mp.endCol}</b>`+
-      (mp.lineCol?` ライン<b>${mp.lineCol}</b>`:'')+
-      ` ／ シート${mp.sheet} ヘッダー行${mp.headerRow||'なし'} ｜ <a href="#" onclick="sw('settings');return false;" style="color:#1a1a1a;">設定変更</a>`;
+    const mode=mp.mode||'sheet';
+    const modeLabel=mode==='filter'?'列フィルタリング':'シートで分ける';
+    let modeDetail='';
+    if(mode==='sheet'){
+      const ls=mp.lineSheets||{};
+      const lsStr=(g.ids||[]).map(id=>getLineName(id)+'=シート'+(ls[id]||1)).join(' ');
+      modeDetail=lsStr?` ／ ${lsStr}`:'';
+    } else {
+      modeDetail=` ／ シート${mp.filterSheet||1}・フィルタ列<b>${mp.filterCol||'A'}</b>`;
+    }
+    info.innerHTML=`方式：<b>${modeLabel}</b>${modeDetail} ／ 品番<b>${mp.partCol}</b> 計画<b>${mp.planCol}</b> 開始<b>${mp.startCol}</b> 終了<b>${mp.endCol}</b>`+
+      ` ／ ヘッダー行${mp.headerRow||'なし'} ｜ <a href="#" onclick="sw('settings');return false;" style="color:#1a1a1a;">設定変更</a>`;
   } else {
     info.style.display='block';
     info.innerHTML='⚠️ まだ列マッピングが設定されていません。<a href="#" onclick="sw(\'settings\');return false;" style="color:#c0392b;">⚙️設定画面で設定してください</a>';
@@ -1543,80 +1588,144 @@ window.onImpGrpSel=function(){
 window.onImpFile=async function(){
   const fileEl=document.getElementById('impFile');
   const f=fileEl?.files[0];
-  if(!f){_impParsedJobs=[];document.getElementById('impBtn').disabled=true;return;}
+  if(!f){_impParsedJobs={};document.getElementById('impBtn').disabled=true;return;}
   const gi=parseInt(document.getElementById('impGrp').value);
   const g=groupCfg[gi]||groupCfg[0];
   const mp=g.importMap||{};
-  const sheetIdx=(mp.sheet||1)-1;
+  const mode=mp.mode||'sheet';
   const headerRow=mp.headerRow||0;
   const pIdx=colToIdx(mp.partCol||'A');
   const plIdx=colToIdx(mp.planCol||'B');
   const stIdx=colToIdx(mp.startCol||'C');
   const enIdx=colToIdx(mp.endCol||'D');
-  const lnIdx=colToIdx(mp.lineCol||'');
-  try{
-    const buf=await f.arrayBuffer();
-    const wb=XLSX.read(buf,{type:'array',cellDates:false,raw:false});
-    const shNames=wb.SheetNames;
-    if(sheetIdx>=shNames.length){alert(`シート${mp.sheet}が見つかりません（シート数:${shNames.length}）`);return;}
-    const ws=wb.Sheets[shNames[sheetIdx]];
-    const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
-    const dataStart=headerRow>0?headerRow:0; // headerRow行目（1始まり）以降がデータ
-    _impParsedJobs=[];
-    const selectedLine=document.getElementById('impLine').value;
-    rows.slice(dataStart).forEach((row,ri)=>{
+  const dataStart=headerRow>0?headerRow:0;
+
+  // 行データ配列 → jobsオブジェクト配列
+  function parseRows(rows){
+    const jobs=[];
+    rows.slice(dataStart).forEach(row=>{
       const part=String(row[pIdx]||'').trim();
       if(!part) return;
       const plan=parseInt(String(row[plIdx]||'').replace(/[^\d]/g,''));
       if(!plan||plan<=0) return;
       const start=parseTime(row[stIdx]);
       const end=parseTime(row[enIdx]);
-      const lineVal=lnIdx>=0?String(row[lnIdx]||'').trim():'';
-      // ライン列がある場合は選択中ラインのみ
-      if(lnIdx>=0&&lineVal&&lineVal!==selectedLine&&lineVal!==getLineName(selectedLine)) return;
-      _impParsedJobs.push({seq:_impParsedJobs.length+1,part,plan,start,end,status:'waiting',actualCount:0,actualStart:'',actualEnd:''});
+      jobs.push({seq:jobs.length+1,part,plan,start,end,status:'waiting',actualCount:0,actualStart:'',actualEnd:''});
     });
-    renderImpPreview(_impParsedJobs,mp);
+    return jobs;
+  }
+
+  try{
+    const buf=await f.arrayBuffer();
+    const wb=XLSX.read(buf,{type:'array',cellDates:false,raw:false});
+    const shNames=wb.SheetNames;
+    _impParsedJobs={};
+
+    if(mode==='sheet'){
+      // ─── シートモード：ラインごとに指定シートから読み込み ───
+      const lineSheets=mp.lineSheets||{};
+      for(const id of (g.ids||[])){
+        const shNum=(lineSheets[id]||1)-1;
+        if(shNum>=shNames.length){
+          console.warn(`${id}: シート${shNum+1}が見つかりません（シート数:${shNames.length}）`);
+          _impParsedJobs[id]=[];
+          continue;
+        }
+        const ws=wb.Sheets[shNames[shNum]];
+        const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+        _impParsedJobs[id]=parseRows(rows);
+      }
+    } else {
+      // ─── フィルターモード：1シートを列でフィルタリング ───
+      const fShNum=(mp.filterSheet||1)-1;
+      if(fShNum>=shNames.length){
+        alert(`シート${mp.filterSheet}が見つかりません（シート数:${shNames.length}）`);
+        return;
+      }
+      const ws=wb.Sheets[shNames[fShNum]];
+      const allRows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+      const fIdx=colToIdx(mp.filterCol||'A');
+      const filterValues=mp.filterValues||{};
+      for(const id of (g.ids||[])){
+        const fVal=(filterValues[id]||'').trim();
+        if(!fVal){_impParsedJobs[id]=[];continue;}
+        // フィルタ値に一致するデータ行のみ抽出（ヘッダー行はskip済みallRowsから）
+        const filtered=allRows.slice(dataStart).filter(row=>String(row[fIdx]||'').trim()===fVal);
+        // parseRowsに渡す際はdataStart=0で（既にスライス済みのため）
+        const jobs=[];
+        filtered.forEach(row=>{
+          const part=String(row[pIdx]||'').trim();
+          if(!part) return;
+          const plan=parseInt(String(row[plIdx]||'').replace(/[^\d]/g,''));
+          if(!plan||plan<=0) return;
+          const start=parseTime(row[stIdx]);
+          const end=parseTime(row[enIdx]);
+          jobs.push({seq:jobs.length+1,part,plan,start,end,status:'waiting',actualCount:0,actualStart:'',actualEnd:''});
+        });
+        _impParsedJobs[id]=jobs;
+      }
+    }
+
+    renderImpPreview(_impParsedJobs,mp,g);
   }catch(e){
     document.getElementById('impPreview').innerHTML='<div style="color:#c0392b;font-size:12px;">❌ 読み込みエラー：'+e.message+'</div>';
     console.error(e);
   }
 };
-function renderImpPreview(jobs,mp){
+function renderImpPreview(jobsObj,mp,g){
   const prevEl=document.getElementById('impPreview');
   const btn=document.getElementById('impBtn');
-  if(!jobs.length){
-    prevEl.innerHTML='<div style="color:#e67e22;font-size:12px;padding:8px;">データが見つかりませんでした。列設定を確認してください。</div>';
+  const ids=Object.keys(jobsObj);
+  const totalJobs=ids.reduce((s,id)=>s+(jobsObj[id]||[]).length,0);
+  const activeIds=ids.filter(id=>(jobsObj[id]||[]).length>0);
+
+  if(totalJobs===0){
+    prevEl.innerHTML='<div style="color:#e67e22;font-size:12px;padding:8px;">データが見つかりませんでした。設定（方式・列・フィルタ値）を確認してください。</div>';
     btn.disabled=true;return;
   }
-  let h='<div style="font-size:11px;color:#27ae60;margin-bottom:6px;">✓ '+jobs.length+'件検出</div>';
-  h+='<div style="overflow-x:auto;"><table class="jtbl"><thead><tr><th>#</th><th>品番</th><th>計画数</th><th>開始</th><th>終了</th></tr></thead><tbody>';
-  jobs.slice(0,15).forEach(j=>{
-    const warn=!j.start||!j.end?'style="background:#fff8e1;"':'';
-    h+=`<tr ${warn}><td>${j.seq}</td><td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${j.part}</td><td>${j.plan.toLocaleString()}個</td><td>${j.start||'<span style="color:#e67e22;">--</span>'}</td><td>${j.end||'<span style="color:#e67e22;">--</span>'}</td></tr>`;
-  });
-  if(jobs.length>15) h+=`<tr><td colspan="5" style="text-align:center;color:#aaa;font-size:10px;">…他${jobs.length-15}件</td></tr>`;
-  h+='</tbody></table></div>';
+
+  let h=`<div style="font-size:11px;color:#27ae60;margin-bottom:6px;">✓ 合計 ${totalJobs}件 / ${activeIds.length}ライン 検出</div>`;
+  for(const id of ids){
+    const jobs=jobsObj[id]||[];
+    const lineName=getLineName(id);
+    if(jobs.length===0){
+      h+=`<div style="font-size:11px;color:#bbb;margin-bottom:4px;">　${lineName}：データなし</div>`;
+      continue;
+    }
+    h+=`<div style="font-size:11px;font-weight:700;color:#1a1a1a;margin:8px 0 3px;">📌 ${lineName}（${jobs.length}件）</div>`;
+    h+='<div style="overflow-x:auto;margin-bottom:4px;"><table class="jtbl"><thead><tr><th>#</th><th>品番</th><th>計画数</th><th>開始</th><th>終了</th></tr></thead><tbody>';
+    jobs.slice(0,8).forEach(j=>{
+      const warn=!j.start||!j.end?' style="background:#fff8e1;"':'';
+      h+=`<tr${warn}><td>${j.seq}</td><td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${j.part}</td><td>${j.plan.toLocaleString()}個</td><td>${j.start||'<span style="color:#e67e22;">--</span>'}</td><td>${j.end||'<span style="color:#e67e22;">--</span>'}</td></tr>`;
+    });
+    if(jobs.length>8) h+=`<tr><td colspan="5" style="text-align:center;color:#aaa;font-size:10px;">…他${jobs.length-8}件</td></tr>`;
+    h+='</tbody></table></div>';
+  }
   prevEl.innerHTML=h;
   btn.disabled=false;
 }
 window.doImport=async function(){
-  if(!_impParsedJobs.length) return;
-  const lineId=document.getElementById('impLine').value;
-  if(!lineId){alert('インポート先のラインを選択してください');return;}
-  if(!confirm(`${getLineName(lineId)} の計画データを${_impParsedJobs.length}件の工程に更新します。\n既存の計画データは上書きされます。よろしいですか？`)) return;
+  const activeIds=Object.keys(_impParsedJobs).filter(id=>(_impParsedJobs[id]||[]).length>0);
+  if(!activeIds.length){alert('インポートするデータがありません');return;}
+  const totalJobs=activeIds.reduce((s,id)=>s+(_impParsedJobs[id]||[]).length,0);
+  const lineNames=activeIds.map(id=>getLineName(id)).join('、');
+  if(!confirm(`${lineNames}\n合計 ${totalJobs}件 の計画データをインポートします。\n既存の計画データは上書きされます。よろしいですか？`)) return;
   const btn=document.getElementById('impBtn');
   btn.disabled=true;
   const m=document.getElementById('impmsg');
   m.style.color='#888';m.textContent='書き込み中...';
   try{
-    const totalPlan=_impParsedJobs.reduce((s,j)=>s+j.plan,0);
-    const upd={jobs:_impParsedJobs,plan:totalPlan,actual:0,part:_impParsedJobs[0]?.part||'',status:'waiting',updatedAt:0,workStart:'',workEnd:''};
-    await update(ref(db,'lines/'+lineId),upd);
-    m.style.color='#27ae60';m.textContent=`✓ ${getLineName(lineId)} に${_impParsedJobs.length}件をインポートしました`;
+    const updates={};
+    activeIds.forEach(lineId=>{
+      const jobs=_impParsedJobs[lineId];
+      const totalPlan=jobs.reduce((s,j)=>s+j.plan,0);
+      updates['lines/'+lineId]={jobs,plan:totalPlan,actual:0,part:jobs[0]?.part||'',status:'waiting',updatedAt:0,workStart:'',workEnd:''};
+    });
+    await update(ref(db),updates);
+    m.style.color='#27ae60';m.textContent=`✓ ${activeIds.length}ライン・${totalJobs}件をインポートしました`;
     document.getElementById('impFile').value='';
     document.getElementById('impPreview').innerHTML='';
-    _impParsedJobs=[];btn.disabled=true;
+    _impParsedJobs={};btn.disabled=true;
     setTimeout(()=>{m.textContent='';},4000);
   }catch(e){
     m.style.color='#c0392b';m.textContent='エラー：'+e.message;
