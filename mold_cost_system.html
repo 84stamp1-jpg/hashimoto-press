@@ -622,7 +622,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.15-8</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.15-9</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -2589,31 +2589,43 @@ function printMaterials() {
   const filterStr = useChecked ? '選択した ' + entries.length + ' 件' : (filterParts.length ? filterParts.join('　') : '全件') + '　' + entries.length + ' 件';
 
   const rows = entries.map(([,r]) => {
-    const sizeX = String(r.sizeX||'').replace(/\.00$/,'');
-    const sizeY = String(r.sizeY||'').replace(/\.00$/,'');
-    const sizeZ = String(r.sizeZ||'').replace(/\.00$/,'');
-    const sizeParts = [sizeX,sizeY,sizeZ].filter(Boolean);
-    const sizeStr = sizeParts.length ? sizeParts.join(' × ') : '—';
+    // 品番・品名は金型マスタから取得
+    const mold     = findMoldByNo(r.moldNo);
+    const partNo   = mold?.partNo   || '';
+    const partName = mold?.partName || '';
 
-    // 重量計算（簡易）
+    // サイズ（▽マーク付き）
+    const fmtSz = (val, flag) => {
+      const v = String(val||'').replace(/\.00$/,'');
+      if (!v) return '';
+      return (flag === true ? '▽▽' : '') + v;
+    };
+    const sx = fmtSz(r.sizeX, r.fX);
+    const sy = fmtSz(r.sizeY, r.fY);
+    const sz = fmtSz(r.sizeZ, r.fZ);
+    const sizeStr = [sx,sy,sz].filter(Boolean).join(' × ') || '—';
+
+    // 重量計算
     const manualKg = r.weight ? parseFloat(r.weight) : null;
     let weightStr = '—';
     if (manualKg) {
       weightStr = (manualKg * (parseFloat(r.qty)||1)).toFixed(1) + ' kg';
+    } else {
+      const w = calcWeight(r.sizeX, r.sizeY, r.sizeZ, r.material, r.qty);
+      if (w) weightStr = (w.total || w.unit * (parseFloat(r.qty)||1)).toFixed(1) + ' kg';
     }
 
     return `<tr>
-      <td>${r.month||'—'}</td>
       <td>${r.confirmedAt||'—'}</td>
-      <td class="mono bold accent">${r.partNo||r.moldNo||''}</td>
-      <td class="mono">${r.moldNo||''}</td>
-      <td>${r.name||''}</td>
+      <td class="mono bold accent">${r.moldNo||''}</td>
+      <td><div class="mono bold accent">${partNo}</div>${partName ? '<div class="small2">' + partName + '</div>' : ''}</td>
       <td class="mono">${r.material||''}</td>
-      <td class="center mono">${sizeStr}</td>
+      <td class="mono">${sizeStr}</td>
       <td class="center">${r.finish||'—'}</td>
       <td class="center">${r.qty||1}</td>
       <td class="right mono">${weightStr}</td>
       <td class="right mono bold">¥${fmtN(r.amount)}</td>
+      <td>${r.arrivalDate||'—'}</td>
       <td class="small">${r.supplier||''}</td>
     </tr>`;
   }).join('');
@@ -2640,6 +2652,7 @@ tr:nth-child(even) td{ background:#f8fafc; }
 .center{ text-align:center; }
 .right{ text-align:right; }
 .small{ font-size:7.5pt; word-break:break-all; }
+.small2{ font-size:7.5pt; color:#475569; margin-top:1px; }
 tfoot td{ font-weight:700; border-top:2px solid #1e293b; background:#f0f4f8 !important; padding:5px; }
 </style></head><body>
 <div class="hd">
@@ -2648,24 +2661,23 @@ tfoot td{ font-weight:700; border-top:2px solid #1e293b; background:#f0f4f8 !imp
 </div>
 <table>
   <thead><tr>
-    <th>仕入日</th>
-    <th>発注確定日</th>
-    <th>品番</th>
+    <th>発注日</th>
     <th>管理NO.</th>
-    <th>品　名</th>
+    <th>品番 / 品名</th>
     <th>材質</th>
     <th style="text-align:center">サイズ (mm)</th>
     <th style="text-align:center">仕上</th>
     <th style="text-align:center">数量</th>
     <th class="right">重量</th>
     <th class="right">金額</th>
+    <th>入荷予定日</th>
     <th>手配先</th>
   </tr></thead>
   <tbody>${rows}</tbody>
   <tfoot><tr>
-    <td colspan="10" style="text-align:right">合　計</td>
+    <td colspan="8" style="text-align:right">合　計</td>
     <td class="right mono">¥${fmtN(totalAmt)}</td>
-    <td></td>
+    <td colspan="2"></td>
   </tr></tfoot>
 </table>
 <script>window.onload=function(){ window.print(); };<\/script>
