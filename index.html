@@ -396,7 +396,7 @@ onValue(ref(db,'settings'),s=>{
   else { const st={};Object.keys(v).forEach(k=>{if(typeof v[k]==='number')st[k]=v[k];});if(Object.keys(st).length)sets={...SDEFS,...st}; }
   // グループ設定
   if(v.groups&&Array.isArray(v.groups)&&v.groups.length){
-    groupCfg=v.groups.map(g=>({gid:g.gid||g.label||'g',label:g.label||g.gid||'グループ',ids:Array.isArray(g.ids)?[...g.ids]:[]}));
+    groupCfg=v.groups.map(g=>({gid:g.gid||g.label||'g',label:g.label||g.gid||'グループ',ids:Array.isArray(g.ids)?[...g.ids]:[],importMap:g.importMap||{}}));
   }
   updateLineSelects();
   renderGroupTabs();
@@ -1343,7 +1343,7 @@ window.saveSets=function(){
   // 新形式：setupTimesとgroupsを一緒に保存
   const cur={}; try{ const snap=window._lastSettingsVal||{}; Object.assign(cur,snap); }catch(e){}
   cur.setupTimes=ns;
-  cur.groups=groupCfg.map(g=>({gid:g.gid,label:g.label,ids:[...g.ids]}));
+  cur.groups=groupCfg.map(g=>({gid:g.gid,label:g.label,ids:[...g.ids],importMap:g.importMap||{}}));
   set(ref(db,'settings'),cur);
   const m=document.getElementById('smsg');m.textContent='保存しました ✓';setTimeout(()=>{m.textContent='';},2000);
 };
@@ -1546,7 +1546,7 @@ window.saveGroups=function(){
   });
   const allIds=getAllIDS();
   const stNs={};allIds.forEach(id=>{const v=parseInt(document.getElementById('st-'+id)?.value);stNs[id]=isNaN(v)?(sets[id]||45):v;});
-  const saveObj={groups:groupCfg.map(g=>({gid:g.gid,label:g.label,ids:[...g.ids]})),setupTimes:stNs};
+  const saveObj={groups:groupCfg.map(g=>({gid:g.gid,label:g.label,ids:[...g.ids],importMap:g.importMap||{}})),setupTimes:stNs};
   set(ref(db,'settings'),saveObj);
   const m=document.getElementById('gmsg');m.textContent='保存しました ✓';setTimeout(()=>{m.textContent='';},2000);
   updateLineSelects();
