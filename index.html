@@ -1423,6 +1423,12 @@ window.renderGrpMgr=function(){
               <div><label style="color:#888;display:block;margin-bottom:2px;">終了時刻 列</label><input type="text" id="mp-${gi}-end" value="${mp.endCol||'D'}" placeholder="D" style="width:45px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
             </div>
           </div>
+          <!-- スキップ設定 -->
+          <div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #e8e8e8;">
+            <label style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
+              <input type="checkbox" id="mp-${gi}-skipnot" ${mp.skipNoTime!==false?'checked':''}> <span>開始・終了時刻が空の行はスキップ<span style="color:#aaa;font-size:10px;margin-left:4px;">（メモ行除外）</span></span>
+            </label>
+          </div>
           <!-- シートモード設定 -->
           <div id="mp-${gi}-sheet-block" style="display:${(mp.mode||'sheet')==='sheet'?'block':'none'};">
             <div style="color:#888;margin-bottom:4px;">ライン別シート番号</div>
@@ -1447,7 +1453,42 @@ window.renderGrpMgr=function(){
   }).join('')+
     `<button class="btn-add-line" style="margin-top:6px;" onclick="addGroup()">＋ グループを追加</button>`;
 };
+// フォームの現在値をgroupCfg/linesメモリに同期（Firebase保存なし）
+function syncGrpMgrForm(){
+  groupCfg.forEach((g,gi)=>{
+    const nm=document.getElementById('gname-'+gi);
+    if(nm&&nm.value.trim()) g.label=nm.value.trim();
+    // ライン表示名
+    (g.ids||[]).forEach((id,li)=>{
+      const ln=document.getElementById(`gln-${gi}-${li}`);
+      if(ln&&ln.value.trim()&&lines[id]) lines[id]={...lines[id],name:ln.value.trim()};
+    });
+    // インポート設定（detailsが開いていない場合はDOMに要素が存在しないこともないが念のため）
+    const readV=(sfx,def)=>{const e=document.getElementById(`mp-${gi}-${sfx}`);return e?e.value.trim()||def:def;};
+    const mode=(document.querySelector(`input[name="mp-${gi}-mode"]:checked`)?.value)||'sheet';
+    const lineSheets={};
+    (g.ids||[]).forEach(id=>{const v=parseInt(document.getElementById(`mp-${gi}-sh-${id}`)?.value)||1;lineSheets[id]=v;});
+    const filterValues={};
+    (g.ids||[]).forEach(id=>{filterValues[id]=(document.getElementById(`mp-${gi}-fv-${id}`)?.value||'').trim();});
+    const skipNoTimeEl=document.getElementById(`mp-${gi}-skipnot`);
+    g.importMap={
+      ...(g.importMap||{}),
+      mode,
+      headerRow:parseInt(readV('hrow','1'))||0,
+      partCol:readV('part','A').toUpperCase(),
+      planCol:readV('plan','B').toUpperCase(),
+      startCol:readV('start','C').toUpperCase(),
+      endCol:readV('end','D').toUpperCase(),
+      lineSheets,
+      filterSheet:parseInt(document.getElementById(`mp-${gi}-fsheet`)?.value)||1,
+      filterCol:(document.getElementById(`mp-${gi}-fcol`)?.value||'A').toUpperCase(),
+      filterValues,
+      skipNoTime:skipNoTimeEl?skipNoTimeEl.checked:true
+    };
+  });
+}
 window.addLineToGroup=function(gi){
+  syncGrpMgrForm(); // 編集中の内容を保持
   const id=prompt('ラインID（例：D1, E1 など）を入力してください:');
   if(!id||!id.trim()) return;
   const tid=id.trim().toUpperCase();
@@ -1461,6 +1502,7 @@ window.addLineToGroup=function(gi){
   renderGroupTabs();
 };
 window.removeLineFromGroup=function(gi,li){
+  syncGrpMgrForm(); // 編集中の内容を保持
   const id=groupCfg[gi].ids[li];
   if(!confirm(id+' をグループから削除しますか？\n（Firebaseのデータは削除されません）')) return;
   groupCfg[gi].ids.splice(li,1);
@@ -1470,6 +1512,7 @@ window.removeLineFromGroup=function(gi,li){
   if(currentGrp===gi) renderBoard();
 };
 window.addGroup=function(){
+  syncGrpMgrForm(); // 編集中の内容を保持
   const label=prompt('新しいグループ名を入力してください:');
   if(!label||!label.trim()) return;
   groupCfg.push({gid:'g'+(groupCfg.length+1),label:label.trim(),ids:[]});
@@ -1497,7 +1540,8 @@ window.saveGroups=function(){
       lineSheets,
       filterSheet:parseInt(document.getElementById(`mp-${gi}-fsheet`)?.value)||1,
       filterCol:(document.getElementById(`mp-${gi}-fcol`)?.value||'A').toUpperCase(),
-      filterValues
+      filterValues,
+      skipNoTime:(document.getElementById(`mp-${gi}-skipnot`)?.checked!==false)
     };
   });
   const allIds=getAllIDS();
@@ -1600,6 +1644,7 @@ window.onImpFile=async function(){
   const enIdx=colToIdx(mp.endCol||'D');
   const dataStart=headerRow>0?headerRow:0;
 
+  const skipNoTime=mp.skipNoTime!==false; // デフォルトtrue（時刻なし行をスキップ）
   // 行データ配列 → jobsオブジェクト配列
   function parseRows(rows){
     const jobs=[];
@@ -1610,6 +1655,8 @@ window.onImpFile=async function(){
       if(!plan||plan<=0) return;
       const start=parseTime(row[stIdx]);
       const end=parseTime(row[enIdx]);
+      // 時刻なし行スキップ設定が有効なら、開始・終了どちらかが空の行を除外
+      if(skipNoTime&&(!start||!end)) return;
       jobs.push({seq:jobs.length+1,part,plan,start,end,status:'waiting',actualCount:0,actualStart:'',actualEnd:''});
     });
     return jobs;
@@ -1647,10 +1694,10 @@ window.onImpFile=async function(){
       const fIdx=colToIdx(mp.filterCol||'A');
       const filterValues=mp.filterValues||{};
       for(const id of (g.ids||[])){
-        const fVal=(filterValues[id]||'').trim();
+        const fVal=(filterValues[id]||'').trim().toLowerCase();
         if(!fVal){_impParsedJobs[id]=[];continue;}
-        // フィルタ値に一致するデータ行のみ抽出（ヘッダー行はskip済みallRowsから）
-        const filtered=allRows.slice(dataStart).filter(row=>String(row[fIdx]||'').trim()===fVal);
+        // フィルタ値を「含む」行を抽出（大文字小文字無視・部分一致）
+        const filtered=allRows.slice(dataStart).filter(row=>String(row[fIdx]||'').trim().toLowerCase().includes(fVal));
         // parseRowsに渡す際はdataStart=0で（既にスライス済みのため）
         const jobs=[];
         filtered.forEach(row=>{
@@ -1660,6 +1707,7 @@ window.onImpFile=async function(){
           if(!plan||plan<=0) return;
           const start=parseTime(row[stIdx]);
           const end=parseTime(row[enIdx]);
+          if(skipNoTime&&(!start||!end)) return; // メモ行スキップ
           jobs.push({seq:jobs.length+1,part,plan,start,end,status:'waiting',actualCount:0,actualStart:'',actualEnd:''});
         });
         _impParsedJobs[id]=jobs;
