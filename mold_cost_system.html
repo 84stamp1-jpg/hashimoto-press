@@ -622,7 +622,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.15-7</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.15-8</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -966,6 +966,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
             <input type="date" class="form-input" id="matBulkArrivalDate" style="padding:3px 6px;font-size:12px;width:140px">
             <button class="btn btn-secondary btn-sm" onclick="matBulkSetArrivalDate()">📦 入荷予定日を一括設定</button>
           </div>
+          <button class="btn btn-secondary btn-sm" onclick="printMaterials()">🖨 印刷</button>
           <button class="btn btn-secondary btn-sm" onclick="copyTableToClipboard('matTableBody','材料費')">📋 全行コピー</button>
         </div>
       </div>
@@ -2540,6 +2541,136 @@ function renderMaterials() {
         </tr>`).join('')}
       </tbody>
     </table>`;
+}
+
+function printMaterials() {
+  // チェックされた行を優先、なければ現在の絞り込み結果を全件
+  const checkedKeys = [...document.querySelectorAll('.mat-check:checked')].map(cb => cb.dataset.key);
+  const useChecked = checkedKeys.length > 0;
+
+  let entries;
+  if (useChecked) {
+    entries = checkedKeys.map(k => [k, DB.materials[k]]).filter(([,r]) => r);
+  } else {
+    const search  = (document.getElementById('matSearch')?.value||'').toLowerCase();
+    const moldFil = document.getElementById('matMoldFilter')?.value || '';
+    const dateFil = document.getElementById('matDateFilter')?.value || '';
+    entries = Object.entries(DB.materials);
+    if (search)  entries = entries.filter(([,r]) =>
+      (r.partNo||'').toLowerCase().includes(search) ||
+      (r.name||'').toLowerCase().includes(search)   ||
+      (r.moldNo||'').toLowerCase().includes(search)
+    );
+    if (moldFil) entries = entries.filter(([,r]) => r.moldNo === moldFil);
+    if (dateFil) entries = entries.filter(([,r]) => (r.month||'').startsWith(dateFil));
+    entries.sort(([,a],[,b]) => {
+      const da = a.confirmedAt||a.month||'', db = b.confirmedAt||b.month||'';
+      if (db > da) return 1; if (db < da) return -1;
+      return (a.partNo||a.moldNo||'').localeCompare(b.partNo||b.moldNo||'', 'ja', {numeric:true});
+    });
+  }
+
+  if (!entries.length) { alert('印刷するデータがありません'); return; }
+
+  const fmtN = n => n ? Number(n).toLocaleString('ja-JP') : '0';
+  const totalAmt = entries.reduce((s,[,r]) => s + (r.amount||0), 0);
+  const printDate = new Date().toLocaleDateString('ja-JP', {year:'numeric',month:'2-digit',day:'2-digit'});
+
+  // フィルター条件の表示テキスト生成
+  const filterParts = [];
+  const sv = document.getElementById('matSearch')?.value;
+  const mv = document.getElementById('matMoldFilter')?.value;
+  const dv = document.getElementById('matDateFilter')?.value;
+  if (!useChecked) {
+    if (sv) filterParts.push('検索：' + sv);
+    if (mv) filterParts.push('金型：' + mv);
+    if (dv) filterParts.push('日付：' + dv);
+  }
+  const filterStr = useChecked ? '選択した ' + entries.length + ' 件' : (filterParts.length ? filterParts.join('　') : '全件') + '　' + entries.length + ' 件';
+
+  const rows = entries.map(([,r]) => {
+    const sizeX = String(r.sizeX||'').replace(/\.00$/,'');
+    const sizeY = String(r.sizeY||'').replace(/\.00$/,'');
+    const sizeZ = String(r.sizeZ||'').replace(/\.00$/,'');
+    const sizeParts = [sizeX,sizeY,sizeZ].filter(Boolean);
+    const sizeStr = sizeParts.length ? sizeParts.join(' × ') : '—';
+
+    // 重量計算（簡易）
+    const manualKg = r.weight ? parseFloat(r.weight) : null;
+    let weightStr = '—';
+    if (manualKg) {
+      weightStr = (manualKg * (parseFloat(r.qty)||1)).toFixed(1) + ' kg';
+    }
+
+    return `<tr>
+      <td>${r.month||'—'}</td>
+      <td>${r.confirmedAt||'—'}</td>
+      <td class="mono bold accent">${r.partNo||r.moldNo||''}</td>
+      <td class="mono">${r.moldNo||''}</td>
+      <td>${r.name||''}</td>
+      <td class="mono">${r.material||''}</td>
+      <td class="center mono">${sizeStr}</td>
+      <td class="center">${r.finish||'—'}</td>
+      <td class="center">${r.qty||1}</td>
+      <td class="right mono">${weightStr}</td>
+      <td class="right mono bold">¥${fmtN(r.amount)}</td>
+      <td class="small">${r.supplier||''}</td>
+    </tr>`;
+  }).join('');
+
+  const win = window.open('', '_blank', 'width=1100,height=750');
+  win.document.write(`<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>材料費一覧</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+<style>
+@page { size: A4 landscape; margin: 8mm 10mm; }
+*{ margin:0; padding:0; box-sizing:border-box; }
+body{ font-family:'Noto Sans JP','MS Gothic',sans-serif; font-size:9pt; color:#1e293b; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+.hd{ display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #1e293b; padding-bottom:5px; margin-bottom:8px; }
+.hd-title{ font-size:14pt; font-weight:700; }
+.hd-meta{ font-size:8pt; color:#64748b; text-align:right; line-height:1.6; }
+table{ width:100%; border-collapse:collapse; }
+th{ background:#1e293b; color:#fff; padding:5px 5px; font-size:8pt; white-space:nowrap; text-align:left; }
+th.right{ text-align:right; }
+td{ padding:4px 5px; border-bottom:1px solid #e2e8f0; font-size:8.5pt; vertical-align:middle; }
+tr:nth-child(even) td{ background:#f8fafc; }
+.mono{ font-family:'Courier New',monospace; }
+.bold{ font-weight:700; }
+.accent{ color:#0369a1; }
+.center{ text-align:center; }
+.right{ text-align:right; }
+.small{ font-size:7.5pt; word-break:break-all; }
+tfoot td{ font-weight:700; border-top:2px solid #1e293b; background:#f0f4f8 !important; padding:5px; }
+</style></head><body>
+<div class="hd">
+  <div class="hd-title">材料費一覧</div>
+  <div class="hd-meta">${filterStr}<br>印刷日：${printDate}　橋本工業㈱</div>
+</div>
+<table>
+  <thead><tr>
+    <th>仕入日</th>
+    <th>発注確定日</th>
+    <th>品番</th>
+    <th>管理NO.</th>
+    <th>品　名</th>
+    <th>材質</th>
+    <th style="text-align:center">サイズ (mm)</th>
+    <th style="text-align:center">仕上</th>
+    <th style="text-align:center">数量</th>
+    <th class="right">重量</th>
+    <th class="right">金額</th>
+    <th>手配先</th>
+  </tr></thead>
+  <tbody>${rows}</tbody>
+  <tfoot><tr>
+    <td colspan="10" style="text-align:right">合　計</td>
+    <td class="right mono">¥${fmtN(totalAmt)}</td>
+    <td></td>
+  </tr></tfoot>
+</table>
+<script>window.onload=function(){ window.print(); };<\/script>
+</body></html>`);
+  win.document.close();
 }
 
 // ═══════════════════════════════════════════════
