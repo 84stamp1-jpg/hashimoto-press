@@ -622,7 +622,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.15-10</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.15-11</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -2516,6 +2516,14 @@ function renderMaterials() {
     const cur = mSel.value;
     mSel.innerHTML = '<option value="">全金型</option>' + moldNos.map(n=>`<option value="${n}"${n===cur?' selected':''}>${n}</option>`).join('');
   }
+  // 仕入日フィルターの月一覧を動的生成
+  const matMonths = [...new Set(Object.values(DB.materials).map(r=>(r.month||'').slice(0,7)).filter(Boolean))].sort().reverse();
+  const dSel = document.getElementById('matDateFilter');
+  if (dSel) {
+    const cur = dSel.value;
+    dSel.innerHTML = '<option value="">全日付</option><option value="nodate">仕入日なし</option>'
+      + matMonths.map(m=>`<option value="${m}"${m===cur?' selected':''}>${m}</option>`).join('');
+  }
   let entries = Object.entries(DB.materials);
   if (search)  entries = entries.filter(([,r]) =>
     (r.partNo||'').toLowerCase().includes(search) ||
@@ -2523,7 +2531,8 @@ function renderMaterials() {
     (r.moldNo||'').toLowerCase().includes(search)
   );
   if (moldFil) entries = entries.filter(([,r]) => r.moldNo === moldFil);
-  if (dateFil) entries = entries.filter(([,r]) => (r.month||'').startsWith(dateFil));
+  if (dateFil === 'nodate') entries = entries.filter(([,r]) => !(r.month||'').trim());
+  else if (dateFil)         entries = entries.filter(([,r]) => (r.month||'').startsWith(dateFil));
   // 発注確定日の降順（confirmedAt優先、なければmonth）→ 同日内は管理NO（partNo）の昇順
   entries.sort(([,a], [,b]) => {
     const da = a.confirmedAt || a.month || '', db = b.confirmedAt || b.month || '';
