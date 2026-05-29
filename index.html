@@ -146,6 +146,19 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 .sr2-row label{font-size:12px;font-weight:500;}
 .sr2-row input{padding:6px 9px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:inherit;}
 .sr2-row span{font-size:11px;color:#888;}
+/* グループタブ */
+.grp-btn{padding:4px 14px;font-size:11px;font-weight:700;border-radius:16px;border:1px solid #ddd;background:#fff;cursor:pointer;font-family:inherit;color:#888;transition:background 0.15s;}
+.grp-btn.active{background:#1a1a1a;color:#fff;border-color:#1a1a1a;}
+/* グループ管理 */
+.grp-section{border:1px solid #e0dfd8;border-radius:8px;padding:10px 12px;margin-bottom:10px;}
+.grp-section-title{font-size:12px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px;}
+.grp-name-input{font-size:12px;padding:4px 8px;border:1px solid #ddd;border-radius:5px;font-family:inherit;width:140px;}
+.grp-line-list{display:flex;flex-direction:column;gap:4px;margin-bottom:8px;}
+.grp-line-row{display:flex;align-items:center;gap:6px;font-size:12px;}
+.grp-line-row input{padding:4px 7px;border:1px solid #ddd;border-radius:5px;font-family:inherit;font-size:11px;}
+.btn-rm{background:none;border:none;color:#c0392b;cursor:pointer;font-size:14px;line-height:1;padding:2px 4px;}
+.btn-add-line{font-size:11px;padding:4px 10px;background:#f8f7f2;border:1px solid #ddd;border-radius:5px;cursor:pointer;font-family:inherit;}
+.btn-add-line:hover{background:#eceae3;}
 </style>
 </head>
 <body>
@@ -174,6 +187,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
       <div class="sc"><div class="sc-lbl">段取り中</div><div class="sc-val" id="s3">-</div></div>
     </div>
     <div class="alts" id="alts"></div>
+    <div id="grpTabs" style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;"></div>
     <div class="lines" id="lview"><div style="padding:20px;color:#888;font-size:12px;">読み込み中...</div></div>
   </div>
 
@@ -184,13 +198,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
         <div class="fi">
           <label>ライン選択</label>
           <select id="iLine" onchange="onLineSel()">
-            <option value="A1">A1号機(5)</option>
-            <option value="A2">A2号機(4)</option>
-            <option value="B1">B1号機(20)</option>
-            <option value="B2">B2号機(6)</option>
-            <option value="BP2">BラインP2</option>
-            <option value="CP3">CラインP3</option>
-            <option value="CP3_2">CラインP3-2</option>
+            <option value="">-- ライン選択 --</option>
           </select>
         </div>
         <div class="fi">
@@ -267,13 +275,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
         <div class="fi">
           <label>修正するライン</label>
           <select id="cLine" onchange="onCorLine()">
-            <option value="A1">A1号機(5)</option>
-            <option value="A2">A2号機(4)</option>
-            <option value="B1">B1号機(20)</option>
-            <option value="B2">B2号機(6)</option>
-            <option value="BP2">BラインP2</option>
-            <option value="CP3">CラインP3</option>
-            <option value="CP3_2">CラインP3-2</option>
+            <option value="">-- ライン選択 --</option>
           </select>
         </div>
         <div class="fi">
@@ -299,7 +301,13 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 
   <div id="tab-settings" style="display:none;">
     <div class="fc">
-      <div class="ftitle">段取り時間アラート設定（分）</div>
+      <div class="ftitle">グループ・ライン管理</div>
+      <div id="grpMgr"></div>
+      <button class="bp" onclick="saveGroups()">グループ設定を保存</button>
+      <div class="msg" id="gmsg"></div>
+    </div>
+    <div class="fc" style="margin-top:8px;">
+      <div class="ftitle">段取り標準時間設定（分）</div>
       <div class="sr2" id="srRows"></div>
       <button class="bp" onclick="saveSets()">保存する</button>
       <div class="msg" id="smsg"></div>
@@ -325,7 +333,17 @@ import { getDatabase, ref, onValue, set, update } from "https://www.gstatic.com/
 const cfg={apiKey:"AIzaSyCvh4rDrk6ljWhNBJc-Kt_YFpvEevLxb6o",authDomain:"hashimoto-press.firebaseapp.com",databaseURL:"https://hashimoto-press-default-rtdb.asia-southeast1.firebasedatabase.app",projectId:"hashimoto-press",storageBucket:"hashimoto-press.firebasestorage.app",messagingSenderId:"508495109760",appId:"1:508495109760:web:53d266bb4483ab04a29065"};
 const app=initializeApp(cfg);
 const db=getDatabase(app);
-const IDS=['A1','A2','B1','B2','BP2','CP3','CP3_2'];
+// ===== グループ・ライン管理 =====
+const DEFAULT_GRP=[
+  {gid:'g1',label:'プレス工程',ids:['A1','A2','B1','B2','BP2','CP3','CP3_2']},
+  {gid:'g2',label:'第2工程',ids:[]}
+];
+let groupCfg=DEFAULT_GRP.map(g=>({...g,ids:[...g.ids]}));
+let currentGrp=0;
+function getIDS(){return groupCfg[currentGrp]?.ids||[];}
+function getAllIDS(){return [...new Set(groupCfg.flatMap(g=>g.ids||[]).filter(Boolean))];}
+function getLineName(id){return lines[id]?.name||id;}
+
 const SDEFS={A1:45,A2:45,B1:60,B2:45,BP2:45,CP3:45,CP3_2:45};
 let lines={},sets={...SDEFS};
 
@@ -337,6 +355,8 @@ onValue(ref(db,'.info/connected'),s=>{
 onValue(ref(db,'lines'),s=>{
   try{
     lines=s.val()||{};
+    updateLineSelects();
+    renderGroupTabs();
     renderBoard();
   }catch(e){
     document.getElementById('lview').innerHTML='<div style="color:red;padding:20px;font-size:12px;">エラー: '+e.message+'</div>';
@@ -344,7 +364,16 @@ onValue(ref(db,'lines'),s=>{
   }
 });
 onValue(ref(db,'settings'),s=>{
-  if(s.val())sets={...SDEFS,...s.val()};
+  const v=s.val()||{};
+  // 段取り時間：新形式(setupTimes)・旧形式両対応
+  if(v.setupTimes) sets={...SDEFS,...v.setupTimes};
+  else { const st={};Object.keys(v).forEach(k=>{if(typeof v[k]==='number')st[k]=v[k];});if(Object.keys(st).length)sets={...SDEFS,...st}; }
+  // グループ設定
+  if(v.groups&&Array.isArray(v.groups)&&v.groups.length){
+    groupCfg=v.groups.map(g=>({gid:g.gid||g.label||'g',label:g.label||g.gid||'グループ',ids:Array.isArray(g.ids)?[...g.ids]:[]}));
+  }
+  updateLineSelects();
+  renderGroupTabs();
   if(Object.keys(lines).length>0) renderBoard();
 });
 
@@ -531,7 +560,7 @@ function getStatus(l){
 function renderBoard(){
   const c=document.getElementById('lview');
   c.innerHTML='';
-  IDS.forEach(id=>{
+  getIDS().forEach(id=>{
     const l=lines[id];if(!l)return;
     const s=getStatus(l);
     const el=elapsed(l.updatedAt);
@@ -832,21 +861,22 @@ function renderBoard(){
 }
 
 function renderSum(){
-  const active=IDS.filter(id=>{
+  const curIDS=getIDS();
+  const active=curIDS.filter(id=>{
     const l=lines[id];
     return l&&l.status==='running'&&l.plan>0;
   }).length;
-  const delays=IDS.filter(id=>{
+  const delays=curIDS.filter(id=>{
     const l=lines[id];
     if(!l||!l.updatedAt||!l.actual) return false;
     if(l.status!=='running'||!l.plan) return false;
     const pr=getProRata(l);
     return pr&&pr.proRata>0&&Math.round(l.actual/pr.proRata*100)<80;
   }).length;
-  const sc=IDS.filter(id=>lines[id]?.status==='setup').length;
-  // 全体達成率：CT達成率の平均
+  const sc=curIDS.filter(id=>lines[id]?.status==='setup').length;
+  // 全体達成率：CT達成率の平均（現グループ）
   var totalRateSum=0, totalRateCnt=0;
-  IDS.forEach(function(id){
+  curIDS.forEach(function(id){
     var l=lines[id]; if(!l) return;
     var lr=calcLineRate(l);
     if(lr&&lr.ctRate!==null){totalRateSum+=lr.ctRate; totalRateCnt++;}
@@ -859,7 +889,7 @@ function renderSum(){
 
 function renderAlts(){
   let h='';
-  IDS.forEach(id=>{
+  getAllIDS().forEach(id=>{
     const l=lines[id];if(!l)return;
     const el=elapsed(l.updatedAt);
     const nowH5=new Date().getHours(),nowM5=new Date().getMinutes();
@@ -1271,24 +1301,128 @@ window.doCorr=function(){
 };
 
 window.renderSR=function(){
-  document.getElementById('srRows').innerHTML=IDS.map(id=>`
-    <div class="sr2-row">
-      <label>${lines[id]?.name||id}</label>
-      <input type="number" id="st-${id}" value="${sets[id]||60}" min="5" max="180">
-      <span>分でアラート</span>
-    </div>`).join('');
+  const allIds=getAllIDS();
+  document.getElementById('srRows').innerHTML=allIds.length
+    ?allIds.map(id=>`
+      <div class="sr2-row">
+        <label>${getLineName(id)}</label>
+        <input type="number" id="st-${id}" value="${sets[id]!==undefined?sets[id]:45}" min="0" max="180">
+        <span>分（標準）</span>
+      </div>`).join('')
+    :'<div style="color:#aaa;font-size:12px;padding:8px 0;">ラインが登録されていません</div>';
 };
 window.saveSets=function(){
-  const ns={};IDS.forEach(id=>{const v=parseInt(document.getElementById('st-'+id)?.value);ns[id]=isNaN(v)?60:v;});
-  set(ref(db,'settings'),ns);
+  const allIds=getAllIDS();
+  const ns={};allIds.forEach(id=>{const v=parseInt(document.getElementById('st-'+id)?.value);ns[id]=isNaN(v)?45:v;});
+  // 新形式：setupTimesとgroupsを一緒に保存
+  const cur={}; try{ const snap=window._lastSettingsVal||{}; Object.assign(cur,snap); }catch(e){}
+  cur.setupTimes=ns;
+  cur.groups=groupCfg.map(g=>({gid:g.gid,label:g.label,ids:[...g.ids]}));
+  set(ref(db,'settings'),cur);
   const m=document.getElementById('smsg');m.textContent='保存しました ✓';setTimeout(()=>{m.textContent='';},2000);
+};
+
+// ===== グループタブ表示・切り替え =====
+function renderGroupTabs(){
+  const el=document.getElementById('grpTabs');
+  if(!el) return;
+  const hasMulti=groupCfg.some(g=>g.ids&&g.ids.length>0);
+  if(!hasMulti||groupCfg.length<=1){el.style.display='none';return;}
+  el.style.display='flex';
+  el.innerHTML=groupCfg.map((g,i)=>{
+    const cnt=g.ids?g.ids.length:0;
+    return `<button class="grp-btn${i===currentGrp?' active':''}" onclick="switchGroup(${i})">${g.label}（${cnt}）</button>`;
+  }).join('');
+}
+window.switchGroup=function(idx){
+  currentGrp=idx;
+  renderGroupTabs();
+  renderBoard();
+};
+
+// ===== ライン選択ドロップダウン更新 =====
+function updateLineSelects(){
+  const allIds=getAllIDS();
+  const opts='<option value="">-- ライン選択 --</option>'+allIds.map(id=>`<option value="${id}">${getLineName(id)}</option>`).join('');
+  ['iLine','cLine'].forEach(sid=>{
+    const el=document.getElementById(sid);
+    if(!el) return;
+    const prev=el.value;
+    el.innerHTML=opts;
+    if(prev&&allIds.includes(prev)) el.value=prev;
+  });
+}
+
+// ===== グループ管理UI =====
+window.renderGrpMgr=function(){
+  const el=document.getElementById('grpMgr');
+  if(!el) return;
+  el.innerHTML=groupCfg.map((g,gi)=>`
+    <div class="grp-section">
+      <div class="grp-section-title">
+        グループ名：<input class="grp-name-input" id="gname-${gi}" value="${g.label}" placeholder="グループ名">
+      </div>
+      <div class="grp-line-list" id="glines-${gi}">
+        ${(g.ids||[]).map((id,li)=>`
+          <div class="grp-line-row">
+            <span style="font-size:11px;min-width:60px;color:#555;">${id}</span>
+            <input id="gln-${gi}-${li}" value="${getLineName(id)}" placeholder="表示名" style="width:120px;">
+            <button class="btn-rm" onclick="removeLineFromGroup(${gi},${li})" title="削除">✕</button>
+          </div>`).join('')}
+      </div>
+      <button class="btn-add-line" onclick="addLineToGroup(${gi})">＋ ラインを追加</button>
+    </div>`).join('')+
+    `<button class="btn-add-line" style="margin-top:6px;" onclick="addGroup()">＋ グループを追加</button>`;
+};
+window.addLineToGroup=function(gi){
+  const id=prompt('ラインID（例：D1, E1 など）を入力してください:');
+  if(!id||!id.trim()) return;
+  const tid=id.trim().toUpperCase();
+  if(getAllIDS().includes(tid)){alert(tid+' は既に登録されています');return;}
+  const name=prompt('表示名を入力してください（例：D1号機）:');
+  groupCfg[gi].ids.push(tid);
+  // linesデータがなければ仮エントリを作成
+  if(!lines[tid]) lines[tid]={name:name||tid,status:'waiting',plan:0,actual:0,updatedAt:0,jobs:[]};
+  window.renderGrpMgr();
+  updateLineSelects();
+  renderGroupTabs();
+};
+window.removeLineFromGroup=function(gi,li){
+  const id=groupCfg[gi].ids[li];
+  if(!confirm(id+' をグループから削除しますか？\n（Firebaseのデータは削除されません）')) return;
+  groupCfg[gi].ids.splice(li,1);
+  window.renderGrpMgr();
+  updateLineSelects();
+  renderGroupTabs();
+  if(currentGrp===gi) renderBoard();
+};
+window.addGroup=function(){
+  const label=prompt('新しいグループ名を入力してください:');
+  if(!label||!label.trim()) return;
+  groupCfg.push({gid:'g'+(groupCfg.length+1),label:label.trim(),ids:[]});
+  window.renderGrpMgr();
+  renderGroupTabs();
+};
+window.saveGroups=function(){
+  // グループ名を反映
+  groupCfg.forEach((g,gi)=>{
+    const inp=document.getElementById('gname-'+gi);
+    if(inp) g.label=inp.value.trim()||g.label;
+  });
+  const allIds=getAllIDS();
+  const stNs={};allIds.forEach(id=>{const v=parseInt(document.getElementById('st-'+id)?.value);stNs[id]=isNaN(v)?(sets[id]||45):v;});
+  const saveObj={groups:groupCfg.map(g=>({gid:g.gid,label:g.label,ids:[...g.ids]})),setupTimes:stNs};
+  set(ref(db,'settings'),saveObj);
+  const m=document.getElementById('gmsg');m.textContent='保存しました ✓';setTimeout(()=>{m.textContent='';},2000);
+  updateLineSelects();
+  renderGroupTabs();
 };
 
 let _swSkipLineSel=false;
 window.sw=function(tab){
   ['board','input','settings'].forEach(t=>document.getElementById('tab-'+t).style.display=t===tab?'block':'none');
   document.querySelectorAll('.tb').forEach((b,i)=>b.classList.toggle('active',['board','input','settings'][i]===tab));
-  if(tab==='settings') window.renderSR();
+  if(tab==='settings'){window.renderSR();window.renderGrpMgr();}
   if(tab==='input'&&!_swSkipLineSel) onLineSel();
   _swSkipLineSel=false;
 };
