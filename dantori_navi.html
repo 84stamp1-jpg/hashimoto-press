@@ -248,8 +248,8 @@ html, body {
 .chip-del:hover{opacity:1;color:#dc2626;}
 .chip-text-input{border:none;outline:none;font-size:12px;min-width:70px;flex:1;padding:2px 2px;background:transparent;font-family:inherit;color:#1a1a1a;}
 .chip-dropdown{position:absolute;top:calc(100% + 2px);left:0;right:0;background:white;border:1px solid #ddd;border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:9999;max-height:140px;overflow-y:auto;display:none;}
-.chip-dd-item{padding:6px 10px;font-size:12px;cursor:pointer;color:#1a1a1a;}
-.chip-dd-item:hover{background:#eff6ff;color:#1e40af;}
+.chip-dd-item{padding:6px 10px;font-size:12px;cursor:pointer;color:#1a1a1a;outline:none;}
+.chip-dd-item:hover,.chip-dd-item:focus{background:#eff6ff;color:#1e40af;}
 .kcard-part{font-size:10px;color:#666;margin-bottom:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .kcard-roles{display:flex;flex-direction:column;gap:2px;}
 .kcard-role{display:flex;align-items:baseline;gap:3px;font-size:10px;}
@@ -811,42 +811,42 @@ html, body {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         <div class="form-group" style="margin:0;">
           <label style="font-size:10px;">条件設定</label>
-          <div id="chip-wrap-cond" class="chip-wrap" onclick="chipWrapClick('chip-wrap-cond')">
-            <input class="chip-text-input" placeholder="名前または↓" autocomplete="off"
-              oninput="chipOnInput('chip-wrap-cond','staffDatalist-cond')"
-              onkeydown="chipOnKeydown(event,'chip-wrap-cond','staffDatalist-cond')"
-              onblur="chipOnBlur('chip-wrap-cond')"
-              onfocus="chipOnInput('chip-wrap-cond','staffDatalist-cond')"/>
+          <div id="chip-wrap-cond" class="chip-wrap" data-dlid="staffDatalist-cond"
+               onmousedown="chipWrapMousedown(event,'chip-wrap-cond')">
+            <input class="chip-text-input" placeholder="名前を選択/入力" autocomplete="off"
+              oninput="chipOnInput('chip-wrap-cond')"
+              onkeydown="chipOnKeydown(event,'chip-wrap-cond')"
+              onblur="chipOnBlur('chip-wrap-cond')"/>
           </div>
         </div>
         <div class="form-group" style="margin:0;">
           <label style="font-size:10px;">品質確認</label>
-          <div id="chip-wrap-quality" class="chip-wrap" onclick="chipWrapClick('chip-wrap-quality')">
-            <input class="chip-text-input" placeholder="名前または↓" autocomplete="off"
-              oninput="chipOnInput('chip-wrap-quality','staffDatalist-quality')"
-              onkeydown="chipOnKeydown(event,'chip-wrap-quality','staffDatalist-quality')"
-              onblur="chipOnBlur('chip-wrap-quality')"
-              onfocus="chipOnInput('chip-wrap-quality','staffDatalist-quality')"/>
+          <div id="chip-wrap-quality" class="chip-wrap" data-dlid="staffDatalist-quality"
+               onmousedown="chipWrapMousedown(event,'chip-wrap-quality')">
+            <input class="chip-text-input" placeholder="名前を選択/入力" autocomplete="off"
+              oninput="chipOnInput('chip-wrap-quality')"
+              onkeydown="chipOnKeydown(event,'chip-wrap-quality')"
+              onblur="chipOnBlur('chip-wrap-quality')"/>
           </div>
         </div>
         <div class="form-group" style="margin:0;">
           <label style="font-size:10px;">リフト</label>
-          <div id="chip-wrap-lift" class="chip-wrap" onclick="chipWrapClick('chip-wrap-lift')">
-            <input class="chip-text-input" placeholder="名前または↓" autocomplete="off"
-              oninput="chipOnInput('chip-wrap-lift','staffDatalist-lift')"
-              onkeydown="chipOnKeydown(event,'chip-wrap-lift','staffDatalist-lift')"
-              onblur="chipOnBlur('chip-wrap-lift')"
-              onfocus="chipOnInput('chip-wrap-lift','staffDatalist-lift')"/>
+          <div id="chip-wrap-lift" class="chip-wrap" data-dlid="staffDatalist-lift"
+               onmousedown="chipWrapMousedown(event,'chip-wrap-lift')">
+            <input class="chip-text-input" placeholder="名前を選択/入力" autocomplete="off"
+              oninput="chipOnInput('chip-wrap-lift')"
+              onkeydown="chipOnKeydown(event,'chip-wrap-lift')"
+              onblur="chipOnBlur('chip-wrap-lift')"/>
           </div>
         </div>
         <div class="form-group" style="margin:0;">
           <label style="font-size:10px;">金型取付</label>
-          <div id="chip-wrap-mount" class="chip-wrap" onclick="chipWrapClick('chip-wrap-mount')">
-            <input class="chip-text-input" placeholder="名前または↓" autocomplete="off"
-              oninput="chipOnInput('chip-wrap-mount','staffDatalist-mount')"
-              onkeydown="chipOnKeydown(event,'chip-wrap-mount','staffDatalist-mount')"
-              onblur="chipOnBlur('chip-wrap-mount')"
-              onfocus="chipOnInput('chip-wrap-mount','staffDatalist-mount')"/>
+          <div id="chip-wrap-mount" class="chip-wrap" data-dlid="staffDatalist-mount"
+               onmousedown="chipWrapMousedown(event,'chip-wrap-mount')">
+            <input class="chip-text-input" placeholder="名前を選択/入力" autocomplete="off"
+              oninput="chipOnInput('chip-wrap-mount')"
+              onkeydown="chipOnKeydown(event,'chip-wrap-mount')"
+              onblur="chipOnBlur('chip-wrap-mount')"/>
           </div>
         </div>
       </div>
@@ -2491,9 +2491,19 @@ function updateStaffDatalist(){
 }
 
 // ===== チップ式担当者入力 =====
-function chipWrapClick(wid){
+function chipDlid(wid){
   const w = document.getElementById(wid);
-  if(w) w.querySelector('.chip-text-input').focus();
+  return w ? (w.dataset.dlid || '') : '';
+}
+// ラップ全体をクリック/mousedownしたとき（チップ削除ボタン以外） → ドロップダウンを即時表示
+function chipWrapMousedown(e, wid){
+  if(e.target.classList.contains('chip-del')) return; // 削除ボタンは除外
+  e.preventDefault(); // フォーカス移動前にdropdownを確実に出す
+  const w = document.getElementById(wid);
+  const inp = w && w.querySelector('.chip-text-input');
+  if(!inp) return;
+  inp.focus();
+  chipShowDd(wid);
 }
 function chipGetValues(wid){
   const w = document.getElementById(wid);
@@ -2521,12 +2531,14 @@ function chipRemove(wid, name){
   const chip = w.querySelector(`.chip[data-n="${name}"]`);
   if(chip) chip.remove();
 }
-function chipOnInput(wid, dlid){
+// ドロップダウンを（現在の入力テキストでフィルタして）表示
+function chipShowDd(wid){
   const w = document.getElementById(wid);
   const inp = w && w.querySelector('.chip-text-input');
-  if(!w||!inp) return;
+  if(!w || !inp) return;
+  const dlid = chipDlid(wid);
   const q = inp.value.toLowerCase();
-  const dl = document.getElementById(dlid);
+  const dl = dlid ? document.getElementById(dlid) : null;
   const cands = dl ? Array.from(dl.options).map(o=>o.value).filter(Boolean) : [];
   const already = chipGetValues(wid);
   const filtered = cands.filter(c=> !already.includes(c) && (!q || c.toLowerCase().includes(q)));
@@ -2534,15 +2546,28 @@ function chipOnInput(wid, dlid){
   if(!dd){ dd=document.createElement('div'); dd.className='chip-dropdown'; w.appendChild(dd); }
   if(!filtered.length){ dd.style.display='none'; return; }
   dd.innerHTML = filtered.map(c=>
-    `<div class="chip-dd-item" onmousedown="event.preventDefault();chipAdd('${wid}','${c}');document.getElementById('${wid}').querySelector('.chip-text-input').value='';chipHideDd('${wid}')">${c}</div>`
+    `<div class="chip-dd-item" tabindex="0"
+      onmousedown="event.preventDefault();chipAdd('${wid}','${c}');document.getElementById('${wid}').querySelector('.chip-text-input').value='';chipHideDd('${wid}')"
+      onkeydown="if(event.key==='Enter'){event.preventDefault();chipAdd('${wid}','${c}');document.getElementById('${wid}').querySelector('.chip-text-input').value='';chipHideDd('${wid}');document.getElementById('${wid}').querySelector('.chip-text-input').focus();}"
+    >${c}</div>`
   ).join('');
   dd.style.display='block';
 }
-function chipOnKeydown(e, wid, dlid){
+function chipOnInput(wid){ chipShowDd(wid); }
+function chipOnKeydown(e, wid){
   const w = document.getElementById(wid);
   const inp = w && w.querySelector('.chip-text-input');
   if(!inp) return;
-  if(e.key==='Enter'||e.key===','||e.key==='Tab'){
+  if(e.key==='ArrowDown'){
+    // ↓キーで即ドロップダウン表示（既に表示中なら最初の項目にフォーカス）
+    e.preventDefault();
+    chipShowDd(wid);
+    const dd = w.querySelector('.chip-dropdown');
+    if(dd && dd.style.display!=='none'){
+      const first = dd.querySelector('.chip-dd-item');
+      if(first) first.focus();
+    }
+  } else if(e.key==='Enter'||e.key===','||e.key==='Tab'){
     e.preventDefault();
     const v = inp.value.trim().replace(/[,、]$/,'');
     if(v){ chipAdd(wid,v); inp.value=''; chipHideDd(wid); }
@@ -2556,10 +2581,13 @@ function chipOnKeydown(e, wid, dlid){
 function chipOnBlur(wid){
   setTimeout(()=>{
     const w = document.getElementById(wid);
+    // ドロップダウン項目にフォーカスが移った場合は閉じない
+    const dd = w && w.querySelector('.chip-dropdown');
+    if(dd && dd.contains(document.activeElement)) return;
     const inp = w && w.querySelector('.chip-text-input');
     if(inp){ const v=inp.value.trim(); if(v){chipAdd(wid,v);inp.value='';} }
     chipHideDd(wid);
-  }, 200);
+  }, 150);
 }
 function chipHideDd(wid){
   const w = document.getElementById(wid);
