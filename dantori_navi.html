@@ -251,6 +251,8 @@ html, body {
 .chip-dd-item{padding:6px 10px;font-size:12px;cursor:pointer;color:#1a1a1a;outline:none;}
 .chip-dd-item:hover,.chip-dd-item:focus{background:#eff6ff;color:#1e40af;}
 .kcard-part{font-size:10px;color:#666;margin-bottom:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.kcard-part-link{cursor:pointer;}
+.kcard-part-link:hover{color:#1e40af;text-decoration:underline;}
 .kcard-roles{display:flex;flex-direction:column;gap:2px;}
 .kcard-role{display:flex;align-items:baseline;gap:3px;font-size:10px;}
 .kcard-role-lbl{color:#aaa;flex-shrink:0;width:30px;}
@@ -2284,6 +2286,19 @@ function refreshFactory(){
   fetchFirebaseLines();
 }
 
+// 品番クリック → 検索タブへ遷移
+function searchPart(partNo){
+  if(!partNo) return;
+  switchTab('search');
+  const inp = document.getElementById('searchInput');
+  if(inp){ inp.value = partNo; onSearchInput(); doSearch(); }
+}
+// イベント委譲：カンバン内の品番クリックを一括処理（inline onclickが動かない環境でも確実に動作）
+document.addEventListener('click', function(e){
+  const el = e.target.closest('[data-search-part]');
+  if(el) searchPart(el.dataset.searchPart);
+});
+
 function clickLineId(lineId){
   // クリックされたライン固有IDから品番を取得し検索タブで類似品を表示
   const ALIASES = {
@@ -2811,7 +2826,9 @@ function renderKanbanCard(d){
   <div class="${cls}">
     ${setupBar}
     <div class="kcard-time">${statusMark}${prodTime||'—'}</div>
-    <div class="kcard-part">${d.partNo||'—'}</div>
+    ${d.partNo
+      ? `<div class="kcard-part kcard-part-link" data-search-part="${d.partNo}">${d.partNo}</div>`
+      : `<div class="kcard-part">—</div>`}
     ${rolesHtml}
     ${editBtn}
   </div>`;
@@ -2837,7 +2854,9 @@ function renderKanbanPersonCard(d, targetName){
     ${setupBar}
     <div class="kcard-time">${prodTime||'—'}</div>
     <div class="kcard-part" style="color:#1a1a1a;font-weight:600;">${lineName}</div>
-    <div class="kcard-part">${d.partNo||'—'}</div>
+    ${d.partNo
+      ? `<div class="kcard-part kcard-part-link" data-search-part="${d.partNo}">${d.partNo}</div>`
+      : `<div class="kcard-part">—</div>`}
     ${roleStr?`<div class="kcard-role"><span class="kcard-role-val" style="color:#0369a1;">${roleStr}</span></div>`:''}
   </div>`;
 }
@@ -2901,7 +2920,7 @@ function renderKanbanCol(colDef, allEntries){
             <div class="kcard-time" style="display:flex;align-items:center;justify-content:space-between;gap:4px;">
               <span>${timeStr}</span>${badge}
             </div>
-            <div class="kcard-part">${part}</div>
+            ${part&&part!=='—'?`<div class="kcard-part kcard-part-link" data-search-part="${part}">${part}</div>`:`<div class="kcard-part">—</div>`}
             ${pct!==null?`<div style="font-size:10px;font-weight:700;color:${pctColor};margin-top:2px;">${actual.toLocaleString()}/${plan.toLocaleString()}個 ${pct}%</div>`:''}
           </div>`;
         }).join('');
@@ -2930,7 +2949,7 @@ function renderKanbanCol(colDef, allEntries){
             <div class="kcard-time" style="display:flex;align-items:center;justify-content:space-between;gap:4px;">
               <span>—</span>${badge}
             </div>
-            <div class="kcard-part">${part}</div>
+            ${part&&part!=='—'?`<div class="kcard-part kcard-part-link" data-search-part="${part}">${part}</div>`:`<div class="kcard-part">—</div>`}
             ${pct!==null?`<div style="font-size:10px;font-weight:700;color:${pctColor};margin-top:2px;">${actual.toLocaleString()}/${plan.toLocaleString()}個 ${pct}%</div>`:''}
           </div>`;
         }
