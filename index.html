@@ -811,7 +811,8 @@ function renderBoard(){
               // 段取りなしフラグ
               setupParts2.push('<span style="color:#aaa;font-size:9px;">✓ 段取りなし</span>');
             } else {
-              const implied=calcImpliedSetup(jobs,jIdx); // null=段取りなし / 0以上=分数
+              // 推定段取りは作業開始済みの場合のみ計算（jWS=作業開始時刻が設定されている）
+              const implied=jWS?calcImpliedSetup(jobs,jIdx):null;
               const dispMin=jSetupMin>0?jSetupMin:(implied||0);
               const isImplied=jSetupMin===0&&(implied||0)>0;
               if(dispMin>0){
@@ -994,9 +995,9 @@ window.openModal=function(id){
     const actNet2=wsM2&&weM2?netMins(wsM2,weM2):0;
     const r=stdCT2>0&&actNet2>0&&a>0?Math.round(a*stdCT2/actNet2*100):(j.plan>0&&a>0?Math.round(a/j.plan*100):null);
     const rc=r===null?'':r>=95?'c-ok':r>=80?'c-wn':'c-ng';
-    // 段取り時間：実績 or 推定
+    // 段取り時間：実績 or 推定（作業開始済みの場合のみ推定計算）
     const actSU=j.setupActualMin||0;
-    const implSU=calcImpliedSetup(jobs,ji);
+    const implSU=jWS2?calcImpliedSetup(jobs,ji):null;
     const dispSU=actSU>0?actSU:(implSU||0);
     const isImpliedSU=actSU===0&&(implSU||0)>0;
     const suR=dispSU>0&&stdSetup>0?Math.round(dispSU/stdSetup*100):null;
