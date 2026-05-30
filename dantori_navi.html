@@ -434,6 +434,7 @@ html, body {
       <button class="sort-btn"        data-sort="line"  onclick="setSortDantori('line')">ライン順</button>
     </div>
     <button class="btn" style="padding:5px 10px;font-size:11px;" onclick="refreshDantori()">↻ 更新</button>
+    <button class="add-btn-dt" style="background:#0369a1;" onclick="importFromProductionPlan()">📥 計画取込</button>
     <button class="add-btn-dt" onclick="showAddDantori()">＋ 追加</button>
   </div>
   <div class="dantori-list" id="dantoriList">
@@ -2030,6 +2031,105 @@ function setSortDantori(by){
   dantoriSortBy = by;
   document.querySelectorAll('.sort-btn').forEach(b=>b.classList.toggle('active', b.dataset.sort===by));
   renderDantori();
+}
+
+// ===== 生産計画から段取り計画を取り込む =====
+async function importFromProductionPlan(){
+  if(!Object.keys(linesData).length){
+    alert('Firebaseへ未接続です。\n画面下部の接続状態を確認してから再試行してください。');
+    return;
+  }
+
+  const entries = [];
+  let idx = 0;
+
+  Object.keys(linesData).sort().forEach(lineId => {
+    const line = linesData[lineId];
+    if(!line || !Array.isArray(line.jobs)) return;
+
+    // history=trueやpart/start/end未入力は除外
+    const jobs = line.jobs.filter(j => j && j.part && j.start && j.end && !j.history);
+
+    jobs.forEach((j, ji) => {
+      // 段取り開始：前ジョブの終了時刻（noSetupフラグがあれば生産開始と同じ）
+      let setupStart = '';
+      if(!j.noSetup){
+        if(ji > 0 && jobs[ji-1] && jobs[ji-1].end){
+          setupStart = jobs[ji-1].end;
+        }
+      } else {
+        setupStart = j.start;
+      }
+
+      const status = j.status==='done'    ? 'done'
+                   : j.status==='running' ? 'in_progress'
+                   : 'scheduled';
+
+      entries.push({
+        _key:      lineId + '_' + idx,
+        lineId,
+        partNo:    j.part,
+        setupStart,
+        prodStart: j.start,
+        prodEnd:   j.end,
+        plan:      j.plan || 0,
+        status,
+        roles:     { 条件設定:'', 金型取付:'', リフト:'' },
+        note:      j.noSetup ? '（段取りなし）' : '',
+        isManual:  false,
+        fromPlan:  true,
+        updatedAt: Date.now(),
+      });
+      idx++;
+    });
+  });
+
+  if(!entries.length){
+    alert('取り込める生産計画が見つかりませんでした。\nプレス進捗管理ボードに品番・開始・終了時刻が登録されているか確認してください。');
+    return;
+  }
+
+  // グループ別プレビュー
+  const byGroup = {};
+  entries.forEach(e => {
+    const g = (e.lineId||'').charAt(0);
+    if(!byGroup[g]) byGroup[g] = [];
+    byGroup[g].push(e);
+  });
+  const preview = Object.entries(byGroup).map(([g, es]) =>
+    `[プレス${g}]\n` + es.map(e =>
+      `  ${LINE_LABEL[e.lineId]||e.lineId}: ${e.partNo}  ${e.setupStart?e.setupStart+'→':''}${e.prodStart}～${e.prodEnd}`
+    ).join('\n')
+  ).join('\n');
+
+  if(!confirm(
+    `生産計画から ${entries.length} 件の段取り計画を取り込みます:\n\n${preview}\n\n` +
+    `※ 手動追加済みの計画は保持されます\n※ 計画取込データは再取込時に上書きされます\n\nよろしいですか?`
+  )) return;
+
+  const fbUrl   = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
+  const dateStr = getDantoriDatePath();
+
+  try {
+    const newData = {};
+    // 手動エントリを保持
+    dantoriSchedule.filter(e => e.isManual === true).forEach(e => {
+      const {_id, ...rest} = e;
+      newData[_id] = rest;
+    });
+    // 計画エントリを連番キーで追加
+    entries.forEach((e, i) => {
+      const {_key, ...rest} = e;
+      newData[`plan_${dateStr}_${String(i).padStart(3,'0')}`] = rest;
+    });
+
+    await fetch(`${fbUrl}/dantori/${dateStr}.json`,
+      {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newData)});
+    await loadDantoriSchedule();
+    alert(`✓ ${entries.length} 件の段取り計画を取り込みました`);
+  } catch(e){
+    alert('取込エラー: ' + e.message);
+  }
 }
 
 // 生産開始時刻を入力したとき、同ラインの直前エントリの生産終了を段取り開始に自動入力
