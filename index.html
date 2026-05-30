@@ -1421,6 +1421,7 @@ window.renderGrpMgr=function(){
               <div><label style="color:#888;display:block;margin-bottom:2px;">計画数 列</label><input type="text" id="mp-${gi}-plan" value="${mp.planCol||'B'}" placeholder="B" style="width:45px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
               <div><label style="color:#888;display:block;margin-bottom:2px;">開始時刻 列</label><input type="text" id="mp-${gi}-start" value="${mp.startCol||'C'}" placeholder="C" style="width:45px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
               <div><label style="color:#888;display:block;margin-bottom:2px;">終了時刻 列</label><input type="text" id="mp-${gi}-end" value="${mp.endCol||'D'}" placeholder="D" style="width:45px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
+              <div style="grid-column:1/-1;"><label style="color:#888;display:block;margin-bottom:2px;">品番が「-」の場合の代替列<span style="color:#aaa;font-size:10px;margin-left:4px;">（空欄=使わない）</span></label><input type="text" id="mp-${gi}-altpart" value="${mp.altPartCol||''}" placeholder="例: C" style="width:45px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
             </div>
           </div>
           <!-- スキップ設定 -->
@@ -1483,7 +1484,8 @@ function syncGrpMgrForm(){
       filterSheet:parseInt(document.getElementById(`mp-${gi}-fsheet`)?.value)||1,
       filterCol:(document.getElementById(`mp-${gi}-fcol`)?.value||'A').toUpperCase(),
       filterValues,
-      skipNoTime:skipNoTimeEl?skipNoTimeEl.checked:true
+      skipNoTime:skipNoTimeEl?skipNoTimeEl.checked:true,
+      altPartCol:(document.getElementById(`mp-${gi}-altpart`)?.value||'').trim().toUpperCase()
     };
   });
 }
@@ -1541,7 +1543,8 @@ window.saveGroups=function(){
       filterSheet:parseInt(document.getElementById(`mp-${gi}-fsheet`)?.value)||1,
       filterCol:(document.getElementById(`mp-${gi}-fcol`)?.value||'A').toUpperCase(),
       filterValues,
-      skipNoTime:(document.getElementById(`mp-${gi}-skipnot`)?.checked!==false)
+      skipNoTime:(document.getElementById(`mp-${gi}-skipnot`)?.checked!==false),
+      altPartCol:(document.getElementById(`mp-${gi}-altpart`)?.value||'').trim().toUpperCase()
     };
   });
   // ライン表示名を Firebase lines/{id}/name へ書き込む
@@ -1661,12 +1664,20 @@ window.onImpFile=async function(){
   const dataStart=headerRow>0?headerRow:0;
 
   const skipNoTime=mp.skipNoTime!==false; // デフォルトtrue（時刻なし行をスキップ）
+  const altPIdx=colToIdx(mp.altPartCol||''); // 代替品番列インデックス（-1=未設定）
+  // 「-」判定（半角・全角ダッシュ・ハイフンのみの文字列）
+  function isDash(s){return /^[-－ー]+$/.test(s);}
   // 行データ配列 → jobsオブジェクト配列
   function parseRows(rows){
     const jobs=[];
     rows.slice(dataStart).forEach(row=>{
-      const part=String(row[pIdx]||'').trim();
-      if(!part) return;
+      let part=String(row[pIdx]||'').trim();
+      // 品番が「-」系の場合、代替列から取得
+      if(isDash(part)&&altPIdx>=0){
+        const alt=String(row[altPIdx]||'').trim();
+        if(alt&&!isDash(alt)) part=alt;
+      }
+      if(!part||isDash(part)) return;
       const plan=parseInt(String(row[plIdx]||'').replace(/[^\d]/g,''));
       if(!plan||plan<=0) return;
       const start=parseTime(row[stIdx]);
@@ -1717,8 +1728,9 @@ window.onImpFile=async function(){
         // parseRowsに渡す際はdataStart=0で（既にスライス済みのため）
         const jobs=[];
         filtered.forEach(row=>{
-          const part=String(row[pIdx]||'').trim();
-          if(!part) return;
+          let part=String(row[pIdx]||'').trim();
+          if(isDash(part)&&altPIdx>=0){const alt=String(row[altPIdx]||'').trim();if(alt&&!isDash(alt))part=alt;}
+          if(!part||isDash(part)) return;
           const plan=parseInt(String(row[plIdx]||'').replace(/[^\d]/g,''));
           if(!plan||plan<=0) return;
           const start=parseTime(row[stIdx]);
