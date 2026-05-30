@@ -170,6 +170,9 @@ html, body {
 .edit-btn:hover{background:#f5f5f3;}
 .del-btn{padding:3px 8px;border:1px solid #fecaca;border-radius:4px;font-size:10px;cursor:pointer;background:white;color:#dc2626;transition:all 0.1s;}
 .del-btn:hover{background:#fff5f5;}
+.dantori-group{margin-bottom:14px;}
+.dantori-group-hdr{font-size:11px;font-weight:700;color:#374151;padding:5px 2px 5px;border-bottom:2px solid #1a1a1a;margin-bottom:8px;display:flex;align-items:center;gap:7px;}
+.grp-count{font-size:10px;color:#888;font-weight:400;background:#f3f4f6;padding:1px 7px;border-radius:8px;}
 .form-group select{width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;background:white;font-family:inherit;}
 .form-group select:focus{outline:none;border-color:#1a1a1a;}
 </style>
@@ -429,9 +432,8 @@ html, body {
   <div class="dt-controls">
     <div style="font-size:12px;color:#888;white-space:nowrap;">本日の段取り計画</div>
     <div class="sort-group">
-      <button class="sort-btn active" data-sort="time"  onclick="setSortDantori('time')">時刻順</button>
-      <button class="sort-btn"        data-sort="group" onclick="setSortDantori('group')">グループ順</button>
-      <button class="sort-btn"        data-sort="line"  onclick="setSortDantori('line')">ライン順</button>
+      <button class="sort-btn active" data-sort="time" onclick="setSortDantori('time')">時刻順</button>
+      <button class="sort-btn"        data-sort="line" onclick="setSortDantori('line')">ライン順</button>
     </div>
     <button class="btn" style="padding:5px 10px;font-size:11px;" onclick="refreshDantori()">↻ 更新</button>
     <button class="add-btn-dt" style="background:#0369a1;" onclick="importFromProductionPlan()">📥 計画取込</button>
@@ -516,6 +518,11 @@ html, body {
       <input type="text" id="cfg-favorites" placeholder="例：80U50-0000,18120-6Y0-0000,MLC-PLATE-A"/>
       <div class="form-hint">品番検索画面に表示するショートカット品番</div>
     </div>
+    <div class="form-group">
+      <label>段取り担当者マスタ（カンマ区切りで入力）</label>
+      <input type="text" id="cfg-staff" placeholder="例：田中,山田,鈴木,見原,大石"/>
+      <div class="form-hint">段取り計画の担当者入力でドロップダウン候補として表示されます</div>
+    </div>
 
     <div class="form-group">
       <label>Firebase データベースURL</label>
@@ -581,20 +588,25 @@ html, body {
         </select>
       </div>
     </div>
+    <!-- 担当者共通datalist（JS で動的更新） -->
+    <datalist id="staffDatalist"></datalist>
     <div style="border-top:1px solid #f0f0f0;margin:4px 0 12px;padding-top:12px;">
-      <div style="font-size:12px;font-weight:600;color:#666;margin-bottom:8px;">担当者</div>
+      <div style="font-size:12px;font-weight:600;color:#666;margin-bottom:8px;">
+        担当者
+        <span style="font-size:10px;font-weight:400;color:#aaa;margin-left:6px;">（設定に登録された名前が候補として出ます）</span>
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
         <div class="form-group" style="margin:0;">
           <label style="font-size:10px;">条件設定</label>
-          <input type="text" id="dt-role-cond" placeholder="担当者名"/>
+          <input type="text" id="dt-role-cond" list="staffDatalist" placeholder="担当者名" autocomplete="off"/>
         </div>
         <div class="form-group" style="margin:0;">
           <label style="font-size:10px;">金型取付</label>
-          <input type="text" id="dt-role-mount" placeholder="複数はカンマ区切り"/>
+          <input type="text" id="dt-role-mount" list="staffDatalist" placeholder="複数はカンマ区切り" autocomplete="off"/>
         </div>
         <div class="form-group" style="margin:0;">
           <label style="font-size:10px;">リフト</label>
-          <input type="text" id="dt-role-lift" placeholder="担当者名"/>
+          <input type="text" id="dt-role-lift" list="staffDatalist" placeholder="担当者名" autocomplete="off"/>
         </div>
       </div>
     </div>
@@ -645,6 +657,7 @@ let config = Object.assign({}, FIXED_CONFIG, {
   proxyUrl:    isValidUrl(savedConfig.proxyUrl, 'script.google.com')  ? savedConfig.proxyUrl    : FIXED_CONFIG.proxyUrl,
   // 任意設定のみlocalStorageから引き継ぐ
   favorites:   savedConfig.favorites || [],
+  staff:       savedConfig.staff     || [],
 });
 
 function showConfig(){
@@ -655,6 +668,7 @@ function showConfig(){
   document.getElementById('cfg-gas').value      = config.gasUrl || '';
   document.getElementById('cfg-proxy').value    = config.proxyUrl || '';
   document.getElementById('cfg-favorites').value = (config.favorites || []).join(',');
+  document.getElementById('cfg-staff').value     = (config.staff     || []).join(',');
   document.getElementById('fld-partNo').value       = FIELD_MAP.partNo       || '文字列__1行__3';
   document.getElementById('fld-name').value         = FIELD_MAP.name         || '文字列__1行__1';
   document.getElementById('fld-customer').value     = FIELD_MAP.customer     || '文字列__1行__2';
@@ -676,7 +690,9 @@ function saveConfig(){
     gasUrl:      document.getElementById('cfg-gas').value.trim(),
     proxyUrl:    document.getElementById('cfg-proxy').value.trim(),
     favorites:   favStr ? favStr.split(',').map(s=>s.trim()).filter(Boolean) : [],
+    staff:       (document.getElementById('cfg-staff').value.trim()||'').split(',').map(s=>s.trim()).filter(Boolean),
   };
+  updateStaffDatalist();
   FIELD_MAP = Object.assign(FIELD_MAP, {
     partNo:       document.getElementById('fld-partNo').value.trim()       || '文字列__1行__3',
     name:         document.getElementById('fld-name').value.trim()         || '文字列__1行__1',
@@ -1796,118 +1812,163 @@ function buildDantoriFromFirebase(lines){
   renderDantori();
 }
 
+// ライン表示名を取得（設定 > linesData.name > LINE_LABEL の順）
+function getLineDisplayName(lineId){
+  return dantoriLineNames[lineId]
+    || (linesData[lineId] && linesData[lineId].name)
+    || LINE_LABEL[lineId]
+    || lineId;
+}
+
+// グループ内ソート関数
+function makeSortFn(groupIds){
+  return (a,b)=>{
+    if(dantoriSortBy==='time'){
+      return (a.sortKey||'').localeCompare(b.sortKey||'');
+    } else { // line：グループの ids 配列の順番で並べる
+      const la = groupIds.indexOf(a.lineId);
+      const lb = groupIds.indexOf(b.lineId);
+      const ia = la===-1 ? 99 : la;
+      const ib = lb===-1 ? 99 : lb;
+      return ia!==ib ? ia-ib : (a.sortKey||'').localeCompare(b.sortKey||'');
+    }
+  };
+}
+
+// 1件分のカードHTML
+function renderDantoriCard(d){
+  const statusLabel={scheduled:'予定',in_progress:'実施中',done:'完了'};
+  const statusClass={scheduled:'s-scheduled',in_progress:'s-now',done:'s-done'};
+  const sLabel   = statusLabel[d.status] || d.status;
+  const sClass   = statusClass[d.status] || 's-next';
+  const isActive = d.status==='in_progress';
+
+  // ライン表示名（「ライン」の重複を防ぐ）
+  const lineName = getLineDisplayName(d.lineId);
+
+  // 段取り時間バー
+  const setupBar = (d.setupStart && d.prodStart)
+    ? `<div class="setup-bar">🔧 段取り：<span class="setup-time-tag">${d.setupStart} 〜 ${d.prodStart}</span></div>`
+    : '';
+
+  // 生産時間テキスト
+  const prodTime = d.prodStart
+    ? (d.prodEnd ? ` ${d.prodStart}〜${d.prodEnd}` : ` ${d.prodStart}〜`)
+    : '';
+
+  // 担当者
+  const roles = d.roles || {};
+  const hasRoles = roles.条件設定 || roles.金型取付 || roles.リフト;
+  const rolesHtml = hasRoles ? `
+    <div class="dc-roles">
+      ${roles.条件設定?`<div class="role-row"><div class="role-label">条件設定</div><div class="person-tags"><span class="ptag main">${roles.条件設定}</span></div></div>`:''}
+      ${roles.金型取付?`<div class="role-row"><div class="role-label">金型取付</div><div class="person-tags">${roles.金型取付.split(/[,、]/).map(p=>`<span class="ptag">${p.trim()}</span>`).join('')}</div></div>`:''}
+      ${roles.リフト  ?`<div class="role-row"><div class="role-label">リフト</div><div class="person-tags"><span class="ptag">${roles.リフト}</span></div></div>`:''}
+    </div>`
+  : (d._source==='auto'?`
+    <div class="dc-roles">
+      <div class="role-row"><div class="role-label">条件設定</div><div class="person-tags"><span class="ptag">—</span></div></div>
+      <div class="role-row"><div class="role-label">金型取付</div><div class="person-tags"><span class="ptag">—</span></div></div>
+      <div class="role-row"><div class="role-label">リフト</div><div class="person-tags"><span class="ptag">—</span></div></div>
+    </div>`:'');
+
+  // 編集・削除（手動 or 計画取込エントリのみ）
+  const canEdit = d._source==='manual' || d.fromPlan;
+  const editBtns = canEdit
+    ? `<button class="edit-btn" onclick="showEditDantori('${d._id}')">✏ 編集</button>
+       <button class="del-btn"  onclick="deleteDantoriEntry('${d._id}')">削除</button>`
+    : '';
+
+  const checkBtn = (d.partNo && d.partNo!=='--')
+    ? `<button class="doc-btn" style="font-size:12px;" onclick="switchTab('search');selectPart('${d.partNo}')">📄 製造条件・標準書を確認</button>`
+    : '';
+
+  const noteHtml = d.note
+    ? `<div style="font-size:11px;color:#888;padding:4px 14px 8px;border-top:1px solid #f8f8f8;">📝 ${d.note}</div>` : '';
+
+  const bottomRow = (checkBtn||editBtns)
+    ? `<div style="padding:8px 14px;border-top:1px solid #f0f0f0;display:flex;gap:6px;align-items:center;flex-wrap:wrap;">${checkBtn}${editBtns}</div>`
+    : '';
+
+  return `
+  <div class="dantori-card${isActive?' active-card':''}">
+    ${setupBar}
+    <div class="dc-header">
+      <div>
+        <div class="dc-time">${lineName}${prodTime}</div>
+        <div class="dc-info">品番：${d.partNo||'—'}</div>
+      </div>
+      <div class="status-badge ${sClass}">${sLabel}</div>
+    </div>
+    ${rolesHtml}
+    ${noteHtml}
+    ${bottomRow}
+  </div>`;
+}
+
 function renderDantori(){
   const list = document.getElementById('dantoriList');
 
-  // 手動入力分（Firebase dantori/YYYYMMDD/ から）
+  // 手動・計画取込エントリ
   const schedEntries = dantoriSchedule.map(d=>({
-    ...d, _source:'manual',
-    sortKey:  d.setupStart || d.prodStart || '99:99',
-    sortGroup:(d.lineId||'Z').charAt(0),
+    ...d, _source: d.isManual ? 'manual' : 'plan',
+    sortKey: d.setupStart || d.prodStart || '99:99',
   }));
 
-  // Firebase lines から自動検出（status=setup）で手動入力と重複しないライン
+  // Firebase lines から自動検出（status=setup）で未登録ラインのみ
   const autoEntries = dantoriFromFirebase
     .filter(d=>!schedEntries.some(s=>s.lineId===d.lineId))
     .map(d=>({
       lineId:d.lineId, partNo:d.partNo,
       setupStart:'', prodStart:'', prodEnd:'',
       status:'in_progress', roles:{}, note:'',
-      _id:null, _source:'auto',
+      _id:null, _source:'auto', fromPlan:false,
       sortKey:'00:00',
-      sortGroup:(d.lineId||'Z').charAt(0),
     }));
 
-  let entries = [...schedEntries, ...autoEntries];
+  const allEntries = [...schedEntries, ...autoEntries];
 
-  // 並び替え
-  const LINE_ORDER = {A1:1,A2:2,B1:3,B2:4,BP2:5,CP3:6,CP3_2:7};
-  entries.sort((a,b)=>{
-    if(dantoriSortBy==='time'){
-      return a.sortKey.localeCompare(b.sortKey);
-    } else if(dantoriSortBy==='group'){
-      const gc = a.sortGroup.localeCompare(b.sortGroup);
-      return gc!==0 ? gc : a.sortKey.localeCompare(b.sortKey);
-    } else { // line
-      const la = LINE_ORDER[a.lineId]||99;
-      const lb = LINE_ORDER[b.lineId]||99;
-      return la!==lb ? la-lb : a.sortKey.localeCompare(b.sortKey);
-    }
-  });
-
-  if(entries.length===0){
-    list.innerHTML='<div class="placeholder" style="padding:24px;text-align:center;color:#aaa;font-size:13px;">段取り計画がありません<br><span style="font-size:11px;margin-top:4px;display:block;">「＋ 追加」ボタンから登録してください</span></div>';
+  if(!allEntries.length){
+    list.innerHTML='<div class="placeholder" style="padding:24px;text-align:center;color:#aaa;font-size:13px;">段取り計画がありません<br><span style="font-size:11px;margin-top:4px;display:block;">「＋ 追加」または「📥 計画取込」で登録してください</span></div>';
     return;
   }
 
-  const statusLabel={scheduled:'予定',in_progress:'実施中',done:'完了'};
-  const statusClass={scheduled:'s-scheduled',in_progress:'s-now',done:'s-done'};
+  // グループ設定（Firebaseのsettings/groupsから取得済み）
+  // 有効なグループがなければ全ラインをひとつのグループとして扱う
+  const groups = (dantoriGroupCfg && dantoriGroupCfg.length > 0)
+    ? dantoriGroupCfg.filter(g => g.ids && g.ids.length > 0)
+    : [{label:'全ライン', ids: Object.keys(linesData).length ? Object.keys(linesData) : Object.keys(LINE_LABEL)}];
 
-  list.innerHTML = entries.map(d=>{
-    const sLabel    = statusLabel[d.status] || d.status;
-    const sClass    = statusClass[d.status] || 's-next';
-    const isActive  = d.status==='in_progress';
-    const lineLabel = LINE_LABEL[d.lineId] || d.lineId || '—';
+  const usedLineIds = new Set();
+  let html = '';
 
-    // 段取り時間バー
-    const setupBar = (d.setupStart && d.prodStart)
-      ? `<div class="setup-bar">🔧 段取り：<span class="setup-time-tag">${d.setupStart} 〜 ${d.prodStart}</span></div>`
-      : '';
-
-    // 生産時間テキスト
-    const prodTime = d.prodStart
-      ? (d.prodEnd ? ` ${d.prodStart}〜${d.prodEnd}` : ` ${d.prodStart}〜`)
-      : '';
-
-    // 担当者
-    const roles = d.roles || {};
-    const hasRoles = roles.条件設定 || roles.金型取付 || roles.リフト;
-    const rolesHtml = hasRoles ? `
-      <div class="dc-roles">
-        ${roles.条件設定 ? `<div class="role-row"><div class="role-label">条件設定</div><div class="person-tags"><span class="ptag main">${roles.条件設定}</span></div></div>` : ''}
-        ${roles.金型取付 ? `<div class="role-row"><div class="role-label">金型取付</div><div class="person-tags">${roles.金型取付.split(/[,、]/).map(p=>`<span class="ptag">${p.trim()}</span>`).join('')}</div></div>` : ''}
-        ${roles.リフト   ? `<div class="role-row"><div class="role-label">リフト</div><div class="person-tags"><span class="ptag">${roles.リフト}</span></div></div>` : ''}
-      </div>`
-    : (d._source==='auto' ? `
-      <div class="dc-roles">
-        <div class="role-row"><div class="role-label">条件設定</div><div class="person-tags"><span class="ptag">—</span></div></div>
-        <div class="role-row"><div class="role-label">金型取付</div><div class="person-tags"><span class="ptag">—</span></div></div>
-        <div class="role-row"><div class="role-label">リフト</div><div class="person-tags"><span class="ptag">—</span></div></div>
-      </div>` : '');
-
-    // 編集・削除（手動のみ）
-    const editBtns = d._source==='manual'
-      ? `<button class="edit-btn" onclick="showEditDantori('${d._id}')">✏ 編集</button>
-         <button class="del-btn"  onclick="deleteDantoriEntry('${d._id}')">削除</button>`
-      : '';
-
-    // 標準書確認ボタン
-    const checkBtn = (d.partNo && d.partNo!=='--')
-      ? `<button class="doc-btn" style="font-size:12px;" onclick="switchTab('search');selectPart('${d.partNo}')">📄 製造条件・標準書を確認</button>`
-      : '';
-
-    const noteHtml = d.note
-      ? `<div style="font-size:11px;color:#888;padding:4px 14px 8px;border-top:1px solid #f8f8f8;">📝 ${d.note}</div>` : '';
-
-    const bottomRow = (checkBtn || editBtns)
-      ? `<div style="padding:8px 14px;border-top:1px solid #f0f0f0;display:flex;gap:6px;align-items:center;flex-wrap:wrap;">${checkBtn}${editBtns}</div>`
-      : '';
-
-    return `
-    <div class="dantori-card${isActive?' active-card':''}">
-      ${setupBar}
-      <div class="dc-header">
-        <div>
-          <div class="dc-time">${lineLabel}ライン${prodTime}</div>
-          <div class="dc-info">品番：${d.partNo||'—'}</div>
-        </div>
-        <div class="status-badge ${sClass}">${sLabel}</div>
+  groups.forEach(g => {
+    const groupEntries = allEntries.filter(e => g.ids.includes(e.lineId));
+    if(!groupEntries.length) return;
+    groupEntries.forEach(e => usedLineIds.add(e.lineId));
+    const sorted = [...groupEntries].sort(makeSortFn(g.ids));
+    html += `
+    <div class="dantori-group">
+      <div class="dantori-group-hdr">
+        ${g.label}
+        <span class="grp-count">${sorted.length}件</span>
       </div>
-      ${rolesHtml}
-      ${noteHtml}
-      ${bottomRow}
+      ${sorted.map(renderDantoriCard).join('')}
     </div>`;
-  }).join('');
+  });
+
+  // どのグループにも属さないエントリ
+  const ungrouped = allEntries.filter(e => !usedLineIds.has(e.lineId));
+  if(ungrouped.length){
+    const sorted = [...ungrouped].sort(makeSortFn([]));
+    html += `
+    <div class="dantori-group">
+      <div class="dantori-group-hdr">その他<span class="grp-count">${sorted.length}件</span></div>
+      ${sorted.map(renderDantoriCard).join('')}
+    </div>`;
+  }
+
+  list.innerHTML = html;
 }
 
 function refreshDantori(){ fetchFirebaseLines(); loadDantoriSchedule(); }
@@ -1916,6 +1977,34 @@ function refreshDantori(){ fetchFirebaseLines(); loadDantoriSchedule(); }
 let dantoriSchedule  = [];
 let dantoriSortBy    = 'time';
 let editingDantoriId = null;
+let dantoriGroupCfg  = [];   // Firebase settings/groups から取得
+let dantoriLineNames = {};   // Firebase settings/lineNames から取得
+
+// Firebase settings から グループ設定・ライン名 を取得
+async function loadDantoriSettings(){
+  const fbUrl = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
+  try {
+    const res = await fetch(`${fbUrl}/settings.json`);
+    if(!res.ok) return;
+    const s = await res.json();
+    if(!s) return;
+    if(s.groups && Array.isArray(s.groups)){
+      dantoriGroupCfg = s.groups.filter(g => g.ids && g.ids.length > 0);
+    }
+    if(s.lineNames && typeof s.lineNames === 'object'){
+      dantoriLineNames = s.lineNames;
+    }
+    renderDantori(); // グループ情報が揃ったら再描画
+  } catch(e){ console.warn('settings load:', e); }
+}
+
+// 担当者 datalist を更新
+function updateStaffDatalist(){
+  const dl = document.getElementById('staffDatalist');
+  if(!dl) return;
+  const staff = config.staff || [];
+  dl.innerHTML = staff.map(n=>`<option value="${n}">`).join('');
+}
 
 function getDantoriDatePath(){
   const n = new Date();
@@ -2207,6 +2296,8 @@ renderChips();
 renderDantori();
 connectFirebase();
 loadDantoriSchedule();
+loadDantoriSettings();
+updateStaffDatalist();
 </script>
 </body>
 </html>
