@@ -155,6 +155,23 @@ html, body {
 .modal-btns{display:flex;gap:8px;margin-top:16px;}
 .modal-btns button{flex:1;padding:9px;border-radius:6px;font-size:13px;cursor:pointer;border:1px solid #ddd;}
 .modal-btns .save-btn{background:#1a1a1a;color:white;border-color:#1a1a1a;}
+
+/* ===== 段取り計画入力 ===== */
+.dt-controls{display:flex;align-items:center;gap:6px;margin-bottom:10px;flex-wrap:wrap;}
+.sort-group{display:flex;gap:2px;background:#f3f4f6;border-radius:20px;padding:2px;}
+.sort-btn{padding:4px 10px;border:none;border-radius:18px;font-size:11px;cursor:pointer;background:transparent;color:#666;transition:all 0.15s;white-space:nowrap;}
+.sort-btn.active{background:white;color:#1a1a1a;font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,0.1);}
+.add-btn-dt{padding:5px 12px;border:none;border-radius:6px;font-size:12px;cursor:pointer;background:#1a1a1a;color:white;margin-left:auto;white-space:nowrap;}
+.add-btn-dt:hover{background:#333;}
+.setup-bar{padding:6px 14px;background:#fffbeb;border-bottom:1px solid #fde68a;font-size:11px;color:#92400e;display:flex;align-items:center;gap:4px;}
+.setup-time-tag{font-weight:700;background:#fcd34d;color:#78350f;padding:1px 8px;border-radius:10px;font-size:11px;}
+.s-scheduled{background:#eff6ff;color:#1d4ed8;}
+.edit-btn{padding:3px 8px;border:1px solid #ddd;border-radius:4px;font-size:10px;cursor:pointer;background:white;color:#555;transition:all 0.1s;}
+.edit-btn:hover{background:#f5f5f3;}
+.del-btn{padding:3px 8px;border:1px solid #fecaca;border-radius:4px;font-size:10px;cursor:pointer;background:white;color:#dc2626;transition:all 0.1s;}
+.del-btn:hover{background:#fff5f5;}
+.form-group select{width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;background:white;font-family:inherit;}
+.form-group select:focus{outline:none;border-color:#1a1a1a;}
 </style>
 </head>
 <body>
@@ -409,9 +426,15 @@ html, body {
 
 <!-- ===== 段取り指示タブ ===== -->
 <div class="content" id="tab-dantori">
-  <div class="dantori-header">
-    <div style="font-size:12px;color:#888;">本日の段取り予定</div>
+  <div class="dt-controls">
+    <div style="font-size:12px;color:#888;white-space:nowrap;">本日の段取り計画</div>
+    <div class="sort-group">
+      <button class="sort-btn active" data-sort="time"  onclick="setSortDantori('time')">時刻順</button>
+      <button class="sort-btn"        data-sort="group" onclick="setSortDantori('group')">グループ順</button>
+      <button class="sort-btn"        data-sort="line"  onclick="setSortDantori('line')">ライン順</button>
+    </div>
     <button class="btn" style="padding:5px 10px;font-size:11px;" onclick="refreshDantori()">↻ 更新</button>
+    <button class="add-btn-dt" onclick="showAddDantori()">＋ 追加</button>
   </div>
   <div class="dantori-list" id="dantoriList">
     <!-- JS生成 -->
@@ -510,6 +533,77 @@ html, body {
     <div class="modal-btns">
       <button onclick="closeConfig()">キャンセル</button>
       <button class="save-btn" onclick="saveConfig()">保存して接続</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 段取り計画入力モーダル ===== -->
+<div class="modal-overlay" id="dantoriModal" style="display:none;" onclick="closeDantoriIfBg(event)">
+  <div class="modal">
+    <h3 id="dantoriModalTitle">📋 段取り計画を追加</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div class="form-group" style="margin:0 0 10px;">
+        <label>ライン</label>
+        <select id="dt-line">
+          <option value="A1">A1</option>
+          <option value="A2">A2</option>
+          <option value="B1">B1</option>
+          <option value="B2">B2</option>
+          <option value="BP2">B-P2</option>
+          <option value="CP3">C-P3</option>
+          <option value="CP3_2">C-P3_2</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin:0 0 10px;">
+        <label>品番</label>
+        <input type="text" id="dt-partno" placeholder="例：80U50-0000"/>
+      </div>
+      <div class="form-group" style="margin:0 0 10px;">
+        <label>段取り開始</label>
+        <input type="time" id="dt-setup-start"/>
+        <div class="form-hint">前工程終了時刻で自動入力されます</div>
+      </div>
+      <div class="form-group" style="margin:0 0 10px;">
+        <label>生産開始</label>
+        <input type="time" id="dt-prod-start" oninput="onDtProdStartChange()"/>
+      </div>
+      <div class="form-group" style="margin:0 0 10px;">
+        <label>生産終了（見込）</label>
+        <input type="time" id="dt-prod-end"/>
+      </div>
+      <div class="form-group" style="margin:0 0 10px;">
+        <label>ステータス</label>
+        <select id="dt-status">
+          <option value="scheduled">予定</option>
+          <option value="in_progress">実施中</option>
+          <option value="done">完了</option>
+        </select>
+      </div>
+    </div>
+    <div style="border-top:1px solid #f0f0f0;margin:4px 0 12px;padding-top:12px;">
+      <div style="font-size:12px;font-weight:600;color:#666;margin-bottom:8px;">担当者</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+        <div class="form-group" style="margin:0;">
+          <label style="font-size:10px;">条件設定</label>
+          <input type="text" id="dt-role-cond" placeholder="担当者名"/>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label style="font-size:10px;">金型取付</label>
+          <input type="text" id="dt-role-mount" placeholder="複数はカンマ区切り"/>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label style="font-size:10px;">リフト</label>
+          <input type="text" id="dt-role-lift" placeholder="担当者名"/>
+        </div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>備考</label>
+      <input type="text" id="dt-note" placeholder="特記事項があれば入力"/>
+    </div>
+    <div class="modal-btns">
+      <button onclick="closeDantoriModal()">キャンセル</button>
+      <button class="save-btn" onclick="saveDantoriEntry()">保存</button>
     </div>
   </div>
 </div>
@@ -1704,81 +1798,251 @@ function buildDantoriFromFirebase(lines){
 function renderDantori(){
   const list = document.getElementById('dantoriList');
 
-  // Firebaseデータがあれば使用、なければデモ
-  if(dantoriFromFirebase.length > 0){
-    list.innerHTML = dantoriFromFirebase.map(d=>`
-      <div class="dantori-card active-card">
-        <div class="dc-header">
-          <div>
-            <div class="dc-time">${d.press}ライン　段取り中</div>
-            <div class="dc-info">品番：${d.partNo}</div>
-          </div>
-          <div class="status-badge s-now">実施中</div>
-        </div>
-        <div class="dc-roles">
-          <div class="role-row">
-            <div class="role-label">条件設定</div>
-            <div class="person-tags"><span class="ptag main">条件設定担当</span></div>
-          </div>
-          <div class="role-row">
-            <div class="role-label">金型取付</div>
-            <div class="person-tags"><span class="ptag">取付担当</span></div>
-          </div>
-          <div class="role-row">
-            <div class="role-label">リフト</div>
-            <div class="person-tags"><span class="ptag">リフト担当</span></div>
-          </div>
-        </div>
-        <div style="padding:8px 14px;border-top:1px solid #f0f0f0;">
-          <button class="doc-btn" style="font-size:12px;" onclick="switchTab('search');selectPart('${d.partNo}')">
-            📄 ${d.partNo} の製造条件・標準書を確認
-          </button>
-        </div>
-      </div>`).join('');
+  // 手動入力分（Firebase dantori/YYYYMMDD/ から）
+  const schedEntries = dantoriSchedule.map(d=>({
+    ...d, _source:'manual',
+    sortKey:  d.setupStart || d.prodStart || '99:99',
+    sortGroup:(d.lineId||'Z').charAt(0),
+  }));
+
+  // Firebase lines から自動検出（status=setup）で手動入力と重複しないライン
+  const autoEntries = dantoriFromFirebase
+    .filter(d=>!schedEntries.some(s=>s.lineId===d.lineId))
+    .map(d=>({
+      lineId:d.lineId, partNo:d.partNo,
+      setupStart:'', prodStart:'', prodEnd:'',
+      status:'in_progress', roles:{}, note:'',
+      _id:null, _source:'auto',
+      sortKey:'00:00',
+      sortGroup:(d.lineId||'Z').charAt(0),
+    }));
+
+  let entries = [...schedEntries, ...autoEntries];
+
+  // 並び替え
+  const LINE_ORDER = {A1:1,A2:2,B1:3,B2:4,BP2:5,CP3:6,CP3_2:7};
+  entries.sort((a,b)=>{
+    if(dantoriSortBy==='time'){
+      return a.sortKey.localeCompare(b.sortKey);
+    } else if(dantoriSortBy==='group'){
+      const gc = a.sortGroup.localeCompare(b.sortGroup);
+      return gc!==0 ? gc : a.sortKey.localeCompare(b.sortKey);
+    } else { // line
+      const la = LINE_ORDER[a.lineId]||99;
+      const lb = LINE_ORDER[b.lineId]||99;
+      return la!==lb ? la-lb : a.sortKey.localeCompare(b.sortKey);
+    }
+  });
+
+  if(entries.length===0){
+    list.innerHTML='<div class="placeholder" style="padding:24px;text-align:center;color:#aaa;font-size:13px;">段取り計画がありません<br><span style="font-size:11px;margin-top:4px;display:block;">「＋ 追加」ボタンから登録してください</span></div>';
     return;
   }
 
-  // デモデータ
-  const DEMO = [
-    {time:'08:00', press:'B1', partNo:'18120-6Y0-0000', status:'done'},
-    {time:'10:30', press:'A1', partNo:'80U50-0000',     status:'now',
-     roles:{条件設定:['田中'], 金型取付:['山田','遠藤'], リフト:['鈴木']}},
-    {time:'13:00', press:'B2', partNo:'COVER-HM-001',   status:'next',
-     roles:{条件設定:['田中'], 金型取付:['見原','大石'], リフト:['鈴木']}},
-  ];
-  const statusLabel = {now:'実施中', next:'次の段取り', done:'完了'};
-  const statusClass = {now:'s-now', next:'s-next', done:'s-done'};
-  list.innerHTML = DEMO.map(d=>{
-    const rolesHtml = d.roles ? `
+  const statusLabel={scheduled:'予定',in_progress:'実施中',done:'完了'};
+  const statusClass={scheduled:'s-scheduled',in_progress:'s-now',done:'s-done'};
+
+  list.innerHTML = entries.map(d=>{
+    const sLabel    = statusLabel[d.status] || d.status;
+    const sClass    = statusClass[d.status] || 's-next';
+    const isActive  = d.status==='in_progress';
+    const lineLabel = LINE_LABEL[d.lineId] || d.lineId || '—';
+
+    // 段取り時間バー
+    const setupBar = (d.setupStart && d.prodStart)
+      ? `<div class="setup-bar">🔧 段取り：<span class="setup-time-tag">${d.setupStart} 〜 ${d.prodStart}</span></div>`
+      : '';
+
+    // 生産時間テキスト
+    const prodTime = d.prodStart
+      ? (d.prodEnd ? ` ${d.prodStart}〜${d.prodEnd}` : ` ${d.prodStart}〜`)
+      : '';
+
+    // 担当者
+    const roles = d.roles || {};
+    const hasRoles = roles.条件設定 || roles.金型取付 || roles.リフト;
+    const rolesHtml = hasRoles ? `
       <div class="dc-roles">
-        ${Object.entries(d.roles).map(([role,persons])=>`
-          <div class="role-row">
-            <div class="role-label">${role}</div>
-            <div class="person-tags">
-              ${persons.map((p,i)=>`<span class="ptag${i===0&&role==='条件設定'?' main':''}">${p}</span>`).join('')}
-            </div>
-          </div>`).join('')}
-        <div style="padding:4px 0 0;">
-          <button class="doc-btn" style="font-size:12px;" onclick="switchTab('search');selectPart('${d.partNo}')">
-            📄 ${d.partNo} の製造条件・標準書を確認
-          </button>
-        </div>
-      </div>` : '';
+        ${roles.条件設定 ? `<div class="role-row"><div class="role-label">条件設定</div><div class="person-tags"><span class="ptag main">${roles.条件設定}</span></div></div>` : ''}
+        ${roles.金型取付 ? `<div class="role-row"><div class="role-label">金型取付</div><div class="person-tags">${roles.金型取付.split(/[,、]/).map(p=>`<span class="ptag">${p.trim()}</span>`).join('')}</div></div>` : ''}
+        ${roles.リフト   ? `<div class="role-row"><div class="role-label">リフト</div><div class="person-tags"><span class="ptag">${roles.リフト}</span></div></div>` : ''}
+      </div>`
+    : (d._source==='auto' ? `
+      <div class="dc-roles">
+        <div class="role-row"><div class="role-label">条件設定</div><div class="person-tags"><span class="ptag">—</span></div></div>
+        <div class="role-row"><div class="role-label">金型取付</div><div class="person-tags"><span class="ptag">—</span></div></div>
+        <div class="role-row"><div class="role-label">リフト</div><div class="person-tags"><span class="ptag">—</span></div></div>
+      </div>` : '');
+
+    // 編集・削除（手動のみ）
+    const editBtns = d._source==='manual'
+      ? `<button class="edit-btn" onclick="showEditDantori('${d._id}')">✏ 編集</button>
+         <button class="del-btn"  onclick="deleteDantoriEntry('${d._id}')">削除</button>`
+      : '';
+
+    // 標準書確認ボタン
+    const checkBtn = (d.partNo && d.partNo!=='--')
+      ? `<button class="doc-btn" style="font-size:12px;" onclick="switchTab('search');selectPart('${d.partNo}')">📄 製造条件・標準書を確認</button>`
+      : '';
+
+    const noteHtml = d.note
+      ? `<div style="font-size:11px;color:#888;padding:4px 14px 8px;border-top:1px solid #f8f8f8;">📝 ${d.note}</div>` : '';
+
+    const bottomRow = (checkBtn || editBtns)
+      ? `<div style="padding:8px 14px;border-top:1px solid #f0f0f0;display:flex;gap:6px;align-items:center;flex-wrap:wrap;">${checkBtn}${editBtns}</div>`
+      : '';
+
     return `
-      <div class="dantori-card${d.status==='now'?' active-card':''}">
-        <div class="dc-header">
-          <div>
-            <div class="dc-time">${d.time}〜　${d.press}ライン</div>
-            <div class="dc-info">品番：${d.partNo}</div>
-          </div>
-          <div class="status-badge ${statusClass[d.status]}">${statusLabel[d.status]}</div>
+    <div class="dantori-card${isActive?' active-card':''}">
+      ${setupBar}
+      <div class="dc-header">
+        <div>
+          <div class="dc-time">${lineLabel}ライン${prodTime}</div>
+          <div class="dc-info">品番：${d.partNo||'—'}</div>
         </div>
-        ${rolesHtml}
-      </div>`;
+        <div class="status-badge ${sClass}">${sLabel}</div>
+      </div>
+      ${rolesHtml}
+      ${noteHtml}
+      ${bottomRow}
+    </div>`;
   }).join('');
 }
 
-function refreshDantori(){ fetchFirebaseLines(); }
+function refreshDantori(){ fetchFirebaseLines(); loadDantoriSchedule(); }
+
+// ===== 段取り計画（手動入力・Firebase保存） =====
+let dantoriSchedule  = [];
+let dantoriSortBy    = 'time';
+let editingDantoriId = null;
+
+function getDantoriDatePath(){
+  const n = new Date();
+  return n.getFullYear()
+    + String(n.getMonth()+1).padStart(2,'0')
+    + String(n.getDate()).padStart(2,'0');
+}
+
+async function loadDantoriSchedule(){
+  const fbUrl   = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
+  const dateStr = getDantoriDatePath();
+  try {
+    const res  = await fetch(`${fbUrl}/dantori/${dateStr}.json`);
+    if(!res.ok) return;
+    const data = await res.json();
+    if(!data){ dantoriSchedule=[]; renderDantori(); return; }
+    dantoriSchedule = Object.entries(data).map(([id,v])=>({...v, _id:id}));
+    renderDantori();
+  } catch(e){ console.warn('dantori load error:',e); }
+}
+
+async function saveDantoriEntry(){
+  const lineId     = document.getElementById('dt-line').value;
+  const partNo     = document.getElementById('dt-partno').value.trim();
+  const setupStart = document.getElementById('dt-setup-start').value;
+  const prodStart  = document.getElementById('dt-prod-start').value;
+  const prodEnd    = document.getElementById('dt-prod-end').value;
+  const status     = document.getElementById('dt-status').value;
+  const roleCond   = document.getElementById('dt-role-cond').value.trim();
+  const roleMount  = document.getElementById('dt-role-mount').value.trim();
+  const roleLift   = document.getElementById('dt-role-lift').value.trim();
+  const note       = document.getElementById('dt-note').value.trim();
+
+  if(!partNo){  alert('品番を入力してください'); return; }
+  if(!prodStart){ alert('生産開始時刻を入力してください'); return; }
+
+  const entry = {
+    lineId, partNo, setupStart, prodStart, prodEnd, status,
+    roles:{ 条件設定:roleCond, 金型取付:roleMount, リフト:roleLift },
+    note, updatedAt:Date.now(), isManual:true,
+  };
+
+  const fbUrl   = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
+  const dateStr = getDantoriDatePath();
+  try {
+    let res;
+    if(editingDantoriId){
+      res = await fetch(`${fbUrl}/dantori/${dateStr}/${editingDantoriId}.json`,
+        {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(entry)});
+    } else {
+      res = await fetch(`${fbUrl}/dantori/${dateStr}.json`,
+        {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(entry)});
+    }
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    closeDantoriModal();
+    await loadDantoriSchedule();
+  } catch(e){ alert('保存エラー：'+e.message); }
+}
+
+async function deleteDantoriEntry(id){
+  if(!confirm('この段取り計画を削除しますか？')) return;
+  const fbUrl   = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
+  const dateStr = getDantoriDatePath();
+  try {
+    await fetch(`${fbUrl}/dantori/${dateStr}/${id}.json`,{method:'DELETE'});
+    await loadDantoriSchedule();
+  } catch(e){ alert('削除エラー：'+e.message); }
+}
+
+function showAddDantori(){
+  editingDantoriId = null;
+  document.getElementById('dantoriModalTitle').textContent = '📋 段取り計画を追加';
+  document.getElementById('dt-line').value        = 'A1';
+  document.getElementById('dt-partno').value      = '';
+  document.getElementById('dt-setup-start').value = '';
+  document.getElementById('dt-prod-start').value  = '';
+  document.getElementById('dt-prod-end').value    = '';
+  document.getElementById('dt-status').value      = 'scheduled';
+  document.getElementById('dt-role-cond').value   = '';
+  document.getElementById('dt-role-mount').value  = '';
+  document.getElementById('dt-role-lift').value   = '';
+  document.getElementById('dt-note').value        = '';
+  document.getElementById('dantoriModal').style.display = 'flex';
+}
+
+function showEditDantori(id){
+  const entry = dantoriSchedule.find(e=>e._id===id);
+  if(!entry) return;
+  editingDantoriId = id;
+  document.getElementById('dantoriModalTitle').textContent = '📋 段取り計画を編集';
+  document.getElementById('dt-line').value        = entry.lineId      || 'A1';
+  document.getElementById('dt-partno').value      = entry.partNo      || '';
+  document.getElementById('dt-setup-start').value = entry.setupStart  || '';
+  document.getElementById('dt-prod-start').value  = entry.prodStart   || '';
+  document.getElementById('dt-prod-end').value    = entry.prodEnd     || '';
+  document.getElementById('dt-status').value      = entry.status      || 'scheduled';
+  document.getElementById('dt-role-cond').value   = (entry.roles&&entry.roles.条件設定) || '';
+  document.getElementById('dt-role-mount').value  = (entry.roles&&entry.roles.金型取付) || '';
+  document.getElementById('dt-role-lift').value   = (entry.roles&&entry.roles.リフト)   || '';
+  document.getElementById('dt-note').value        = entry.note        || '';
+  document.getElementById('dantoriModal').style.display = 'flex';
+}
+
+function closeDantoriModal(){
+  document.getElementById('dantoriModal').style.display = 'none';
+  editingDantoriId = null;
+}
+function closeDantoriIfBg(e){
+  if(e.target===document.getElementById('dantoriModal')) closeDantoriModal();
+}
+
+function setSortDantori(by){
+  dantoriSortBy = by;
+  document.querySelectorAll('.sort-btn').forEach(b=>b.classList.toggle('active', b.dataset.sort===by));
+  renderDantori();
+}
+
+// 生産開始時刻を入力したとき、同ラインの直前エントリの生産終了を段取り開始に自動入力
+function onDtProdStartChange(){
+  const lineId       = document.getElementById('dt-line').value;
+  const prodStart    = document.getElementById('dt-prod-start').value;
+  const setupStartEl = document.getElementById('dt-setup-start');
+  if(!lineId || !prodStart || setupStartEl.value) return; // 既入力は上書きしない
+  const prev = dantoriSchedule
+    .filter(e=>e.lineId===lineId && e._id!==editingDantoriId && e.prodEnd && e.prodEnd<=prodStart)
+    .sort((a,b)=>b.prodEnd.localeCompare(a.prodEnd));
+  if(prev.length>0) setupStartEl.value = prev[0].prodEnd;
+}
 
 function postToSlack(){
   const fbUrl = config.firebaseUrl || FIREBASE_URL;
@@ -1842,6 +2106,7 @@ checkConfig();
 renderChips();
 renderDantori();
 connectFirebase();
+loadDantoriSchedule();
 </script>
 </body>
 </html>
