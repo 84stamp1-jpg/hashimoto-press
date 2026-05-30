@@ -136,6 +136,10 @@ html, body {
 .pp-idle{font-size:10px;color:#bbb;font-style:italic;}
 .pp-divider{border-top:1px dashed #f0f0f0;margin:4px 0;}
 .pp-status-badge{font-size:9px;padding:1px 6px;border-radius:9px;font-weight:600;white-space:nowrap;}
+.pp-part{font-size:10px;color:#374151;margin:2px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pp-progress{font-size:11px;font-weight:700;margin:2px 0;}
+.pp-progress-bar{height:4px;background:#f0f0f0;border-radius:2px;overflow:hidden;margin:3px 0;}
+.pp-progress-fill{height:100%;border-radius:2px;transition:width 0.4s;}
 
 /* ===== DANTORI TAB ===== */
 .dantori-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
@@ -1858,25 +1862,6 @@ function updatePersonPanel(){
   const panel = document.getElementById('personPanel');
   if(!panel) return;
 
-  // 段取り計画から人別アサインを収集
-  const assigns = {};
-  STAFF_PERSONS.forEach(n => { assigns[n] = []; });
-
-  dantoriSchedule.forEach(entry => {
-    const r = entry.roles || {};
-    STAFF_PERSONS.forEach(name => {
-      const isCond  = r.条件設定 === name;
-      const isMount = (r.金型取付 || '').split(/[,、]/).map(s => s.trim()).includes(name);
-      const isLift  = r.リフト   === name;
-      if(isCond || isMount || isLift){
-        assigns[name].push({
-          entry,
-          roleStr: [isCond?'条件設定':'', isMount?'金型取付':'', isLift?'リフト':''].filter(Boolean).join('・'),
-        });
-      }
-    });
-  });
-
   const BADGE_STYLE = {
     running:{bg:'#1d4ed8',text:'white',label:'稼働中'},
     setup:  {bg:'#1a1a1a',text:'white',label:'段取中'},
@@ -1885,49 +1870,101 @@ function updatePersonPanel(){
   };
 
   panel.innerHTML = STAFF_PERSONS.map(name => {
-    const list = assigns[name];
+    let bodyHtml = '';
 
-    let bodyHtml;
-    if(!list.length){
-      bodyHtml = '<div class="pp-idle">未割当</div>';
-    } else {
-      bodyHtml = list.map(({entry, roleStr}, i) => {
-        const lineId   = entry.lineId;
-        const lineName = getLineDisplayName(lineId);
-        const line     = linesData[lineId];
-        const st       = (line && line.status) || 'waiting';
-        const bs       = BADGE_STYLE[st] || BADGE_STYLE.waiting;
-        const badge    = `<span class="pp-status-badge" style="background:${bs.bg};color:${bs.text};">${bs.label}</span>`;
+    // ① 担当者自身のライン（Firebase lines/{name}）
+    const ownLine = linesData[name];
+    if(ownLine){
+      const st  = ownLine.status || 'waiting';
+      const bs  = BADGE_STYLE[st] || BADGE_STYLE.waiting;
+      const badge = `<span class="pp-status-badge" style="background:${bs.bg};color:${bs.text};">${bs.label}</span>`;
 
-        // 生産時間帯
-        const prodTime = entry.prodStart
-          ? (entry.prodEnd ? `${entry.prodStart}〜${entry.prodEnd}` : `${entry.prodStart}〜`)
-          : '';
+      const part = ownLine.part || '--';
+      const plan = ownLine.plan || 0;
+      const actual = ownLine.actual || 0;
+      const pct  = plan > 0 ? Math.round(actual / plan * 100) : null;
+      const pctColor = pct === null ? '#94a3b8'
+                     : pct >= 100   ? '#16a34a'
+                     : pct >= 80    ? '#1d4ed8'
+                     : '#dc2626';
+      const barColor = pct === null ? '#e0e0e0'
+                     : pct >= 100   ? '#16a34a'
+                     : pct >= 80    ? '#3b82f6'
+                     : '#ef4444';
+      const barW = pct !== null ? Math.min(pct, 100) : 0;
 
-        // 段取り時間帯
-        const setupTime = (entry.setupStart && entry.prodStart)
-          ? `🔧${entry.setupStart}〜${entry.prodStart}` : '';
+      const pctHtml = pct !== null ? `
+        <div class="pp-progress" style="color:${pctColor};">${actual.toLocaleString()}/${plan.toLocaleString()}個 ${pct}%</div>
+        <div class="pp-progress-bar"><div class="pp-progress-fill" style="width:${barW}%;background:${barColor};"></div></div>
+      ` : '';
 
-        // スケジュール差
-        const diff = getLineScheduleDiff(lineId);
-        let schedHtml = '';
-        if(diff !== null){
-          const abs = Math.abs(Math.round(diff));
-          if(abs < 2)     schedHtml = '<div class="pp-sched on-time">▶ 計画通り</div>';
-          else if(diff>0) schedHtml = `<div class="pp-sched behind">▼ ${abs}分遅れ</div>`;
-          else            schedHtml = `<div class="pp-sched ahead">▲ ${abs}分早い</div>`;
-        }
+      // 現在のジョブ（running or 次のwaiting）
+      const jobs = Array.isArray(ownLine.jobs) ? ownLine.jobs : [];
+      const runJob  = jobs.find(j => j.status === 'running');
+      const nextJob = !runJob ? jobs.find(j => j.status === 'waiting') : null;
+      const curJob  = runJob || nextJob;
+      const jobTimeHtml = curJob && curJob.start
+        ? `<div class="pp-time">${runJob ? '▶' : '次:'} ${curJob.start}〜${curJob.end || ''}</div>`
+        : '';
 
+      // スケジュール差分
+      const diff = getLineScheduleDiff(name);
+      let schedHtml = '';
+      if(diff !== null){
+        const abs = Math.abs(Math.round(diff));
+        if(abs < 2)     schedHtml = '<div class="pp-sched on-time">▶ 計画通り</div>';
+        else if(diff>0) schedHtml = `<div class="pp-sched behind">▼ ${abs}分遅れ</div>`;
+        else            schedHtml = `<div class="pp-sched ahead">▲ ${abs}分早い</div>`;
+      }
+
+      bodyHtml += `
+      <div class="pp-assign">
+        <div class="pp-line-name">${badge}</div>
+        <div class="pp-part">${part}</div>
+        ${pctHtml}
+        ${jobTimeHtml}
+        ${schedHtml}
+      </div>`;
+    }
+
+    // ② 段取り担当ロール（dantoriScheduleから）
+    const roleAssigns = [];
+    dantoriSchedule.forEach(entry => {
+      const r = entry.roles || {};
+      const isCond  = r.条件設定 === name;
+      const isMount = (r.金型取付 || '').split(/[,、]/).map(s => s.trim()).includes(name);
+      const isLift  = r.リフト   === name;
+      if(isCond || isMount || isLift){
+        roleAssigns.push({
+          entry,
+          roleStr: [isCond?'条件設定':'', isMount?'金型取付':'', isLift?'リフト':''].filter(Boolean).join('・'),
+        });
+      }
+    });
+
+    if(roleAssigns.length){
+      if(bodyHtml) bodyHtml += '<div class="pp-divider"></div>';
+      bodyHtml += roleAssigns.map(({entry, roleStr}, i) => {
+        const lineName = getLineDisplayName(entry.lineId);
+        const ld = linesData[entry.lineId];
+        const st = (ld && ld.status) || 'waiting';
+        const bs = BADGE_STYLE[st] || BADGE_STYLE.waiting;
+        const badge = `<span class="pp-status-badge" style="background:${bs.bg};color:${bs.text};">${bs.label}</span>`;
+        const setupTime = (entry.setupStart && entry.prodStart) ? `🔧${entry.setupStart}〜${entry.prodStart} ` : '';
+        const prodTime  = entry.prodStart
+          ? (entry.prodEnd ? `${entry.prodStart}〜${entry.prodEnd}` : `${entry.prodStart}〜`) : '';
         const divider = i > 0 ? '<div class="pp-divider"></div>' : '';
         return `${divider}
         <div class="pp-assign">
           <div class="pp-line-name">${lineName} ${badge}</div>
           <div class="pp-role-text">${roleStr}</div>
-          ${setupTime ? `<div class="pp-time">${setupTime}</div>` : ''}
-          ${prodTime  ? `<div class="pp-time">${prodTime}</div>`  : ''}
-          ${schedHtml}
+          ${(setupTime||prodTime) ? `<div class="pp-time">${setupTime}${prodTime}</div>` : ''}
         </div>`;
       }).join('');
+    }
+
+    if(!bodyHtml){
+      bodyHtml = '<div class="pp-idle">データなし</div>';
     }
 
     return `
