@@ -114,15 +114,15 @@ html, body {
 .ld{width:10px;height:10px;border-radius:2px;}
 .refresh-btn{padding:5px 10px;border:1px solid #ddd;border-radius:6px;font-size:11px;cursor:pointer;background:white;color:#666;}
 .refresh-btn:hover{background:#f5f5f3;}
-.fwrap{border:1px solid #d1d5db;border-radius:10px;overflow:hidden;background:#9ca3af;padding:3px;display:flex;gap:3px;align-items:stretch;}
+.fwrap{border:1px solid #d1d5db;border-radius:10px;overflow:hidden;background:#9ca3af;padding:2px;display:flex;gap:2px;align-items:stretch;}
 .factory-svg-wrap{flex:1;min-width:0;}
 .factory-svg-wrap svg{display:block;width:100%;height:auto;max-height:calc(100vh - 165px);}
 .firebase-status{margin-top:4px;font-size:11px;color:#888;display:flex;align-items:center;gap:5px;}
 .status-dot{width:7px;height:7px;border-radius:50%;background:#aaa;}
 .status-dot.connected{background:#16a34a;}
 /* ===== 担当者パネル ===== */
-.person-panel{width:160px;flex-shrink:0;display:flex;flex-direction:column;gap:3px;}
-.pp-card{background:white;border-radius:6px;padding:7px 9px;display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;}
+.person-panel{width:205px;flex-shrink:0;display:flex;flex-direction:column;gap:2px;}
+.pp-card{background:white;border-radius:6px;padding:8px 12px;display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;}
 .pp-name{font-size:13px;font-weight:700;color:#1a1a1a;border-bottom:1px solid #f0f0f0;padding-bottom:4px;margin-bottom:5px;display:flex;align-items:center;gap:5px;}
 .pp-name-badge{font-size:9px;padding:1px 6px;border-radius:10px;font-weight:600;}
 .pp-assign{display:flex;flex-direction:column;gap:2px;}
@@ -1836,24 +1836,25 @@ function getLineScheduleDiff(lineId){
   const pStart = timeToMins(job.start);
   const pEnd   = timeToMins(job.end);
   const aStart = timeToMins(job.actualStart);
-  const plan   = job.plan   || 0;
-  const actual = typeof job.actualCount === 'number' ? job.actualCount : (line.actual || 0);
+  const plan   = job.plan || 0;
+  const actual = typeof job.actualCount === 'number' ? job.actualCount : 0;
 
-  // 生産進捗ベースの計算（最優先）
-  if(plan > 0 && pStart !== null && pEnd !== null){
-    const totalMins  = pEnd - pStart;
+  // 実績カウントがある場合のみ生産進捗ベース計算
+  // （カウント0のまま時間が経つと膨大な遅れになるため条件追加）
+  if(actual > 0 && plan > 0 && pStart !== null && pEnd !== null){
+    const totalMins = pEnd - pStart;
     if(totalMins > 0){
       const effectiveStart = aStart !== null ? aStart : pStart;
-      const elapsed   = Math.max(0, nowMins - effectiveStart);
-      const rate      = plan / totalMins;        // 個/分
-      const expected  = rate * elapsed;          // この時点での期待数
-      const countDiff = actual - expected;       // 正=進んでいる 負=遅れ
-      const timeDiff  = countDiff / rate;        // 分換算（正=早い 負=遅れ）
-      return -timeDiff;                          // 正=遅れ 負=早い
+      // ジョブの計画時間内にelapsedを収める
+      const elapsed  = Math.min(Math.max(0, nowMins - effectiveStart), totalMins);
+      const rate     = plan / totalMins;           // 個/分
+      const expected = rate * elapsed;             // この時点での期待数
+      const timeDiff = (actual - expected) / rate; // 正=早い 負=遅れ
+      return -timeDiff;                            // 正=遅れ 負=早い
     }
   }
 
-  // フォールバック：開始時刻ズレのみ
+  // フォールバック：開始時刻ズレのみ（actual=0時はこちらを使用）
   if(aStart !== null && pStart !== null) return aStart - pStart;
   return null;
 }
