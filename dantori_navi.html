@@ -240,6 +240,16 @@ html, body {
 .kcard.k-scheduled{border-color:#e0e0e0;}
 .kcard-time{font-size:11px;font-weight:700;color:#1a1a1a;margin-bottom:3px;display:flex;align-items:center;gap:3px;}
 .kcard-setup-bar{font-size:9px;color:#92400e;background:#fef3c7;padding:1px 5px;border-radius:3px;margin-bottom:3px;white-space:nowrap;}
+/* ===== チップ式担当者入力 ===== */
+.chip-wrap{display:flex;flex-wrap:wrap;gap:4px;padding:4px 6px;border:1px solid #ddd;border-radius:6px;background:white;min-height:34px;cursor:text;align-items:center;position:relative;}
+.chip-wrap:focus-within{border-color:#1a1a1a;box-shadow:0 0 0 3px rgba(0,0,0,0.06);}
+.chip{display:inline-flex;align-items:center;gap:3px;background:#dbeafe;color:#1e40af;border-radius:10px;padding:2px 8px 2px 9px;font-size:11px;font-weight:600;white-space:nowrap;line-height:1.4;}
+.chip-del{cursor:pointer;color:#1e40af;font-size:13px;line-height:1;padding:0 1px;opacity:.7;}
+.chip-del:hover{opacity:1;color:#dc2626;}
+.chip-text-input{border:none;outline:none;font-size:12px;min-width:70px;flex:1;padding:2px 2px;background:transparent;font-family:inherit;color:#1a1a1a;}
+.chip-dropdown{position:absolute;top:calc(100% + 2px);left:0;right:0;background:white;border:1px solid #ddd;border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:9999;max-height:140px;overflow-y:auto;display:none;}
+.chip-dd-item{padding:6px 10px;font-size:12px;cursor:pointer;color:#1a1a1a;}
+.chip-dd-item:hover{background:#eff6ff;color:#1e40af;}
 .kcard-part{font-size:10px;color:#666;margin-bottom:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .kcard-roles{display:flex;flex-direction:column;gap:2px;}
 .kcard-role{display:flex;align-items:baseline;gap:3px;font-size:10px;}
@@ -717,6 +727,11 @@ html, body {
       </div>
       <div class="form-hint">各ロールの担当者候補をカンマ区切りで入力します（段取り計画モーダルのドロップダウン候補に使用）</div>
     </div>
+    <div class="form-group">
+      <label>休憩時間帯（段取り正味時間の計算に使用）</label>
+      <input type="text" id="cfg-breaks" placeholder="例：10:00-10:10, 12:10-12:50, 14:50-15:00"/>
+      <div class="form-hint">HH:MM-HH:MM 形式でカンマ区切り。段取り時間（🔧）の所要分数から自動的に除外されます。</div>
+    </div>
 
     <div class="form-group">
       <label>Firebase データベースURL</label>
@@ -796,19 +811,43 @@ html, body {
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         <div class="form-group" style="margin:0;">
           <label style="font-size:10px;">条件設定</label>
-          <input type="text" id="dt-role-cond" list="staffDatalist-cond" placeholder="担当者名" autocomplete="off"/>
+          <div id="chip-wrap-cond" class="chip-wrap" onclick="chipWrapClick('chip-wrap-cond')">
+            <input class="chip-text-input" placeholder="名前または↓" autocomplete="off"
+              oninput="chipOnInput('chip-wrap-cond','staffDatalist-cond')"
+              onkeydown="chipOnKeydown(event,'chip-wrap-cond','staffDatalist-cond')"
+              onblur="chipOnBlur('chip-wrap-cond')"
+              onfocus="chipOnInput('chip-wrap-cond','staffDatalist-cond')"/>
+          </div>
         </div>
         <div class="form-group" style="margin:0;">
           <label style="font-size:10px;">品質確認</label>
-          <input type="text" id="dt-role-quality" list="staffDatalist-quality" placeholder="担当者名" autocomplete="off"/>
+          <div id="chip-wrap-quality" class="chip-wrap" onclick="chipWrapClick('chip-wrap-quality')">
+            <input class="chip-text-input" placeholder="名前または↓" autocomplete="off"
+              oninput="chipOnInput('chip-wrap-quality','staffDatalist-quality')"
+              onkeydown="chipOnKeydown(event,'chip-wrap-quality','staffDatalist-quality')"
+              onblur="chipOnBlur('chip-wrap-quality')"
+              onfocus="chipOnInput('chip-wrap-quality','staffDatalist-quality')"/>
+          </div>
         </div>
         <div class="form-group" style="margin:0;">
           <label style="font-size:10px;">リフト</label>
-          <input type="text" id="dt-role-lift" list="staffDatalist-lift" placeholder="担当者名" autocomplete="off"/>
+          <div id="chip-wrap-lift" class="chip-wrap" onclick="chipWrapClick('chip-wrap-lift')">
+            <input class="chip-text-input" placeholder="名前または↓" autocomplete="off"
+              oninput="chipOnInput('chip-wrap-lift','staffDatalist-lift')"
+              onkeydown="chipOnKeydown(event,'chip-wrap-lift','staffDatalist-lift')"
+              onblur="chipOnBlur('chip-wrap-lift')"
+              onfocus="chipOnInput('chip-wrap-lift','staffDatalist-lift')"/>
+          </div>
         </div>
         <div class="form-group" style="margin:0;">
           <label style="font-size:10px;">金型取付</label>
-          <input type="text" id="dt-role-mount" list="staffDatalist-mount" placeholder="複数はカンマ区切り" autocomplete="off"/>
+          <div id="chip-wrap-mount" class="chip-wrap" onclick="chipWrapClick('chip-wrap-mount')">
+            <input class="chip-text-input" placeholder="名前または↓" autocomplete="off"
+              oninput="chipOnInput('chip-wrap-mount','staffDatalist-mount')"
+              onkeydown="chipOnKeydown(event,'chip-wrap-mount','staffDatalist-mount')"
+              onblur="chipOnBlur('chip-wrap-mount')"
+              onfocus="chipOnInput('chip-wrap-mount','staffDatalist-mount')"/>
+          </div>
         </div>
       </div>
     </div>
@@ -874,6 +913,8 @@ function showConfig(){
   document.getElementById('cfg-staff-lift').value    = (config.staffLift    || []).join(',');
   document.getElementById('cfg-staff-mount').value   = (config.staffMount   || []).join(',');
   document.getElementById('cfg-staff-quality').value = (config.staffQuality || []).join(',');
+  document.getElementById('cfg-breaks').value = (config.breaks || DEFAULT_BREAKS)
+    .map(b=>`${b.start}-${b.end}`).join(', ');
   document.getElementById('fld-partNo').value       = FIELD_MAP.partNo       || '文字列__1行__3';
   document.getElementById('fld-name').value         = FIELD_MAP.name         || '文字列__1行__1';
   document.getElementById('fld-customer').value     = FIELD_MAP.customer     || '文字列__1行__2';
@@ -899,6 +940,10 @@ function saveConfig(){
     staffLift:    (document.getElementById('cfg-staff-lift').value.trim()||'').split(',').map(s=>s.trim()).filter(Boolean),
     staffMount:   (document.getElementById('cfg-staff-mount').value.trim()||'').split(',').map(s=>s.trim()).filter(Boolean),
     staffQuality: (document.getElementById('cfg-staff-quality').value.trim()||'').split(',').map(s=>s.trim()).filter(Boolean),
+    breaks: (document.getElementById('cfg-breaks').value.trim()||'')
+      .split(',').map(s=>s.trim()).filter(Boolean)
+      .map(s=>{ const [st,en]=s.split('-'); return (st&&en)?{start:st.trim(),end:en.trim()}:null; })
+      .filter(Boolean),
   };
   updateStaffDatalist();
   FIELD_MAP = Object.assign(FIELD_MAP, {
@@ -2445,6 +2490,83 @@ function updateStaffDatalist(){
   });
 }
 
+// ===== チップ式担当者入力 =====
+function chipWrapClick(wid){
+  const w = document.getElementById(wid);
+  if(w) w.querySelector('.chip-text-input').focus();
+}
+function chipGetValues(wid){
+  const w = document.getElementById(wid);
+  if(!w) return [];
+  return Array.from(w.querySelectorAll('.chip[data-n]')).map(c=>c.dataset.n);
+}
+function chipSet(wid, csv){
+  const w = document.getElementById(wid);
+  if(!w) return;
+  w.querySelectorAll('.chip[data-n]').forEach(c=>c.remove());
+  if(csv)(csv.split(/[,、]/).map(s=>s.trim()).filter(Boolean)).forEach(n=>chipAdd(wid,n));
+}
+function chipAdd(wid, name){
+  const w = document.getElementById(wid);
+  if(!w || !name) return;
+  if(chipGetValues(wid).includes(name)) return;
+  const chip = document.createElement('span');
+  chip.className='chip'; chip.dataset.n=name;
+  chip.innerHTML=`${name}<span class="chip-del" onmousedown="event.preventDefault();chipRemove('${wid}','${CSS.escape(name)}')">×</span>`;
+  w.insertBefore(chip, w.querySelector('.chip-text-input'));
+}
+function chipRemove(wid, name){
+  const w = document.getElementById(wid);
+  if(!w) return;
+  const chip = w.querySelector(`.chip[data-n="${name}"]`);
+  if(chip) chip.remove();
+}
+function chipOnInput(wid, dlid){
+  const w = document.getElementById(wid);
+  const inp = w && w.querySelector('.chip-text-input');
+  if(!w||!inp) return;
+  const q = inp.value.toLowerCase();
+  const dl = document.getElementById(dlid);
+  const cands = dl ? Array.from(dl.options).map(o=>o.value).filter(Boolean) : [];
+  const already = chipGetValues(wid);
+  const filtered = cands.filter(c=> !already.includes(c) && (!q || c.toLowerCase().includes(q)));
+  let dd = w.querySelector('.chip-dropdown');
+  if(!dd){ dd=document.createElement('div'); dd.className='chip-dropdown'; w.appendChild(dd); }
+  if(!filtered.length){ dd.style.display='none'; return; }
+  dd.innerHTML = filtered.map(c=>
+    `<div class="chip-dd-item" onmousedown="event.preventDefault();chipAdd('${wid}','${c}');document.getElementById('${wid}').querySelector('.chip-text-input').value='';chipHideDd('${wid}')">${c}</div>`
+  ).join('');
+  dd.style.display='block';
+}
+function chipOnKeydown(e, wid, dlid){
+  const w = document.getElementById(wid);
+  const inp = w && w.querySelector('.chip-text-input');
+  if(!inp) return;
+  if(e.key==='Enter'||e.key===','||e.key==='Tab'){
+    e.preventDefault();
+    const v = inp.value.trim().replace(/[,、]$/,'');
+    if(v){ chipAdd(wid,v); inp.value=''; chipHideDd(wid); }
+  } else if(e.key==='Backspace' && !inp.value){
+    const chips = w.querySelectorAll('.chip[data-n]');
+    if(chips.length) chips[chips.length-1].remove();
+  } else if(e.key==='Escape'){
+    chipHideDd(wid);
+  }
+}
+function chipOnBlur(wid){
+  setTimeout(()=>{
+    const w = document.getElementById(wid);
+    const inp = w && w.querySelector('.chip-text-input');
+    if(inp){ const v=inp.value.trim(); if(v){chipAdd(wid,v);inp.value='';} }
+    chipHideDd(wid);
+  }, 200);
+}
+function chipHideDd(wid){
+  const w = document.getElementById(wid);
+  const dd = w && w.querySelector('.chip-dropdown');
+  if(dd) dd.style.display='none';
+}
+
 function getDantoriDatePath(){
   const n = new Date();
   return n.getFullYear()
@@ -2473,10 +2595,10 @@ async function saveDantoriEntry(){
   const prodStart  = document.getElementById('dt-prod-start').value;
   const prodEnd    = document.getElementById('dt-prod-end').value;
   const status     = document.getElementById('dt-status').value;
-  const roleCond    = document.getElementById('dt-role-cond').value.trim();
-  const roleMount   = document.getElementById('dt-role-mount').value.trim();
-  const roleLift    = document.getElementById('dt-role-lift').value.trim();
-  const roleQuality = document.getElementById('dt-role-quality').value.trim();
+  const roleCond    = chipGetValues('chip-wrap-cond').join(',');
+  const roleMount   = chipGetValues('chip-wrap-mount').join(',');
+  const roleLift    = chipGetValues('chip-wrap-lift').join(',');
+  const roleQuality = chipGetValues('chip-wrap-quality').join(',');
   const note        = document.getElementById('dt-note').value.trim();
 
   if(!partNo){  alert('品番を入力してください'); return; }
@@ -2524,10 +2646,10 @@ function showAddDantori(){
   document.getElementById('dt-prod-start').value  = '';
   document.getElementById('dt-prod-end').value    = '';
   document.getElementById('dt-status').value      = 'scheduled';
-  document.getElementById('dt-role-cond').value    = '';
-  document.getElementById('dt-role-mount').value   = '';
-  document.getElementById('dt-role-lift').value    = '';
-  document.getElementById('dt-role-quality').value = '';
+  chipSet('chip-wrap-cond',    '');
+  chipSet('chip-wrap-mount',   '');
+  chipSet('chip-wrap-lift',    '');
+  chipSet('chip-wrap-quality', '');
   document.getElementById('dt-note').value         = '';
   document.getElementById('dantoriModal').style.display = 'flex';
 }
@@ -2543,10 +2665,10 @@ function showEditDantori(id){
   document.getElementById('dt-prod-start').value  = entry.prodStart   || '';
   document.getElementById('dt-prod-end').value    = entry.prodEnd     || '';
   document.getElementById('dt-status').value      = entry.status      || 'scheduled';
-  document.getElementById('dt-role-cond').value    = (entry.roles&&entry.roles.条件設定) || '';
-  document.getElementById('dt-role-mount').value   = (entry.roles&&entry.roles.金型取付) || '';
-  document.getElementById('dt-role-lift').value    = (entry.roles&&entry.roles.リフト)   || '';
-  document.getElementById('dt-role-quality').value = (entry.roles&&entry.roles.品質確認) || '';
+  chipSet('chip-wrap-cond',    (entry.roles&&entry.roles.条件設定) || '');
+  chipSet('chip-wrap-mount',   (entry.roles&&entry.roles.金型取付) || '');
+  chipSet('chip-wrap-lift',    (entry.roles&&entry.roles.リフト)   || '');
+  chipSet('chip-wrap-quality', (entry.roles&&entry.roles.品質確認) || '');
   document.getElementById('dt-note').value        = entry.note        || '';
   document.getElementById('dantoriModal').style.display = 'flex';
 }
@@ -2589,6 +2711,15 @@ function getAllDantoriEntries(){
   return [...schedEntries, ...autoEntries];
 }
 
+// デフォルト休憩時間（設定で上書き可）
+const DEFAULT_BREAKS = [
+  {start:'10:00', end:'10:10'},
+  {start:'12:10', end:'12:50'},
+  {start:'14:50', end:'15:00'},
+  {start:'17:00', end:'17:10'},
+  {start:'20:10', end:'20:30'},
+];
+
 // HH:MM 形式の2時刻から所要分数を計算（日をまたぐ場合も対応）
 function calcDurMin(start, end){
   if(!start || !end) return null;
@@ -2606,15 +2737,33 @@ function formatDur(min){
   return m ? `${h}h${m}分` : `${h}時間`;
 }
 
+// 休憩時間を除いた正味段取り所要分数
+function calcSetupNetMin(start, end){
+  const total = calcDurMin(start, end);
+  if(total === null) return null;
+  const toMin = t => { const [h,m]=t.split(':').map(Number); return h*60+m; };
+  const sMin = toMin(start);
+  const eMin = sMin + total; // midnight crossing 対応
+  const breaks = (config.breaks && config.breaks.length) ? config.breaks : DEFAULT_BREAKS;
+  let overlap = 0;
+  breaks.forEach(({start:bs, end:be})=>{
+    let bsM = toMin(bs), beM = toMin(be);
+    if(beM <= bsM) beM += 24*60; // 日またぎ休憩
+    const oStart = Math.max(sMin, bsM);
+    const oEnd   = Math.min(eMin, beM);
+    if(oEnd > oStart) overlap += (oEnd - oStart);
+  });
+  const net = total - overlap;
+  return net > 0 ? net : total; // 念のため0以下にならないようにする
+}
+
 function renderKanbanCard(d){
   const roles   = d.roles || {};
-  const setupDur = calcDurMin(d.setupStart, d.prodStart);
+  const setupDur = calcSetupNetMin(d.setupStart, d.prodStart);
   const setupBar = (d.setupStart && d.prodStart)
     ? `<div class="kcard-setup-bar">🔧 ${d.setupStart}〜${d.prodStart}${setupDur?` <span style="font-weight:400;">(${formatDur(setupDur)})</span>`:''}</div>` : '';
   const prodTime = d.prodStart
     ? (d.prodEnd ? `${d.prodStart}〜${d.prodEnd}` : `${d.prodStart}〜`) : '';
-  const prodDur  = calcDurMin(d.prodStart, d.prodEnd);
-  const durTag   = prodDur ? `<span style="font-size:9px;color:#888;font-weight:400;margin-left:3px;">(${formatDur(prodDur)})</span>` : '';
   const statusMark = d.status==='in_progress'?'▶ ':(d.status==='done'?'✓ ':'');
   const rolesHtml = (roles.条件設定||roles.金型取付||roles.リフト||roles.品質確認) ? `
     <div class="kcard-roles">
@@ -2633,7 +2782,7 @@ function renderKanbanCard(d){
   return `
   <div class="${cls}">
     ${setupBar}
-    <div class="kcard-time">${statusMark}${prodTime||'—'}${durTag}</div>
+    <div class="kcard-time">${statusMark}${prodTime||'—'}</div>
     <div class="kcard-part">${d.partNo||'—'}</div>
     ${rolesHtml}
     ${editBtn}
@@ -2649,18 +2798,16 @@ function renderKanbanPersonCard(d, targetName){
     roles.リフト===targetName ? 'リフト' : '',
     roles.品質確認===targetName ? '品質確認' : '',
   ].filter(Boolean).join('・');
-  const setupDur2 = calcDurMin(d.setupStart, d.prodStart);
+  const setupDur2 = calcSetupNetMin(d.setupStart, d.prodStart);
   const setupBar = (d.setupStart && d.prodStart)
     ? `<div class="kcard-setup-bar">🔧 ${d.setupStart}〜${d.prodStart}${setupDur2?` <span style="font-weight:400;">(${formatDur(setupDur2)})</span>`:''}</div>` : '';
   const prodTime = d.prodStart
     ? (d.prodEnd ? `${d.prodStart}〜${d.prodEnd}` : `${d.prodStart}〜`) : '';
-  const prodDur2 = calcDurMin(d.prodStart, d.prodEnd);
-  const durTag2  = prodDur2 ? `<span style="font-size:9px;color:#888;font-weight:400;margin-left:3px;">(${formatDur(prodDur2)})</span>` : '';
   const cls = d.status==='in_progress'?'kcard k-active':(d.status==='done'?'kcard k-done':'kcard k-scheduled');
   return `
   <div class="${cls}">
     ${setupBar}
-    <div class="kcard-time">${prodTime||'—'}${durTag2}</div>
+    <div class="kcard-time">${prodTime||'—'}</div>
     <div class="kcard-part" style="color:#1a1a1a;font-weight:600;">${lineName}</div>
     <div class="kcard-part">${d.partNo||'—'}</div>
     ${roleStr?`<div class="kcard-role"><span class="kcard-role-val" style="color:#0369a1;">${roleStr}</span></div>`:''}
@@ -2716,8 +2863,6 @@ function renderKanbanCol(colDef, allEntries){
           const cls   = (jst==='running'||jst==='setup') ? 'kcard k-active' : 'kcard k-scheduled';
           const prefix = jst==='running' ? '▶ ' : '';
           const timeStr = job.start ? `${prefix}${job.start}〜${job.end||''}` : '—';
-          const jobDur  = calcDurMin(job.start, job.end);
-          const jobDurTag = jobDur ? `<span style="font-size:9px;color:#888;font-weight:400;margin-left:2px;">(${formatDur(jobDur)})</span>` : '';
           const plan    = job.plan       || 0;
           const actual  = job.actualCount || 0;
           const pct     = plan > 0 ? Math.round(actual/plan*100) : null;
@@ -2726,7 +2871,7 @@ function renderKanbanCol(colDef, allEntries){
           return `
           <div class="${cls}">
             <div class="kcard-time" style="display:flex;align-items:center;justify-content:space-between;gap:4px;">
-              <span>${timeStr}${jobDurTag}</span>${badge}
+              <span>${timeStr}</span>${badge}
             </div>
             <div class="kcard-part">${part}</div>
             ${pct!==null?`<div style="font-size:10px;font-weight:700;color:${pctColor};margin-top:2px;">${actual.toLocaleString()}/${plan.toLocaleString()}個 ${pct}%</div>`:''}
