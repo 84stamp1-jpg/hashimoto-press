@@ -149,6 +149,24 @@ html, body {
 .pp-divider{border-top:1px dashed #f0f0f0;margin:4px 0;}
 .pp-status-badge{font-size:9px;padding:1px 7px;border-radius:9px;font-weight:600;white-space:nowrap;flex-shrink:0;}
 
+/* ===== SVG稼働カード（foreignObject用） ===== */
+.svg-line-card{font-family:'Hiragino Sans','Meiryo',sans-serif;font-size:9px;line-height:1.3;padding:3px 5px;width:100%;height:100%;display:flex;flex-direction:column;gap:1px;overflow:hidden;box-sizing:border-box;background:transparent;}
+.svg-line-card.slc-compact{padding:2px 4px;gap:0px;}
+.slc-head{display:flex;align-items:center;justify-content:space-between;gap:2px;margin-bottom:1px;}
+.slc-name{font-size:10px;font-weight:700;white-space:nowrap;flex-shrink:0;}
+.slc-badge{font-size:7px;padding:1px 5px;border-radius:6px;color:white;font-weight:700;white-space:nowrap;flex-shrink:0;background:#94a3b8;}
+.slc-part{font-size:8px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:1px 0;}
+.slc-meta{display:flex;align-items:center;justify-content:space-between;gap:2px;margin:1px 0;}
+.slc-pct{font-size:9px;font-weight:700;white-space:nowrap;color:#94a3b8;}
+.slc-sched{font-size:8px;font-weight:700;white-space:nowrap;}
+.slc-sched.behind{color:#dc2626;}
+.slc-sched.ahead{color:#2563eb;}
+.slc-sched.on-time{color:#16a34a;}
+.slc-bar-wrap{height:3px;background:#f0f0f0;border-radius:2px;overflow:hidden;margin:1px 0;}
+.slc-bar{height:100%;border-radius:2px;transition:width 0.3s;background:#e0e0e0;width:0%;}
+.slc-time{font-size:7.5px;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;}
+.slc-stop{font-size:8px;color:#94a3b8;font-style:italic;margin-top:2px;}
+
 /* ===== DANTORI TAB ===== */
 .dantori-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
 .dantori-list{display:flex;flex-direction:column;gap:10px;}
@@ -398,86 +416,172 @@ html, body {
   <text x="550" y="424" font-size="8" fill="#374151">リフト　グレー=位置不明</text>
   <text x="700" y="432" font-size="7" fill="#94a3b8">※5秒ごとに自動更新</text>
 
-  <!-- ===== 稼働カード ===== -->
+  <!-- ===== 稼働カード（foreignObject版） ===== -->
 
   <!-- A1カード -->
   <g id="press-A" onclick="clickPress('A')" style="cursor:pointer;">
-    <rect id="lineA1-bg" x="102" y="36" width="100" height="56" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
-    <rect id="lineA1-badge" x="154" y="39" width="44" height="13" rx="6" fill="#3b82f6"/>
-    <text id="lineA1-badgeLabel" x="176" y="49" text-anchor="middle" font-size="7" font-weight="700" fill="white">稼働中</text>
-    <text x="126" y="56" text-anchor="middle" font-size="11" font-weight="700" fill="#1e40af">A1</text>
-    <text id="lineA1-part" x="152" y="70" text-anchor="middle" font-size="7.5" fill="#374151">--</text>
-    <text id="lineA1-rate" x="152" y="84" text-anchor="middle" font-size="10" font-weight="700" fill="#1d4ed8">--</text>
+    <rect x="102" y="36" width="100" height="82" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+    <foreignObject x="103" y="37" width="98" height="80">
+      <div xmlns="http://www.w3.org/1999/xhtml" class="svg-line-card">
+        <div class="slc-head">
+          <span class="slc-name" style="color:#1e40af;">A1</span>
+          <span class="slc-badge" id="lineA1-badge">待機中</span>
+        </div>
+        <div class="slc-part" id="lineA1-part">--</div>
+        <div class="slc-meta">
+          <span class="slc-pct" id="lineA1-pct">--</span>
+          <span class="slc-sched" id="lineA1-sched"></span>
+        </div>
+        <div class="slc-bar-wrap"><div class="slc-bar" id="lineA1-bar"></div></div>
+        <div class="slc-time" id="lineA1-time"></div>
+        <div class="slc-stop" id="lineA1-stop" style="display:none;">計画停止</div>
+      </div>
+    </foreignObject>
   </g>
 
   <!-- A2カード -->
   <g onclick="clickPress('A')" style="cursor:pointer;">
-    <rect id="lineA2-bg" x="102" y="108" width="100" height="56" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
-    <rect id="lineA2-badge" x="154" y="111" width="44" height="13" rx="6" fill="#3b82f6"/>
-    <text id="lineA2-badgeLabel" x="176" y="121" text-anchor="middle" font-size="7" font-weight="700" fill="white">稼働中</text>
-    <text x="126" y="128" text-anchor="middle" font-size="11" font-weight="700" fill="#1e40af">A2</text>
-    <text id="lineA2-part" x="152" y="142" text-anchor="middle" font-size="7.5" fill="#374151">--</text>
-    <text id="lineA2-rate" x="152" y="158" text-anchor="middle" font-size="10" font-weight="700" fill="#1d4ed8">--</text>
+    <rect x="102" y="122" width="100" height="82" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+    <foreignObject x="103" y="123" width="98" height="80">
+      <div xmlns="http://www.w3.org/1999/xhtml" class="svg-line-card">
+        <div class="slc-head">
+          <span class="slc-name" style="color:#1e40af;">A2</span>
+          <span class="slc-badge" id="lineA2-badge">待機中</span>
+        </div>
+        <div class="slc-part" id="lineA2-part">--</div>
+        <div class="slc-meta">
+          <span class="slc-pct" id="lineA2-pct">--</span>
+          <span class="slc-sched" id="lineA2-sched"></span>
+        </div>
+        <div class="slc-bar-wrap"><div class="slc-bar" id="lineA2-bar"></div></div>
+        <div class="slc-time" id="lineA2-time"></div>
+        <div class="slc-stop" id="lineA2-stop" style="display:none;">計画停止</div>
+      </div>
+    </foreignObject>
   </g>
 
   <!-- B1カード（緑） -->
   <g id="press-B" onclick="clickPress('B')" style="cursor:pointer;">
-    <rect id="lineB1-bg" x="102" y="264" width="100" height="56" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
-    <rect id="lineB1-badge" x="154" y="267" width="44" height="13" rx="6" fill="#22c55e"/>
-    <text id="lineB1-badgeLabel" x="176" y="277" text-anchor="middle" font-size="7" font-weight="700" fill="white">稼働中</text>
-    <text x="126" y="284" text-anchor="middle" font-size="11" font-weight="700" fill="#15803d">B1</text>
-    <text id="lineB1-part" x="152" y="298" text-anchor="middle" font-size="7.5" fill="#374151">--</text>
-    <text id="lineB1-rate" x="152" y="314" text-anchor="middle" font-size="10" font-weight="700" fill="#15803d">--</text>
+    <rect x="102" y="264" width="100" height="82" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+    <foreignObject x="103" y="265" width="98" height="80">
+      <div xmlns="http://www.w3.org/1999/xhtml" class="svg-line-card">
+        <div class="slc-head">
+          <span class="slc-name" style="color:#15803d;">B1</span>
+          <span class="slc-badge" id="lineB1-badge">待機中</span>
+        </div>
+        <div class="slc-part" id="lineB1-part">--</div>
+        <div class="slc-meta">
+          <span class="slc-pct" id="lineB1-pct">--</span>
+          <span class="slc-sched" id="lineB1-sched"></span>
+        </div>
+        <div class="slc-bar-wrap"><div class="slc-bar" id="lineB1-bar"></div></div>
+        <div class="slc-time" id="lineB1-time"></div>
+        <div class="slc-stop" id="lineB1-stop" style="display:none;">計画停止</div>
+      </div>
+    </foreignObject>
   </g>
 
   <!-- B2カード -->
   <g onclick="clickPress('B')" style="cursor:pointer;">
-    <rect id="lineB2-bg" x="210" y="36" width="144" height="56" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
-    <rect id="lineB2-badge" x="310" y="39" width="44" height="13" rx="6" fill="#22c55e"/>
-    <text id="lineB2-badgeLabel" x="332" y="49" text-anchor="middle" font-size="7" font-weight="700" fill="white">稼働中</text>
-    <text x="242" y="56" text-anchor="middle" font-size="11" font-weight="700" fill="#15803d">B2</text>
-    <text id="lineB2-part" x="282" y="70" text-anchor="middle" font-size="7.5" fill="#374151">--</text>
-    <text id="lineB2-rate" x="282" y="84" text-anchor="middle" font-size="10" font-weight="700" fill="#15803d">--</text>
+    <rect x="210" y="36" width="144" height="82" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+    <foreignObject x="211" y="37" width="142" height="80">
+      <div xmlns="http://www.w3.org/1999/xhtml" class="svg-line-card">
+        <div class="slc-head">
+          <span class="slc-name" style="color:#15803d;">B2</span>
+          <span class="slc-badge" id="lineB2-badge">待機中</span>
+        </div>
+        <div class="slc-part" id="lineB2-part">--</div>
+        <div class="slc-meta">
+          <span class="slc-pct" id="lineB2-pct">--</span>
+          <span class="slc-sched" id="lineB2-sched"></span>
+        </div>
+        <div class="slc-bar-wrap"><div class="slc-bar" id="lineB2-bar"></div></div>
+        <div class="slc-time" id="lineB2-time"></div>
+        <div class="slc-stop" id="lineB2-stop" style="display:none;">計画停止</div>
+      </div>
+    </foreignObject>
   </g>
 
-  <!-- BP2カード -->
+  <!-- Bライン（BP2）カード -->
   <g onclick="clickPress('B')" style="cursor:pointer;">
-    <rect id="lineBP2-bg" x="210" y="148" width="144" height="56" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
-    <rect id="lineBP2-badge" x="310" y="151" width="44" height="13" rx="6" fill="#22c55e"/>
-    <text id="lineBP2-badgeLabel" x="332" y="161" text-anchor="middle" font-size="7" font-weight="700" fill="white">稼働中</text>
-    <text x="242" y="166" text-anchor="middle" font-size="11" font-weight="700" fill="#15803d">Bライン</text>
-    <text id="lineBP2-part" x="282" y="180" text-anchor="middle" font-size="7.5" fill="#374151">--</text>
-    <text id="lineBP2-rate" x="282" y="195" text-anchor="middle" font-size="10" font-weight="700" fill="#15803d">--</text>
+    <rect x="210" y="148" width="144" height="82" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+    <foreignObject x="211" y="149" width="142" height="80">
+      <div xmlns="http://www.w3.org/1999/xhtml" class="svg-line-card">
+        <div class="slc-head">
+          <span class="slc-name" style="color:#15803d;">Bライン</span>
+          <span class="slc-badge" id="lineBP2-badge">待機中</span>
+        </div>
+        <div class="slc-part" id="lineBP2-part">--</div>
+        <div class="slc-meta">
+          <span class="slc-pct" id="lineBP2-pct">--</span>
+          <span class="slc-sched" id="lineBP2-sched"></span>
+        </div>
+        <div class="slc-bar-wrap"><div class="slc-bar" id="lineBP2-bar"></div></div>
+        <div class="slc-time" id="lineBP2-time"></div>
+        <div class="slc-stop" id="lineBP2-stop" style="display:none;">計画停止</div>
+      </div>
+    </foreignObject>
   </g>
 
-  <!-- Cライン①カード（プレスC上段） -->
+  <!-- Cライン①カード（プレスC上段・compact） -->
   <g id="press-C" onclick="clickPress('C')" style="cursor:pointer;">
-    <rect id="lineCP3-bg" x="364" y="36" width="184" height="44" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
-    <rect id="lineCP3-badge" x="504" y="39" width="44" height="13" rx="6" fill="#f59e0b"/>
-    <text id="lineCP3-badgeLabel" x="526" y="49" text-anchor="middle" font-size="7" font-weight="700" fill="white">稼働中</text>
-    <text x="400" y="53" text-anchor="middle" font-size="11" font-weight="700" fill="#92400e">Cライン①</text>
-    <text id="lineCP3-part" x="450" y="63" text-anchor="middle" font-size="7.5" fill="#374151">--</text>
-    <text id="lineCP3-rate" x="450" y="74" text-anchor="middle" font-size="9" font-weight="700" fill="#b45309">--</text>
+    <rect x="364" y="36" width="184" height="44" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+    <foreignObject x="365" y="37" width="182" height="42">
+      <div xmlns="http://www.w3.org/1999/xhtml" class="svg-line-card slc-compact">
+        <div class="slc-head">
+          <span class="slc-name" style="color:#92400e;">Cライン①</span>
+          <span class="slc-badge" id="lineCP3-badge">待機中</span>
+        </div>
+        <div class="slc-part" id="lineCP3-part">--</div>
+        <div class="slc-meta">
+          <span class="slc-pct" id="lineCP3-pct">--</span>
+          <span class="slc-sched" id="lineCP3-sched"></span>
+        </div>
+        <div class="slc-bar-wrap"><div class="slc-bar" id="lineCP3-bar"></div></div>
+        <div class="slc-stop" id="lineCP3-stop" style="display:none;">計画停止</div>
+      </div>
+    </foreignObject>
   </g>
 
-  <!-- Cライン②カード（プレスC下段） -->
+  <!-- Cライン②カード（プレスC下段・compact） -->
   <g onclick="clickPress('C')" style="cursor:pointer;">
-    <rect id="lineCP3_2-bg" x="364" y="84" width="184" height="44" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
-    <rect id="lineCP3_2-badge" x="504" y="87" width="44" height="13" rx="6" fill="#f59e0b"/>
-    <text id="lineCP3_2-badgeLabel" x="526" y="97" text-anchor="middle" font-size="7" font-weight="700" fill="white">稼働中</text>
-    <text x="400" y="101" text-anchor="middle" font-size="11" font-weight="700" fill="#92400e">Cライン②</text>
-    <text id="lineCP3_2-part" x="450" y="111" text-anchor="middle" font-size="7.5" fill="#374151">--</text>
-    <text id="lineCP3_2-rate" x="450" y="122" text-anchor="middle" font-size="9" font-weight="700" fill="#b45309">--</text>
+    <rect x="364" y="84" width="184" height="44" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+    <foreignObject x="365" y="85" width="182" height="42">
+      <div xmlns="http://www.w3.org/1999/xhtml" class="svg-line-card slc-compact">
+        <div class="slc-head">
+          <span class="slc-name" style="color:#92400e;">Cライン②</span>
+          <span class="slc-badge" id="lineCP3_2-badge">待機中</span>
+        </div>
+        <div class="slc-part" id="lineCP3_2-part">--</div>
+        <div class="slc-meta">
+          <span class="slc-pct" id="lineCP3_2-pct">--</span>
+          <span class="slc-sched" id="lineCP3_2-sched"></span>
+        </div>
+        <div class="slc-bar-wrap"><div class="slc-bar" id="lineCP3_2-bar"></div></div>
+        <div class="slc-stop" id="lineCP3_2-stop" style="display:none;">計画停止</div>
+      </div>
+    </foreignObject>
   </g>
 
   <!-- ロボットラインカード（プレスD） -->
   <g id="press-D" onclick="clickPress('D')" style="cursor:pointer;">
-    <rect id="lineRobot-bg" x="364" y="168" width="184" height="56" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
-    <rect id="lineRobot-badge" x="504" y="171" width="44" height="13" rx="6" fill="#94a3b8"/>
-    <text id="lineRobot-badgeLabel" x="526" y="181" text-anchor="middle" font-size="7" font-weight="700" fill="white">待機中</text>
-    <text x="408" y="186" text-anchor="middle" font-size="10" font-weight="700" fill="#713f12">ロボットライン</text>
-    <text id="lineRobot-part" x="450" y="199" text-anchor="middle" font-size="7.5" fill="#374151">--</text>
-    <text id="lineRobot-rate" x="450" y="214" text-anchor="middle" font-size="9" font-weight="700" fill="#b45309">--</text>
+    <rect x="364" y="168" width="184" height="82" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+    <foreignObject x="365" y="169" width="182" height="80">
+      <div xmlns="http://www.w3.org/1999/xhtml" class="svg-line-card">
+        <div class="slc-head">
+          <span class="slc-name" style="color:#713f12;">ロボットライン</span>
+          <span class="slc-badge" id="lineRobot-badge">待機中</span>
+        </div>
+        <div class="slc-part" id="lineRobot-part">--</div>
+        <div class="slc-meta">
+          <span class="slc-pct" id="lineRobot-pct">--</span>
+          <span class="slc-sched" id="lineRobot-sched"></span>
+        </div>
+        <div class="slc-bar-wrap"><div class="slc-bar" id="lineRobot-bar"></div></div>
+        <div class="slc-time" id="lineRobot-time"></div>
+        <div class="slc-stop" id="lineRobot-stop" style="display:none;">計画停止</div>
+      </div>
+    </foreignObject>
   </g>
 
   <!-- ===== ビーコン表示グループ ===== -->
@@ -1365,10 +1469,10 @@ const FIREBASE_URL = 'https://hashimoto-press-default-rtdb.asia-southeast1.fireb
 // 各エリアのテキストと干渉しない位置に設定
 // 複数人は右→下に折り返し
 const AREA_POSITIONS = {
-  // プレスA: rect(100,8,104,238) テキストy=28 → カードの間の空きy=190
-  'プレスA':    {x:135, y:190},
-  // プレスB: rect(208,8,148,354) B2(y=36-92) BP2(y=148-204) → 間の空きy=110
-  'プレスB':    {x:240, y:110},
+  // プレスA: rect(100,8,104,238) A1(y=36-118) A2(y=122-204) → 下余白y=215
+  'プレスA':    {x:135, y:215},
+  // プレスB: rect(208,8,148,354) B2(y=36-118) BP2(y=148-230) → 間の空きy=133
+  'プレスB':    {x:240, y:133},
   // プレスC: rect(362,8,188,132) カード2枚 → 右端上部
   'プレスC':    {x:520, y:25},
   // プレスD: rect(362,144,188,120) テキストx=456,y=210 → 右端上部(テキストより上)
@@ -1757,22 +1861,6 @@ const STATUS_COLORS = {
 function updateFactoryView(lines){
   linesData = lines || {};
 
-  // Firebase ID（新・旧両方）→ SVG要素ID のマッピング
-  const lineMap = {
-    A1:             {part:'lineA1-part',    rate:'lineA1-rate',    badge:'lineA1-badge',    badgeLabel:'lineA1-badgeLabel'},
-    A2:             {part:'lineA2-part',    rate:'lineA2-rate',    badge:'lineA2-badge',    badgeLabel:'lineA2-badgeLabel'},
-    B1:             {part:'lineB1-part',    rate:'lineB1-rate',    badge:'lineB1-badge',    badgeLabel:'lineB1-badgeLabel'},
-    B2:             {part:'lineB2-part',    rate:'lineB2-rate',    badge:'lineB2-badge',    badgeLabel:'lineB2-badgeLabel'},
-    BP2:            {part:'lineBP2-part',   rate:'lineBP2-rate',   badge:'lineBP2-badge',   badgeLabel:'lineBP2-badgeLabel'},
-    'Bライン':       {part:'lineBP2-part',   rate:'lineBP2-rate',   badge:'lineBP2-badge',   badgeLabel:'lineBP2-badgeLabel'},
-    CP3:            {part:'lineCP3-part',   rate:'lineCP3-rate',   badge:'lineCP3-badge',   badgeLabel:'lineCP3-badgeLabel'},
-    'Cライン①':     {part:'lineCP3-part',   rate:'lineCP3-rate',   badge:'lineCP3-badge',   badgeLabel:'lineCP3-badgeLabel'},
-    CP3_2:          {part:'lineCP3_2-part', rate:'lineCP3_2-rate', badge:'lineCP3_2-badge', badgeLabel:'lineCP3_2-badgeLabel'},
-    'Cライン②':     {part:'lineCP3_2-part', rate:'lineCP3_2-rate', badge:'lineCP3_2-badge', badgeLabel:'lineCP3_2-badgeLabel'},
-    robot:          {part:'lineRobot-part', rate:'lineRobot-rate', badge:'lineRobot-badge', badgeLabel:'lineRobot-badgeLabel'},
-    'ロボットライン': {part:'lineRobot-part', rate:'lineRobot-rate', badge:'lineRobot-badge', badgeLabel:'lineRobot-badgeLabel'},
-  };
-
   // バッジカラー定義
   const BADGE_COLORS = {
     setup:   {bg:'#1a1a1a', label:'段取中'},
@@ -1781,39 +1869,114 @@ function updateFactoryView(lines){
     stop:    {bg:'#dc2626', label:'停止中'},
   };
 
-  Object.entries(lineMap).forEach(([id, els]) => {
-    const line  = linesData[id];
-    const st    = (line && line.status) || 'waiting';
-    const bc    = BADGE_COLORS[st] || BADGE_COLORS.waiting;
-    const rate  = (line && line.plan > 0) ? Math.round(line.actual / line.plan * 100) : null;
-    const partText = (line && line.part)
-      ? (line.part.length > 18 ? line.part.slice(0,17)+'…' : line.part)
-      : '--';
+  // 各カード定義: ids（Firebaseキー、優先順）、要素プレフィックス、コンパクト表示か
+  const CARDS = [
+    {ids:['A1'],                      prefix:'lineA1',    compact:false},
+    {ids:['A2'],                      prefix:'lineA2',    compact:false},
+    {ids:['B1'],                      prefix:'lineB1',    compact:false},
+    {ids:['B2'],                      prefix:'lineB2',    compact:false},
+    {ids:['Bライン','BP2'],            prefix:'lineBP2',   compact:false},
+    {ids:['Cライン①','CP3'],           prefix:'lineCP3',   compact:true},
+    {ids:['Cライン②','CP3_2'],         prefix:'lineCP3_2', compact:true},
+    {ids:['ロボットライン','robot'],    prefix:'lineRobot', compact:false},
+  ];
 
-    // 品番
-    const partEl = document.getElementById(els.part);
-    if(partEl) partEl.textContent = partText;
-
-    // 達成率（色分け）
-    const rateEl = document.getElementById(els.rate);
-    if(rateEl){
-      rateEl.textContent = rate !== null ? rate + '%' : '--';
-      const rateColor = rate === null ? '#94a3b8'
-        : rate >= 100 ? '#16a34a'
-        : rate >= 80  ? '#1d4ed8'
-        : '#dc2626';
-      rateEl.setAttribute('fill', rateColor);
-      rateEl.setAttribute('font-size', rate !== null && rate >= 100 ? '11' : '10');
+  CARDS.forEach(({ids, prefix, compact}) => {
+    // 最初にデータが見つかったIDを使用
+    let line = null, lineId = ids[0];
+    for(const id of ids){
+      if(linesData[id]){ line = linesData[id]; lineId = id; break; }
     }
 
-    // バッジ色
-    const badgeEl = document.getElementById(els.badge);
-    if(badgeEl) badgeEl.setAttribute('fill', bc.bg);
+    const st = (line && line.status) || 'waiting';
+    const bc = BADGE_COLORS[st] || BADGE_COLORS.waiting;
+    const plan   = (line && line.plan)   || 0;
+    const actual = (line && line.actual) || 0;
+    const jobs   = (line && Array.isArray(line.jobs)) ? line.jobs : [];
+    const hasPlan = plan > 0 || jobs.some(j => (j.plan||0) > 0);
 
-    // バッジラベル
-    const labelEl = document.getElementById(els.badgeLabel);
-    if(labelEl) labelEl.textContent = bc.label;
+    // バッジ
+    const badgeEl = document.getElementById(prefix + '-badge');
+    if(badgeEl){ badgeEl.textContent = bc.label; badgeEl.style.background = bc.bg; }
+
+    const stopEl = document.getElementById(prefix + '-stop');
+
+    if(!hasPlan){
+      // 計画停止表示
+      if(stopEl) stopEl.style.display = '';
+      ['part','pct','sched','time'].forEach(k => {
+        const el = document.getElementById(prefix + '-' + k);
+        if(el) el.style.display = 'none';
+      });
+      // バーwrap（親要素）ごと隠す
+      const barEl0 = document.getElementById(prefix + '-bar');
+      if(barEl0) barEl0.parentElement.style.display = 'none';
+      return;
+    }
+
+    // 通常表示
+    if(stopEl) stopEl.style.display = 'none';
+    ['part','pct','sched','time'].forEach(k => {
+      const el = document.getElementById(prefix + '-' + k);
+      if(el) el.style.display = '';
+    });
+    const barWrapEl = document.getElementById(prefix + '-bar');
+    if(barWrapEl) barWrapEl.parentElement.style.display = '';
+
+    // 品番
+    const partEl = document.getElementById(prefix + '-part');
+    if(partEl){
+      const partText = (line && line.part)
+        ? (line.part.length > 20 ? line.part.slice(0,19)+'…' : line.part) : '--';
+      partEl.textContent = partText;
+    }
+
+    // 達成率
+    const pct = plan > 0 ? Math.round(actual / plan * 100) : null;
+    const pctColor = pct === null ? '#94a3b8' : pct >= 100 ? '#16a34a' : pct >= 80 ? '#1d4ed8' : '#dc2626';
+    const pctEl = document.getElementById(prefix + '-pct');
+    if(pctEl){
+      pctEl.textContent = pct !== null
+        ? `${actual.toLocaleString()}/${plan.toLocaleString()}個 ${pct}%` : '--';
+      pctEl.style.color = pctColor;
+    }
+
+    // スケジュール差分
+    const diff = getLineScheduleDiff(lineId);
+    const schedEl = document.getElementById(prefix + '-sched');
+    if(schedEl){
+      if(diff !== null){
+        const abs = Math.abs(Math.round(diff));
+        if(abs < 2){ schedEl.textContent = '計画通り'; schedEl.className = 'slc-sched on-time'; }
+        else if(diff > 0){ schedEl.textContent = `▼${abs}分遅れ`; schedEl.className = 'slc-sched behind'; }
+        else { schedEl.textContent = `▲${abs}分早い`; schedEl.className = 'slc-sched ahead'; }
+      } else {
+        schedEl.textContent = '';
+        schedEl.className = 'slc-sched';
+      }
+    }
+
+    // プログレスバー
+    const barEl = document.getElementById(prefix + '-bar');
+    if(barEl){
+      const barColor = pct === null ? '#e0e0e0' : pct >= 100 ? '#16a34a' : pct >= 80 ? '#3b82f6' : '#ef4444';
+      barEl.style.width = (pct !== null ? Math.min(pct,100) : 0) + '%';
+      barEl.style.background = barColor;
+    }
+
+    // 現在ジョブ時刻（compact以外）
+    if(!compact){
+      const timeEl = document.getElementById(prefix + '-time');
+      if(timeEl){
+        const runJob  = jobs.find(j => j.status === 'running');
+        const nextJob = !runJob ? jobs.find(j => j.status === 'waiting') : null;
+        const curJob  = runJob || nextJob;
+        timeEl.textContent = curJob && curJob.start
+          ? `${runJob ? '▶' : '次:'} ${curJob.start}〜${curJob.end||''}` : '';
+      }
+    }
   });
+
   updatePersonPanel();
 }
 
