@@ -240,6 +240,12 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
         <input type="text" id="iNote" placeholder="例：金型調整中">
       </div>
       <div class="slbl">作業時間</div>
+      <div style="margin-bottom:6px;padding:4px 0;">
+        <label style="cursor:pointer;display:inline-flex;align-items:center;gap:7px;font-size:12px;color:#555;">
+          <input type="checkbox" id="iNoSetup" onchange="onNoSetupChange()"> 段取りなし（この工程は段取りが発生しない）
+        </label>
+      </div>
+      <div id="setupFields">
       <div class="fg3">
         <div class="fi">
           <label>段取り開始</label>
@@ -264,6 +270,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
         <div class="fi"></div>
         <div class="fi"></div>
       </div>
+      </div><!-- /setupFields -->
       <div class="br">
         <button class="bp" onclick="doSub()">更新する</button>
         <button class="bd" onclick="showCor()">修正する</button>
@@ -368,7 +375,8 @@ let groupCfg=DEFAULT_GRP.map(g=>({...g,ids:[...g.ids]}));
 let currentGrp=0;
 function getIDS(){return groupCfg[currentGrp]?.ids||[];}
 function getAllIDS(){return [...new Set(groupCfg.flatMap(g=>g.ids||[]).filter(Boolean))];}
-function getLineName(id){return lines[id]?.name||id;}
+let lineNamesMap={}; // settings/lineNames から読み込むライン名マップ
+function getLineName(id){return lineNamesMap[id]||lines[id]?.name||id;}
 
 const SDEFS={A1:45,A2:45,B1:60,B2:45,BP2:45,CP3:45,CP3_2:45};
 let lines={},sets={...SDEFS};
@@ -381,6 +389,8 @@ onValue(ref(db,'.info/connected'),s=>{
 onValue(ref(db,'lines'),s=>{
   try{
     lines=s.val()||{};
+    // lineNamesMap の名前を適用（lines内のname欠損を補完）
+    Object.keys(lineNamesMap).forEach(id=>{if(lineNamesMap[id])lines[id]={...(lines[id]||{status:'waiting',plan:0,actual:0,updatedAt:0,jobs:[]}),name:lineNamesMap[id]};});
     updateLineSelects();
     renderGroupTabs();
     renderBoard();
@@ -398,6 +408,9 @@ onValue(ref(db,'settings'),s=>{
   if(v.groups&&Array.isArray(v.groups)&&v.groups.length){
     groupCfg=v.groups.map(g=>({gid:g.gid||g.label||'g',label:g.label||g.gid||'グループ',ids:Array.isArray(g.ids)?[...g.ids]:[],importMap:g.importMap||{}}));
   }
+  // ライン名マップを更新し lines にも反映
+  if(v.lineNames&&typeof v.lineNames==='object') lineNamesMap={...v.lineNames};
+  Object.keys(lineNamesMap).forEach(id=>{if(lineNamesMap[id])lines[id]={...(lines[id]||{status:'waiting',plan:0,actual:0,updatedAt:0,jobs:[]}),name:lineNamesMap[id]};});
   updateLineSelects();
   renderGroupTabs();
   if(Object.keys(lines).length>0) renderBoard();
@@ -500,6 +513,18 @@ function breakMins(startM,endM){
 function netMins(startM,endM){
   if(!startM||!endM||endM<=startM) return 0;
   return Math.max(0,(endM-startM)-breakMins(startM,endM));
+}
+// 段取り時間の推定計算（入力なし・段取りなしでない場合）
+// 戻り値: null=段取りなし, 0以上=分数
+const SETUP_BASE_MIN=8*60+10; // 08:10 始業基準
+function calcImpliedSetup(jobs,ji){
+  const j=jobs[ji];
+  if(j.noSetup) return null;               // 段取りなしフラグ
+  if((j.setupActualMin||0)>0) return j.setupActualMin; // 実績入力あり
+  const startM=timeToMin(j.start);
+  if(!startM) return 0;
+  const prevEndM=ji>0?timeToMin(jobs[ji-1].end):SETUP_BASE_MIN;
+  return Math.max(0,startM-(prevEndM||startM));
 }
 
 function getProRata(l){
@@ -782,15 +807,22 @@ function renderBoard(){
           const setupParts2=[];
           {
             const stdSU=sets[id]!==undefined?sets[id]:0;
-            if(jSetupMin>0){
-              // 実績あり：実績÷標準の比率を表示
-              const suR2=stdSU>0?Math.round(jSetupMin/stdSU*100):null;
-              const suCol2=suR2===null?'#999':suR2<=100?'#27ae60':suR2<=125?'#e67e22':'#c0392b';
-              const ratioStr=suR2!==null?' ('+suR2+'%)':'';
-              setupParts2.push('<span style="color:'+suCol2+';">🔧 段取 '+jSetupMin+'分／標準'+stdSU+'分'+ratioStr+'</span>');
+            if(j.noSetup){
+              // 段取りなしフラグ
+              setupParts2.push('<span style="color:#aaa;font-size:9px;">✓ 段取りなし</span>');
             } else {
-              // 実績なし：標準時間のみ表示（グレー）
-              setupParts2.push('<span style="color:#bbb;">🔧 標準 '+stdSU+'分</span>');
+              const implied=calcImpliedSetup(jobs,jIdx); // null=段取りなし / 0以上=分数
+              const dispMin=jSetupMin>0?jSetupMin:(implied||0);
+              const isImplied=jSetupMin===0&&(implied||0)>0;
+              if(dispMin>0){
+                const suR2=stdSU>0?Math.round(dispMin/stdSU*100):null;
+                const suCol2=suR2===null?'#999':suR2<=100?'#27ae60':suR2<=125?'#e67e22':'#c0392b';
+                const ratioStr=suR2!==null?' ('+suR2+'%)':'';
+                const implMark=isImplied?'<span style="font-size:9px;color:#bbb;"> 推定</span>':'';
+                setupParts2.push('<span style="color:'+suCol2+';">🔧 段取 '+dispMin+'分／標準'+stdSU+'分'+ratioStr+implMark+'</span>');
+              } else {
+                setupParts2.push('<span style="color:#bbb;">🔧 標準 '+stdSU+'分</span>');
+              }
             }
           }
           if(jWS) setupParts2.push('開始 '+jWS);
@@ -818,7 +850,7 @@ function renderBoard(){
     d.onclick=function(){openModal(id);};
     d.innerHTML=
       '<div class="lhead">'+
-        '<div><div class="lname">'+l.name+'</div>'+
+        '<div><div class="lname">'+getLineName(id)+'</div>'+
         ((pr&&(pr.phase==='before'||pr.phase==='done'))||(!l.workStart&&!l.actual)?'':'<div class="lpart">'+(l.part||'未設定')+(l.note?' / '+l.note:'')+'</div>')+
         '</div>'+
         '<span class="bdg '+s.bdg+'">'+s.lbl+'</span>'+
@@ -930,12 +962,12 @@ function renderAlts(){
     const lastEndMin5=allJobs5.length?Math.max(...allJobs5.map(j=>timeToMin(j.end)||0)):0;
     const pastLastEnd5=lastEndMin5>0&&(nowH5*60+nowM5)>=lastEndMin5;
     if(l.status==='running'&&l.plan>0&&isWork5&&nowM5>=10&&!updAfter5&&!allDone5&&!pastLastEnd5)
-      h+='<div class="al warn"><div class="al-txt w">⚠️ 未報告：'+l.name+'</div><div class="al-sub">'+(l.updatedAt===0?nowH5+'時台の実績が未入力':'前回更新：'+fmtTs(l.updatedAt))+'</div></div>';
+      h+='<div class="al warn"><div class="al-txt w">⚠️ 未報告：'+getLineName(id)+'</div><div class="al-sub">'+(l.updatedAt===0?nowH5+'時台の実績が未入力':'前回更新：'+fmtTs(l.updatedAt))+'</div></div>';
     if(l.status==='setup'&&el>=(sets[id]||60)&&l.updatedAt>0)
-      h+='<div class="al warn"><div class="al-txt w">🔧 段取り超過：'+l.name+'</div><div class="al-sub">'+el+'分経過（設定'+(sets[id]||60)+'分）</div></div>';
+      h+='<div class="al warn"><div class="al-txt w">🔧 段取り超過：'+getLineName(id)+'</div><div class="al-sub">'+el+'分経過（設定'+(sets[id]||60)+'分）</div></div>';
     const pr5=getProRata(l);
     if(l.status==='running'&&l.plan>0&&l.actual>0&&l.updatedAt>0&&pr5&&pr5.proRata>0&&Math.round(l.actual/pr5.proRata*100)<80)
-      h+='<div class="al"><div class="al-txt">🔴 遅れ：'+l.name+'（'+l.part+'）</div><div class="al-sub">達成率'+Math.round(l.actual/pr5.proRata*100)+'%</div></div>';
+      h+='<div class="al"><div class="al-txt">🔴 遅れ：'+getLineName(id)+'（'+l.part+'）</div><div class="al-sub">達成率'+Math.round(l.actual/pr5.proRata*100)+'%</div></div>';
   });
   document.getElementById('alts').innerHTML=h;
 }
@@ -943,12 +975,12 @@ function renderAlts(){
 // モーダル
 window.openModal=function(id){
   const l=lines[id];if(!l)return;
-  document.getElementById('mttl').textContent=l.name+' 工程詳細';
+  document.getElementById('mttl').textContent=getLineName(id)+' 工程詳細';
   const jobs=(l.jobs||[]).filter(j=>j.plan>0);
   const stdSetup=sets[id]||60;
   let h=`<table class="jtbl"><thead><tr><th>#</th><th>品番</th><th>計画数</th><th>実績数</th><th>CT達成率</th><th>段取り<br><span style="font-weight:400;color:#aaa;">標準${stdSetup}分</span></th><th>予定時間</th><th>実績時間</th><th></th></tr></thead><tbody>`;
   if(!jobs.length){h+='<tr><td colspan="9" style="padding:16px;color:#aaa;text-align:center;">工程データなし</td></tr>';}
-  jobs.forEach(j=>{
+  jobs.forEach((j,ji)=>{
     const isCur=j.part===l.part;
     const a=isCur?l.actual:(j.actualCount||0);
     // CT達成率：(実績数×標準CT) ÷ 実績時間 × 100
@@ -962,14 +994,20 @@ window.openModal=function(id){
     const actNet2=wsM2&&weM2?netMins(wsM2,weM2):0;
     const r=stdCT2>0&&actNet2>0&&a>0?Math.round(a*stdCT2/actNet2*100):(j.plan>0&&a>0?Math.round(a/j.plan*100):null);
     const rc=r===null?'':r>=95?'c-ok':r>=80?'c-wn':'c-ng';
-    // 段取り時間比率：実績÷標準（100%以下が良い）
+    // 段取り時間：実績 or 推定
     const actSU=j.setupActualMin||0;
-    const suR=actSU>0?Math.round(actSU/stdSetup*100):null;
+    const implSU=calcImpliedSetup(jobs,ji);
+    const dispSU=actSU>0?actSU:(implSU||0);
+    const isImpliedSU=actSU===0&&(implSU||0)>0;
+    const suR=dispSU>0&&stdSetup>0?Math.round(dispSU/stdSetup*100):null;
     const suCol=suR===null?'#aaa':suR<=100?'#27ae60':suR<=125?'#e67e22':'#c0392b';
-    const suDisp=actSU>0
-      ?`<span style="color:${suCol};font-weight:700;">${actSU}分</span>`+
-       (suR!==null?`<span style="font-size:9px;color:${suCol};margin-left:3px;">(${suR}%)</span>`:'')
-      :'<span style="color:#ccc;">--</span>';
+    const suDisp=j.noSetup
+      ?'<span style="color:#aaa;font-size:10px;">段取りなし</span>'
+      :dispSU>0
+        ?`<span style="color:${suCol};font-weight:700;">${dispSU}分</span>`+
+         (suR!==null?`<span style="font-size:9px;color:${suCol};margin-left:3px;">(${suR}%)</span>`:'')+
+         (isImpliedSU?'<span style="font-size:9px;color:#bbb;"> 推定</span>':'')
+        :'<span style="color:#ccc;">--</span>';
     const rowCls=isCur?'cur':(j.status==='done'?'dn':'');
     const aTime=j.actualStart&&j.actualEnd?j.actualStart+'〜'+j.actualEnd:'--';
     const pTime=j.start&&j.end?j.start+'〜'+j.end:'--';
@@ -1048,6 +1086,8 @@ function restoreJobFields(lineId, partVal, startVal, seqVal){
   document.getElementById('iSE').value=seVal;
   document.getElementById('iWS').value=wsVal;
   document.getElementById('iWE').value=weVal;
+  const noSetupEl=document.getElementById('iNoSetup');
+  if(noSetupEl){noSetupEl.checked=!!(job&&job.noSetup);window.onNoSetupChange();}
   // 標準CT表示（計画数÷計画時間）
   const stdCtEl=document.getElementById('iStdCT');
   if(job&&job.plan>0&&job.start&&job.end){
@@ -1123,6 +1163,11 @@ window.onPartSel=function(){
   }
 };
 
+window.onNoSetupChange=function(){
+  const checked=document.getElementById('iNoSetup')?.checked;
+  const fields=document.getElementById('setupFields');
+  if(fields){fields.style.opacity=checked?'0.35':'1';fields.style.pointerEvents=checked?'none':'';}
+};
 window.setNow=function(id){
   const n=new Date();
   document.getElementById(id).value=`${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
@@ -1235,6 +1280,7 @@ window.doSub=function(){
         actualEnd:we,
         actualCount:actVal,
         revisedPlan:(!isNaN(revised)&&revised>0)?revised:(j.revisedPlan||null),
+        noSetup:!!(document.getElementById('iNoSetup')?.checked),
         setupActualMin:setupMin!==null?setupMin:(j.setupActualMin||0),
         paceInfo,
         snapHistory,
@@ -1459,10 +1505,10 @@ function syncGrpMgrForm(){
   groupCfg.forEach((g,gi)=>{
     const nm=document.getElementById('gname-'+gi);
     if(nm&&nm.value.trim()) g.label=nm.value.trim();
-    // ライン表示名
+    // ライン表示名（lineNamesMap に反映）
     (g.ids||[]).forEach((id,li)=>{
       const ln=document.getElementById(`gln-${gi}-${li}`);
-      if(ln&&ln.value.trim()&&lines[id]) lines[id]={...lines[id],name:ln.value.trim()};
+      if(ln&&ln.value.trim()) lineNamesMap[id]=ln.value.trim();
     });
     // インポート設定（detailsが開いていない場合はDOMに要素が存在しないこともないが念のため）
     const readV=(sfx,def)=>{const e=document.getElementById(`mp-${gi}-${sfx}`);return e?e.value.trim()||def:def;};
@@ -1547,26 +1593,22 @@ window.saveGroups=function(){
       altPartCol:(document.getElementById(`mp-${gi}-altpart`)?.value||'').trim().toUpperCase()
     };
   });
-  // ライン表示名を Firebase lines/{id}/name へ書き込む
-  const lineNameUpd={};
+  // ライン表示名を lineNamesMap に収集（settings/lineNames として保存）
+  const newLineNames={};
   groupCfg.forEach((g,gi)=>{
     (g.ids||[]).forEach((id,li)=>{
       const lnInp=document.getElementById(`gln-${gi}-${li}`);
-      if(lnInp&&lnInp.value.trim()){
-        const newName=lnInp.value.trim();
-        lineNameUpd['lines/'+id+'/name']=newName;
-        if(lines[id]) lines[id]={...lines[id],name:newName};
-        else lines[id]={name:newName,status:'waiting',plan:0,actual:0,updatedAt:0,jobs:[]};
-      }
+      if(lnInp&&lnInp.value.trim()) newLineNames[id]=lnInp.value.trim();
     });
   });
+  lineNamesMap={...lineNamesMap,...newLineNames};
+  // メモリ上の lines にも即反映
+  Object.keys(lineNamesMap).forEach(id=>{if(lineNamesMap[id])lines[id]={...(lines[id]||{status:'waiting',plan:0,actual:0,updatedAt:0,jobs:[]}),name:lineNamesMap[id]};});
   const allIds=getAllIDS();
   const stNs={};allIds.forEach(id=>{const v=parseInt(document.getElementById('st-'+id)?.value);stNs[id]=isNaN(v)?(sets[id]||45):v;});
-  const saveObj={groups:groupCfg.map(g=>({gid:g.gid,label:g.label,ids:[...g.ids],importMap:g.importMap||{}})),setupTimes:stNs};
-  // settings全体を上書き保存
+  const saveObj={groups:groupCfg.map(g=>({gid:g.gid,label:g.label,ids:[...g.ids],importMap:g.importMap||{}})),setupTimes:stNs,lineNames:lineNamesMap};
+  // settings として一括保存（lines/ パスには書き込まない）
   set(ref(db,'settings'),saveObj);
-  // ライン表示名を個別パスで更新
-  if(Object.keys(lineNameUpd).length) update(ref(db),lineNameUpd);
   const m=document.getElementById('gmsg');m.textContent='保存しました ✓';setTimeout(()=>{m.textContent='';},2000);
   updateLineSelects();
   renderGroupTabs();
