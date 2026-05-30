@@ -804,10 +804,10 @@ function renderBoard(){
         }
       }
     }
-    // 3種類ペース
+    // 3種類ペース（現品番のみ・正味時間ベースで統一）
     const cjP=(l.jobs||[]).find(j=>j.part===l.part&&j.plan>0&&j.start&&j.end);
-    const planH=cjP?(timeToMin(cjP.end)-timeToMin(cjP.start))/60:0;
-    const planPace=planH>0?Math.round(cjP.plan/planH):0;
+    const planNetP=cjP?netMins(timeToMin(cjP.start),timeToMin(cjP.end)):0; // 正味時間（休憩除外）
+    const planPace=planNetP>0?Math.round(cjP.plan/planNetP*60):0; // 正味時間ベースの計画ペース
     function mkPace(p){
       if(planPace<=0) return p.toLocaleString()+'個/h';
       const d=p-planPace,col=d>=0?'#27ae60':'#c0392b';
