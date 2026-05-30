@@ -108,9 +108,9 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 .trouble-btn.active{background:#fdecea;border-color:#c0392b;color:#c0392b;animation:tblink 1.5s ease-in-out infinite;}
 @keyframes tblink{0%,100%{opacity:1;}50%{opacity:0.65;}}
 /* トラブルバー（カード内） */
-.tbar{border-radius:5px;padding:4px 8px;margin-bottom:4px;display:flex;align-items:center;gap:8px;font-size:10px;}
-.tbar.ongoing{background:rgba(231,76,60,0.10);border:1px solid rgba(231,76,60,0.20);}
-.tbar.done{background:rgba(0,0,0,0.04);border:1px solid rgba(0,0,0,0.06);}
+.tbar{border-radius:4px;padding:4px 10px;margin-bottom:4px;display:flex;align-items:center;gap:8px;font-size:10px;}
+.tbar.ongoing{background:#fdf5f5;border-left:3px solid #c0392b;}
+.tbar.done{background:#fefbf0;border-left:3px solid #d68910;}
 /* カード背景点滅（緊急時） */
 @keyframes cardBgBlink{0%,100%{background-color:rgba(231,76,60,0.28);}50%{background-color:rgba(231,76,60,0.06);}}
 .trouble-blink-card{animation:cardBgBlink 1.2s ease-in-out infinite!important;}
@@ -419,7 +419,10 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
         <label>メモ <span style="font-size:9px;color:#aaa;">任意</span></label>
         <input type="text" id="tNote" placeholder="例：モーター故障、修理業者連絡中" style="width:100%;padding:7px 9px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:inherit;">
       </div>
-      <button class="bp" onclick="addTrouble()">追加する</button>
+      <div class="br">
+        <button class="bp" id="tAddBtn" onclick="addTrouble()">追加する</button>
+        <button class="bd" id="tCancelBtn" onclick="cancelEditTrouble()" style="display:none;">キャンセル</button>
+      </div>
       <div id="tMsg" style="font-size:11px;color:#27ae60;margin-top:6px;min-height:14px;"></div>
     </div>
   </div>
@@ -574,7 +577,8 @@ function calcLineRate(l){
     estFinish='完了';
   } else if(remainingPlanMin>0&&ctRate&&ctRate>0){
     const adjustedMin=remainingPlanMin*(100/ctRate);
-    const estM=updMin+Math.round(adjustedMin);
+    // 正味分数→時計時刻に変換（途中の休憩時間を正確に加算）
+    const estM=addNetMins(updMin,Math.round(adjustedMin));
     estFinish=String(Math.floor(estM/60)).padStart(2,'0')+':'+String(estM%60).padStart(2,'0');
   }
 
@@ -596,6 +600,18 @@ function breakMins(startM,endM){
 function netMins(startM,endM){
   if(!startM||!endM||endM<=startM) return 0;
   return Math.max(0,(endM-startM)-breakMins(startM,endM));
+}
+// 正味分数を加算して時計時刻(分)を返す（休憩時間を正確に加算）
+function addNetMins(startClockM,netToAdd){
+  if(!netToAdd||netToAdd<=0) return Math.round(startClockM);
+  let t=startClockM+netToAdd;
+  for(let i=0;i<10;i++){
+    const bm=breakMins(startClockM,t);
+    const newT=startClockM+netToAdd+bm;
+    if(Math.abs(newT-t)<0.5) break;
+    t=newT;
+  }
+  return Math.round(t);
 }
 // 段取り時間の推定計算（入力なし・段取りなしでない場合）
 // actualWorkStart: 実際の作業開始時刻（"HH:MM" 形式）を渡す
@@ -682,12 +698,12 @@ function getStatus(l){
   if(!pv&&!(l.status==='running'&&l.workStart&&l.workStart!=='')){
     return{lbl:'待機中',bdg:'wt',card:'s-wt',bar:'c-wt',pr};
   }
-  // CT達成率で状態判定
+  // CT達成率で状態判定（net minutes で統一）
   let r=0;
   const cjSt=(l.jobs||[]).find(j=>j.part===l.part&&j.plan>0&&j.start&&j.end);
   if(cjSt&&l.actual>0){
-    const planMinSt=timeToMin(cjSt.end)-timeToMin(cjSt.start);
-    const planCtSt=planMinSt>0?planMinSt/cjSt.plan:0;
+    const planNetSt=netMins(timeToMin(cjSt.start),timeToMin(cjSt.end)); // net minutes
+    const planCtSt=planNetSt>0?planNetSt/cjSt.plan:0;
     const wsStM=timeToMin(l.workStart||cjSt.start);
     const weStM=l.workEnd&&l.workEnd!==''?timeToMin(l.workEnd):(new Date().getHours()*60+new Date().getMinutes());
     const actMinSt=wsStM&&weStM?netMins(wsStM,weStM):0;
@@ -740,7 +756,7 @@ function renderBoard(){
     if(partRate2===null&&partActual>0&&cjCT) partRate2=Math.round(partActual/cjCT.plan*100);
     const proRateDisp=partRate2!==null?partRate2+'%':'-';
     const barW=l.status==='setup'?100:(pv>0?Math.min(Math.round(partActual/pv*100),100):0);
-    // 遅れ分数：実績入力時点（updatedAt）で計算・固定
+    // 遅れ分数：スケジュール開始基準で計算（段取・トラブルを含む計画全体の遅れ）
     let delayDisp='';
     if(partActual>0&&!(l.workEnd&&l.workEnd!=='')){
       const cjD=(l.jobs||[]).find(j=>j.part===l.part&&j.plan>0&&j.start&&j.end);
@@ -751,13 +767,38 @@ function renderBoard(){
           if(updM){
             const planNetD=netMins(sm2,em2);
             const planCTD=planNetD>0?planNetD/cjD.plan:0;
-            const wsM_d=timeToMin(l.workStart||cjD.start);
-            const elapsedD=wsM_d?netMins(wsM_d,Math.min(updM,em2)):0;
-            const targetAtUpd=planCTD>0?Math.round(elapsedD/planCTD):0;
-            const shortage=targetAtUpd-partActual;
-            if(shortage>0){
-              const dMin=Math.round(shortage*planCTD);
-              delayDisp='<div style="font-size:10px;color:#c0392b;font-weight:700;margin-top:2px;">⏱ '+dMin+'分遅れ（'+shortage.toLocaleString()+'個不足）</div>';
+            // スケジュール開始(sm2)基準で「今この時点で何個あるべきか」
+            const elapsedFromSched=netMins(sm2,Math.min(updM,em2));
+            const targetFromSched=planCTD>0?Math.round(elapsedFromSched/planCTD):0;
+            const totalShortage=targetFromSched-partActual;
+            if(totalShortage>0){
+              const totalDelayMin=Math.round(totalShortage*planCTD);
+              // 遅れ内訳の計算
+              const breakdownParts=[];
+              // ① 段取超過分
+              const stdSetupForLine=sets[id]||0;
+              const wsM_d=timeToMin(l.workStart||'');
+              if(wsM_d&&stdSetupForLine>0){
+                const actualSetupNet=netMins(sm2,wsM_d);
+                const setupOverrun=Math.max(0,Math.round(actualSetupNet-stdSetupForLine));
+                if(setupOverrun>0) breakdownParts.push('段取超過 +'+setupOverrun+'分');
+              }
+              // ② トラブル停止分（当日の記録合計）
+              const trbs=(l.troubles||[]).filter(t=>t&&t.start);
+              if(trbs.length>0){
+                let troubleNet=0;
+                trbs.forEach(t=>{
+                  const ts=timeToMin(t.start);
+                  const te=t.end?timeToMin(t.end):Math.min(updM,em2);
+                  if(ts&&te>ts) troubleNet+=netMins(ts,te);
+                });
+                if(troubleNet>0) breakdownParts.push('トラブル +'+Math.round(troubleNet)+'分');
+              }
+              let html='<div style="font-size:10px;color:#c0392b;font-weight:700;margin-top:2px;">⏱ 計画比 '+totalDelayMin+'分遅れ（'+totalShortage.toLocaleString()+'個不足）</div>';
+              if(breakdownParts.length>0){
+                html+='<div style="font-size:9px;color:#888;margin-top:1px;padding-left:2px;">└ '+breakdownParts.join('　')+'</div>';
+              }
+              delayDisp=html;
             }
           }
         }
@@ -1116,6 +1157,7 @@ function renderAlts(){
 
 // ===== トラブル記録（複数件対応）=====
 let _troubleLineId=null;
+let _editingTroubleIdx=null; // null=新規追加, 数値=編集中インデックス
 
 // トラブル経過時間・背景色をリアルタイム更新（30秒ごと）
 function updateTroubleColors(){
@@ -1169,6 +1211,7 @@ function _renderTroubleList(){
       noteStr+
       '<span style="margin-left:auto;display:flex;gap:4px;">'+
         (ongoing?'<button class="btn-now" onclick="endTrouble('+i+')" style="font-size:10px;">終了</button>':'')+
+        '<button class="btn-now" onclick="editTrouble('+i+')" style="font-size:10px;">✏</button>'+
         '<button class="btn-rm" onclick="deleteTrouble('+i+')" style="width:22px;height:22px;font-size:10px;border-radius:4px;">✕</button>'+
       '</span>'+
     '</div>';
@@ -1177,6 +1220,7 @@ function _renderTroubleList(){
 
 window.openTroubleModal=function(id){
   _troubleLineId=id;
+  _editingTroubleIdx=null;
   document.getElementById('troubleMttl').textContent='⚠ '+getLineName(id)+'　トラブル・停止記録';
   const n=new Date();
   document.getElementById('tType').value='設備トラブル';
@@ -1184,6 +1228,8 @@ window.openTroubleModal=function(id){
   document.getElementById('tEnd').value='';
   document.getElementById('tNote').value='';
   document.getElementById('tMsg').textContent='';
+  document.getElementById('tAddBtn').textContent='追加する';
+  document.getElementById('tCancelBtn').style.display='none';
   _renderTroubleList();
   document.getElementById('troubleOv').classList.add('open');
 };
@@ -1200,15 +1246,52 @@ window.addTrouble=function(){
   const end=document.getElementById('tEnd').value;
   const note=document.getElementById('tNote').value.trim();
   if(!start){document.getElementById('tMsg').style.color='#c0392b';document.getElementById('tMsg').textContent='開始時刻を入力してください';return;}
-  const newTroubles=[..._getTroubles(_troubleLineId),{id:Date.now(),type,start,end:end||null,note:note||null}];
+  let newTroubles;
+  const isEdit=_editingTroubleIdx!==null;
+  if(isEdit){
+    // 既存トラブルを更新
+    newTroubles=[..._getTroubles(_troubleLineId)];
+    newTroubles[_editingTroubleIdx]={...newTroubles[_editingTroubleIdx],type,start,end:end||null,note:note||null};
+    _editingTroubleIdx=null;
+    document.getElementById('tAddBtn').textContent='追加する';
+    document.getElementById('tCancelBtn').style.display='none';
+  } else {
+    // 新規追加
+    newTroubles=[..._getTroubles(_troubleLineId),{id:Date.now(),type,start,end:end||null,note:note||null}];
+  }
   update(ref(db,'lines/'+_troubleLineId),{troubles:newTroubles});
   if(lines[_troubleLineId]) lines[_troubleLineId].troubles=newTroubles;
   document.getElementById('tEnd').value='';
   document.getElementById('tNote').value='';
   document.getElementById('tMsg').style.color='#27ae60';
-  document.getElementById('tMsg').textContent='追加しました';
+  document.getElementById('tMsg').textContent=isEdit?'更新しました':'追加しました';
   setTimeout(()=>{if(document.getElementById('tMsg'))document.getElementById('tMsg').textContent='';},1500);
   _renderTroubleList();
+};
+window.editTrouble=function(idx){
+  const t=_getTroubles(_troubleLineId)[idx];
+  if(!t) return;
+  _editingTroubleIdx=idx;
+  document.getElementById('tType').value=t.type;
+  document.getElementById('tStart').value=t.start;
+  document.getElementById('tEnd').value=t.end||'';
+  document.getElementById('tNote').value=t.note||'';
+  document.getElementById('tAddBtn').textContent='更新する';
+  document.getElementById('tCancelBtn').style.display='';
+  document.getElementById('tMsg').textContent='';
+  // 編集フォームまでスクロール
+  document.getElementById('tAddBtn').scrollIntoView({behavior:'smooth',block:'nearest'});
+};
+window.cancelEditTrouble=function(){
+  _editingTroubleIdx=null;
+  const n=new Date();
+  document.getElementById('tType').value='設備トラブル';
+  document.getElementById('tStart').value=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');
+  document.getElementById('tEnd').value='';
+  document.getElementById('tNote').value='';
+  document.getElementById('tAddBtn').textContent='追加する';
+  document.getElementById('tCancelBtn').style.display='none';
+  document.getElementById('tMsg').textContent='';
 };
 window.endTrouble=function(idx){
   if(!_troubleLineId) return;
