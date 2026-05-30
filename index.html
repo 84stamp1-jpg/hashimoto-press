@@ -28,11 +28,16 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 .main{flex:1;overflow-y:auto;padding:10px 14px;}
 
 /* サマリー：コンパクト横並び */
-.sum{display:flex;gap:8px;margin-bottom:8px;}
-.sc{background:#fff;border-radius:7px;padding:7px 14px;border:1px solid #ddd;display:flex;align-items:center;gap:10px;flex:1;}
-.sc-lbl{font-size:11px;color:#888;}
-.sc-val{font-size:22px;font-weight:700;margin-left:auto;}
+.sum-section{margin-bottom:5px;}
+.sum-lbl{font-size:10px;color:#999;font-weight:600;margin-bottom:2px;padding-left:3px;letter-spacing:0.02em;}
+.sum{display:flex;gap:6px;margin-bottom:0;}
+.sc{background:#fff;border-radius:7px;padding:6px 12px;border:1px solid #ddd;display:flex;align-items:center;gap:8px;flex:1;}
+.sc-lbl{font-size:10px;color:#888;}
+.sc-val{font-size:20px;font-weight:700;margin-left:auto;}
 .sc-val.red{color:#c0392b;} .sc-val.green{color:#27ae60;} .sc-val.amber{color:#d68910;}
+.sum-section.sub .sc{background:#f8f7f2;border-color:#e8e6df;}
+.sum-section.sub .sc-val{font-size:16px;color:#555;}
+.sum-section.sub .sc-val.red{color:#c0392b;} .sum-section.sub .sc-val.green{color:#27ae60;} .sum-section.sub .sc-val.amber{color:#d68910;}
 
 /* アラート：コンパクト */
 .alts{display:flex;flex-direction:column;gap:3px;margin-bottom:8px;}
@@ -194,12 +199,24 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 
 <div class="main">
   <div id="tab-board">
-    <!-- サマリー：横並びコンパクト -->
-    <div class="sum">
-      <div class="sc"><div class="sc-lbl">稼働ライン</div><div class="sc-val" id="s0">-</div></div>
-      <div class="sc"><div class="sc-lbl">遅れ発生</div><div class="sc-val red" id="s1">-</div></div>
-      <div class="sc"><div class="sc-lbl">全体達成率</div><div class="sc-val" id="s2">-%</div></div>
-      <div class="sc"><div class="sc-lbl">段取り中</div><div class="sc-val" id="s3">-</div></div>
+    <!-- サマリー：全グループ（上段）＋ 現グループ（下段） -->
+    <div class="sum-section">
+      <div class="sum-lbl">◎ 全グループ</div>
+      <div class="sum">
+        <div class="sc"><div class="sc-lbl">稼働ライン</div><div class="sc-val" id="s0">-</div></div>
+        <div class="sc"><div class="sc-lbl">遅れ発生</div><div class="sc-val" id="s1">-</div></div>
+        <div class="sc"><div class="sc-lbl">全体達成率</div><div class="sc-val" id="s2">-%</div></div>
+        <div class="sc"><div class="sc-lbl">段取り中</div><div class="sc-val" id="s3">-</div></div>
+      </div>
+    </div>
+    <div class="sum-section sub" style="margin-bottom:8px;">
+      <div class="sum-lbl" id="sumGrpLbl">現グループ</div>
+      <div class="sum">
+        <div class="sc"><div class="sc-lbl">稼働ライン</div><div class="sc-val" id="sg0">-</div></div>
+        <div class="sc"><div class="sc-lbl">遅れ発生</div><div class="sc-val" id="sg1">-</div></div>
+        <div class="sc"><div class="sc-lbl">全体達成率</div><div class="sc-val" id="sg2">-%</div></div>
+        <div class="sc"><div class="sc-lbl">段取り中</div><div class="sc-val" id="sg3">-</div></div>
+      </div>
     </div>
     <div class="alts" id="alts"></div>
     <div id="grpTabs" style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;"></div>
@@ -1101,31 +1118,76 @@ function renderBoard(){
   renderSum();renderAlts();
 }
 
-function renderSum(){
-  const curIDS=getIDS();
-  const active=curIDS.filter(id=>{
-    const l=lines[id];
-    return l&&l.status==='running'&&l.plan>0;
-  }).length;
-  const delays=curIDS.filter(id=>{
-    const l=lines[id];
-    if(!l||!l.updatedAt||!l.actual) return false;
-    if(l.status!=='running'||!l.plan) return false;
-    const pr=getProRata(l);
-    return pr&&pr.proRata>0&&Math.round(l.actual/pr.proRata*100)<80;
-  }).length;
-  const sc=curIDS.filter(id=>lines[id]?.status==='setup').length;
-  // 全体達成率：CT達成率の平均（現グループ）
-  var totalRateSum=0, totalRateCnt=0;
-  curIDS.forEach(function(id){
-    var l=lines[id]; if(!l) return;
-    var lr=calcLineRate(l);
-    if(lr&&lr.ctRate!==null){totalRateSum+=lr.ctRate; totalRateCnt++;}
+// 段取り待機判定：手動 status==='setup' OR 前品番終了＋次品番未開始
+function isSetupWaiting(l){
+  if(!l) return false;
+  if(l.status==='setup') return true;
+  // 自動検知：l.workStart が空（前品番終了後、次品番未開始）
+  if(l.workStart&&l.workStart!=='') return false; // 既に作業開始済み
+  const jobs=(l.jobs||[]).filter(j=>!j.history&&j.plan>0&&j.start&&j.end);
+  if(!jobs.length) return false;
+  // 現品番 job を特定
+  let curJi=jobs.findIndex(j=>j.part===l.part);
+  if(curJi<=0) return false; // 先頭品番または見つからない場合は対象外
+  const curJob=jobs[curJi];
+  if(curJob.actualStart&&curJob.actualStart!=='') return false; // 既に開始済み
+  // 前品番が完了しているか
+  const prevJob=jobs[curJi-1];
+  return !!(prevJob.actualEnd&&prevJob.actualEnd!=='');
+}
+
+// サマリー集計（IDS配列を受け取り集計結果を返す）
+function calcSumData(ids){
+  let active=0, delays=0, setup=0, rateSum=0, rateCnt=0;
+  ids.forEach(function(id){
+    const l=lines[id]; if(!l) return;
+    // 稼働ライン：作業開始済み・未終了（現在生産中）
+    const isRunning=!!(l.workStart&&l.workStart!==''&&(!l.workEnd||l.workEnd===''));
+    if(isRunning) active++;
+    // 遅れ発生：稼働中かつスケジュール基準で実績 < 目標
+    if(isRunning){
+      const pr=getProRata(l);
+      if(pr&&pr.proRata!==null&&pr.proRata>0&&(l.actual||0)<pr.proRata) delays++;
+    }
+    // 段取り中
+    if(isSetupWaiting(l)) setup++;
+    // CT達成率（稼働中ラインのみ平均）
+    if(isRunning){
+      const lr=calcLineRate(l);
+      if(lr&&lr.ctRate!==null){rateSum+=lr.ctRate; rateCnt++;}
+    }
   });
-  var r=totalRateCnt>0?Math.round(totalRateSum/totalRateCnt):0;  document.getElementById('s0').textContent=active;
-  const d=document.getElementById('s1');d.textContent=delays;d.className='sc-val '+(delays>0?'red':'green');
-  const rv=document.getElementById('s2');rv.textContent=totalRateCnt>0?r+'%':'-';rv.className='sc-val '+(r>=95?'green':r>=80?'amber':'red');
-  document.getElementById('s3').textContent=sc;
+  const rate=rateCnt>0?Math.round(rateSum/rateCnt):null;
+  return{active,delays,setup,rate};
+}
+
+// サマリーDOMに集計結果を反映（pfx = '' で全グループ用 s0〜s3、'g' で現グループ用 sg0〜sg3）
+function applySumData(pfx,data){
+  const {active,delays,setup,rate}=data;
+  document.getElementById(pfx+'0').textContent=active;
+  const d=document.getElementById(pfx+'1');
+  d.textContent=delays;
+  d.className='sc-val '+(delays>0?'red':'green');
+  const rv=document.getElementById(pfx+'2');
+  rv.textContent=rate!==null?rate+'%':'-';
+  rv.className='sc-val '+(rate===null?'':(rate>=95?'green':rate>=80?'amber':'red'));
+  document.getElementById(pfx+'3').textContent=setup;
+}
+
+function renderSum(){
+  const allData=calcSumData(getAllIDS());
+  applySumData('s',allData);
+  // 現グループ行：グループが複数ある場合のみ表示
+  const subSec=document.querySelector('.sum-section.sub');
+  const multiGrp=groupCfg.filter(g=>g.ids&&g.ids.length>0).length>1;
+  if(subSec) subSec.style.display=multiGrp?'':'none';
+  if(multiGrp){
+    const curData=calcSumData(getIDS());
+    applySumData('sg',curData);
+    const grpName=groupCfg[currentGrp]?.name||groupCfg[currentGrp]?.label||('グループ'+(currentGrp+1));
+    const lbl=document.getElementById('sumGrpLbl');
+    if(lbl) lbl.textContent='▸ '+grpName;
+  }
 }
 
 function renderAlts(){
