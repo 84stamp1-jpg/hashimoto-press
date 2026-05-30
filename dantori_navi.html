@@ -773,7 +773,7 @@ html, body {
         担当者
         <span style="font-size:10px;font-weight:400;color:#aaa;margin-left:6px;">（設定に登録された名前が候補として出ます）</span>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         <div class="form-group" style="margin:0;">
           <label style="font-size:10px;">条件設定</label>
           <input type="text" id="dt-role-cond" list="staffDatalist" placeholder="担当者名" autocomplete="off"/>
@@ -785,6 +785,10 @@ html, body {
         <div class="form-group" style="margin:0;">
           <label style="font-size:10px;">リフト</label>
           <input type="text" id="dt-role-lift" list="staffDatalist" placeholder="担当者名" autocomplete="off"/>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label style="font-size:10px;">品質確認</label>
+          <input type="text" id="dt-role-quality" list="staffDatalist" placeholder="担当者名" autocomplete="off"/>
         </div>
       </div>
     </div>
@@ -2121,13 +2125,14 @@ function updatePersonPanel(){
     const roleAssigns = [];
     dantoriSchedule.forEach(entry => {
       const r = entry.roles || {};
-      const isCond  = r.条件設定 === name;
-      const isMount = (r.金型取付||'').split(/[,、]/).map(s=>s.trim()).includes(name);
-      const isLift  = r.リフト   === name;
-      if(isCond || isMount || isLift){
+      const isCond    = r.条件設定 === name;
+      const isMount   = (r.金型取付||'').split(/[,、]/).map(s=>s.trim()).includes(name);
+      const isLift    = r.リフト   === name;
+      const isQuality = r.品質確認 === name;
+      if(isCond || isMount || isLift || isQuality){
         roleAssigns.push({
           entry,
-          roleStr:[isCond?'条件設定':'', isMount?'金型取付':'', isLift?'リフト':''].filter(Boolean).join('・'),
+          roleStr:[isCond?'条件設定':'', isMount?'金型取付':'', isLift?'リフト':'', isQuality?'品質確認':''].filter(Boolean).join('・'),
         });
       }
     });
@@ -2209,14 +2214,19 @@ function refreshFactory(){
 }
 
 function clickPress(pressId){
-  // クリックされたプレスの現在品番を検索タブで表示
+  // クリックされたプレスの現在品番を検索タブで表示（類似品オートコンプリート付き）
   const lineIds = Object.entries(LINE_PRESS_MAP)
     .filter(([,p])=>p===pressId)
     .map(([id])=>id);
   const running = lineIds.find(id=> linesData[id] && linesData[id].part);
   if(running && linesData[running].part){
+    const part = linesData[running].part;
     switchTab('search');
-    selectPart(linesData[running].part);
+    const inp = document.getElementById('searchInput');
+    inp.value = part;
+    // 類似品をオートコンプリートで表示しつつ、完全一致結果もカードで表示
+    onSearchInput();
+    doSearch();
   }
 }
 
@@ -2288,18 +2298,20 @@ function renderDantoriCard(d){
 
   // 担当者
   const roles = d.roles || {};
-  const hasRoles = roles.条件設定 || roles.金型取付 || roles.リフト;
+  const hasRoles = roles.条件設定 || roles.金型取付 || roles.リフト || roles.品質確認;
   const rolesHtml = hasRoles ? `
     <div class="dc-roles">
       ${roles.条件設定?`<div class="role-row"><div class="role-label">条件設定</div><div class="person-tags"><span class="ptag main">${roles.条件設定}</span></div></div>`:''}
       ${roles.金型取付?`<div class="role-row"><div class="role-label">金型取付</div><div class="person-tags">${roles.金型取付.split(/[,、]/).map(p=>`<span class="ptag">${p.trim()}</span>`).join('')}</div></div>`:''}
       ${roles.リフト  ?`<div class="role-row"><div class="role-label">リフト</div><div class="person-tags"><span class="ptag">${roles.リフト}</span></div></div>`:''}
+      ${roles.品質確認?`<div class="role-row"><div class="role-label">品質確認</div><div class="person-tags"><span class="ptag">${roles.品質確認}</span></div></div>`:''}
     </div>`
   : (d._source==='auto'?`
     <div class="dc-roles">
       <div class="role-row"><div class="role-label">条件設定</div><div class="person-tags"><span class="ptag">—</span></div></div>
       <div class="role-row"><div class="role-label">金型取付</div><div class="person-tags"><span class="ptag">—</span></div></div>
       <div class="role-row"><div class="role-label">リフト</div><div class="person-tags"><span class="ptag">—</span></div></div>
+      <div class="role-row"><div class="role-label">品質確認</div><div class="person-tags"><span class="ptag">—</span></div></div>
     </div>`:'');
 
   // 編集・削除（手動 or 計画取込エントリのみ）
@@ -2424,17 +2436,18 @@ async function saveDantoriEntry(){
   const prodStart  = document.getElementById('dt-prod-start').value;
   const prodEnd    = document.getElementById('dt-prod-end').value;
   const status     = document.getElementById('dt-status').value;
-  const roleCond   = document.getElementById('dt-role-cond').value.trim();
-  const roleMount  = document.getElementById('dt-role-mount').value.trim();
-  const roleLift   = document.getElementById('dt-role-lift').value.trim();
-  const note       = document.getElementById('dt-note').value.trim();
+  const roleCond    = document.getElementById('dt-role-cond').value.trim();
+  const roleMount   = document.getElementById('dt-role-mount').value.trim();
+  const roleLift    = document.getElementById('dt-role-lift').value.trim();
+  const roleQuality = document.getElementById('dt-role-quality').value.trim();
+  const note        = document.getElementById('dt-note').value.trim();
 
   if(!partNo){  alert('品番を入力してください'); return; }
   if(!prodStart){ alert('生産開始時刻を入力してください'); return; }
 
   const entry = {
     lineId, partNo, setupStart, prodStart, prodEnd, status,
-    roles:{ 条件設定:roleCond, 金型取付:roleMount, リフト:roleLift },
+    roles:{ 条件設定:roleCond, 金型取付:roleMount, リフト:roleLift, 品質確認:roleQuality },
     note, updatedAt:Date.now(), isManual:true,
   };
 
@@ -2474,10 +2487,11 @@ function showAddDantori(){
   document.getElementById('dt-prod-start').value  = '';
   document.getElementById('dt-prod-end').value    = '';
   document.getElementById('dt-status').value      = 'scheduled';
-  document.getElementById('dt-role-cond').value   = '';
-  document.getElementById('dt-role-mount').value  = '';
-  document.getElementById('dt-role-lift').value   = '';
-  document.getElementById('dt-note').value        = '';
+  document.getElementById('dt-role-cond').value    = '';
+  document.getElementById('dt-role-mount').value   = '';
+  document.getElementById('dt-role-lift').value    = '';
+  document.getElementById('dt-role-quality').value = '';
+  document.getElementById('dt-note').value         = '';
   document.getElementById('dantoriModal').style.display = 'flex';
 }
 
@@ -2492,9 +2506,10 @@ function showEditDantori(id){
   document.getElementById('dt-prod-start').value  = entry.prodStart   || '';
   document.getElementById('dt-prod-end').value    = entry.prodEnd     || '';
   document.getElementById('dt-status').value      = entry.status      || 'scheduled';
-  document.getElementById('dt-role-cond').value   = (entry.roles&&entry.roles.条件設定) || '';
-  document.getElementById('dt-role-mount').value  = (entry.roles&&entry.roles.金型取付) || '';
-  document.getElementById('dt-role-lift').value   = (entry.roles&&entry.roles.リフト)   || '';
+  document.getElementById('dt-role-cond').value    = (entry.roles&&entry.roles.条件設定) || '';
+  document.getElementById('dt-role-mount').value   = (entry.roles&&entry.roles.金型取付) || '';
+  document.getElementById('dt-role-lift').value    = (entry.roles&&entry.roles.リフト)   || '';
+  document.getElementById('dt-role-quality').value = (entry.roles&&entry.roles.品質確認) || '';
   document.getElementById('dt-note').value        = entry.note        || '';
   document.getElementById('dantoriModal').style.display = 'flex';
 }
@@ -2544,11 +2559,12 @@ function renderKanbanCard(d){
   const prodTime = d.prodStart
     ? (d.prodEnd ? `${d.prodStart}〜${d.prodEnd}` : `${d.prodStart}〜`) : '';
   const statusMark = d.status==='in_progress'?'▶ ':(d.status==='done'?'✓ ':'');
-  const rolesHtml = (roles.条件設定||roles.金型取付||roles.リフト) ? `
+  const rolesHtml = (roles.条件設定||roles.金型取付||roles.リフト||roles.品質確認) ? `
     <div class="kcard-roles">
       ${roles.条件設定?`<div class="kcard-role"><span class="kcard-role-lbl">条件</span><span class="kcard-role-val">${roles.条件設定}</span></div>`:''}
       ${roles.金型取付?`<div class="kcard-role"><span class="kcard-role-lbl">取付</span><span class="kcard-role-val">${roles.金型取付}</span></div>`:''}
       ${roles.リフト  ?`<div class="kcard-role"><span class="kcard-role-lbl">リフト</span><span class="kcard-role-val">${roles.リフト}</span></div>`:''}
+      ${roles.品質確認?`<div class="kcard-role"><span class="kcard-role-lbl">品質</span><span class="kcard-role-val">${roles.品質確認}</span></div>`:''}
     </div>` : '';
   const canEdit = d._source==='manual' || d.fromPlan;
   const editBtn = (canEdit && d._id)
@@ -2573,7 +2589,8 @@ function renderKanbanPersonCard(d, targetName){
   const roleStr  = [
     roles.条件設定===targetName ? '条件設定' : '',
     (roles.金型取付||'').split(/[,、]/).map(s=>s.trim()).includes(targetName) ? '金型取付' : '',
-    roles.リフト===targetName ? 'リフト' : ''
+    roles.リフト===targetName ? 'リフト' : '',
+    roles.品質確認===targetName ? '品質確認' : '',
   ].filter(Boolean).join('・');
   const setupBar = (d.setupStart && d.prodStart)
     ? `<div class="kcard-setup-bar">🔧 ${d.setupStart}〜${d.prodStart}</div>` : '';
@@ -2617,20 +2634,67 @@ function renderKanbanCol(colDef, allEntries){
     </div>`;
   } else {
     // 担当者別カラム
-    const name    = colDef.name;
+    const name = colDef.name;
+
+    // ① 自分のライン（Firebase lines/{name}）を直接表示
+    const ownLine = linesData[name];
+    let ownLineCard = '';
+    if(ownLine){
+      const st     = ownLine.status || 'waiting';
+      const plan   = ownLine.plan   || 0;
+      const actual = ownLine.actual || 0;
+      const jobs   = Array.isArray(ownLine.jobs) ? ownLine.jobs : [];
+      const hasPlan = plan > 0 || jobs.some(j=>(j.plan||0) > 0);
+      const BADGE_BG = {running:'#1d4ed8',setup:'#1a1a1a',waiting:'#94a3b8',stop:'#dc2626'};
+      const BADGE_LB = {running:'稼働中',setup:'段取中',waiting:'待機中',stop:'停止中'};
+      const bgC  = BADGE_BG[st] || '#94a3b8';
+      const stLb = BADGE_LB[st] || '待機中';
+      const badge = `<span style="font-size:9px;padding:1px 7px;border-radius:8px;background:${bgC};color:white;font-weight:600;flex-shrink:0;">${stLb}</span>`;
+      const cls   = (st==='running'||st==='setup') ? 'kcard k-active' : 'kcard k-scheduled';
+
+      if(!hasPlan){
+        ownLineCard = `
+        <div class="${cls}">
+          <div class="kcard-time" style="display:flex;align-items:center;justify-content:space-between;gap:4px;">
+            <span>—</span>${badge}
+          </div>
+          <div class="kcard-part" style="color:#94a3b8;font-style:italic;">計画停止</div>
+        </div>`;
+      } else {
+        const pct = plan > 0 ? Math.round(actual/plan*100) : null;
+        const pctColor = pct===null?'#94a3b8':pct>=100?'#16a34a':pct>=80?'#1d4ed8':'#dc2626';
+        const part = ownLine.part || '—';
+        const runJob  = jobs.find(j=>j.status==='running');
+        const nextJob = !runJob ? jobs.find(j=>j.status==='waiting') : null;
+        const curJob  = runJob || nextJob;
+        const timeStr = curJob && curJob.start
+          ? `${runJob?'▶':'次:'} ${curJob.start}〜${curJob.end||''}` : '—';
+        ownLineCard = `
+        <div class="${cls}">
+          <div class="kcard-time" style="display:flex;align-items:center;justify-content:space-between;gap:4px;">
+            <span>${timeStr}</span>${badge}
+          </div>
+          <div class="kcard-part">${part}</div>
+          ${pct!==null?`<div style="font-size:10px;font-weight:700;color:${pctColor};margin-top:2px;">${actual.toLocaleString()}/${plan.toLocaleString()}個 ${pct}%</div>`:''}
+        </div>`;
+      }
+    }
+
+    // ② 段取りロール割り当て（条件設定/金型取付/リフト/品質確認）
     const entries = allEntries.filter(e=>{
       const r = e.roles || {};
       return r.条件設定===name
           || (r.金型取付||'').split(/[,、]/).map(s=>s.trim()).includes(name)
-          || r.リフト===name;
+          || r.リフト===name
+          || r.品質確認===name;
     }).sort((a,b)=>(a.sortKey||'').localeCompare(b.sortKey||''));
-    const cardsHtml = entries.length
-      ? entries.map(d=>renderKanbanPersonCard(d, name)).join('')
-      : `<div class="k-empty">担当なし</div>`;
+    const roleCardsHtml = entries.map(d=>renderKanbanPersonCard(d, name)).join('');
+
+    const totalHtml = ownLineCard + roleCardsHtml;
     return `
     <div class="kanban-col">
       <div class="kanban-col-hdr">${name}</div>
-      ${cardsHtml}
+      ${totalHtml || '<div class="k-empty">担当なし</div>'}
     </div>`;
   }
 }
@@ -2684,7 +2748,7 @@ async function importFromProductionPlan(){
         prodEnd:   j.end,
         plan:      j.plan || 0,
         status,
-        roles:     { 条件設定:'', 金型取付:'', リフト:'' },
+        roles:     { 条件設定:'', 金型取付:'', リフト:'', 品質確認:'' },
         note:      j.noSetup ? '（段取りなし）' : '',
         isManual:  false,
         fromPlan:  true,
