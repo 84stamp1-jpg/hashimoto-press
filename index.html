@@ -515,16 +515,27 @@ function netMins(startM,endM){
   return Math.max(0,(endM-startM)-breakMins(startM,endM));
 }
 // 段取り時間の推定計算（入力なし・段取りなしでない場合）
-// 戻り値: null=段取りなし, 0以上=分数
+// actualWorkStart: 実際の作業開始時刻（"HH:MM" 形式）を渡す
+// 戻り値: null=段取りなし, 0以上=分数（休憩時間除く）
 const SETUP_BASE_MIN=8*60+10; // 08:10 始業基準
-function calcImpliedSetup(jobs,ji){
+function calcImpliedSetup(jobs,ji,actualWorkStart){
   const j=jobs[ji];
   if(j.noSetup) return null;               // 段取りなしフラグ
   if((j.setupActualMin||0)>0) return j.setupActualMin; // 実績入力あり
-  const startM=timeToMin(j.start);
+  // 実際の作業開始時刻（引数優先→j.actualStart→j.start）
+  const startM=timeToMin(actualWorkStart||j.actualStart||j.start);
   if(!startM) return 0;
-  const prevEndM=ji>0?timeToMin(jobs[ji-1].end):SETUP_BASE_MIN;
-  return Math.max(0,startM-(prevEndM||startM));
+  // 前工程の終了時刻：実績があれば実績終了、なければ予定終了
+  let prevEndM;
+  if(ji>0){
+    const pj=jobs[ji-1];
+    prevEndM=timeToMin(pj.actualEnd||pj.end)||SETUP_BASE_MIN;
+  } else {
+    prevEndM=SETUP_BASE_MIN;
+  }
+  if(startM<=prevEndM) return 0;
+  // 休憩時間を除いた純段取り時間
+  return Math.max(0,netMins(prevEndM,startM));
 }
 
 function getProRata(l){
@@ -811,8 +822,8 @@ function renderBoard(){
               // 段取りなしフラグ
               setupParts2.push('<span style="color:#aaa;font-size:9px;">✓ 段取りなし</span>');
             } else {
-              // 推定段取りは作業開始済みの場合のみ計算（jWS=作業開始時刻が設定されている）
-              const implied=jWS?calcImpliedSetup(jobs,jIdx):null;
+              // 推定段取りは作業開始済みの場合のみ計算（jWS=実際の作業開始時刻）
+              const implied=jWS?calcImpliedSetup(jobs,jIdx,jWS):null;
               const dispMin=jSetupMin>0?jSetupMin:(implied||0);
               const isImplied=jSetupMin===0&&(implied||0)>0;
               if(dispMin>0){
@@ -997,7 +1008,7 @@ window.openModal=function(id){
     const rc=r===null?'':r>=95?'c-ok':r>=80?'c-wn':'c-ng';
     // 段取り時間：実績 or 推定（作業開始済みの場合のみ推定計算）
     const actSU=j.setupActualMin||0;
-    const implSU=jWS2?calcImpliedSetup(jobs,ji):null;
+    const implSU=jWS2?calcImpliedSetup(jobs,ji,jWS2):null;
     const dispSU=actSU>0?actSU:(implSU||0);
     const isImpliedSU=actSU===0&&(implSU||0)>0;
     const suR=dispSU>0&&stdSetup>0?Math.round(dispSU/stdSetup*100):null;
