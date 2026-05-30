@@ -28,16 +28,19 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 .main{flex:1;overflow-y:auto;padding:10px 14px;}
 
 /* サマリー：コンパクト横並び */
-.sum-section{margin-bottom:5px;}
-.sum-lbl{font-size:10px;color:#999;font-weight:600;margin-bottom:2px;padding-left:3px;letter-spacing:0.02em;}
-.sum{display:flex;gap:6px;margin-bottom:0;}
-.sc{background:#fff;border-radius:7px;padding:6px 12px;border:1px solid #ddd;display:flex;align-items:center;gap:8px;flex:1;}
+.sum{display:flex;gap:6px;margin-bottom:8px;}
+.sc{background:#fff;border-radius:7px;padding:6px 12px;border:1px solid #ddd;display:flex;align-items:center;gap:6px;flex:1;min-width:0;}
+.sc-info{flex:1;min-width:0;}
 .sc-lbl{font-size:10px;color:#888;}
-.sc-val{font-size:20px;font-weight:700;margin-left:auto;}
+.sc-hint{font-size:9px;color:#bbb;margin-top:1px;display:none;}
+.sum.show-sub .sc-hint{display:block;}
+.sc-vals{display:flex;align-items:baseline;gap:5px;flex-shrink:0;}
+.sc-val{font-size:20px;font-weight:700;}
 .sc-val.red{color:#c0392b;} .sc-val.green{color:#27ae60;} .sc-val.amber{color:#d68910;}
-.sum-section.sub .sc{background:#f8f7f2;border-color:#e8e6df;}
-.sum-section.sub .sc-val{font-size:16px;color:#555;}
-.sum-section.sub .sc-val.red{color:#c0392b;} .sum-section.sub .sc-val.green{color:#27ae60;} .sum-section.sub .sc-val.amber{color:#d68910;}
+.sc-vsep{font-size:11px;color:#ccc;display:none;}
+.sc-vsub{font-size:14px;font-weight:700;color:#bbb;display:none;}
+.sc-vsub.red{color:#c0392b;} .sc-vsub.green{color:#27ae60;} .sc-vsub.amber{color:#d68910;}
+.sum.show-sub .sc-vsep,.sum.show-sub .sc-vsub{display:inline-block;}
 
 /* アラート：コンパクト */
 .alts{display:flex;flex-direction:column;gap:3px;margin-bottom:8px;}
@@ -199,23 +202,23 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 
 <div class="main">
   <div id="tab-board">
-    <!-- サマリー：全グループ（上段）＋ 現グループ（下段） -->
-    <div class="sum-section">
-      <div class="sum-lbl">◎ 全グループ</div>
-      <div class="sum">
-        <div class="sc"><div class="sc-lbl">稼働ライン</div><div class="sc-val" id="s0">-</div></div>
-        <div class="sc"><div class="sc-lbl">遅れ発生</div><div class="sc-val" id="s1">-</div></div>
-        <div class="sc"><div class="sc-lbl">全体達成率</div><div class="sc-val" id="s2">-%</div></div>
-        <div class="sc"><div class="sc-lbl">段取り中</div><div class="sc-val" id="s3">-</div></div>
+    <!-- サマリー：1行（全グループ / 現グループ） -->
+    <div class="sum" id="sumRow">
+      <div class="sc">
+        <div class="sc-info"><div class="sc-lbl">稼働ライン</div><div class="sc-hint" id="sumGrpLbl">全体 / 現</div></div>
+        <div class="sc-vals"><span class="sc-val" id="s0">-</span><span class="sc-vsep">/</span><span class="sc-vsub" id="sg0">-</span></div>
       </div>
-    </div>
-    <div class="sum-section sub" style="margin-bottom:8px;">
-      <div class="sum-lbl" id="sumGrpLbl">現グループ</div>
-      <div class="sum">
-        <div class="sc"><div class="sc-lbl">稼働ライン</div><div class="sc-val" id="sg0">-</div></div>
-        <div class="sc"><div class="sc-lbl">遅れ発生</div><div class="sc-val" id="sg1">-</div></div>
-        <div class="sc"><div class="sc-lbl">全体達成率</div><div class="sc-val" id="sg2">-%</div></div>
-        <div class="sc"><div class="sc-lbl">段取り中</div><div class="sc-val" id="sg3">-</div></div>
+      <div class="sc">
+        <div class="sc-info"><div class="sc-lbl">遅れ発生</div><div class="sc-hint">全体 / 現</div></div>
+        <div class="sc-vals"><span class="sc-val" id="s1">-</span><span class="sc-vsep">/</span><span class="sc-vsub" id="sg1">-</span></div>
+      </div>
+      <div class="sc">
+        <div class="sc-info"><div class="sc-lbl">全体達成率</div><div class="sc-hint">全体 / 現</div></div>
+        <div class="sc-vals"><span class="sc-val" id="s2">-%</span><span class="sc-vsep">/</span><span class="sc-vsub" id="sg2">-%</span></div>
+      </div>
+      <div class="sc">
+        <div class="sc-info"><div class="sc-lbl">段取り中</div><div class="sc-hint">全体 / 現</div></div>
+        <div class="sc-vals"><span class="sc-val" id="s3">-</span><span class="sc-vsep">/</span><span class="sc-vsub" id="sg3">-</span></div>
       </div>
     </div>
     <div class="alts" id="alts"></div>
@@ -1161,32 +1164,36 @@ function calcSumData(ids){
   return{active,delays,setup,rate};
 }
 
-// サマリーDOMに集計結果を反映（pfx = '' で全グループ用 s0〜s3、'g' で現グループ用 sg0〜sg3）
+// サマリーDOMに集計結果を反映
+// pfx='s' → 全グループ用（s0〜s3, className=sc-val）
+// pfx='sg' → 現グループ用（sg0〜sg3, className=sc-vsub）
 function applySumData(pfx,data){
+  const isSub=pfx==='sg';
+  const cls=isSub?'sc-vsub':'sc-val';
   const {active,delays,setup,rate}=data;
   document.getElementById(pfx+'0').textContent=active;
   const d=document.getElementById(pfx+'1');
   d.textContent=delays;
-  d.className='sc-val '+(delays>0?'red':'green');
+  d.className=cls+' '+(delays>0?'red':'green');
   const rv=document.getElementById(pfx+'2');
   rv.textContent=rate!==null?rate+'%':'-';
-  rv.className='sc-val '+(rate===null?'':(rate>=95?'green':rate>=80?'amber':'red'));
+  rv.className=cls+' '+(rate===null?'':(rate>=95?'green':rate>=80?'amber':'red'));
   document.getElementById(pfx+'3').textContent=setup;
 }
 
 function renderSum(){
   const allData=calcSumData(getAllIDS());
   applySumData('s',allData);
-  // 現グループ行：グループが複数ある場合のみ表示
-  const subSec=document.querySelector('.sum-section.sub');
+  // グループが複数ある場合のみ「/ 現グループ値」を表示
   const multiGrp=groupCfg.filter(g=>g.ids&&g.ids.length>0).length>1;
-  if(subSec) subSec.style.display=multiGrp?'':'none';
+  const sumRow=document.getElementById('sumRow');
+  if(sumRow) sumRow.classList.toggle('show-sub',multiGrp);
   if(multiGrp){
     const curData=calcSumData(getIDS());
     applySumData('sg',curData);
-    const grpName=groupCfg[currentGrp]?.name||groupCfg[currentGrp]?.label||('グループ'+(currentGrp+1));
+    const grpName=groupCfg[currentGrp]?.label||('グループ'+(currentGrp+1));
     const lbl=document.getElementById('sumGrpLbl');
-    if(lbl) lbl.textContent='▸ '+grpName;
+    if(lbl) lbl.textContent='全体 / '+grpName;
   }
 }
 
