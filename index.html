@@ -102,6 +102,16 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 .rate-bar-bg{height:7px;background:rgba(0,0,0,0.08);border-radius:4px;overflow:hidden;margin-top:4px;}
 .rate-bar-fill{height:100%;border-radius:4px;transition:width 0.4s;}
 
+/* トラブル記録ボタン */
+.trouble-btn{background:#fff8f0;border:1px solid #ffc107;color:#e65100;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;line-height:1.6;flex-shrink:0;}
+.trouble-btn:hover{background:#ffe0b2;}
+.trouble-btn.active{background:#fdecea;border-color:#c0392b;color:#c0392b;animation:tblink 1.5s ease-in-out infinite;}
+@keyframes tblink{0%,100%{opacity:1;}50%{opacity:0.65;}}
+/* トラブルバー（カード内） */
+.tbar{border-radius:5px;padding:4px 8px;margin-bottom:6px;display:flex;align-items:center;gap:8px;font-size:10px;}
+.tbar.ongoing{background:rgba(231,76,60,0.10);border:1px solid rgba(231,76,60,0.20);}
+.tbar.done{background:rgba(0,0,0,0.04);border:1px solid rgba(0,0,0,0.06);}
+
 /* モーダル */
 .ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:100;align-items:center;justify-content:center;}
 .ov.open{display:flex;}
@@ -245,7 +255,8 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
           <input type="checkbox" id="iNoSetup" onchange="onNoSetupChange()"> 段取りなし（この工程は段取りが発生しない）
         </label>
       </div>
-      <div id="setupFields">
+      <!-- 段取り時間フィールド：段取りなし時のみグレーアウト -->
+      <div id="setupOnlyFields">
       <div class="fg3">
         <div class="fi">
           <label>段取り開始</label>
@@ -257,20 +268,21 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
           <div class="tw"><input type="time" id="iSE"><button class="btn-now" onclick="setNow('iSE')">今</button></div>
           <div class="hint">段取り終了時刻</div>
         </div>
+        <div class="fi"></div>
+      </div>
+      </div><!-- /setupOnlyFields -->
+      <!-- 作業時間フィールド：段取りなし時も常に有効 -->
+      <div class="fg3">
         <div class="fi">
           <label>作業開始</label>
           <div class="tw"><input type="time" id="iWS"><button class="btn-now" onclick="setNow('iWS')">今</button></div>
         </div>
-      </div>
-      <div class="fg3">
         <div class="fi">
           <label>作業終了</label>
           <div class="tw"><input type="time" id="iWE"><button class="btn-now" onclick="setNow('iWE')">今</button></div>
         </div>
         <div class="fi"></div>
-        <div class="fi"></div>
       </div>
-      </div><!-- /setupFields -->
       <div class="br">
         <button class="bp" onclick="doSub()">更新する</button>
         <button class="bd" onclick="showCor()">修正する</button>
@@ -348,6 +360,48 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
   </div>
 </div>
 
+<!-- トラブル記録モーダル -->
+<div class="ov" id="troubleOv" onclick="closeTroubleOv(event)">
+  <div class="modal" style="max-width:440px;">
+    <div class="mhd">
+      <div class="mttl" id="troubleMttl">⚠ トラブル・停止記録</div>
+      <button class="mclose" onclick="closeTroubleOvD()">×</button>
+    </div>
+    <div id="troubleBody">
+      <div class="fi" style="margin-bottom:9px;">
+        <label>原因</label>
+        <select id="tType" style="width:100%;padding:7px 9px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:inherit;">
+          <option value="設備トラブル">🔧 設備トラブル</option>
+          <option value="材料待ち">📦 材料待ち</option>
+          <option value="品質問題">🔍 品質問題</option>
+          <option value="段取り延長">⏱ 段取り延長</option>
+          <option value="人員不足">👤 人員不足</option>
+          <option value="その他">📝 その他</option>
+        </select>
+      </div>
+      <div class="fg2" style="margin-bottom:9px;">
+        <div class="fi">
+          <label>開始時刻</label>
+          <div class="tw"><input type="time" id="tStart"><button class="btn-now" onclick="setTNow('tStart')">今</button></div>
+        </div>
+        <div class="fi">
+          <label>終了時刻 <span style="font-size:9px;color:#aaa;">空欄＝継続中</span></label>
+          <div class="tw"><input type="time" id="tEnd"><button class="btn-now" onclick="setTNow('tEnd')">今</button></div>
+        </div>
+      </div>
+      <div class="fi" style="margin-bottom:14px;">
+        <label>メモ <span style="font-size:9px;color:#aaa;">任意</span></label>
+        <input type="text" id="tNote" placeholder="例：モーター故障、修理業者連絡中" style="width:100%;padding:7px 9px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:inherit;">
+      </div>
+      <div class="br">
+        <button class="bp" onclick="saveTrouble()">記録する</button>
+        <button class="bd" onclick="clearTrouble()">記録を消す</button>
+      </div>
+      <div id="tMsg" style="font-size:11px;color:#27ae60;margin-top:6px;min-height:14px;"></div>
+    </div>
+  </div>
+</div>
+
 <!-- 工程詳細モーダル -->
 <div class="ov" id="ov" onclick="closeOv(event)">
   <div class="modal">
@@ -376,6 +430,7 @@ let currentGrp=0;
 function getIDS(){return groupCfg[currentGrp]?.ids||[];}
 function getAllIDS(){return [...new Set(groupCfg.flatMap(g=>g.ids||[]).filter(Boolean))];}
 let lineNamesMap={}; // settings/lineNames から読み込むライン名マップ
+let lineNoAlertMap={}; // settings/lineNoAlert から読み込む「未報告警告なし」フラグ
 function getLineName(id){return lineNamesMap[id]||lines[id]?.name||id;}
 
 const SDEFS={A1:45,A2:45,B1:60,B2:45,BP2:45,CP3:45,CP3_2:45};
@@ -410,6 +465,7 @@ onValue(ref(db,'settings'),s=>{
   }
   // ライン名マップを更新し lines にも反映
   if(v.lineNames&&typeof v.lineNames==='object') lineNamesMap={...v.lineNames};
+  if(v.lineNoAlert&&typeof v.lineNoAlert==='object') lineNoAlertMap={...v.lineNoAlert};
   Object.keys(lineNamesMap).forEach(id=>{if(lineNamesMap[id])lines[id]={...(lines[id]||{status:'waiting',plan:0,actual:0,updatedAt:0,jobs:[]}),name:lineNamesMap[id]};});
   updateLineSelects();
   renderGroupTabs();
@@ -857,16 +913,62 @@ function renderBoard(){
       });
       sched+='</div>';
     }
+    // ===== トラブル状態の計算 =====
+    const at=l.activeTrouble;
+    let troubleBg='';
+    let troubleBarHtml='';
+    let hasOngoingTrouble=false;
+    if(at&&at.start){
+      if(!at.end){
+        // 継続中トラブル
+        hasOngoingTrouble=true;
+        const startM=timeToMin(at.start);
+        const nowM=new Date().getHours()*60+new Date().getMinutes();
+        const elapsed=Math.max(0,nowM-startM);
+        if(elapsed<10) troubleBg='rgba(255,193,7,0.10)';
+        else if(elapsed<30) troubleBg='rgba(255,193,7,0.25)';
+        else if(elapsed<60) troubleBg='rgba(231,76,60,0.18)';
+        else troubleBg='rgba(231,76,60,0.32)';
+        const h=Math.floor(elapsed/60),m=elapsed%60;
+        const elStr=h>0?(h+'時間'+(m>0?m+'分':'')+'経過'):(m+'分経過');
+        const noteStr=at.note?'<span style="color:#999;margin-left:4px;">'+at.note+'</span>':'';
+        troubleBarHtml='<div class="tbar ongoing">'+
+          '<span style="color:#c0392b;font-weight:700;">⚠ '+at.type+'</span>'+
+          '<span style="color:#888;">'+at.start+'〜継続中</span>'+
+          noteStr+
+          '<span id="telapsed-'+id+'" style="color:#c0392b;font-weight:700;margin-left:auto;">'+elStr+'</span>'+
+        '</div>';
+      } else {
+        // 終了済みトラブル
+        const sm=timeToMin(at.start),em2=timeToMin(at.end);
+        const dur=em2>=sm?em2-sm:0;
+        const h=Math.floor(dur/60),m=dur%60;
+        const durStr=h>0?(h+'時間'+(m>0?m+'分':'')):(m+'分');
+        const noteStr=at.note?'　'+at.note:'';
+        troubleBarHtml='<div class="tbar done">'+
+          '<span style="color:#888;">✓ '+at.type+'　'+at.start+'〜'+at.end+'（'+durStr+'）'+noteStr+'</span>'+
+        '</div>';
+      }
+    }
     const d=document.createElement('div');
     d.className='lcard '+(s.card||'');
+    d.id='lcard-'+id;
+    if(troubleBg) d.style.background=troubleBg;
+    if(hasOngoingTrouble){d.dataset.troubleStart=at.start;d.dataset.troubleId=id;}
     d.onclick=function(){openModal(id);};
     d.innerHTML=
       '<div class="lhead">'+
-        '<div><div class="lname">'+getLineName(id)+'</div>'+
+        '<div style="flex:1;min-width:0;"><div class="lname">'+getLineName(id)+'</div>'+
         ((pr&&(pr.phase==='before'||pr.phase==='done'))||(!l.workStart&&!l.actual)?'':'<div class="lpart">'+(l.part||'未設定')+(l.note?' / '+l.note:'')+'</div>')+
         '</div>'+
-        '<span class="bdg '+s.bdg+'">'+s.lbl+'</span>'+
+        '<div style="display:flex;align-items:flex-start;gap:5px;flex-shrink:0;">'+
+          '<span class="bdg '+s.bdg+'">'+s.lbl+'</span>'+
+          '<button class="trouble-btn'+(hasOngoingTrouble?' active':'')+'" onclick="event.stopPropagation();openTroubleModal(\''+id+'\')" title="トラブル・停止記録">'+
+            (hasOngoingTrouble?'⚠ 対応中':'⚠')+
+          '</button>'+
+        '</div>'+
       '</div>'+
+      troubleBarHtml+
       // 達成率バナー：CT達成率 + 計画達成率の2指標
       (function(){
         var lr=calcLineRate(l);
@@ -973,7 +1075,7 @@ function renderAlts(){
     const allJobs5=(l.jobs||[]).filter(j=>j.plan>0&&j.end);
     const lastEndMin5=allJobs5.length?Math.max(...allJobs5.map(j=>timeToMin(j.end)||0)):0;
     const pastLastEnd5=lastEndMin5>0&&(nowH5*60+nowM5)>=lastEndMin5;
-    if(l.status==='running'&&l.plan>0&&isWork5&&nowM5>=10&&!updAfter5&&!allDone5&&!pastLastEnd5)
+    if(l.status==='running'&&l.plan>0&&isWork5&&nowM5>=10&&!updAfter5&&!allDone5&&!pastLastEnd5&&!lineNoAlertMap[id])
       h+='<div class="al warn"><div class="al-txt w">⚠️ 未報告：'+getLineName(id)+'</div><div class="al-sub">'+(l.updatedAt===0?nowH5+'時台の実績が未入力':'前回更新：'+fmtTs(l.updatedAt))+'</div></div>';
     if(l.status==='setup'&&el>=(sets[id]||60)&&l.updatedAt>0)
       h+='<div class="al warn"><div class="al-txt w">🔧 段取り超過：'+getLineName(id)+'</div><div class="al-sub">'+el+'分経過（設定'+(sets[id]||60)+'分）</div></div>';
@@ -983,6 +1085,73 @@ function renderAlts(){
   });
   document.getElementById('alts').innerHTML=h;
 }
+
+// ===== トラブル記録 =====
+let _troubleLineId=null;
+
+// トラブル経過時間をリアルタイム更新（毎分）
+function updateTroubleColors(){
+  document.querySelectorAll('.lcard[data-trouble-start]').forEach(function(card){
+    const startStr=card.dataset.troubleStart;
+    const tid=card.dataset.troubleId;
+    if(!startStr||!tid) return;
+    const startM=timeToMin(startStr);
+    const nowM=new Date().getHours()*60+new Date().getMinutes();
+    const elapsed=Math.max(0,nowM-startM);
+    // 背景色更新
+    let bg;
+    if(elapsed<10) bg='rgba(255,193,7,0.10)';
+    else if(elapsed<30) bg='rgba(255,193,7,0.25)';
+    else if(elapsed<60) bg='rgba(231,76,60,0.18)';
+    else bg='rgba(231,76,60,0.32)';
+    card.style.background=bg;
+    // 経過時間テキスト更新
+    const elEl=document.getElementById('telapsed-'+tid);
+    if(elEl){
+      const h=Math.floor(elapsed/60),m=elapsed%60;
+      elEl.textContent=h>0?(h+'時間'+(m>0?m+'分':'')+'経過'):(m+'分経過');
+    }
+  });
+}
+
+window.openTroubleModal=function(id){
+  _troubleLineId=id;
+  const l=lines[id]||{};
+  const at=l.activeTrouble||{};
+  document.getElementById('troubleMttl').textContent='⚠ '+getLineName(id)+'　トラブル・停止記録';
+  document.getElementById('tType').value=at.type||'設備トラブル';
+  document.getElementById('tStart').value=at.start||'';
+  document.getElementById('tEnd').value=at.end||'';
+  document.getElementById('tNote').value=at.note||'';
+  document.getElementById('tMsg').textContent='';
+  document.getElementById('troubleOv').classList.add('open');
+};
+window.closeTroubleOv=function(e){if(e.target===document.getElementById('troubleOv'))closeTroubleOvD();};
+window.closeTroubleOvD=function(){document.getElementById('troubleOv').classList.remove('open');};
+window.setTNow=function(fid){
+  const n=new Date();
+  document.getElementById(fid).value=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');
+};
+window.saveTrouble=function(){
+  if(!_troubleLineId) return;
+  const type=document.getElementById('tType').value;
+  const start=document.getElementById('tStart').value;
+  const end=document.getElementById('tEnd').value;
+  const note=document.getElementById('tNote').value.trim();
+  if(!start){document.getElementById('tMsg').style.color='#c0392b';document.getElementById('tMsg').textContent='開始時刻を入力してください';return;}
+  const trouble={type,start,end:end||null,note:note||null};
+  update(ref(db,'lines/'+_troubleLineId),{activeTrouble:trouble});
+  document.getElementById('tMsg').style.color='#27ae60';
+  document.getElementById('tMsg').textContent='記録しました';
+  setTimeout(closeTroubleOvD,800);
+};
+window.clearTrouble=function(){
+  if(!_troubleLineId) return;
+  update(ref(db,'lines/'+_troubleLineId),{activeTrouble:null});
+  document.getElementById('tMsg').style.color='#888';
+  document.getElementById('tMsg').textContent='記録を削除しました';
+  setTimeout(closeTroubleOvD,800);
+};
 
 // モーダル
 window.openModal=function(id){
@@ -1177,7 +1346,8 @@ window.onPartSel=function(){
 
 window.onNoSetupChange=function(){
   const checked=document.getElementById('iNoSetup')?.checked;
-  const fields=document.getElementById('setupFields');
+  // 段取り開始・終了フィールドのみグレーアウト（作業開始・終了は常に有効）
+  const fields=document.getElementById('setupOnlyFields');
   if(fields){fields.style.opacity=checked?'0.35':'1';fields.style.pointerEvents=checked?'none':'';}
 };
 window.setNow=function(id){
@@ -1450,9 +1620,12 @@ window.renderGrpMgr=function(){
       </div>
       <div class="grp-line-list" id="glines-${gi}">
         ${(g.ids||[]).map((id,li)=>`
-          <div class="grp-line-row">
+          <div class="grp-line-row" style="flex-wrap:wrap;gap:4px;">
             <span style="font-size:11px;min-width:60px;color:#555;">${id}</span>
-            <input id="gln-${gi}-${li}" value="${getLineName(id)}" placeholder="表示名" style="width:120px;">
+            <input id="gln-${gi}-${li}" value="${getLineName(id)}" placeholder="表示名" style="width:110px;">
+            <label style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#888;cursor:pointer;white-space:nowrap;" title="チェックするとこのラインの未報告警告を非表示にします">
+              <input type="checkbox" id="gna-${gi}-${li}" ${lineNoAlertMap[id]?'checked':''}>未報告警告なし
+            </label>
             <button class="btn-rm" onclick="removeLineFromGroup(${gi},${li})" title="削除">✕</button>
           </div>`).join('')}
       </div>
@@ -1517,10 +1690,12 @@ function syncGrpMgrForm(){
   groupCfg.forEach((g,gi)=>{
     const nm=document.getElementById('gname-'+gi);
     if(nm&&nm.value.trim()) g.label=nm.value.trim();
-    // ライン表示名（lineNamesMap に反映）
+    // ライン表示名・警告設定（lineNamesMap / lineNoAlertMap に反映）
     (g.ids||[]).forEach((id,li)=>{
       const ln=document.getElementById(`gln-${gi}-${li}`);
       if(ln&&ln.value.trim()) lineNamesMap[id]=ln.value.trim();
+      const na=document.getElementById(`gna-${gi}-${li}`);
+      if(na) lineNoAlertMap[id]=na.checked;
     });
     // インポート設定（detailsが開いていない場合はDOMに要素が存在しないこともないが念のため）
     const readV=(sfx,def)=>{const e=document.getElementById(`mp-${gi}-${sfx}`);return e?e.value.trim()||def:def;};
@@ -1618,7 +1793,7 @@ window.saveGroups=function(){
   Object.keys(lineNamesMap).forEach(id=>{if(lineNamesMap[id])lines[id]={...(lines[id]||{status:'waiting',plan:0,actual:0,updatedAt:0,jobs:[]}),name:lineNamesMap[id]};});
   const allIds=getAllIDS();
   const stNs={};allIds.forEach(id=>{const v=parseInt(document.getElementById('st-'+id)?.value);stNs[id]=isNaN(v)?(sets[id]||45):v;});
-  const saveObj={groups:groupCfg.map(g=>({gid:g.gid,label:g.label,ids:[...g.ids],importMap:g.importMap||{}})),setupTimes:stNs,lineNames:lineNamesMap};
+  const saveObj={groups:groupCfg.map(g=>({gid:g.gid,label:g.label,ids:[...g.ids],importMap:g.importMap||{}})),setupTimes:stNs,lineNames:lineNamesMap,lineNoAlert:lineNoAlertMap};
   // settings として一括保存（lines/ パスには書き込まない）
   set(ref(db,'settings'),saveObj);
   const m=document.getElementById('gmsg');m.textContent='保存しました ✓';setTimeout(()=>{m.textContent='';},2000);
@@ -1945,7 +2120,7 @@ function tick(){
   document.getElementById('clk').textContent=`${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}`;
   document.getElementById('dstr').textContent=`${n.getFullYear()}年${n.getMonth()+1}月${n.getDate()}日（${days[n.getDay()]}）`;
 }
-tick();setInterval(tick,1000);setInterval(()=>{renderAlts();renderBoard();},60000);
+tick();setInterval(tick,1000);setInterval(()=>{renderAlts();renderBoard();},60000);setInterval(updateTroubleColors,30000);
 </script>
 </body>
 </html>
