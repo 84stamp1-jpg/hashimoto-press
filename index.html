@@ -387,9 +387,13 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
     <div class="fc" style="margin-top:8px;">
       <div class="ftitle">📋 計画修正（実績を維持したまま変更）</div>
       <div style="font-size:11px;color:#888;margin-bottom:10px;">当日の計画変更時に使用します。入力済みの実績（数量・時刻）はそのまま維持されます。</div>
-      <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px;">
-        <div class="fi" style="flex:1;margin:0;">
-          <label>ライン選択</label>
+      <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px;flex-wrap:wrap;">
+        <div class="fi" style="flex:1;min-width:110px;margin:0;">
+          <label>グループ</label>
+          <select id="peGrp" onchange="onPeGrpSel()"></select>
+        </div>
+        <div class="fi" style="flex:1;min-width:110px;margin:0;">
+          <label>ライン</label>
           <select id="peLineId"></select>
         </div>
         <button class="bp-sub" onclick="loadPlanEdit()" style="flex-shrink:0;height:34px;">読み込む</button>
@@ -1864,7 +1868,7 @@ window.switchGroup=function(idx){
 function updateLineSelects(){
   const allIds=getAllIDS();
   const opts='<option value="">-- ライン選択 --</option>'+allIds.map(id=>`<option value="${id}">${getLineName(id)}</option>`).join('');
-  ['iLine','cLine','peLineId'].forEach(sid=>{
+  ['iLine','cLine'].forEach(sid=>{
     const el=document.getElementById(sid);
     if(!el) return;
     const prev=el.value;
@@ -2083,7 +2087,7 @@ window.sw=function(tab){
   ['board','input','import','settings'].forEach(t=>document.getElementById('tab-'+t).style.display=t===tab?'block':'none');
   document.querySelectorAll('.tb').forEach((b,i)=>b.classList.toggle('active',['board','input','import','settings'][i]===tab));
   if(tab==='settings'){window.renderSR();window.renderGrpMgr();}
-  if(tab==='import') renderImpGrpSel();
+  if(tab==='import'){renderImpGrpSel();renderPeGrpSel();}
   if(tab==='input'&&!_swSkipLineSel) onLineSel();
   _swSkipLineSel=false;
 };
@@ -2284,6 +2288,25 @@ let _peLineId=null;
 let _peOrigJobs=[];
 
 function _esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+function renderPeGrpSel(){
+  const sel=document.getElementById('peGrp');
+  if(!sel) return;
+  const prev=sel.value;
+  sel.innerHTML=groupCfg.map((g,i)=>`<option value="${i}">${g.label}</option>`).join('');
+  if(prev!==''&&groupCfg[parseInt(prev)]) sel.value=prev;
+  onPeGrpSel();
+}
+window.onPeGrpSel=function(){
+  const gi=parseInt(document.getElementById('peGrp')?.value)||0;
+  const g=groupCfg[gi]||groupCfg[0];
+  const lineSel=document.getElementById('peLineId');
+  if(!lineSel) return;
+  lineSel.innerHTML='<option value="">-- ライン選択 --</option>'+
+    (g.ids||[]).map(id=>`<option value="${id}">${getLineName(id)}</option>`).join('');
+  // ライン変更時はテーブルをリセット
+  window.cancelPlanEdit();
+};
 
 window.loadPlanEdit=function(){
   const lineId=document.getElementById('peLineId')?.value;
