@@ -156,8 +156,25 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 .br{display:flex;gap:8px;align-items:center;margin-top:4px;}
 .bp{background:#1a1a1a;color:#fff;border:none;border-radius:6px;padding:8px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}
 .bp:hover{opacity:0.8;}
+.bp-sub{background:#f0efe8;color:#555;border:1px solid #ddd;border-radius:6px;padding:6px 16px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;}
+.bp-sub:hover{background:#e8e6df;}
+.bp-cancel{background:#fff;color:#888;border:1px solid #ddd;border-radius:6px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}
+.bp-cancel:hover{background:#f5f5f5;}
 .bd{background:#fdf5f5;color:#c0392b;border:1px solid #f5c6c6;border-radius:6px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}
 .bd:hover{background:#fde8e8;}
+/* 計画修正テーブル */
+.pe-tbl{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:4px;}
+.pe-tbl th{background:#f0efe8;font-weight:600;padding:5px 7px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;font-size:10px;}
+.pe-tbl td{padding:4px 5px;border-bottom:0.5px solid #f0efe8;vertical-align:middle;}
+.pe-tbl tr:last-child td{border-bottom:none;}
+.pe-inp{border:1px solid #ddd;border-radius:3px;padding:3px 6px;font-size:11px;font-family:inherit;background:#fff;width:100%;}
+.pe-inp:focus{outline:none;border-color:#2980b9;box-shadow:0 0 0 2px rgba(41,128,185,0.12);}
+.pe-inp.w-part{width:110px;} .pe-inp.w-qty{width:58px;} .pe-inp.w-time{width:72px;}
+.pe-act{font-size:9px;padding:2px 6px;border-radius:10px;white-space:nowrap;}
+.pe-act.has{background:#eafaf1;color:#1e8449;font-weight:700;}
+.pe-act.none{background:#f5f5f5;color:#bbb;}
+.pe-del{font-size:10px;padding:2px 8px;border:1px solid #e0c0c0;background:#fdf5f5;color:#c0392b;border-radius:3px;cursor:pointer;white-space:nowrap;}
+.pe-del:hover{background:#fdecea;}
 .msg{font-size:11px;color:#27ae60;margin-top:6px;min-height:15px;}
 .slbl{font-size:10px;color:#aaa;font-weight:500;margin:6px 0 4px;letter-spacing:0.04em;}
 
@@ -364,6 +381,20 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
         <span style="font-size:11px;color:#aaa;">※既存の計画データは上書きされます</span>
       </div>
       <div class="msg" id="impmsg"></div>
+    </div>
+
+    <!-- 計画修正セクション -->
+    <div class="fc" style="margin-top:8px;">
+      <div class="ftitle">📋 計画修正（実績を維持したまま変更）</div>
+      <div style="font-size:11px;color:#888;margin-bottom:10px;">当日の計画変更時に使用します。入力済みの実績（数量・時刻）はそのまま維持されます。</div>
+      <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px;">
+        <div class="fi" style="flex:1;margin:0;">
+          <label>ライン選択</label>
+          <select id="peLineId"></select>
+        </div>
+        <button class="bp-sub" onclick="loadPlanEdit()" style="flex-shrink:0;height:34px;">読み込む</button>
+      </div>
+      <div id="peTable" style="display:none;"></div>
     </div>
   </div>
 
@@ -1833,7 +1864,7 @@ window.switchGroup=function(idx){
 function updateLineSelects(){
   const allIds=getAllIDS();
   const opts='<option value="">-- ライン選択 --</option>'+allIds.map(id=>`<option value="${id}">${getLineName(id)}</option>`).join('');
-  ['iLine','cLine'].forEach(sid=>{
+  ['iLine','cLine','peLineId'].forEach(sid=>{
     const el=document.getElementById(sid);
     if(!el) return;
     const prev=el.value;
@@ -2248,6 +2279,148 @@ function renderImpPreview(jobsObj,mp,g){
   prevEl.innerHTML=h;
   btn.disabled=false;
 }
+// ===== 計画修正（実績を維持したまま計画を変更） =====
+let _peLineId=null;
+let _peOrigJobs=[];
+
+function _esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+window.loadPlanEdit=function(){
+  const lineId=document.getElementById('peLineId')?.value;
+  if(!lineId){alert('ラインを選択してください');return;}
+  _peLineId=lineId;
+  _peOrigJobs=JSON.parse(JSON.stringify(lines[lineId]?.jobs||[]));
+  if(!_peOrigJobs.length){
+    const container=document.getElementById('peTable');
+    container.style.display='block';
+    container.innerHTML='<div style="font-size:12px;color:#888;padding:8px 0;">このラインには計画データがありません。品番を追加してください。</div>';
+    _renderPeButtons(container);
+    return;
+  }
+  _renderPeTable();
+};
+
+function _renderPeTable(){
+  const container=document.getElementById('peTable');
+  if(!container) return;
+  let h='<div style="overflow-x:auto;"><table class="pe-tbl">';
+  h+='<thead><tr><th>#</th><th>品番</th><th>予定数</th><th>開始</th><th>終了</th><th>段取りなし</th><th>実績状況</th><th></th></tr></thead>';
+  h+='<tbody id="peBody">';
+  _peOrigJobs.forEach((j,i)=>{h+=_buildPeRow(j,i,i+1);});
+  h+='</tbody></table></div>';
+  container.innerHTML=h;
+  container.style.display='block';
+  _renderPeButtons(container);
+}
+
+function _buildPeRow(j,origJi,rowNum){
+  const hasActual=(j.actual>0)||(j.actualStart&&j.actualStart!=='');
+  const actBadge=hasActual
+    ?`<span class="pe-act has">✓ ${j.actual||0}個${j.actualStart?' / '+j.actualStart:''}</span>`
+    :`<span class="pe-act none">未実施</span>`;
+  return `<tr class="pe-row" data-origji="${origJi}">
+    <td style="color:#bbb;font-size:10px;text-align:center;">${rowNum}</td>
+    <td><input class="pe-inp w-part" type="text" value="${_esc(j.part||'')}" placeholder="品番"></td>
+    <td><input class="pe-inp w-qty" type="number" min="0" value="${j.plan||0}"></td>
+    <td><input class="pe-inp w-time" type="time" value="${j.start||''}"></td>
+    <td><input class="pe-inp w-time" type="time" value="${j.end||''}"></td>
+    <td style="text-align:center;"><input type="checkbox" ${j.noSetup?'checked':''}></td>
+    <td>${actBadge}</td>
+    <td><button class="pe-del" onclick="window.removePeRow(this)">削除</button></td>
+  </tr>`;
+}
+
+function _renderPeButtons(container){
+  const btnArea=document.createElement('div');
+  btnArea.style.cssText='margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;';
+  btnArea.innerHTML=`
+    <button class="bp-sub" onclick="window.addPeRow()">＋ 品番を追加</button>
+    <button class="bp" onclick="window.savePlanEdit()">保存する</button>
+    <button class="bp-cancel" onclick="window.cancelPlanEdit()">キャンセル</button>`;
+  container.appendChild(btnArea);
+  const msgEl=document.createElement('div');
+  msgEl.id='pemsg';msgEl.className='msg';
+  container.appendChild(msgEl);
+}
+
+window.addPeRow=function(){
+  const tbody=document.getElementById('peBody');
+  if(!tbody) return;
+  const rows=tbody.querySelectorAll('.pe-row');
+  const rowNum=rows.length+1;
+  let defStart='';
+  if(rows.length>0){
+    const lastRow=rows[rows.length-1];
+    defStart=lastRow.querySelectorAll('.pe-inp.w-time')[1]?.value||'';
+  }
+  const tr=document.createElement('tr');
+  tr.className='pe-row';
+  tr.dataset.origji='-1';
+  tr.innerHTML=`
+    <td style="color:#bbb;font-size:10px;text-align:center;">${rowNum}</td>
+    <td><input class="pe-inp w-part" type="text" value="" placeholder="品番"></td>
+    <td><input class="pe-inp w-qty" type="number" min="0" value="0"></td>
+    <td><input class="pe-inp w-time" type="time" value="${defStart}"></td>
+    <td><input class="pe-inp w-time" type="time" value=""></td>
+    <td style="text-align:center;"><input type="checkbox"></td>
+    <td><span class="pe-act none">未実施</span></td>
+    <td><button class="pe-del" onclick="window.removePeRow(this)">削除</button></td>`;
+  tbody.appendChild(tr);
+};
+
+window.removePeRow=function(btn){
+  const row=btn.closest('.pe-row');
+  const origJi=parseInt(row.dataset.origji);
+  const oj=origJi>=0?_peOrigJobs[origJi]:null;
+  const hasActual=oj&&((oj.actual>0)||(oj.actualStart&&oj.actualStart!==''));
+  if(hasActual&&!confirm('この品番には実績データが入力されています。\n削除すると実績データも失われます。続けますか？')) return;
+  row.remove();
+  document.querySelectorAll('#peBody .pe-row').forEach((r,i)=>{r.cells[0].textContent=i+1;});
+};
+
+window.cancelPlanEdit=function(){
+  const c=document.getElementById('peTable');
+  if(c){c.style.display='none';c.innerHTML='';}
+  _peLineId=null;_peOrigJobs=[];
+};
+
+window.savePlanEdit=async function(){
+  if(!_peLineId) return;
+  const rows=document.querySelectorAll('#peBody .pe-row');
+  if(!rows.length){alert('品番が1件もありません');return;}
+  const mergedJobs=[...rows].map(row=>{
+    const origJi=parseInt(row.dataset.origji);
+    const oj=(origJi>=0&&_peOrigJobs[origJi])?_peOrigJobs[origJi]:{};
+    const inps=row.querySelectorAll('.pe-inp');
+    return {
+      part:inps[0].value.trim(),
+      plan:parseInt(inps[1].value)||0,
+      start:inps[2].value,
+      end:inps[3].value,
+      noSetup:row.querySelector('input[type="checkbox"]').checked,
+      // 実績フィールドをすべて引き継ぐ
+      actual:oj.actual||0,
+      actualStart:oj.actualStart||'',
+      actualEnd:oj.actualEnd||'',
+      setupActualMin:oj.setupActualMin||0,
+      prevActual:oj.prevActual||0,
+    };
+  });
+  if(mergedJobs.some(j=>!j.part)){alert('品番が空の行があります');return;}
+  const totalPlan=mergedJobs.reduce((s,j)=>s+j.plan,0);
+  const pemsg=document.getElementById('pemsg');
+  if(pemsg){pemsg.style.color='#888';pemsg.textContent='保存中...';}
+  try{
+    // jobs・plan のみ上書き（actual / status / updatedAt / troubles / workStart / workEnd は維持）
+    await update(ref(db,'lines/'+_peLineId),{jobs:mergedJobs,plan:totalPlan});
+    if(pemsg){pemsg.style.color='#27ae60';pemsg.textContent=`✓ ${getLineName(_peLineId)} の計画を更新しました（実績を維持）`;}
+    _peOrigJobs=JSON.parse(JSON.stringify(mergedJobs));
+    setTimeout(()=>{if(pemsg)pemsg.textContent='';},4000);
+  }catch(e){
+    if(pemsg){pemsg.style.color='#c0392b';pemsg.textContent='エラー：'+e.message;}
+  }
+};
+
 window.doImport=async function(){
   const activeIds=Object.keys(_impParsedJobs).filter(id=>(_impParsedJobs[id]||[]).length>0);
   if(!activeIds.length){alert('インポートするデータがありません');return;}
