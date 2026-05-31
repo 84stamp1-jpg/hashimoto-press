@@ -387,14 +387,10 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
     <div class="fc" style="margin-top:8px;">
       <div class="ftitle">📋 計画修正（実績を維持したまま変更）</div>
       <div style="font-size:11px;color:#888;margin-bottom:10px;">当日の計画変更時に使用します。入力済みの実績（数量・時刻）はそのまま維持されます。</div>
-      <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px;flex-wrap:wrap;">
-        <div class="fi" style="flex:1;min-width:110px;margin:0;">
+      <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px;">
+        <div class="fi" style="flex:1;margin:0;">
           <label>グループ</label>
-          <select id="peGrp" onchange="onPeGrpSel()"></select>
-        </div>
-        <div class="fi" style="flex:1;min-width:110px;margin:0;">
-          <label>ライン</label>
-          <select id="peLineId"></select>
+          <select id="peGrp"></select>
         </div>
         <button class="bp-sub" onclick="loadPlanEdit()" style="flex-shrink:0;height:34px;">読み込む</button>
       </div>
@@ -2284,8 +2280,7 @@ function renderImpPreview(jobsObj,mp,g){
   btn.disabled=false;
 }
 // ===== 計画修正（実績を維持したまま計画を変更） =====
-let _peLineId=null;
-let _peOrigJobs=[];
+let _peAllLines={}; // {lineId: [...origJobs]}
 
 function _esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
@@ -2295,53 +2290,57 @@ function renderPeGrpSel(){
   const prev=sel.value;
   sel.innerHTML=groupCfg.map((g,i)=>`<option value="${i}">${g.label}</option>`).join('');
   if(prev!==''&&groupCfg[parseInt(prev)]) sel.value=prev;
-  onPeGrpSel();
 }
-window.onPeGrpSel=function(){
+
+// グループ内の全ラインを一括表示
+window.loadPlanEdit=function(){
   const gi=parseInt(document.getElementById('peGrp')?.value)||0;
   const g=groupCfg[gi]||groupCfg[0];
-  const lineSel=document.getElementById('peLineId');
-  if(!lineSel) return;
-  lineSel.innerHTML='<option value="">-- ライン選択 --</option>'+
-    (g.ids||[]).map(id=>`<option value="${id}">${getLineName(id)}</option>`).join('');
-  // ライン変更時はテーブルをリセット
-  window.cancelPlanEdit();
+  const ids=(g.ids||[]).filter(Boolean);
+  if(!ids.length){alert('このグループにラインがありません');return;}
+  // 各ラインのjobsをディープコピーして保持
+  _peAllLines={};
+  ids.forEach(id=>{
+    _peAllLines[id]=JSON.parse(JSON.stringify(lines[id]?.jobs||[]));
+  });
+  _renderPeAllTables(ids);
 };
 
-window.loadPlanEdit=function(){
-  const lineId=document.getElementById('peLineId')?.value;
-  if(!lineId){alert('ラインを選択してください');return;}
-  _peLineId=lineId;
-  _peOrigJobs=JSON.parse(JSON.stringify(lines[lineId]?.jobs||[]));
-  if(!_peOrigJobs.length){
-    const container=document.getElementById('peTable');
-    container.style.display='block';
-    container.innerHTML='<div style="font-size:12px;color:#888;padding:8px 0;">このラインには計画データがありません。品番を追加してください。</div>';
-    _renderPeButtons(container);
-    return;
-  }
-  _renderPeTable();
-};
-
-function _renderPeTable(){
+// グループ内の全ラインをセクションごとに描画
+function _renderPeAllTables(ids){
   const container=document.getElementById('peTable');
   if(!container) return;
-  let h='<div style="overflow-x:auto;"><table class="pe-tbl">';
-  h+='<thead><tr><th>#</th><th>品番</th><th>予定数</th><th>開始</th><th>終了</th><th>段取りなし</th><th>実績状況</th><th></th></tr></thead>';
-  h+='<tbody id="peBody">';
-  _peOrigJobs.forEach((j,i)=>{h+=_buildPeRow(j,i,i+1);});
-  h+='</tbody></table></div>';
+  let h='';
+  ids.forEach(lineId=>{
+    const origJobs=_peAllLines[lineId]||[];
+    h+=`<div class="pe-section" data-lineid="${lineId}" style="margin-bottom:14px;">`;
+    h+=`<div style="font-size:12px;font-weight:700;color:#1a1a1a;margin-bottom:5px;padding-bottom:4px;border-bottom:1px solid #e0e0e0;">${_esc(getLineName(lineId))}</div>`;
+    h+='<div style="overflow-x:auto;"><table class="pe-tbl">';
+    h+='<thead><tr><th>#</th><th>品番</th><th>予定数</th><th>開始</th><th>終了</th><th>段取りなし</th><th>実績状況</th><th></th></tr></thead>';
+    h+=`<tbody class="pe-body" data-lineid="${lineId}">`;
+    if(origJobs.length){
+      origJobs.forEach((j,i)=>{h+=_buildPeRow(j,i,i+1,lineId);});
+    }
+    h+='</tbody></table></div>';
+    h+=`<button class="bp-sub" onclick="window.addPeRow('${lineId}')" style="margin-top:5px;">＋ 品番を追加</button>`;
+    h+='</div>';
+  });
+  // 保存・キャンセルボタン（共通）
+  h+=`<div style="display:flex;gap:8px;margin-top:6px;">
+    <button class="bp" onclick="window.savePlanEdit()">すべて保存する</button>
+    <button class="bp-cancel" onclick="window.cancelPlanEdit()">キャンセル</button>
+  </div>`;
+  h+='<div class="msg" id="pemsg"></div>';
   container.innerHTML=h;
   container.style.display='block';
-  _renderPeButtons(container);
 }
 
-function _buildPeRow(j,origJi,rowNum){
+function _buildPeRow(j,origJi,rowNum,lineId){
   const hasActual=(j.actual>0)||(j.actualStart&&j.actualStart!=='');
   const actBadge=hasActual
     ?`<span class="pe-act has">✓ ${j.actual||0}個${j.actualStart?' / '+j.actualStart:''}</span>`
     :`<span class="pe-act none">未実施</span>`;
-  return `<tr class="pe-row" data-origji="${origJi}">
+  return `<tr class="pe-row" data-origji="${origJi}" data-lineid="${lineId}">
     <td style="color:#bbb;font-size:10px;text-align:center;">${rowNum}</td>
     <td><input class="pe-inp w-part" type="text" value="${_esc(j.part||'')}" placeholder="品番"></td>
     <td><input class="pe-inp w-qty" type="number" min="0" value="${j.plan||0}"></td>
@@ -2353,32 +2352,15 @@ function _buildPeRow(j,origJi,rowNum){
   </tr>`;
 }
 
-function _renderPeButtons(container){
-  const btnArea=document.createElement('div');
-  btnArea.style.cssText='margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;';
-  btnArea.innerHTML=`
-    <button class="bp-sub" onclick="window.addPeRow()">＋ 品番を追加</button>
-    <button class="bp" onclick="window.savePlanEdit()">保存する</button>
-    <button class="bp-cancel" onclick="window.cancelPlanEdit()">キャンセル</button>`;
-  container.appendChild(btnArea);
-  const msgEl=document.createElement('div');
-  msgEl.id='pemsg';msgEl.className='msg';
-  container.appendChild(msgEl);
-}
-
-window.addPeRow=function(){
-  const tbody=document.getElementById('peBody');
+window.addPeRow=function(lineId){
+  const tbody=document.querySelector(`.pe-body[data-lineid="${lineId}"]`);
   if(!tbody) return;
   const rows=tbody.querySelectorAll('.pe-row');
   const rowNum=rows.length+1;
   let defStart='';
-  if(rows.length>0){
-    const lastRow=rows[rows.length-1];
-    defStart=lastRow.querySelectorAll('.pe-inp.w-time')[1]?.value||'';
-  }
+  if(rows.length>0){defStart=rows[rows.length-1].querySelectorAll('.pe-inp.w-time')[1]?.value||'';}
   const tr=document.createElement('tr');
-  tr.className='pe-row';
-  tr.dataset.origji='-1';
+  tr.className='pe-row';tr.dataset.origji='-1';tr.dataset.lineid=lineId;
   tr.innerHTML=`
     <td style="color:#bbb;font-size:10px;text-align:center;">${rowNum}</td>
     <td><input class="pe-inp w-part" type="text" value="" placeholder="品番"></td>
@@ -2394,50 +2376,77 @@ window.addPeRow=function(){
 window.removePeRow=function(btn){
   const row=btn.closest('.pe-row');
   const origJi=parseInt(row.dataset.origji);
-  const oj=origJi>=0?_peOrigJobs[origJi]:null;
+  const lineId=row.dataset.lineid;
+  const oj=(origJi>=0&&_peAllLines[lineId])?_peAllLines[lineId][origJi]:null;
   const hasActual=oj&&((oj.actual>0)||(oj.actualStart&&oj.actualStart!==''));
   if(hasActual&&!confirm('この品番には実績データが入力されています。\n削除すると実績データも失われます。続けますか？')) return;
   row.remove();
-  document.querySelectorAll('#peBody .pe-row').forEach((r,i)=>{r.cells[0].textContent=i+1;});
+  const tbody=document.querySelector(`.pe-body[data-lineid="${lineId}"]`);
+  if(tbody) tbody.querySelectorAll('.pe-row').forEach((r,i)=>{r.cells[0].textContent=i+1;});
 };
 
 window.cancelPlanEdit=function(){
   const c=document.getElementById('peTable');
   if(c){c.style.display='none';c.innerHTML='';}
-  _peLineId=null;_peOrigJobs=[];
+  _peAllLines={};
 };
 
 window.savePlanEdit=async function(){
-  if(!_peLineId) return;
-  const rows=document.querySelectorAll('#peBody .pe-row');
-  if(!rows.length){alert('品番が1件もありません');return;}
-  const mergedJobs=[...rows].map(row=>{
-    const origJi=parseInt(row.dataset.origji);
-    const oj=(origJi>=0&&_peOrigJobs[origJi])?_peOrigJobs[origJi]:{};
-    const inps=row.querySelectorAll('.pe-inp');
-    return {
-      part:inps[0].value.trim(),
-      plan:parseInt(inps[1].value)||0,
-      start:inps[2].value,
-      end:inps[3].value,
-      noSetup:row.querySelector('input[type="checkbox"]').checked,
-      // 実績フィールドをすべて引き継ぐ
-      actual:oj.actual||0,
-      actualStart:oj.actualStart||'',
-      actualEnd:oj.actualEnd||'',
-      setupActualMin:oj.setupActualMin||0,
-      prevActual:oj.prevActual||0,
-    };
-  });
-  if(mergedJobs.some(j=>!j.part)){alert('品番が空の行があります');return;}
-  const totalPlan=mergedJobs.reduce((s,j)=>s+j.plan,0);
+  const sections=document.querySelectorAll('.pe-section');
+  if(!sections.length) return;
+  // 全セクションのバリデーション
+  for(const sec of sections){
+    const lineId=sec.dataset.lineid;
+    const rows=sec.querySelectorAll('.pe-row');
+    if([...rows].some(r=>!r.querySelectorAll('.pe-inp')[0].value.trim())){
+      alert(`${getLineName(lineId)}：品番が空の行があります`);return;
+    }
+  }
   const pemsg=document.getElementById('pemsg');
   if(pemsg){pemsg.style.color='#888';pemsg.textContent='保存中...';}
   try{
-    // jobs・plan のみ上書き（actual / status / updatedAt / troubles / workStart / workEnd は維持）
-    await update(ref(db,'lines/'+_peLineId),{jobs:mergedJobs,plan:totalPlan});
-    if(pemsg){pemsg.style.color='#27ae60';pemsg.textContent=`✓ ${getLineName(_peLineId)} の計画を更新しました（実績を維持）`;}
-    _peOrigJobs=JSON.parse(JSON.stringify(mergedJobs));
+    const updates={};
+    sections.forEach(sec=>{
+      const lineId=sec.dataset.lineid;
+      const origJobs=_peAllLines[lineId]||[];
+      const rows=sec.querySelectorAll('.pe-row');
+      const mergedJobs=[...rows].map(row=>{
+        const origJi=parseInt(row.dataset.origji);
+        const oj=(origJi>=0&&origJobs[origJi])?origJobs[origJi]:{};
+        const inps=row.querySelectorAll('.pe-inp');
+        return {
+          part:inps[0].value.trim(),
+          plan:parseInt(inps[1].value)||0,
+          start:inps[2].value,
+          end:inps[3].value,
+          noSetup:row.querySelector('input[type="checkbox"]').checked,
+          actual:oj.actual||0,
+          actualStart:oj.actualStart||'',
+          actualEnd:oj.actualEnd||'',
+          setupActualMin:oj.setupActualMin||0,
+          prevActual:oj.prevActual||0,
+        };
+      });
+      const totalPlan=mergedJobs.reduce((s,j)=>s+j.plan,0);
+      updates['lines/'+lineId+'/jobs']=mergedJobs;
+      updates['lines/'+lineId+'/plan']=totalPlan;
+    });
+    await update(ref(db),updates);
+    const gi=parseInt(document.getElementById('peGrp')?.value)||0;
+    const grpName=groupCfg[gi]?.label||'グループ';
+    if(pemsg){pemsg.style.color='#27ae60';pemsg.textContent=`✓ ${grpName}の計画を更新しました（実績を維持）`;}
+    // origJobsを更新
+    sections.forEach(sec=>{
+      const lineId=sec.dataset.lineid;
+      const rows=sec.querySelectorAll('.pe-row');
+      const newJobs=[...rows].map(row=>{
+        const origJi=parseInt(row.dataset.origji);
+        const oj=(origJi>=0&&(_peAllLines[lineId]||[])[origJi])?_peAllLines[lineId][origJi]:{};
+        const inps=row.querySelectorAll('.pe-inp');
+        return {part:inps[0].value.trim(),plan:parseInt(inps[1].value)||0,start:inps[2].value,end:inps[3].value,noSetup:row.querySelector('input[type="checkbox"]').checked,actual:oj.actual||0,actualStart:oj.actualStart||'',actualEnd:oj.actualEnd||'',setupActualMin:oj.setupActualMin||0,prevActual:oj.prevActual||0};
+      });
+      _peAllLines[lineId]=newJobs;
+    });
     setTimeout(()=>{if(pemsg)pemsg.textContent='';},4000);
   }catch(e){
     if(pemsg){pemsg.style.color='#c0392b';pemsg.textContent='エラー：'+e.message;}
