@@ -446,7 +446,7 @@ html, body {
 <!-- タブ（ヘッダーを兼ねる） -->
 <div class="tabs">
   <div class="tab active" onclick="switchTab('factory')">🏭 工場レイアウト</div>
-  <div class="tab" onclick="switchTab('progress')">📊 進捗</div>
+  <div class="tab" onclick="switchTab('progress')">📊 進捗管理</div>
   <div class="tab" onclick="switchTab('quality')">✅ 品質チェック</div>
   <div class="tab" onclick="switchTab('dantori')">📋 段取り指示</div>
   <div class="tab" onclick="switchTab('search')">🔍 品番検索</div>
@@ -1050,13 +1050,11 @@ html, body {
   </div><!-- /qc-screen-search -->
 </div><!-- /tab-quality -->
 
-<!-- ===== 進捗ボードタブ ===== -->
+<!-- ===== 進捗管理タブ ===== -->
 <div class="content" id="tab-progress">
-  <iframe
-    src="https://84stamp1-jpg.github.io/hashimoto-press/"
+  <iframe id="pm-iframe"
     style="width:100%;height:calc(100vh - 38px);border:none;display:block;"
-    allow="fullscreen"
-    loading="lazy">
+    allow="fullscreen">
   </iframe>
 </div><!-- /tab-progress -->
 
@@ -1610,7 +1608,29 @@ function switchTab(name){
   document.getElementById('tab-'+name).classList.add('active');
   const tabs = ['factory','progress','quality','dantori','search'];
   document.querySelectorAll('.tab')[tabs.indexOf(name)].classList.add('active');
-  if(name==='quality') qcOnTabActivated();
+  if(name==='quality')   qcOnTabActivated();
+  if(name==='progress')  initPmTab();
+}
+
+// ===== 進捗管理タブ初期化 =====
+function initPmTab(){
+  var ifr = document.getElementById('pm-iframe');
+  if(!ifr || ifr.getAttribute('data-pm-loaded')) return;
+  ifr.setAttribute('data-pm-loaded','1');
+  // ローカル開発時はサブフォルダ、GitHub Pages時は同一フォルダ
+  var isLocal = /localhost|127\.0\.0\.1/.test(location.hostname);
+  ifr.src = isLocal ? 'hashimoto-press/index.html' : 'index.html';
+  ifr.addEventListener('load', function(){
+    try {
+      var doc = ifr.contentDocument || ifr.contentWindow.document;
+      if(doc && doc.head){
+        var s = doc.createElement('style');
+        // 進捗管理ボードの独自ヘッダー（黒帯）を非表示
+        s.textContent = '.hdr{display:none!important;}html,body{overflow:auto!important;}';
+        doc.head.appendChild(s);
+      }
+    } catch(e){ /* cross-origin等で失敗しても無視 */ }
+  });
 }
 
 // ===== デモデータ =====
