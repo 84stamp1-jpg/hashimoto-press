@@ -254,6 +254,47 @@ html, body {
 .kcard-role-lbl{color:#aaa;flex-shrink:0;width:30px;}
 .kcard-role-val{color:#1a1a1a;font-weight:600;word-break:break-all;}
 .k-empty{color:#ccc;font-size:11px;text-align:center;padding:16px 4px;}
+
+/* 担当者別カード（組立ライン担当表示） */
+.roster-wrap{padding:8px 10px;}
+.roster-time-now{font-size:11px;color:#888;margin-bottom:8px;font-variant-numeric:tabular-nums;}
+.roster-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:7px;}
+.roster-card{background:#fff;border-radius:7px;padding:8px 10px;border:1px solid #e5e5e5;border-left:4px solid #ddd;min-height:64px;display:flex;flex-direction:column;gap:2px;}
+.roster-card.r-active{border-left-color:#1d4ed8;}
+.roster-card.r-setup {border-left-color:#d97706;}
+.roster-card.r-sched {border-left-color:#94a3b8;}
+.roster-card.r-none  {border-left-color:#e5e5e5;opacity:0.55;}
+.roster-name{font-size:12px;font-weight:700;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.roster-line{font-size:14px;font-weight:800;color:#1d4ed8;margin-top:1px;}
+.roster-card.r-setup .roster-line{color:#d97706;}
+.roster-card.r-none  .roster-line{font-size:11px;color:#94a3b8;font-weight:400;}
+.roster-role{font-size:9px;color:#6b7280;line-height:1.3;}
+.roster-time{font-size:9px;color:#374151;font-variant-numeric:tabular-nums;}
+.roster-multi{font-size:9px;color:#94a3b8;margin-top:2px;}
+.roster-section{font-size:11px;font-weight:700;color:#6b7280;margin:10px 0 5px;letter-spacing:0.05em;}
+
+/* プレス作業者タイムライン（Ganttチャート） */
+.rt-title{padding:5px 10px;font-size:11px;color:#888;background:#f5f5f3;border-bottom:1px solid #e5e5e5;font-variant-numeric:tabular-nums;}
+.rt-outer{overflow:auto;max-height:calc(100vh - 92px);background:#f9f9f7;font-size:11px;}
+.rt-hdr{display:flex;align-items:stretch;position:sticky;top:0;z-index:20;background:#f0f0ee;border-bottom:2px solid #d5d5d3;}
+.rt-hdr-name{flex-shrink:0;width:110px;border-right:1px solid #ccc;padding:0 8px;font-size:9px;color:#aaa;font-weight:600;display:flex;align-items:flex-end;padding-bottom:4px;}
+.rt-hdr-chart{position:relative;height:28px;flex-shrink:0;}
+.rt-hour-mark{position:absolute;top:0;height:100%;border-left:1px dashed #d0d0d0;padding:0 3px;display:flex;align-items:flex-end;font-size:9px;color:#aaa;padding-bottom:3px;white-space:nowrap;}
+.rt-body{position:relative;}
+.rt-section-row{display:flex;align-items:center;background:#ebebea;border-top:2px solid #d5d5d3;height:22px;}
+.rt-section-name-cell{flex-shrink:0;width:110px;border-right:1px solid #ccc;}
+.rt-section-label{flex:1;padding:0 8px;font-size:10px;font-weight:700;color:#888;letter-spacing:.06em;}
+.rt-row{display:flex;align-items:center;border-bottom:1px solid #efefef;height:34px;}
+.rt-row:hover{background:rgba(29,78,216,.04);}
+.rt-name{flex-shrink:0;width:110px;padding:0 7px;font-size:11px;font-weight:600;color:#1a1a1a;border-right:1px solid #e8e8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;height:100%;display:flex;align-items:center;position:sticky;left:0;z-index:5;background:white;}
+.rt-row:hover .rt-name{background:#f5f9ff;}
+.rt-track{position:relative;flex-shrink:0;height:34px;overflow:visible;}
+.rt-block{position:absolute;top:5px;height:24px;border-radius:3px;display:flex;align-items:center;padding:0 4px;font-size:9px;font-weight:700;color:rgba(255,255,255,.95);overflow:hidden;white-space:nowrap;cursor:default;min-width:4px;box-shadow:0 1px 3px rgba(0,0,0,.2);}
+.rt-block.rt-setup{background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.25) 0,rgba(255,255,255,.25) 3px,transparent 3px,transparent 7px)!important;}
+.rt-overlay{position:absolute;top:0;left:110px;bottom:0;pointer-events:none;overflow:hidden;}
+.rt-break-band{position:absolute;top:0;bottom:0;background:rgba(0,0,0,.07);}
+.rt-now-line{position:absolute;top:0;bottom:0;width:2px;background:#ef4444;z-index:6;}
+.rt-now-line::before{content:'▼';position:absolute;top:0;left:-4px;font-size:10px;color:#ef4444;line-height:1;}
 .form-group select{width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:6px;font-size:13px;background:white;font-family:inherit;}
 .form-group select:focus{outline:none;border-color:#1a1a1a;}
 /* ===== 品質チェックシート統合 ===== */
@@ -789,6 +830,7 @@ html, body {
       <button class="kanban-tab active" data-page="kp1" onclick="switchKanbanPage('kp1')">A・Bライン</button>
       <button class="kanban-tab"        data-page="kp2" onclick="switchKanbanPage('kp2')">C・Dライン</button>
       <button class="kanban-tab"        data-page="kp3" onclick="switchKanbanPage('kp3')">担当者別</button>
+      <button class="kanban-tab"        data-page="kp4" onclick="switchKanbanPage('kp4')">🔧 プレス計画</button>
     </div>
     <button class="btn" style="padding:5px 10px;font-size:11px;" onclick="refreshDantori()">↻ 更新</button>
     <button class="add-btn-dt" style="background:#0369a1;" onclick="importFromProductionPlan()">📥 計画取込</button>
@@ -3019,6 +3061,9 @@ const KANBAN_PAGES = [
   {
     id:'kp3', label:'担当者別', type:'person',
     cols:[{name:'大塚'},{name:'鈴木'},{name:'野口'},{name:'近藤'},{name:'坂田'}]
+  },
+  {
+    id:'kp4', label:'プレス計画', type:'press'
   }
 ];
 let kanbanPage = 'kp1';
@@ -3536,8 +3581,225 @@ function renderKanban(){
   const list       = document.getElementById('dantoriList');
   const allEntries = getAllDantoriEntries();
   const page       = KANBAN_PAGES.find(p=>p.id===kanbanPage) || KANBAN_PAGES[0];
+  if(page.id === 'kp3'){
+    list.innerHTML = renderWorkerRoster(allEntries);   // 組立ライン担当カード
+    return;
+  }
+  if(page.id === 'kp4'){
+    list.innerHTML = renderPressTimeline(allEntries);  // プレス作業者Gantt
+    return;
+  }
   const colsHtml   = page.cols.map(col=>renderKanbanCol(col, allEntries)).join('');
   list.innerHTML   = `<div class="kanban-board">${colsHtml}</div>`;
+}
+
+// ===== 担当者タイムライン =====
+// ラインカラー定義
+const LINE_COLORS_MAP = {
+  'A1':'#1d4ed8','A2':'#3b82f6',
+  'B1':'#16a34a','B2':'#15803d',
+  'Bライン':'#0891b2',
+  'Cライン①':'#d97706','Cライン②':'#b45309',
+  'ロボットライン':'#7c3aed',
+};
+// タイムライン描画定数
+const RT_START = 8*60;          // 08:00
+const RT_END   = 20*60;         // 20:00
+const RT_PPM   = 1.5;           // px per minute (= 90px/hour)
+const RT_W     = (RT_END - RT_START) * RT_PPM; // 1080px
+
+function rt_toX(m){ return Math.max(0, Math.min(RT_W, (m - RT_START) * RT_PPM)); }
+function rt_toMin(t){ if(!t) return null; const [h,m] = t.split(':').map(Number); return isNaN(h) ? null : h*60+m; }
+
+// 担当者マスター（セクション付き。設定で上書き可）
+const WORKER_MASTER = [
+  { section:'プレス', names:['見原　一彦','仲田　涼真','長田　由香倫','大石　章宏',
+                              '松浦　広治','吉田　光好','柴田　晃宏','横田川　延広'] },
+  { section:'組立',   names:['永丘　克也','近藤　満','大塚　圭汰','鈴木　里美','野口　敦子'] },
+  { section:'品管・総務', names:['八木　貴志','杉山　好美','登﨑　千春'] },
+];
+
+function getAllWorkerNames(){
+  // マスター + config.staff* + スケジュール内の役割 を統合
+  const seen = new Set();
+  const result = []; // {section, name} の順序付き配列
+  const addName = (section, name) => {
+    const n = (name||'').trim();
+    if(!n || seen.has(n)) return;
+    seen.add(n); result.push({section, name:n});
+  };
+  WORKER_MASTER.forEach(({section, names}) => names.forEach(n => addName(section, n)));
+  // config.staff* から追加
+  const extra = [
+    ...(config.staffCond    || []),
+    ...(config.staffLift    || []),
+    ...(config.staffMount   || []),
+    ...(config.staffQuality || []),
+  ];
+  extra.forEach(n => addName('その他', n));
+  // スケジュールの roles から自動検出
+  dantoriSchedule.forEach(d => {
+    const r = d.roles || {};
+    [r.条件設定, r.リフト, r.品質確認].forEach(n => addName('その他', n||''));
+    (r.金型取付||'').split(/[,、]/).forEach(n => addName('その他', n));
+  });
+  return result;
+}
+
+function getWorkerSchedule(name, allEntries){
+  return allEntries.filter(e => {
+    const r = e.roles || {};
+    return r.条件設定 === name
+        || r.リフト === name
+        || r.品質確認 === name
+        || (r.金型取付||'').split(/[,、]/).map(s=>s.trim()).includes(name);
+  }).sort((a,b) => (a.sortKey||'').localeCompare(b.sortKey||''));
+}
+
+// ===== kp3：担当者別カード（組立ライン担当表示） =====
+function renderWorkerRoster(allEntries){
+  const now  = new Date();
+  const nowM = now.getHours()*60 + now.getMinutes();
+  const toMin = t => { if(!t) return null; const [h,m]=t.split(':').map(Number); return isNaN(h)?null:h*60+m; };
+
+  const workers = getAllWorkerNames();
+  const sections = {}, sectionOrder = [];
+  workers.forEach(({section, name}) => {
+    if(!sections[section]){ sections[section]=[]; sectionOrder.push(section); }
+    sections[section].push(name);
+  });
+
+  let html = '<div class="roster-wrap">';
+  const timeStr0 = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  html += `<div class="roster-time-now">現在時刻 ${timeStr0} 時点の担当状況</div>`;
+
+  sectionOrder.forEach(sec => {
+    html += `<div class="roster-section">── ${sec} ──</div>`;
+    html += '<div class="roster-grid">';
+    sections[sec].forEach(name => {
+      const assigns = getWorkerSchedule(name, allEntries);
+      if(!assigns.length){
+        html += `<div class="roster-card r-none">
+          <div class="roster-name">${name}</div>
+          <div class="roster-line">未割当</div>
+        </div>`;
+        return;
+      }
+      let cur = assigns.find(d => {
+        const sM = toMin(d.setupStart || d.prodStart);
+        const eM = toMin(d.prodEnd);
+        if(sM === null) return false;
+        return eM !== null ? (nowM >= sM && nowM <= eM) : nowM >= sM;
+      });
+      if(!cur) cur = assigns[0];
+      const r = cur.roles || {};
+      const roles = [
+        r.条件設定 === name ? '条件設定' : '',
+        (r.金型取付||'').split(/[,、]/).map(s=>s.trim()).includes(name) ? '金型取付' : '',
+        r.リフト === name ? '🏗リフト' : '',
+        r.品質確認 === name ? '品質確認' : '',
+      ].filter(Boolean).join('・');
+      const lineName = getLineDisplayName(cur.lineId);
+      const tStart   = cur.setupStart || cur.prodStart || '';
+      const tEnd     = cur.prodEnd || '';
+      const tDisp    = tStart ? (tEnd ? `${tStart}〜${tEnd}` : `${tStart}〜`) : '';
+      const isActive = cur.status === 'in_progress';
+      const isSetup  = cur.status === 'setup' || (cur.setupStart && !cur.prodStart);
+      const cardCls  = isActive ? 'r-active' : isSetup ? 'r-setup' : 'r-sched';
+      const multi    = assigns.length > 1 ? `<div class="roster-multi">他${assigns.length-1}件あり</div>` : '';
+      html += `<div class="roster-card ${cardCls}">
+        <div class="roster-name">${name}</div>
+        <div class="roster-line">${lineName}</div>
+        ${roles ? `<div class="roster-role">${roles}</div>` : ''}
+        ${tDisp ? `<div class="roster-time">${tDisp}</div>` : ''}
+        ${multi}
+      </div>`;
+    });
+    html += '</div>';
+  });
+  html += '</div>';
+  return html;
+}
+
+// ===== kp4：プレス計画タイムライン（Ganttチャート） =====
+function renderPressTimeline(allEntries){
+  const now     = new Date();
+  const nowM    = now.getHours()*60 + now.getMinutes();
+  const timeStr = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+
+  // ── 時間軸ヘッダー ──
+  let hourHtml = '';
+  for(let h = 8; h <= 20; h++){
+    const x = rt_toX(h * 60);
+    hourHtml += `<div class="rt-hour-mark" style="left:${x}px;">${String(h).padStart(2,'0')}:00</div>`;
+  }
+
+  // ── オーバーレイ：ブレーク帯 + 現在時刻線 ──
+  const BREAKS = [{from:12*60, to:13*60}]; // 昼休み帯
+  const breakHtml = BREAKS.map(b => {
+    const bx = rt_toX(b.from), bw = (b.to - b.from) * RT_PPM;
+    return `<div class="rt-break-band" style="left:${bx}px;width:${bw}px;"></div>`;
+  }).join('');
+  const nowInRange = nowM >= RT_START && nowM <= RT_END;
+  const nowHtml = nowInRange ? `<div class="rt-now-line" style="left:${rt_toX(nowM)}px;"></div>` : '';
+
+  // ── プレスセクションの作業者のみ ──
+  const workers = getAllWorkerNames().filter(w => w.section === 'プレス');
+
+  // ── 行を生成 ──
+  let rowsHtml = '';
+  workers.forEach(({name}) => {
+    // 段取り計画の roles から割り当て取得
+    const assigns = getWorkerSchedule(name, allEntries);
+    // TODO: pressSchedule（任意タスク）からも取得（後で追加）
+    let blk = '';
+    assigns.forEach(d => {
+      const color   = LINE_COLORS_MAP[d.lineId] || '#6b7280';
+      const label   = getLineDisplayName(d.lineId);
+      const r       = d.roles || {};
+      const roleStr = [
+        r.条件設定 === name ? '条件' : '',
+        (r.金型取付||'').split(/[,、]/).map(s=>s.trim()).includes(name) ? '取付' : '',
+        r.リフト === name ? 'リフト' : '',
+        r.品質確認 === name ? '品質' : '',
+      ].filter(Boolean).join('·');
+      const tip = `${label}  [${roleStr||'担当'}]  ${d.setupStart||d.prodStart||''}〜${d.prodEnd||''}`;
+      const sm = rt_toMin(d.setupStart), ps = rt_toMin(d.prodStart), pe = rt_toMin(d.prodEnd);
+
+      // 段取りブロック（setupStart〜prodStart）
+      if(sm !== null && ps !== null && ps > sm){
+        const sx = rt_toX(sm), sw = Math.max(rt_toX(ps) - sx, 8);
+        blk += `<div class="rt-block rt-setup" style="left:${sx}px;width:${sw}px;background:${color};" title="${tip}">段取</div>`;
+      }
+      // 生産ブロック（prodStart〜prodEnd）
+      if(ps !== null){
+        const px = rt_toX(ps);
+        const pw = pe !== null ? Math.max(rt_toX(pe) - px, 8) : 90 * RT_PPM;
+        blk += `<div class="rt-block" style="left:${px}px;width:${pw}px;background:${color};" title="${tip}">${label}</div>`;
+      } else if(sm !== null && ps === null){
+        const sx = rt_toX(sm), sw = 60 * RT_PPM;
+        blk += `<div class="rt-block rt-setup" style="left:${sx}px;width:${sw}px;background:${color};" title="${tip}">段取中</div>`;
+      }
+    });
+    rowsHtml += `<div class="rt-row">
+      <div class="rt-name" title="${name}">${name}</div>
+      <div class="rt-track" style="width:${RT_W}px;">${blk}</div>
+    </div>`;
+  });
+
+  return `<div style="overflow:hidden;">
+  <div class="rt-title">🔧 プレス作業者 配置タイムライン ── ${timeStr} 現在　<span style="font-size:10px;color:#aaa;">※ タスク追加機能は準備中</span></div>
+  <div class="rt-outer">
+    <div class="rt-hdr">
+      <div class="rt-hdr-name">担当者</div>
+      <div class="rt-hdr-chart" style="width:${RT_W}px;">${hourHtml}</div>
+    </div>
+    <div class="rt-body">
+      ${rowsHtml}
+      <div class="rt-overlay" style="width:${RT_W}px;">${breakHtml}${nowHtml}</div>
+    </div>
+  </div>
+</div>`;
 }
 
 // ===== 生産計画から段取り計画を取り込む =====
