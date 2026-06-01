@@ -403,6 +403,44 @@ html, body {
 .qc-pb{border:2px dashed #bbb;border-radius:10px;padding:20px;text-align:center;cursor:pointer;background:#fafafa;}
 .qc-pb .qc-cam-ico{font-size:32px;}.qc-pb p{font-size:12px;color:#888;margin-top:6px;}
 .qc-pb.ok{border-color:#1F4E79;background:#f0f6ff;}
+/* ===== 現品票発行 ===== */
+#qc-hinpyo-modal{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:none;align-items:flex-end;justify-content:center;overflow-y:auto;}
+#qc-hinpyo-modal.on{display:flex;}
+.hp-inner{background:#fff;border-radius:16px 16px 0 0;width:100%;max-width:480px;padding:18px 16px 34px;max-height:92vh;overflow-y:auto;}
+.hp-title{font-size:15px;font-weight:700;color:#1F4E79;margin-bottom:12px;}
+.hp-info-box{background:#f0f6ff;border-radius:8px;padding:10px 12px;margin-bottom:12px;}
+.hp-info-hinban{font-weight:700;font-size:14px;color:#1F4E79;margin-bottom:3px;}
+.hp-info-sub{font-size:11px;color:#555;}
+.hp-row2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;}
+.hp-fld{display:flex;flex-direction:column;gap:3px;}
+.hp-fld label{font-size:10px;color:#666;font-weight:600;}
+.hp-fld input,.hp-fld select{padding:7px 9px;border:1.5px solid #ddd;border-radius:7px;font-size:13px;width:100%;box-sizing:border-box;}
+.hp-fld input:focus{outline:none;border-color:#1F4E79;}
+.hp-badge{padding:10px 14px;background:#f0f6ff;border-radius:8px;font-size:13px;color:#1F4E79;font-weight:700;margin-bottom:12px;line-height:1.6;}
+.hp-btn-row{display:flex;gap:8px;margin-top:14px;}
+.hp-btn{flex:1;padding:12px;font-size:14px;font-weight:700;border:none;border-radius:8px;cursor:pointer;}
+.hp-btn-cancel{background:#f0f4f8;color:#555;}
+.hp-btn-print{background:#1F4E79;color:#fff;}
+/* 印刷エリア（画面では非表示） */
+#hp-print-area{display:none;}
+@media print{
+  body>*:not(#hp-print-area){display:none!important;}
+  #hp-print-area{display:block!important;margin:0;padding:0;}
+  .hp-page{width:210mm;height:297mm;page-break-after:always;box-sizing:border-box;}
+  .hp-page:last-child{page-break-after:auto;}
+  .hp-grid{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:5mm;padding:8mm;height:100%;box-sizing:border-box;}
+  .hp-tag{border:1.5px solid #444;border-radius:2mm;padding:3mm 3.5mm;display:flex;flex-direction:column;box-sizing:border-box;overflow:hidden;}
+  .hp-tag-title{text-align:center;font-size:12pt;font-weight:900;letter-spacing:8pt;border-bottom:1.5px solid #333;padding-bottom:2mm;margin-bottom:2mm;color:#000;}
+  .hp-tr{display:grid;}
+  .hp-td{padding:1.2mm 1.5mm;border:0.5px solid #999;font-size:7pt;overflow:hidden;line-height:1.3;}
+  .hp-td.lbl{font-weight:700;font-size:6.5pt;}
+  .hp-td.orange{background:#FFF3E0;color:#BF360C;}
+  .hp-td.blue{background:#E3F2FD;color:#0D47A1;}
+  .hp-td.val{font-size:8.5pt;font-weight:700;color:#000;}
+  .hp-td.qty{font-size:13pt;font-weight:900;color:#C62828;text-align:center;}
+  .hp-spacer{flex:1;}
+  .hp-footer{text-align:right;font-size:7pt;font-weight:700;color:#BF360C;padding-top:2mm;border-top:0.5px solid #ddd;margin-top:1mm;}
+}
 </style>
 </head>
 <body>
@@ -812,6 +850,7 @@ html, body {
           <div id="qc-bunno-info"></div>
         </div>
         <button onclick="qcOpenBulkMode()" style="width:100%;padding:9px;background:#fff;border:1.5px solid #854F0B;color:#854F0B;font-size:12px;font-weight:700;border-radius:8px;cursor:pointer;margin-top:6px">📦 一括振り分けモード</button>
+        <button onclick="qcOpenHinpyo()" style="width:100%;padding:9px;background:#fff;border:1.5px solid #1F4E79;color:#1F4E79;font-size:12px;font-weight:700;border-radius:8px;cursor:pointer;margin-top:6px">📄 現品票発行</button>
       </div>
       <div class="qc-card">
         <div class="qc-card-title">基本情報</div>
@@ -1081,6 +1120,22 @@ html, body {
         <div class="form-group" style="margin:0;">
           <label style="font-size:10px;">品質チェックシート（添付ファイル）</label>
           <input type="text" id="fld-qualitySheet" placeholder="品質チェックシート"/>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label style="font-size:10px;">加工先フィールドコード</label>
+          <input type="text" id="fld-processingDest" placeholder="加工先"/>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label style="font-size:10px;">次工程フィールドコード</label>
+          <input type="text" id="fld-nextProcess" placeholder="次工程"/>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label style="font-size:10px;">保管場所フィールドコード</label>
+          <input type="text" id="fld-storageLocation" placeholder="保管場所"/>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label style="font-size:10px;">箱入数フィールドコード</label>
+          <input type="text" id="fld-boxCount" placeholder="箱入数"/>
         </div>
       </div>
       <div style="margin-top:8px;padding:8px;background:#fffbeb;border-radius:6px;font-size:11px;color:#92400e;">
@@ -1356,7 +1411,11 @@ function showConfig(){
   document.getElementById('fld-customer').value     = FIELD_MAP.customer     || '文字列__1行__2';
   document.getElementById('fld-line').value         = FIELD_MAP.line         || 'ライン';
   document.getElementById('fld-standardWork').value = FIELD_MAP.standardWork || '作業標準書';
-  document.getElementById('fld-qualitySheet').value = FIELD_MAP.qualitySheet || '品質チェックシート';
+  document.getElementById('fld-qualitySheet').value    = FIELD_MAP.qualitySheet    || '品質チェックシート';
+  document.getElementById('fld-processingDest').value  = FIELD_MAP.processingDest  || '加工先';
+  document.getElementById('fld-nextProcess').value     = FIELD_MAP.nextProcess     || '次工程';
+  document.getElementById('fld-storageLocation').value = FIELD_MAP.storageLocation || '保管場所';
+  document.getElementById('fld-boxCount').value        = FIELD_MAP.boxCount        || '箱入数';
   document.getElementById('fieldDetectMsg').textContent = '';
   document.getElementById('configModal').style.display = 'flex';
 }
@@ -1389,7 +1448,11 @@ function saveConfig(){
     customer:     document.getElementById('fld-customer').value.trim()     || '文字列__1行__2',
     line:         document.getElementById('fld-line').value.trim()         || 'ライン',
     standardWork: document.getElementById('fld-standardWork').value.trim() || '作業標準書',
-    qualitySheet: document.getElementById('fld-qualitySheet').value.trim() || '品質チェックシート',
+    qualitySheet:    document.getElementById('fld-qualitySheet').value.trim()    || '品質チェックシート',
+    processingDest:  document.getElementById('fld-processingDest').value.trim()  || '加工先',
+    nextProcess:     document.getElementById('fld-nextProcess').value.trim()     || '次工程',
+    storageLocation: document.getElementById('fld-storageLocation').value.trim() || '保管場所',
+    boxCount:        document.getElementById('fld-boxCount').value.trim()        || '箱入数',
   });
   localStorage.setItem(CFG_KEY, JSON.stringify(config));
   localStorage.setItem('hk_navi_fields', JSON.stringify(FIELD_MAP));
@@ -1507,15 +1570,23 @@ async function autoDetectFields(){
       name:         findCode('品名','name','名称'),
       customer:     findCode('取引先','customer','得意先'),
       line:         findCode('ライン','line','プレス'),
-      standardWork: findCode('作業標準書','標準書','standard'),
-      qualitySheet: findCode('品質チェック','チェックシート','quality'),
+      standardWork:    findCode('作業標準書','標準書','standard'),
+      qualitySheet:    findCode('品質チェック','チェックシート','quality'),
+      processingDest:  findCode('加工先','processing'),
+      nextProcess:     findCode('次工程','次工'),
+      storageLocation: findCode('保管場所','保管'),
+      boxCount:        findCode('箱入数','箱数','box'),
     };
-    if(map.partNo)       document.getElementById('fld-partNo').value       = map.partNo;
-    if(map.name)         document.getElementById('fld-name').value         = map.name;
-    if(map.customer)     document.getElementById('fld-customer').value     = map.customer;
-    if(map.line)         document.getElementById('fld-line').value         = map.line;
-    if(map.standardWork) document.getElementById('fld-standardWork').value = map.standardWork;
-    if(map.qualitySheet) document.getElementById('fld-qualitySheet').value = map.qualitySheet;
+    if(map.partNo)          document.getElementById('fld-partNo').value          = map.partNo;
+    if(map.name)            document.getElementById('fld-name').value            = map.name;
+    if(map.customer)        document.getElementById('fld-customer').value        = map.customer;
+    if(map.line)            document.getElementById('fld-line').value            = map.line;
+    if(map.standardWork)    document.getElementById('fld-standardWork').value    = map.standardWork;
+    if(map.qualitySheet)    document.getElementById('fld-qualitySheet').value    = map.qualitySheet;
+    if(map.processingDest)  document.getElementById('fld-processingDest').value  = map.processingDest;
+    if(map.nextProcess)     document.getElementById('fld-nextProcess').value     = map.nextProcess;
+    if(map.storageLocation) document.getElementById('fld-storageLocation').value = map.storageLocation;
+    if(map.boxCount)        document.getElementById('fld-boxCount').value        = map.boxCount;
   } catch(e){
     msg.innerHTML = `<span style="color:#dc2626;">✗ 自動検出失敗（CORSエラー）</span><br><span style="color:#888;font-size:10px;">フィールドコードは手動で入力してください</span>`;
   }
@@ -1572,6 +1643,10 @@ let FIELD_MAP = Object.assign({
   strokeCount:     'ストローク数',
   standardWork:    '作業標準書',
   qualitySheet:    '品質チェックシート',
+  processingDest:  '加工先',
+  nextProcess:     '次工程',
+  storageLocation: '保管場所',
+  boxCount:        '箱入数',
 }, JSON.parse(localStorage.getItem('hk_navi_fields') || '{}'));
 
 // ===== Firebase 部品マスタ検索 =====
@@ -1807,7 +1882,11 @@ async function doSearch(){
     cushionPins:  part.cushionPins  || '—',
     cushionPressure: part.cushionPressure || '—',
     material:     part.material     || '—',
-    strokeCount:  part.strokeCount  || '—',
+    strokeCount:     part.strokeCount     || '—',
+    processingDest:  part.processingDest  || '',
+    nextProcess:     part.nextProcess     || '',
+    storageLocation: part.storageLocation || '',
+    boxCount:        part.boxCount        || '',
     standardWork:  Array.isArray(part.standardWork)  ? part.standardWork.map(f=>({name:f.name,key:f.fileKey,type:'作業標準書'}))  : [],
     qualitySheet:  Array.isArray(part.qualitySheet)  ? part.qualitySheet.map(f=>({name:f.name,key:f.fileKey,type:'品質チェックシート'}))  : [],
     dantoStandard: Array.isArray(part.dantoStandard) ? part.dantoStandard.map(f=>({name:f.name,key:f.fileKey,type:'段取標準書'})) : [],
@@ -2741,7 +2820,7 @@ document.addEventListener('click', function(e){
 });
 
 function clickLineId(lineId){
-  // クリックされたライン固有IDから品番を取得し検索タブで類似品を表示
+  // クリックされたライン固有IDから品番を取得
   const ALIASES = {
     'Bライン':    ['Bライン','BP2'],
     'Cライン①':   ['Cライン①','CP3'],
@@ -2753,13 +2832,36 @@ function clickLineId(lineId){
   for(const id of ids){
     if(linesData[id] && linesData[id].part){ part = linesData[id].part; break; }
   }
-  if(part){
-    switchTab('search');
-    const inp = document.getElementById('searchInput');
-    inp.value = part;
-    onSearchInput();
-    doSearch();
-  }
+  if(!part) return;
+  // アクション選択ポップアップを表示
+  showLineActionPopup(lineId, part);
+}
+
+function showLineActionPopup(lineId, partNo){
+  const existing = document.getElementById('line-action-overlay');
+  if(existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'line-action-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:900;display:flex;align-items:flex-end;justify-content:center;';
+  overlay.addEventListener('click', function(e){ if(e.target===overlay) overlay.remove(); });
+  const lineLabel = LINE_LABEL[lineId] || lineId;
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px 16px 0 0;width:100%;max-width:480px;padding:20px 18px 36px;box-shadow:0 -4px 24px rgba(0,0,0,.18);">
+      <div style="font-size:13px;color:#888;margin-bottom:4px;">${lineLabel}</div>
+      <div style="font-size:16px;font-weight:700;color:#1F4E79;margin-bottom:16px;">📋 ${partNo}</div>
+      <button
+        onclick="document.getElementById('line-action-overlay').remove();switchTab('search');const i=document.getElementById('searchInput');i.value='${partNo}';onSearchInput();doSearch();"
+        style="width:100%;padding:14px;background:#fff;border:1.5px solid #1d4ed8;color:#1d4ed8;font-size:14px;font-weight:700;border-radius:10px;cursor:pointer;margin-bottom:10px;text-align:left;">
+        🔍 品番検索で詳細を見る
+      </button>
+      <button
+        onclick="document.getElementById('line-action-overlay').remove();if(typeof qcFromSearch==='function')qcFromSearch('${partNo}');"
+        style="width:100%;padding:14px;background:#fff;border:1.5px solid #16a34a;color:#16a34a;font-size:14px;font-weight:700;border-radius:10px;cursor:pointer;text-align:left;">
+        ✅ 品質チェック記録を検索
+      </button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
 }
 
 // ===== 段取り指示（Firebaseから生成） =====
@@ -3631,6 +3733,7 @@ var QC_BULK_HINBAN = null, QC_BULK_JUNJO = null, QC_ALLOC_DATA = [];
 var QC_BULK_PHOTO = null;
 var QC_CAM_STREAM = null, QC_CAM_PHOTOS_TMP = [], QC_CAM_DEVICES = [], QC_CAM_DEVICE_IDX = 0, QC_CAM_TARGET = 'form';
 var QC_PENDING_MODE = false, QC_EDIT_FROM_SCREEN = 'list';
+var QC_HINPYO_DATA = null; // 現品票用の部品マスタデータ（kintoneから）
 var QC_INITIALIZED = false;
 
 var QC_TEAM_MAP = {
@@ -3777,6 +3880,11 @@ function qcSelectSakuyo(item){
   });
   sel.appendChild(hb); sel.appendChild(dt); sel.style.display='block';
   qcShowBunnoInfo(item);
+  // 現品票用: 部品マスタから追加情報を非同期取得
+  QC_HINPYO_DATA = null;
+  if(typeof findPartByNo === 'function'){
+    findPartByNo(item.hinban).then(function(p){ QC_HINPYO_DATA = p || null; }).catch(function(){});
+  }
 }
 
 function qcShowBunnoInfo(item){
@@ -4424,7 +4532,197 @@ window.qcCamDone = function(){
 };
 window.qcCloseCamModal = function(){ if(QC_CAM_STREAM) QC_CAM_STREAM.getTracks().forEach(function(t){ t.stop(); }); QC_CAM_STREAM=null; document.getElementById('qc-cam-modal').className='qc-cam-modal'; };
 
+// ----- 現品票発行 -----
+window.qcOpenHinpyo = function(){
+  if(!QC_SEL_SAKUYO){ alert('先に作業選択（製造番号）を選んでください'); return; }
+  var item = QC_SEL_SAKUYO;
+  // ヘッダー情報
+  document.getElementById('hp-info-hinban').textContent = item.hinban + '　' + (item.hinmei||'');
+  document.getElementById('hp-info-sub').textContent    = '製造番号: ' + item.seizoNo + '　工順' + item.junjo;
+  // 生産日・作業者をフォームから引き継ぎ
+  var dtEl = document.getElementById('qc-dt');
+  document.getElementById('hp-seizo-dt').value = dtEl ? dtEl.value : '';
+  var opEl = document.getElementById('qc-op');
+  document.getElementById('hp-sakusha').value  = opEl ? opEl.value : '';
+  // kintone部品マスタデータ（取得済みであれば反映）
+  var kd = QC_HINPYO_DATA || {};
+  document.getElementById('hp-processing-dest').value = kd.processingDest  || '';
+  document.getElementById('hp-next-process').value    = kd.nextProcess     || '';
+  document.getElementById('hp-storage').value         = kd.storageLocation || '';
+  document.getElementById('hp-hako').value            = kd.boxCount        || '';
+  // 良品数をフォームから引き継ぎ
+  var prodEl = document.getElementById('qc-prod');
+  document.getElementById('hp-prod').value = (prodEl && parseInt(prodEl.value)>0) ? prodEl.value : '';
+  qcCalcHinpyo();
+  document.getElementById('qc-hinpyo-modal').classList.add('on');
+};
+
+window.qcCloseHinpyo = function(){
+  document.getElementById('qc-hinpyo-modal').classList.remove('on');
+};
+
+window.qcCalcHinpyo = function(){
+  var hako  = parseInt(document.getElementById('hp-hako').value)||0;
+  var prod  = parseInt(document.getElementById('hp-prod').value)||0;
+  var badge = document.getElementById('hp-badge');
+  if(hako<=0){ badge.textContent='① 箱入数を入力してください'; return; }
+  if(prod<=0){ badge.textContent='② 生産数（良品数 or 予定）を入力してください'; return; }
+  var full  = Math.floor(prod/hako);
+  var rem   = prod % hako;
+  var total = full + (rem>0?1:0);
+  var pages = Math.ceil(total/4);
+  badge.innerHTML = '現品票 <strong>' + total + '枚</strong>'
+    + '　（フル ' + full + '枚 × ' + hako + '個'
+    + (rem>0 ? '　＋端数 1枚 × ' + rem + '個' : '')
+    + '）<br>A4 ' + pages + 'ページ印刷';
+};
+
+function makeHinpyoTag(data, qty, tagNo, totalTags){
+  var tag = document.createElement('div');
+  tag.className = 'hp-tag';
+  tag.innerHTML =
+    '<div class="hp-tag-title">現　品　票</div>'
+  + '<div class="hp-tr" style="grid-template-columns:28mm 1fr;">'
+  +   '<div class="hp-td lbl orange">品　番</div>'
+  +   '<div class="hp-td val orange" style="font-size:9.5pt;">' + esc(data.hinban) + '</div>'
+  + '</div>'
+  + '<div class="hp-tr" style="grid-template-columns:28mm 1fr;">'
+  +   '<div class="hp-td lbl orange">品　名</div>'
+  +   '<div class="hp-td val">' + esc(data.hinmei) + '</div>'
+  + '</div>'
+  + '<div class="hp-tr" style="grid-template-columns:55fr 45fr;">'
+  +   '<div class="hp-td lbl blue">製 造 番 号</div>'
+  +   '<div class="hp-td lbl orange">Lot NO.（前工程）</div>'
+  + '</div>'
+  + '<div class="hp-tr" style="grid-template-columns:55fr 45fr;">'
+  +   '<div class="hp-td val blue">' + esc(data.seizoNo) + '</div>'
+  +   '<div class="hp-td val"></div>'
+  + '</div>'
+  + '<div class="hp-tr" style="grid-template-columns:30fr 30fr 40fr;">'
+  +   '<div class="hp-td lbl blue">製 造 日</div>'
+  +   '<div class="hp-td lbl blue">数　量</div>'
+  +   '<div class="hp-td lbl blue">保 管 場 所</div>'
+  + '</div>'
+  + '<div class="hp-tr" style="grid-template-columns:30fr 30fr 40fr;">'
+  +   '<div class="hp-td val">' + esc(data.seizoDt) + '</div>'
+  +   '<div class="hp-td qty">' + qty + '</div>'
+  +   '<div class="hp-td val">' + esc(data.storage) + '</div>'
+  + '</div>'
+  + '<div class="hp-tr" style="grid-template-columns:50fr 50fr;">'
+  +   '<div class="hp-td lbl blue">加 工 先 ／ 作 業 者</div>'
+  +   '<div class="hp-td lbl orange">次 工 程</div>'
+  + '</div>'
+  + '<div class="hp-tr" style="grid-template-columns:50fr 50fr;">'
+  +   '<div class="hp-td val">' + esc(data.processingDest) + (data.sakusha ? ' ／ ' + esc(data.sakusha) : '') + '</div>'
+  +   '<div class="hp-td val orange">' + esc(data.nextProcess) + '</div>'
+  + '</div>'
+  + '<div class="hp-tr" style="grid-template-columns:28mm 1fr;">'
+  +   '<div class="hp-td lbl blue">備　考</div>'
+  +   '<div class="hp-td val"></div>'
+  + '</div>'
+  + '<div class="hp-spacer"></div>'
+  + '<div class="hp-footer">(' + tagNo + ' / ' + totalTags + ')　橋本工業株式会社</div>';
+  return tag;
+}
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+window.qcPrintHinpyo = function(){
+  var hako = parseInt(document.getElementById('hp-hako').value)||0;
+  var prod = parseInt(document.getElementById('hp-prod').value)||0;
+  if(hako<=0 || prod<=0){ alert('箱入数と生産数を入力してください'); return; }
+  var item = QC_SEL_SAKUYO;
+  var kd   = QC_HINPYO_DATA || {};
+  var data = {
+    hinban:         item.hinban,
+    hinmei:         item.hinmei || '',
+    seizoNo:        item.seizoNo,
+    seizoDt:        document.getElementById('hp-seizo-dt').value,
+    sakusha:        document.getElementById('hp-sakusha').value,
+    processingDest: document.getElementById('hp-processing-dest').value || kd.processingDest || '',
+    nextProcess:    document.getElementById('hp-next-process').value    || kd.nextProcess    || '',
+    storage:        document.getElementById('hp-storage').value         || kd.storageLocation|| '',
+  };
+  var full  = Math.floor(prod/hako);
+  var rem   = prod % hako;
+  var total = full + (rem>0?1:0);
+  var area  = document.getElementById('hp-print-area');
+  area.innerHTML = '';
+  // 4枚/ページ（2×2）でA4ページを生成
+  for(var p=0; p<Math.ceil(total/4); p++){
+    var page = document.createElement('div');
+    page.className = 'hp-page';
+    var grid = document.createElement('div');
+    grid.className = 'hp-grid';
+    for(var t=0; t<4; t++){
+      var tagIdx = p*4 + t;
+      if(tagIdx >= total) break;
+      var isLast = (tagIdx === total-1) && rem>0;
+      var qty    = isLast ? rem : hako;
+      grid.appendChild(makeHinpyoTag(data, qty, tagIdx+1, total));
+    }
+    page.appendChild(grid);
+    area.appendChild(page);
+  }
+  qcCloseHinpyo();
+  window.print();
+};
+
 })(); // end IIFE
 </script>
+
+<!-- ===== 現品票発行モーダル ===== -->
+<div id="qc-hinpyo-modal" onclick="if(event.target===this)qcCloseHinpyo()">
+  <div class="hp-inner">
+    <div class="hp-title">📄 現品票発行</div>
+    <div class="hp-info-box">
+      <div class="hp-info-hinban" id="hp-info-hinban"></div>
+      <div class="hp-info-sub"   id="hp-info-sub"></div>
+    </div>
+    <div class="hp-row2">
+      <div class="hp-fld">
+        <label>製造日</label>
+        <input type="date" id="hp-seizo-dt"/>
+      </div>
+      <div class="hp-fld">
+        <label>作業者</label>
+        <input type="text" id="hp-sakusha" placeholder="作業者名"/>
+      </div>
+    </div>
+    <div class="hp-row2">
+      <div class="hp-fld">
+        <label>加工先</label>
+        <input type="text" id="hp-processing-dest" placeholder="加工先"/>
+      </div>
+      <div class="hp-fld">
+        <label>次工程</label>
+        <input type="text" id="hp-next-process" placeholder="次工程"/>
+      </div>
+    </div>
+    <div class="hp-row2">
+      <div class="hp-fld">
+        <label>保管場所</label>
+        <input type="text" id="hp-storage" placeholder="保管場所"/>
+      </div>
+      <div class="hp-fld">
+        <label>箱入数</label>
+        <input type="number" id="hp-hako" placeholder="0" min="1" oninput="qcCalcHinpyo()"/>
+      </div>
+    </div>
+    <div class="hp-fld" style="margin-bottom:10px;">
+      <label>生産数（良品数）※ 0の場合は予定生産数を入力</label>
+      <input type="number" id="hp-prod" placeholder="0" min="0" oninput="qcCalcHinpyo()"/>
+    </div>
+    <div class="hp-badge" id="hp-badge">枚数: 計算中...</div>
+    <div class="hp-btn-row">
+      <button class="hp-btn hp-btn-cancel" onclick="qcCloseHinpyo()">キャンセル</button>
+      <button class="hp-btn hp-btn-print"  onclick="qcPrintHinpyo()">🖨 印刷</button>
+    </div>
+  </div>
+</div>
+
+<!-- 現品票 印刷専用エリア -->
+<div id="hp-print-area"></div>
+
 </body>
 </html>
