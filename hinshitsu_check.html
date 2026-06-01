@@ -794,6 +794,23 @@ function getExifOrientation(buffer){
 
 function compressImage(file,cb){
   var ok=Math.round(file.size/1024);
+  if(typeof createImageBitmap==='function'){
+    createImageBitmap(file,{imageOrientation:'from-image'}).then(function(bmp){
+      var w=bmp.width,h=bmp.height;
+      var scale=(w>MAX_PX||h>MAX_PX)?MAX_PX/Math.max(w,h):1;
+      var canvas=document.createElement('canvas');
+      canvas.width=Math.round(w*scale);
+      canvas.height=Math.round(h*scale);
+      canvas.getContext('2d').drawImage(bmp,0,0,canvas.width,canvas.height);
+      bmp.close();
+      var data=canvas.toDataURL('image/jpeg',QUALITY);
+      cb(data,ok,Math.round(data.length*0.75/1024));
+    }).catch(function(){compressImageLegacy(file,ok,cb);});
+  }else{
+    compressImageLegacy(file,ok,cb);
+  }
+}
+function compressImageLegacy(file,ok,cb){
   var reader=new FileReader();
   reader.onload=function(e){
     var buffer=e.target.result;
@@ -803,26 +820,22 @@ function compressImage(file,cb){
     var img=new Image();
     img.onload=function(){
       var w=img.width,h=img.height;
-      // orientationに応じた実際の表示サイズ
       var sw=w,sh=h;
       if([5,6,7,8].indexOf(orientation)>=0){sw=h;sh=w;}
-      // スケール計算
-      var scale=1;
-      if(sw>MAX_PX||sh>MAX_PX) scale=MAX_PX/Math.max(sw,sh);
+      var scale=(sw>MAX_PX||sh>MAX_PX)?MAX_PX/Math.max(sw,sh):1;
       var canvas=document.createElement('canvas');
       canvas.width=Math.round(sw*scale);
       canvas.height=Math.round(sh*scale);
       var ctx=canvas.getContext('2d');
       ctx.save();
-      // orientation変換
       switch(orientation){
         case 2: ctx.transform(-1,0,0,1,canvas.width,0); break;
         case 3: ctx.transform(-1,0,0,-1,canvas.width,canvas.height); break;
         case 4: ctx.transform(1,0,0,-1,0,canvas.height); break;
         case 5: ctx.transform(0,1,1,0,0,0); break;
-        case 6: ctx.transform(0,1,-1,0,canvas.height,0); break;
-        case 7: ctx.transform(0,-1,-1,0,canvas.height,canvas.width); break;
-        case 8: ctx.transform(0,-1,1,0,0,canvas.width); break;
+        case 6: ctx.transform(0,1,-1,0,canvas.width,0); break;
+        case 7: ctx.transform(0,-1,-1,0,canvas.width,canvas.height); break;
+        case 8: ctx.transform(0,-1,1,0,0,canvas.height); break;
       }
       ctx.drawImage(img,0,0,w*scale,h*scale);
       ctx.restore();
@@ -1848,19 +1861,39 @@ async function openCamModal(){
 }
 async function startCamera(){
   try{
+    if(CAM_STREAM){CAM_STREAM.getTracks().forEach(function(t){t.stop();});CAM_STREAM=null;}
+    // 権限付与前はdeviceIdが空になるため、まず汎用制約で起動してから再列挙する
     var devices=await navigator.mediaDevices.enumerateDevices();
-    CAM_DEVICES=devices.filter(function(d){return d.kind==='videoinput';});
+    var validDevs=devices.filter(function(d){return d.kind==='videoinput'&&d.deviceId;});
+    CAM_DEVICES=validDevs;
     if(CAM_DEVICE_IDX>=CAM_DEVICES.length) CAM_DEVICE_IDX=0;
-    var constraints={video:CAM_DEVICES.length>0
-      ?{deviceId:{exact:CAM_DEVICES[CAM_DEVICE_IDX].deviceId},width:{ideal:1280},height:{ideal:720}}
-      :{width:{ideal:1280},height:{ideal:720}}};
-    if(CAM_STREAM) CAM_STREAM.getTracks().forEach(function(t){t.stop();});
-    CAM_STREAM=await navigator.mediaDevices.getUserMedia(constraints);
+    var stream=null;
+    if(CAM_DEVICES.length>0){
+      try{
+        // deviceId指定で試みる
+        stream=await navigator.mediaDevices.getUserMedia({video:{deviceId:{exact:CAM_DEVICES[CAM_DEVICE_IDX].deviceId},width:{ideal:1280},height:{ideal:720}}});
+      }catch(e1){
+        // 失敗した場合は汎用制約で再試行（書画カメラ等でdeviceIdが変わる場合の対策）
+        stream=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:1280},height:{ideal:720}}});
+      }
+    }else{
+      // デバイス一覧未取得（初回アクセス等）は汎用制約
+      stream=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:1280},height:{ideal:720}}});
+    }
+    CAM_STREAM=stream;
     document.getElementById('cam-video').srcObject=CAM_STREAM;
     document.getElementById('cam-error').textContent='';
+    // 権限取得後に再列挙してカメラ切替ボタンを正しく表示
+    var devices2=await navigator.mediaDevices.enumerateDevices();
+    CAM_DEVICES=devices2.filter(function(d){return d.kind==='videoinput'&&d.deviceId;});
     document.getElementById('cam-switch-btn').style.display=CAM_DEVICES.length>1?'block':'none';
   }catch(e){
-    document.getElementById('cam-error').textContent='カメラを起動できませんでした。接続とブラウザの許可設定を確認してください。';
+    var msg='カメラを起動できませんでした。';
+    if(e.name==='NotAllowedError'||e.name==='PermissionDeniedError') msg+='ブラウザのカメラ許可をONにしてください。';
+    else if(e.name==='NotFoundError'||e.name==='DevicesNotFoundError') msg+='カメラが見つかりません。USB接続を確認してください。';
+    else if(e.name==='NotReadableError'||e.name==='TrackStartError') msg+='カメラが他のアプリ（Teamsなど）で使用中です。';
+    else msg+='接続とブラウザの許可設定を確認してください（'+e.name+'）。';
+    document.getElementById('cam-error').textContent=msg;
     document.getElementById('cam-switch-btn').style.display='none';
   }
 }
