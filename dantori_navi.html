@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>段取りナビゲーション｜橋本工業</title>
+<title>H-Hub｜橋本工業</title>
 <style>
 /* ===== RESET & BASE ===== */
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -486,6 +486,7 @@ html, body {
 
 <!-- タブ（ヘッダーを兼ねる） -->
 <div class="tabs">
+  <div style="padding:0 14px 0 12px;font-size:15px;font-weight:900;color:#1d4ed8;letter-spacing:-0.5px;white-space:nowrap;border-right:1px solid #e5e5e5;align-self:stretch;display:flex;align-items:center;flex-shrink:0;">H-Hub</div>
   <div class="tab active" onclick="switchTab('factory')">🏭 工場レイアウト</div>
   <div class="tab" onclick="switchTab('progress')">📊 進捗管理</div>
   <div class="tab" onclick="switchTab('quality')">✅ 品質チェック</div>
@@ -829,7 +830,7 @@ html, body {
     <div class="kanban-tabs" id="kanbanTabs">
       <button class="kanban-tab active" data-page="kp1" onclick="switchKanbanPage('kp1')">A・Bライン</button>
       <button class="kanban-tab"        data-page="kp2" onclick="switchKanbanPage('kp2')">C・Dライン</button>
-      <button class="kanban-tab"        data-page="kp3" onclick="switchKanbanPage('kp3')">担当者別</button>
+      <button class="kanban-tab"        data-page="kp3" onclick="switchKanbanPage('kp3')">組立・検査</button>
       <button class="kanban-tab"        data-page="kp4" onclick="switchKanbanPage('kp4')">🔧 プレス計画</button>
     </div>
     <button class="btn" style="padding:5px 10px;font-size:11px;" onclick="refreshDantori()">↻ 更新</button>
@@ -1105,7 +1106,7 @@ html, body {
 <!-- ===== 設定モーダル ===== -->
 <div class="modal-overlay" id="configModal" style="display:none;" onclick="closeConfigIfBg(event)">
   <div class="modal">
-    <h3>⚙ システム設定</h3>
+    <h3>⚙ H-Hub 設定</h3>
     <div class="form-group">
       <label>kintone サブドメイン</label>
       <input type="text" id="cfg-domain" placeholder="例：hashimoto-kogyo"/>
@@ -3059,8 +3060,8 @@ const KANBAN_PAGES = [
     ]
   },
   {
-    id:'kp3', label:'担当者別', type:'person',
-    cols:[{name:'大塚'},{name:'鈴木'},{name:'野口'},{name:'近藤'},{name:'坂田'}]
+    id:'kp3', label:'組立・検査', type:'person',
+    cols:[{name:'永丘'},{name:'近藤'},{name:'大塚'},{name:'鈴木'},{name:'野口'}]
   },
   {
     id:'kp4', label:'プレス計画', type:'press'
@@ -3581,10 +3582,6 @@ function renderKanban(){
   const list       = document.getElementById('dantoriList');
   const allEntries = getAllDantoriEntries();
   const page       = KANBAN_PAGES.find(p=>p.id===kanbanPage) || KANBAN_PAGES[0];
-  if(page.id === 'kp3'){
-    list.innerHTML = renderWorkerRoster(allEntries);   // 組立ライン担当カード
-    return;
-  }
   if(page.id === 'kp4'){
     list.innerHTML = renderPressTimeline(allEntries);  // プレス作業者Gantt
     return;
