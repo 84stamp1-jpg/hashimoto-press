@@ -466,10 +466,11 @@ html, body {
 
 <!-- タブ -->
 <div class="tabs">
-  <div class="tab" onclick="switchTab('search')">🔍 品番検索</div>
   <div class="tab active" onclick="switchTab('factory')">🏭 工場レイアウト</div>
-  <div class="tab" onclick="switchTab('dantori')">📋 段取り指示</div>
+  <div class="tab" onclick="switchTab('progress')">📊 進捗</div>
   <div class="tab" onclick="switchTab('quality')">✅ 品質チェック</div>
+  <div class="tab" onclick="switchTab('dantori')">📋 段取り指示</div>
+  <div class="tab" onclick="switchTab('search')">🔍 品番検索</div>
 </div>
 
 <!-- ===== 品番検索タブ ===== -->
@@ -1066,6 +1067,16 @@ html, body {
   </div><!-- /qc-screen-search -->
 </div><!-- /tab-quality -->
 
+<!-- ===== 進捗ボードタブ ===== -->
+<div class="content" id="tab-progress">
+  <iframe
+    src="https://84stamp1-jpg.github.io/hashimoto-press/"
+    style="width:100%;height:calc(100vh - 90px);border:none;display:block;"
+    allow="fullscreen"
+    loading="lazy">
+  </iframe>
+</div><!-- /tab-progress -->
+
 </div><!-- /app -->
 
 <!-- ===== 設定モーダル ===== -->
@@ -1614,7 +1625,7 @@ function switchTab(name){
   document.querySelectorAll('.content').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
-  const tabs = ['search','factory','dantori','quality'];
+  const tabs = ['factory','progress','quality','dantori','search'];
   document.querySelectorAll('.tab')[tabs.indexOf(name)].classList.add('active');
   if(name==='quality') qcOnTabActivated();
 }
@@ -4657,21 +4668,26 @@ function makeHinpyoTag(data, qty, tagNo, totalTags){
 
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-// kintoneから現品票用フィールド（加工先・次工程・保管場所・箱入数）を直接取得
-// FirebaseのGAS同期が新フィールドを含んでいない場合のフォールバック
+// kintoneから現品票用フィールド（加工先・次工程・保管場所・箱入数）を取得
+// 品質チェックシートGASを中継サーバとして使用（CORSなし）
 function qcFetchHinpyoFieldsFromKintone(hinban, cb){
+  var gasUrl = QC_GAS_URL();
+  if(!gasUrl){ if(cb) cb({}); return; }
   if(!config.domain || !config.token || !config.appId){ if(cb) cb({}); return; }
   var pCode  = FIELD_MAP.partNo          || '文字列__1行__3';
   var pdCode = FIELD_MAP.processingDest  || '加工先';
   var npCode = FIELD_MAP.nextProcess     || '次工程';
   var slCode = FIELD_MAP.storageLocation || '保管場所';
   var bcCode = FIELD_MAP.boxCount        || '箱入数';
-  var query  = pCode + ' = "' + hinban + '" limit 1';
-  var fields = [pCode, pdCode, npCode, slCode, bcCode];
-  if(typeof fetchKintoneDirect !== 'function'){ if(cb) cb({}); return; }
-  fetchKintoneDirect(query, fields).then(function(records){
-    if(!records || !records.length){ if(cb) cb({}); return; }
-    var rec = records[0];
+  qcGasPost('getKintonePartData', {
+    domain: config.domain,
+    appId:  config.appId,
+    token:  config.token,
+    query:  pCode + ' = "' + hinban + '" limit 1',
+    fields: [pCode, pdCode, npCode, slCode, bcCode],
+  }, function(res){
+    if(!res || !res.ok || !res.records || !res.records.length){ if(cb) cb({}); return; }
+    var rec = res.records[0];
     function gv(code){
       if(!rec || !rec[code]) return '';
       var v = rec[code].value;
@@ -4683,7 +4699,7 @@ function qcFetchHinpyoFieldsFromKintone(hinban, cb){
       storageLocation: gv(slCode),
       boxCount:        gv(bcCode),
     });
-  }).catch(function(){ if(cb) cb({}); });
+  }, function(){ if(cb) cb({}); });
 }
 
 window.qcPrintHinpyo = function(){
