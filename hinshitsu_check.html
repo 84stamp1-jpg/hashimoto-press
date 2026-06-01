@@ -178,8 +178,8 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
 .cam-title{color:#fff;font-size:14px;font-weight:700;margin-bottom:6px;text-align:center}
 .cam-counter{color:#7eb8f7;font-size:12px;margin-bottom:6px}
 .cam-switch-btn{padding:6px 12px;background:transparent;color:#7eb8f7;font-size:12px;border:1px solid #7eb8f7;border-radius:6px;cursor:pointer;margin-bottom:8px;display:none}
-.cam-video-wrap{position:relative;width:min(90vw,500px);background:#000;border-radius:10px;overflow:hidden}
-#cam-video{width:100%;display:block;max-height:55vh;object-fit:contain}
+.cam-video-wrap{position:relative;width:min(96vw,800px);background:#000;border-radius:10px;overflow:hidden}
+#cam-video{width:100%;display:block;max-height:72vh;object-fit:contain}
 .cam-overlay{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
 .cam-cross{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:40px;height:40px;opacity:.5}
 .cam-cross::before,.cam-cross::after{content:"";position:absolute;background:#fff}
@@ -1868,17 +1868,19 @@ async function startCamera(){
     CAM_DEVICES=validDevs;
     if(CAM_DEVICE_IDX>=CAM_DEVICES.length) CAM_DEVICE_IDX=0;
     var stream=null;
+    // A4用紙撮影に適した4:3比率（1600×1200）を優先。16:9より縦横のバランスがA4に近い
+    var A4_CONSTRAINTS={width:{ideal:1600},height:{ideal:1200}};
     if(CAM_DEVICES.length>0){
       try{
         // deviceId指定で試みる
-        stream=await navigator.mediaDevices.getUserMedia({video:{deviceId:{exact:CAM_DEVICES[CAM_DEVICE_IDX].deviceId},width:{ideal:1280},height:{ideal:720}}});
+        stream=await navigator.mediaDevices.getUserMedia({video:Object.assign({deviceId:{exact:CAM_DEVICES[CAM_DEVICE_IDX].deviceId}},A4_CONSTRAINTS)});
       }catch(e1){
         // 失敗した場合は汎用制約で再試行（書画カメラ等でdeviceIdが変わる場合の対策）
-        stream=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:1280},height:{ideal:720}}});
+        stream=await navigator.mediaDevices.getUserMedia({video:A4_CONSTRAINTS});
       }
     }else{
       // デバイス一覧未取得（初回アクセス等）は汎用制約
-      stream=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:1280},height:{ideal:720}}});
+      stream=await navigator.mediaDevices.getUserMedia({video:A4_CONSTRAINTS});
     }
     CAM_STREAM=stream;
     document.getElementById('cam-video').srcObject=CAM_STREAM;
