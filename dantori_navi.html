@@ -3880,10 +3880,24 @@ function qcSelectSakuyo(item){
   });
   sel.appendChild(hb); sel.appendChild(dt); sel.style.display='block';
   qcShowBunnoInfo(item);
-  // 現品票用: 部品マスタから追加情報を非同期取得
+  // 現品票用: Firebase → なければ kintone直接 の順で取得
   QC_HINPYO_DATA = null;
   if(typeof findPartByNo === 'function'){
-    findPartByNo(item.hinban).then(function(p){ QC_HINPYO_DATA = p || null; }).catch(function(){});
+    findPartByNo(item.hinban).then(function(p){
+      QC_HINPYO_DATA = p || {};
+      // Firebaseに新フィールドがない場合はkintoneから直接補完
+      if(!p || (!p.processingDest && !p.nextProcess && !p.storageLocation && !p.boxCount)){
+        qcFetchHinpyoFieldsFromKintone(item.hinban, function(extra){
+          QC_HINPYO_DATA = Object.assign(QC_HINPYO_DATA || {}, extra);
+        });
+      }
+    }).catch(function(){
+      // Firebaseも失敗した場合は直接kintoneへ
+      QC_HINPYO_DATA = {};
+      qcFetchHinpyoFieldsFromKintone(item.hinban, function(extra){
+        QC_HINPYO_DATA = extra;
+      });
+    });
   }
 }
 
@@ -4555,6 +4569,22 @@ window.qcOpenHinpyo = function(){
   document.getElementById('hp-prod').value = (prodEl && parseInt(prodEl.value)>0) ? prodEl.value : '';
   qcCalcHinpyo();
   document.getElementById('qc-hinpyo-modal').classList.add('on');
+  // Firebaseにフィールドが無い場合はkintoneから直接取得（バックグラウンド）
+  var fieldsEmpty = !kd.processingDest && !kd.nextProcess && !kd.storageLocation && !kd.boxCount;
+  if(fieldsEmpty){
+    qcFetchHinpyoFieldsFromKintone(item.hinban, function(extra){
+      if(extra.processingDest && !document.getElementById('hp-processing-dest').value)
+        document.getElementById('hp-processing-dest').value = extra.processingDest;
+      if(extra.nextProcess && !document.getElementById('hp-next-process').value)
+        document.getElementById('hp-next-process').value    = extra.nextProcess;
+      if(extra.storageLocation && !document.getElementById('hp-storage').value)
+        document.getElementById('hp-storage').value         = extra.storageLocation;
+      if(extra.boxCount && !document.getElementById('hp-hako').value)
+        document.getElementById('hp-hako').value            = extra.boxCount;
+      QC_HINPYO_DATA = Object.assign(QC_HINPYO_DATA || {}, extra);
+      qcCalcHinpyo();
+    });
+  }
 };
 
 window.qcCloseHinpyo = function(){
@@ -4626,6 +4656,35 @@ function makeHinpyoTag(data, qty, tagNo, totalTags){
 }
 
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// kintoneから現品票用フィールド（加工先・次工程・保管場所・箱入数）を直接取得
+// FirebaseのGAS同期が新フィールドを含んでいない場合のフォールバック
+function qcFetchHinpyoFieldsFromKintone(hinban, cb){
+  if(!config.domain || !config.token || !config.appId){ if(cb) cb({}); return; }
+  var pCode  = FIELD_MAP.partNo          || '文字列__1行__3';
+  var pdCode = FIELD_MAP.processingDest  || '加工先';
+  var npCode = FIELD_MAP.nextProcess     || '次工程';
+  var slCode = FIELD_MAP.storageLocation || '保管場所';
+  var bcCode = FIELD_MAP.boxCount        || '箱入数';
+  var query  = pCode + ' = "' + hinban + '" limit 1';
+  var fields = [pCode, pdCode, npCode, slCode, bcCode];
+  if(typeof fetchKintoneDirect !== 'function'){ if(cb) cb({}); return; }
+  fetchKintoneDirect(query, fields).then(function(records){
+    if(!records || !records.length){ if(cb) cb({}); return; }
+    var rec = records[0];
+    function gv(code){
+      if(!rec || !rec[code]) return '';
+      var v = rec[code].value;
+      return (v !== null && v !== undefined) ? String(v) : '';
+    }
+    if(cb) cb({
+      processingDest:  gv(pdCode),
+      nextProcess:     gv(npCode),
+      storageLocation: gv(slCode),
+      boxCount:        gv(bcCode),
+    });
+  }).catch(function(){ if(cb) cb({}); });
+}
 
 window.qcPrintHinpyo = function(){
   var hako = parseInt(document.getElementById('hp-hako').value)||0;
