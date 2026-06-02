@@ -622,7 +622,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.15-14</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.15-16</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -945,9 +945,12 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
       <select class="filter-select" id="matMoldFilter" onchange="renderMaterials()">
         <option value="">全金型</option>
       </select>
-      <select class="filter-select" id="matDateFilter" onchange="renderMaterials()" style="width:120px">
-        <option value="">全日付</option>
-        <option value="nodate">仕入日なし</option>
+      <select class="filter-select" id="matDateFilter" onchange="renderMaterials()" style="width:140px">
+        <option value="">全入荷予定日</option>
+        <option value="nodate">入荷予定日なし</option>
+      </select>
+      <select class="filter-select" id="matSupplierFilter" onchange="renderMaterials()">
+        <option value="">全手配先</option>
       </select>
       <button class="btn btn-primary btn-sm" onclick="openMatModal()">＋ 材料費入力</button>
     </div>
@@ -983,6 +986,9 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
       <select class="filter-select" id="outMonthFilter" onchange="renderOutsource()">
         <option value="">全月</option>
       </select>
+      <select class="filter-select" id="outSupplierFilter" onchange="renderOutsource()">
+        <option value="">全仕入先</option>
+      </select>
       <button class="btn btn-primary btn-sm" onclick="openOutModal()">＋ 外注費入力</button>
     </div>
     <div id="outSupplierSummary"></div>
@@ -1009,6 +1015,9 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
       <input class="search-input" type="text" placeholder="品番・品名で検索..." id="purSearch" oninput="renderPurchase()">
       <select class="filter-select" id="purMonthFilter" onchange="renderPurchase()">
         <option value="">全月</option>
+      </select>
+      <select class="filter-select" id="purSupplierFilter" onchange="renderPurchase()">
+        <option value="">全仕入先</option>
       </select>
       <button class="btn btn-primary btn-sm" onclick="openPurModal()">＋ 購入品費入力</button>
       <button class="btn btn-secondary btn-sm" onclick="document.getElementById('csvFile').click()">📥 CSV取込</button>
@@ -2510,18 +2519,19 @@ function renderMaterials() {
   const search   = (document.getElementById('matSearch')?.value||'').toLowerCase();
   const moldFil  = document.getElementById('matMoldFilter')?.value || '';
   const dateFil  = document.getElementById('matDateFilter')?.value || '';
+  const supFil   = document.getElementById('matSupplierFilter')?.value || '';
   const moldNos = [...new Set(Object.values(DB.materials).map(r=>r.moldNo).filter(Boolean))].sort();
   const mSel = document.getElementById('matMoldFilter');
   if (mSel) {
     const cur = mSel.value;
     mSel.innerHTML = '<option value="">全金型</option>' + moldNos.map(n=>`<option value="${n}"${n===cur?' selected':''}>${n}</option>`).join('');
   }
-  // 仕入日フィルターの月一覧を動的生成
-  const matMonths = [...new Set(Object.values(DB.materials).map(r=>(r.month||'').slice(0,7)).filter(Boolean))].sort().reverse();
+  // 入荷予定日フィルターの月一覧を動的生成
+  const matMonths = [...new Set(Object.values(DB.materials).map(r=>(r.arrivalDate||'').slice(0,7)).filter(Boolean))].sort().reverse();
   const dSel = document.getElementById('matDateFilter');
   if (dSel) {
     const cur = dSel.value;
-    dSel.innerHTML = '<option value="">全日付</option><option value="nodate">仕入日なし</option>'
+    dSel.innerHTML = '<option value="">全日付</option><option value="nodate">入荷予定日なし</option>'
       + matMonths.map(m=>`<option value="${m}"${m===cur?' selected':''}>${m}</option>`).join('');
   }
   let entries = Object.entries(DB.materials);
@@ -2537,8 +2547,13 @@ function renderMaterials() {
     });
   }
   if (moldFil) entries = entries.filter(([,r]) => r.moldNo === moldFil);
-  if (dateFil === 'nodate') entries = entries.filter(([,r]) => !(r.month||'').trim());
-  else if (dateFil)         entries = entries.filter(([,r]) => (r.month||'').startsWith(dateFil));
+  if (dateFil === 'nodate') entries = entries.filter(([,r]) => !(r.arrivalDate||'').trim());
+  else if (dateFil)         entries = entries.filter(([,r]) => (r.arrivalDate||'').startsWith(dateFil));
+  // 手配先フィルター動的生成
+  const matSups = [...new Set(Object.values(DB.materials).map(r=>r.supplier||'').filter(Boolean))].sort();
+  const sSel = document.getElementById('matSupplierFilter');
+  if (sSel) { const c=sSel.value; sSel.innerHTML='<option value="">全手配先</option>'+matSups.map(s=>`<option value="${s}"${s===c?' selected':''}>${s}</option>`).join(''); }
+  if (supFil) entries = entries.filter(([,r]) => r.supplier === supFil);
   // 発注確定日の降順（confirmedAt優先、なければmonth）→ 同日内は管理NO（partNo）の昇順
   entries.sort(([,a], [,b]) => {
     const da = a.confirmedAt || a.month || '', db = b.confirmedAt || b.month || '';
@@ -2549,7 +2564,7 @@ function renderMaterials() {
   });
   const total = entries.reduce((s,[,r])=>s+(r.amount||0),0);
   document.getElementById('matCount').textContent = entries.length + '件 / ¥' + fmt(total);
-  const _matMonthLabel = (() => { const v = document.getElementById('matDateFilter')?.value||''; if (!v) return '全期間'; if (v==='nodate') return '仕入日なし'; return v.replace(/^(\d{4})-(\d{2})$/,'$1年$2月'); })();
+  const _matMonthLabel = (() => { const v = document.getElementById('matDateFilter')?.value||''; if (!v) return '全期間'; if (v==='nodate') return '入荷予定日なし'; return v.replace(/^(\d{4})-(\d{2})$/,'$1年$2月'); })();
   renderSupplierSummary(entries.filter(([,r]) => (r.month||'').length >= 8), 'matSupplierSummary', r => r.amount||0, _matMonthLabel);
   if (!entries.length) { document.getElementById('matTableBody').innerHTML = '<div class="empty"><div class="empty-icon">🔩</div>データなし</div>'; return; }
   document.getElementById('matTableBody').innerHTML = `
@@ -2745,8 +2760,9 @@ tfoot td{ font-weight:700; border-top:2px solid #1e293b; background:#f0f4f8 !imp
 // OUTSOURCE
 // ═══════════════════════════════════════════════
 function renderOutsource() {
-  const search = (document.getElementById('outSearch')?.value||'').toLowerCase();
-  const month  = document.getElementById('outMonthFilter')?.value || '';
+  const search  = (document.getElementById('outSearch')?.value||'').toLowerCase();
+  const month   = document.getElementById('outMonthFilter')?.value || '';
+  const supFil  = document.getElementById('outSupplierFilter')?.value || '';
   const months = [...new Set(Object.values(DB.outsource).map(r=>(r.month||'').slice(0,7)).filter(Boolean))].sort().reverse();
   const mSel = document.getElementById('outMonthFilter');
   const mCur = mSel?.value;
@@ -2764,6 +2780,11 @@ function renderOutsource() {
     });
   }
   if (month) entries = entries.filter(([,r]) => (r.month||'').slice(0,7) === month);
+  // 仕入先フィルター動的生成
+  const outSups = [...new Set(Object.values(DB.outsource).map(r=>r.supplier||'').filter(Boolean))].sort();
+  const outSSel = document.getElementById('outSupplierFilter');
+  if (outSSel) { const c=outSSel.value; outSSel.innerHTML='<option value="">全仕入先</option>'+outSups.map(s=>`<option value="${s}"${s===c?' selected':''}>${s}</option>`).join(''); }
+  if (supFil) entries = entries.filter(([,r]) => r.supplier === supFil);
   document.getElementById('outCount').textContent = entries.length + '件 / ¥' + fmt(entries.reduce((s,[,r])=>s+(r.total||0),0));
   const _outMonthLabel = month ? month.replace(/^(\d{4})-(\d{2})$/,'$1年$2月') : '全期間';
   renderSupplierSummary(entries.filter(([,r]) => (r.month||'').length >= 8), 'outSupplierSummary', r => r.total||0, _outMonthLabel);
@@ -2807,8 +2828,9 @@ function renderOutsource() {
 // ═══════════════════════════════════════════════
 function renderPurchase() {
   if (!DB.purchase) DB.purchase = {};
-  const search = (document.getElementById('purSearch')?.value||'').toLowerCase();
-  const month  = document.getElementById('purMonthFilter')?.value || '';
+  const search  = (document.getElementById('purSearch')?.value||'').toLowerCase();
+  const month   = document.getElementById('purMonthFilter')?.value || '';
+  const supFil  = document.getElementById('purSupplierFilter')?.value || '';
   // 月フォーマットを正規化してから集計
   const months = [...new Set(Object.values(DB.purchase).map(r=>{
     const m = r.month||'';
@@ -2830,6 +2852,11 @@ function renderPurchase() {
     });
   }
   if (month) entries = entries.filter(([,r]) => (r.month||'').replace(/\//g,'-').slice(0,7) === month);
+  // 仕入先フィルター動的生成
+  const purSups = [...new Set(Object.values(DB.purchase).map(r=>r.supplier||'').filter(Boolean))].sort();
+  const purSSel = document.getElementById('purSupplierFilter');
+  if (purSSel) { const c=purSSel.value; purSSel.innerHTML='<option value="">全仕入先</option>'+purSups.map(s=>`<option value="${s}"${s===c?' selected':''}>${s}</option>`).join(''); }
+  if (supFil) entries = entries.filter(([,r]) => r.supplier === supFil);
   document.getElementById('purCount').textContent = entries.length + '件 / ¥' + fmt(entries.reduce((s,[,r])=>s+(r.total||0),0));
   const _purMonthLabel = month ? month.replace(/^(\d{4})-(\d{2})$/,'$1年$2月') : '全期間';
   renderSupplierSummary(entries.filter(([,r]) => (r.month||'').length >= 8), 'purSupplierSummary', r => r.total||0, _purMonthLabel);
