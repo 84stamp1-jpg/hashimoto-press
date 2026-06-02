@@ -4144,19 +4144,20 @@ async function importFromProductionPlan(){
                    : 'scheduled';
 
       entries.push({
-        _key:      lineId + '_' + idx,
+        _key:       lineId + '_' + idx,
         lineId,
-        partNo:    j.part,
+        partNo:     j.part,
         setupStart,
-        prodStart: j.start,
-        prodEnd:   j.end,
-        plan:      j.plan || 0,
+        prodStart:  j.start,
+        prodEnd:    j.end,
+        plan:       j.plan || 0,
+        mountCount: j.hito  || 0,   // 作業人数（進捗南里から取込）
         status,
-        roles:     { 条件設定:'', 金型取付:'', リフト:'', 品質確認:'' },
-        note:      j.noSetup ? '（段取りなし）' : '',
-        isManual:  false,
-        fromPlan:  true,
-        updatedAt: Date.now(),
+        roles:      { 条件設定:'', 金型取付:'', リフト:'', 品質確認:'' },
+        note:       j.noSetup ? '（段取りなし）' : '',
+        isManual:   false,
+        fromPlan:   true,
+        updatedAt:  Date.now(),
       });
       idx++;
     });
@@ -4176,7 +4177,8 @@ async function importFromProductionPlan(){
   });
   const preview = Object.entries(byGroup).map(([g, es]) =>
     `[プレス${g}]\n` + es.map(e =>
-      `  ${LINE_LABEL[e.lineId]||e.lineId}: ${e.partNo}  ${e.setupStart?e.setupStart+'→':''}${e.prodStart}～${e.prodEnd}`
+      `  ${LINE_LABEL[e.lineId]||e.lineId}: ${e.partNo}  ${e.setupStart?e.setupStart+'→':''}${e.prodStart}～${e.prodEnd}` +
+      (e.mountCount > 0 ? `  👷${e.mountCount}人` : '')
     ).join('\n')
   ).join('\n');
 
@@ -4334,8 +4336,8 @@ async function autoAssignRoles(){
   // ・ライン外（noLine）は除く
   // ・優先ライン仕事なし → グループ内の近いラインから応援（近い順）
   // ・優先ライン未設定（フローティング）は自動割当対象外
-  // ・PRESS_LINE_MASTER の workers 人数を上限に使用
-  function findMountWorkers(lineId, thisEntryAssigned, s, e){
+  // ・mountCount（進捗南里 作業人数）> 0 ならその人数を上限、なければPRESS_LINE_MASTERの人数
+  function findMountWorkers(lineId, thisEntryAssigned, s, e, mountCount){
     // 利用可能判定（同エントリの担当者はbusy無視）
     const isAvail = w => {
       if(workerHasRole(w,'noLine')) return false;
@@ -4343,8 +4345,8 @@ async function autoAssignRoles(){
       return !isBusy(w, s, e) && !isUnavailableAt(w, s);
     };
 
-    // PRESS_LINE_MASTERの人数が上限（段取り人数の基準）
-    const maxCount = PRESS_LINE_MASTER[lineId]?.workers?.length || 99;
+    // 段取り人数上限：進捗南里の作業人数 > 0 ならそれを優先、なければPRESS_LINE_MASTERの人数
+    const maxCount = (mountCount > 0) ? mountCount : (PRESS_LINE_MASTER[lineId]?.workers?.length || 99);
 
     if(hasRoleData){
       const freeLines = getSameGroupNoWork(lineId); // 近い順にソート済み
@@ -4453,12 +4455,18 @@ async function autoAssignRoles(){
     // 品質確認・初品出しと同じ人でもOK（同ラインなら兼務可）
     // ライン外（noLine）は除く
     const thisEntryAssigned = [qual, ippin].filter(Boolean);
-    const mountAvail = findMountWorkers(entry.lineId, thisEntryAssigned, s, e);
+    const mountAvail = findMountWorkers(entry.lineId, thisEntryAssigned, s, e, entry.mountCount||0);
     if(mountAvail.length){
       roles.金型取付 = mountAvail.join('、');
       // mountに追加された人（質/初品と別の人）をbusy登録
       mountAvail.filter(w => !thisEntryAssigned.includes(w))
         .forEach(w => markBusy(w, s, e, `金型取付 ${linePart}`));
+      // 作業人数より割り当てが少ない場合も不足として警告
+      const need = entry.mountCount || 0;
+      if(need > 0 && mountAvail.length < need){
+        shortages.push({ role:'金型取付', linePart, timeStr,
+          detail:`人数不足 ${mountAvail.length}人割当 / ${need}人必要（追加候補なし）` });
+      }
     } else {
       const mountAll = getMountCandidatesAll(entry.lineId);
       const busyOnes = mountAll.filter(w => isBusy(w, s, e) && !thisEntryAssigned.includes(w)).map(w => {
@@ -4554,6 +4562,13 @@ function aarSwitchTab(tab){
 
       // 金型取付：ライン外(noLine)除く、役割に応じた色◯で表示
       const mountNames = (r.金型取付||'').split(/[,、]/).map(s=>s.trim()).filter(Boolean);
+      const expectedCount = d.mountCount > 0 ? d.mountCount : null;
+      const assignedCount = mountNames.length;
+      const countStr = expectedCount !== null
+        ? (assignedCount >= expectedCount
+            ? `<span style="color:#15803d;font-size:10px;margin-left:4px;">(${assignedCount}/${expectedCount}人)</span>`
+            : `<span style="color:#dc2626;font-size:10px;font-weight:700;margin-left:4px;">(${assignedCount}/${expectedCount}人)</span>`)
+        : '';
       const mBadge = mountNames.length
         ? mountNames.map(w => {
             const isQ = (r.品質確認 === w);
@@ -4562,7 +4577,7 @@ function aarSwitchTab(tab){
                         : isI ? `<span style="color:#7c3aed;font-size:13px;" title="初品出し兼任">●</span>`
                         : `<span style="color:#94a3b8;font-size:13px;" title="金型取付">●</span>`;
             return `<span style="white-space:nowrap;margin-right:6px;">${dot} ${w}</span>`;
-          }).join('')
+          }).join('') + countStr
         : '<span style="color:#dc2626;font-size:10px;">未割当</span>';
 
       return `<tr>
