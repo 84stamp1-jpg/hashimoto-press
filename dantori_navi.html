@@ -4278,6 +4278,9 @@ async function autoAssignRoles(){
   }
 
   // ── 時間重複チェック ──────────────────────────
+  // 品質確認・初品出しは約5分で完了するため、busy登録はその分だけ
+  const QUALITY_BUSY_MIN = 5;
+
   const busyMap = {};
   const isBusy = (w, s, e) => {
     if(!w || s===null) return false;
@@ -4428,11 +4431,11 @@ async function autoAssignRoles(){
     const timeStr  = entry.setupStart||entry.prodStart||'';
     const roles    = { 品質確認:'', 初品出し:'', 金型取付:'' };
 
-    // ① 品質確認
+    // ① 品質確認（約5分で完了 → QUALITY_BUSY_MIN分だけbusyに）
     const qual = findWorker('quality', entry.lineId, s, e);
     if(qual){
       roles.品質確認 = qual;
-      markBusy(qual, s, e, `品質確認 ${linePart}`);
+      markBusy(qual, s, s + QUALITY_BUSY_MIN, `品質確認 ${linePart}`);
     } else {
       const qualAll = hasRoleData
         ? allPressWorkers.filter(w => workerHasRole(w,'quality') &&
@@ -4448,11 +4451,11 @@ async function autoAssignRoles(){
       conflicts.push({ type:'conflict', role:'品質確認', linePart, timeStr, detail });
     }
 
-    // ② 初品出し
+    // ② 初品出し（約5分で完了 → QUALITY_BUSY_MIN分だけbusyに）
     const ippin = findWorker('ippin', entry.lineId, s, e);
     if(ippin){
       roles.初品出し = ippin;
-      markBusy(ippin, s, e, `初品出し ${linePart}`);
+      markBusy(ippin, s, s + QUALITY_BUSY_MIN, `初品出し ${linePart}`);
     } else {
       const ippinAll = hasRoleData
         ? allPressWorkers.filter(w => workerHasRole(w,'ippin') &&
