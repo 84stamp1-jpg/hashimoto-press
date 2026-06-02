@@ -1373,7 +1373,6 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
     <span class="conn off" id="conn" style="font-size:10px;padding:2px 8px;border-radius:10px;font-weight:700;">接続中...</span>
     <div class="dstr" id="dstr" style="font-size:11px;color:#aaa;"></div>
     <div class="clk" id="clk" style="font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;color:#fff;">--:--:--</div>
-    <button onclick="window.sw('settings')" style="font-size:11px;padding:3px 12px;background:#555;color:#fff;border:none;border-radius:5px;cursor:pointer;font-weight:700;">⚙️ 設定</button>
     <button onclick="window.saveSnapshot()" style="font-size:11px;padding:3px 12px;background:#2980b9;color:#fff;border:none;border-radius:5px;cursor:pointer;font-weight:700;">📷 進捗を保存（PDF）</button>
   </div>
 <div class="tabs">
@@ -4269,6 +4268,16 @@ function renderKanbanCard(d){
         <button class="edit-btn" onclick="showEditDantori('${d._id}')">✏</button>
         <button class="del-btn"  onclick="deleteDantoriEntry('${d._id}')">×</button>
        </div>` : '';
+  // 型数・段取人数バッジ
+  const kata_  = d.mountKata  != null ? d.mountKata  : null;
+  const ninzu_ = d.mountCount != null ? d.mountCount : null;
+  const stdMin_= (kata_ && ninzu_) ? calcDantoriSetupTime(d.lineId, kata_, ninzu_) : null;
+  const kataHtml = (kata_ != null || ninzu_ != null)
+    ? `<div style="display:flex;gap:5px;flex-wrap:wrap;font-size:10px;color:#64748b;margin:3px 0 1px;">
+        ${kata_  != null ? `<span>🔧${kata_}型</span>` : ''}
+        ${ninzu_ != null ? `<span>👤${ninzu_}人<span style="color:#94a3b8;">（段取）</span></span>` : ''}
+        ${stdMin_ ? `<span style="color:#94a3b8;">標準${stdMin_}分</span>` : ''}
+      </div>` : '';
   const cls = d.status==='in_progress'?'kcard k-active':(d.status==='done'?'kcard k-done':'kcard k-scheduled');
   return `
   <div class="${cls}">
@@ -4277,6 +4286,7 @@ function renderKanbanCard(d){
     ${d.partNo
       ? `<div class="kcard-part kcard-part-link" data-search-part="${d.partNo}">${d.partNo}</div>`
       : `<div class="kcard-part">—</div>`}
+    ${kataHtml}
     ${rolesHtml}
     ${editBtn}
   </div>`;
