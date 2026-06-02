@@ -3556,21 +3556,19 @@ function renderDantoriCard(d){
   // ライン表示名（「ライン」の重複を防ぐ）
   const lineName = getLineDisplayName(d.lineId);
 
-  // 型数・段取人数・標準時間バッジ（setupStartの有無に関わらず常に表示）
-  const kata_   = d.mountKata  != null ? d.mountKata  : 1;
-  const ninzu_  = d.mountCount != null ? d.mountCount : 0;
-  const worker_ = d.workerCount!= null ? d.workerCount: 0;
-  const stdMin_ = calcDantoriSetupTime(d.lineId, kata_ || 1, ninzu_ || 0);
-  // 計画取込データがある（fromPlan）またはmountKata/mountCountが明示的に設定されている場合に表示
-  const hasKataData = d.fromPlan || d.mountKata != null || d.mountCount != null;
-  const kataInfoHtml = hasKataData
-    ? `<div style="display:flex;gap:6px;align-items:center;padding:2px 14px 4px;font-size:10px;color:#64748b;flex-wrap:wrap;">
-        <span>🔧 ${kata_ || 1}型</span>
-        <span>🔩 ${ninzu_ > 0 ? ninzu_ : '?'}人<span style="color:#94a3b8;">（段取）</span></span>
-        <span>👷 ${worker_ > 0 ? worker_ : '<span style="color:#f59e0b;">未設定</span>'}人<span style="color:#94a3b8;">（作業）</span></span>
-        <span style="color:#94a3b8;">標準${stdMin_}分</span>
-      </div>`
-    : '';
+  // 型数・段取人数・標準時間バッジ（常に表示、未設定時は⚠1型1人・マスタ標準時間）
+  const kata_    = (d.mountKata  != null && d.mountKata  > 0) ? d.mountKata  : null;
+  const ninzu_   = (d.mountCount != null && d.mountCount > 0) ? d.mountCount : null;
+  const worker_  = d.workerCount != null ? d.workerCount : 0;
+  const isDefault_ = (kata_ == null && ninzu_ == null);
+  const stdMin_  = calcDantoriSetupTime(d.lineId, kata_ || 1, ninzu_ || 1);
+  const kataInfoHtml = `<div style="display:flex;gap:6px;align-items:center;padding:2px 14px 4px;font-size:10px;color:#64748b;flex-wrap:wrap;">
+      ${isDefault_ ? `<span style="color:#f59e0b;">⚠ 未設定</span>` : ''}
+      <span>🔧 ${kata_ != null ? kata_ : 1}型</span>
+      <span>🔩 ${ninzu_ != null ? ninzu_ : 1}人<span style="color:#94a3b8;">（段取）</span></span>
+      <span>👷 ${worker_ > 0 ? worker_ : '<span style="color:#f59e0b;">未設定</span>'}人<span style="color:#94a3b8;">（作業）</span></span>
+      <span style="color:#94a3b8;">標準${stdMin_}分</span>
+    </div>`;
 
   // 段取り時間バー（段取り開始〜生産開始 実績/予定）
   let setupBar = '';
@@ -3894,11 +3892,13 @@ let dantoriSetupParams = {}; // Firebase settings/setupParams — ライン別{c
 // 段取り標準時間を動的計算: C×人数 + P×型数÷人数
 function calcDantoriSetupTime(lineId, kata, ninzu){
   const base = dantoriSetupTimes[lineId] || 45;
-  if(!kata || !ninzu) return base;
+  // 未設定時は 1型1人 として計算（結果は base と等しい）
+  const k = (kata  != null && kata  > 0) ? kata  : 1;
+  const n = (ninzu != null && ninzu > 0) ? ninzu : 1;
   const sp = dantoriSetupParams[lineId];
   const c = (sp && sp.c != null) ? sp.c : Math.round(base / 2);
   const p = (sp && sp.p != null) ? sp.p : (base - Math.round(base / 2));
-  return Math.round(c * ninzu + p * kata / ninzu);
+  return Math.round((c * n + p * k) / n);
 }
 
 // Firebase settings から グループ設定・ライン名 を取得
@@ -4268,16 +4268,17 @@ function renderKanbanCard(d){
         <button class="edit-btn" onclick="showEditDantori('${d._id}')">✏</button>
         <button class="del-btn"  onclick="deleteDantoriEntry('${d._id}')">×</button>
        </div>` : '';
-  // 型数・段取人数バッジ
-  const kata_  = d.mountKata  != null ? d.mountKata  : null;
-  const ninzu_ = d.mountCount != null ? d.mountCount : null;
-  const stdMin_= (kata_ && ninzu_) ? calcDantoriSetupTime(d.lineId, kata_, ninzu_) : null;
-  const kataHtml = (kata_ != null || ninzu_ != null)
-    ? `<div style="display:flex;gap:5px;flex-wrap:wrap;font-size:10px;color:#64748b;margin:3px 0 1px;">
-        ${kata_  != null ? `<span>🔧${kata_}型</span>` : ''}
-        ${ninzu_ != null ? `<span>👤${ninzu_}人<span style="color:#94a3b8;">（段取）</span></span>` : ''}
-        ${stdMin_ ? `<span style="color:#94a3b8;">標準${stdMin_}分</span>` : ''}
-      </div>` : '';
+  // 型数・段取人数バッジ（未設定時は⚠1型1人・マスタ標準時間を表示）
+  const kata_   = (d.mountKata  != null && d.mountKata  > 0) ? d.mountKata  : null;
+  const ninzu_  = (d.mountCount != null && d.mountCount > 0) ? d.mountCount : null;
+  const isDefault = (kata_ == null && ninzu_ == null);
+  const stdMin_ = calcDantoriSetupTime(d.lineId, kata_ || 1, ninzu_ || 1);
+  const kataHtml = `<div style="display:flex;gap:5px;flex-wrap:wrap;font-size:10px;color:#64748b;margin:3px 0 1px;">
+      ${isDefault ? `<span style="color:#f59e0b;">⚠</span>` : ''}
+      <span>🔧${kata_ != null ? kata_ : 1}型</span>
+      <span>👤${ninzu_ != null ? ninzu_ : 1}人<span style="color:#94a3b8;">（段取）</span></span>
+      <span style="color:#94a3b8;">標準${stdMin_}分</span>
+    </div>`;
   const cls = d.status==='in_progress'?'kcard k-active':(d.status==='done'?'kcard k-done':'kcard k-scheduled');
   return `
   <div class="${cls}">
@@ -6726,12 +6727,14 @@ let setupParams={}; // { lineId: { c:前作業片付け分, p:次作業準備分
 // 式: C×M + P×N÷M  （C=片付け, P=準備, M=人数, N=型数）
 function calcSetupTime(lineId, kata, ninzu){
   const base = sets[lineId] || 45;
-  if(!kata || !ninzu) return base;
+  // 未設定時は 1型1人 として計算（結果は base と等しい）
+  const k = (kata  != null && kata  > 0) ? kata  : 1;
+  const n = (ninzu != null && ninzu > 0) ? ninzu : 1;
   const sp = setupParams[lineId];
   // setupParams未設定の場合はbase値を半分ずつC/Pのデフォルトとして使用
   const c = (sp && sp.c != null) ? sp.c : Math.round(base / 2);
   const p = (sp && sp.p != null) ? sp.p : (base - Math.round(base / 2));
-  return Math.round(c * ninzu + p * kata / ninzu);
+  return Math.round((c * n + p * k) / n);
 }
 
 onValue(ref(db,'.info/connected'),s=>{
