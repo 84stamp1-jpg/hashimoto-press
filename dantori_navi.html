@@ -1839,6 +1839,13 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
         <input type="text" id="dt-partno" placeholder="例：80U50-0000"/>
       </div>
       <div class="form-group" style="margin:0 0 10px;">
+        <label style="display:flex;align-items:center;gap:8px;">
+          <input type="checkbox" id="dt-no-setup" onchange="onDtNoSetupChange()"/>
+          段取りなし
+          <span style="font-size:10px;color:#94a3b8;font-weight:400;">（品質確認・初品出し・金型取付は不要）</span>
+        </label>
+      </div>
+      <div class="form-group" style="margin:0 0 10px;" id="dt-setup-start-group">
         <label>段取り開始</label>
         <input type="time" id="dt-setup-start"/>
         <div class="form-hint">前工程終了時刻で自動入力されます</div>
@@ -4189,6 +4196,7 @@ async function saveDantoriEntry(){
   const roleQuality = chipGetValues('chip-wrap-quality').join(',');
   const roleWorker  = chipGetValues('chip-wrap-worker').join(',');
   const note        = document.getElementById('dt-note').value.trim();
+  const noSetup     = !!(document.getElementById('dt-no-setup')?.checked);
 
   if(!partNo){  alert('品番を入力してください'); return; }
   if(!prodStart){ alert('生産開始時刻を入力してください'); return; }
@@ -4196,7 +4204,9 @@ async function saveDantoriEntry(){
   // 編集時は既存エントリのmountCount/workerCount/mountKataを保持
   const existingEntry = editingDantoriId ? dantoriSchedule.find(e=>e._id===editingDantoriId) : null;
   const entry = {
-    lineId, partNo, setupStart, prodStart, prodEnd, status,
+    lineId, partNo,
+    setupStart: noSetup ? '' : setupStart,
+    prodStart, prodEnd, status, noSetup,
     roles:{ 金型取付:roleMount, 初品出し:roleIppin, 品質確認:roleQuality, 作業者:roleWorker },
     note, updatedAt:Date.now(), isManual:true,
     ...(existingEntry ? {
@@ -4249,6 +4259,8 @@ function showAddDantori(){
   chipSet('chip-wrap-lift',    '');
   chipSet('chip-wrap-quality', '');
   document.getElementById('dt-note').value         = '';
+  document.getElementById('dt-no-setup').checked   = false;
+  onDtNoSetupChange();
   document.getElementById('dantoriModal').style.display = 'flex';
 }
 
@@ -4268,7 +4280,16 @@ function showEditDantori(id){
   chipSet('chip-wrap-quality', (entry.roles&&entry.roles.品質確認)  || '');
   chipSet('chip-wrap-worker',  (entry.roles&&entry.roles.作業者)    || '');
   document.getElementById('dt-note').value        = entry.note        || '';
+  document.getElementById('dt-no-setup').checked  = !!(entry.noSetup);
+  onDtNoSetupChange();
   document.getElementById('dantoriModal').style.display = 'flex';
+}
+
+function onDtNoSetupChange(){
+  const checked = document.getElementById('dt-no-setup').checked;
+  const grp = document.getElementById('dt-setup-start-group');
+  if(grp) grp.style.display = checked ? 'none' : '';
+  if(checked) document.getElementById('dt-setup-start').value = '';
 }
 
 function closeDantoriModal(){
@@ -7930,7 +7951,7 @@ window.onPartSel=function(){
   const startVal=opt.dataset.start||'';
   restoreJobFields(lineId, partVal, startVal);
   // 稼働状態の自動セット
-  const seqNum=seqVal?parseInt(seqVal):0;
+  const seqNum=opt.dataset.seq?parseInt(opt.dataset.seq):0;
   // seq優先、次にstart、最後に品番名のみでjobを特定
   const job=seqNum>0
     ?(l?.jobs||[]).find(j=>j.seq===seqNum&&j.part===partVal)
@@ -8658,7 +8679,9 @@ window.onImpFile=async function(){
             const nv=parseInt(String(filtered[fi+1][plIdx]||'').replace(/[^\d]/g,''));
             if(nv>0&&nv<=100) hito=nv; // 作業人数は100人以下と想定
           }
-          jobs.push({seq:jobs.length+1,part,plan,kata,ninzu,hito,start,end,status:'waiting',actualCount:0,actualStart:'',actualEnd:''});
+          // C列の型数・人数が両方0の場合は段取りなし扱い
+          const noSetup=(kata===0&&ninzu===0);
+          jobs.push({seq:jobs.length+1,part,plan,kata,ninzu,hito,start,end,noSetup,status:'waiting',actualCount:0,actualStart:'',actualEnd:''});
         }
         _impParsedJobs[id]=jobs;
       }
