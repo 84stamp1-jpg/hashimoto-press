@@ -290,7 +290,7 @@ html, body {
 .rt-row:hover .rt-name{background:#f5f9ff;}
 .rt-track{position:relative;flex-shrink:0;height:34px;overflow:visible;}
 .rt-block{position:absolute;top:5px;height:24px;border-radius:3px;display:flex;align-items:center;padding:0 4px;font-size:9px;font-weight:700;color:rgba(255,255,255,.95);overflow:hidden;white-space:nowrap;cursor:default;min-width:4px;box-shadow:0 1px 3px rgba(0,0,0,.2);}
-.rt-block.rt-setup{background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.25) 0,rgba(255,255,255,.25) 3px,transparent 3px,transparent 7px)!important;}
+.rt-block.rt-setup{background-color:#fef9c3!important;color:#92400e!important;border:1px solid #fcd34d!important;box-shadow:0 1px 2px rgba(0,0,0,.1)!important;background-image:repeating-linear-gradient(135deg,rgba(0,0,0,.06) 0,rgba(0,0,0,.06) 3px,transparent 3px,transparent 7px)!important;}
 .rt-overlay{position:absolute;top:0;left:110px;bottom:0;pointer-events:none;overflow:hidden;}
 .rt-break-band{position:absolute;top:0;bottom:0;background:rgba(0,0,0,.07);}
 .rt-now-line{position:absolute;top:0;bottom:0;width:2px;background:#ef4444;z-index:6;}
@@ -1391,24 +1391,27 @@ html, body {
 
 <!-- ===== 作業者マスタ モーダル ===== -->
 <div class="modal-overlay" id="workerRoleModal" style="display:none;" onclick="closeWorkerRoleIfBg(event)">
-  <div class="modal" style="max-width:560px;">
-    <h3 style="margin:0 0 12px;font-size:15px;">👥 作業者マスタ（役割設定）</h3>
-    <p style="font-size:11px;color:#666;margin:0 0 12px;">各作業者に担当役割を設定します。設定はFirebaseに保存されます。</p>
-    <div style="overflow-x:auto;">
+  <div class="modal" style="max-width:660px;">
+    <h3 style="margin:0 0 4px;font-size:15px;">👥 作業者マスタ（プレス）</h3>
+    <p style="font-size:11px;color:#666;margin:0 0 10px;">役割・優先ライン・作業者名を編集できます。Firebaseに保存されます。</p>
+    <div style="overflow-x:auto;max-height:55vh;overflow-y:auto;">
       <table id="workerRoleTable" style="width:100%;border-collapse:collapse;font-size:12px;">
-        <thead>
+        <thead style="position:sticky;top:0;z-index:1;">
           <tr style="background:#f1f5f9;text-align:center;">
-            <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0;white-space:nowrap;">作業者名</th>
-            <th style="padding:8px 6px;border-bottom:2px solid #e2e8f0;white-space:nowrap;">品質確認<br><span style="font-weight:normal;color:#666;">段取り時チェック</span></th>
-            <th style="padding:8px 6px;border-bottom:2px solid #e2e8f0;white-space:nowrap;">初品出し<br><span style="font-weight:normal;color:#666;">初品確認担当</span></th>
-            <th style="padding:8px 6px;border-bottom:2px solid #e2e8f0;white-space:nowrap;">ラインに入らない<br><span style="font-weight:normal;color:#666;">リーダー等</span></th>
+            <th style="padding:7px 8px;text-align:left;border-bottom:2px solid #e2e8f0;white-space:nowrap;min-width:120px;">作業者名</th>
+            <th style="padding:7px 5px;border-bottom:2px solid #e2e8f0;white-space:nowrap;">品質<br><span style="font-weight:normal;color:#666;font-size:10px;">確認</span></th>
+            <th style="padding:7px 5px;border-bottom:2px solid #e2e8f0;white-space:nowrap;">初品<br><span style="font-weight:normal;color:#666;font-size:10px;">出し</span></th>
+            <th style="padding:7px 5px;border-bottom:2px solid #e2e8f0;white-space:nowrap;">ライン<br><span style="font-weight:normal;color:#666;font-size:10px;">外</span></th>
+            <th style="padding:7px 8px;border-bottom:2px solid #e2e8f0;white-space:nowrap;min-width:110px;">優先ライン</th>
+            <th style="padding:7px 4px;border-bottom:2px solid #e2e8f0;width:28px;"></th>
           </tr>
         </thead>
         <tbody id="workerRoleTbody"></tbody>
       </table>
     </div>
-    <div id="workerRoleSaveStatus" style="min-height:20px;margin-top:10px;font-size:12px;color:#0369a1;"></div>
-    <div class="modal-btns" style="margin-top:14px;">
+    <button onclick="workerRoleAddRow()" style="margin-top:8px;padding:5px 14px;font-size:12px;border:1px dashed #94a3b8;border-radius:6px;background:#f8fafc;color:#475569;cursor:pointer;width:100%;">＋ 作業者を追加</button>
+    <div id="workerRoleSaveStatus" style="min-height:18px;margin-top:8px;font-size:12px;color:#0369a1;"></div>
+    <div class="modal-btns" style="margin-top:12px;">
       <button onclick="closeWorkerRoleModal()">キャンセル</button>
       <button class="save-btn" onclick="saveWorkerRoleMaster()">💾 保存</button>
     </div>
@@ -3147,9 +3150,20 @@ let kanbanPage = 'kp1';
 // Firebase settings/workerRoles から読み込む。{フルネーム:[ロール配列]}
 // ロール定義: 'quality'=品質確認担当, 'ippin'=初品出し担当, 'noLine'=ラインに入らない
 let WORKER_ROLE_MASTER = {};
+// Firebase settings/pressWorkerList — プレス作業者の編集可能リスト（null=WORKER_MASTERデフォルト使用）
+let PRESS_WORKER_LIST = null;
+// Firebase settings/workerPriorityLine — 作業者ごとの優先ライン {フルネーム: lineId}
+let WORKER_PRIORITY_LINE = {};
 
 function workerHasRole(name, role){
   return (WORKER_ROLE_MASTER[name] || []).includes(role);
+}
+
+// プレス作業者リストを取得（編集済みリストまたはWORKER_MASTERのデフォルト）
+function getPressWorkerList(){
+  if(PRESS_WORKER_LIST !== null) return [...PRESS_WORKER_LIST];
+  const sec = WORKER_MASTER.find(s => s.section === 'プレス');
+  return sec ? [...sec.names] : [];
 }
 
 // ===== 作業者マスタ UI =====
@@ -3167,69 +3181,121 @@ function closeWorkerRoleIfBg(e){
   if(e.target === document.getElementById('workerRoleModal')) closeWorkerRoleModal();
 }
 
+// 優先ラインのselect optionsを生成
+function _workerLineOptions(selected){
+  const lines = ['', ...Object.keys(PRESS_LINE_MASTER)];
+  return lines.map(function(l){
+    const sel = (l === (selected||'')) ? 'selected' : '';
+    const label = l ? l : '（なし）';
+    return `<option value="${l}" ${sel}>${label}</option>`;
+  }).join('');
+}
+
 function renderWorkerRoleMaster(){
-  // プレスセクションの全作業者をテーブル表示
-  const pressSection = WORKER_MASTER.find(s => s.section === 'プレス');
-  const names = pressSection ? pressSection.names : [];
+  const names = getPressWorkerList();
   const tbody = document.getElementById('workerRoleTbody');
   tbody.innerHTML = '';
-  names.forEach(function(name){
-    const roles = WORKER_ROLE_MASTER[name] || [];
-    const chkQuality = roles.includes('quality') ? 'checked' : '';
-    const chkIppin   = roles.includes('ippin')   ? 'checked' : '';
-    const chkNoLine  = roles.includes('noLine')  ? 'checked' : '';
-    const tr = document.createElement('tr');
-    tr.style.borderBottom = '1px solid #f1f5f9';
-    tr.innerHTML = `
-      <td style="padding:7px 10px;white-space:nowrap;">${name}</td>
-      <td style="padding:7px 6px;text-align:center;">
-        <input type="checkbox" data-worker="${name}" data-role="quality" ${chkQuality}
-          style="width:16px;height:16px;accent-color:#0369a1;cursor:pointer;">
-      </td>
-      <td style="padding:7px 6px;text-align:center;">
-        <input type="checkbox" data-worker="${name}" data-role="ippin" ${chkIppin}
-          style="width:16px;height:16px;accent-color:#7c3aed;cursor:pointer;">
-      </td>
-      <td style="padding:7px 6px;text-align:center;">
-        <input type="checkbox" data-worker="${name}" data-role="noLine" ${chkNoLine}
-          style="width:16px;height:16px;accent-color:#dc2626;cursor:pointer;">
-      </td>
-    `;
-    tbody.appendChild(tr);
-  });
+  names.forEach(function(name){ _workerRoleAppendRow(tbody, name); });
+}
+
+// 1行追加（既存名または空欄）
+function _workerRoleAppendRow(tbody, name){
+  const roles    = WORKER_ROLE_MASTER[name] || [];
+  const priLine  = WORKER_PRIORITY_LINE[name] || '';
+  const chkQ = roles.includes('quality') ? 'checked' : '';
+  const chkI = roles.includes('ippin')   ? 'checked' : '';
+  const chkN = roles.includes('noLine')  ? 'checked' : '';
+  const tr = document.createElement('tr');
+  tr.className = 'wrm-row';
+  tr.style.borderBottom = '1px solid #f1f5f9';
+  tr.innerHTML = `
+    <td style="padding:5px 6px;">
+      <input type="text" class="wrm-name" value="${name||''}"
+        style="width:100%;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:12px;box-sizing:border-box;"
+        placeholder="氏名">
+    </td>
+    <td style="padding:5px 4px;text-align:center;">
+      <input type="checkbox" class="wrm-chk" data-role="quality" ${chkQ}
+        style="width:15px;height:15px;accent-color:#0369a1;cursor:pointer;">
+    </td>
+    <td style="padding:5px 4px;text-align:center;">
+      <input type="checkbox" class="wrm-chk" data-role="ippin" ${chkI}
+        style="width:15px;height:15px;accent-color:#7c3aed;cursor:pointer;">
+    </td>
+    <td style="padding:5px 4px;text-align:center;">
+      <input type="checkbox" class="wrm-chk" data-role="noLine" ${chkN}
+        style="width:15px;height:15px;accent-color:#dc2626;cursor:pointer;">
+    </td>
+    <td style="padding:5px 6px;">
+      <select class="wrm-line"
+        style="width:100%;padding:3px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;">
+        ${_workerLineOptions(priLine)}
+      </select>
+    </td>
+    <td style="padding:5px 4px;text-align:center;">
+      <button onclick="workerRoleDeleteRow(this)"
+        style="padding:2px 7px;font-size:12px;border:1px solid #fca5a5;border-radius:4px;background:#fff1f2;color:#dc2626;cursor:pointer;line-height:1.3;">×</button>
+    </td>
+  `;
+  tbody.appendChild(tr);
+}
+
+function workerRoleAddRow(){
+  const tbody = document.getElementById('workerRoleTbody');
+  _workerRoleAppendRow(tbody, '');
+  // 追加した行の名前入力にフォーカス
+  const rows = tbody.querySelectorAll('.wrm-row');
+  const lastInput = rows[rows.length-1].querySelector('.wrm-name');
+  if(lastInput) lastInput.focus();
+}
+
+function workerRoleDeleteRow(btn){
+  const tr = btn.closest('tr');
+  if(tr) tr.remove();
 }
 
 async function saveWorkerRoleMaster(){
-  const checkboxes = document.querySelectorAll('#workerRoleTbody input[type=checkbox]');
-  // { name: Set<role> }
-  const map = {};
-  checkboxes.forEach(function(cb){
-    const name = cb.dataset.worker;
-    const role = cb.dataset.role;
-    if(!map[name]) map[name] = [];
-    if(cb.checked) map[name].push(role);
-  });
-  // 空の配列はキーごと除外（Firebase節約）
-  const newMaster = {};
-  Object.keys(map).forEach(function(name){
-    if(map[name].length > 0) newMaster[name] = map[name];
+  const rows = document.querySelectorAll('#workerRoleTbody .wrm-row');
+  const newList     = [];
+  const newRoles    = {};
+  const newPriLine  = {};
+
+  rows.forEach(function(tr){
+    const nameEl = tr.querySelector('.wrm-name');
+    const name   = (nameEl ? nameEl.value.trim() : '');
+    if(!name) return;   // 名前なし行は無視
+    newList.push(name);
+    // roles
+    const chks = tr.querySelectorAll('.wrm-chk');
+    const roleArr = [];
+    chks.forEach(function(cb){ if(cb.checked) roleArr.push(cb.dataset.role); });
+    if(roleArr.length) newRoles[name] = roleArr;
+    // priority line
+    const lineEl = tr.querySelector('.wrm-line');
+    if(lineEl && lineEl.value) newPriLine[name] = lineEl.value;
   });
 
   const statusEl = document.getElementById('workerRoleSaveStatus');
+  statusEl.style.color = '#0369a1';
   statusEl.textContent = '💾 保存中...';
 
   try {
     const fbUrl = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/, '');
-    const res = await fetch(`${fbUrl}/settings/workerRoles.json`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newMaster)
-    });
-    if(!res.ok) throw new Error('HTTP ' + res.status);
-    WORKER_ROLE_MASTER = newMaster;
+    // 3つのパスに並行保存
+    const saves = [
+      fetch(`${fbUrl}/settings/workerRoles.json`,       { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newRoles)   }),
+      fetch(`${fbUrl}/settings/pressWorkerList.json`,   { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newList)    }),
+      fetch(`${fbUrl}/settings/workerPriorityLine.json`,{ method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newPriLine) }),
+    ];
+    const results = await Promise.all(saves);
+    results.forEach(function(r){ if(!r.ok) throw new Error('HTTP ' + r.status); });
+    // メモリ更新
+    WORKER_ROLE_MASTER   = newRoles;
+    PRESS_WORKER_LIST    = newList;
+    WORKER_PRIORITY_LINE = newPriLine;
     statusEl.style.color = '#059669';
-    statusEl.textContent = '✓ 保存しました';
-    setTimeout(function(){ closeWorkerRoleModal(); }, 800);
+    statusEl.textContent = '✓ 保存しました（' + newList.length + '名）';
+    setTimeout(function(){ closeWorkerRoleModal(); }, 900);
   } catch(e){
     statusEl.style.color = '#dc2626';
     statusEl.textContent = '❌ 保存エラー: ' + e.message;
@@ -3259,6 +3325,12 @@ async function loadDantoriSettings(){
     }
     if(s.workerRoles && typeof s.workerRoles === 'object'){
       WORKER_ROLE_MASTER = s.workerRoles;
+    }
+    if(s.pressWorkerList && Array.isArray(s.pressWorkerList)){
+      PRESS_WORKER_LIST = s.pressWorkerList;
+    }
+    if(s.workerPriorityLine && typeof s.workerPriorityLine === 'object'){
+      WORKER_PRIORITY_LINE = s.workerPriorityLine;
     }
     renderDantori(); // グループ情報が揃ったら再描画
   } catch(e){ console.warn('settings load:', e); }
@@ -3803,7 +3875,10 @@ const PRESS_LINE_MASTER = {
 function resolveWorkerName(abbrev){
   if(!abbrev) return abbrev;
   const a = abbrev.trim();
-  const allNames = WORKER_MASTER.flatMap(s => s.names);
+  // PRESS_WORKER_LIST（編集済みリスト）+ 他のWORKER_MASTERセクションを合わせて検索
+  const pressNames = getPressWorkerList();
+  const otherNames = WORKER_MASTER.filter(s => s.section !== 'プレス').flatMap(s => s.names);
+  const allNames   = [...pressNames, ...otherNames];
   if(allNames.includes(a)) return a;                       // 完全一致
   const norm = s => s.replace(/[\s　]+/g, '');             // スペース除去
   const match = allNames.find(n => norm(n).startsWith(norm(a)));
@@ -3819,7 +3894,12 @@ function getAllWorkerNames(){
     if(!n || seen.has(n)) return;
     seen.add(n); result.push({section, name:n});
   };
-  WORKER_MASTER.forEach(({section, names}) => names.forEach(n => addName(section, n)));
+  // プレスはPRESS_WORKER_LIST優先（編集済みリスト）
+  const pressNames = getPressWorkerList();
+  pressNames.forEach(n => addName('プレス', n));
+  // 組立・品管・その他はWORKER_MASTERのまま
+  WORKER_MASTER.filter(s => s.section !== 'プレス')
+    .forEach(({section, names}) => names.forEach(n => addName(section, n)));
   // config.staff* から追加
   const extra = [
     ...(config.staffCond    || []),
