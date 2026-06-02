@@ -2201,8 +2201,11 @@ window.onImpGrpSel=function(){
     } else {
       modeDetail=` ／ シート${mp.filterSheet||1}・フィルタ列<b>${mp.filterCol||'A'}</b>`;
     }
+    const kataInfo = mp.kataCol
+      ? ` 型数/人数<b>${mp.kataCol}</b>`
+      : ` <span style="color:#e67e22;">⚠ 型数/人数列 未設定</span>`;
     info.innerHTML=`方式：<b>${modeLabel}</b>${modeDetail} ／ 品番<b>${mp.partCol}</b> 計画<b>${mp.planCol}</b> 開始<b>${mp.startCol}</b> 終了<b>${mp.endCol}</b>`+
-      ` ／ ヘッダー行${mp.headerRow||'なし'} ｜ <a href="#" onclick="sw('settings');return false;" style="color:#1a1a1a;">設定変更</a>`;
+      `${kataInfo} ／ ヘッダー行${mp.headerRow||'なし'} ｜ <a href="#" onclick="sw('settings');return false;" style="color:#1a1a1a;">設定変更</a>`;
   } else {
     info.style.display='block';
     info.innerHTML='⚠️ まだ列マッピングが設定されていません。<a href="#" onclick="sw(\'settings\');return false;" style="color:#c0392b;">⚙️設定画面で設定してください</a>';
@@ -2593,12 +2596,18 @@ window.doImport=async function(){
       const totalPlan=jobs.reduce((s,j)=>s+j.plan,0);
       updates['lines/'+lineId]={jobs,plan:totalPlan,actual:0,part:jobs[0]?.part||'',status:'waiting',updatedAt:0,workStart:'',workEnd:''};
     });
-    // データなしラインは全実績含めてクリア（古いデータを残さない）
+    // データなしラインはフィールドを個別に上書きクリア（実績・ペース等も含む）
     emptyIds.forEach(lineId=>{
-      updates['lines/'+lineId] = {
-        jobs:[], plan:0, actual:0, part:'', status:'waiting',
-        workStart:'', workEnd:'', updatedAt:0
-      };
+      updates['lines/'+lineId+'/jobs']           = [];
+      updates['lines/'+lineId+'/plan']           = 0;
+      updates['lines/'+lineId+'/actual']         = 0;
+      updates['lines/'+lineId+'/part']           = '';
+      updates['lines/'+lineId+'/status']         = 'waiting';
+      updates['lines/'+lineId+'/workStart']      = '';
+      updates['lines/'+lineId+'/workEnd']        = '';
+      updates['lines/'+lineId+'/updatedAt']      = 0;
+      updates['lines/'+lineId+'/prevUpdatedAt']  = 0;
+      updates['lines/'+lineId+'/prev2UpdatedAt'] = 0;
     });
     await update(ref(db),updates);
     m.style.color='#27ae60';
