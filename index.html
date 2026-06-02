@@ -2262,12 +2262,18 @@ window.onImpFile=async function(){
       const end=parseTime(row[enIdx]);
       // 時刻なし行スキップ設定が有効なら、開始・終了どちらかが空の行を除外
       if(skipNoTime&&(!start||!end)) continue;
-      // 品番行の直後（次の品番行まで最大10行）を走査して kata / ninzu / hito を取得
+      // 品番行の直後（次の「有効な品番行」まで最大12行）を走査して kata / ninzu / hito を取得
+      // ※「有効な品番行」= 品番 + 開始時刻 + 終了時刻 がある行（中間行は含まない）
       let kata=0, ninzu=0, hito=0;
-      for(let la=i+1; la<dataRows.length && la<=i+10; la++){
+      for(let la=i+1; la<dataRows.length && la<=i+12; la++){
         const lr=dataRows[la];
         const lrPart=String(lr[pIdx]||'').trim();
-        if(lrPart&&!isDash(lrPart)) break; // 次の品番行 → 走査終了
+        if(lrPart&&!isDash(lrPart)){
+          // 開始・終了時刻もあれば次の製品行 → 走査終了
+          const lrSt=parseTime(lr[stIdx]), lrEn=parseTime(lr[enIdx]);
+          if(lrSt&&lrEn) break;
+          // 時刻なし → 中間行（材質・品目コード等）なのでスキップして続行
+        }
         // C列（kataCol）から型数・段取人数を取得
         if(kataIdx>=0){
           const cv=String(lr[kataIdx]||'').trim();
@@ -2277,7 +2283,7 @@ window.onImpFile=async function(){
         // D列（planCol）次行から作業人数(hito)を取得（hitoFromNextRow有効時のみ）
         if(!hito && hitoFromNextRow && la===i+1){
           const nv=parseInt(String(lr[plIdx]||'').replace(/[^\d]/g,''));
-          if(nv>0&&nv<=50) hito=nv; // 50以下なら人数と解釈（生産数量と区別）
+          if(nv>0&&nv<=50) hito=nv;
         }
       }
       jobs.push({seq:jobs.length+1,part,plan,kata,ninzu,hito,start,end,status:'waiting',actualCount:0,actualStart:'',actualEnd:''});
@@ -2334,10 +2340,13 @@ window.onImpFile=async function(){
           const end=parseTime(row[enIdx]);
           if(skipNoTime&&(!start||!end)) continue; // メモ行スキップ
           let kata=0, ninzu=0, hito=0;
-          for(let la=fi+1; la<filtered.length && la<=fi+10; la++){
+          for(let la=fi+1; la<filtered.length && la<=fi+12; la++){
             const lr=filtered[la];
             const lrPart=String(lr[pIdx]||'').trim();
-            if(lrPart&&!isDash(lrPart)) break;
+            if(lrPart&&!isDash(lrPart)){
+              const lrSt=parseTime(lr[stIdx]),lrEn=parseTime(lr[enIdx]);
+              if(lrSt&&lrEn) break;
+            }
             if(kataIdx>=0){
               const cv=String(lr[kataIdx]||'').trim();
               if(!kata  && parseKata(cv))  kata  = parseKata(cv);
