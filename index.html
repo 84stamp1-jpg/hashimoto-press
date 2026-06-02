@@ -521,6 +521,17 @@ let lines={},sets={...SDEFS};
 // 段取り時間の内訳（片付けC分＋準備P分）per lineId
 let setupParams={}; // { lineId: { c:前作業片付け分, p:次作業準備分 } }
 
+// 段取り標準時間を動的計算（kata=型数N, ninzu=段取人数M）
+// 式: C×M + P×N÷M  （C=片付け, P=準備, M=人数, N=型数）
+function calcSetupTime(lineId, kata, ninzu){
+  const base = sets[lineId] || 45;
+  if(!kata || !ninzu) return base;
+  const sp = setupParams[lineId];
+  if(!sp || (!sp.c && !sp.p)) return base;
+  const c = sp.c || 0, p = sp.p || 0;
+  return Math.round(c * ninzu + p * kata / ninzu);
+}
+
 onValue(ref(db,'.info/connected'),s=>{
   const b=document.getElementById('conn');
   if(s.val()){b.textContent='● 同期中';b.className='conn on';}
@@ -836,7 +847,8 @@ function renderBoard(){
               // 遅れ内訳の計算
               const breakdownParts=[];
               // ① 段取超過分
-              const stdSetupForLine=sets[id]||0;
+              const _curJ=jobs.find(jj=>jj.status==='running')||jobs[0];
+              const stdSetupForLine=calcSetupTime(id,_curJ?.kata,_curJ?.ninzu)||0;
               const wsM_d=timeToMin(l.workStart||'');
               if(wsM_d&&stdSetupForLine>0){
                 const actualSetupNet=netMins(sm2,wsM_d);
@@ -1001,12 +1013,13 @@ function renderBoard(){
           // 2行目：段取り時間（標準比率付き）・作業開始・終了を品番列下に表示
           const setupParts2=[];
           {
-            const stdSU=sets[id]!==undefined?sets[id]:0;
+            // 型数・段取人数がある場合は動的計算、なければマスタ値
+            const stdSU=calcSetupTime(id, j.kata, j.ninzu);
+            const kataLabel=(j.kata||0)>0&&(j.ninzu||0)>0
+              ? ` <span style="font-size:9px;color:#888;">${j.kata}型/${j.ninzu}人</span>` : '';
             if(j.noSetup){
-              // 段取りなしフラグ
               setupParts2.push('<span style="color:#aaa;font-size:9px;">✓ 段取りなし</span>');
             } else {
-              // 推定段取りは作業開始済みの場合のみ計算（jWS=実際の作業開始時刻）
               const implied=jWS?calcImpliedSetup(jobs,jIdx,jWS):null;
               const dispMin=jSetupMin>0?jSetupMin:(implied||0);
               const isImplied=jSetupMin===0&&(implied||0)>0;
@@ -1015,9 +1028,9 @@ function renderBoard(){
                 const suCol2=suR2===null?'#999':suR2<=100?'#27ae60':suR2<=125?'#e67e22':'#c0392b';
                 const ratioStr=suR2!==null?' ('+suR2+'%)':'';
                 const implMark=isImplied?'<span style="font-size:9px;color:#bbb;"> 推定</span>':'';
-                setupParts2.push('<span style="color:'+suCol2+';">🔧 段取 '+dispMin+'分／標準'+stdSU+'分'+ratioStr+implMark+'</span>');
+                setupParts2.push('<span style="color:'+suCol2+';">🔧 段取 '+dispMin+'分／標準'+stdSU+'分'+ratioStr+kataLabel+implMark+'</span>');
               } else {
-                setupParts2.push('<span style="color:#bbb;">🔧 標準 '+stdSU+'分</span>');
+                setupParts2.push('<span style="color:#bbb;">🔧 標準 '+stdSU+'分'+kataLabel+'</span>');
               }
             }
           }
@@ -2246,23 +2259,22 @@ window.onImpFile=async function(){
       const end=parseTime(row[enIdx]);
       // 時刻なし行スキップ設定が有効なら、開始・終了どちらかが空の行を除外
       if(skipNoTime&&(!start||!end)) continue;
-      // C列（kataCol）から本番行の「N型」と「N人（段取り人数）」を取得
-      let kata=0, ninzu=0;
-      if(kataIdx>=0){
-        kata =parseKata(row[kataIdx]);   // 型数
-        ninzu=parseNinzu(row[kataIdx]);  // 段取り人数（C列）
-      }
-      // 次行をD列作業人数(hito)として読む（段取り人数ninzuとは別）
-      let hito=0;
-      if(hitoFromNextRow&&i+1<dataRows.length){
-        const nr=dataRows[i+1];
-        const nrPart=String(nr[pIdx]||'').trim();
-        if(!nrPart||isDash(nrPart)){
-          const nrVal=parseInt(String(nr[plIdx]||'').replace(/[^\d]/g,''));
-          if(nrVal>0) hito=nrVal;
-          // kataColの次行に「N人」があればninzuを上書き（より明示的）
-          if(kataIdx>=0){const nv=parseNinzu(nr[kataIdx]);if(nv>0) ninzu=nv;}
-          if(hito>0||(kataIdx>=0&&(parseKata(nr[kataIdx])>0||parseNinzu(nr[kataIdx])>0))) i++;
+      // 品番行の直後（次の品番行まで最大10行）を走査して kata / ninzu / hito を取得
+      let kata=0, ninzu=0, hito=0;
+      for(let la=i+1; la<dataRows.length && la<=i+10; la++){
+        const lr=dataRows[la];
+        const lrPart=String(lr[pIdx]||'').trim();
+        if(lrPart&&!isDash(lrPart)) break; // 次の品番行 → 走査終了
+        // C列（kataCol）から型数・段取人数を取得
+        if(kataIdx>=0){
+          const cv=String(lr[kataIdx]||'').trim();
+          if(!kata  && parseKata(cv))  kata  = parseKata(cv);
+          if(!ninzu && parseNinzu(cv)) ninzu = parseNinzu(cv);
+        }
+        // D列（planCol）次行から作業人数(hito)を取得（hitoFromNextRow有効時のみ）
+        if(!hito && hitoFromNextRow && la===i+1){
+          const nv=parseInt(String(lr[plIdx]||'').replace(/[^\d]/g,''));
+          if(nv>0&&nv<=50) hito=nv; // 50以下なら人数と解釈（生産数量と区別）
         }
       }
       jobs.push({seq:jobs.length+1,part,plan,kata,ninzu,hito,start,end,status:'waiting',actualCount:0,actualStart:'',actualEnd:''});
@@ -2318,17 +2330,19 @@ window.onImpFile=async function(){
           const start=parseTime(row[stIdx]);
           const end=parseTime(row[enIdx]);
           if(skipNoTime&&(!start||!end)) continue; // メモ行スキップ
-          let kata=0, ninzu=0;
-          if(kataIdx>=0){kata=parseKata(row[kataIdx]);ninzu=parseNinzu(row[kataIdx]);}
-          let hito=0;
-          if(hitoFromNextRow&&fi+1<filtered.length){
-            const nr=filtered[fi+1];
-            const nrPart=String(nr[pIdx]||'').trim();
-            if(!nrPart||isDash(nrPart)){
-              const nrVal=parseInt(String(nr[plIdx]||'').replace(/[^\d]/g,''));
-              if(nrVal>0) hito=nrVal;
-              if(kataIdx>=0){const nv=parseNinzu(nr[kataIdx]);if(nv>0) ninzu=nv;}
-              if(hito>0||(kataIdx>=0&&(parseKata(nr[kataIdx])>0||parseNinzu(nr[kataIdx])>0))) fi++;
+          let kata=0, ninzu=0, hito=0;
+          for(let la=fi+1; la<filtered.length && la<=fi+10; la++){
+            const lr=filtered[la];
+            const lrPart=String(lr[pIdx]||'').trim();
+            if(lrPart&&!isDash(lrPart)) break;
+            if(kataIdx>=0){
+              const cv=String(lr[kataIdx]||'').trim();
+              if(!kata  && parseKata(cv))  kata  = parseKata(cv);
+              if(!ninzu && parseNinzu(cv)) ninzu = parseNinzu(cv);
+            }
+            if(!hito&&hitoFromNextRow&&la===fi+1){
+              const nv=parseInt(String(lr[plIdx]||'').replace(/[^\d]/g,''));
+              if(nv>0&&nv<=50) hito=nv;
             }
           }
           jobs.push({seq:jobs.length+1,part,plan,kata,ninzu,hito,start,end,status:'waiting',actualCount:0,actualStart:'',actualEnd:''});
@@ -2579,12 +2593,12 @@ window.doImport=async function(){
       const totalPlan=jobs.reduce((s,j)=>s+j.plan,0);
       updates['lines/'+lineId]={jobs,plan:totalPlan,actual:0,part:jobs[0]?.part||'',status:'waiting',updatedAt:0,workStart:'',workEnd:''};
     });
-    // データなしラインはjobsを空配列にクリア（古いデータを残さない）
+    // データなしラインは全実績含めてクリア（古いデータを残さない）
     emptyIds.forEach(lineId=>{
-      updates['lines/'+lineId+'/jobs']  = [];
-      updates['lines/'+lineId+'/plan']  = 0;
-      updates['lines/'+lineId+'/part']  = '';
-      updates['lines/'+lineId+'/status']= 'waiting';
+      updates['lines/'+lineId] = {
+        jobs:[], plan:0, actual:0, part:'', status:'waiting',
+        workStart:'', workEnd:'', updatedAt:0
+      };
     });
     await update(ref(db),updates);
     m.style.color='#27ae60';
