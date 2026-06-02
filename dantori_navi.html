@@ -1368,13 +1368,23 @@ html, body {
           </div>
         </div>
         <div class="form-group" style="margin:0;grid-column:1/-1;">
-          <label style="font-size:10px;">金型取付</label>
+          <label style="font-size:10px;">金型取付<span style="color:#94a3b8;font-weight:400;margin-left:4px;">段取り専任</span></label>
           <div id="chip-wrap-mount" class="chip-wrap" data-dlid="staffDatalist-press"
                onmousedown="chipWrapMousedown(event,'chip-wrap-mount')">
             <input class="chip-text-input" placeholder="名前を選択/入力" autocomplete="off"
               oninput="chipOnInput('chip-wrap-mount')"
               onkeydown="chipOnKeydown(event,'chip-wrap-mount')"
               onblur="chipOnBlur('chip-wrap-mount')"/>
+          </div>
+        </div>
+        <div class="form-group" style="margin:0;grid-column:1/-1;">
+          <label style="font-size:10px;">作業者<span style="color:#94a3b8;font-weight:400;margin-left:4px;">生産担当（段取り者も含む）</span></label>
+          <div id="chip-wrap-worker" class="chip-wrap" data-dlid="staffDatalist-press"
+               onmousedown="chipWrapMousedown(event,'chip-wrap-worker')">
+            <input class="chip-text-input" placeholder="名前を選択/入力" autocomplete="off"
+              oninput="chipOnInput('chip-wrap-worker')"
+              onkeydown="chipOnKeydown(event,'chip-wrap-worker')"
+              onblur="chipOnBlur('chip-wrap-worker')"/>
           </div>
         </div>
       </div>
@@ -3105,11 +3115,11 @@ function renderDantoriCard(d){
   // 計画取込データがある（fromPlan）またはmountKata/mountCountが明示的に設定されている場合に表示
   const hasKataData = d.fromPlan || d.mountKata != null || d.mountCount != null;
   const kataInfoHtml = hasKataData
-    ? `<div style="display:flex;gap:8px;align-items:center;padding:2px 14px 4px;font-size:10px;color:#64748b;flex-wrap:wrap;">
+    ? `<div style="display:flex;gap:6px;align-items:center;padding:2px 14px 4px;font-size:10px;color:#64748b;flex-wrap:wrap;">
         <span>🔧 ${kata_ || 1}型</span>
-        ${ninzu_  > 0 ? `<span>🔩 ${ninzu_}人（金型取付）</span>` : ''}
-        ${worker_ > 0 ? `<span>👷 ${worker_}人（作業者）</span>` : ''}
-        <span style="color:#94a3b8;">段取標準 ${stdMin_}分</span>
+        <span>🔩 ${ninzu_ > 0 ? ninzu_ : '?'}人<span style="color:#94a3b8;">（段取）</span></span>
+        <span>👷 ${worker_ > 0 ? worker_ : '<span style="color:#f59e0b;">未設定</span>'}人<span style="color:#94a3b8;">（作業）</span></span>
+        <span style="color:#94a3b8;">標準${stdMin_}分</span>
       </div>`
     : '';
 
@@ -3134,20 +3144,17 @@ function renderDantoriCard(d){
   const hasRoles = roles.金型取付 || roles.初品出し || roles.品質確認 || roles.作業者;
   const toTags = str => (str||'').split(/[,、]/).map(p=>p.trim()).filter(Boolean)
     .map(p=>`<span class="ptag">${p}</span>`).join('');
-  const rolesHtml = hasRoles ? `
+  // プレスラインのエントリかどうか（作業者行を表示するか判定）
+  const isPressEntry = !!PRESS_LINE_MASTER[d.lineId];
+  const unset = `<span class="ptag ptag-unset">未割当</span>`;
+  const rolesHtml = (hasRoles || d.fromPlan || isPressEntry) ? `
     <div class="dc-roles">
-      ${roles.品質確認?`<div class="role-row"><div class="role-label">品質確認</div><div class="person-tags">${toTags(roles.品質確認)}</div></div>`:''}
-      ${roles.初品出し?`<div class="role-row"><div class="role-label">初品出し</div><div class="person-tags">${toTags(roles.初品出し)}</div></div>`:''}
-      ${roles.金型取付?`<div class="role-row"><div class="role-label" title="段取り専任（setupStart〜prodStart）">金型取付</div><div class="person-tags">${toTags(roles.金型取付)}</div></div>`:''}
-      ${roles.作業者?`<div class="role-row"><div class="role-label" title="生産担当（prodStart〜prodEnd）">作業者</div><div class="person-tags">${toTags(roles.作業者)}</div></div>`:''}
+      ${(roles.品質確認||isPressEntry)?`<div class="role-row"><div class="role-label">品質確認</div><div class="person-tags">${roles.品質確認?toTags(roles.品質確認):unset}</div></div>`:''}
+      ${(roles.初品出し||isPressEntry)?`<div class="role-row"><div class="role-label">初品出し</div><div class="person-tags">${roles.初品出し?toTags(roles.初品出し):'<span style="color:#94a3b8;font-size:11px;">—</span>'}</div></div>`:''}
+      ${(roles.金型取付||isPressEntry)?`<div class="role-row"><div class="role-label" title="段取り専任">金型取付</div><div class="person-tags">${roles.金型取付?toTags(roles.金型取付):unset}</div></div>`:''}
+      ${(roles.作業者||isPressEntry)?`<div class="role-row"><div class="role-label" title="生産担当">作業者</div><div class="person-tags">${roles.作業者?toTags(roles.作業者):unset}</div></div>`:''}
     </div>`
-  : (d._source==='auto'||d.fromPlan?`
-    <div class="dc-roles">
-      <div class="role-row"><div class="role-label">品質確認</div><div class="person-tags"><span class="ptag ptag-unset">未割当</span></div></div>
-      <div class="role-row"><div class="role-label">初品出し</div><div class="person-tags"><span class="ptag ptag-unset">—</span></div></div>
-      <div class="role-row"><div class="role-label">金型取付</div><div class="person-tags"><span class="ptag ptag-unset">未割当</span></div></div>
-      ${d.workerCount>0?`<div class="role-row"><div class="role-label">作業者</div><div class="person-tags"><span class="ptag ptag-unset">未割当</span></div></div>`:''}
-    </div>`:'');
+  : '';
 
   // 編集・削除（手動 or 計画取込エントリのみ）
   const canEdit = d._source==='manual' || d.fromPlan;
@@ -3624,15 +3631,25 @@ async function saveDantoriEntry(){
   const roleMount   = chipGetValues('chip-wrap-mount').join(',');
   const roleIppin   = chipGetValues('chip-wrap-lift').join(',');
   const roleQuality = chipGetValues('chip-wrap-quality').join(',');
+  const roleWorker  = chipGetValues('chip-wrap-worker').join(',');
   const note        = document.getElementById('dt-note').value.trim();
 
   if(!partNo){  alert('品番を入力してください'); return; }
   if(!prodStart){ alert('生産開始時刻を入力してください'); return; }
 
+  // 編集時は既存エントリのmountCount/workerCount/mountKataを保持
+  const existingEntry = editingDantoriId ? dantoriSchedule.find(e=>e._id===editingDantoriId) : null;
   const entry = {
     lineId, partNo, setupStart, prodStart, prodEnd, status,
-    roles:{ 金型取付:roleMount, 初品出し:roleIppin, 品質確認:roleQuality },
+    roles:{ 金型取付:roleMount, 初品出し:roleIppin, 品質確認:roleQuality, 作業者:roleWorker },
     note, updatedAt:Date.now(), isManual:true,
+    ...(existingEntry ? {
+      plan:       existingEntry.plan       || 0,
+      mountCount: existingEntry.mountCount || 0,
+      workerCount:existingEntry.workerCount|| 0,
+      mountKata:  existingEntry.mountKata  || 1,
+      fromPlan:   existingEntry.fromPlan   || false,
+    } : {}),
   };
 
   const fbUrl   = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
@@ -3691,8 +3708,9 @@ function showEditDantori(id){
   document.getElementById('dt-prod-end').value    = entry.prodEnd     || '';
   document.getElementById('dt-status').value      = entry.status      || 'scheduled';
   chipSet('chip-wrap-mount',   (entry.roles&&entry.roles.金型取付) || '');
-  chipSet('chip-wrap-lift',    (entry.roles&&(entry.roles.初品出し||entry.roles.初品出し)) || '');
-  chipSet('chip-wrap-quality', (entry.roles&&entry.roles.品質確認) || '');
+  chipSet('chip-wrap-lift',    (entry.roles&&entry.roles.初品出し)  || '');
+  chipSet('chip-wrap-quality', (entry.roles&&entry.roles.品質確認)  || '');
+  chipSet('chip-wrap-worker',  (entry.roles&&entry.roles.作業者)    || '');
   document.getElementById('dt-note').value        = entry.note        || '';
   document.getElementById('dantoriModal').style.display = 'flex';
 }
