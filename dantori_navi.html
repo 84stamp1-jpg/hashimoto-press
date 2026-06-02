@@ -1168,8 +1168,13 @@ html, body {
 
 <!-- ===== 進捗管理タブ ===== -->
 <div class="content" id="tab-progress">
+  <!-- iframeヘッダー非表示の代わりに進捗保存ボタンをここに設置 -->
+  <div style="display:flex;align-items:center;gap:8px;padding:4px 10px;background:#1a1a1a;flex-shrink:0;">
+    <span style="color:#fff;font-size:11px;font-weight:700;flex:1;">📊 プレス進捗管理ボード</span>
+    <button onclick="pmSaveSnapshot()" style="font-size:11px;padding:3px 12px;background:#2980b9;color:#fff;border:none;border-radius:5px;cursor:pointer;font-weight:700;">📷 進捗を保存（PDF）</button>
+  </div>
   <iframe id="pm-iframe"
-    style="width:100%;height:calc(100vh - 38px);border:none;display:block;"
+    style="width:100%;height:calc(100vh - 62px);border:none;display:block;"
     allow="fullscreen">
   </iframe>
 </div><!-- /tab-progress -->
@@ -1751,12 +1756,26 @@ function initPmTab(){
       var doc = ifr.contentDocument || ifr.contentWindow.document;
       if(doc && doc.head){
         var s = doc.createElement('style');
-        // 進捗管理ボードの独自ヘッダー（黒帯）を非表示
+        // 進捗管理ボードの独自ヘッダー（黒帯）を非表示（H-Hub側にボタンを移設したため）
         s.textContent = '.hdr{display:none!important;}html,body{overflow:auto!important;}';
         doc.head.appendChild(s);
       }
     } catch(e){ /* cross-origin等で失敗しても無視 */ }
   });
+}
+
+// 進捗管理タブの「📷 進捗を保存」ボタン → iframe内のsaveSnapshot()を呼び出す
+function pmSaveSnapshot(){
+  var ifr = document.getElementById('pm-iframe');
+  if(!ifr || !ifr.contentWindow){
+    alert('進捗管理ボードが読み込まれていません');
+    return;
+  }
+  try {
+    ifr.contentWindow.saveSnapshot();
+  } catch(e){
+    alert('保存できませんでした: ' + e.message);
+  }
 }
 
 // ===== デモデータ =====
