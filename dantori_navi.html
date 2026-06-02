@@ -3098,16 +3098,18 @@ function renderDantoriCard(d){
   const lineName = getLineDisplayName(d.lineId);
 
   // 型数・段取人数・標準時間バッジ（setupStartの有無に関わらず常に表示）
-  const kata_  = d.mountKata  || 1;
-  const ninzu_ = d.mountCount || 0;
-  const stdMin_ = calcDantoriSetupTime(d.lineId, kata_, ninzu_);
-  const worker_ = d.workerCount || 0;
-  const kataInfoHtml = (kata_ > 0 || ninzu_ > 0 || worker_ > 0)
+  const kata_   = d.mountKata  != null ? d.mountKata  : 1;
+  const ninzu_  = d.mountCount != null ? d.mountCount : 0;
+  const worker_ = d.workerCount!= null ? d.workerCount: 0;
+  const stdMin_ = calcDantoriSetupTime(d.lineId, kata_ || 1, ninzu_ || 0);
+  // 計画取込データがある（fromPlan）またはmountKata/mountCountが明示的に設定されている場合に表示
+  const hasKataData = d.fromPlan || d.mountKata != null || d.mountCount != null;
+  const kataInfoHtml = hasKataData
     ? `<div style="display:flex;gap:8px;align-items:center;padding:2px 14px 4px;font-size:10px;color:#64748b;flex-wrap:wrap;">
-        ${kata_  > 0 ? `<span>🔧 ${kata_}型</span>` : ''}
-        ${ninzu_ > 0 ? `<span>🔩 ${ninzu_}人（金型取付）</span>` : ''}
-        ${worker_> 0 ? `<span>👷 ${worker_}人（作業者）</span>` : ''}
-        ${(ninzu_>0||worker_>0) ? `<span style="color:#94a3b8;">段取標準 ${stdMin_}分</span>` : ''}
+        <span>🔧 ${kata_ || 1}型</span>
+        ${ninzu_  > 0 ? `<span>🔩 ${ninzu_}人（金型取付）</span>` : ''}
+        ${worker_ > 0 ? `<span>👷 ${worker_}人（作業者）</span>` : ''}
+        <span style="color:#94a3b8;">段取標準 ${stdMin_}分</span>
       </div>`
     : '';
 
@@ -4232,22 +4234,22 @@ async function importFromProductionPlan(){
                    : 'scheduled';
 
       entries.push({
-        _key:       lineId + '_' + idx,
+        _key:        lineId + '_' + idx,
         lineId,
-        partNo:     j.part,
+        partNo:      j.part,
         setupStart,
-        prodStart:  j.start,
-        prodEnd:    j.end,
+        prodStart:   j.start,
+        prodEnd:     j.end,
         plan:        j.plan  || 0,
         mountCount:  j.ninzu || 0,  // 段取り人数（金型取付、C列）
-        workerCount: j.hito  || 0,  // 作業人数（生産時、D列）
-        mountKata:   j.kata  || 1,  // 型数 N（進捗南里から取込）
+        workerCount: j.hito  || 0,  // 作業人数（D列次行、hitoFromNextRow設定で取得）
+        mountKata:   j.kata  || 1,  // 型数 N
         status,
-        roles:      { 条件設定:'', 金型取付:'', リフト:'', 品質確認:'' },
-        note:       j.noSetup ? '（段取りなし）' : '',
-        isManual:   false,
-        fromPlan:   true,
-        updatedAt:  Date.now(),
+        roles: { 条件設定:'', 金型取付:'', リフト:'', 品質確認:'', 初品出し:'', 作業者:'' },
+        note:        j.noSetup ? '（段取りなし）' : '',
+        isManual:    false,
+        fromPlan:    true,
+        updatedAt:   Date.now(),
       });
       idx++;
     });
