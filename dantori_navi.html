@@ -4805,9 +4805,12 @@ async function importFromProductionPlan(){
     const jobs = line.jobs.filter(j => j && j.part && j.start && j.end && !j.history);
 
     jobs.forEach((j, ji) => {
-      // 段取り開始：前ジョブの終了時刻（noSetupフラグがあれば生産開始と同じ）
+      // kata=0かつninzu=0の場合もnoSetup扱い（Excelインポート時に型数/人数列が空の場合）
+      const isNoSetup = !!(j.noSetup || (j.kata === 0 && j.ninzu === 0));
+
+      // 段取り開始：前ジョブの終了時刻（noSetupなら生産開始と同じ）
       let setupStart = '';
-      if(!j.noSetup){
+      if(!isNoSetup){
         if(ji > 0 && jobs[ji-1] && jobs[ji-1].end){
           setupStart = jobs[ji-1].end;
         }
@@ -4829,10 +4832,11 @@ async function importFromProductionPlan(){
         plan:        j.plan  || 0,
         mountCount:  j.ninzu || 0,  // 段取り人数（金型取付、C列）
         workerCount: j.hito  || 0,  // 作業人数（D列次行、hitoFromNextRow設定で取得）
-        mountKata:   j.kata  || 1,  // 型数 N
+        mountKata:   j.kata  || 0,  // 型数 N（0=未設定）
+        noSetup:     isNoSetup,
         status,
         roles: { 条件設定:'', 金型取付:'', リフト:'', 品質確認:'', 初品出し:'', 作業者:'' },
-        note:        j.noSetup ? '（段取りなし）' : '',
+        note:        isNoSetup ? '（段取りなし）' : '',
         isManual:    false,
         fromPlan:    true,
         updatedAt:   Date.now(),
@@ -5089,81 +5093,85 @@ async function autoAssignRoles(){
     const ps       = toMin(entry.prodStart);  // 生産開始（金型取付終了の基準）
     const roles    = { 品質確認:'', 初品出し:'', 金型取付:'', 作業者:'' };
 
-    // ① 品質確認（約5分で完了 → QUALITY_BUSY_MIN分だけbusyに）
-    const qual = findWorker('quality', entry.lineId, s, e);
-    if(qual){
-      roles.品質確認 = qual;
-      markBusy(qual, s, s + QUALITY_BUSY_MIN, `品質確認 ${linePart}`);
-    } else {
-      const qualAll = hasRoleData
-        ? allPressWorkers.filter(w => workerHasRole(w,'quality') &&
-            (!WORKER_PRIORITY_LINE[w] || WORKER_PRIORITY_LINE[w] === entry.lineId ||
-             getSameGroupNoWork(entry.lineId).includes(WORKER_PRIORITY_LINE[w])))
-        : (PRESS_LINE_MASTER[entry.lineId] ? [resolveWorkerName(PRESS_LINE_MASTER[entry.lineId].quality)] : []);
-      const qualConflict = qualAll.filter(w => isBusy(w, s, e)).map(w => {
-        const slot = busySlotOf(w, s, e);
-        return `${w}（${slot ? slot.label : '他作業中'} ${slot ? fmtMin(slot.s)+'〜'+fmtMin(slot.e) : ''}）`;
-      });
-      const qualAbsent = qualAll.filter(w => isUnavailableAt(w, s)).map(w => `${w}（出勤なし）`);
-      const detail = [...qualConflict, ...qualAbsent].join('、') || '候補なし';
-      conflicts.push({ type:'conflict', role:'品質確認', linePart, timeStr, detail });
-    }
-
-    // ② 初品出し（短時間作業 → IPPIN_BUSY_MIN分だけbusyに）
-    // qualと同一人物でも可（同一エントリで品質確認+初品出し兼務OK）
-    const ippin = findWorker('ippin', entry.lineId, s, e, qual ? [qual] : []);
-    if(ippin){
-      roles.初品出し = ippin;
-      markBusy(ippin, s, s + IPPIN_BUSY_MIN, `初品出し ${linePart}`);
-    } else {
-      const ippinAll = hasRoleData
-        ? allPressWorkers.filter(w => workerHasRole(w,'ippin') &&
-            (!WORKER_PRIORITY_LINE[w] || WORKER_PRIORITY_LINE[w] === entry.lineId ||
-             getSameGroupNoWork(entry.lineId).includes(WORKER_PRIORITY_LINE[w])))
-        : (PRESS_LINE_MASTER[entry.lineId] ? [resolveWorkerName(PRESS_LINE_MASTER[entry.lineId].ippin)] : []);
-      const ippinConflict = ippinAll.filter(w => isBusy(w, s, e)).map(w => {
-        const slot = busySlotOf(w, s, e);
-        return `${w}（${slot ? slot.label : '他作業中'} ${slot ? fmtMin(slot.s)+'〜'+fmtMin(slot.e) : ''}）`;
-      });
-      const ippinAbsent = ippinAll.filter(w => isUnavailableAt(w, s)).map(w => `${w}（出勤なし）`);
-      if(ippinAll.length){
-        const detail = [...ippinConflict, ...ippinAbsent].join('、') || '候補なし';
-        conflicts.push({ type:'conflict', role:'初品出し', linePart, timeStr, detail });
+    // 段取りなしの場合は①②③をスキップ（品質確認・初品出し・金型取付は不要）
+    let qual = null, ippin = null, mountAvail = [];
+    if(!entry.noSetup){
+      // ① 品質確認（約5分で完了 → QUALITY_BUSY_MIN分だけbusyに）
+      qual = findWorker('quality', entry.lineId, s, e);
+      if(qual){
+        roles.品質確認 = qual;
+        markBusy(qual, s, s + QUALITY_BUSY_MIN, `品質確認 ${linePart}`);
+      } else {
+        const qualAll = hasRoleData
+          ? allPressWorkers.filter(w => workerHasRole(w,'quality') &&
+              (!WORKER_PRIORITY_LINE[w] || WORKER_PRIORITY_LINE[w] === entry.lineId ||
+               getSameGroupNoWork(entry.lineId).includes(WORKER_PRIORITY_LINE[w])))
+          : (PRESS_LINE_MASTER[entry.lineId] ? [resolveWorkerName(PRESS_LINE_MASTER[entry.lineId].quality)] : []);
+        const qualConflict = qualAll.filter(w => isBusy(w, s, e)).map(w => {
+          const slot = busySlotOf(w, s, e);
+          return `${w}（${slot ? slot.label : '他作業中'} ${slot ? fmtMin(slot.s)+'〜'+fmtMin(slot.e) : ''}）`;
+        });
+        const qualAbsent = qualAll.filter(w => isUnavailableAt(w, s)).map(w => `${w}（出勤なし）`);
+        const detail = [...qualConflict, ...qualAbsent].join('、') || '候補なし';
+        conflicts.push({ type:'conflict', role:'品質確認', linePart, timeStr, detail });
       }
-    }
 
-    // ③ 金型取付（段取り専任: setupStart〜prodStart の間のみbusy）
-    // 品質確認・初品出しと同じ人でもOK / ライン外(noLine)は除く
-    const mountEnd = (ps && ps > s) ? ps : s + 1; // 段取り終了 = 生産開始
-    const thisEntryAssigned = [qual, ippin].filter(Boolean);
-    const mountAvail = findMountWorkers(entry.lineId, thisEntryAssigned, s, mountEnd, entry.mountCount||0);
-    if(mountAvail.length){
-      roles.金型取付 = mountAvail.join('、');
-      // 金型取付はsetupStart〜prodStart(段取りフェーズ)だけbusy
-      mountAvail.forEach(w => markBusy(w, s, mountEnd, `金型取付 ${linePart}`));
-      const need = entry.mountCount || 0;
-      if(need > 0 && mountAvail.length < need){
-        shortages.push({ role:'金型取付', linePart, timeStr,
-          detail:`人数不足 ${mountAvail.length}人割当 / ${need}人必要（追加候補なし）` });
+      // ② 初品出し（短時間作業 → IPPIN_BUSY_MIN分だけbusyに）
+      // qualと同一人物でも可（同一エントリで品質確認+初品出し兼務OK）
+      ippin = findWorker('ippin', entry.lineId, s, e, qual ? [qual] : []);
+      if(ippin){
+        roles.初品出し = ippin;
+        markBusy(ippin, s, s + IPPIN_BUSY_MIN, `初品出し ${linePart}`);
+      } else {
+        const ippinAll = hasRoleData
+          ? allPressWorkers.filter(w => workerHasRole(w,'ippin') &&
+              (!WORKER_PRIORITY_LINE[w] || WORKER_PRIORITY_LINE[w] === entry.lineId ||
+               getSameGroupNoWork(entry.lineId).includes(WORKER_PRIORITY_LINE[w])))
+          : (PRESS_LINE_MASTER[entry.lineId] ? [resolveWorkerName(PRESS_LINE_MASTER[entry.lineId].ippin)] : []);
+        const ippinConflict = ippinAll.filter(w => isBusy(w, s, e)).map(w => {
+          const slot = busySlotOf(w, s, e);
+          return `${w}（${slot ? slot.label : '他作業中'} ${slot ? fmtMin(slot.s)+'〜'+fmtMin(slot.e) : ''}）`;
+        });
+        const ippinAbsent = ippinAll.filter(w => isUnavailableAt(w, s)).map(w => `${w}（出勤なし）`);
+        if(ippinAll.length){
+          const detail = [...ippinConflict, ...ippinAbsent].join('、') || '候補なし';
+          conflicts.push({ type:'conflict', role:'初品出し', linePart, timeStr, detail });
+        }
       }
-    } else {
-      const mountAll = getMountCandidatesAll(entry.lineId);
-      const busyOnes = mountAll.filter(w => isBusy(w, s, mountEnd) && !thisEntryAssigned.includes(w)).map(w => {
-        const slot = busySlotOf(w, s, mountEnd);
-        return `${w}（${slot ? slot.label : '他'} ${slot ? fmtMin(slot.s)+'〜'+fmtMin(slot.e) : ''}）`;
-      });
-      const absentOnes = mountAll.filter(w => isUnavailableAt(w, s) && !thisEntryAssigned.includes(w))
-        .map(w => `${w}（出勤なし）`);
-      const noLineOnes = (hasRoleData ? allPressWorkers : []).filter(w =>
-        workerHasRole(w,'noLine') && (WORKER_PRIORITY_LINE[w] === entry.lineId || !WORKER_PRIORITY_LINE[w])
-      );
-      const detail = [
-        busyOnes.length   ? `重複中: ${busyOnes.join('、')}` : '',
-        absentOnes.length ? `出勤なし: ${absentOnes.join('、')}` : '',
-        noLineOnes.length ? `ライン外: ${noLineOnes.join('、')}` : '',
-      ].filter(Boolean).join(' ／ ');
-      shortages.push({ role:'金型取付', linePart, timeStr, detail: detail||'候補者なし' });
-    }
+
+      // ③ 金型取付（段取り専任: setupStart〜prodStart の間のみbusy）
+      // 品質確認・初品出しと同じ人でもOK / ライン外(noLine)は除く
+      const mountEnd = (ps && ps > s) ? ps : s + 1; // 段取り終了 = 生産開始
+      const thisEntryAssigned = [qual, ippin].filter(Boolean);
+      mountAvail = findMountWorkers(entry.lineId, thisEntryAssigned, s, mountEnd, entry.mountCount||0);
+      if(mountAvail.length){
+        roles.金型取付 = mountAvail.join('、');
+        // 金型取付はsetupStart〜prodStart(段取りフェーズ)だけbusy
+        mountAvail.forEach(w => markBusy(w, s, mountEnd, `金型取付 ${linePart}`));
+        const need = entry.mountCount || 0;
+        if(need > 0 && mountAvail.length < need){
+          shortages.push({ role:'金型取付', linePart, timeStr,
+            detail:`人数不足 ${mountAvail.length}人割当 / ${need}人必要（追加候補なし）` });
+        }
+      } else {
+        const mountAll = getMountCandidatesAll(entry.lineId);
+        const busyOnes = mountAll.filter(w => isBusy(w, s, mountEnd) && !thisEntryAssigned.includes(w)).map(w => {
+          const slot = busySlotOf(w, s, mountEnd);
+          return `${w}（${slot ? slot.label : '他'} ${slot ? fmtMin(slot.s)+'〜'+fmtMin(slot.e) : ''}）`;
+        });
+        const absentOnes = mountAll.filter(w => isUnavailableAt(w, s) && !thisEntryAssigned.includes(w))
+          .map(w => `${w}（出勤なし）`);
+        const noLineOnes = (hasRoleData ? allPressWorkers : []).filter(w =>
+          workerHasRole(w,'noLine') && (WORKER_PRIORITY_LINE[w] === entry.lineId || !WORKER_PRIORITY_LINE[w])
+        );
+        const detail = [
+          busyOnes.length   ? `重複中: ${busyOnes.join('、')}` : '',
+          absentOnes.length ? `出勤なし: ${absentOnes.join('、')}` : '',
+          noLineOnes.length ? `ライン外: ${noLineOnes.join('、')}` : '',
+        ].filter(Boolean).join(' ／ ');
+        shortages.push({ role:'金型取付', linePart, timeStr, detail: detail||'候補者なし' });
+      }
+    } // end !noSetup
 
     // ④ 作業者（生産フェーズ: prodStart〜prodEnd でbusy）
     // ルール: 金型取付した人を優先して作業者に → 不足分のみ別の作業者を追加
@@ -8586,7 +8594,9 @@ window.onImpFile=async function(){
         const nv=parseInt(String(dataRows[i+1][plIdx]||'').replace(/[^\d]/g,''));
         if(nv>0&&nv<=100) hito=nv; // 作業人数は100人以下と想定
       }
-      jobs.push({seq:jobs.length+1,part,plan,kata,ninzu,hito,start,end,status:'waiting',actualCount:0,actualStart:'',actualEnd:''});
+      // C列の型数・人数が両方0の場合は段取りなし扱い
+      const noSetup = (kata === 0 && ninzu === 0);
+      jobs.push({seq:jobs.length+1,part,plan,kata,ninzu,hito,start,end,noSetup,status:'waiting',actualCount:0,actualStart:'',actualEnd:''});
     }
     return jobs;
   }
