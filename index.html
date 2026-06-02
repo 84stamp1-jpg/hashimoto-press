@@ -406,7 +406,12 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
       <div class="msg" id="gmsg"></div>
     </div>
     <div class="fc" style="margin-top:8px;">
-      <div class="ftitle">段取り標準時間設定（分）</div>
+      <div class="ftitle">段取り標準時間設定</div>
+      <div style="font-size:11px;color:#888;margin-bottom:8px;line-height:1.6;">
+        ライン毎に「前作業の片付け時間（C）」と「次作業の準備時間（P）」を設定します。<br>
+        <b>計算式：</b> 段取り時間 ＝ C × 人数 ＋ P × 型数 ÷ 人数
+        <span style="margin-left:8px;color:#1a1a1a;">例）3型・2人 ＝ C×2 ＋ P×3÷2</span>
+      </div>
       <div class="sr2" id="srRows"></div>
       <button class="bp" onclick="saveSets()">保存する</button>
       <div class="msg" id="smsg"></div>
@@ -513,6 +518,8 @@ function getLineName(id){return lineNamesMap[id]||lines[id]?.name||id;}
 
 const SDEFS={A1:45,A2:45,B1:60,B2:45,BP2:45,CP3:45,CP3_2:45};
 let lines={},sets={...SDEFS};
+// 段取り時間の内訳（片付けC分＋準備P分）per lineId
+let setupParams={}; // { lineId: { c:前作業片付け分, p:次作業準備分 } }
 
 onValue(ref(db,'.info/connected'),s=>{
   const b=document.getElementById('conn');
@@ -537,6 +544,8 @@ onValue(ref(db,'settings'),s=>{
   // 段取り時間：新形式(setupTimes)・旧形式両対応
   if(v.setupTimes) sets={...SDEFS,...v.setupTimes};
   else { const st={};Object.keys(v).forEach(k=>{if(typeof v[k]==='number')st[k]=v[k];});if(Object.keys(st).length)sets={...SDEFS,...st}; }
+  // 段取り時間の内訳(C+P)
+  if(v.setupParams&&typeof v.setupParams==='object') setupParams={...v.setupParams};
   // グループ設定
   if(v.groups&&Array.isArray(v.groups)&&v.groups.length){
     groupCfg=v.groups.map(g=>({gid:g.gid||g.label||'g',label:g.label||g.gid||'グループ',ids:Array.isArray(g.ids)?[...g.ids]:[],importMap:g.importMap||{}}));
@@ -1823,22 +1832,54 @@ window.doCorr=function(){
 window.renderSR=function(){
   const allIds=getAllIDS();
   document.getElementById('srRows').innerHTML=allIds.length
-    ?allIds.map(id=>`
-      <div class="sr2-row">
-        <label>${getLineName(id)}</label>
-        <input type="number" id="st-${id}" value="${sets[id]!==undefined?sets[id]:45}" min="0" max="180">
-        <span>分（標準）</span>
-      </div>`).join('')
+    ?allIds.map(id=>{
+      const sp=setupParams[id]||{};
+      const c=sp.c!==undefined?sp.c:Math.round((sets[id]||45)/2);
+      const p=sp.p!==undefined?sp.p:Math.round((sets[id]||45)/2);
+      return `
+      <div class="sr2-row" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px;">
+        <label style="min-width:70px;">${getLineName(id)}</label>
+        <span style="font-size:11px;color:#888;">片付け</span>
+        <input type="number" id="st-c-${id}" value="${c}" min="0" max="120" style="width:55px;padding:3px 5px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:12px;">
+        <span style="font-size:11px;color:#888;">分 ＋ 準備</span>
+        <input type="number" id="st-p-${id}" value="${p}" min="0" max="120" style="width:55px;padding:3px 5px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:12px;">
+        <span style="font-size:11px;color:#888;">分</span>
+        <span style="font-size:11px;color:#1a1a1a;font-weight:700;">＝ <span id="st-calc-${id}">${c+p}</span>分（1型1人）</span>
+      </div>`;
+    }).join('')
     :'<div style="color:#aaa;font-size:12px;padding:8px 0;">ラインが登録されていません</div>';
+  // リアルタイム合計表示
+  getAllIDS().forEach(id=>{
+    ['c','p'].forEach(k=>{
+      const el=document.getElementById(`st-${k}-${id}`);
+      if(el) el.addEventListener('input',()=>{
+        const c2=parseInt(document.getElementById(`st-c-${id}`)?.value)||0;
+        const p2=parseInt(document.getElementById(`st-p-${id}`)?.value)||0;
+        const calc=document.getElementById(`st-calc-${id}`);
+        if(calc) calc.textContent=c2+p2;
+      });
+    });
+  });
 };
 window.saveSets=function(){
   const allIds=getAllIDS();
-  const ns={};allIds.forEach(id=>{const v=parseInt(document.getElementById('st-'+id)?.value);ns[id]=isNaN(v)?45:v;});
-  // 新形式：setupTimesとgroupsを一緒に保存
+  const ns={};    // setupTimes（互換用: C+P合計）
+  const nsp={};   // setupParams（内訳）
+  allIds.forEach(id=>{
+    const c=parseInt(document.getElementById(`st-c-${id}`)?.value);
+    const p=parseInt(document.getElementById(`st-p-${id}`)?.value);
+    const cv=isNaN(c)?15:c, pv=isNaN(p)?15:p;
+    ns[id]=cv+pv;
+    nsp[id]={c:cv,p:pv};
+  });
+  // 保存
   const cur={}; try{ const snap=window._lastSettingsVal||{}; Object.assign(cur,snap); }catch(e){}
   cur.setupTimes=ns;
+  cur.setupParams=nsp;
   cur.groups=groupCfg.map(g=>({gid:g.gid,label:g.label,ids:[...g.ids],importMap:g.importMap||{}}));
   set(ref(db,'settings'),cur);
+  sets={...SDEFS,...ns};
+  setupParams={...nsp};
   const m=document.getElementById('smsg');m.textContent='保存しました ✓';setTimeout(()=>{m.textContent='';},2000);
 };
 
@@ -1918,6 +1959,7 @@ window.renderGrpMgr=function(){
               <div><label style="color:#888;display:block;margin-bottom:2px;">計画数 列</label><input type="text" id="mp-${gi}-plan" value="${mp.planCol||'B'}" placeholder="B" style="width:45px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
               <div><label style="color:#888;display:block;margin-bottom:2px;">開始時刻 列</label><input type="text" id="mp-${gi}-start" value="${mp.startCol||'C'}" placeholder="C" style="width:45px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
               <div><label style="color:#888;display:block;margin-bottom:2px;">終了時刻 列</label><input type="text" id="mp-${gi}-end" value="${mp.endCol||'D'}" placeholder="D" style="width:45px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
+              <div><label style="color:#888;display:block;margin-bottom:2px;">型数/人数 列<span style="color:#aaa;font-size:10px;margin-left:3px;">（*型/*人）</span></label><input type="text" id="mp-${gi}-kata" value="${mp.kataCol||''}" placeholder="例: C" style="width:45px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
               <div style="grid-column:1/-1;"><label style="color:#888;display:block;margin-bottom:2px;">品番が「-」の場合の代替列<span style="color:#aaa;font-size:10px;margin-left:4px;">（空欄=使わない）</span></label><input type="text" id="mp-${gi}-altpart" value="${mp.altPartCol||''}" placeholder="例: C" style="width:45px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
             </div>
           </div>
@@ -1990,6 +2032,7 @@ function syncGrpMgrForm(){
       filterValues,
       skipNoTime:skipNoTimeEl?skipNoTimeEl.checked:true,
       hitoFromNextRow:hitoNextEl?hitoNextEl.checked:false,
+      kataCol:(document.getElementById(`mp-${gi}-kata`)?.value||'').trim().toUpperCase()||undefined,
       altPartCol:(document.getElementById(`mp-${gi}-altpart`)?.value||'').trim().toUpperCase()
     };
   });
@@ -2050,6 +2093,7 @@ window.saveGroups=function(){
       filterValues,
       skipNoTime:(document.getElementById(`mp-${gi}-skipnot`)?.checked!==false),
       hitoFromNextRow:(document.getElementById(`mp-${gi}-hitonext`)?.checked||false),
+      kataCol:(document.getElementById(`mp-${gi}-kata`)?.value||'').trim().toUpperCase()||undefined,
       altPartCol:(document.getElementById(`mp-${gi}-altpart`)?.value||'').trim().toUpperCase()
     };
   });
@@ -2171,9 +2215,13 @@ window.onImpFile=async function(){
 
   const skipNoTime=mp.skipNoTime!==false; // デフォルトtrue（時刻なし行をスキップ）
   const hitoFromNextRow=mp.hitoFromNextRow||false; // 次行を作業人数として読む
-  const altPIdx=colToIdx(mp.altPartCol||''); // 代替品番列インデックス（-1=未設定）
+  const kataIdx=colToIdx(mp.kataCol||'');          // 型数/人数列（例: C）
+  const altPIdx=colToIdx(mp.altPartCol||'');        // 代替品番列
   // 「-」判定（半角・全角ダッシュ・ハイフンのみの文字列）
   function isDash(s){return /^[-－ー]+$/.test(s);}
+  // セル値から「N型」→N、「N人」→N を抽出するヘルパー
+  function parseKata(cell){const m=String(cell||'').match(/(\d+)\s*型/);return m?parseInt(m[1]):0;}
+  function parseNinzu(cell){const m=String(cell||'').match(/(\d+)\s*人/);return m?parseInt(m[1]):0;}
   // 行データ配列 → jobsオブジェクト配列
   function parseRows(rows){
     const jobs=[];
@@ -2193,17 +2241,25 @@ window.onImpFile=async function(){
       const end=parseTime(row[enIdx]);
       // 時刻なし行スキップ設定が有効なら、開始・終了どちらかが空の行を除外
       if(skipNoTime&&(!start||!end)) continue;
-      // 次行を作業人数として読む（品番なし次行の計画数列の値）
-      let hito=0;
+      // 型数: kataColが設定されていれば本番行から「N型」を取得
+      const kata=kataIdx>=0?parseKata(row[kataIdx]):0;
+      // 次行を作業人数(hito)・人数(ninzu)として読む
+      let hito=0, ninzu=0;
       if(hitoFromNextRow&&i+1<dataRows.length){
         const nr=dataRows[i+1];
         const nrPart=String(nr[pIdx]||'').trim();
         if(!nrPart||isDash(nrPart)){
           const nrVal=parseInt(String(nr[plIdx]||'').replace(/[^\d]/g,''));
-          if(nrVal>0){hito=nrVal;i++;} // 作業人数行をスキップ
+          if(nrVal>0) hito=nrVal;
+          // kataColの次行から「N人」→ 人数も取得
+          if(kataIdx>=0) ninzu=parseNinzu(nr[kataIdx]);
+          // 次行をスキップ（hito または ninzu のどちらか取れれば）
+          if(hito>0||ninzu>0) i++;
         }
       }
-      jobs.push({seq:jobs.length+1,part,plan,hito,start,end,status:'waiting',actualCount:0,actualStart:'',actualEnd:''});
+      // ninzu（*人）が取れた場合はhitoとして使用（D列の数値と同じはずだが念のため優先）
+      if(ninzu>0) hito=ninzu;
+      jobs.push({seq:jobs.length+1,part,plan,kata,hito,start,end,status:'waiting',actualCount:0,actualStart:'',actualEnd:''});
     }
     return jobs;
   }
@@ -2256,16 +2312,20 @@ window.onImpFile=async function(){
           const start=parseTime(row[stIdx]);
           const end=parseTime(row[enIdx]);
           if(skipNoTime&&(!start||!end)) continue; // メモ行スキップ
-          let hito=0;
+          const kata=kataIdx>=0?parseKata(row[kataIdx]):0;
+          let hito=0, ninzu=0;
           if(hitoFromNextRow&&fi+1<filtered.length){
             const nr=filtered[fi+1];
             const nrPart=String(nr[pIdx]||'').trim();
             if(!nrPart||isDash(nrPart)){
               const nrVal=parseInt(String(nr[plIdx]||'').replace(/[^\d]/g,''));
-              if(nrVal>0){hito=nrVal;fi++;}
+              if(nrVal>0) hito=nrVal;
+              if(kataIdx>=0) ninzu=parseNinzu(nr[kataIdx]);
+              if(hito>0||ninzu>0) fi++;
             }
           }
-          jobs.push({seq:jobs.length+1,part,plan,hito,start,end,status:'waiting',actualCount:0,actualStart:'',actualEnd:''});
+          if(ninzu>0) hito=ninzu;
+          jobs.push({seq:jobs.length+1,part,plan,kata,hito,start,end,status:'waiting',actualCount:0,actualStart:'',actualEnd:''});
         }
         _impParsedJobs[id]=jobs;
       }
@@ -2298,13 +2358,15 @@ function renderImpPreview(jobsObj,mp,g){
       continue;
     }
     const hasHito=jobs.some(j=>j.hito>0);
+    const hasKata=jobs.some(j=>j.kata>0);
     h+=`<div style="font-size:11px;font-weight:700;color:#1a1a1a;margin:8px 0 3px;">📌 ${lineName}（${jobs.length}件）</div>`;
-    h+=`<div style="overflow-x:auto;margin-bottom:4px;"><table class="jtbl"><thead><tr><th>#</th><th>品番</th><th>計画数</th><th>開始</th><th>終了</th>${hasHito?'<th>作業人数</th>':''}</tr></thead><tbody>`;
+    const colCount=5+(hasKata?1:0)+(hasHito?1:0);
+    h+=`<div style="overflow-x:auto;margin-bottom:4px;"><table class="jtbl"><thead><tr><th>#</th><th>品番</th><th>計画数</th><th>開始</th><th>終了</th>${hasKata?'<th>型数</th>':''}${hasHito?'<th>人数</th>':''}</tr></thead><tbody>`;
     jobs.slice(0,8).forEach(j=>{
       const warn=!j.start||!j.end?' style="background:#fff8e1;"':'';
-      h+=`<tr${warn}><td>${j.seq}</td><td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${j.part}</td><td>${j.plan.toLocaleString()}個</td><td>${j.start||'<span style="color:#e67e22;">--</span>'}</td><td>${j.end||'<span style="color:#e67e22;">--</span>'}</td>${hasHito?`<td style="text-align:center;">${j.hito>0?j.hito+'人':'<span style="color:#aaa;">-</span>'}</td>`:''}</tr>`;
+      h+=`<tr${warn}><td>${j.seq}</td><td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${j.part}</td><td>${j.plan.toLocaleString()}個</td><td>${j.start||'<span style="color:#e67e22;">--</span>'}</td><td>${j.end||'<span style="color:#e67e22;">--</span>'}</td>${hasKata?`<td style="text-align:center;">${j.kata>0?j.kata+'型':'<span style="color:#aaa;">-</span>'}</td>`:''}${hasHito?`<td style="text-align:center;">${j.hito>0?j.hito+'人':'<span style="color:#aaa;">-</span>'}</td>`:''}</tr>`;
     });
-    if(jobs.length>8) h+=`<tr><td colspan="${hasHito?6:5}" style="text-align:center;color:#aaa;font-size:10px;">…他${jobs.length-8}件</td></tr>`;
+    if(jobs.length>8) h+=`<tr><td colspan="${colCount}" style="text-align:center;color:#aaa;font-size:10px;">…他${jobs.length-8}件</td></tr>`;
     h+='</tbody></table></div>';
   }
   prevEl.innerHTML=h;
