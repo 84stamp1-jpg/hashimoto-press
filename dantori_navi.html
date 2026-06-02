@@ -1664,6 +1664,28 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 
 </div><!-- /app -->
 
+<!-- ===== PINモーダル ===== -->
+<div class="modal-overlay" id="pinModal" style="display:none;z-index:600;" onclick="pinModalBgClick(event)">
+  <div class="modal" style="max-width:320px;text-align:center;">
+    <div style="font-size:20px;margin-bottom:8px;">🔒</div>
+    <h3 style="margin-bottom:4px;">管理者PIN</h3>
+    <p style="font-size:12px;color:#888;margin-bottom:16px;">設定を変更するにはPINを入力してください</p>
+    <input type="password" id="pinInput" maxlength="8"
+      placeholder="PINを入力"
+      style="width:100%;padding:10px;font-size:18px;text-align:center;letter-spacing:6px;border:2px solid #ddd;border-radius:8px;outline:none;"
+      onkeydown="if(event.key==='Enter')checkPinSubmit()"
+      oninput="document.getElementById('pinError').textContent=''"/>
+    <div id="pinError" style="color:#dc2626;font-size:12px;min-height:18px;margin:6px 0;"></div>
+    <div class="modal-btns">
+      <button onclick="closePinModal()" style="flex:1;padding:9px;border-radius:6px;font-size:13px;cursor:pointer;border:1px solid #ddd;background:#fff;">キャンセル</button>
+      <button onclick="checkPinSubmit()" class="save-btn" style="flex:1;padding:9px;border-radius:6px;font-size:13px;cursor:pointer;border:none;background:#1a1a1a;color:#fff;">確認</button>
+    </div>
+    <div style="margin-top:12px;font-size:11px;color:#aaa;">
+      初期PIN: <b>1234</b>（設定内で変更できます）
+    </div>
+  </div>
+</div>
+
 <!-- ===== 設定モーダル ===== -->
 <div class="modal-overlay" id="configModal" style="display:none;" onclick="closeConfigIfBg(event)">
   <div class="modal">
@@ -1772,6 +1794,24 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
     <div class="modal-btns">
       <button onclick="closeConfig()">キャンセル</button>
       <button class="save-btn" onclick="saveConfig()">保存して接続</button>
+    </div>
+
+    <!-- PIN変更セクション -->
+    <div style="border-top:1px solid #f0f0f0;margin-top:18px;padding-top:14px;">
+      <div style="font-size:12px;font-weight:600;color:#666;margin-bottom:10px;">🔒 管理者PIN変更</div>
+      <div class="form-group" style="margin-bottom:8px;">
+        <label>現在のPIN</label>
+        <input type="password" id="pin-current" maxlength="8" placeholder="現在のPIN"/>
+      </div>
+      <div class="form-group" style="margin-bottom:8px;">
+        <label>新しいPIN（4桁以上）</label>
+        <input type="password" id="pin-new" maxlength="8" placeholder="新しいPIN"/>
+      </div>
+      <div class="form-group" style="margin-bottom:10px;">
+        <label>新しいPIN（確認）</label>
+        <input type="password" id="pin-confirm" maxlength="8" placeholder="もう一度入力"/>
+      </div>
+      <button onclick="changeAdminPin()" style="padding:7px 16px;border:1px solid #1a1a1a;border-radius:6px;font-size:12px;cursor:pointer;background:#1a1a1a;color:#fff;">PINを変更する</button>
     </div>
   </div>
 </div>
@@ -2026,7 +2066,8 @@ let config = Object.assign({}, FIXED_CONFIG, {
   staff:       savedConfig.staff     || [],
 });
 
-function showConfig(){
+function showConfig(){ requirePin(_showConfigDirect); }
+function _showConfigDirect(){
   document.getElementById('cfg-domain').value   = config.domain || '';
   document.getElementById('cfg-appid').value    = config.appId  || '';
   document.getElementById('cfg-token').value    = config.token  || '';
@@ -2248,6 +2289,72 @@ function switchTab(name){
 }
 
 // 進捗管理タブ: ネイティブ実装のためiframe関数を削除
+
+// ===== PIN認証 =====
+const PIN_KEY = 'hhub_admin_pin';
+let _pinUnlocked = false;  // セッション中の解錠状態
+let _pinCallback  = null;
+
+function requirePin(callback){
+  if(_pinUnlocked){ callback(); return; }
+  _pinCallback = callback;
+  const el = document.getElementById('pinInput');
+  if(el){ el.value=''; }
+  document.getElementById('pinError').textContent = '';
+  document.getElementById('pinModal').style.display = 'flex';
+  setTimeout(()=>{ if(el) el.focus(); }, 80);
+}
+
+function checkPinSubmit(){
+  const entered = (document.getElementById('pinInput').value||'').trim();
+  const stored  = localStorage.getItem(PIN_KEY) || '1234';
+  if(entered === stored){
+    _pinUnlocked = true;
+    document.getElementById('pinModal').style.display = 'none';
+    if(_pinCallback){ const cb = _pinCallback; _pinCallback = null; cb(); }
+  } else {
+    document.getElementById('pinError').textContent = 'PINが違います';
+    document.getElementById('pinInput').value = '';
+    document.getElementById('pinInput').focus();
+  }
+}
+
+function closePinModal(){
+  document.getElementById('pinModal').style.display = 'none';
+  _pinCallback = null;
+}
+
+function pinModalBgClick(e){
+  if(e.target === document.getElementById('pinModal')) closePinModal();
+}
+
+// PIN変更（設定画面から呼ぶ）
+function changeAdminPin(){
+  const cur  = (document.getElementById('pin-current')||{}).value || '';
+  const next = (document.getElementById('pin-new')||{}).value || '';
+  const conf = (document.getElementById('pin-confirm')||{}).value || '';
+  const stored = localStorage.getItem(PIN_KEY) || '1234';
+  if(cur !== stored){ alert('現在のPINが違います'); return; }
+  if(next.length < 4){ alert('新しいPINは4桁以上にしてください'); return; }
+  if(next !== conf){ alert('新しいPINと確認が一致しません'); return; }
+  localStorage.setItem(PIN_KEY, next);
+  alert('PINを変更しました');
+  ['pin-current','pin-new','pin-confirm'].forEach(id=>{ const e=document.getElementById(id); if(e)e.value=''; });
+}
+
+// 進捗ボードの sw('settings') をPIN保護（モジュールロード後に上書き）
+window.addEventListener('load', function(){
+  const _origSw = window.sw;
+  if(typeof _origSw === 'function'){
+    window.sw = function(tab){
+      if(tab === 'settings'){
+        requirePin(function(){ _origSw('settings'); });
+      } else {
+        _origSw(tab);
+      }
+    };
+  }
+});
 
 // ===== デモデータ =====
 const DEMO_PARTS = [
