@@ -527,8 +527,9 @@ function calcSetupTime(lineId, kata, ninzu){
   const base = sets[lineId] || 45;
   if(!kata || !ninzu) return base;
   const sp = setupParams[lineId];
-  if(!sp || (!sp.c && !sp.p)) return base;
-  const c = sp.c || 0, p = sp.p || 0;
+  // setupParams未設定の場合はbase値を半分ずつC/Pのデフォルトとして使用
+  const c = (sp && sp.c != null) ? sp.c : Math.round(base / 2);
+  const p = (sp && sp.p != null) ? sp.p : (base - Math.round(base / 2));
   return Math.round(c * ninzu + p * kata / ninzu);
 }
 
