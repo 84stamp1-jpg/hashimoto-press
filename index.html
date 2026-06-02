@@ -2219,9 +2219,14 @@ window.onImpFile=async function(){
   const altPIdx=colToIdx(mp.altPartCol||'');        // 代替品番列
   // 「-」判定（半角・全角ダッシュ・ハイフンのみの文字列）
   function isDash(s){return /^[-－ー]+$/.test(s);}
-  // セル値から「N型」→N、「N人」→N を抽出するヘルパー
+  // セル値から「N型」→型数N、「N人」→人数N を抽出（数値のみでも人数と解釈）
   function parseKata(cell){const m=String(cell||'').match(/(\d+)\s*型/);return m?parseInt(m[1]):0;}
-  function parseNinzu(cell){const m=String(cell||'').match(/(\d+)\s*人/);return m?parseInt(m[1]):0;}
+  function parseNinzu(cell){
+    const s=String(cell||'').trim();
+    const m=s.match(/(\d+)\s*人/);if(m)return parseInt(m[1]);
+    // 「人」なしの純粋な数値（1〜20）は段取り人数と解釈
+    const n=parseInt(s);return(!isNaN(n)&&n>=1&&n<=20)?n:0;
+  }
   // 行データ配列 → jobsオブジェクト配列
   function parseRows(rows){
     const jobs=[];
@@ -2241,25 +2246,26 @@ window.onImpFile=async function(){
       const end=parseTime(row[enIdx]);
       // 時刻なし行スキップ設定が有効なら、開始・終了どちらかが空の行を除外
       if(skipNoTime&&(!start||!end)) continue;
-      // 型数: kataColが設定されていれば本番行から「N型」を取得
-      const kata=kataIdx>=0?parseKata(row[kataIdx]):0;
-      // 次行を作業人数(hito)・人数(ninzu)として読む
-      let hito=0, ninzu=0;
+      // C列（kataCol）から本番行の「N型」と「N人（段取り人数）」を取得
+      let kata=0, ninzu=0;
+      if(kataIdx>=0){
+        kata =parseKata(row[kataIdx]);   // 型数
+        ninzu=parseNinzu(row[kataIdx]);  // 段取り人数（C列）
+      }
+      // 次行をD列作業人数(hito)として読む（段取り人数ninzuとは別）
+      let hito=0;
       if(hitoFromNextRow&&i+1<dataRows.length){
         const nr=dataRows[i+1];
         const nrPart=String(nr[pIdx]||'').trim();
         if(!nrPart||isDash(nrPart)){
           const nrVal=parseInt(String(nr[plIdx]||'').replace(/[^\d]/g,''));
           if(nrVal>0) hito=nrVal;
-          // kataColの次行から「N人」→ 人数も取得
-          if(kataIdx>=0) ninzu=parseNinzu(nr[kataIdx]);
-          // 次行をスキップ（hito または ninzu のどちらか取れれば）
-          if(hito>0||ninzu>0) i++;
+          // kataColの次行に「N人」があればninzuを上書き（より明示的）
+          if(kataIdx>=0){const nv=parseNinzu(nr[kataIdx]);if(nv>0) ninzu=nv;}
+          if(hito>0||(kataIdx>=0&&(parseKata(nr[kataIdx])>0||parseNinzu(nr[kataIdx])>0))) i++;
         }
       }
-      // ninzu（*人）が取れた場合はhitoとして使用（D列の数値と同じはずだが念のため優先）
-      if(ninzu>0) hito=ninzu;
-      jobs.push({seq:jobs.length+1,part,plan,kata,hito,start,end,status:'waiting',actualCount:0,actualStart:'',actualEnd:''});
+      jobs.push({seq:jobs.length+1,part,plan,kata,ninzu,hito,start,end,status:'waiting',actualCount:0,actualStart:'',actualEnd:''});
     }
     return jobs;
   }
@@ -2312,20 +2318,20 @@ window.onImpFile=async function(){
           const start=parseTime(row[stIdx]);
           const end=parseTime(row[enIdx]);
           if(skipNoTime&&(!start||!end)) continue; // メモ行スキップ
-          const kata=kataIdx>=0?parseKata(row[kataIdx]):0;
-          let hito=0, ninzu=0;
+          let kata=0, ninzu=0;
+          if(kataIdx>=0){kata=parseKata(row[kataIdx]);ninzu=parseNinzu(row[kataIdx]);}
+          let hito=0;
           if(hitoFromNextRow&&fi+1<filtered.length){
             const nr=filtered[fi+1];
             const nrPart=String(nr[pIdx]||'').trim();
             if(!nrPart||isDash(nrPart)){
               const nrVal=parseInt(String(nr[plIdx]||'').replace(/[^\d]/g,''));
               if(nrVal>0) hito=nrVal;
-              if(kataIdx>=0) ninzu=parseNinzu(nr[kataIdx]);
-              if(hito>0||ninzu>0) fi++;
+              if(kataIdx>=0){const nv=parseNinzu(nr[kataIdx]);if(nv>0) ninzu=nv;}
+              if(hito>0||(kataIdx>=0&&(parseKata(nr[kataIdx])>0||parseNinzu(nr[kataIdx])>0))) fi++;
             }
           }
-          if(ninzu>0) hito=ninzu;
-          jobs.push({seq:jobs.length+1,part,plan,kata,hito,start,end,status:'waiting',actualCount:0,actualStart:'',actualEnd:''});
+          jobs.push({seq:jobs.length+1,part,plan,kata,ninzu,hito,start,end,status:'waiting',actualCount:0,actualStart:'',actualEnd:''});
         }
         _impParsedJobs[id]=jobs;
       }
@@ -2357,14 +2363,15 @@ function renderImpPreview(jobsObj,mp,g){
       h+=`<div style="font-size:11px;color:#bbb;margin-bottom:4px;">　${lineName}：データなし</div>`;
       continue;
     }
-    const hasHito=jobs.some(j=>j.hito>0);
-    const hasKata=jobs.some(j=>j.kata>0);
+    const hasKata =jobs.some(j=>j.kata >0);
+    const hasNinzu=jobs.some(j=>j.ninzu>0);
+    const hasHito =jobs.some(j=>j.hito >0);
     h+=`<div style="font-size:11px;font-weight:700;color:#1a1a1a;margin:8px 0 3px;">📌 ${lineName}（${jobs.length}件）</div>`;
-    const colCount=5+(hasKata?1:0)+(hasHito?1:0);
-    h+=`<div style="overflow-x:auto;margin-bottom:4px;"><table class="jtbl"><thead><tr><th>#</th><th>品番</th><th>計画数</th><th>開始</th><th>終了</th>${hasKata?'<th>型数</th>':''}${hasHito?'<th>人数</th>':''}</tr></thead><tbody>`;
+    const colCount=5+(hasKata?1:0)+(hasNinzu?1:0)+(hasHito?1:0);
+    h+=`<div style="overflow-x:auto;margin-bottom:4px;"><table class="jtbl"><thead><tr><th>#</th><th>品番</th><th>計画数</th><th>開始</th><th>終了</th>${hasKata?'<th>型数</th>':''}${hasNinzu?'<th>段取人数</th>':''}${hasHito?'<th>作業人数</th>':''}</tr></thead><tbody>`;
     jobs.slice(0,8).forEach(j=>{
       const warn=!j.start||!j.end?' style="background:#fff8e1;"':'';
-      h+=`<tr${warn}><td>${j.seq}</td><td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${j.part}</td><td>${j.plan.toLocaleString()}個</td><td>${j.start||'<span style="color:#e67e22;">--</span>'}</td><td>${j.end||'<span style="color:#e67e22;">--</span>'}</td>${hasKata?`<td style="text-align:center;">${j.kata>0?j.kata+'型':'<span style="color:#aaa;">-</span>'}</td>`:''}${hasHito?`<td style="text-align:center;">${j.hito>0?j.hito+'人':'<span style="color:#aaa;">-</span>'}</td>`:''}</tr>`;
+      h+=`<tr${warn}><td>${j.seq}</td><td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${j.part}</td><td>${j.plan.toLocaleString()}個</td><td>${j.start||'<span style="color:#e67e22;">--</span>'}</td><td>${j.end||'<span style="color:#e67e22;">--</span>'}</td>${hasKata?`<td style="text-align:center;">${j.kata>0?j.kata+'型':'<span style="color:#aaa;">-</span>'}</td>`:''}${hasNinzu?`<td style="text-align:center;">${j.ninzu>0?j.ninzu+'人':'<span style="color:#aaa;">-</span>'}</td>`:''}${hasHito?`<td style="text-align:center;">${j.hito>0?j.hito+'人':'<span style="color:#aaa;">-</span>'}</td>`:''}</tr>`;
     });
     if(jobs.length>8) h+=`<tr><td colspan="${colCount}" style="text-align:center;color:#aaa;font-size:10px;">…他${jobs.length-8}件</td></tr>`;
     h+='</tbody></table></div>';
@@ -2547,24 +2554,41 @@ window.savePlanEdit=async function(){
 };
 
 window.doImport=async function(){
-  const activeIds=Object.keys(_impParsedJobs).filter(id=>(_impParsedJobs[id]||[]).length>0);
-  if(!activeIds.length){alert('インポートするデータがありません');return;}
+  const gi=parseInt(document.getElementById('impGrp').value)||0;
+  const g=groupCfg[gi]||groupCfg[0];
+  const allGroupIds=(g.ids||[]);
+  const activeIds=allGroupIds.filter(id=>(_impParsedJobs[id]||[]).length>0);
+  const emptyIds =allGroupIds.filter(id=>!(_impParsedJobs[id]||[]).length); // データなし行
+  if(!activeIds.length && !emptyIds.length){alert('インポートするデータがありません');return;}
   const totalJobs=activeIds.reduce((s,id)=>s+(_impParsedJobs[id]||[]).length,0);
-  const lineNames=activeIds.map(id=>getLineName(id)).join('、');
-  if(!confirm(`${lineNames}\n合計 ${totalJobs}件 の計画データをインポートします。\n既存の計画データは上書きされます。よろしいですか？`)) return;
+  const lineNames=activeIds.map(id=>getLineName(id)).join('、')||'なし';
+  const emptyNames=emptyIds.map(id=>getLineName(id)).join('、');
+  const confirmMsg=`【インポート】${lineNames}　合計${totalJobs}件\n`
+    +(emptyNames?`【データなし→クリア】${emptyNames}\n`:'')
+    +`\n既存の計画データは上書きされます。よろしいですか？`;
+  if(!confirm(confirmMsg)) return;
   const btn=document.getElementById('impBtn');
   btn.disabled=true;
   const m=document.getElementById('impmsg');
   m.style.color='#888';m.textContent='書き込み中...';
   try{
     const updates={};
+    // データありラインを上書き
     activeIds.forEach(lineId=>{
       const jobs=_impParsedJobs[lineId];
       const totalPlan=jobs.reduce((s,j)=>s+j.plan,0);
       updates['lines/'+lineId]={jobs,plan:totalPlan,actual:0,part:jobs[0]?.part||'',status:'waiting',updatedAt:0,workStart:'',workEnd:''};
     });
+    // データなしラインはjobsを空配列にクリア（古いデータを残さない）
+    emptyIds.forEach(lineId=>{
+      updates['lines/'+lineId+'/jobs']  = [];
+      updates['lines/'+lineId+'/plan']  = 0;
+      updates['lines/'+lineId+'/part']  = '';
+      updates['lines/'+lineId+'/status']= 'waiting';
+    });
     await update(ref(db),updates);
-    m.style.color='#27ae60';m.textContent=`✓ ${activeIds.length}ライン・${totalJobs}件をインポートしました`;
+    m.style.color='#27ae60';
+    m.textContent=`✓ ${activeIds.length}ライン・${totalJobs}件をインポート`+(emptyIds.length?`　${emptyIds.length}ラインをクリア`:'');
     document.getElementById('impFile').value='';
     document.getElementById('impPreview').innerHTML='';
     _impParsedJobs={};btn.disabled=true;
@@ -2597,7 +2621,7 @@ window.saveSnapshot=function(){
   bar.style.cssText='display:flex;justify-content:space-between;align-items:center;background:#1a1a1a;color:#fff;padding:10px 16px;border-radius:8px;margin-bottom:10px;';
   const title=document.createElement('span');
   title.style.cssText='font-weight:700;font-size:14px;';
-  title.textContent='プレス進捗スナップショット　'+dateStr;
+  title.textContent='進捗管理スナップショット　'+dateStr;
   const btnWrap=document.createElement('div');
   btnWrap.style.cssText='display:flex;gap:8px;';
   const btnPrint=document.createElement('button');
