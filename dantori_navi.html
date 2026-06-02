@@ -1170,7 +1170,8 @@ html, body {
 <div class="content" id="tab-progress">
   <!-- iframeヘッダー非表示の代わりに進捗保存ボタンをここに設置 -->
   <div style="display:flex;align-items:center;gap:8px;padding:4px 10px;background:#1a1a1a;flex-shrink:0;">
-    <span style="color:#fff;font-size:11px;font-weight:700;flex:1;">📊 プレス進捗管理ボード</span>
+    <span style="color:#fff;font-size:11px;font-weight:700;flex:1;">📊 進捗管理ボード</span>
+    <button onclick="pmGoToTab('settings')" style="font-size:11px;padding:3px 12px;background:#555;color:#fff;border:none;border-radius:5px;cursor:pointer;font-weight:700;">⚙️ 設定</button>
     <button onclick="pmSaveSnapshot()" style="font-size:11px;padding:3px 12px;background:#2980b9;color:#fff;border:none;border-radius:5px;cursor:pointer;font-weight:700;">📷 進捗を保存（PDF）</button>
   </div>
   <iframe id="pm-iframe"
@@ -1390,9 +1391,20 @@ html, body {
 
 <!-- ===== 作業者マスタ モーダル ===== -->
 <div class="modal-overlay" id="workerRoleModal" style="display:none;" onclick="closeWorkerRoleIfBg(event)">
-  <div class="modal" style="max-width:660px;">
-    <h3 style="margin:0 0 4px;font-size:15px;">👥 作業者マスタ（プレス）</h3>
-    <p style="font-size:11px;color:#666;margin:0 0 10px;">役割・優先ライン・作業者名を編集できます。Firebaseに保存されます。</p>
+  <div class="modal" style="max-width:680px;">
+    <h3 style="margin:0 0 4px;font-size:15px;">👥 作業者マスタ</h3>
+    <p style="font-size:11px;color:#666;margin:0 0 8px;">役割・優先ライン・作業者名を編集できます。Firebaseに保存されます。</p>
+    <!-- 役割の標準作業時間設定 -->
+    <div style="display:flex;gap:16px;align-items:center;padding:7px 10px;background:#f1f5f9;border-radius:6px;margin-bottom:10px;font-size:12px;">
+      <span style="color:#475569;font-weight:600;">⏱ 標準作業時間：</span>
+      <label style="display:flex;align-items:center;gap:4px;color:#1d4ed8;">品質確認
+        <input type="number" id="wrm-quality-mins" min="1" max="60" value="5" style="width:48px;padding:2px 5px;border:1px solid #cbd5e1;border-radius:4px;font-size:12px;text-align:center;">分
+      </label>
+      <label style="display:flex;align-items:center;gap:4px;color:#7c3aed;">初品出し
+        <input type="number" id="wrm-ippin-mins" min="1" max="60" value="10" style="width:48px;padding:2px 5px;border:1px solid #cbd5e1;border-radius:4px;font-size:12px;text-align:center;">分
+      </label>
+      <span style="font-size:10px;color:#94a3b8;">※ busyとみなす時間。それ以外は他の作業に入れます</span>
+    </div>
     <div style="overflow-x:auto;max-height:55vh;overflow-y:auto;">
       <table id="workerRoleTable" style="width:100%;border-collapse:collapse;font-size:12px;">
         <thead style="position:sticky;top:0;z-index:1;">
@@ -1767,15 +1779,14 @@ function initPmTab(){
 // 進捗管理タブの「📷 進捗を保存」ボタン → iframe内のsaveSnapshot()を呼び出す
 function pmSaveSnapshot(){
   var ifr = document.getElementById('pm-iframe');
-  if(!ifr || !ifr.contentWindow){
-    alert('進捗管理ボードが読み込まれていません');
-    return;
-  }
-  try {
-    ifr.contentWindow.saveSnapshot();
-  } catch(e){
-    alert('保存できませんでした: ' + e.message);
-  }
+  if(!ifr || !ifr.contentWindow){ alert('進捗管理ボードが読み込まれていません'); return; }
+  try { ifr.contentWindow.saveSnapshot(); } catch(e){ alert('保存できませんでした: ' + e.message); }
+}
+// 進捗管理ボード内のタブに切り替える（設定タブなど）
+function pmGoToTab(tabName){
+  var ifr = document.getElementById('pm-iframe');
+  if(!ifr || !ifr.contentWindow){ alert('進捗管理ボードが読み込まれていません'); return; }
+  try { ifr.contentWindow.sw(tabName); } catch(e){ alert('タブ切替に失敗しました: ' + e.message); }
 }
 
 // ===== デモデータ =====
@@ -3186,6 +3197,8 @@ let WORKER_PRIORITY_LINE = {};
 // Firebase settings/workerAttendance — 当日出勤状況 {フルネーム: {am:bool, pm:bool}}
 // am/pm 両方true=終日, amのみ=午前のみ, pmのみ=午後のみ, 両方false=欠勤
 let WORKER_ATTENDANCE = {};
+// Firebase settings/roleTimeMins — 品質確認・初品出しの標準作業時間（分）
+let ROLE_TIME_MINS = { quality: 5, ippin: 10 };
 
 function workerHasRole(name, role){
   return (WORKER_ROLE_MASTER[name] || []).includes(role);
@@ -3201,6 +3214,11 @@ function getPressWorkerList(){
 // ===== 作業者マスタ UI =====
 function showWorkerRoleMaster(){
   renderWorkerRoleMaster();
+  // 現在の標準時間を設定UIに反映
+  const qEl = document.getElementById('wrm-quality-mins');
+  const iEl = document.getElementById('wrm-ippin-mins');
+  if(qEl) qEl.value = ROLE_TIME_MINS.quality || 5;
+  if(iEl) iEl.value = ROLE_TIME_MINS.ippin   || 10;
   document.getElementById('workerRoleModal').style.display = 'flex';
   document.getElementById('workerRoleSaveStatus').textContent = '';
 }
@@ -3346,14 +3364,21 @@ async function saveWorkerRoleMaster(){
   statusEl.style.color = '#0369a1';
   statusEl.textContent = '💾 保存中...';
 
+  // 標準作業時間
+  const newRoleTime = {
+    quality: parseInt(document.getElementById('wrm-quality-mins')?.value) || 5,
+    ippin:   parseInt(document.getElementById('wrm-ippin-mins')?.value)   || 10,
+  };
+
   try {
     const fbUrl = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/, '');
     // 並行保存
     const saves = [
-      fetch(`${fbUrl}/settings/workerRoles.json`,        { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newRoles)  }),
-      fetch(`${fbUrl}/settings/pressWorkerList.json`,    { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newList)   }),
-      fetch(`${fbUrl}/settings/workerPriorityLine.json`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newPriLine)}),
-      fetch(`${fbUrl}/settings/workerAttendance.json`,   { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newAtt)    }),
+      fetch(`${fbUrl}/settings/workerRoles.json`,        { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newRoles)    }),
+      fetch(`${fbUrl}/settings/pressWorkerList.json`,    { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newList)     }),
+      fetch(`${fbUrl}/settings/workerPriorityLine.json`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newPriLine)  }),
+      fetch(`${fbUrl}/settings/workerAttendance.json`,   { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newAtt)      }),
+      fetch(`${fbUrl}/settings/roleTimeMins.json`,       { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newRoleTime) }),
     ];
     const results = await Promise.all(saves);
     results.forEach(function(r){ if(!r.ok) throw new Error('HTTP ' + r.status); });
@@ -3362,6 +3387,7 @@ async function saveWorkerRoleMaster(){
     PRESS_WORKER_LIST    = newList;
     WORKER_PRIORITY_LINE = newPriLine;
     WORKER_ATTENDANCE    = newAtt;
+    ROLE_TIME_MINS       = newRoleTime;
     updateStaffDatalist();
     statusEl.style.color = '#059669';
     statusEl.textContent = '✓ 保存しました（' + newList.length + '名）';
@@ -3404,6 +3430,9 @@ async function loadDantoriSettings(){
     }
     if(s.workerAttendance && typeof s.workerAttendance === 'object'){
       WORKER_ATTENDANCE = s.workerAttendance;
+    }
+    if(s.roleTimeMins && typeof s.roleTimeMins === 'object'){
+      ROLE_TIME_MINS = { quality: s.roleTimeMins.quality || 5, ippin: s.roleTimeMins.ippin || 10 };
     }
     updateStaffDatalist(); // 作業者マスタ読み込み後にdatalist更新
     renderDantori(); // グループ情報が揃ったら再描画
@@ -4116,7 +4145,7 @@ function renderPressTimeline(allEntries){
   });
 
   return `<div style="overflow:hidden;">
-  <div class="rt-title">📍 プレス作業者 ライン配置表 ── ${timeStr} 現在　<span style="font-size:10px;color:#aaa;">※ 下の「🤖 自動割り振り」で役割を自動設定できます</span></div>
+  <div class="rt-title">📍 作業者 ライン配置表 ── ${timeStr} 現在　<span style="font-size:10px;color:#aaa;">※ 下の「🤖 自動割り振り」で役割を自動設定できます</span></div>
   <div class="rt-outer">
     <div class="rt-hdr">
       <div class="rt-hdr-name">担当者</div>
@@ -4170,7 +4199,8 @@ async function importFromProductionPlan(){
         prodStart:  j.start,
         prodEnd:    j.end,
         plan:       j.plan || 0,
-        mountCount: j.hito  || 0,   // 作業人数（進捗南里から取込）
+        mountCount: j.hito  || 0,   // 作業人数 M（進捗南里から取込）
+        mountKata:  j.kata  || 1,   // 型数 N（進捗南里から取込）
         status,
         roles:      { 条件設定:'', 金型取付:'', リフト:'', 品質確認:'' },
         note:       j.noSetup ? '（段取りなし）' : '',
@@ -4197,6 +4227,7 @@ async function importFromProductionPlan(){
   const preview = Object.entries(byGroup).map(([g, es]) =>
     `[プレス${g}]\n` + es.map(e =>
       `  ${LINE_LABEL[e.lineId]||e.lineId}: ${e.partNo}  ${e.setupStart?e.setupStart+'→':''}${e.prodStart}～${e.prodEnd}` +
+      (e.mountKata > 1 ? `  🔧${e.mountKata}型` : '') +
       (e.mountCount > 0 ? `  👷${e.mountCount}人` : '')
     ).join('\n')
   ).join('\n');
@@ -4278,8 +4309,9 @@ async function autoAssignRoles(){
   }
 
   // ── 時間重複チェック ──────────────────────────
-  // 品質確認・初品出しは約5分で完了するため、busy登録はその分だけ
-  const QUALITY_BUSY_MIN = 5;
+  // 品質確認・初品出しは短時間作業 → ROLE_TIME_MINSの分だけbusyに
+  const QUALITY_BUSY_MIN = ROLE_TIME_MINS.quality || 5;
+  const IPPIN_BUSY_MIN   = ROLE_TIME_MINS.ippin   || 10;
 
   const busyMap = {};
   const isBusy = (w, s, e) => {
@@ -4326,29 +4358,27 @@ async function autoAssignRoles(){
   }
 
   // 品質確認・初品出しを探す（グループフォールバック付き）
-  function findWorker(role, lineId, s, e){
+  // allowBusy: 同一エントリで既に別役割を持つ人（busyチェック免除）
+  function findWorker(role, lineId, s, e, allowBusy=[]){
+    const canWork = w => !isUnavailableAt(w, s) && (!isBusy(w, s, e) || allowBusy.includes(w));
     if(hasRoleData){
-      const cands = allPressWorkers.filter(w =>
-        workerHasRole(w, role) && !isUnavailableAt(w, s)
-      );
-      // ① 優先ライン一致 → 空き
-      const prio = cands.filter(w => WORKER_PRIORITY_LINE[w] === lineId && !isBusy(w, s, e));
+      const cands = allPressWorkers.filter(w => workerHasRole(w, role));
+      // ① 優先ライン一致
+      const prio = cands.filter(w => WORKER_PRIORITY_LINE[w] === lineId && canWork(w));
       if(prio.length) return prio[0];
-      // ② 同グループで仕事なし → 空き（グループ応援）
+      // ② 同グループで仕事なし（グループ応援）
       const freeLines = getSameGroupNoWork(lineId);
-      const grp = cands.filter(w =>
-        freeLines.includes(WORKER_PRIORITY_LINE[w]) && !isBusy(w, s, e)
-      );
+      const grp = cands.filter(w => freeLines.includes(WORKER_PRIORITY_LINE[w]) && canWork(w));
       if(grp.length) return grp[0];
-      // ③ 優先ライン未設定（フローティング）→ 空き
-      const floating = cands.filter(w => !WORKER_PRIORITY_LINE[w] && !isBusy(w, s, e));
+      // ③ 優先ライン未設定（フローティング）
+      const floating = cands.filter(w => !WORKER_PRIORITY_LINE[w] && canWork(w));
       if(floating.length) return floating[0];
     }
     // フォールバック: PRESS_LINE_MASTER
     const plm = PRESS_LINE_MASTER[lineId];
     if(plm){
       const fb = resolveWorkerName(role === 'quality' ? plm.quality : plm.ippin);
-      if(fb && !isBusy(fb, s, e) && !isUnavailableAt(fb, s)) return fb;
+      if(fb && canWork(fb)) return fb;
     }
     return null;
   }
@@ -4451,11 +4481,12 @@ async function autoAssignRoles(){
       conflicts.push({ type:'conflict', role:'品質確認', linePart, timeStr, detail });
     }
 
-    // ② 初品出し（約5分で完了 → QUALITY_BUSY_MIN分だけbusyに）
-    const ippin = findWorker('ippin', entry.lineId, s, e);
+    // ② 初品出し（短時間作業 → IPPIN_BUSY_MIN分だけbusyに）
+    // qualと同一人物でも可（同一エントリで品質確認+初品出し兼務OK）
+    const ippin = findWorker('ippin', entry.lineId, s, e, qual ? [qual] : []);
     if(ippin){
       roles.初品出し = ippin;
-      markBusy(ippin, s, s + QUALITY_BUSY_MIN, `初品出し ${linePart}`);
+      markBusy(ippin, s, s + IPPIN_BUSY_MIN, `初品出し ${linePart}`);
     } else {
       const ippinAll = hasRoleData
         ? allPressWorkers.filter(w => workerHasRole(w,'ippin') &&
@@ -4480,9 +4511,8 @@ async function autoAssignRoles(){
     const mountAvail = findMountWorkers(entry.lineId, thisEntryAssigned, s, e, entry.mountCount||0);
     if(mountAvail.length){
       roles.金型取付 = mountAvail.join('、');
-      // mountに追加された人（質/初品と別の人）をbusy登録
-      mountAvail.filter(w => !thisEntryAssigned.includes(w))
-        .forEach(w => markBusy(w, s, e, `金型取付 ${linePart}`));
+      // 金型取付担当者は段取り後そのまま生産に入るため、全員を[s,e]でbusy登録
+      mountAvail.forEach(w => markBusy(w, s, e, `金型取付 ${linePart}`));
       // 作業人数より割り当てが少ない場合も不足として警告
       const need = entry.mountCount || 0;
       if(need > 0 && mountAvail.length < need){
