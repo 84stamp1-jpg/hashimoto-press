@@ -831,10 +831,11 @@ html, body {
       <button class="kanban-tab active" data-page="kp1" onclick="switchKanbanPage('kp1')">A・Bライン</button>
       <button class="kanban-tab"        data-page="kp2" onclick="switchKanbanPage('kp2')">C・Dライン</button>
       <button class="kanban-tab"        data-page="kp3" onclick="switchKanbanPage('kp3')">組立・検査</button>
-      <button class="kanban-tab"        data-page="kp4" onclick="switchKanbanPage('kp4')">🔧 プレス計画</button>
+      <button class="kanban-tab"        data-page="kp4" onclick="switchKanbanPage('kp4')">📍 配置表</button>
     </div>
     <button class="btn" style="padding:5px 10px;font-size:11px;" onclick="refreshDantori()">↻ 更新</button>
     <button class="add-btn-dt" style="background:#0369a1;" onclick="importFromProductionPlan()">📥 計画取込</button>
+    <button class="add-btn-dt" style="background:#7c3aed;" onclick="autoAssignRoles()" title="PRESS_LINE_MASTERに基づき品質確認・リフト・金型取付を自動割り振り">🤖 自動割り振り</button>
     <button class="add-btn-dt" onclick="showAddDantori()">＋ 追加</button>
   </div>
   <div class="dantori-list" id="dantoriList">
@@ -861,6 +862,7 @@ html, body {
     <div class="qc-tab qc-active" id="qc-tab-form" onclick="qcShowScreen('form')">📝 記録する</div>
     <div class="qc-tab" id="qc-tab-list" onclick="qcShowScreen('list')">📋 日別一覧</div>
     <div class="qc-tab" id="qc-tab-search" onclick="qcShowScreen('search')">🔍 製造番号</div>
+    <div class="qc-tab" id="qc-tab-upload" onclick="qcShowScreen('upload')">📤 予定更新</div>
   </div>
 
   <!-- 記録フォーム -->
@@ -1091,6 +1093,54 @@ html, body {
     <div id="qc-seizo-result"><div class="qc-empty">製造番号または品番を入力してください</div></div>
   </div>
   </div><!-- /qc-screen-search -->
+
+  <!-- 生産予定更新 -->
+  <div class="qc-screen" id="qc-screen-upload">
+  <div class="qc-cont">
+
+    <!-- ① 再取得 -->
+    <div class="qc-card" style="margin-bottom:10px;">
+      <div class="qc-card-title" style="margin-bottom:8px;">🔄 スプレッドシートから再取得</div>
+      <p style="font-size:12px;color:#555;margin-bottom:10px;">
+        Googleスプレッドシートを直接編集した場合は、このボタンでデータを最新状態に更新します。
+      </p>
+      <div id="qc-reload-status" style="font-size:12px;color:#1F4E79;margin-bottom:8px;display:none;"></div>
+      <button class="qc-btn" onclick="qcReloadSakuyo()" style="margin-bottom:0;">🔄 最新データを取得する</button>
+    </div>
+
+    <!-- ② ファイルアップロード -->
+    <div class="qc-card">
+      <div class="qc-card-title" style="margin-bottom:8px;">📥 ファイルから生産予定を更新</div>
+      <p style="font-size:12px;color:#555;margin-bottom:10px;">
+        Excelまたは CSVファイルを選択すると内容をプレビューします。<br>
+        確認後「スプレッドシートに反映」で更新されます。<br>
+        <span style="color:#E24B4A;font-weight:600;">※ スプレッドシートの既存データは上書きされます</span>
+      </p>
+
+      <!-- ファイル選択 -->
+      <label style="display:flex;align-items:center;gap:8px;padding:10px 14px;border:2px dashed #b0c8e8;border-radius:8px;cursor:pointer;background:#f0f6ff;margin-bottom:10px;">
+        <span style="font-size:20px;">📂</span>
+        <span style="font-size:13px;color:#1F4E79;font-weight:600;">ファイルを選択 (.xlsx / .csv)</span>
+        <input type="file" id="qc-upload-file" accept=".xlsx,.xls,.csv" style="display:none;" onchange="qcOnUploadFile(this)">
+      </label>
+      <div id="qc-upload-filename" style="font-size:12px;color:#888;margin-bottom:6px;"></div>
+
+      <!-- プレビューテーブル -->
+      <div id="qc-upload-preview" style="display:none;">
+        <div style="font-size:12px;font-weight:700;color:#333;margin-bottom:6px;" id="qc-upload-count"></div>
+        <div style="overflow-x:auto;border:1px solid #dde;border-radius:6px;margin-bottom:10px;">
+          <table id="qc-upload-table" style="border-collapse:collapse;font-size:11px;min-width:100%;"></table>
+        </div>
+        <!-- 列マッピング確認 -->
+        <div id="qc-upload-colmap" style="background:#f0f6ff;border-radius:6px;padding:8px 10px;font-size:11px;margin-bottom:10px;"></div>
+        <button class="qc-btn" id="qc-upload-send-btn" onclick="qcSendSakuyoToGas()" style="background:#1F4E79;">スプレッドシートに反映する</button>
+        <div id="qc-upload-send-status" style="font-size:12px;margin-top:8px;display:none;"></div>
+      </div>
+    </div>
+
+  </div>
+  </div><!-- /qc-screen-upload -->
+
 </div><!-- /tab-quality -->
 
 <!-- ===== 進捗管理タブ ===== -->
@@ -2808,7 +2858,14 @@ function updatePersonPanel(){
 
     return `
     <div class="pp-card">
-      <div class="pp-name"><span class="pp-name-left">${name}</span>${badge}</div>
+      <div class="pp-name">
+        <span class="pp-name-left">${name}</span>
+        <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
+          ${badge}
+          <button onclick="event.stopPropagation();switchTab('quality')" title="品質チェックシートを開く"
+            style="font-size:9px;padding:1px 5px;border:1px solid #bfdbfe;border-radius:4px;background:#eff6ff;cursor:pointer;color:#1d4ed8;font-weight:600;white-space:nowrap;">✅QC</button>
+        </div>
+      </div>
       ${bodyHtml}${extra}
     </div>`;
   }).join('');
@@ -3064,7 +3121,7 @@ const KANBAN_PAGES = [
     cols:[{name:'永丘'},{name:'近藤'},{name:'大塚'},{name:'鈴木'},{name:'野口'}]
   },
   {
-    id:'kp4', label:'プレス計画', type:'press'
+    id:'kp4', label:'配置表', type:'press'
   }
 ];
 let kanbanPage = 'kp1';
@@ -3611,10 +3668,39 @@ function rt_toMin(t){ if(!t) return null; const [h,m] = t.split(':').map(Number)
 // 担当者マスター（セクション付き。設定で上書き可）
 const WORKER_MASTER = [
   { section:'プレス', names:['見原　一彦','仲田　涼真','長田　由香倫','大石　章宏',
-                              '松浦　広治','吉田　光好','柴田　晃宏','横田川　延広'] },
+                              '松浦　広治','吉田　光好','柴田　晃宏','横田川　延広',
+                              '伊藤','ジュン','ノア','ダール','中野','アリ',
+                              'ジャン','マット','フン'] },
   { section:'組立',   names:['永丘　克也','近藤　満','大塚　圭汰','鈴木　里美','野口　敦子'] },
   { section:'品管・総務', names:['八木　貴志','杉山　好美','登﨑　千春'] },
 ];
+
+// ===== プレスライン別作業者マスター（自動割り振り用） =====
+// quality: 品質確認担当（段取り時に品質チェック）
+// ippin:   リフト担当（初品確認）
+// workers: 金型取付候補（ライン作業者）
+const PRESS_LINE_MASTER = {
+  'A1':           { quality:'仲田',   ippin:'長田',  workers:['伊藤'] },
+  'A2':           { quality:'仲田',   ippin:'長田',  workers:['長田'] },
+  'Bライン':      { quality:'見原',   ippin:'吉田',  workers:['吉田','ジュン','ノア','中野','アリ','柴田'] },
+  'B1':           { quality:'見原',   ippin:'吉田',  workers:['松浦'] },
+  'B2':           { quality:'見原',   ippin:'吉田',  workers:['ダール','横田川'] },
+  'Cライン①':    { quality:'大石章', ippin:'ジャン', workers:['ジャン','マット'] },
+  'Cライン②':    { quality:'大石章', ippin:'ジャン', workers:['マット','フン'] },
+  'ロボットライン':{ quality:'大石章', ippin:'ジャン', workers:['フン'] },
+};
+
+// ===== 作業者名 正規化（略称→フルネーム変換） =====
+// PRESS_LINE_MASTERの略称（例:'仲田'）をWORKER_MASTERのフルネーム（例:'仲田　涼真'）に変換する
+function resolveWorkerName(abbrev){
+  if(!abbrev) return abbrev;
+  const a = abbrev.trim();
+  const allNames = WORKER_MASTER.flatMap(s => s.names);
+  if(allNames.includes(a)) return a;                       // 完全一致
+  const norm = s => s.replace(/[\s　]+/g, '');             // スペース除去
+  const match = allNames.find(n => norm(n).startsWith(norm(a)));
+  return match || a;                                       // 見つからなければ元の値
+}
 
 function getAllWorkerNames(){
   // マスター + config.staff* + スケジュール内の役割 を統合
@@ -3785,7 +3871,7 @@ function renderPressTimeline(allEntries){
   });
 
   return `<div style="overflow:hidden;">
-  <div class="rt-title">🔧 プレス作業者 配置タイムライン ── ${timeStr} 現在　<span style="font-size:10px;color:#aaa;">※ タスク追加機能は準備中</span></div>
+  <div class="rt-title">📍 プレス作業者 ライン配置表 ── ${timeStr} 現在　<span style="font-size:10px;color:#aaa;">※ 下の「🤖 自動割り振り」で役割を自動設定できます</span></div>
   <div class="rt-outer">
     <div class="rt-hdr">
       <div class="rt-hdr-name">担当者</div>
@@ -3892,9 +3978,111 @@ async function importFromProductionPlan(){
     await fetch(`${fbUrl}/dantori/${dateStr}.json`,
       {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newData)});
     await loadDantoriSchedule();
-    alert(`✓ ${entries.length} 件の段取り計画を取り込みました`);
+    alert(`✓ ${entries.length} 件の段取り計画を取り込みました\n\n計画修正時は「📥 計画取込」を再度押すと上書き更新されます`);
   } catch(e){
     alert('取込エラー: ' + e.message);
+  }
+}
+
+// ===== 役割 自動割り振り =====
+// PRESS_LINE_MASTERに基づき、時間重複なしで品質確認・リフト・金型取付を自動設定
+// 条件設定は常に空にする
+async function autoAssignRoles(){
+  const targets = dantoriSchedule.filter(d => PRESS_LINE_MASTER[d.lineId]);
+  if(!targets.length){
+    alert('割り振り対象の段取り計画がありません。\n計画取込後に実行してください。');
+    return;
+  }
+
+  const toMin = t => { if(!t)return null; const [h,m]=t.split(':').map(Number); return isNaN(h)?null:h*60+m; };
+
+  // 時間帯重複チェック用マップ
+  const busyMap = {};   // { workerName: [{s, e}] }
+  const isBusy = (w, s, e) => {
+    if(!w || s===null) return false;
+    const effE = (e!==null) ? e : s+60;
+    return (busyMap[w]||[]).some(slot => s < slot.e && effE > slot.s);
+  };
+  const markBusy = (w, s, e) => {
+    if(!w || s===null) return;
+    if(!busyMap[w]) busyMap[w] = [];
+    busyMap[w].push({ s, e:(e!==null)?e:s+60 });
+  };
+
+  // 時刻順にソートして割り振り（早い順に優先）
+  const sorted = [...targets].sort((a, b) =>
+    (toMin(a.setupStart||a.prodStart)||9999) - (toMin(b.setupStart||b.prodStart)||9999)
+  );
+
+  const conflicts = [];
+  sorted.forEach(entry => {
+    const m = PRESS_LINE_MASTER[entry.lineId];
+    if(!m) return;
+    const s = toMin(entry.setupStart||entry.prodStart);
+    const e = toMin(entry.prodEnd||entry.prodStart);
+
+    const roles = { 条件設定:'', 品質確認:'', リフト:'', 金型取付:'' };
+
+    // 略称→フルネーム変換（Gantt表示とのマッチングに必要）
+    const rqual   = resolveWorkerName(m.quality);
+    const rippin  = m.ippin ? resolveWorkerName(m.ippin) : '';
+    const rWorkers = m.workers.map(resolveWorkerName);
+
+    // 品質確認（品質マークの作業者）
+    if(!isBusy(rqual, s, e)){
+      roles.品質確認 = rqual;
+      markBusy(rqual, s, e);
+    } else {
+      conflicts.push(`${getLineDisplayName(entry.lineId)} ${entry.setupStart||entry.prodStart}〜: 品質確認(${rqual})が重複`);
+    }
+
+    // リフト（初品マークの作業者）
+    if(rippin && !isBusy(rippin, s, e)){
+      roles.リフト = rippin;
+      markBusy(rippin, s, e);
+    } else if(rippin){
+      conflicts.push(`${getLineDisplayName(entry.lineId)} ${entry.setupStart||entry.prodStart}〜: リフト(${rippin})が重複`);
+    }
+
+    // 金型取付（ライン作業者から利用可能な人を割り当て）
+    const available = rWorkers.filter(w =>
+      w !== rqual && w !== rippin && !isBusy(w, s, e)
+    );
+    if(available.length){
+      roles.金型取付 = available.join('、');
+      available.forEach(w => markBusy(w, s, e));
+    }
+
+    entry.roles = roles;
+  });
+
+  // プレビュー表示
+  const preview = sorted.map(d => {
+    const r = d.roles;
+    const line = getLineDisplayName(d.lineId);
+    const t = (d.setupStart||d.prodStart||'') + (d.prodEnd ? '〜'+d.prodEnd : '');
+    return `${line} ${t}\n  品質:${r.品質確認||'（重複）'} / リフト:${r.リフト||'（重複）'} / 取付:${r.金型取付||'なし'}`;
+  }).join('\n');
+
+  const warnMsg = conflicts.length ? `\n\n⚠ 重複のため未割り振り:\n${conflicts.join('\n')}` : '';
+  if(!confirm(`${sorted.length}件に自動割り振りします:\n\n${preview}${warnMsg}\n\nFirebaseに保存しますか？`)) return;
+
+  // Firebase保存（全エントリを再保存）
+  const fbUrl   = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
+  const dateStr = getDantoriDatePath();
+  try {
+    const newData = {};
+    dantoriSchedule.forEach(e => {
+      const {_id, ...rest} = e;
+      if(_id) newData[_id] = rest;
+    });
+    await fetch(`${fbUrl}/dantori/${dateStr}.json`,
+      {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newData)});
+    await loadDantoriSchedule();
+    renderKanban();
+    alert(`✓ 自動割り振りを保存しました${conflicts.length ? '\n\n※ ' + conflicts.length + '件は重複のため手動確認が必要です' : ''}`);
+  } catch(e){
+    alert('保存エラー: ' + e.message);
   }
 }
 
@@ -4047,6 +4235,204 @@ window.qcOnTabActivated = function(){
   }
 };
 
+// ----- 生産予定 再取得 -----
+window.qcReloadSakuyo = function(){
+  var st = document.getElementById('qc-reload-status');
+  st.style.display = 'block';
+  st.style.color = '#1F4E79';
+  st.textContent = '⏳ データを取得中…';
+  qcGasPost('getSakuyoData', {}, function(res){
+    QC_SAKUYO = (res && res.ok) ? (res.data || []) : [];
+    st.style.color = '#15803d';
+    st.textContent = '✓ ' + QC_SAKUYO.length + '件のデータを取得しました（' + new Date().toLocaleTimeString('ja-JP') + '）';
+  }, function(e){
+    st.style.color = '#E24B4A';
+    st.textContent = '⚠ 取得失敗: ' + (e ? e.message : '通信エラー');
+  });
+};
+
+// ----- 生産予定 ファイルアップロード -----
+var QC_UPLOAD_PARSED = [];  // [{hinban,hinmei,seizoNo,junjo,shiji,kosei,納期}, ...]
+
+// SheetJS 遅延ロード
+function qcLoadSheetJS(cb){
+  if(window.XLSX){ cb(); return; }
+  var s = document.createElement('script');
+  s.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+  s.onload  = cb;
+  s.onerror = function(){ alert('SheetJSの読み込みに失敗しました。インターネット接続を確認してください。'); };
+  document.head.appendChild(s);
+}
+
+window.qcOnUploadFile = function(input){
+  var file = input.files[0];
+  if(!file) return;
+  document.getElementById('qc-upload-filename').textContent = '📄 ' + file.name;
+  document.getElementById('qc-upload-preview').style.display = 'none';
+  QC_UPLOAD_PARSED = [];
+
+  var ext = file.name.split('.').pop().toLowerCase();
+  var reader = new FileReader();
+
+  if(ext === 'csv'){
+    reader.onload = function(e){
+      var text = e.target.result;
+      var lines = text.split(/\r?\n/).filter(function(l){ return l.trim(); });
+      var data  = lines.map(function(l){
+        // RFC4180 簡易パーサ（ダブルクォート対応）
+        var row=[], cur='', inQ=false;
+        for(var i=0;i<l.length;i++){
+          var c=l[i];
+          if(c==='"'){ inQ=!inQ; }
+          else if(c===','&&!inQ){ row.push(cur.trim()); cur=''; }
+          else { cur+=c; }
+        }
+        row.push(cur.trim());
+        return row;
+      });
+      qcProcessSheetData(data);
+    };
+    reader.readAsText(file, 'UTF-8');
+  } else {
+    qcLoadSheetJS(function(){
+      reader.onload = function(e){
+        var wb = XLSX.read(e.target.result, {type:'array', cellDates:true});
+        var ws = wb.Sheets[wb.SheetNames[0]];
+        var data = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+        qcProcessSheetData(data);
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  }
+};
+
+// ヘッダー→フィールド名 マッピング（スプレッドシート実測列名を優先）
+// GAS列構造: A:製造番号 B:工順 C:工程 D:品番 E:品名 G:加工指示数 Z:作業票納期
+var QC_COL_KEYWORDS = {
+  hinban:  ['品番','hinban','品番コード','品目コード'],
+  hinmei:  ['品名','hinmei','製品名','品目名','品目'],
+  seizoNo: ['製造番号','製番','seizono','製造no'],
+  junjo:   ['工順','工程順序','順序','順番','junjo','工程順'],
+  shiji:   ['加工指示数','指示数','生産数','shiji','数量','予定数','計画数'],
+  kosei:   ['工程','kosei','工程名','作業'],
+  納期:    ['作業票納期','工程納期','納期','nouki','納入日','納品日'],
+};
+
+function qcDetectCols(headers){
+  var map = {};
+  headers.forEach(function(h, i){
+    var hl = String(h).toLowerCase().replace(/\s/g,'');
+    Object.keys(QC_COL_KEYWORDS).forEach(function(key){
+      if(map[key] !== undefined) return;
+      QC_COL_KEYWORDS[key].forEach(function(kw){
+        if(hl.indexOf(kw.toLowerCase().replace(/\s/g,'')) >= 0){
+          if(map[key] === undefined) map[key] = i;
+        }
+      });
+    });
+  });
+  return map;
+}
+
+function qcCellStr(v){
+  if(v === null || v === undefined) return '';
+  if(v instanceof Date){
+    // 日付→ MM/DD 形式
+    return (v.getMonth()+1) + '/' + v.getDate();
+  }
+  return String(v).trim();
+}
+
+function qcProcessSheetData(data){
+  if(!data || data.length < 2){
+    alert('データが空か形式が不正です。'); return;
+  }
+  var headers = data[0].map(function(h){ return qcCellStr(h); });
+  var colMap  = qcDetectCols(headers);
+
+  // 全行をパース
+  var rows = [];
+  for(var i=1;i<data.length;i++){
+    var row = data[i];
+    var hinban = colMap.hinban !== undefined ? qcCellStr(row[colMap.hinban]) : '';
+    if(!hinban) continue;  // 品番が空の行はスキップ
+    var obj = { hinban: hinban };
+    ['hinmei','seizoNo','junjo','shiji','kosei','納期'].forEach(function(k){
+      obj[k] = colMap[k] !== undefined ? qcCellStr(row[colMap[k]]) : '';
+    });
+    rows.push(obj);
+  }
+
+  QC_UPLOAD_PARSED = rows;
+
+  // プレビュー描画
+  var previewEl = document.getElementById('qc-upload-preview');
+  var countEl   = document.getElementById('qc-upload-count');
+  var tableEl   = document.getElementById('qc-upload-table');
+  var colmapEl  = document.getElementById('qc-upload-colmap');
+
+  countEl.textContent = '📊 ' + rows.length + '件 検出（先頭5件を表示）';
+
+  // 列マッピング表示
+  var mapLines = Object.keys(colMap).map(function(k){
+    var label = {hinban:'品番',hinmei:'品名',seizoNo:'製造番号',junjo:'順序',shiji:'指示数',kosei:'工程',納期:'納期'}[k] || k;
+    return label + ' → 列' + (colMap[k]+1) + '「' + headers[colMap[k]] + '」';
+  });
+  var unmapped = Object.keys(QC_COL_KEYWORDS).filter(function(k){ return colMap[k]===undefined; })
+    .map(function(k){ return {hinban:'品番',hinmei:'品名',seizoNo:'製造番号',junjo:'順序',shiji:'指示数',kosei:'工程',納期:'納期'}[k]||k; });
+  colmapEl.innerHTML = '<b>🔗 列マッピング：</b> ' + mapLines.join(' ／ ')
+    + (unmapped.length ? '<br><span style="color:#E24B4A;">⚠ 未検出: ' + unmapped.join(', ') + '</span>' : '');
+
+  // プレビューテーブル
+  var keys = ['hinban','hinmei','seizoNo','junjo','shiji','kosei','納期'];
+  var labels = {hinban:'品番',hinmei:'品名',seizoNo:'製造番号',junjo:'順序',shiji:'指示数',kosei:'工程',納期:'納期'};
+  var th = keys.map(function(k){ return '<th style="background:#163d61;color:#fff;padding:4px 8px;white-space:nowrap;">'+labels[k]+'</th>'; }).join('');
+  var tbody = rows.slice(0,5).map(function(r){
+    var tds = keys.map(function(k){ return '<td style="padding:3px 8px;border-bottom:1px solid #eee;white-space:nowrap;">'+(r[k]||'—')+'</td>'; }).join('');
+    return '<tr>'+tds+'</tr>';
+  }).join('');
+  tableEl.innerHTML = '<thead><tr>'+th+'</tr></thead><tbody>'+tbody+'</tbody>';
+
+  document.getElementById('qc-upload-send-status').style.display = 'none';
+  previewEl.style.display = 'block';
+}
+
+window.qcSendSakuyoToGas = function(){
+  if(!QC_UPLOAD_PARSED.length){ alert('ファイルを選択してください。'); return; }
+  if(!confirm(QC_UPLOAD_PARSED.length + '件のデータをスプレッドシートに反映します。\n既存データは上書きされます。\n\nよろしいですか？')) return;
+
+  var statusEl  = document.getElementById('qc-upload-send-status');
+  var sendBtn   = document.getElementById('qc-upload-send-btn');
+  statusEl.style.display  = 'block';
+  statusEl.style.color    = '#1F4E79';
+  statusEl.textContent    = '⏳ 送信中…';
+  sendBtn.disabled        = true;
+
+  qcGasPost('updateSakuyoData', { rows: QC_UPLOAD_PARSED }, function(res){
+    sendBtn.disabled = false;
+    if(res && res.ok){
+      statusEl.style.color = '#15803d';
+      statusEl.textContent = '✓ ' + QC_UPLOAD_PARSED.length + '件を反映しました。データを再取得します…';
+      // 反映後に QC_SAKUYO を再読み込み
+      qcGasPost('getSakuyoData', {}, function(res2){
+        QC_SAKUYO = (res2 && res2.ok) ? (res2.data || []) : QC_UPLOAD_PARSED;
+        statusEl.textContent = '✓ 完了！' + QC_SAKUYO.length + '件を取得しました（' + new Date().toLocaleTimeString('ja-JP') + '）';
+      }, function(){
+        // GAS再取得失敗でもパース済みデータを使う
+        QC_SAKUYO = QC_UPLOAD_PARSED;
+        statusEl.textContent += '（再取得失敗 — ローカルデータを使用中）';
+      });
+    } else {
+      statusEl.style.color = '#E24B4A';
+      statusEl.textContent = '⚠ 反映失敗: ' + (res && res.error ? res.error : '不明なエラー');
+    }
+  }, function(e){
+    sendBtn.disabled = false;
+    statusEl.style.color = '#E24B4A';
+    statusEl.textContent = '⚠ 通信エラー: ' + (e ? e.message : '不明');
+  });
+};
+
 // ----- 品番検索からの遷移 -----
 window.qcFromSearch = function(partNo){
   switchTab('quality');
@@ -4057,11 +4443,11 @@ window.qcFromSearch = function(partNo){
 
 // ----- サブ画面切替 -----
 window.qcShowScreen = function(sc){
-  ['form','list','search','bulk','edit'].forEach(function(s){
+  ['form','list','search','bulk','edit','upload'].forEach(function(s){
     var el = document.getElementById('qc-screen-'+s);
     if(el) el.className = 'qc-screen' + (s===sc?' qc-on':'');
   });
-  ['form','list','search'].forEach(function(s){
+  ['form','list','search','upload'].forEach(function(s){
     var el = document.getElementById('qc-tab-'+s);
     if(el) el.className = 'qc-tab' + (s===sc?' qc-active':'');
   });
