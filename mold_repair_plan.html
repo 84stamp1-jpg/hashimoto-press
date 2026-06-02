@@ -1813,14 +1813,28 @@ function nmRenderChargeChips(){
 }
 function nmRenderLegendItems(){
   const el=document.getElementById('nmLegendItems');if(!el)return;
+  const last=nmLegendMaster.length-1;
   el.innerHTML=nmLegendMaster.map((lg,i)=>`
-    <span class="nm-legend-chip" style="background:${lg.color}">
+    <span class="nm-legend-chip" style="background:${lg.color};align-items:center;gap:2px">
+      <button onclick="nmMoveLegend(${i},-1)" title="上/左へ"
+        style="background:none;border:none;color:rgba(255,255,255,.8);cursor:pointer;font-size:10px;padding:0 1px;line-height:1"
+        ${i===0?'disabled':''}>◀</button>
       <input type="color" value="${lg.color}" title="色変更"
-        style="width:18px;height:18px;border:none;border-radius:3px;cursor:pointer;padding:0;background:none;opacity:.8"
+        style="width:16px;height:16px;border:none;border-radius:2px;cursor:pointer;padding:0;background:none;opacity:.85;flex-shrink:0"
         onchange="nmUpdateLegendColor(${i},this.value)">
       ${nmEsc(lg.name)}
+      <button onclick="nmMoveLegend(${i},1)" title="下/右へ"
+        style="background:none;border:none;color:rgba(255,255,255,.8);cursor:pointer;font-size:10px;padding:0 1px;line-height:1"
+        ${i===last?'disabled':''}>▶</button>
       <button class="nm-chip-del" onclick="nmDelLegend(${i})">×</button>
     </span>`).join('');
+}
+
+function nmMoveLegend(i, dir){
+  const j=i+dir;
+  if(j<0||j>=nmLegendMaster.length)return;
+  [nmLegendMaster[i],nmLegendMaster[j]]=[nmLegendMaster[j],nmLegendMaster[i]];
+  nmSaveMasters();nmRenderLegendBar();nmRenderLegendItems();
 }
 // 凡例バー（ガント上部の選択パレット）
 function nmRenderLegendBar(){
@@ -2096,8 +2110,8 @@ function nmBuildTbody(){
       // Col4: 工程ドロップダウン（部品固有工程＋凡例マスタ）
       const tdProc=document.createElement('td');tdProc.style.cssText='padding:1px;vertical-align:middle;';
       const selP=document.createElement('select');selP.style.cssText='width:100%;font-size:9px;border:1px solid #ccc;border-radius:2px;background:#fff;font-family:inherit;padding:1px;';
+      // キントーン取得の部品固有工程のみ（凡例は含めない）
       const pOpts=['...', ...moldProcs];
-      nmLegendMaster.forEach(lg=>{if(!pOpts.includes(lg.name))pOpts.push(lg.name);});
       if(task.process&&!pOpts.includes(task.process))pOpts.splice(1,0,task.process);
       pOpts.forEach(p=>{const o=document.createElement('option');o.value=p;o.textContent=p;if(p===task.process||(p==='...'&&!task.process))o.selected=true;selP.appendChild(o);});
       selP.addEventListener('change',()=>{task.process=selP.value==='...'?'':selP.value;nmSave();});
