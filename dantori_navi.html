@@ -4581,8 +4581,8 @@ async function autoAssignRoles(){
     // ルール: 金型取付した人を優先して作業者に → 不足分のみ別の作業者を追加
     const wrkCount = entry.workerCount || 0;
     if(wrkCount > 0 && ps && e && ps < e){
-      // ベース: 金型取付した人は全員そのまま作業者に
-      const workerAvail = [...mountAvail];
+      // ベース: 金型取付した人を優先、workerCountを超える場合は先着でカット
+      const workerAvail = mountAvail.slice(0, wrkCount);
 
       // 不足分を補完（金型取付していない人から、prodStart〜prodEnd で空きのある人）
       const shortage = wrkCount - workerAvail.length;
