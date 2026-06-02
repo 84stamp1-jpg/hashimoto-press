@@ -181,6 +181,7 @@ html, body {
 .person-tags{display:flex;gap:5px;flex-wrap:wrap;}
 .ptag{padding:3px 9px;background:#f5f5f3;border:1px solid #e5e5e5;border-radius:20px;font-size:12px;color:#1a1a1a;}
 .ptag.main{background:#1a1a1a;color:white;border-color:#1a1a1a;}
+.ptag-unset{background:#fef2f2;border-color:#fecaca;color:#dc2626;font-size:11px;}
 
 .slack-section{margin-top:12px;}
 .slack-btn{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;padding:10px 16px;border:1px solid #e5e5e5;border-radius:8px;font-size:13px;cursor:pointer;background:white;color:#1a1a1a;transition:all 0.1s;}
@@ -3096,19 +3097,29 @@ function renderDantoriCard(d){
   // ライン表示名（「ライン」の重複を防ぐ）
   const lineName = getLineDisplayName(d.lineId);
 
-  // 段取り時間バー（標準時間を動的計算して表示）
+  // 型数・段取人数・標準時間バッジ（setupStartの有無に関わらず常に表示）
+  const kata_  = d.mountKata  || 1;
+  const ninzu_ = d.mountCount || 0;
+  const stdMin_ = calcDantoriSetupTime(d.lineId, kata_, ninzu_);
+  const worker_ = d.workerCount || 0;
+  const kataInfoHtml = (kata_ > 0 || ninzu_ > 0 || worker_ > 0)
+    ? `<div style="display:flex;gap:8px;align-items:center;padding:2px 14px 4px;font-size:10px;color:#64748b;flex-wrap:wrap;">
+        ${kata_  > 0 ? `<span>🔧 ${kata_}型</span>` : ''}
+        ${ninzu_ > 0 ? `<span>🔩 ${ninzu_}人（金型取付）</span>` : ''}
+        ${worker_> 0 ? `<span>👷 ${worker_}人（作業者）</span>` : ''}
+        ${(ninzu_>0||worker_>0) ? `<span style="color:#94a3b8;">段取標準 ${stdMin_}分</span>` : ''}
+      </div>`
+    : '';
+
+  // 段取り時間バー（段取り開始〜生産開始 実績/予定）
   let setupBar = '';
   if(d.setupStart && d.prodStart){
     const actualMin = calcDurMin(d.setupStart, d.prodStart);
-    const stdMin    = calcDantoriSetupTime(d.lineId, d.mountKata || 1, d.mountCount || 0);
-    const kataStr   = (d.mountKata > 1 || d.mountCount > 0)
-      ? `<span style="font-size:10px;color:#94a3b8;margin-left:4px;">${d.mountKata||1}型/${d.mountCount||'?'}人→標準${stdMin}分</span>`
-      : `<span style="font-size:10px;color:#94a3b8;margin-left:4px;">標準${stdMin}分</span>`;
-    const ratio  = (actualMin && stdMin) ? Math.round(actualMin / stdMin * 100) : null;
+    const ratio  = (actualMin && stdMin_) ? Math.round(actualMin / stdMin_ * 100) : null;
     const ratioStr = ratio !== null
       ? `<span style="font-size:10px;color:${ratio<=100?'#15803d':ratio<=125?'#d97706':'#dc2626'};margin-left:4px;">(${ratio}%)</span>`
       : '';
-    setupBar = `<div class="setup-bar">🔧 段取り：<span class="setup-time-tag">${d.setupStart} 〜 ${d.prodStart}</span>${actualMin ? `<span style="font-size:10px;color:#475569;margin-left:4px;">${actualMin}分</span>` : ''}${ratioStr}${kataStr}</div>`;
+    setupBar = `<div class="setup-bar">🔧 段取り：<span class="setup-time-tag">${d.setupStart} 〜 ${d.prodStart}</span>${actualMin ? `<span style="font-size:10px;color:#475569;margin-left:4px;">${actualMin}分</span>` : ''}${ratioStr}</div>`;
   }
 
   // 生産時間テキスト
@@ -3116,20 +3127,24 @@ function renderDantoriCard(d){
     ? (d.prodEnd ? ` ${d.prodStart}〜${d.prodEnd}` : ` ${d.prodStart}〜`)
     : '';
 
-  // 担当者
+  // 担当者（金型取付と作業者は独立した役割）
   const roles = d.roles || {};
-  const hasRoles = roles.金型取付 || roles.初品出し || roles.品質確認;
+  const hasRoles = roles.金型取付 || roles.初品出し || roles.品質確認 || roles.作業者;
+  const toTags = str => (str||'').split(/[,、]/).map(p=>p.trim()).filter(Boolean)
+    .map(p=>`<span class="ptag">${p}</span>`).join('');
   const rolesHtml = hasRoles ? `
     <div class="dc-roles">
-      ${roles.品質確認?`<div class="role-row"><div class="role-label">品質確認</div><div class="person-tags"><span class="ptag">${roles.品質確認}</span></div></div>`:''}
-      ${roles.初品出し?`<div class="role-row"><div class="role-label">初品出し</div><div class="person-tags"><span class="ptag">${roles.初品出し}</span></div></div>`:''}
-      ${roles.金型取付?`<div class="role-row"><div class="role-label">金型取付</div><div class="person-tags">${roles.金型取付.split(/[,、]/).map(p=>`<span class="ptag">${p.trim()}</span>`).join('')}</div></div>`:''}
+      ${roles.品質確認?`<div class="role-row"><div class="role-label">品質確認</div><div class="person-tags">${toTags(roles.品質確認)}</div></div>`:''}
+      ${roles.初品出し?`<div class="role-row"><div class="role-label">初品出し</div><div class="person-tags">${toTags(roles.初品出し)}</div></div>`:''}
+      ${roles.金型取付?`<div class="role-row"><div class="role-label" title="段取り専任（setupStart〜prodStart）">金型取付</div><div class="person-tags">${toTags(roles.金型取付)}</div></div>`:''}
+      ${roles.作業者?`<div class="role-row"><div class="role-label" title="生産担当（prodStart〜prodEnd）">作業者</div><div class="person-tags">${toTags(roles.作業者)}</div></div>`:''}
     </div>`
-  : (d._source==='auto'?`
+  : (d._source==='auto'||d.fromPlan?`
     <div class="dc-roles">
-      <div class="role-row"><div class="role-label">品質確認</div><div class="person-tags"><span class="ptag">—</span></div></div>
-      <div class="role-row"><div class="role-label">初品出し</div><div class="person-tags"><span class="ptag">—</span></div></div>
-      <div class="role-row"><div class="role-label">金型取付</div><div class="person-tags"><span class="ptag">—</span></div></div>
+      <div class="role-row"><div class="role-label">品質確認</div><div class="person-tags"><span class="ptag ptag-unset">未割当</span></div></div>
+      <div class="role-row"><div class="role-label">初品出し</div><div class="person-tags"><span class="ptag ptag-unset">—</span></div></div>
+      <div class="role-row"><div class="role-label">金型取付</div><div class="person-tags"><span class="ptag ptag-unset">未割当</span></div></div>
+      ${d.workerCount>0?`<div class="role-row"><div class="role-label">作業者</div><div class="person-tags"><span class="ptag ptag-unset">未割当</span></div></div>`:''}
     </div>`:'');
 
   // 編集・削除（手動 or 計画取込エントリのみ）
@@ -3160,6 +3175,7 @@ function renderDantoriCard(d){
       </div>
       <div class="status-badge ${sClass}">${sLabel}</div>
     </div>
+    ${kataInfoHtml}
     ${rolesHtml}
     ${noteHtml}
     ${bottomRow}
@@ -4222,9 +4238,10 @@ async function importFromProductionPlan(){
         setupStart,
         prodStart:  j.start,
         prodEnd:    j.end,
-        plan:       j.plan  || 0,
-        mountCount: j.ninzu || j.hito || 0,  // 段取り人数（C列優先）/ 作業人数（D列）
-        mountKata:  j.kata  || 1,            // 型数 N（進捗南里から取込）
+        plan:        j.plan  || 0,
+        mountCount:  j.ninzu || 0,  // 段取り人数（金型取付、C列）
+        workerCount: j.hito  || 0,  // 作業人数（生産時、D列）
+        mountKata:   j.kata  || 1,  // 型数 N（進捗南里から取込）
         status,
         roles:      { 条件設定:'', 金型取付:'', リフト:'', 品質確認:'' },
         note:       j.noSetup ? '（段取りなし）' : '',
@@ -4296,14 +4313,12 @@ let _aarConflicts     = [];
 let _aarShortages     = [];
 
 async function autoAssignRoles(){
-  // プレスラインを持つエントリ（マスタにあるライン OR 計画があるライン）
-  const allPressLines = new Set([
-    ...Object.keys(PRESS_LINE_MASTER),
-    ...dantoriSchedule.map(d => d.lineId)
-  ]);
-  const targets = dantoriSchedule.filter(d => allPressLines.has(d.lineId) && d.lineId);
+  // プレスラインのみ対象（PRESS_LINE_MASTERに登録されているライン）
+  // 組立・ロボットライン等は除く
+  const pressLineIds = new Set(Object.keys(PRESS_LINE_MASTER));
+  const targets = dantoriSchedule.filter(d => pressLineIds.has(d.lineId) && d.lineId);
   if(!targets.length){
-    alert('割り振り対象の段取り計画がありません。\n計画取込後に実行してください。');
+    alert('割り振り対象のプレスライン段取り計画がありません。\n計画取込後に実行してください。');
     return;
   }
 
@@ -4483,7 +4498,8 @@ async function autoAssignRoles(){
     const lineDisp = getLineDisplayName(entry.lineId);
     const linePart = `${lineDisp}（${entry.partNo||'品番不明'}）`;
     const timeStr  = entry.setupStart||entry.prodStart||'';
-    const roles    = { 品質確認:'', 初品出し:'', 金型取付:'' };
+    const ps       = toMin(entry.prodStart);  // 生産開始（金型取付終了の基準）
+    const roles    = { 品質確認:'', 初品出し:'', 金型取付:'', 作業者:'' };
 
     // ① 品質確認（約5分で完了 → QUALITY_BUSY_MIN分だけbusyに）
     const qual = findWorker('quality', entry.lineId, s, e);
@@ -4528,16 +4544,15 @@ async function autoAssignRoles(){
       }
     }
 
-    // ③ 金型取付
-    // 品質確認・初品出しと同じ人でもOK（同ラインなら兼務可）
-    // ライン外（noLine）は除く
+    // ③ 金型取付（段取り専任: setupStart〜prodStart の間のみbusy）
+    // 品質確認・初品出しと同じ人でもOK / ライン外(noLine)は除く
+    const mountEnd = (ps && ps > s) ? ps : s + 1; // 段取り終了 = 生産開始
     const thisEntryAssigned = [qual, ippin].filter(Boolean);
-    const mountAvail = findMountWorkers(entry.lineId, thisEntryAssigned, s, e, entry.mountCount||0);
+    const mountAvail = findMountWorkers(entry.lineId, thisEntryAssigned, s, mountEnd, entry.mountCount||0);
     if(mountAvail.length){
       roles.金型取付 = mountAvail.join('、');
-      // 金型取付担当者は段取り後そのまま生産に入るため、全員を[s,e]でbusy登録
-      mountAvail.forEach(w => markBusy(w, s, e, `金型取付 ${linePart}`));
-      // 作業人数より割り当てが少ない場合も不足として警告
+      // 金型取付はsetupStart〜prodStart(段取りフェーズ)だけbusy
+      mountAvail.forEach(w => markBusy(w, s, mountEnd, `金型取付 ${linePart}`));
       const need = entry.mountCount || 0;
       if(need > 0 && mountAvail.length < need){
         shortages.push({ role:'金型取付', linePart, timeStr,
@@ -4545,8 +4560,8 @@ async function autoAssignRoles(){
       }
     } else {
       const mountAll = getMountCandidatesAll(entry.lineId);
-      const busyOnes = mountAll.filter(w => isBusy(w, s, e) && !thisEntryAssigned.includes(w)).map(w => {
-        const slot = busySlotOf(w, s, e);
+      const busyOnes = mountAll.filter(w => isBusy(w, s, mountEnd) && !thisEntryAssigned.includes(w)).map(w => {
+        const slot = busySlotOf(w, s, mountEnd);
         return `${w}（${slot ? slot.label : '他'} ${slot ? fmtMin(slot.s)+'〜'+fmtMin(slot.e) : ''}）`;
       });
       const absentOnes = mountAll.filter(w => isUnavailableAt(w, s) && !thisEntryAssigned.includes(w))
@@ -4555,11 +4570,42 @@ async function autoAssignRoles(){
         workerHasRole(w,'noLine') && (WORKER_PRIORITY_LINE[w] === entry.lineId || !WORKER_PRIORITY_LINE[w])
       );
       const detail = [
-        busyOnes.length   ? `重複中: ${busyOnes.join('、')}`    : '',
+        busyOnes.length   ? `重複中: ${busyOnes.join('、')}` : '',
         absentOnes.length ? `出勤なし: ${absentOnes.join('、')}` : '',
         noLineOnes.length ? `ライン外: ${noLineOnes.join('、')}` : '',
       ].filter(Boolean).join(' ／ ');
       shortages.push({ role:'金型取付', linePart, timeStr, detail: detail||'候補者なし' });
+    }
+
+    // ④ 作業者（生産フェーズ: prodStart〜prodEnd でbusy）
+    // ルール: 金型取付した人を優先して作業者に → 不足分のみ別の作業者を追加
+    const wrkCount = entry.workerCount || 0;
+    if(wrkCount > 0 && ps && e && ps < e){
+      // ベース: 金型取付した人は全員そのまま作業者に
+      const workerAvail = [...mountAvail];
+
+      // 不足分を補完（金型取付していない人から、prodStart〜prodEnd で空きのある人）
+      const shortage = wrkCount - workerAvail.length;
+      if(shortage > 0){
+        const additional = findMountWorkers(entry.lineId, [], ps, e, shortage + workerAvail.length)
+          .filter(w => !workerAvail.includes(w))
+          .slice(0, shortage);
+        workerAvail.push(...additional);
+      }
+
+      if(workerAvail.length){
+        roles.作業者 = workerAvail.join('、');
+        // 全作業者を prodStart〜prodEnd でbusy登録
+        workerAvail.forEach(w => markBusy(w, ps, e, `作業 ${linePart}`));
+        if(workerAvail.length < wrkCount){
+          shortages.push({ role:'作業者', linePart,
+            timeStr: entry.prodStart||timeStr,
+            detail:`人数不足 ${workerAvail.length}人割当 / ${wrkCount}人必要（追加候補なし）` });
+        }
+      } else {
+        shortages.push({ role:'作業者', linePart,
+          timeStr: entry.prodStart||timeStr, detail:'候補者なし' });
+      }
     }
 
     entry.roles = roles;
@@ -4656,6 +4702,18 @@ function aarSwitchTab(tab){
           }).join('') + countStr
         : '<span style="color:#dc2626;font-size:10px;">未割当</span>';
 
+      // 作業者
+      const workerNames = (r.作業者||'').split(/[,、]/).map(s=>s.trim()).filter(Boolean);
+      const wCount = d.workerCount || 0;
+      const wCountStr = wCount > 0
+        ? (workerNames.length >= wCount
+            ? `<span style="color:#15803d;font-size:10px;margin-left:4px;">(${workerNames.length}/${wCount}人)</span>`
+            : `<span style="color:#dc2626;font-size:10px;font-weight:700;margin-left:4px;">(${workerNames.length}/${wCount}人)</span>`)
+        : '';
+      const wBadge = workerNames.length
+        ? workerNames.map(w=>`<span style="white-space:nowrap;margin-right:4px;color:#065f46;">${w}</span>`).join('') + wCountStr
+        : (wCount>0?'<span style="color:#dc2626;font-size:10px;">未割当</span>':'<span style="color:#aaa;font-size:10px;">—</span>');
+
       return `<tr>
         <td style="white-space:nowrap;">${getLineDisplayName(d.lineId)}</td>
         <td>${d.partNo||'—'}</td>
@@ -4663,6 +4721,7 @@ function aarSwitchTab(tab){
         <td>${qBadge}</td>
         <td>${iBadge}</td>
         <td style="line-height:1.8;">${mBadge}</td>
+        <td style="line-height:1.8;">${wBadge}</td>
       </tr>`;
     }).join('');
     cont.innerHTML = `
@@ -4674,9 +4733,10 @@ function aarSwitchTab(tab){
           <th>ライン</th><th>品番</th><th>時間</th>
           <th style="color:#1d4ed8;">品質確認</th>
           <th style="color:#7c3aed;">初品出し</th>
-          <th>金型取付（◯付き）</th>
+          <th>金型取付</th>
+          <th style="color:#065f46;">作業者</th>
         </tr></thead>
-        <tbody>${rows||'<tr><td colspan="6" style="text-align:center;color:#aaa;padding:20px;">対象なし</td></tr>'}</tbody>
+        <tbody>${rows||'<tr><td colspan="7" style="text-align:center;color:#aaa;padding:20px;">対象なし</td></tr>'}</tbody>
       </table>`;
 
   } else if(tab === 'warn'){
