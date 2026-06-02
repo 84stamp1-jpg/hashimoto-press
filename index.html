@@ -1926,6 +1926,10 @@ window.renderGrpMgr=function(){
             <label style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
               <input type="checkbox" id="mp-${gi}-skipnot" ${mp.skipNoTime!==false?'checked':''}> <span>開始・終了時刻が空の行はスキップ<span style="color:#aaa;font-size:10px;margin-left:4px;">（メモ行除外）</span></span>
             </label>
+            <br>
+            <label style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;margin-top:4px;">
+              <input type="checkbox" id="mp-${gi}-hitonext" ${mp.hitoFromNextRow?'checked':''}> <span>計画数列の次行を作業人数として読む<span style="color:#aaa;font-size:10px;margin-left:4px;">（品番なし次行の値を段取り人数に使用）</span></span>
+            </label>
           </div>
           <!-- シートモード設定 -->
           <div id="mp-${gi}-sheet-block" style="display:${(mp.mode||'sheet')==='sheet'?'block':'none'};">
@@ -1971,6 +1975,7 @@ function syncGrpMgrForm(){
     const filterValues={};
     (g.ids||[]).forEach(id=>{filterValues[id]=(document.getElementById(`mp-${gi}-fv-${id}`)?.value||'').trim();});
     const skipNoTimeEl=document.getElementById(`mp-${gi}-skipnot`);
+    const hitoNextEl=document.getElementById(`mp-${gi}-hitonext`);
     g.importMap={
       ...(g.importMap||{}),
       mode,
@@ -1984,6 +1989,7 @@ function syncGrpMgrForm(){
       filterCol:(document.getElementById(`mp-${gi}-fcol`)?.value||'A').toUpperCase(),
       filterValues,
       skipNoTime:skipNoTimeEl?skipNoTimeEl.checked:true,
+      hitoFromNextRow:hitoNextEl?hitoNextEl.checked:false,
       altPartCol:(document.getElementById(`mp-${gi}-altpart`)?.value||'').trim().toUpperCase()
     };
   });
@@ -2043,6 +2049,7 @@ window.saveGroups=function(){
       filterCol:(document.getElementById(`mp-${gi}-fcol`)?.value||'A').toUpperCase(),
       filterValues,
       skipNoTime:(document.getElementById(`mp-${gi}-skipnot`)?.checked!==false),
+      hitoFromNextRow:(document.getElementById(`mp-${gi}-hitonext`)?.checked||false),
       altPartCol:(document.getElementById(`mp-${gi}-altpart`)?.value||'').trim().toUpperCase()
     };
   });
@@ -2163,28 +2170,41 @@ window.onImpFile=async function(){
   const dataStart=headerRow>0?headerRow:0;
 
   const skipNoTime=mp.skipNoTime!==false; // デフォルトtrue（時刻なし行をスキップ）
+  const hitoFromNextRow=mp.hitoFromNextRow||false; // 次行を作業人数として読む
   const altPIdx=colToIdx(mp.altPartCol||''); // 代替品番列インデックス（-1=未設定）
   // 「-」判定（半角・全角ダッシュ・ハイフンのみの文字列）
   function isDash(s){return /^[-－ー]+$/.test(s);}
   // 行データ配列 → jobsオブジェクト配列
   function parseRows(rows){
     const jobs=[];
-    rows.slice(dataStart).forEach(row=>{
+    const dataRows=rows.slice(dataStart);
+    for(let i=0;i<dataRows.length;i++){
+      const row=dataRows[i];
       let part=String(row[pIdx]||'').trim();
       // 品番が「-」系の場合、代替列から取得
       if(isDash(part)&&altPIdx>=0){
         const alt=String(row[altPIdx]||'').trim();
         if(alt&&!isDash(alt)) part=alt;
       }
-      if(!part||isDash(part)) return;
+      if(!part||isDash(part)) continue;
       const plan=parseInt(String(row[plIdx]||'').replace(/[^\d]/g,''));
-      if(!plan||plan<=0) return;
+      if(!plan||plan<=0) continue;
       const start=parseTime(row[stIdx]);
       const end=parseTime(row[enIdx]);
       // 時刻なし行スキップ設定が有効なら、開始・終了どちらかが空の行を除外
-      if(skipNoTime&&(!start||!end)) return;
-      jobs.push({seq:jobs.length+1,part,plan,start,end,status:'waiting',actualCount:0,actualStart:'',actualEnd:''});
-    });
+      if(skipNoTime&&(!start||!end)) continue;
+      // 次行を作業人数として読む（品番なし次行の計画数列の値）
+      let hito=0;
+      if(hitoFromNextRow&&i+1<dataRows.length){
+        const nr=dataRows[i+1];
+        const nrPart=String(nr[pIdx]||'').trim();
+        if(!nrPart||isDash(nrPart)){
+          const nrVal=parseInt(String(nr[plIdx]||'').replace(/[^\d]/g,''));
+          if(nrVal>0){hito=nrVal;i++;} // 作業人数行をスキップ
+        }
+      }
+      jobs.push({seq:jobs.length+1,part,plan,hito,start,end,status:'waiting',actualCount:0,actualStart:'',actualEnd:''});
+    }
     return jobs;
   }
 
@@ -2226,17 +2246,27 @@ window.onImpFile=async function(){
         const filtered=allRows.slice(dataStart).filter(row=>String(row[fIdx]||'').trim().toLowerCase().includes(fVal));
         // parseRowsに渡す際はdataStart=0で（既にスライス済みのため）
         const jobs=[];
-        filtered.forEach(row=>{
+        for(let fi=0;fi<filtered.length;fi++){
+          const row=filtered[fi];
           let part=String(row[pIdx]||'').trim();
           if(isDash(part)&&altPIdx>=0){const alt=String(row[altPIdx]||'').trim();if(alt&&!isDash(alt))part=alt;}
-          if(!part||isDash(part)) return;
+          if(!part||isDash(part)) continue;
           const plan=parseInt(String(row[plIdx]||'').replace(/[^\d]/g,''));
-          if(!plan||plan<=0) return;
+          if(!plan||plan<=0) continue;
           const start=parseTime(row[stIdx]);
           const end=parseTime(row[enIdx]);
-          if(skipNoTime&&(!start||!end)) return; // メモ行スキップ
-          jobs.push({seq:jobs.length+1,part,plan,start,end,status:'waiting',actualCount:0,actualStart:'',actualEnd:''});
-        });
+          if(skipNoTime&&(!start||!end)) continue; // メモ行スキップ
+          let hito=0;
+          if(hitoFromNextRow&&fi+1<filtered.length){
+            const nr=filtered[fi+1];
+            const nrPart=String(nr[pIdx]||'').trim();
+            if(!nrPart||isDash(nrPart)){
+              const nrVal=parseInt(String(nr[plIdx]||'').replace(/[^\d]/g,''));
+              if(nrVal>0){hito=nrVal;fi++;}
+            }
+          }
+          jobs.push({seq:jobs.length+1,part,plan,hito,start,end,status:'waiting',actualCount:0,actualStart:'',actualEnd:''});
+        }
         _impParsedJobs[id]=jobs;
       }
     }
@@ -2267,13 +2297,14 @@ function renderImpPreview(jobsObj,mp,g){
       h+=`<div style="font-size:11px;color:#bbb;margin-bottom:4px;">　${lineName}：データなし</div>`;
       continue;
     }
+    const hasHito=jobs.some(j=>j.hito>0);
     h+=`<div style="font-size:11px;font-weight:700;color:#1a1a1a;margin:8px 0 3px;">📌 ${lineName}（${jobs.length}件）</div>`;
-    h+='<div style="overflow-x:auto;margin-bottom:4px;"><table class="jtbl"><thead><tr><th>#</th><th>品番</th><th>計画数</th><th>開始</th><th>終了</th></tr></thead><tbody>';
+    h+=`<div style="overflow-x:auto;margin-bottom:4px;"><table class="jtbl"><thead><tr><th>#</th><th>品番</th><th>計画数</th><th>開始</th><th>終了</th>${hasHito?'<th>作業人数</th>':''}</tr></thead><tbody>`;
     jobs.slice(0,8).forEach(j=>{
       const warn=!j.start||!j.end?' style="background:#fff8e1;"':'';
-      h+=`<tr${warn}><td>${j.seq}</td><td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${j.part}</td><td>${j.plan.toLocaleString()}個</td><td>${j.start||'<span style="color:#e67e22;">--</span>'}</td><td>${j.end||'<span style="color:#e67e22;">--</span>'}</td></tr>`;
+      h+=`<tr${warn}><td>${j.seq}</td><td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${j.part}</td><td>${j.plan.toLocaleString()}個</td><td>${j.start||'<span style="color:#e67e22;">--</span>'}</td><td>${j.end||'<span style="color:#e67e22;">--</span>'}</td>${hasHito?`<td style="text-align:center;">${j.hito>0?j.hito+'人':'<span style="color:#aaa;">-</span>'}</td>`:''}</tr>`;
     });
-    if(jobs.length>8) h+=`<tr><td colspan="5" style="text-align:center;color:#aaa;font-size:10px;">…他${jobs.length-8}件</td></tr>`;
+    if(jobs.length>8) h+=`<tr><td colspan="${hasHito?6:5}" style="text-align:center;color:#aaa;font-size:10px;">…他${jobs.length-8}件</td></tr>`;
     h+='</tbody></table></div>';
   }
   prevEl.innerHTML=h;
