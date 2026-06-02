@@ -835,7 +835,8 @@ html, body {
     </div>
     <button class="btn" style="padding:5px 10px;font-size:11px;" onclick="refreshDantori()">↻ 更新</button>
     <button class="add-btn-dt" style="background:#0369a1;" onclick="importFromProductionPlan()">📥 計画取込</button>
-    <button class="add-btn-dt" style="background:#7c3aed;" onclick="autoAssignRoles()" title="PRESS_LINE_MASTERに基づき品質確認・リフト・金型取付を自動割り振り">🤖 自動割り振り</button>
+    <button class="add-btn-dt" style="background:#7c3aed;" onclick="autoAssignRoles()" title="PRESS_LINE_MASTERに基づき品質確認・初品出し・金型取付を自動割り振り">🤖 自動割り振り</button>
+    <button class="add-btn-dt" style="background:#0f766e;" onclick="showWorkerRoleMaster()">👥 作業者マスタ</button>
     <button class="add-btn-dt" onclick="showAddDantori()">＋ 追加</button>
   </div>
   <div class="dantori-list" id="dantoriList">
@@ -1098,14 +1099,16 @@ html, body {
   <div class="qc-screen" id="qc-screen-upload">
   <div class="qc-cont">
 
-    <!-- ① 再取得 -->
+    <!-- ① キャッシュ状態 / 再取得 -->
     <div class="qc-card" style="margin-bottom:10px;">
-      <div class="qc-card-title" style="margin-bottom:8px;">🔄 スプレッドシートから再取得</div>
-      <p style="font-size:12px;color:#555;margin-bottom:10px;">
-        Googleスプレッドシートを直接編集した場合は、このボタンでデータを最新状態に更新します。
+      <div class="qc-card-title" style="margin-bottom:8px;">📦 現在の読み込み状態</div>
+      <div id="qc-cache-info" style="font-size:12px;color:#555;background:#f0f6ff;border-radius:6px;padding:8px 10px;margin-bottom:10px;"></div>
+      <p style="font-size:11px;color:#888;margin-bottom:8px;">
+        ※ ファイルを読み込んだデータは次回起動時も自動で復元されます。<br>
+        Googleスプレッドシートに直接更新があった場合のみ↓を使用してください。
       </p>
       <div id="qc-reload-status" style="font-size:12px;color:#1F4E79;margin-bottom:8px;display:none;"></div>
-      <button class="qc-btn" onclick="qcReloadSakuyo()" style="margin-bottom:0;">🔄 最新データを取得する</button>
+      <button class="qc-btn" onclick="qcReloadSakuyo()" style="margin-bottom:0;background:#555;">🔄 スプレッドシートから再取得</button>
     </div>
 
     <!-- ② ファイルアップロード -->
@@ -1133,7 +1136,8 @@ html, body {
         </div>
         <!-- 列マッピング確認 -->
         <div id="qc-upload-colmap" style="background:#f0f6ff;border-radius:6px;padding:8px 10px;font-size:11px;margin-bottom:10px;"></div>
-        <button class="qc-btn" id="qc-upload-send-btn" onclick="qcSendSakuyoToGas()" style="background:#1F4E79;">スプレッドシートに反映する</button>
+        <button class="qc-btn" id="qc-upload-send-btn" onclick="qcSendSakuyoToGas()" style="background:#1F4E79;">✅ このデータを読み込む</button>
+        <p style="font-size:11px;color:#888;margin-top:4px;">※ スプレッドシートへの書き込みは不要。このボタンで即座に使えます。</p>
         <div id="qc-upload-send-status" style="font-size:12px;margin-top:8px;display:none;"></div>
       </div>
     </div>
@@ -1343,16 +1347,6 @@ html, body {
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         <div class="form-group" style="margin:0;">
-          <label style="font-size:10px;">条件設定</label>
-          <div id="chip-wrap-cond" class="chip-wrap" data-dlid="staffDatalist-cond"
-               onmousedown="chipWrapMousedown(event,'chip-wrap-cond')">
-            <input class="chip-text-input" placeholder="名前を選択/入力" autocomplete="off"
-              oninput="chipOnInput('chip-wrap-cond')"
-              onkeydown="chipOnKeydown(event,'chip-wrap-cond')"
-              onblur="chipOnBlur('chip-wrap-cond')"/>
-          </div>
-        </div>
-        <div class="form-group" style="margin:0;">
           <label style="font-size:10px;">品質確認</label>
           <div id="chip-wrap-quality" class="chip-wrap" data-dlid="staffDatalist-quality"
                onmousedown="chipWrapMousedown(event,'chip-wrap-quality')">
@@ -1363,7 +1357,7 @@ html, body {
           </div>
         </div>
         <div class="form-group" style="margin:0;">
-          <label style="font-size:10px;">リフト</label>
+          <label style="font-size:10px;">初品出し</label>
           <div id="chip-wrap-lift" class="chip-wrap" data-dlid="staffDatalist-lift"
                onmousedown="chipWrapMousedown(event,'chip-wrap-lift')">
             <input class="chip-text-input" placeholder="名前を選択/入力" autocomplete="off"
@@ -1372,7 +1366,7 @@ html, body {
               onblur="chipOnBlur('chip-wrap-lift')"/>
           </div>
         </div>
-        <div class="form-group" style="margin:0;">
+        <div class="form-group" style="margin:0;grid-column:1/-1;">
           <label style="font-size:10px;">金型取付</label>
           <div id="chip-wrap-mount" class="chip-wrap" data-dlid="staffDatalist-mount"
                onmousedown="chipWrapMousedown(event,'chip-wrap-mount')">
@@ -1391,6 +1385,32 @@ html, body {
     <div class="modal-btns">
       <button onclick="closeDantoriModal()">キャンセル</button>
       <button class="save-btn" onclick="saveDantoriEntry()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 作業者マスタ モーダル ===== -->
+<div class="modal-overlay" id="workerRoleModal" style="display:none;" onclick="closeWorkerRoleIfBg(event)">
+  <div class="modal" style="max-width:560px;">
+    <h3 style="margin:0 0 12px;font-size:15px;">👥 作業者マスタ（役割設定）</h3>
+    <p style="font-size:11px;color:#666;margin:0 0 12px;">各作業者に担当役割を設定します。設定はFirebaseに保存されます。</p>
+    <div style="overflow-x:auto;">
+      <table id="workerRoleTable" style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead>
+          <tr style="background:#f1f5f9;text-align:center;">
+            <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0;white-space:nowrap;">作業者名</th>
+            <th style="padding:8px 6px;border-bottom:2px solid #e2e8f0;white-space:nowrap;">品質確認<br><span style="font-weight:normal;color:#666;">段取り時チェック</span></th>
+            <th style="padding:8px 6px;border-bottom:2px solid #e2e8f0;white-space:nowrap;">初品出し<br><span style="font-weight:normal;color:#666;">初品確認担当</span></th>
+            <th style="padding:8px 6px;border-bottom:2px solid #e2e8f0;white-space:nowrap;">ラインに入らない<br><span style="font-weight:normal;color:#666;">リーダー等</span></th>
+          </tr>
+        </thead>
+        <tbody id="workerRoleTbody"></tbody>
+      </table>
+    </div>
+    <div id="workerRoleSaveStatus" style="min-height:20px;margin-top:10px;font-size:12px;color:#0369a1;"></div>
+    <div class="modal-btns" style="margin-top:14px;">
+      <button onclick="closeWorkerRoleModal()">キャンセル</button>
+      <button class="save-btn" onclick="saveWorkerRoleMaster()">💾 保存</button>
     </div>
   </div>
 </div>
@@ -2825,14 +2845,13 @@ function updatePersonPanel(){
     const roleAssigns = [];
     dantoriSchedule.forEach(entry => {
       const r = entry.roles || {};
-      const isCond    = r.条件設定 === name;
       const isMount   = (r.金型取付||'').split(/[,、]/).map(s=>s.trim()).includes(name);
-      const isLift    = r.リフト   === name;
+      const isIppin   = r.初品出し   === name;
       const isQuality = r.品質確認 === name;
-      if(isCond || isMount || isLift || isQuality){
+      if(isMount || isIppin || isQuality){
         roleAssigns.push({
           entry,
-          roleStr:[isCond?'条件設定':'', isMount?'金型取付':'', isLift?'リフト':'', isQuality?'品質確認':''].filter(Boolean).join('・'),
+          roleStr:[isMount?'金型取付':'', isIppin?'初品出し':'', isQuality?'品質確認':''].filter(Boolean).join('・'),
         });
       }
     });
@@ -3046,20 +3065,18 @@ function renderDantoriCard(d){
 
   // 担当者
   const roles = d.roles || {};
-  const hasRoles = roles.条件設定 || roles.金型取付 || roles.リフト || roles.品質確認;
+  const hasRoles = roles.金型取付 || roles.初品出し || roles.品質確認;
   const rolesHtml = hasRoles ? `
     <div class="dc-roles">
-      ${roles.条件設定?`<div class="role-row"><div class="role-label">条件設定</div><div class="person-tags"><span class="ptag main">${roles.条件設定}</span></div></div>`:''}
-      ${roles.金型取付?`<div class="role-row"><div class="role-label">金型取付</div><div class="person-tags">${roles.金型取付.split(/[,、]/).map(p=>`<span class="ptag">${p.trim()}</span>`).join('')}</div></div>`:''}
-      ${roles.リフト  ?`<div class="role-row"><div class="role-label">リフト</div><div class="person-tags"><span class="ptag">${roles.リフト}</span></div></div>`:''}
       ${roles.品質確認?`<div class="role-row"><div class="role-label">品質確認</div><div class="person-tags"><span class="ptag">${roles.品質確認}</span></div></div>`:''}
+      ${roles.初品出し?`<div class="role-row"><div class="role-label">初品出し</div><div class="person-tags"><span class="ptag">${roles.初品出し}</span></div></div>`:''}
+      ${roles.金型取付?`<div class="role-row"><div class="role-label">金型取付</div><div class="person-tags">${roles.金型取付.split(/[,、]/).map(p=>`<span class="ptag">${p.trim()}</span>`).join('')}</div></div>`:''}
     </div>`
   : (d._source==='auto'?`
     <div class="dc-roles">
-      <div class="role-row"><div class="role-label">条件設定</div><div class="person-tags"><span class="ptag">—</span></div></div>
-      <div class="role-row"><div class="role-label">金型取付</div><div class="person-tags"><span class="ptag">—</span></div></div>
-      <div class="role-row"><div class="role-label">リフト</div><div class="person-tags"><span class="ptag">—</span></div></div>
       <div class="role-row"><div class="role-label">品質確認</div><div class="person-tags"><span class="ptag">—</span></div></div>
+      <div class="role-row"><div class="role-label">初品出し</div><div class="person-tags"><span class="ptag">—</span></div></div>
+      <div class="role-row"><div class="role-label">金型取付</div><div class="person-tags"><span class="ptag">—</span></div></div>
     </div>`:'');
 
   // 編集・削除（手動 or 計画取込エントリのみ）
@@ -3126,6 +3143,99 @@ const KANBAN_PAGES = [
 ];
 let kanbanPage = 'kp1';
 
+// ===== 作業者ロールマスター =====
+// Firebase settings/workerRoles から読み込む。{フルネーム:[ロール配列]}
+// ロール定義: 'quality'=品質確認担当, 'ippin'=初品出し担当, 'noLine'=ラインに入らない
+let WORKER_ROLE_MASTER = {};
+
+function workerHasRole(name, role){
+  return (WORKER_ROLE_MASTER[name] || []).includes(role);
+}
+
+// ===== 作業者マスタ UI =====
+function showWorkerRoleMaster(){
+  renderWorkerRoleMaster();
+  document.getElementById('workerRoleModal').style.display = 'flex';
+  document.getElementById('workerRoleSaveStatus').textContent = '';
+}
+
+function closeWorkerRoleModal(){
+  document.getElementById('workerRoleModal').style.display = 'none';
+}
+
+function closeWorkerRoleIfBg(e){
+  if(e.target === document.getElementById('workerRoleModal')) closeWorkerRoleModal();
+}
+
+function renderWorkerRoleMaster(){
+  // プレスセクションの全作業者をテーブル表示
+  const pressSection = WORKER_MASTER.find(s => s.section === 'プレス');
+  const names = pressSection ? pressSection.names : [];
+  const tbody = document.getElementById('workerRoleTbody');
+  tbody.innerHTML = '';
+  names.forEach(function(name){
+    const roles = WORKER_ROLE_MASTER[name] || [];
+    const chkQuality = roles.includes('quality') ? 'checked' : '';
+    const chkIppin   = roles.includes('ippin')   ? 'checked' : '';
+    const chkNoLine  = roles.includes('noLine')  ? 'checked' : '';
+    const tr = document.createElement('tr');
+    tr.style.borderBottom = '1px solid #f1f5f9';
+    tr.innerHTML = `
+      <td style="padding:7px 10px;white-space:nowrap;">${name}</td>
+      <td style="padding:7px 6px;text-align:center;">
+        <input type="checkbox" data-worker="${name}" data-role="quality" ${chkQuality}
+          style="width:16px;height:16px;accent-color:#0369a1;cursor:pointer;">
+      </td>
+      <td style="padding:7px 6px;text-align:center;">
+        <input type="checkbox" data-worker="${name}" data-role="ippin" ${chkIppin}
+          style="width:16px;height:16px;accent-color:#7c3aed;cursor:pointer;">
+      </td>
+      <td style="padding:7px 6px;text-align:center;">
+        <input type="checkbox" data-worker="${name}" data-role="noLine" ${chkNoLine}
+          style="width:16px;height:16px;accent-color:#dc2626;cursor:pointer;">
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+async function saveWorkerRoleMaster(){
+  const checkboxes = document.querySelectorAll('#workerRoleTbody input[type=checkbox]');
+  // { name: Set<role> }
+  const map = {};
+  checkboxes.forEach(function(cb){
+    const name = cb.dataset.worker;
+    const role = cb.dataset.role;
+    if(!map[name]) map[name] = [];
+    if(cb.checked) map[name].push(role);
+  });
+  // 空の配列はキーごと除外（Firebase節約）
+  const newMaster = {};
+  Object.keys(map).forEach(function(name){
+    if(map[name].length > 0) newMaster[name] = map[name];
+  });
+
+  const statusEl = document.getElementById('workerRoleSaveStatus');
+  statusEl.textContent = '💾 保存中...';
+
+  try {
+    const fbUrl = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/, '');
+    const res = await fetch(`${fbUrl}/settings/workerRoles.json`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newMaster)
+    });
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    WORKER_ROLE_MASTER = newMaster;
+    statusEl.style.color = '#059669';
+    statusEl.textContent = '✓ 保存しました';
+    setTimeout(function(){ closeWorkerRoleModal(); }, 800);
+  } catch(e){
+    statusEl.style.color = '#dc2626';
+    statusEl.textContent = '❌ 保存エラー: ' + e.message;
+  }
+}
+
 // ===== 段取り計画（手動入力・Firebase保存） =====
 let dantoriSchedule  = [];
 let dantoriSortBy    = 'time';
@@ -3146,6 +3256,9 @@ async function loadDantoriSettings(){
     }
     if(s.lineNames && typeof s.lineNames === 'object'){
       dantoriLineNames = s.lineNames;
+    }
+    if(s.workerRoles && typeof s.workerRoles === 'object'){
+      WORKER_ROLE_MASTER = s.workerRoles;
     }
     renderDantori(); // グループ情報が揃ったら再描画
   } catch(e){ console.warn('settings load:', e); }
@@ -3298,9 +3411,8 @@ async function saveDantoriEntry(){
   const prodStart  = document.getElementById('dt-prod-start').value;
   const prodEnd    = document.getElementById('dt-prod-end').value;
   const status     = document.getElementById('dt-status').value;
-  const roleCond    = chipGetValues('chip-wrap-cond').join(',');
   const roleMount   = chipGetValues('chip-wrap-mount').join(',');
-  const roleLift    = chipGetValues('chip-wrap-lift').join(',');
+  const roleIppin   = chipGetValues('chip-wrap-lift').join(',');
   const roleQuality = chipGetValues('chip-wrap-quality').join(',');
   const note        = document.getElementById('dt-note').value.trim();
 
@@ -3309,7 +3421,7 @@ async function saveDantoriEntry(){
 
   const entry = {
     lineId, partNo, setupStart, prodStart, prodEnd, status,
-    roles:{ 条件設定:roleCond, 金型取付:roleMount, リフト:roleLift, 品質確認:roleQuality },
+    roles:{ 金型取付:roleMount, 初品出し:roleIppin, 品質確認:roleQuality },
     note, updatedAt:Date.now(), isManual:true,
   };
 
@@ -3368,9 +3480,8 @@ function showEditDantori(id){
   document.getElementById('dt-prod-start').value  = entry.prodStart   || '';
   document.getElementById('dt-prod-end').value    = entry.prodEnd     || '';
   document.getElementById('dt-status').value      = entry.status      || 'scheduled';
-  chipSet('chip-wrap-cond',    (entry.roles&&entry.roles.条件設定) || '');
   chipSet('chip-wrap-mount',   (entry.roles&&entry.roles.金型取付) || '');
-  chipSet('chip-wrap-lift',    (entry.roles&&entry.roles.リフト)   || '');
+  chipSet('chip-wrap-lift',    (entry.roles&&(entry.roles.初品出し||entry.roles.初品出し)) || '');
   chipSet('chip-wrap-quality', (entry.roles&&entry.roles.品質確認) || '');
   document.getElementById('dt-note').value        = entry.note        || '';
   document.getElementById('dantoriModal').style.display = 'flex';
@@ -3468,12 +3579,11 @@ function renderKanbanCard(d){
   const prodTime = d.prodStart
     ? (d.prodEnd ? `${d.prodStart}〜${d.prodEnd}` : `${d.prodStart}〜`) : '';
   const statusMark = d.status==='in_progress'?'▶ ':(d.status==='done'?'✓ ':'');
-  const rolesHtml = (roles.条件設定||roles.金型取付||roles.リフト||roles.品質確認) ? `
+  const rolesHtml = (roles.金型取付||roles.初品出し||roles.品質確認) ? `
     <div class="kcard-roles">
-      ${roles.条件設定?`<div class="kcard-role"><span class="kcard-role-lbl">条件</span><span class="kcard-role-val">${roles.条件設定}</span></div>`:''}
-      ${roles.金型取付?`<div class="kcard-role"><span class="kcard-role-lbl">取付</span><span class="kcard-role-val">${roles.金型取付}</span></div>`:''}
-      ${roles.リフト  ?`<div class="kcard-role"><span class="kcard-role-lbl">リフト</span><span class="kcard-role-val">${roles.リフト}</span></div>`:''}
       ${roles.品質確認?`<div class="kcard-role"><span class="kcard-role-lbl">品質</span><span class="kcard-role-val">${roles.品質確認}</span></div>`:''}
+      ${roles.初品出し?`<div class="kcard-role"><span class="kcard-role-lbl">初品</span><span class="kcard-role-val">${roles.初品出し}</span></div>`:''}
+      ${roles.金型取付?`<div class="kcard-role"><span class="kcard-role-lbl">取付</span><span class="kcard-role-val">${roles.金型取付}</span></div>`:''}
     </div>` : '';
   const canEdit = d._source==='manual' || d.fromPlan;
   const editBtn = (canEdit && d._id)
@@ -3498,9 +3608,8 @@ function renderKanbanPersonCard(d, targetName){
   const roles    = d.roles || {};
   const lineName = getLineDisplayName(d.lineId);
   const roleStr  = [
-    roles.条件設定===targetName ? '条件設定' : '',
     (roles.金型取付||'').split(/[,、]/).map(s=>s.trim()).includes(targetName) ? '金型取付' : '',
-    roles.リフト===targetName ? 'リフト' : '',
+    roles.初品出し===targetName ? '初品出し' : '',
     roles.品質確認===targetName ? '品質確認' : '',
   ].filter(Boolean).join('・');
   const setupDur2 = calcSetupNetMin(d.setupStart, d.prodStart);
@@ -3616,12 +3725,11 @@ function renderKanbanCol(colDef, allEntries){
       }
     }
 
-    // ② 段取りロール割り当て（条件設定/金型取付/リフト/品質確認）
+    // ② 段取りロール割り当て（品質確認/初品出し/金型取付）
     const entries = allEntries.filter(e=>{
       const r = e.roles || {};
-      return r.条件設定===name
-          || (r.金型取付||'').split(/[,、]/).map(s=>s.trim()).includes(name)
-          || r.リフト===name
+      return (r.金型取付||'').split(/[,、]/).map(s=>s.trim()).includes(name)
+          || r.初品出し===name
           || r.品質確認===name;
     }).sort((a,b)=>(a.sortKey||'').localeCompare(b.sortKey||''));
     const roleCardsHtml = entries.map(d=>renderKanbanPersonCard(d, name)).join('');
@@ -3723,7 +3831,7 @@ function getAllWorkerNames(){
   // スケジュールの roles から自動検出
   dantoriSchedule.forEach(d => {
     const r = d.roles || {};
-    [r.条件設定, r.リフト, r.品質確認].forEach(n => addName('その他', n||''));
+    [r.初品出し, r.品質確認].forEach(n => addName('その他', n||''));
     (r.金型取付||'').split(/[,、]/).forEach(n => addName('その他', n));
   });
   return result;
@@ -3732,8 +3840,7 @@ function getAllWorkerNames(){
 function getWorkerSchedule(name, allEntries){
   return allEntries.filter(e => {
     const r = e.roles || {};
-    return r.条件設定 === name
-        || r.リフト === name
+    return r.初品出し === name
         || r.品質確認 === name
         || (r.金型取付||'').split(/[,、]/).map(s=>s.trim()).includes(name);
   }).sort((a,b) => (a.sortKey||'').localeCompare(b.sortKey||''));
@@ -3777,9 +3884,8 @@ function renderWorkerRoster(allEntries){
       if(!cur) cur = assigns[0];
       const r = cur.roles || {};
       const roles = [
-        r.条件設定 === name ? '条件設定' : '',
         (r.金型取付||'').split(/[,、]/).map(s=>s.trim()).includes(name) ? '金型取付' : '',
-        r.リフト === name ? '🏗リフト' : '',
+        r.初品出し === name ? '初品出し' : '',
         r.品質確認 === name ? '品質確認' : '',
       ].filter(Boolean).join('・');
       const lineName = getLineDisplayName(cur.lineId);
@@ -3841,9 +3947,8 @@ function renderPressTimeline(allEntries){
       const label   = getLineDisplayName(d.lineId);
       const r       = d.roles || {};
       const roleStr = [
-        r.条件設定 === name ? '条件' : '',
         (r.金型取付||'').split(/[,、]/).map(s=>s.trim()).includes(name) ? '取付' : '',
-        r.リフト === name ? 'リフト' : '',
+        r.初品出し === name ? '初品' : '',
         r.品質確認 === name ? '品質' : '',
       ].filter(Boolean).join('·');
       const tip = `${label}  [${roleStr||'担当'}]  ${d.setupStart||d.prodStart||''}〜${d.prodEnd||''}`;
@@ -3985,8 +4090,8 @@ async function importFromProductionPlan(){
 }
 
 // ===== 役割 自動割り振り =====
-// PRESS_LINE_MASTERに基づき、時間重複なしで品質確認・リフト・金型取付を自動設定
-// 条件設定は常に空にする
+// PRESS_LINE_MASTER + WORKER_ROLE_MASTER に基づき
+// 時間重複なしで 品質確認・初品出し・金型取付 を自動設定
 async function autoAssignRoles(){
   const targets = dantoriSchedule.filter(d => PRESS_LINE_MASTER[d.lineId]);
   if(!targets.length){
@@ -3997,7 +4102,7 @@ async function autoAssignRoles(){
   const toMin = t => { if(!t)return null; const [h,m]=t.split(':').map(Number); return isNaN(h)?null:h*60+m; };
 
   // 時間帯重複チェック用マップ
-  const busyMap = {};   // { workerName: [{s, e}] }
+  const busyMap = {};
   const isBusy = (w, s, e) => {
     if(!w || s===null) return false;
     const effE = (e!==null) ? e : s+60;
@@ -4009,65 +4114,80 @@ async function autoAssignRoles(){
     busyMap[w].push({ s, e:(e!==null)?e:s+60 });
   };
 
-  // 時刻順にソートして割り振り（早い順に優先）
+  // 時刻順にソート
   const sorted = [...targets].sort((a, b) =>
     (toMin(a.setupStart||a.prodStart)||9999) - (toMin(b.setupStart||b.prodStart)||9999)
   );
 
-  const conflicts = [];
+  const conflicts   = [];   // 重複エラー
+  const shortages   = [];   // 人員不足
   sorted.forEach(entry => {
     const m = PRESS_LINE_MASTER[entry.lineId];
     if(!m) return;
     const s = toMin(entry.setupStart||entry.prodStart);
     const e = toMin(entry.prodEnd||entry.prodStart);
+    const linePart = `${getLineDisplayName(entry.lineId)}（${entry.partNo||'品番不明'}）`;
+    const timeStr  = entry.setupStart||entry.prodStart||'';
 
-    const roles = { 条件設定:'', 品質確認:'', リフト:'', 金型取付:'' };
+    const roles = { 品質確認:'', 初品出し:'', 金型取付:'' };
 
-    // 略称→フルネーム変換（Gantt表示とのマッチングに必要）
+    // 略称→フルネーム変換
     const rqual   = resolveWorkerName(m.quality);
     const rippin  = m.ippin ? resolveWorkerName(m.ippin) : '';
     const rWorkers = m.workers.map(resolveWorkerName);
 
-    // 品質確認（品質マークの作業者）
+    // ① 品質確認
     if(!isBusy(rqual, s, e)){
       roles.品質確認 = rqual;
       markBusy(rqual, s, e);
     } else {
-      conflicts.push(`${getLineDisplayName(entry.lineId)} ${entry.setupStart||entry.prodStart}〜: 品質確認(${rqual})が重複`);
+      conflicts.push(`⚠ 品質確認：${rqual} が重複\n   → ${linePart} ${timeStr}〜 に割り振れません`);
     }
 
-    // リフト（初品マークの作業者）
+    // ② 初品出し
     if(rippin && !isBusy(rippin, s, e)){
-      roles.リフト = rippin;
+      roles.初品出し = rippin;
       markBusy(rippin, s, e);
     } else if(rippin){
-      conflicts.push(`${getLineDisplayName(entry.lineId)} ${entry.setupStart||entry.prodStart}〜: リフト(${rippin})が重複`);
+      conflicts.push(`⚠ 初品出し：${rippin} が重複\n   → ${linePart} ${timeStr}〜 に割り振れません`);
     }
 
-    // 金型取付（ライン作業者から利用可能な人を割り当て）
-    const available = rWorkers.filter(w =>
-      w !== rqual && w !== rippin && !isBusy(w, s, e)
+    // ③ 金型取付（noLine フラグのある人は除外）
+    const lineCandidates = rWorkers.filter(w =>
+      w !== rqual && w !== rippin && !workerHasRole(w, 'noLine')
     );
+    const available = lineCandidates.filter(w => !isBusy(w, s, e));
+
     if(available.length){
       roles.金型取付 = available.join('、');
       available.forEach(w => markBusy(w, s, e));
+    } else {
+      // 誰が重複しているかを明示
+      const busyOnes   = lineCandidates.filter(w => isBusy(w, s, e));
+      const noLinOnes  = rWorkers.filter(w => w !== rqual && w !== rippin && workerHasRole(w, 'noLine'));
+      const detail = [
+        busyOnes.length  ? `重複中: ${busyOnes.join('、')}`   : '',
+        noLinOnes.length ? `ライン外: ${noLinOnes.join('、')}` : '',
+      ].filter(Boolean).join(' ／ ');
+      shortages.push(`⛔ 金型取付 人員不足：${linePart} ${timeStr}〜\n   ${detail||'候補者なし'}`);
     }
 
     entry.roles = roles;
   });
 
-  // プレビュー表示
+  // プレビュー
   const preview = sorted.map(d => {
     const r = d.roles;
     const line = getLineDisplayName(d.lineId);
-    const t = (d.setupStart||d.prodStart||'') + (d.prodEnd ? '〜'+d.prodEnd : '');
-    return `${line} ${t}\n  品質:${r.品質確認||'（重複）'} / リフト:${r.リフト||'（重複）'} / 取付:${r.金型取付||'なし'}`;
+    const t = (d.setupStart||d.prodStart||'') + (d.prodEnd?'〜'+d.prodEnd:'');
+    return `${line}（${d.partNo||'—'}） ${t}\n  品質:${r.品質確認||'（未割当）'} / 初品:${r.初品出し||'（未割当）'} / 取付:${r.金型取付||'なし'}`;
   }).join('\n');
 
-  const warnMsg = conflicts.length ? `\n\n⚠ 重複のため未割り振り:\n${conflicts.join('\n')}` : '';
+  const warnLines = [...conflicts, ...shortages];
+  const warnMsg = warnLines.length ? `\n\n${warnLines.join('\n')}` : '';
   if(!confirm(`${sorted.length}件に自動割り振りします:\n\n${preview}${warnMsg}\n\nFirebaseに保存しますか？`)) return;
 
-  // Firebase保存（全エントリを再保存）
+  // Firebase保存
   const fbUrl   = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
   const dateStr = getDantoriDatePath();
   try {
@@ -4080,7 +4200,10 @@ async function autoAssignRoles(){
       {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newData)});
     await loadDantoriSchedule();
     renderKanban();
-    alert(`✓ 自動割り振りを保存しました${conflicts.length ? '\n\n※ ' + conflicts.length + '件は重複のため手動確認が必要です' : ''}`);
+    const warnSummary = warnLines.length
+      ? `\n\n⚠ ${conflicts.length}件の重複 / ${shortages.length}件の人員不足\n（段取り指示カードで手動確認してください）`
+      : '';
+    alert(`✓ 自動割り振りを保存しました${warnSummary}`);
   } catch(e){
     alert('保存エラー: ' + e.message);
   }
@@ -4229,22 +4352,59 @@ window.qcOnTabActivated = function(){
     document.getElementById('qc-bulk-pi-retake').addEventListener('change', function(){ qcAddBulkPhoto(this.files[0]); this.value=''; qcCloseViewer(); });
     // 作業予定・記録読み込み
     qcGasPost('getRecords', {}, function(res){ if(res&&res.ok){ QC_ALL_RECORDS=res.records||[]; qcUpdatePendingBadge(); }}, function(){});
-    qcGasPost('getSakuyoData', {}, function(res){ QC_SAKUYO = (res&&res.ok) ? (res.data||[]) : []; }, function(){ QC_SAKUYO=[]; });
+    qcGasPost('getSakuyoData', {}, function(res){
+      QC_SAKUYO = qcFilterSakuyo((res&&res.ok) ? (res.data||[]) : []);
+    }, function(){
+      // GAS失敗 → localStorageキャッシュから復元
+      try {
+        var cached = localStorage.getItem('qcSakuyoCache');
+        if(cached){ QC_SAKUYO = JSON.parse(cached); return; }
+      } catch(e){}
+      QC_SAKUYO = [];
+    });
     // sakuyo検索
     document.getElementById('qc-sakuyo-search').addEventListener('input', qcOnSakuyoInput);
   }
 };
 
-// ----- 生産予定 再取得 -----
+// ----- キャッシュ情報表示 -----
+function qcUpdateCacheInfo(){
+  var el = document.getElementById('qc-cache-info');
+  if(!el) return;
+  try {
+    var date  = localStorage.getItem('qcSakuyoCacheDate');
+    var count = localStorage.getItem('qcSakuyoCacheCount');
+    if(date && count){
+      el.innerHTML = '✅ <b>ファイルから読み込み済み</b>　' + count + '件<br>'
+        + '<span style="color:#888;">読み込み日時: ' + date + '</span>';
+      el.style.color = '#15803d';
+    } else {
+      el.innerHTML = '🔄 スプレッドシートから自動取得中（またはキャッシュなし）';
+      el.style.color = '#555';
+    }
+  } catch(e){
+    el.innerHTML = '—';
+  }
+}
+
+// ----- 外注プレス等を除外するフィルタ -----
+// kosei（工程）に「外注」が含まれる行は表示しない
+function qcFilterSakuyo(data){
+  return (data||[]).filter(function(s){
+    return String(s.kosei||'').indexOf('外注') < 0;
+  });
+}
+
+// ----- 生産予定 再取得（GAS経由） -----
 window.qcReloadSakuyo = function(){
   var st = document.getElementById('qc-reload-status');
   st.style.display = 'block';
   st.style.color = '#1F4E79';
   st.textContent = '⏳ データを取得中…';
   qcGasPost('getSakuyoData', {}, function(res){
-    QC_SAKUYO = (res && res.ok) ? (res.data || []) : [];
+    QC_SAKUYO = qcFilterSakuyo((res && res.ok) ? (res.data || []) : []);
     st.style.color = '#15803d';
-    st.textContent = '✓ ' + QC_SAKUYO.length + '件のデータを取得しました（' + new Date().toLocaleTimeString('ja-JP') + '）';
+    st.textContent = '✓ ' + QC_SAKUYO.length + '件を取得しました（外注除外済）（' + new Date().toLocaleTimeString('ja-JP') + '）';
   }, function(e){
     st.style.color = '#E24B4A';
     st.textContent = '⚠ 取得失敗: ' + (e ? e.message : '通信エラー');
@@ -4397,40 +4557,37 @@ function qcProcessSheetData(data){
   previewEl.style.display = 'block';
 }
 
+// GAS不要：ファイルをローカルで直接読み込み + localStorageにキャッシュ保存
 window.qcSendSakuyoToGas = function(){
   if(!QC_UPLOAD_PARSED.length){ alert('ファイルを選択してください。'); return; }
-  if(!confirm(QC_UPLOAD_PARSED.length + '件のデータをスプレッドシートに反映します。\n既存データは上書きされます。\n\nよろしいですか？')) return;
 
-  var statusEl  = document.getElementById('qc-upload-send-status');
-  var sendBtn   = document.getElementById('qc-upload-send-btn');
-  statusEl.style.display  = 'block';
-  statusEl.style.color    = '#1F4E79';
-  statusEl.textContent    = '⏳ 送信中…';
-  sendBtn.disabled        = true;
+  var statusEl = document.getElementById('qc-upload-send-status');
+  var sendBtn  = document.getElementById('qc-upload-send-btn');
 
-  qcGasPost('updateSakuyoData', { rows: QC_UPLOAD_PARSED }, function(res){
-    sendBtn.disabled = false;
-    if(res && res.ok){
-      statusEl.style.color = '#15803d';
-      statusEl.textContent = '✓ ' + QC_UPLOAD_PARSED.length + '件を反映しました。データを再取得します…';
-      // 反映後に QC_SAKUYO を再読み込み
-      qcGasPost('getSakuyoData', {}, function(res2){
-        QC_SAKUYO = (res2 && res2.ok) ? (res2.data || []) : QC_UPLOAD_PARSED;
-        statusEl.textContent = '✓ 完了！' + QC_SAKUYO.length + '件を取得しました（' + new Date().toLocaleTimeString('ja-JP') + '）';
-      }, function(){
-        // GAS再取得失敗でもパース済みデータを使う
-        QC_SAKUYO = QC_UPLOAD_PARSED;
-        statusEl.textContent += '（再取得失敗 — ローカルデータを使用中）';
-      });
-    } else {
-      statusEl.style.color = '#E24B4A';
-      statusEl.textContent = '⚠ 反映失敗: ' + (res && res.error ? res.error : '不明なエラー');
-    }
-  }, function(e){
-    sendBtn.disabled = false;
-    statusEl.style.color = '#E24B4A';
-    statusEl.textContent = '⚠ 通信エラー: ' + (e ? e.message : '不明');
-  });
+  // 外注プレスをフィルタリング
+  var filtered = qcFilterSakuyo(QC_UPLOAD_PARSED);
+  var excluded = QC_UPLOAD_PARSED.length - filtered.length;
+
+  // QC_SAKUYO に即座に反映
+  QC_SAKUYO = filtered;
+
+  // localStorageにキャッシュ保存（次回起動時も保持）
+  try {
+    localStorage.setItem('qcSakuyoCache',     JSON.stringify(filtered));
+    localStorage.setItem('qcSakuyoCacheDate', new Date().toLocaleString('ja-JP'));
+    localStorage.setItem('qcSakuyoCacheCount', String(filtered.length));
+  } catch(e){ console.warn('localStorage保存失敗:', e); }
+
+  statusEl.style.display = 'block';
+  statusEl.style.color   = '#15803d';
+  statusEl.textContent   = '✓ ' + filtered.length + '件を読み込みました'
+    + (excluded > 0 ? '（外注プレス ' + excluded + '件を除外）' : '')
+    + '　次回起動時も自動で読み込まれます';
+
+  sendBtn.disabled = false;
+
+  // キャッシュ日時をUIに反映
+  qcUpdateCacheInfo();
 };
 
 // ----- 品番検索からの遷移 -----
@@ -4451,8 +4608,9 @@ window.qcShowScreen = function(sc){
     var el = document.getElementById('qc-tab-'+s);
     if(el) el.className = 'qc-tab' + (s===sc?' qc-active':'');
   });
-  if(sc==='list') qcLoadRecords();
+  if(sc==='list')   qcLoadRecords();
   if(sc==='search'){ if(!QC_ALL_RECORDS.length) qcLoadRecords(); else qcRunSeizoSearch(); }
+  if(sc==='upload') qcUpdateCacheInfo();
 };
 
 // ----- 作業選択 -----
