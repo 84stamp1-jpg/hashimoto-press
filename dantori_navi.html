@@ -4278,15 +4278,38 @@ async function autoAssignRoles(){
   const hasRoleData = Object.keys(WORKER_ROLE_MASTER).length > 0;
   const allPressWorkers = getPressWorkerList();
 
-  function findWorker(role, lineId, excludes, s, e){
+  // ── 時刻順ソート（先にソートしてactiveLineSetを確定） ──
+  const sorted = [...targets].sort((a, b) =>
+    (toMin(a.setupStart||a.prodStart)||9999) - (toMin(b.setupStart||b.prodStart)||9999)
+  );
+
+  // 作業がある（dantori登録がある）ラインのSet
+  const activeLineSet = new Set(sorted.map(d => d.lineId));
+
+  // 同グループで仕事がないラインを取得（そこ担当の人が他ラインに回せる）
+  function getSameGroupNoWork(lineId){
+    if(!dantoriGroupCfg.length) return [];
+    const grp = dantoriGroupCfg.find(g => g.ids && g.ids.includes(lineId));
+    if(!grp) return [];
+    return grp.ids.filter(id => id !== lineId && !activeLineSet.has(id));
+  }
+
+  // 品質確認・初品出しを探す（グループフォールバック付き）
+  function findWorker(role, lineId, s, e){
     if(hasRoleData){
       const cands = allPressWorkers.filter(w =>
-        workerHasRole(w, role) && !excludes.includes(w) && !isUnavailableAt(w, s)
+        workerHasRole(w, role) && !isUnavailableAt(w, s)
       );
-      // 優先ライン一致 → 空き
+      // ① 優先ライン一致 → 空き
       const prio = cands.filter(w => WORKER_PRIORITY_LINE[w] === lineId && !isBusy(w, s, e));
       if(prio.length) return prio[0];
-      // 優先ライン未設定（どこでも可） → 空き
+      // ② 同グループで仕事なし → 空き（グループ応援）
+      const freeLines = getSameGroupNoWork(lineId);
+      const grp = cands.filter(w =>
+        freeLines.includes(WORKER_PRIORITY_LINE[w]) && !isBusy(w, s, e)
+      );
+      if(grp.length) return grp[0];
+      // ③ 優先ライン未設定（フローティング）→ 空き
       const floating = cands.filter(w => !WORKER_PRIORITY_LINE[w] && !isBusy(w, s, e));
       if(floating.length) return floating[0];
     }
@@ -4294,62 +4317,67 @@ async function autoAssignRoles(){
     const plm = PRESS_LINE_MASTER[lineId];
     if(plm){
       const fb = resolveWorkerName(role === 'quality' ? plm.quality : plm.ippin);
-      if(fb && !excludes.includes(fb) && !isBusy(fb, s, e) && !isUnavailableAt(fb, s)) return fb;
+      if(fb && !isBusy(fb, s, e) && !isUnavailableAt(fb, s)) return fb;
     }
     return null;
   }
 
-  function findMountWorkers(lineId, excludes, s, e){
-    let cands = [];
+  // 金型取付を探す
+  // ・品質確認/初品出しと同じ人でもOK（thisEntryAssigned の人はisBusy無視）
+  // ・ライン外（noLine）は除く
+  // ・優先ライン仕事なし → グループ他ライン応援を次候補に
+  function findMountWorkers(lineId, thisEntryAssigned, s, e){
+    // 利用可能判定（同エントリの担当者はbusy無視）
+    const isAvail = w => {
+      if(workerHasRole(w,'noLine')) return false;
+      if(thisEntryAssigned.includes(w)) return !isUnavailableAt(w, s); // 同ライン担当者はbusy無視
+      return !isBusy(w, s, e) && !isUnavailableAt(w, s);
+    };
+
     if(hasRoleData){
-      // 優先ライン一致で noLine なし
+      const freeLines = getSameGroupNoWork(lineId);
+      // ① 優先ライン一致
       const prio = allPressWorkers.filter(w =>
-        !workerHasRole(w,'noLine') && !excludes.includes(w) &&
-        WORKER_PRIORITY_LINE[w] === lineId &&
-        !isBusy(w, s, e) && !isUnavailableAt(w, s)
+        WORKER_PRIORITY_LINE[w] === lineId && isAvail(w)
       );
-      cands = prio;
-      if(!cands.length){
-        // 優先ライン未設定で noLine なし
-        cands = allPressWorkers.filter(w =>
-          !workerHasRole(w,'noLine') && !excludes.includes(w) &&
-          !WORKER_PRIORITY_LINE[w] &&
-          !isBusy(w, s, e) && !isUnavailableAt(w, s)
-        );
-      }
+      if(prio.length) return prio;
+      // ② 同グループで仕事なし（グループ応援）
+      const grp = allPressWorkers.filter(w =>
+        freeLines.includes(WORKER_PRIORITY_LINE[w]) && isAvail(w)
+      );
+      if(grp.length) return grp;
+      // ③ 優先ライン未設定（フローティング）
+      const floating = allPressWorkers.filter(w =>
+        !WORKER_PRIORITY_LINE[w] && isAvail(w)
+      );
+      if(floating.length) return floating;
     }
     // フォールバック: PRESS_LINE_MASTER.workers
-    if(!cands.length){
-      const plm = PRESS_LINE_MASTER[lineId];
-      if(plm){
-        cands = plm.workers.map(resolveWorkerName).filter(w =>
-          !excludes.includes(w) && !workerHasRole(w,'noLine') &&
-          !isBusy(w, s, e) && !isUnavailableAt(w, s)
-        );
-      }
+    const plm = PRESS_LINE_MASTER[lineId];
+    if(plm){
+      const fb = plm.workers.map(resolveWorkerName).filter(w =>
+        !workerHasRole(w,'noLine') && !isBusy(w, s, e) && !isUnavailableAt(w, s)
+      );
+      if(fb.length) return fb;
     }
-    return cands;
+    return [];
   }
 
-  // ── 全候補一覧（不足時の詳細表示用） ────────────
-  function getMountCandidatesAll(lineId, excludes, s, e){
-    let all = [];
+  // 不足時の詳細表示用全候補（ライン外除く・excludes不使用）
+  function getMountCandidatesAll(lineId){
     if(hasRoleData){
-      all = allPressWorkers.filter(w => !workerHasRole(w,'noLine') && !excludes.includes(w));
-      // 優先ライン一致 or 未設定
-      all = all.filter(w => !WORKER_PRIORITY_LINE[w] || WORKER_PRIORITY_LINE[w] === lineId);
+      const freeLines = getSameGroupNoWork(lineId);
+      const all = allPressWorkers.filter(w =>
+        !workerHasRole(w,'noLine') &&
+        (!WORKER_PRIORITY_LINE[w] ||
+          WORKER_PRIORITY_LINE[w] === lineId ||
+          freeLines.includes(WORKER_PRIORITY_LINE[w]))
+      );
+      if(all.length) return all;
     }
-    if(!all.length){
-      const plm = PRESS_LINE_MASTER[lineId];
-      if(plm) all = plm.workers.map(resolveWorkerName);
-    }
-    return all;
+    const plm = PRESS_LINE_MASTER[lineId];
+    return plm ? plm.workers.map(resolveWorkerName) : [];
   }
-
-  // ── 時刻順ソート ──────────────────────────────
-  const sorted = [...targets].sort((a, b) =>
-    (toMin(a.setupStart||a.prodStart)||9999) - (toMin(b.setupStart||b.prodStart)||9999)
-  );
 
   const conflicts = [];
   const shortages = [];
@@ -4361,18 +4389,17 @@ async function autoAssignRoles(){
     const linePart = `${lineDisp}（${entry.partNo||'品番不明'}）`;
     const timeStr  = entry.setupStart||entry.prodStart||'';
     const roles    = { 品質確認:'', 初品出し:'', 金型取付:'' };
-    const assigned = [];   // この枠に割り当て済みの名前（金型候補の除外用）
 
     // ① 品質確認
-    const qual = findWorker('quality', entry.lineId, assigned, s, e);
+    const qual = findWorker('quality', entry.lineId, s, e);
     if(qual){
       roles.品質確認 = qual;
       markBusy(qual, s, e, `品質確認 ${linePart}`);
-      assigned.push(qual);
     } else {
-      // 誰が競合しているか調べる
       const qualAll = hasRoleData
-        ? allPressWorkers.filter(w => workerHasRole(w,'quality') && (!WORKER_PRIORITY_LINE[w] || WORKER_PRIORITY_LINE[w] === entry.lineId))
+        ? allPressWorkers.filter(w => workerHasRole(w,'quality') &&
+            (!WORKER_PRIORITY_LINE[w] || WORKER_PRIORITY_LINE[w] === entry.lineId ||
+             getSameGroupNoWork(entry.lineId).includes(WORKER_PRIORITY_LINE[w])))
         : (PRESS_LINE_MASTER[entry.lineId] ? [resolveWorkerName(PRESS_LINE_MASTER[entry.lineId].quality)] : []);
       const qualConflict = qualAll.filter(w => isBusy(w, s, e)).map(w => {
         const slot = busySlotOf(w, s, e);
@@ -4384,14 +4411,15 @@ async function autoAssignRoles(){
     }
 
     // ② 初品出し
-    const ippin = findWorker('ippin', entry.lineId, assigned, s, e);
+    const ippin = findWorker('ippin', entry.lineId, s, e);
     if(ippin){
       roles.初品出し = ippin;
       markBusy(ippin, s, e, `初品出し ${linePart}`);
-      assigned.push(ippin);
     } else {
       const ippinAll = hasRoleData
-        ? allPressWorkers.filter(w => workerHasRole(w,'ippin') && (!WORKER_PRIORITY_LINE[w] || WORKER_PRIORITY_LINE[w] === entry.lineId))
+        ? allPressWorkers.filter(w => workerHasRole(w,'ippin') &&
+            (!WORKER_PRIORITY_LINE[w] || WORKER_PRIORITY_LINE[w] === entry.lineId ||
+             getSameGroupNoWork(entry.lineId).includes(WORKER_PRIORITY_LINE[w])))
         : (PRESS_LINE_MASTER[entry.lineId] ? [resolveWorkerName(PRESS_LINE_MASTER[entry.lineId].ippin)] : []);
       const ippinConflict = ippinAll.filter(w => isBusy(w, s, e)).map(w => {
         const slot = busySlotOf(w, s, e);
@@ -4405,22 +4433,28 @@ async function autoAssignRoles(){
     }
 
     // ③ 金型取付
-    const mountAvail = findMountWorkers(entry.lineId, assigned, s, e);
+    // 品質確認・初品出しと同じ人でもOK（同ラインなら兼務可）
+    // ライン外（noLine）は除く
+    const thisEntryAssigned = [qual, ippin].filter(Boolean);
+    const mountAvail = findMountWorkers(entry.lineId, thisEntryAssigned, s, e);
     if(mountAvail.length){
       roles.金型取付 = mountAvail.join('、');
-      mountAvail.forEach(w => markBusy(w, s, e, `金型取付 ${linePart}`));
+      // mountに追加された人（質/初品と別の人）をbusy登録
+      mountAvail.filter(w => !thisEntryAssigned.includes(w))
+        .forEach(w => markBusy(w, s, e, `金型取付 ${linePart}`));
     } else {
-      const mountAll = getMountCandidatesAll(entry.lineId, assigned, s, e);
-      const busyOnes   = mountAll.filter(w => isBusy(w, s, e)).map(w => {
+      const mountAll = getMountCandidatesAll(entry.lineId);
+      const busyOnes = mountAll.filter(w => isBusy(w, s, e) && !thisEntryAssigned.includes(w)).map(w => {
         const slot = busySlotOf(w, s, e);
         return `${w}（${slot ? slot.label : '他'} ${slot ? fmtMin(slot.s)+'〜'+fmtMin(slot.e) : ''}）`;
       });
-      const absentOnes = mountAll.filter(w => isUnavailableAt(w, s)).map(w => `${w}（出勤なし）`);
+      const absentOnes = mountAll.filter(w => isUnavailableAt(w, s) && !thisEntryAssigned.includes(w))
+        .map(w => `${w}（出勤なし）`);
       const noLineOnes = (hasRoleData ? allPressWorkers : []).filter(w =>
         workerHasRole(w,'noLine') && (WORKER_PRIORITY_LINE[w] === entry.lineId || !WORKER_PRIORITY_LINE[w])
       );
       const detail = [
-        busyOnes.length   ? `重複中: ${busyOnes.join('、')}`   : '',
+        busyOnes.length   ? `重複中: ${busyOnes.join('、')}`    : '',
         absentOnes.length ? `出勤なし: ${absentOnes.join('、')}` : '',
         noLineOnes.length ? `ライン外: ${noLineOnes.join('、')}` : '',
       ].filter(Boolean).join(' ／ ');
