@@ -622,7 +622,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.15-13</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.15-14</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -2550,7 +2550,7 @@ function renderMaterials() {
   const total = entries.reduce((s,[,r])=>s+(r.amount||0),0);
   document.getElementById('matCount').textContent = entries.length + '件 / ¥' + fmt(total);
   const _matMonthLabel = (() => { const v = document.getElementById('matDateFilter')?.value||''; if (!v) return '全期間'; if (v==='nodate') return '仕入日なし'; return v.replace(/^(\d{4})-(\d{2})$/,'$1年$2月'); })();
-  renderSupplierSummary(entries.filter(([,r]) => (r.month||'').trim()), 'matSupplierSummary', r => r.amount||0, _matMonthLabel);
+  renderSupplierSummary(entries.filter(([,r]) => (r.month||'').length >= 8), 'matSupplierSummary', r => r.amount||0, _matMonthLabel);
   if (!entries.length) { document.getElementById('matTableBody').innerHTML = '<div class="empty"><div class="empty-icon">🔩</div>データなし</div>'; return; }
   document.getElementById('matTableBody').innerHTML = `
     <table>
@@ -2568,7 +2568,7 @@ function renderMaterials() {
             <button class="btn btn-danger btn-sm" style="padding:2px 5px;font-size:10px" onclick="matDeleteOne('${k}')">×</button>
             ${(r.quoteReqKey||r.quoteKey) ? '<button class="btn btn-secondary btn-sm" style="padding:2px 5px;font-size:9px;background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd" onclick="restoreToOrderPage(\'' + (r.quoteReqKey||r.quoteKey) + '\',\'' + (r.orderedSupId||'') + '\',\'' + k + '\')">📋 注文書</button>' : ''}
           </td>
-          <td class="mono" style="font-size:15px">${r.month||''}</td>
+          <td class="mono" style="font-size:15px;color:${(r.month||'').length>=8?'inherit':'var(--text3)'}">${(r.month||'').length>=8?r.month:'—'}</td>
           <td class="mono" style="font-size:13px;color:${r.arrivalDate?'var(--accent)':'var(--text3)'}">${r.arrivalDate||'—'}</td>
           <td class="mono" style="font-size:15px;font-weight:600;color:var(--accent)">${r.partNo||r.moldNo||''}</td>
           <td>
@@ -2766,7 +2766,7 @@ function renderOutsource() {
   if (month) entries = entries.filter(([,r]) => (r.month||'').slice(0,7) === month);
   document.getElementById('outCount').textContent = entries.length + '件 / ¥' + fmt(entries.reduce((s,[,r])=>s+(r.total||0),0));
   const _outMonthLabel = month ? month.replace(/^(\d{4})-(\d{2})$/,'$1年$2月') : '全期間';
-  renderSupplierSummary(entries.filter(([,r]) => (r.month||'').trim()), 'outSupplierSummary', r => r.total||0, _outMonthLabel);
+  renderSupplierSummary(entries.filter(([,r]) => (r.month||'').length >= 8), 'outSupplierSummary', r => r.total||0, _outMonthLabel);
   if (!entries.length) { document.getElementById('outTableBody').innerHTML = '<div class="empty"><div class="empty-icon">🏭</div>データなし</div>'; return; }
   document.getElementById('outTableBody').innerHTML = `
     <table>
@@ -2783,7 +2783,7 @@ function renderOutsource() {
             <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px;margin-right:2px" onclick="editOutsource('${k}')">編集</button>
             <button class="btn btn-danger btn-sm" style="padding:2px 5px;font-size:10px" onclick="outDeleteOne('${k}')">×</button>
           </td>
-          <td class="mono" style="font-size:15px">${r.month||''}</td>
+          <td class="mono" style="font-size:15px;color:${(r.month||'').length>=8?'inherit':'var(--text3)'}">${(r.month||'').length>=8?r.month:'—'}</td>
           <td>
             <div class="mono" style="font-size:15px;font-weight:700;color:var(--accent)">${r.moldNo||''}</div>
             ${r.process ? '<div style="font-size:10px;color:var(--text3)">' + r.process + '</div>' : ''}
@@ -2832,7 +2832,7 @@ function renderPurchase() {
   if (month) entries = entries.filter(([,r]) => (r.month||'').replace(/\//g,'-').slice(0,7) === month);
   document.getElementById('purCount').textContent = entries.length + '件 / ¥' + fmt(entries.reduce((s,[,r])=>s+(r.total||0),0));
   const _purMonthLabel = month ? month.replace(/^(\d{4})-(\d{2})$/,'$1年$2月') : '全期間';
-  renderSupplierSummary(entries.filter(([,r]) => (r.month||'').trim()), 'purSupplierSummary', r => r.total||0, _purMonthLabel);
+  renderSupplierSummary(entries.filter(([,r]) => (r.month||'').length >= 8), 'purSupplierSummary', r => r.total||0, _purMonthLabel);
   if (!entries.length) { document.getElementById('purTableBody').innerHTML = '<div class="empty"><div class="empty-icon">🛒</div>データなし</div>'; return; }
   document.getElementById('purTableBody').innerHTML = `
     <table>
@@ -2852,7 +2852,7 @@ function renderPurchase() {
             <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px;margin-right:2px" onclick="editPurchase('${k}')">編集</button>
             <button class="btn btn-danger btn-sm" style="padding:2px 5px;font-size:10px" onclick="purDeleteOne('${k}')">×</button>
           </td>
-          <td class="mono" style="font-size:15px">${r.month||''}</td>
+          <td class="mono" style="font-size:15px;color:${(r.month||'').length>=8?'inherit':'var(--text3)'}">${(r.month||'').length>=8?r.month:'—'}</td>
           <td class="mono" style="font-size:15px;font-weight:600;color:var(--accent)">${r.moldNo||''}</td>
           <td>${matPartNoCell(r.moldNo, r.partNo)}</td>
           <td style="font-size:11px">${r.name||''}</td>
