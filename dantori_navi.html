@@ -3096,10 +3096,20 @@ function renderDantoriCard(d){
   // ライン表示名（「ライン」の重複を防ぐ）
   const lineName = getLineDisplayName(d.lineId);
 
-  // 段取り時間バー
-  const setupBar = (d.setupStart && d.prodStart)
-    ? `<div class="setup-bar">🔧 段取り：<span class="setup-time-tag">${d.setupStart} 〜 ${d.prodStart}</span></div>`
-    : '';
+  // 段取り時間バー（標準時間を動的計算して表示）
+  let setupBar = '';
+  if(d.setupStart && d.prodStart){
+    const actualMin = calcDurMin(d.setupStart, d.prodStart);
+    const stdMin    = calcDantoriSetupTime(d.lineId, d.mountKata || 1, d.mountCount || 0);
+    const kataStr   = (d.mountKata > 1 || d.mountCount > 0)
+      ? `<span style="font-size:10px;color:#94a3b8;margin-left:4px;">${d.mountKata||1}型/${d.mountCount||'?'}人→標準${stdMin}分</span>`
+      : `<span style="font-size:10px;color:#94a3b8;margin-left:4px;">標準${stdMin}分</span>`;
+    const ratio  = (actualMin && stdMin) ? Math.round(actualMin / stdMin * 100) : null;
+    const ratioStr = ratio !== null
+      ? `<span style="font-size:10px;color:${ratio<=100?'#15803d':ratio<=125?'#d97706':'#dc2626'};margin-left:4px;">(${ratio}%)</span>`
+      : '';
+    setupBar = `<div class="setup-bar">🔧 段取り：<span class="setup-time-tag">${d.setupStart} 〜 ${d.prodStart}</span>${actualMin ? `<span style="font-size:10px;color:#475569;margin-left:4px;">${actualMin}分</span>` : ''}${ratioStr}${kataStr}</div>`;
+  }
 
   // 生産時間テキスト
   const prodTime = d.prodStart
@@ -3404,6 +3414,18 @@ let dantoriSortBy    = 'time';
 let editingDantoriId = null;
 let dantoriGroupCfg  = [];   // Firebase settings/groups から取得
 let dantoriLineNames = {};   // Firebase settings/lineNames から取得
+let dantoriSetupTimes  = {}; // Firebase settings/setupTimes  — ライン別段取り標準時間（合計）
+let dantoriSetupParams = {}; // Firebase settings/setupParams — ライン別{c:片付け, p:準備}
+
+// 段取り標準時間を動的計算: C×人数 + P×型数÷人数
+function calcDantoriSetupTime(lineId, kata, ninzu){
+  const base = dantoriSetupTimes[lineId] || 45;
+  if(!kata || !ninzu) return base;
+  const sp = dantoriSetupParams[lineId];
+  const c = (sp && sp.c != null) ? sp.c : Math.round(base / 2);
+  const p = (sp && sp.p != null) ? sp.p : (base - Math.round(base / 2));
+  return Math.round(c * ninzu + p * kata / ninzu);
+}
 
 // Firebase settings から グループ設定・ライン名 を取得
 async function loadDantoriSettings(){
@@ -3434,6 +3456,8 @@ async function loadDantoriSettings(){
     if(s.roleTimeMins && typeof s.roleTimeMins === 'object'){
       ROLE_TIME_MINS = { quality: s.roleTimeMins.quality || 5, ippin: s.roleTimeMins.ippin || 10 };
     }
+    if(s.setupTimes  && typeof s.setupTimes  === 'object') dantoriSetupTimes  = s.setupTimes;
+    if(s.setupParams && typeof s.setupParams === 'object') dantoriSetupParams = s.setupParams;
     updateStaffDatalist(); // 作業者マスタ読み込み後にdatalist更新
     renderDantori(); // グループ情報が揃ったら再描画
   } catch(e){ console.warn('settings load:', e); }
