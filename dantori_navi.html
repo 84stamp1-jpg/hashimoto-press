@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 /* ===== RESET & BASE ===== */
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -29,6 +30,8 @@ html, body {
 
 .content{padding:4px;display:none;}
 .content.active{display:block;}
+.content#tab-progress.active{display:flex!important;}
+
 
 /* ===== SEARCH TAB ===== */
 .search-wrap{position:relative;margin-bottom:14px;}
@@ -498,6 +501,202 @@ html, body {
   .hp-spacer{flex:1;}
   .hp-footer{text-align:right;font-size:7.5pt;font-weight:700;color:#BF360C;padding-top:1.5mm;border-top:0.5px solid #ddd;margin-top:auto;}
 }
+
+/* ===== 進捗管理ボード スコープCSS ===== */
+
+
+body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;display:flex;flex-direction:column;}
+
+/* ヘッダー */
+#tab-progress .hdr{background:#1a1a1a;color:#fff;padding:7px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+#tab-progress .hdr-title{font-size:13px;font-weight:700;}
+#tab-progress .hdr-r{display:flex;align-items:center;gap:12px;}
+#tab-progress .clk{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;}
+#tab-progress .dstr{font-size:11px;color:#aaa;}
+#tab-progress .conn{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:700;}
+#tab-progress .conn.on{background:#eafaf1;color:#1e8449;}
+#tab-progress .conn.off{background:#555;color:#ccc;}
+
+/* タブ */
+#tab-progress .tabs{display:flex;background:#fff;border-bottom:1px solid #ddd;flex-shrink:0;}
+#tab-progress .tb{flex:1;font-size:11px;padding:7px 4px;border:none;background:none;cursor:pointer;color:#999;font-weight:500;font-family:inherit;border-bottom:2px solid transparent;}
+#tab-progress .tb.active{color:#1a1a1a;border-bottom:2px solid #1a1a1a;background:#fafaf7;}
+
+#tab-progress .main{flex:1;overflow-y:auto;padding:10px 14px;}
+
+/* サマリー：コンパクト横並び */
+#tab-progress .sum{display:flex;gap:6px;margin-bottom:8px;}
+#tab-progress .sc{background:#fff;border-radius:7px;padding:6px 12px;border:1px solid #ddd;display:flex;align-items:center;gap:6px;flex:1;min-width:0;}
+#tab-progress .sc-info{flex:1;min-width:0;}
+#tab-progress .sc-lbl{font-size:10px;color:#888;}
+#tab-progress .sc-hint{font-size:9px;color:#bbb;margin-top:1px;display:none;}
+#tab-progress .sum.show-sub .sc-hint{display:block;}
+#tab-progress .sc-vals{display:flex;align-items:baseline;gap:5px;flex-shrink:0;}
+#tab-progress .sc-val{font-size:20px;font-weight:700;}
+#tab-progress .sc-val.red{color:#c0392b;} .sc-val.green{color:#27ae60;} .sc-val.amber{color:#d68910;}
+#tab-progress .sc-vsep{font-size:11px;color:#ccc;display:none;}
+#tab-progress .sc-vsub{font-size:14px;font-weight:700;color:#bbb;display:none;}
+#tab-progress .sc-vsub.red{color:#c0392b;} .sc-vsub.green{color:#27ae60;} .sc-vsub.amber{color:#d68910;}
+#tab-progress .sum.show-sub .sc-vsep,
+#tab-progress .sum.show-sub .sc-vsub{display:inline-block;}
+
+/* アラート：コンパクト */
+#tab-progress .alts{display:flex;flex-direction:column;gap:3px;margin-bottom:8px;}
+#tab-progress .al{border-left:3px solid #c0392b;border-radius:4px;padding:4px 10px;display:flex;align-items:center;gap:8px;background:#fdf5f5;}
+#tab-progress .al.warn{background:#fefbf0;border-left-color:#d68910;}
+#tab-progress .al-txt{font-size:12px;font-weight:700;color:#c0392b;}
+#tab-progress .al-txt.w{color:#d68910;}
+#tab-progress .al-sub{font-size:10px;color:#999;margin-left:auto;}
+
+/* ラインカード */
+#tab-progress .lines{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
+
+/* 状態ごとの色：背景は白維持、左ボーダーのみ色付け */
+#tab-progress .lcard{background:#fff;border-radius:8px;border:1px solid #ddd;border-left:4px solid #ddd;padding:10px 12px;cursor:pointer;transition:box-shadow 0.15s;min-width:0;overflow:hidden;}
+#tab-progress .lcard:hover{box-shadow:0 2px 10px rgba(0,0,0,0.1);}
+#tab-progress .lcard.s-ng{border-left-color:#e74c3c;}
+#tab-progress .lcard.s-wn{border-left-color:#e67e22;}
+#tab-progress .lcard.s-ok{border-left-color:#27ae60;}
+#tab-progress .lcard.s-su{border-left-color:#2980b9;}
+#tab-progress .lcard.s-st{border-left-color:#95a5a6;}
+#tab-progress .lcard.s-wt{border-left-color:#bdc3c7;}
+
+#tab-progress .lhead{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;}
+#tab-progress .lname{font-size:17px;font-weight:700;color:#1a1a1a;}
+#tab-progress .lpart{font-size:13px;color:#888;margin-top:2px;}
+#tab-progress .bdg{font-size:11px;padding:3px 10px;border-radius:10px;font-weight:700;white-space:nowrap;}
+#tab-progress .bdg.ok{background:#eafaf1;color:#1e8449;}
+#tab-progress .bdg.wn{background:#fef3e2;color:#d35400;}
+#tab-progress .bdg.ng{background:#fdecea;color:#c0392b;}
+#tab-progress .bdg.su{background:#ebf5fb;color:#1a5276;}
+#tab-progress .bdg.st{background:#f5f5f5;color:#888;}
+#tab-progress .bdg.wt{background:#f5f5f5;color:#aaa;}
+
+/* プログレスバー */
+#tab-progress .pb{height:5px;background:#f0efe8;border-radius:3px;overflow:hidden;margin-bottom:7px;}
+#tab-progress .pb-f{height:100%;border-radius:3px;transition:width 0.4s;}
+#tab-progress .c-ok{background:#27ae60;} .c-wn{background:#e67e22;} .c-ng{background:#e74c3c;}
+#tab-progress .c-su{background:#2980b9;} .c-st{background:#95a5a6;} .c-wt{background:#ddd;}
+
+/* 数値ボックス */
+#tab-progress .nums{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;margin-bottom:6px;}
+#tab-progress .nb{background:#f8f7f2;border-radius:4px;padding:4px;text-align:center;}
+#tab-progress .nv{font-size:16px;font-weight:700;color:#1a1a1a;}
+#tab-progress .nv.red{color:#c0392b;}
+#tab-progress .nl{font-size:8px;color:#aaa;margin-top:1px;}
+
+/* 品番スケジュール */
+#tab-progress .sched{border-top:0.5px solid #f0efe8;padding-top:5px;margin-top:5px;}
+#tab-progress .sr{display:grid;grid-template-columns:18px 130px minmax(0,1fr);gap:2px 4px;padding:4px 0;border-bottom:0.5px solid #f8f7f2;font-size:12px;align-items:baseline;}
+#tab-progress .sr:last-child{border-bottom:none;}
+#tab-progress .sr.cur{background:#fffbf0;margin:0 -2px;padding:3px 2px;border-radius:3px;border-bottom:none;}
+#tab-progress .sn{color:#ccc;min-width:12px;font-size:9px;}
+#tab-progress .sp{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;width:130px;flex-shrink:0;}
+#tab-progress .sr.cur .sp{font-weight:700;color:#1a1a1a;}
+#tab-progress .sq{color:#888;min-width:50px;text-align:right;}
+.st2{color:#aaa;min-width:76px;text-align:right;font-size:10px;}
+#tab-progress .sa{text-align:right;font-size:10px;font-weight:700;}
+#tab-progress .sa.ok{color:#27ae60;} .sa.wn{color:#e67e22;} .sa.ng{color:#c0392b;} .sa.none{color:#ccc;}
+.sr.cur .st2{color:#e67e22;font-weight:700;}
+
+#tab-progress .upd{font-size:11px;color:#bbb;text-align:right;margin-top:4px;}
+#tab-progress .rate-banner{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;margin-bottom:7px;}
+#tab-progress .rate-banner.ok{background:#eafaf1;} .rate-banner.wn{background:#fef9ec;} .rate-banner.ng{background:#fdecea;} .rate-banner.wt{background:#f5f5f5;}
+#tab-progress .rate-num{font-size:22px;font-weight:700;line-height:1;}
+#tab-progress .rate-num.ok{color:#27ae60;} .rate-num.wn{color:#e67e22;} .rate-num.ng{color:#c0392b;} .rate-num.wt{color:#bbb;}
+#tab-progress .rate-info{flex:1;font-size:11px;}
+#tab-progress .rate-bar-bg{height:7px;background:rgba(0,0,0,0.08);border-radius:4px;overflow:hidden;margin-top:4px;}
+#tab-progress .rate-bar-fill{height:100%;border-radius:4px;transition:width 0.4s;}
+
+/* トラブル記録ボタン */
+#tab-progress .trouble-btn{background:#fff8f0;border:1px solid #ffc107;color:#e65100;border-radius:5px;padding:2px 7px;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;line-height:1.6;flex-shrink:0;}
+#tab-progress .trouble-btn:hover{background:#ffe0b2;}
+#tab-progress .trouble-btn.active{background:#fdecea;border-color:#c0392b;color:#c0392b;animation:tblink 1.5s ease-in-out infinite;}
+@keyframes tblink{0%,100%{opacity:1;}50%{opacity:0.65;}}
+/* トラブルバー（カード内） */
+.tbar{border-radius:4px;padding:4px 10px;margin-bottom:4px;display:flex;align-items:center;gap:8px;font-size:10px;}
+.tbar.ongoing{background:#fdf5f5;border-left:3px solid #c0392b;}
+.tbar.done{background:#fefbf0;border-left:3px solid #d68910;}
+/* カード背景点滅（緊急時） */
+@keyframes cardBgBlink{0%,100%{background-color:rgba(231,76,60,0.28);}50%{background-color:rgba(231,76,60,0.06);}}
+.trouble-blink-card{animation:cardBgBlink 1.2s ease-in-out infinite!important;}
+
+/* モーダル */
+.ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:100;align-items:center;justify-content:center;}
+.ov.open{display:flex;}
+.modal{background:#fff;border-radius:12px;padding:20px;width:94%;max-width:600px;max-height:88vh;overflow-y:auto;}
+.mhd{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
+.mttl{font-size:15px;font-weight:700;}
+.mclose{font-size:22px;cursor:pointer;color:#888;background:none;border:none;line-height:1;}
+.jtbl{width:100%;border-collapse:collapse;font-size:12px;}
+.jtbl th{background:#f8f7f2;padding:6px 8px;text-align:left;font-weight:500;font-size:10px;color:#666;border-bottom:1px solid #e0dfd8;}
+.jtbl td{padding:7px 8px;border-bottom:0.5px solid #f5f4f0;vertical-align:middle;}
+.jtbl tr.cur{background:#fffbf0;}
+.jtbl tr.dn{background:#f0faf4;}
+.pbsm{height:4px;background:#f0efe8;border-radius:2px;overflow:hidden;margin-top:3px;}
+.pbsm-f{height:100%;border-radius:2px;}
+.btn-to-input{font-size:10px;padding:3px 8px;background:#f8f7f2;border:1px solid #ddd;border-radius:4px;cursor:pointer;font-family:inherit;}
+.btn-to-input:hover{background:#eeede6;}
+
+/* 入力フォーム */
+.fc{background:#fff;border-radius:10px;padding:16px;border:1px solid #ddd;max-width:620px;margin:0 auto 10px;}
+.ftitle{font-size:13px;font-weight:700;margin-bottom:12px;}
+.fg2{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:9px;}
+.fg3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-bottom:9px;}
+.fi label{font-size:11px;color:#888;display:block;margin-bottom:3px;font-weight:500;}
+.fi input,.fi select{width:100%;padding:7px 9px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:inherit;background:#fff;color:#1a1a1a;}
+.fi input:focus,.fi select:focus{outline:none;border-color:#1a1a1a;}
+.hint{font-size:10px;color:#aaa;margin-top:2px;}
+.tw{display:flex;gap:4px;align-items:center;}
+.tw input{flex:1;}
+.btn-now{background:#f0efe8;border:1px solid #ddd;border-radius:5px;padding:6px 8px;font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;}
+.btn-now:hover{background:#e0dfd8;}
+.br{display:flex;gap:8px;align-items:center;margin-top:4px;}
+.bp{background:#1a1a1a;color:#fff;border:none;border-radius:6px;padding:8px 22px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}
+.bp:hover{opacity:0.8;}
+.bp-sub{background:#f0efe8;color:#555;border:1px solid #ddd;border-radius:6px;padding:6px 16px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;}
+.bp-sub:hover{background:#e8e6df;}
+.bp-cancel{background:#fff;color:#888;border:1px solid #ddd;border-radius:6px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}
+.bp-cancel:hover{background:#f5f5f5;}
+.bd{background:#fdf5f5;color:#c0392b;border:1px solid #f5c6c6;border-radius:6px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}
+.bd:hover{background:#fde8e8;}
+/* 計画修正テーブル */
+.pe-tbl{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:4px;}
+.pe-tbl th{background:#f0efe8;font-weight:600;padding:5px 7px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;font-size:10px;}
+.pe-tbl td{padding:4px 5px;border-bottom:0.5px solid #f0efe8;vertical-align:middle;}
+.pe-tbl tr:last-child td{border-bottom:none;}
+.pe-inp{border:1px solid #ddd;border-radius:3px;padding:3px 6px;font-size:11px;font-family:inherit;background:#fff;width:100%;}
+.pe-inp:focus{outline:none;border-color:#2980b9;box-shadow:0 0 0 2px rgba(41,128,185,0.12);}
+.pe-inp.w-part{width:110px;} .pe-inp.w-qty{width:58px;} .pe-inp.w-time{width:72px;}
+.pe-act{font-size:9px;padding:2px 6px;border-radius:10px;white-space:nowrap;}
+.pe-act.has{background:#eafaf1;color:#1e8449;font-weight:700;}
+.pe-act.none{background:#f5f5f5;color:#bbb;}
+.pe-del{font-size:10px;padding:2px 8px;border:1px solid #e0c0c0;background:#fdf5f5;color:#c0392b;border-radius:3px;cursor:pointer;white-space:nowrap;}
+.pe-del:hover{background:#fdecea;}
+.msg{font-size:11px;color:#27ae60;margin-top:6px;min-height:15px;}
+.slbl{font-size:10px;color:#aaa;font-weight:500;margin:6px 0 4px;letter-spacing:0.04em;}
+
+/* 段取り設定 */
+.sr2{display:flex;flex-direction:column;gap:8px;margin-bottom:12px;}
+.sr2-row{display:grid;grid-template-columns:110px 80px 70px;align-items:center;gap:8px;}
+.sr2-row label{font-size:12px;font-weight:500;}
+.sr2-row input{padding:6px 9px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:inherit;}
+.sr2-row span{font-size:11px;color:#888;}
+/* グループタブ */
+.grp-btn{padding:4px 14px;font-size:11px;font-weight:700;border-radius:16px;border:1px solid #ddd;background:#fff;cursor:pointer;font-family:inherit;color:#888;transition:background 0.15s;}
+.grp-btn.active{background:#1a1a1a;color:#fff;border-color:#1a1a1a;}
+/* グループ管理 */
+.grp-section{border:1px solid #e0dfd8;border-radius:8px;padding:10px 12px;margin-bottom:10px;}
+.grp-section-title{font-size:12px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px;}
+.grp-name-input{font-size:12px;padding:4px 8px;border:1px solid #ddd;border-radius:5px;font-family:inherit;width:140px;}
+.grp-line-list{display:flex;flex-direction:column;gap:4px;margin-bottom:8px;}
+.grp-line-row{display:flex;align-items:center;gap:6px;font-size:12px;}
+.grp-line-row input{padding:4px 7px;border:1px solid #ddd;border-radius:5px;font-family:inherit;font-size:11px;}
+.btn-rm{background:none;border:none;color:#c0392b;cursor:pointer;font-size:14px;line-height:1;padding:2px 4px;}
+.btn-add-line{font-size:11px;padding:4px 10px;background:#f8f7f2;border:1px solid #ddd;border-radius:5px;cursor:pointer;font-family:inherit;}
+.btn-add-line:hover{background:#eceae3;}
+
+
 </style>
 </head>
 <body>
@@ -1167,18 +1366,301 @@ html, body {
 
 </div><!-- /tab-quality -->
 
-<!-- ===== 進捗管理タブ ===== -->
-<div class="content" id="tab-progress">
-  <!-- iframeヘッダー非表示の代わりに進捗保存ボタンをここに設置 -->
+<!-- ===== 進捗管理タブ（ネイティブ実装） ===== -->
+<div class="content" id="tab-progress" style="flex-direction:column;height:calc(100vh - 35px);overflow:hidden;">
   <div style="display:flex;align-items:center;gap:8px;padding:4px 10px;background:#1a1a1a;flex-shrink:0;">
     <span style="color:#fff;font-size:11px;font-weight:700;flex:1;">📊 進捗管理ボード</span>
-    <button onclick="pmGoToTab('settings')" style="font-size:11px;padding:3px 12px;background:#555;color:#fff;border:none;border-radius:5px;cursor:pointer;font-weight:700;">⚙️ 設定</button>
-    <button onclick="pmSaveSnapshot()" style="font-size:11px;padding:3px 12px;background:#2980b9;color:#fff;border:none;border-radius:5px;cursor:pointer;font-weight:700;">📷 進捗を保存（PDF）</button>
+    <span class="conn off" id="conn" style="font-size:10px;padding:2px 8px;border-radius:10px;font-weight:700;">接続中...</span>
+    <div class="dstr" id="dstr" style="font-size:11px;color:#aaa;"></div>
+    <div class="clk" id="clk" style="font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;color:#fff;">--:--:--</div>
+    <button onclick="window.sw('settings')" style="font-size:11px;padding:3px 12px;background:#555;color:#fff;border:none;border-radius:5px;cursor:pointer;font-weight:700;">⚙️ 設定</button>
+    <button onclick="window.saveSnapshot()" style="font-size:11px;padding:3px 12px;background:#2980b9;color:#fff;border:none;border-radius:5px;cursor:pointer;font-weight:700;">📷 進捗を保存（PDF）</button>
   </div>
-  <iframe id="pm-iframe"
-    style="width:100%;height:calc(100vh - 62px);border:none;display:block;"
-    allow="fullscreen">
-  </iframe>
+<div class="tabs">
+  <button class="tb active" onclick="sw('board')">📊 進捗ボード</button>
+  <button class="tb" onclick="sw('input')">✏️ 実績入力</button>
+  <button class="tb" onclick="sw('import')">📥 予定ｲﾝﾎﾟｰﾄ</button>
+  <button class="tb" onclick="sw('settings')">⚙️ 設定</button>
+</div>
+
+<div class="main">
+  <div id="tab-board">
+    <!-- サマリー：1行（全グループ / 現グループ） -->
+    <div class="sum" id="sumRow">
+      <div class="sc">
+        <div class="sc-info"><div class="sc-lbl">稼働ライン</div><div class="sc-hint" id="sumGrpLbl">全体 / 現</div></div>
+        <div class="sc-vals"><span class="sc-val" id="s0">-</span><span class="sc-vsep">/</span><span class="sc-vsub" id="sg0">-</span></div>
+      </div>
+      <div class="sc">
+        <div class="sc-info"><div class="sc-lbl">遅れ発生</div><div class="sc-hint">全体 / 現</div></div>
+        <div class="sc-vals"><span class="sc-val" id="s1">-</span><span class="sc-vsep">/</span><span class="sc-vsub" id="sg1">-</span></div>
+      </div>
+      <div class="sc">
+        <div class="sc-info"><div class="sc-lbl">全体達成率</div><div class="sc-hint">全体 / 現</div></div>
+        <div class="sc-vals"><span class="sc-val" id="s2">-%</span><span class="sc-vsep">/</span><span class="sc-vsub" id="sg2">-%</span></div>
+      </div>
+      <div class="sc">
+        <div class="sc-info"><div class="sc-lbl">段取り中</div><div class="sc-hint">全体 / 現</div></div>
+        <div class="sc-vals"><span class="sc-val" id="s3">-</span><span class="sc-vsep">/</span><span class="sc-vsub" id="sg3">-</span></div>
+      </div>
+    </div>
+    <div class="alts" id="alts"></div>
+    <div id="grpTabs" style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;"></div>
+    <div class="lines" id="lview"><div style="padding:20px;color:#888;font-size:12px;">読み込み中...</div></div>
+  </div>
+
+  <div id="tab-input" style="display:none;">
+    <div class="fc">
+      <div class="ftitle">実績入力（リーダー用）</div>
+      <div class="fg2">
+        <div class="fi">
+          <label>ライン選択</label>
+          <select id="iLine" onchange="onLineSel()">
+            <option value="">-- ライン選択 --</option>
+          </select>
+        </div>
+        <div class="fi">
+          <label>稼働状態</label>
+          <select id="iStat">
+            <option value="running">稼働中</option>
+            <option value="setup">段取り中</option>
+            <option value="stop">停止</option>
+            <option value="waiting">待機中</option>
+          </select>
+        </div>
+      </div>
+      <div class="fi" style="margin-bottom:9px;">
+        <label>品番選択（当日予定）<span id="part-note" style="margin-left:8px;font-size:10px;font-weight:700;"></span></label>
+        <select id="iPart" onchange="onPartSel()">
+          <option value="">-- 品番を選択 --</option>
+        </select>
+      </div>
+      <div class="fg3">
+        <div class="fi">
+          <label>計画数（標準CT基準）</label>
+          <input type="number" id="iPlan" placeholder="自動入力" min="0">
+          <div class="hint" id="iStdCT" style="color:#e67e22;font-weight:500;"></div>
+        </div>
+        <div class="fi">
+          <label>修正計画数 <span style="font-size:9px;color:#e67e22;">材料変更時</span></label>
+          <input type="number" id="iRevised" placeholder="変更なければ空欄" min="0">
+          <div class="hint">材料が増減した場合のみ入力</div>
+        </div>
+        <div class="fi">
+          <label>実績数</label>
+          <input type="number" id="iActual" placeholder="例：1500" min="0">
+        </div>
+      </div>
+      <div class="fi" style="margin-bottom:9px;">
+        <label>備考</label>
+        <input type="text" id="iNote" placeholder="例：金型調整中">
+      </div>
+      <div class="slbl">作業時間</div>
+      <div style="margin-bottom:6px;padding:4px 0;">
+        <label style="cursor:pointer;display:inline-flex;align-items:center;gap:7px;font-size:12px;color:#555;">
+          <input type="checkbox" id="iNoSetup" onchange="onNoSetupChange()"> 段取りなし（この工程は段取りが発生しない）
+        </label>
+      </div>
+      <!-- 段取り時間フィールド：段取りなし時のみグレーアウト -->
+      <div id="setupOnlyFields">
+      <div class="fg3">
+        <div class="fi">
+          <label>段取り開始</label>
+          <div class="tw"><input type="time" id="iSS"><button class="btn-now" onclick="setNow('iSS')">今</button></div>
+          <div class="hint">前工程終了〜段取開始</div>
+        </div>
+        <div class="fi">
+          <label>段取り終了</label>
+          <div class="tw"><input type="time" id="iSE"><button class="btn-now" onclick="setNow('iSE')">今</button></div>
+          <div class="hint">段取り終了時刻</div>
+        </div>
+        <div class="fi"></div>
+      </div>
+      </div><!-- /setupOnlyFields -->
+      <!-- 作業時間フィールド：段取りなし時も常に有効 -->
+      <div class="fg3">
+        <div class="fi">
+          <label>作業開始</label>
+          <div class="tw"><input type="time" id="iWS"><button class="btn-now" onclick="setNow('iWS')">今</button></div>
+        </div>
+        <div class="fi">
+          <label>作業終了</label>
+          <div class="tw"><input type="time" id="iWE"><button class="btn-now" onclick="setNow('iWE')">今</button></div>
+        </div>
+        <div class="fi"></div>
+      </div>
+      <div class="br">
+        <button class="bp" onclick="doSub()">更新する</button>
+        <button class="bd" onclick="showCor()">修正する</button>
+      </div>
+      <div class="msg" id="imsg"></div>
+    </div>
+
+    <div class="fc" id="corCard" style="display:none;">
+      <div class="ftitle">⚠️ 入力修正</div>
+      <div class="fg2">
+        <div class="fi">
+          <label>修正するライン</label>
+          <select id="cLine" onchange="onCorLine()">
+            <option value="">-- ライン選択 --</option>
+          </select>
+        </div>
+        <div class="fi">
+          <label>修正する工程</label>
+          <select id="cJob"></select>
+        </div>
+        <div class="fi">
+          <label>正しい実績数</label>
+          <input type="number" id="cAct" min="0">
+        </div>
+        <div class="fi">
+          <label>作業終了時刻</label>
+          <div class="tw"><input type="time" id="cEnd"><button class="btn-now" onclick="setNow('cEnd')">今</button></div>
+        </div>
+      </div>
+      <div class="br">
+        <button class="bp" onclick="doCorr()">修正を反映</button>
+        <button style="background:none;border:none;font-size:12px;color:#888;cursor:pointer;" onclick="hideCor()">キャンセル</button>
+      </div>
+      <div class="msg" id="cmsg"></div>
+    </div>
+  </div>
+
+  <div id="tab-import" style="display:none;">
+    <div class="fc">
+      <div class="ftitle">📥 生産予定インポート（Excel）</div>
+      <div class="fg2" style="margin-bottom:9px;">
+        <div class="fi">
+          <label>グループ</label>
+          <select id="impGrp" onchange="onImpGrpSel()"></select>
+        </div>
+      </div>
+      <div class="fi" style="margin-bottom:9px;">
+        <label>Excelファイル選択</label>
+        <input type="file" id="impFile" accept=".xlsx,.xls,.csv" onchange="onImpFile()" style="font-size:12px;padding:4px 0;">
+        <div class="hint">選択すると自動でプレビューを表示します</div>
+      </div>
+      <div id="impMapInfo" style="font-size:11px;color:#888;background:#f8f7f2;border-radius:6px;padding:6px 10px;margin-bottom:8px;display:none;"></div>
+      <div id="impPreview" style="margin-bottom:8px;"></div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="bp" id="impBtn" onclick="doImport()" disabled>この内容でインポート</button>
+        <span style="font-size:11px;color:#aaa;">※既存の計画データは上書きされます</span>
+      </div>
+      <div class="msg" id="impmsg"></div>
+    </div>
+
+    <!-- 計画修正セクション -->
+    <div class="fc" style="margin-top:8px;">
+      <div class="ftitle">📋 計画修正（実績を維持したまま変更）</div>
+      <div style="font-size:11px;color:#888;margin-bottom:10px;">当日の計画変更時に使用します。入力済みの実績（数量・時刻）はそのまま維持されます。</div>
+      <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px;">
+        <div class="fi" style="flex:1;margin:0;">
+          <label>グループ</label>
+          <select id="peGrp"></select>
+        </div>
+        <button class="bp-sub" onclick="loadPlanEdit()" style="flex-shrink:0;height:34px;">読み込む</button>
+      </div>
+      <div id="peTable" style="display:none;"></div>
+    </div>
+  </div>
+
+  <div id="tab-settings" style="display:none;">
+    <div class="fc">
+      <div class="ftitle">グループ・ライン管理</div>
+      <div id="grpMgr"></div>
+      <button class="bp" onclick="saveGroups()">グループ設定を保存</button>
+      <div class="msg" id="gmsg"></div>
+    </div>
+    <div class="fc" style="margin-top:8px;">
+      <div class="ftitle">段取り標準時間設定</div>
+      <div style="font-size:11px;color:#888;margin-bottom:8px;line-height:1.6;">
+        ライン毎に「前作業の片付け時間（C）」と「次作業の準備時間（P）」を設定します。<br>
+        <b>計算式：</b> 段取り時間 ＝ C × 人数 ＋ P × 型数 ÷ 人数
+        <span style="margin-left:8px;color:#1a1a1a;">例）3型・2人 ＝ C×2 ＋ P×3÷2</span>
+      </div>
+      <div class="sr2" id="srRows"></div>
+      <button class="bp" onclick="saveSets()">保存する</button>
+      <div class="msg" id="smsg"></div>
+    </div>
+    <div class="fc" style="margin-top:8px;">
+      <div class="ftitle">トラブル背景色のしきい値（分）</div>
+      <div style="font-size:11px;color:#888;margin-bottom:10px;">トラブル開始からの経過時間に応じてラインカードの背景色が変わります</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-bottom:10px;">
+        <div class="fi">
+          <label>🟡 黄色になる時間</label>
+          <div class="tw"><input type="number" id="thr-y" min="1" max="120" style="width:100%;padding:7px 9px;border:1px solid #ddd;border-radius:6px;font-size:13px;"><span style="font-size:11px;color:#888;white-space:nowrap;">分以上</span></div>
+        </div>
+        <div class="fi">
+          <label>🔴 赤になる時間</label>
+          <div class="tw"><input type="number" id="thr-r" min="1" max="120" style="width:100%;padding:7px 9px;border:1px solid #ddd;border-radius:6px;font-size:13px;"><span style="font-size:11px;color:#888;white-space:nowrap;">分以上</span></div>
+        </div>
+        <div class="fi">
+          <label>🔴 赤点滅になる時間</label>
+          <div class="tw"><input type="number" id="thr-b" min="1" max="180" style="width:100%;padding:7px 9px;border:1px solid #ddd;border-radius:6px;font-size:13px;"><span style="font-size:11px;color:#888;white-space:nowrap;">分以上</span></div>
+        </div>
+      </div>
+      <button class="bp" onclick="saveTroubleThresh()">保存する</button>
+      <div class="msg" id="thrmsg"></div>
+    </div>
+  </div>
+</div>
+
+<!-- トラブル記録モーダル -->
+<div class="ov" id="troubleOv" onclick="closeTroubleOv(event)">
+  <div class="modal" style="max-width:480px;">
+    <div class="mhd">
+      <div class="mttl" id="troubleMttl">⚠ トラブル・停止記録</div>
+      <button class="mclose" onclick="closeTroubleOvD()">×</button>
+    </div>
+    <!-- 既存トラブル一覧 -->
+    <div id="troubleList" style="margin-bottom:12px;"></div>
+    <!-- 新規追加フォーム -->
+    <div style="border-top:1px solid #eee;padding-top:12px;">
+      <div style="font-size:11px;font-weight:700;color:#555;margin-bottom:8px;">＋ 新しいトラブルを追加</div>
+      <div class="fi" style="margin-bottom:9px;">
+        <label>原因</label>
+        <select id="tType" style="width:100%;padding:7px 9px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:inherit;">
+          <option value="設備トラブル">🔧 設備トラブル</option>
+          <option value="材料待ち">📦 材料待ち</option>
+          <option value="品質問題">🔍 品質問題</option>
+          <option value="人員不足">👤 人員不足</option>
+          <option value="その他">📝 その他</option>
+        </select>
+      </div>
+      <div class="fg2" style="margin-bottom:9px;">
+        <div class="fi">
+          <label>開始時刻</label>
+          <div class="tw"><input type="time" id="tStart"><button class="btn-now" onclick="setTNow('tStart')">今</button></div>
+        </div>
+        <div class="fi">
+          <label>終了時刻 <span style="font-size:9px;color:#aaa;">空欄＝継続中</span></label>
+          <div class="tw"><input type="time" id="tEnd"><button class="btn-now" onclick="setTNow('tEnd')">今</button></div>
+        </div>
+      </div>
+      <div class="fi" style="margin-bottom:12px;">
+        <label>メモ <span style="font-size:9px;color:#aaa;">任意</span></label>
+        <input type="text" id="tNote" placeholder="例：モーター故障、修理業者連絡中" style="width:100%;padding:7px 9px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:inherit;">
+      </div>
+      <div class="br">
+        <button class="bp" id="tAddBtn" onclick="addTrouble()">追加する</button>
+        <button class="bd" id="tCancelBtn" onclick="cancelEditTrouble()" style="display:none;">キャンセル</button>
+      </div>
+      <div id="tMsg" style="font-size:11px;color:#27ae60;margin-top:6px;min-height:14px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 工程詳細モーダル -->
+<div class="ov" id="ov" onclick="closeOv(event)">
+  <div class="modal">
+    <div class="mhd">
+      <div class="mttl" id="mttl">-</div>
+      <button class="mclose" onclick="closeOvD()">×</button>
+    </div>
+    <div id="mbody"></div>
+  </div>
+</div>
+
 </div><!-- /tab-progress -->
 
 </div><!-- /app -->
@@ -1763,42 +2245,10 @@ function switchTab(name){
   const tabs = ['factory','progress','quality','dantori','search'];
   document.querySelectorAll('.tab')[tabs.indexOf(name)].classList.add('active');
   if(name==='quality')   qcOnTabActivated();
-  if(name==='progress')  initPmTab();
+  // 進捗管理はネイティブ実装
 }
 
-// ===== 進捗管理タブ初期化 =====
-function initPmTab(){
-  var ifr = document.getElementById('pm-iframe');
-  if(!ifr || ifr.getAttribute('data-pm-loaded')) return;
-  ifr.setAttribute('data-pm-loaded','1');
-  // ローカル開発時はサブフォルダ、GitHub Pages時は同一フォルダ
-  var isLocal = /localhost|127\.0\.0\.1/.test(location.hostname);
-  ifr.src = isLocal ? 'hashimoto-press/index.html' : 'index.html';
-  ifr.addEventListener('load', function(){
-    try {
-      var doc = ifr.contentDocument || ifr.contentWindow.document;
-      if(doc && doc.head){
-        var s = doc.createElement('style');
-        // 進捗管理ボードの独自ヘッダー（黒帯）を非表示（H-Hub側にボタンを移設したため）
-        s.textContent = '.hdr{display:none!important;}html,body{overflow:auto!important;}';
-        doc.head.appendChild(s);
-      }
-    } catch(e){ /* cross-origin等で失敗しても無視 */ }
-  });
-}
-
-// 進捗管理タブの「📷 進捗を保存」ボタン → iframe内のsaveSnapshot()を呼び出す
-function pmSaveSnapshot(){
-  var ifr = document.getElementById('pm-iframe');
-  if(!ifr || !ifr.contentWindow){ alert('進捗管理ボードが読み込まれていません'); return; }
-  try { ifr.contentWindow.saveSnapshot(); } catch(e){ alert('保存できませんでした: ' + e.message); }
-}
-// 進捗管理ボード内のタブに切り替える（設定タブなど）
-function pmGoToTab(tabName){
-  var ifr = document.getElementById('pm-iframe');
-  if(!ifr || !ifr.contentWindow){ alert('進捗管理ボードが読み込まれていません'); return; }
-  try { ifr.contentWindow.sw(tabName); } catch(e){ alert('タブ切替に失敗しました: ' + e.message); }
-}
+// 進捗管理タブ: ネイティブ実装のためiframe関数を削除
 
 // ===== デモデータ =====
 const DEMO_PARTS = [
@@ -6234,5 +6684,2210 @@ window.qcPrintHinpyo = function(){
 <!-- 現品票 印刷専用エリア -->
 <div id="hp-print-area"></div>
 
+
+<!-- ===== 進捗管理ボード JS ===== -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, onValue, set, update } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+const cfg={apiKey:"AIzaSyCvh4rDrk6ljWhNBJc-Kt_YFpvEevLxb6o",authDomain:"hashimoto-press.firebaseapp.com",databaseURL:"https://hashimoto-press-default-rtdb.asia-southeast1.firebasedatabase.app",projectId:"hashimoto-press",storageBucket:"hashimoto-press.firebasestorage.app",messagingSenderId:"508495109760",appId:"1:508495109760:web:53d266bb4483ab04a29065"};
+const app=initializeApp(cfg);
+const db=getDatabase(app);
+// ===== グループ・ライン管理 =====
+const DEFAULT_GRP=[
+  {gid:'g1',label:'プレス工程',ids:['A1','A2','B1','B2','BP2','CP3','CP3_2']},
+  {gid:'g2',label:'第2工程',ids:[]}
+];
+let groupCfg=DEFAULT_GRP.map(g=>({...g,ids:[...g.ids]}));
+let currentGrp=0;
+function getIDS(){return groupCfg[currentGrp]?.ids||[];}
+function getAllIDS(){return [...new Set(groupCfg.flatMap(g=>g.ids||[]).filter(Boolean))];}
+let lineNamesMap={}; // settings/lineNames から読み込むライン名マップ
+let lineNoAlertMap={}; // settings/lineNoAlert から読み込む「未報告警告なし」フラグ
+let troubleThresh={y:10,r:20,b:40}; // トラブル背景色しきい値（分）: y=黄, r=赤, b=点滅
+function getLineName(id){return lineNamesMap[id]||lines[id]?.name||id;}
+
+const SDEFS={A1:45,A2:45,B1:60,B2:45,BP2:45,CP3:45,CP3_2:45};
+let lines={},sets={...SDEFS};
+// 段取り時間の内訳（片付けC分＋準備P分）per lineId
+let setupParams={}; // { lineId: { c:前作業片付け分, p:次作業準備分 } }
+
+// 段取り標準時間を動的計算（kata=型数N, ninzu=段取人数M）
+// 式: C×M + P×N÷M  （C=片付け, P=準備, M=人数, N=型数）
+function calcSetupTime(lineId, kata, ninzu){
+  const base = sets[lineId] || 45;
+  if(!kata || !ninzu) return base;
+  const sp = setupParams[lineId];
+  // setupParams未設定の場合はbase値を半分ずつC/Pのデフォルトとして使用
+  const c = (sp && sp.c != null) ? sp.c : Math.round(base / 2);
+  const p = (sp && sp.p != null) ? sp.p : (base - Math.round(base / 2));
+  return Math.round(c * ninzu + p * kata / ninzu);
+}
+
+onValue(ref(db,'.info/connected'),s=>{
+  const b=document.getElementById('conn');
+  if(s.val()){b.textContent='● 同期中';b.className='conn on';}
+  else{b.textContent='○ オフライン';b.className='conn off';}
+});
+onValue(ref(db,'lines'),s=>{
+  try{
+    lines=s.val()||{};
+    // lineNamesMap の名前を適用（lines内のname欠損を補完）
+    Object.keys(lineNamesMap).forEach(id=>{if(lineNamesMap[id])lines[id]={...(lines[id]||{status:'waiting',plan:0,actual:0,updatedAt:0,jobs:[]}),name:lineNamesMap[id]};});
+    updateLineSelects();
+    renderGroupTabs();
+    renderBoard();
+  }catch(e){
+    document.getElementById('lview').innerHTML='<div style="color:red;padding:20px;font-size:12px;">エラー: '+e.message+'</div>';
+    console.error(e);
+  }
+});
+onValue(ref(db,'settings'),s=>{
+  const v=s.val()||{};
+  // 段取り時間：新形式(setupTimes)・旧形式両対応
+  if(v.setupTimes) sets={...SDEFS,...v.setupTimes};
+  else { const st={};Object.keys(v).forEach(k=>{if(typeof v[k]==='number')st[k]=v[k];});if(Object.keys(st).length)sets={...SDEFS,...st}; }
+  // 段取り時間の内訳(C+P)
+  if(v.setupParams&&typeof v.setupParams==='object') setupParams={...v.setupParams};
+  // グループ設定
+  if(v.groups&&Array.isArray(v.groups)&&v.groups.length){
+    groupCfg=v.groups.map(g=>({gid:g.gid||g.label||'g',label:g.label||g.gid||'グループ',ids:Array.isArray(g.ids)?[...g.ids]:[],importMap:g.importMap||{}}));
+  }
+  // ライン名マップを更新し lines にも反映
+  if(v.lineNames&&typeof v.lineNames==='object') lineNamesMap={...v.lineNames};
+  if(v.lineNoAlert&&typeof v.lineNoAlert==='object') lineNoAlertMap={...v.lineNoAlert};
+  if(v.troubleThresh&&typeof v.troubleThresh==='object') troubleThresh={...troubleThresh,...v.troubleThresh};
+  // しきい値UIに反映
+  ['y','r','b'].forEach(k=>{const el=document.getElementById('thr-'+k);if(el&&troubleThresh[k]) el.value=troubleThresh[k];});
+  Object.keys(lineNamesMap).forEach(id=>{if(lineNamesMap[id])lines[id]={...(lines[id]||{status:'waiting',plan:0,actual:0,updatedAt:0,jobs:[]}),name:lineNamesMap[id]};});
+  updateLineSelects();
+  renderGroupTabs();
+  if(Object.keys(lines).length>0) renderBoard();
+});
+
+const rate=(p,a)=>p?Math.round(a/p*100):null;
+const elapsed=ts=>(!ts||ts===0)?9999:Math.round((Date.now()-ts)/60000);
+const fmtTs=ts=>(!ts||ts===0)?'--:--':`${String(new Date(ts).getHours()).padStart(2,'0')}:${String(new Date(ts).getMinutes()).padStart(2,'0')}`;
+const timeToH=t=>{if(!t)return null;const p=t.split(':');return +p[0]+ +p[1]/60;};
+const timeToMin=t=>{if(!t||t==='')return null;const p=t.split(':');return +p[0]*60+(+p[1]|0);};
+
+// ライン達成率計算
+// CT達成率 = 計画CT / 実績CT の加重平均（標準時間をどれだけ達成しているか）
+// 見込み完了時刻 = 現在時刻 + 残作業計画時間 ÷ CT達成率
+function calcLineRate(l){
+  const jobs=(l.jobs||[]).filter(j=>j.plan>0&&j.start&&j.end&&!j.history);
+  if(!jobs.length) return null;
+
+  const now=new Date();
+  const nowMin=now.getHours()*60+now.getMinutes();
+  const updT=l.updatedAt>0?new Date(l.updatedAt):now;
+  const updMin=updT.getHours()*60+updT.getMinutes();
+
+  let ctRateSum=0, ctRateCnt=0;
+  let remainingPlanMin=0;
+
+  // 現在稼働中jobを特定（関数外で一度だけ計算）
+  const curActiveJob=(function(){
+    let ci=jobs.findIndex(jj=>jj.part===l.part&&l.workStart&&jj.actualStart===l.workStart);
+    if(ci<0) ci=jobs.findIndex(jj=>jj.part===l.part&&jj.status==='running');
+    if(ci<0) ci=jobs.findIndex(jj=>jj.part===l.part&&jj.plan>0);
+    return ci>=0?jobs[ci]:null;
+  })();
+
+  jobs.forEach(function(j){
+    const sm=timeToMin(j.start);
+    const em=timeToMin(j.end);
+    if(sm===null||em===null) return;
+    const planNetJ=netMins(sm,em);
+    if(planNetJ<=0) return;
+    const planCT=planNetJ/j.plan;
+
+    const jActCount=j.actualCount||0;
+    const isCurrentJob=curActiveJob&&(j.seq?j.seq===curActiveJob.seq:j===curActiveJob);
+    const jAct=isCurrentJob&&(l.actual||0)>jActCount?(l.actual||0):jActCount;
+
+    if(jAct>0){
+      const wsJ=timeToMin(isCurrentJob?(l.workStart||j.actualStart||j.start):(j.actualStart||j.start));
+      const weJ=isCurrentJob
+        ?(l.workEnd&&l.workEnd!==''?timeToMin(l.workEnd):updMin)
+        :(j.actualEnd&&j.actualEnd!==''?timeToMin(j.actualEnd):updMin);
+      const actualNetJ=wsJ&&weJ?netMins(wsJ,weJ):0;
+      if(actualNetJ>0){
+        ctRateSum+=jAct*planCT/actualNetJ;
+        ctRateCnt++;
+      }
+      // 未完了jobの残り作業時間を加算（修正計画数があればそちらを使用、標準CTは不変）
+      const isDone=j.status==='done'||(j.actualEnd&&j.actualEnd!=='');
+      if(!isDone){
+        const effectivePlan=j.revisedPlan||j.plan;
+        const rem=Math.max(0,effectivePlan-jAct);
+        remainingPlanMin+=rem*planCT;
+      }
+    } else {
+      // 未着手jobは修正計画数ベースの時間を残り時間に加算
+      const effectivePlan=j.revisedPlan||j.plan;
+      remainingPlanMin+=effectivePlan*planCT;
+    }
+  });
+
+  const ctRate=ctRateCnt>0?Math.round(ctRateSum/ctRateCnt*100):null;
+
+  // 見込み完了時刻：残り計画時間をCT達成率で補正して計算
+  let estFinish=null;
+  const lastJob=jobs[jobs.length-1];
+  const planEndTime=lastJob&&lastJob.end?lastJob.end:null;
+  if(remainingPlanMin<=0&&ctRateCnt>0){
+    estFinish='完了';
+  } else if(remainingPlanMin>0&&ctRate&&ctRate>0){
+    const adjustedMin=remainingPlanMin*(100/ctRate);
+    // 正味分数→時計時刻に変換（途中の休憩時間を正確に加算）
+    const estM=addNetMins(updMin,Math.round(adjustedMin));
+    estFinish=String(Math.floor(estM/60)).padStart(2,'0')+':'+String(estM%60).padStart(2,'0');
+  }
+
+  if(ctRate===null&&estFinish===null) return null;
+  return {ctRate, estFinish, planEndTime};
+}
+// 休憩時間帯（分単位）
+const BREAKS=[[600,610],[730,770],[890,900],[1020,1030]]; // 10:00-10:10, 12:10-12:50, 14:50-15:00, 17:00-17:10
+// 指定区間内の休憩時間(分)を計算
+function breakMins(startM,endM){
+  let total=0;
+  BREAKS.forEach(function(b){
+    const os=Math.max(startM,b[0]),oe=Math.min(endM,b[1]);
+    if(oe>os) total+=oe-os;
+  });
+  return total;
+}
+// 休憩を除いた正味稼働時間(分)
+function netMins(startM,endM){
+  if(!startM||!endM||endM<=startM) return 0;
+  return Math.max(0,(endM-startM)-breakMins(startM,endM));
+}
+// 正味分数を加算して時計時刻(分)を返す（休憩時間を正確に加算）
+function addNetMins(startClockM,netToAdd){
+  if(!netToAdd||netToAdd<=0) return Math.round(startClockM);
+  let t=startClockM+netToAdd;
+  for(let i=0;i<10;i++){
+    const bm=breakMins(startClockM,t);
+    const newT=startClockM+netToAdd+bm;
+    if(Math.abs(newT-t)<0.5) break;
+    t=newT;
+  }
+  return Math.round(t);
+}
+// 段取り時間の推定計算（入力なし・段取りなしでない場合）
+// actualWorkStart: 実際の作業開始時刻（"HH:MM" 形式）を渡す
+// 戻り値: null=段取りなし, 0以上=分数（休憩時間除く）
+const SETUP_BASE_MIN=8*60+10; // 08:10 始業基準
+function calcImpliedSetup(jobs,ji,actualWorkStart){
+  const j=jobs[ji];
+  if(j.noSetup) return null;               // 段取りなしフラグ
+  if((j.setupActualMin||0)>0) return j.setupActualMin; // 実績入力あり
+  // 実際の作業開始時刻（引数優先→j.actualStart→j.start）
+  const startM=timeToMin(actualWorkStart||j.actualStart||j.start);
+  if(!startM) return 0;
+  // 前工程の終了時刻：実績があれば実績終了、なければ予定終了
+  let prevEndM;
+  if(ji>0){
+    const pj=jobs[ji-1];
+    prevEndM=timeToMin(pj.actualEnd||pj.end)||SETUP_BASE_MIN;
+  } else {
+    prevEndM=SETUP_BASE_MIN;
+  }
+  if(startM<=prevEndM) return 0;
+  // 休憩時間を除いた純段取り時間
+  return Math.max(0,netMins(prevEndM,startM));
+}
+
+function getProRata(l){
+  const jobs=(l.jobs||[]).filter(j=>j.plan>0&&j.start&&j.end&&j.part===l.part);
+  // 入力時点（updatedAt）を基準に計算、未入力なら現在時刻
+  const updT=l.updatedAt>0?new Date(l.updatedAt):new Date();
+  const nowMin=updT.getHours()*60+updT.getMinutes();
+  if(!jobs.length) return null;
+  const j=jobs[0];
+  const sm=timeToMin(j.start),em=timeToMin(j.end);
+  if(!sm||!em||em===sm) return null;
+  // 作業終了済み（jobレベル）→ null（表示しない）
+  const jobDone=j.status==='done'||(j.actualEnd&&j.actualEnd!=='')||(l.workEnd&&l.workEnd!==''&&l.part===j.part);
+  if(jobDone) return{proRata:null,phase:'done'};
+  // 未開始 → null（表示しない）
+  if(nowMin<sm) return{proRata:null,phase:'before'};
+  // 計画終了時刻を過ぎている → 同じペースで計算継続
+  if(nowMin>=em){
+    const planNet=netMins(sm,em);
+    if(planNet<=0) return{proRata:j.plan,phase:'over'};
+    const rate=j.plan/planNet;
+    const overNet=netMins(em,nowMin);
+    return{proRata:Math.round(j.plan+rate*overNet),phase:'over'};
+  }
+  // 作業中：休憩除外で案分
+  const planNet=netMins(sm,em);
+  const elapsed2=netMins(sm,nowMin);
+  if(planNet<=0) return{proRata:null,phase:'active'};
+  return{proRata:Math.round(j.plan*elapsed2/planNet),phase:'active'};
+}
+
+function getStatus(l){
+  if(l.status==='setup') return{lbl:'段取り中',bdg:'su',card:'s-su',bar:'c-su',pr:null};
+  if(l.status==='stop')  return{lbl:'停止',bdg:'st',card:'s-st',bar:'c-st',pr:null};
+  if(l.status==='waiting')return{lbl:'待機中',bdg:'wt',card:'s-wt',bar:'c-wt',pr:null};
+  const pr=getProRata(l);
+  const pv=pr&&pr.proRata&&pr.proRata>0?pr.proRata:0;
+  // 未開始・終了済み・計画時間外はproRataがnull→待機/正常表示
+  if(pr&&(pr.phase==='before'||pr.phase==='done'||pr.phase==='over')){
+    if(pr.phase==='done'){
+      // 終了済み：実績で最終評価
+      const cjSt2=(l.jobs||[]).find(j=>j.part===l.part&&j.plan>0);
+      if(cjSt2&&l.actual>0){
+        const r2=Math.round(l.actual/cjSt2.plan*100);
+        if(r2>=95)return{lbl:'完了',bdg:'ok',card:'s-ok',bar:'c-ok',pr};
+        if(r2>=80)return{lbl:'完了',bdg:'wn',card:'s-wn',bar:'c-wn',pr};
+        return{lbl:'完了',bdg:'ng',card:'s-ng',bar:'c-ng',pr};
+      }
+      return{lbl:'完了',bdg:'ok',card:'s-ok',bar:'c-ok',pr};
+    }
+    // before/over：l.status==='running'かつworkStartがあれば稼働中として評価継続
+    if(pr.phase==='before'&&!(l.status==='running'&&l.workStart&&l.workStart!=='')){
+      return{lbl:'待機中',bdg:'wt',card:'s-wt',bar:'c-wt',pr};
+    }
+    // overで稼働中でなければ終了済み扱い
+    if(pr.phase==='over'&&!(l.status==='running'&&l.workStart&&l.workStart!=='')){
+      return{lbl:'完了',bdg:'ok',card:'s-ok',bar:'c-ok',pr};
+    }
+    // 稼働中なのに計画時間外→そのまま評価継続（fall through）
+  }
+  if(!pv&&!(l.status==='running'&&l.workStart&&l.workStart!=='')){
+    return{lbl:'待機中',bdg:'wt',card:'s-wt',bar:'c-wt',pr};
+  }
+  // CT達成率で状態判定（net minutes で統一）
+  let r=0;
+  const cjSt=(l.jobs||[]).find(j=>j.part===l.part&&j.plan>0&&j.start&&j.end);
+  if(cjSt&&l.actual>0){
+    const planNetSt=netMins(timeToMin(cjSt.start),timeToMin(cjSt.end)); // net minutes
+    const planCtSt=planNetSt>0?planNetSt/cjSt.plan:0;
+    const wsStM=timeToMin(l.workStart||cjSt.start);
+    const weStM=l.workEnd&&l.workEnd!==''?timeToMin(l.workEnd):(new Date().getHours()*60+new Date().getMinutes());
+    const actMinSt=wsStM&&weStM?netMins(wsStM,weStM):0;
+    const actCtSt=actMinSt>0&&l.actual>0?actMinSt/l.actual:0;
+    if(planCtSt>0&&actCtSt>0) r=Math.round(planCtSt/actCtSt*100);
+    else r=Math.round(l.actual/pv*100);
+  } else {
+    r=l.actual!=null?Math.round(l.actual/pv*100):0;
+  }
+  if(r>=95)return{lbl:'正常',bdg:'ok',card:'s-ok',bar:'c-ok',pr};
+  if(r>=80)return{lbl:'注意',bdg:'wn',card:'s-wn',bar:'c-wn',pr};
+  return{lbl:'遅れ',bdg:'ng',card:'s-ng',bar:'c-ng',pr};
+}
+
+function renderBoard(){
+  const c=document.getElementById('lview');
+  c.innerHTML='';
+  getIDS().forEach(id=>{
+    const l=lines[id];if(!l)return;
+    const s=getStatus(l);
+    const el=elapsed(l.updatedAt);
+    const pr=s.pr||getProRata(l);
+    const pv=pr&&pr.proRata>0?pr.proRata:0;
+    // 現在品番のjobからactualCountを取得（lineレベルに依存しない）
+    const _curJob2=(l.jobs||[]).find(function(j){
+      if(!j.plan||j.part!==l.part) return false;
+      if(l.workStart&&j.actualStart===l.workStart) return true;
+      if(j.status==='running') return true;
+      return false;
+    })||(l.jobs||[]).find(j=>j.part===l.part&&j.plan>0);
+    const partActual=_curJob2?((_curJob2.actualCount)||0):(l.actual||0);
+    const proRataDisp=pv>0?pv.toLocaleString()+'個':'';
+    // 達成率（入力時点の目標CT個数比・全て統一）
+    let partRate2=null;
+    const cjCT=(l.jobs||[]).find(j=>j.part===l.part&&j.plan>0&&j.start&&j.end);
+    if(cjCT&&partActual>0){
+      const smCT=timeToMin(cjCT.start),emCT=timeToMin(cjCT.end);
+      const planNetCT=netMins(smCT,emCT);
+      const planCTmain=planNetCT>0?planNetCT/cjCT.plan:0;
+      const wsMainM=timeToMin(l.workStart||cjCT.start);
+      // 入力時点（updatedAt）を基準に固定
+      const updMT=l.updatedAt>0?(function(){const ut=new Date(l.updatedAt);return ut.getHours()*60+ut.getMinutes();})():null;
+      const weMainM=l.workEnd&&l.workEnd!==''?timeToMin(l.workEnd):updMT;
+      if(wsMainM&&weMainM){
+        const actMinMain=netMins(wsMainM,Math.min(weMainM,emCT));
+        const targetMain=planCTmain>0?Math.round(actMinMain/planCTmain):0;
+        if(targetMain>0) partRate2=Math.round(partActual/targetMain*100);
+      }
+    }
+    if(partRate2===null&&partActual>0&&cjCT) partRate2=Math.round(partActual/cjCT.plan*100);
+    const proRateDisp=partRate2!==null?partRate2+'%':'-';
+    const barW=l.status==='setup'?100:(pv>0?Math.min(Math.round(partActual/pv*100),100):0);
+    // 遅れ分数：スケジュール開始基準で計算（段取・トラブルを含む計画全体の遅れ）
+    let delayDisp='';
+    if(partActual>0&&!(l.workEnd&&l.workEnd!=='')){
+      const cjD=(l.jobs||[]).find(j=>j.part===l.part&&j.plan>0&&j.start&&j.end);
+      if(cjD){
+        const sm2=timeToMin(cjD.start),em2=timeToMin(cjD.end);
+        if(sm2&&em2&&em2>sm2){
+          const updM=l.updatedAt>0?(function(){const ut=new Date(l.updatedAt);return ut.getHours()*60+ut.getMinutes();})():null;
+          if(updM){
+            const planNetD=netMins(sm2,em2);
+            const planCTD=planNetD>0?planNetD/cjD.plan:0;
+            // スケジュール開始(sm2)基準で「今この時点で何個あるべきか」
+            const elapsedFromSched=netMins(sm2,Math.min(updM,em2));
+            const targetFromSched=planCTD>0?Math.round(elapsedFromSched/planCTD):0;
+            const totalShortage=targetFromSched-partActual;
+            if(totalShortage>0){
+              const totalDelayMin=Math.round(totalShortage*planCTD);
+              // 遅れ内訳の計算
+              const breakdownParts=[];
+              // ① 段取超過分
+              const _curJ=jobs.find(jj=>jj.status==='running')||jobs[0];
+              const stdSetupForLine=calcSetupTime(id,_curJ?.kata,_curJ?.ninzu)||0;
+              const wsM_d=timeToMin(l.workStart||'');
+              if(wsM_d&&stdSetupForLine>0){
+                const actualSetupNet=netMins(sm2,wsM_d);
+                const setupOverrun=Math.max(0,Math.round(actualSetupNet-stdSetupForLine));
+                if(setupOverrun>0) breakdownParts.push('段取超過 +'+setupOverrun+'分');
+              }
+              // ② トラブル停止分（当日の記録合計）
+              const trbs=(l.troubles||[]).filter(t=>t&&t.start);
+              if(trbs.length>0){
+                let troubleNet=0;
+                trbs.forEach(t=>{
+                  const ts=timeToMin(t.start);
+                  const te=t.end?timeToMin(t.end):Math.min(updM,em2);
+                  if(ts&&te>ts) troubleNet+=netMins(ts,te);
+                });
+                if(troubleNet>0) breakdownParts.push('トラブル +'+Math.round(troubleNet)+'分');
+              }
+              let html='<div style="font-size:10px;color:#c0392b;font-weight:700;margin-top:2px;">⏱ 計画比 '+totalDelayMin+'分遅れ（'+totalShortage.toLocaleString()+'個不足）</div>';
+              if(breakdownParts.length>0){
+                html+='<div style="font-size:9px;color:#888;margin-top:1px;padding-left:2px;">└ '+breakdownParts.join('　')+'</div>';
+              }
+              delayDisp=html;
+            }
+          }
+        }
+      }
+    }
+    // 3種類ペース（現品番のみ・正味時間ベースで統一）
+    const cjP=(l.jobs||[]).find(j=>j.part===l.part&&j.plan>0&&j.start&&j.end);
+    const planNetP=cjP?netMins(timeToMin(cjP.start),timeToMin(cjP.end)):0; // 正味時間（休憩除外）
+    const planPace=planNetP>0?Math.round(cjP.plan/planNetP*60):0; // 正味時間ベースの計画ペース
+    function mkPace(p){
+      if(planPace<=0) return p.toLocaleString()+'個/h';
+      const d=p-planPace,col=d>=0?'#27ae60':'#c0392b';
+      return p.toLocaleString()+'個/h <span style="color:'+col+';">'+(d>=0?'+':'')+d.toLocaleString()+'個/h</span>';
+    }
+    const pRows=[];
+    if(l.prev2UpdatedAt>0&&l.prevUpdatedAt>l.prev2UpdatedAt){
+      const d1=(l.prevActual||0)-(l.prev2Actual||0);
+      const t1a=new Date(l.prev2UpdatedAt),t1b=new Date(l.prevUpdatedAt);
+      const n1=netMins(t1a.getHours()*60+t1a.getMinutes(),t1b.getHours()*60+t1b.getMinutes());
+      if(n1>0&&d1>=0) pRows.push('前回: '+mkPace(Math.round(d1/n1*60)));
+    }
+    if(l.prevUpdatedAt>0&&l.updatedAt>l.prevUpdatedAt){
+      const d2=partActual-(l.prevActual||0);
+      const t2a=new Date(l.prevUpdatedAt),t2b=new Date(l.updatedAt);
+      const n2=netMins(t2a.getHours()*60+t2a.getMinutes(),t2b.getHours()*60+t2b.getMinutes());
+      if(n2>0&&d2>=0) pRows.push('今回: '+mkPace(Math.round(d2/n2*60)));
+    }
+    if(partActual>0&&cjP){
+      const wsM=timeToMin(l.workStart||cjP.start);
+      // 終了済みはworkEnd、未終了は現在時刻で計算
+      const weM=l.workEnd&&l.workEnd!==''?timeToMin(l.workEnd):(new Date().getHours()*60+new Date().getMinutes());
+      const netM=wsM&&weM?netMins(wsM,weM):0;
+      if(netM>0){
+        const totalPace=Math.round(partActual/netM*60);
+        const suffix=l.workEnd&&l.workEnd!==''?'（確定）':'';
+        pRows.push('通算: '+mkPace(totalPace)+suffix);
+      }
+    }
+    const paceDisp=pRows.length?'<div style="font-size:10px;color:#555;margin-top:3px;line-height:1.9;">⚡ '+pRows.join('　')+'</div>':'';
+    // 品番リスト
+    const jobs=(l.jobs||[]).filter(j=>j.plan>0);
+    let sched='';
+    if(jobs.length){
+      sched='<div class="sched">';
+      // 現在稼働中jobのインデックスを特定（品番+開始時刻）
+      // 現在稼働中jobを特定（workStartが一致するjob優先）
+      var curJobIdx=jobs.findIndex(function(j){return j.part===l.part&&l.workStart&&j.actualStart===l.workStart;});
+      if(curJobIdx<0) curJobIdx=jobs.findIndex(function(j){return j.part===l.part&&j.status==='running';});
+      if(curJobIdx<0) curJobIdx=jobs.findIndex(function(j){return j.part===l.part;});
+      jobs.forEach(function(j,jIdx){
+        if(j.history&&j.status==='history'){
+          // 履歴品番（計画から削除されたが実績あり）
+          const jAct=j.actualCount||0;
+          const jR=jAct>0&&j.plan>0?Math.round(jAct/j.plan*100):null;
+          const rc=jR===null?'none':jR>=95?'ok':jR>=80?'wn':'ng';
+          sched+='<div class="sr" style="opacity:0.5;">'+
+            '<span class="sn" style="color:#bbb;">-</span>'+
+            '<span class="sp" style="color:#aaa;text-decoration:line-through;">'+j.part+'</span>'+
+            '<span class="sq" style="color:#bbb;">'+j.plan.toLocaleString()+'個</span>'+
+            (jAct>0?'<span class="sa '+rc+'">'+jAct.toLocaleString()+'個</span>':'<span class="sa none">-</span>')+
+            '<span class="st2" style="color:#bbb;font-size:9px;">履歴</span>'+
+            '</div>';
+          return;
+        }
+        const cur=(jIdx===curJobIdx);
+        // 常にjobレベルのactualCountを使用（lineレベルに依存しない）
+        const jAct=j.actualCount||0;
+        // CT達成率：標準CT vs 実績CT（「この個数を作るのに標準通りの時間か」）
+        let jR=null, rc='none';
+        if(jAct>0&&j.plan>0&&j.start&&j.end){
+          const sm2=timeToMin(j.start), em2=timeToMin(j.end);
+          const planNetJ2=sm2&&em2?netMins(sm2,em2):0;
+          const standardCT2=planNetJ2>0?planNetJ2/j.plan:0; // 標準CT（分/個）
+          const jWS2=cur?(l.workStart||j.actualStart||j.start):(j.actualStart||j.start);
+          const jWE2=cur?(l.workEnd&&l.workEnd!==''?l.workEnd:(j.actualEnd||'')):(j.actualEnd||'');
+          const wsM2=timeToMin(jWS2);
+          const weM2=jWE2&&jWE2!==''?timeToMin(jWE2):(new Date().getHours()*60+new Date().getMinutes());
+          const actNetJ2=wsM2&&weM2?netMins(wsM2,weM2):0;
+          // CT達成率 = (実績数×標準CT) ÷ 実績時間 × 100
+          if(standardCT2>0&&actNetJ2>0){
+            jR=Math.round(jAct*standardCT2/actNetJ2*100);
+          } else if(j.plan>0){
+            jR=Math.round(jAct/j.plan*100);
+          }
+          rc=jR>=95?'ok':jR>=80?'wn':'ng';
+        }
+        const jWS=cur?(l.workStart||j.actualStart||''):(j.actualStart||'');
+        const jWE=cur?(l.workEnd||j.actualEnd||''):(j.actualEnd||'');
+        const jSetupMin=cur?(l.setupMin||j.setupActualMin||0):(j.setupActualMin||0);
+        const tParts=[];
+        if(jSetupMin>0) tParts.push('段取'+jSetupMin+'分');
+        if(jWS) tParts.push('開'+jWS);
+        if(jWE) tParts.push('終'+jWE);
+        // 入力履歴スナップショット
+        const snapH=j.snapHistory||[];
+        let snapDisp='';
+        if(snapH.length>0){
+          // 履歴：全件を→でつないでインライン表示
+          const snapParts2=snapH.map(s=>{
+            const rc2=s.r>=95?'#27ae60':s.r>=80?'#e67e22':'#c0392b';
+            return '<span style="color:'+rc2+';font-weight:700;white-space:nowrap;">'+s.t+'('+s.r+'%)</span>';
+          });
+          snapDisp='<span style="font-size:9px;color:#ddd;"> ▎ </span>'+snapParts2.join('<span style="color:#ddd;">→</span>');
+        }
+        // 終了済み品番のペース表示：actualStart〜actualEndから毎回再計算（paceInfo保存値は使わない）
+        let jpStr='';
+        if(j.status==='done'){
+          const wsJP=timeToMin(j.actualStart||j.start||'');
+          const weJP=timeToMin(j.actualEnd||'');
+          const netJP=wsJP&&weJP?netMins(wsJP,weJP):0;
+          const jActJP=j.actualCount||0;
+          if(netJP>0&&jActJP>0){
+            const pace=Math.round(jActJP/netJP*60);
+            const smJP=timeToMin(j.start||''),emJP=timeToMin(j.end||'');
+            const planNetJP=smJP&&emJP?netMins(smJP,emJP):0;
+            const planPaceJP=planNetJP>0?Math.round(j.plan/planNetJP*60):0;
+            const pd=pace-planPaceJP;
+            const pc=pd>=0?'#27ae60':'#c0392b';
+            jpStr='<br><span style="font-size:9px;color:#555;">⚡'+pace.toLocaleString()+'個/h <span style="color:'+pc+'">'+(pd>=0?'+':'')+pd.toLocaleString()+'個/h</span></span>';
+          }
+        }
+        // grid 3列: 連番(18px) | 品番(140px) | 残り(数量・時間・実績)
+          // 2行目: 空 | 段取り情報 | 空
+          // 3行目: 空 | 空 | 履歴
+          const timeInfo=(j.start&&j.end?j.start+'〜'+j.end:'-');
+          // 標準CT（個/h）計算
+          const sm3=timeToMin(j.start),em3=timeToMin(j.end);
+          const planNet3=sm3&&em3?netMins(sm3,em3):0;
+          const stdRate3=planNet3>0?Math.round(j.plan/planNet3*60):0;
+          const stdCTStr=stdRate3>0?'<span style="font-size:9px;color:#aaa;margin-left:3px;">標準'+stdRate3+'個/h</span>':'';
+          // 修正計画数表示
+          const effPlan=j.revisedPlan||j.plan;
+          const planDisp=j.revisedPlan&&j.revisedPlan!==j.plan
+            ?j.plan.toLocaleString()+'<span style="color:#e67e22;font-size:10px;margin-left:2px;">→'+j.revisedPlan.toLocaleString()+'</span>'
+            :j.plan.toLocaleString();
+          const col3='<span class="sq">'+planDisp+'個</span>'+stdCTStr+
+            (jAct>0?'<span class="sa '+rc+'">'+jAct.toLocaleString()+'個</span>':'<span class="sa none">-</span>')+
+            '<span style="font-size:10px;color:#aaa;white-space:nowrap;">'+timeInfo+'</span>'+
+            jpStr;
+          // 2行目：段取り時間（標準比率付き）・作業開始・終了を品番列下に表示
+          const setupParts2=[];
+          {
+            // 型数・段取人数がある場合は動的計算、なければマスタ値
+            const stdSU=calcSetupTime(id, j.kata, j.ninzu);
+            const kataLabel=(j.kata||0)>0&&(j.ninzu||0)>0
+              ? ` <span style="font-size:9px;color:#888;">${j.kata}型/${j.ninzu}人</span>` : '';
+            if(j.noSetup){
+              setupParts2.push('<span style="color:#aaa;font-size:9px;">✓ 段取りなし</span>');
+            } else {
+              const implied=jWS?calcImpliedSetup(jobs,jIdx,jWS):null;
+              const dispMin=jSetupMin>0?jSetupMin:(implied||0);
+              const isImplied=jSetupMin===0&&(implied||0)>0;
+              if(dispMin>0){
+                const suR2=stdSU>0?Math.round(dispMin/stdSU*100):null;
+                const suCol2=suR2===null?'#999':suR2<=100?'#27ae60':suR2<=125?'#e67e22':'#c0392b';
+                const ratioStr=suR2!==null?' ('+suR2+'%)':'';
+                const implMark=isImplied?'<span style="font-size:9px;color:#bbb;"> 推定</span>':'';
+                setupParts2.push('<span style="color:'+suCol2+';">🔧 段取 '+dispMin+'分／標準'+stdSU+'分'+ratioStr+kataLabel+implMark+'</span>');
+              } else {
+                setupParts2.push('<span style="color:#bbb;">🔧 標準 '+stdSU+'分'+kataLabel+'</span>');
+              }
+            }
+          }
+          if(jWS) setupParts2.push('開始 '+jWS);
+          if(jWE) setupParts2.push('終了 '+jWE);
+          const setupRow2=setupParts2.join('  ');
+          sched+='<div class="sr'+(cur?' cur':'')+'">'+
+            '<span class="sn">'+j.seq+'</span>'+
+            '<span class="sp">'+(cur?'▶ ':'')+j.part+'</span>'+
+            '<span style="display:flex;flex-wrap:wrap;align-items:baseline;gap:3px;min-width:0;">'+col3+'</span>'+
+            (setupRow2?
+              '<span></span>'+
+              '<span style="font-size:9px;color:#999;padding-top:1px;white-space:nowrap;">'+setupRow2+'</span>'+
+              '<span></span>'
+            :'')+
+            (snapDisp?
+              '<span></span>'+'<span></span>'+
+              '<span style="font-size:9px;line-height:1.8;display:flex;flex-wrap:wrap;gap:0 2px;min-width:0;">'+snapDisp+'</span>'
+            :'')+
+          '</div>';
+      });
+      sched+='</div>';
+    }
+    // ===== トラブル状態の計算（複数件対応）=====
+    const allTroubles=(l.troubles||[]).filter(t=>t&&t.start);
+    const ongoingTroubles=allTroubles.filter(t=>!t.end);
+    const endedTroubles=allTroubles.filter(t=>t.end);
+    const hasOngoingTrouble=ongoingTroubles.length>0;
+    const nowMT=new Date().getHours()*60+new Date().getMinutes();
+    let troubleBarHtml='';
+    let maxElapsed=0;
+    let oldestStart=null;
+    if(hasOngoingTrouble){
+      ongoingTroubles.forEach(t=>{
+        const sm=timeToMin(t.start);
+        const elapsed=Math.max(0,nowMT-sm);
+        if(elapsed>maxElapsed) maxElapsed=elapsed;
+        if(!oldestStart||sm<timeToMin(oldestStart)) oldestStart=t.start;
+        const h=Math.floor(elapsed/60),mv=elapsed%60;
+        const elStr=h>0?(h+'時間'+(mv>0?mv+'分':'')+'経過'):(mv+'分経過');
+        const noteStr=t.note?'<span style="color:#999;margin-left:4px;font-size:9px;">'+t.note+'</span>':'';
+        troubleBarHtml+='<div class="tbar ongoing" data-tstart="'+t.start+'">'+
+          '<span style="color:#c0392b;font-weight:700;">⚠ '+t.type+'</span>'+
+          '<span style="color:#888;">'+t.start+'〜継続中</span>'+
+          noteStr+
+          '<span class="telapsed" style="color:#c0392b;font-weight:700;margin-left:auto;">'+elStr+'</span>'+
+        '</div>';
+      });
+    }
+    // 終了済みトラブル（最新2件）
+    endedTroubles.slice(-2).forEach(t=>{
+      const sm=timeToMin(t.start),em2=timeToMin(t.end);
+      const dur=Math.max(0,em2-sm);
+      const h=Math.floor(dur/60),mv=dur%60;
+      const durStr=h>0?(h+'時間'+(mv>0?mv+'分':'')):(mv+'分');
+      troubleBarHtml+='<div class="tbar done"><span style="color:#888;">✓ '+t.type+'　'+t.start+'〜'+t.end+'（'+durStr+'）'+(t.note?'　'+t.note:'')+'</span></div>';
+    });
+    // カード背景色（しきい値は troubleThresh 参照）
+    const blinkCard=hasOngoingTrouble&&maxElapsed>=troubleThresh.b;
+    const d=document.createElement('div');
+    d.className='lcard '+(s.card||'')+(blinkCard?' trouble-blink-card':'');
+    d.id='lcard-'+id;
+    if(hasOngoingTrouble&&!blinkCard){
+      d.style.background=maxElapsed>=troubleThresh.r?'rgba(231,76,60,0.20)':'rgba(255,193,7,0.22)';
+    }
+    if(hasOngoingTrouble&&oldestStart){d.dataset.troubleStart=oldestStart;d.dataset.troubleId=id;}
+    d.onclick=function(){openModal(id);};
+    d.innerHTML=
+      '<div class="lhead">'+
+        '<div style="flex:1;min-width:0;"><div class="lname">'+getLineName(id)+'</div>'+
+        ((pr&&(pr.phase==='before'||pr.phase==='done'))||(!l.workStart&&!l.actual)?'':'<div class="lpart">'+(l.part||'未設定')+(l.note?' / '+l.note:'')+'</div>')+
+        '</div>'+
+        '<div style="display:flex;align-items:flex-start;gap:5px;flex-shrink:0;">'+
+          '<span class="bdg '+s.bdg+'">'+s.lbl+'</span>'+
+          '<button class="trouble-btn'+(hasOngoingTrouble?' active':'')+'" onclick="event.stopPropagation();openTroubleModal(\''+id+'\')" title="トラブル・停止記録">'+
+            (hasOngoingTrouble?'⚠ 対応中':'⚠')+
+          '</button>'+
+        '</div>'+
+      '</div>'+
+      troubleBarHtml+
+      // 達成率バナー：CT達成率 + 計画達成率の2指標
+      (function(){
+        var lr=calcLineRate(l);
+        if(!lr) return '';
+        var ctR=lr.ctRate, estF=lr.estFinish, planEnd=lr.planEndTime;
+        if(ctR===null&&estF===null) return '';
+        function rateBox(label, val, sub){
+          if(val===null) return '';
+          var col=val>=95?'#27ae60':val>=80?'#e67e22':'#e74c3c';
+          var barW=Math.min(val,100);
+          return '<div style="flex:1;background:rgba(0,0,0,0.04);border-radius:6px;padding:6px 8px;">'+
+            '<div style="font-size:9px;color:#888;margin-bottom:2px;">'+label+'</div>'+
+            '<div style="font-size:18px;font-weight:700;color:'+col+';">'+val+'%</div>'+
+            '<div style="height:4px;background:rgba(0,0,0,0.08);border-radius:2px;margin:3px 0;">'+
+              '<div style="height:100%;width:'+barW+'%;background:'+col+';border-radius:2px;"></div>'+
+            '</div>'+
+            '<div style="font-size:9px;color:#888;">'+sub+'</div>'+
+          '</div>';
+        }
+        function estBox(estF, planEnd){
+          if(!estF) return '';
+          if(estF==='完了'){
+            return '<div style="flex:1;background:rgba(39,174,96,0.08);border-radius:6px;padding:6px 8px;">'+
+              '<div style="font-size:9px;color:#888;margin-bottom:2px;">見込み完了</div>'+
+              '<div style="font-size:18px;font-weight:700;color:#27ae60;">✓ 完了</div>'+
+              '<div style="font-size:9px;color:#888;">全工程終了</div>'+
+            '</div>';
+          }
+          var em=timeToMin(estF);
+          var pm=planEnd?timeToMin(planEnd):null;
+          var diff=(em!==null&&pm!==null)?(em-pm):null;
+          var col=diff===null?'#888':diff<=0?'#27ae60':diff<=15?'#e67e22':'#e74c3c';
+          var diffStr=diff===null?'':(diff===0?'計画通り':diff<0?(Math.abs(diff)+'分早く終わる予定'):('+'+diff+'分遅れる見込み'));
+          return '<div style="flex:1;background:rgba(0,0,0,0.04);border-radius:6px;padding:6px 8px;">'+
+            '<div style="font-size:9px;color:#888;margin-bottom:2px;">見込み完了時刻</div>'+
+            '<div style="font-size:18px;font-weight:700;color:'+col+';">'+estF+'</div>'+
+            '<div style="font-size:9px;color:'+col+';">'+
+              (planEnd?'計画 '+planEnd+(diffStr?' ／ '+diffStr:''):'計画終了時刻なし')+
+            '</div>'+
+          '</div>';
+        }
+        return '<div style="display:flex;gap:6px;margin-bottom:8px;">'+
+          rateBox('CT達成率（標準時間比）', ctR, '標準時間をどれだけ達成しているか')+
+          estBox(estF, planEnd)+
+        '</div>';
+      })()+
+      '<div class="pb"><div class="pb-f '+s.bar+'" style="width:'+barW+'%"></div></div>'+
+      // 数値ボックス：稼働中のみ表示（未開始・完了・計画時間外は非表示）
+      ((pr&&(pr.phase==='before'||pr.phase==='done'))||(!l.workStart&&!l.actual)?'':(
+      '<div class="nums">'+
+        '<div class="nb"><div class="nv">'+(cjCT?(cjCT.revisedPlan||cjCT.plan).toLocaleString():(l.plan>0?l.plan.toLocaleString():'-'))+'</div><div class="nl">計画（全体）</div></div>'+
+        (proRataDisp?'<div class="nb"><div class="nv" style="font-size:11px;color:#e67e22;">'+proRataDisp+'</div><div class="nl">現時点の目標</div></div>':'')+
+        '<div class="nb"><div class="nv">'+(partActual>0?partActual.toLocaleString():'-')+'</div><div class="nl">実績</div></div>'+
+        '<div class="nb"><div class="nv">'+proRateDisp+'</div><div class="nl">達成率</div></div>'+
+      '</div>'
+      ))+
+      sched+delayDisp+paceDisp+
+      '<div class="lupdate">更新：'+fmtTs(l.updatedAt)+'（'+(el<9999?el+'分前':'未更新')+'）</div>';
+        c.appendChild(d);
+  });
+  renderSum();renderAlts();
+}
+
+// 段取り待機判定：手動 status==='setup' OR 前品番終了＋次品番未開始
+function isSetupWaiting(l){
+  if(!l) return false;
+  if(l.status==='setup') return true;
+  // 自動検知：l.workStart が空（前品番終了後、次品番未開始）
+  if(l.workStart&&l.workStart!=='') return false; // 既に作業開始済み
+  const jobs=(l.jobs||[]).filter(j=>!j.history&&j.plan>0&&j.start&&j.end);
+  if(!jobs.length) return false;
+  // 現品番 job を特定
+  let curJi=jobs.findIndex(j=>j.part===l.part);
+  if(curJi<=0) return false; // 先頭品番または見つからない場合は対象外
+  const curJob=jobs[curJi];
+  if(curJob.actualStart&&curJob.actualStart!=='') return false; // 既に開始済み
+  // 前品番が完了しているか
+  const prevJob=jobs[curJi-1];
+  return !!(prevJob.actualEnd&&prevJob.actualEnd!=='');
+}
+
+// サマリー集計（IDS配列を受け取り集計結果を返す）
+function calcSumData(ids){
+  let active=0, delays=0, setup=0, rateSum=0, rateCnt=0;
+  ids.forEach(function(id){
+    const l=lines[id]; if(!l) return;
+    // 稼働ライン：作業開始済み・未終了（現在生産中）
+    const isRunning=!!(l.workStart&&l.workStart!==''&&(!l.workEnd||l.workEnd===''));
+    if(isRunning) active++;
+    // 遅れ発生：稼働中かつスケジュール基準で実績 < 目標
+    if(isRunning){
+      const pr=getProRata(l);
+      if(pr&&pr.proRata!==null&&pr.proRata>0&&(l.actual||0)<pr.proRata) delays++;
+    }
+    // 段取り中
+    if(isSetupWaiting(l)) setup++;
+    // CT達成率（稼働中ラインのみ平均）
+    if(isRunning){
+      const lr=calcLineRate(l);
+      if(lr&&lr.ctRate!==null){rateSum+=lr.ctRate; rateCnt++;}
+    }
+  });
+  const rate=rateCnt>0?Math.round(rateSum/rateCnt):null;
+  return{active,delays,setup,rate};
+}
+
+// サマリーDOMに集計結果を反映
+// pfx='s' → 全グループ用（s0〜s3, className=sc-val）
+// pfx='sg' → 現グループ用（sg0〜sg3, className=sc-vsub）
+function applySumData(pfx,data){
+  const isSub=pfx==='sg';
+  const cls=isSub?'sc-vsub':'sc-val';
+  const {active,delays,setup,rate}=data;
+  document.getElementById(pfx+'0').textContent=active;
+  const d=document.getElementById(pfx+'1');
+  d.textContent=delays;
+  d.className=cls+' '+(delays>0?'red':'green');
+  const rv=document.getElementById(pfx+'2');
+  rv.textContent=rate!==null?rate+'%':'-';
+  rv.className=cls+' '+(rate===null?'':(rate>=95?'green':rate>=80?'amber':'red'));
+  document.getElementById(pfx+'3').textContent=setup;
+}
+
+function renderSum(){
+  const allData=calcSumData(getAllIDS());
+  applySumData('s',allData);
+  // グループが複数ある場合のみ「/ 現グループ値」を表示
+  const multiGrp=groupCfg.filter(g=>g.ids&&g.ids.length>0).length>1;
+  const sumRow=document.getElementById('sumRow');
+  if(sumRow) sumRow.classList.toggle('show-sub',multiGrp);
+  if(multiGrp){
+    const curData=calcSumData(getIDS());
+    applySumData('sg',curData);
+    const grpName=groupCfg[currentGrp]?.label||('グループ'+(currentGrp+1));
+    const lbl=document.getElementById('sumGrpLbl');
+    if(lbl) lbl.textContent='全体 / '+grpName;
+  }
+}
+
+function renderAlts(){
+  let h='';
+  getAllIDS().forEach(id=>{
+    const l=lines[id];if(!l)return;
+    const el=elapsed(l.updatedAt);
+    const nowH5=new Date().getHours(),nowM5=new Date().getMinutes();
+    const cj5=(l.jobs||[]).find(j=>j.part===l.part&&j.start);
+    const sm5=cj5?timeToMin(cj5.start):null;
+    const isWork5=sm5!==null&&(nowH5*60+nowM5)>=sm5;
+    const updAfter5=l.updatedAt>0&&(new Date(l.updatedAt).getHours()*60+new Date(l.updatedAt).getMinutes())>=nowH5*60;
+    // 全工程終了チェック
+    const allDone5=(l.jobs||[]).filter(j=>j.plan>0).every(j=>j.status==='done'||(j.actualEnd&&j.actualEnd!==''));
+    // 計画最終終了時刻チェック
+    const allJobs5=(l.jobs||[]).filter(j=>j.plan>0&&j.end);
+    const lastEndMin5=allJobs5.length?Math.max(...allJobs5.map(j=>timeToMin(j.end)||0)):0;
+    const pastLastEnd5=lastEndMin5>0&&(nowH5*60+nowM5)>=lastEndMin5;
+    if(l.status==='running'&&l.plan>0&&isWork5&&nowM5>=10&&!updAfter5&&!allDone5&&!pastLastEnd5&&!lineNoAlertMap[id])
+      h+='<div class="al warn"><div class="al-txt w">⚠️ 未報告：'+getLineName(id)+'</div><div class="al-sub">'+(l.updatedAt===0?nowH5+'時台の実績が未入力':'前回更新：'+fmtTs(l.updatedAt))+'</div></div>';
+    if(l.status==='setup'&&el>=(sets[id]||60)&&l.updatedAt>0)
+      h+='<div class="al warn"><div class="al-txt w">🔧 段取り超過：'+getLineName(id)+'</div><div class="al-sub">'+el+'分経過（設定'+(sets[id]||60)+'分）</div></div>';
+    const pr5=getProRata(l);
+    if(l.status==='running'&&l.plan>0&&l.actual>0&&l.updatedAt>0&&pr5&&pr5.proRata>0&&Math.round(l.actual/pr5.proRata*100)<80)
+      h+='<div class="al"><div class="al-txt">🔴 遅れ：'+getLineName(id)+'（'+l.part+'）</div><div class="al-sub">達成率'+Math.round(l.actual/pr5.proRata*100)+'%</div></div>';
+  });
+  document.getElementById('alts').innerHTML=h;
+}
+
+// ===== トラブル記録（複数件対応）=====
+let _troubleLineId=null;
+let _editingTroubleIdx=null; // null=新規追加, 数値=編集中インデックス
+
+// トラブル経過時間・背景色をリアルタイム更新（30秒ごと）
+function updateTroubleColors(){
+  const nowM=new Date().getHours()*60+new Date().getMinutes();
+  // カード背景色更新
+  document.querySelectorAll('.lcard[data-trouble-id]').forEach(function(card){
+    const startStr=card.dataset.troubleStart;
+    if(!startStr) return;
+    const elapsed=Math.max(0,nowM-timeToMin(startStr));
+    if(elapsed>=troubleThresh.b){
+      card.style.background='';
+      card.classList.add('trouble-blink-card');
+    } else if(elapsed>=troubleThresh.r){
+      card.classList.remove('trouble-blink-card');
+      card.style.background='rgba(231,76,60,0.20)';
+    } else {
+      card.classList.remove('trouble-blink-card');
+      card.style.background='rgba(255,193,7,0.22)';
+    }
+  });
+  // 各トラブルバーの経過時間テキスト更新
+  document.querySelectorAll('.tbar.ongoing[data-tstart]').forEach(function(bar){
+    const elapsed=Math.max(0,nowM-timeToMin(bar.dataset.tstart));
+    const elEl=bar.querySelector('.telapsed');
+    if(elEl){const h=Math.floor(elapsed/60),m=elapsed%60;elEl.textContent=h>0?(h+'時間'+(m>0?m+'分':'')+'経過'):(m+'分経過');}
+  });
+}
+
+function _getTroubles(id){return (lines[id]?.troubles||[]).filter(t=>t&&t.start);}
+
+function _renderTroubleList(){
+  if(!_troubleLineId) return;
+  const troubles=_getTroubles(_troubleLineId);
+  const nowM=new Date().getHours()*60+new Date().getMinutes();
+  if(!troubles.length){
+    document.getElementById('troubleList').innerHTML='<div style="color:#bbb;font-size:12px;padding:4px 0 8px;">記録なし</div>';
+    return;
+  }
+  document.getElementById('troubleList').innerHTML=troubles.map((t,i)=>{
+    const ongoing=!t.end;
+    const sm=timeToMin(t.start);
+    let durStr='';
+    if(ongoing){const e=Math.max(0,nowM-sm);const h=Math.floor(e/60),m=e%60;durStr=(h>0?h+'時間'+(m>0?m+'分':''):m+'分')+'継続中';}
+    else{const em=timeToMin(t.end);const dur=Math.max(0,em-sm);const h=Math.floor(dur/60),m=dur%60;durStr=h>0?h+'時間'+(m>0?m+'分':''):m+'分';}
+    const col=ongoing?'#c0392b':'#888';
+    const noteStr=t.note?'<span style="color:#aaa;font-size:9px;margin-left:4px;">'+t.note+'</span>':'';
+    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:5px;background:'+(ongoing?'rgba(231,76,60,0.08)':'rgba(0,0,0,0.03)')+';margin-bottom:4px;">'+
+      '<span style="color:'+col+';font-weight:700;font-size:11px;">'+(ongoing?'⚠':'✓')+' '+t.type+'</span>'+
+      '<span style="font-size:11px;color:#888;">'+t.start+'〜'+(t.end||'継続中')+'</span>'+
+      '<span style="font-size:10px;color:'+col+';">'+durStr+'</span>'+
+      noteStr+
+      '<span style="margin-left:auto;display:flex;gap:4px;">'+
+        (ongoing?'<button class="btn-now" onclick="endTrouble('+i+')" style="font-size:10px;">終了</button>':'')+
+        '<button class="btn-now" onclick="editTrouble('+i+')" style="font-size:10px;">✏</button>'+
+        '<button class="btn-rm" onclick="deleteTrouble('+i+')" style="width:22px;height:22px;font-size:10px;border-radius:4px;">✕</button>'+
+      '</span>'+
+    '</div>';
+  }).join('');
+}
+
+window.openTroubleModal=function(id){
+  _troubleLineId=id;
+  _editingTroubleIdx=null;
+  document.getElementById('troubleMttl').textContent='⚠ '+getLineName(id)+'　トラブル・停止記録';
+  const n=new Date();
+  document.getElementById('tType').value='設備トラブル';
+  document.getElementById('tStart').value=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');
+  document.getElementById('tEnd').value='';
+  document.getElementById('tNote').value='';
+  document.getElementById('tMsg').textContent='';
+  document.getElementById('tAddBtn').textContent='追加する';
+  document.getElementById('tCancelBtn').style.display='none';
+  _renderTroubleList();
+  document.getElementById('troubleOv').classList.add('open');
+};
+window.closeTroubleOv=function(e){if(e.target===document.getElementById('troubleOv'))closeTroubleOvD();};
+window.closeTroubleOvD=function(){document.getElementById('troubleOv').classList.remove('open');};
+window.setTNow=function(fid){
+  const n=new Date();
+  document.getElementById(fid).value=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');
+};
+window.addTrouble=function(){
+  if(!_troubleLineId) return;
+  const type=document.getElementById('tType').value;
+  const start=document.getElementById('tStart').value;
+  const end=document.getElementById('tEnd').value;
+  const note=document.getElementById('tNote').value.trim();
+  if(!start){document.getElementById('tMsg').style.color='#c0392b';document.getElementById('tMsg').textContent='開始時刻を入力してください';return;}
+  let newTroubles;
+  const isEdit=_editingTroubleIdx!==null;
+  if(isEdit){
+    // 既存トラブルを更新
+    newTroubles=[..._getTroubles(_troubleLineId)];
+    newTroubles[_editingTroubleIdx]={...newTroubles[_editingTroubleIdx],type,start,end:end||null,note:note||null};
+    _editingTroubleIdx=null;
+    document.getElementById('tAddBtn').textContent='追加する';
+    document.getElementById('tCancelBtn').style.display='none';
+  } else {
+    // 新規追加
+    newTroubles=[..._getTroubles(_troubleLineId),{id:Date.now(),type,start,end:end||null,note:note||null}];
+  }
+  update(ref(db,'lines/'+_troubleLineId),{troubles:newTroubles});
+  if(lines[_troubleLineId]) lines[_troubleLineId].troubles=newTroubles;
+  document.getElementById('tEnd').value='';
+  document.getElementById('tNote').value='';
+  document.getElementById('tMsg').style.color='#27ae60';
+  document.getElementById('tMsg').textContent=isEdit?'更新しました':'追加しました';
+  setTimeout(()=>{if(document.getElementById('tMsg'))document.getElementById('tMsg').textContent='';},1500);
+  _renderTroubleList();
+};
+window.editTrouble=function(idx){
+  const t=_getTroubles(_troubleLineId)[idx];
+  if(!t) return;
+  _editingTroubleIdx=idx;
+  document.getElementById('tType').value=t.type;
+  document.getElementById('tStart').value=t.start;
+  document.getElementById('tEnd').value=t.end||'';
+  document.getElementById('tNote').value=t.note||'';
+  document.getElementById('tAddBtn').textContent='更新する';
+  document.getElementById('tCancelBtn').style.display='';
+  document.getElementById('tMsg').textContent='';
+  // 編集フォームまでスクロール
+  document.getElementById('tAddBtn').scrollIntoView({behavior:'smooth',block:'nearest'});
+};
+window.cancelEditTrouble=function(){
+  _editingTroubleIdx=null;
+  const n=new Date();
+  document.getElementById('tType').value='設備トラブル';
+  document.getElementById('tStart').value=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');
+  document.getElementById('tEnd').value='';
+  document.getElementById('tNote').value='';
+  document.getElementById('tAddBtn').textContent='追加する';
+  document.getElementById('tCancelBtn').style.display='none';
+  document.getElementById('tMsg').textContent='';
+};
+window.endTrouble=function(idx){
+  if(!_troubleLineId) return;
+  const troubles=[..._getTroubles(_troubleLineId)];
+  const n=new Date();
+  troubles[idx]={...troubles[idx],end:String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0')};
+  update(ref(db,'lines/'+_troubleLineId),{troubles});
+  if(lines[_troubleLineId]) lines[_troubleLineId].troubles=troubles;
+  _renderTroubleList();
+};
+window.deleteTrouble=function(idx){
+  if(!_troubleLineId) return;
+  const troubles=_getTroubles(_troubleLineId).filter((_,i)=>i!==idx);
+  update(ref(db,'lines/'+_troubleLineId),{troubles:troubles.length?troubles:null});
+  if(lines[_troubleLineId]) lines[_troubleLineId].troubles=troubles.length?troubles:undefined;
+  _renderTroubleList();
+};
+window.saveTroubleThresh=function(){
+  const y=parseInt(document.getElementById('thr-y').value)||10;
+  const r=parseInt(document.getElementById('thr-r').value)||20;
+  const b=parseInt(document.getElementById('thr-b').value)||40;
+  troubleThresh={y,r,b};
+  update(ref(db,'settings'),{troubleThresh:{y,r,b}});
+  const m=document.getElementById('thrmsg');m.textContent='保存しました ✓';setTimeout(()=>{m.textContent='';},2000);
+};
+
+// モーダル
+window.openModal=function(id){
+  const l=lines[id];if(!l)return;
+  document.getElementById('mttl').textContent=getLineName(id)+' 工程詳細';
+  const jobs=(l.jobs||[]).filter(j=>j.plan>0);
+  const stdSetup=sets[id]||60;
+  let h=`<table class="jtbl"><thead><tr><th>#</th><th>品番</th><th>計画数</th><th>実績数</th><th>CT達成率</th><th>段取り<br><span style="font-weight:400;color:#aaa;">標準${stdSetup}分</span></th><th>予定時間</th><th>実績時間</th><th></th></tr></thead><tbody>`;
+  if(!jobs.length){h+='<tr><td colspan="9" style="padding:16px;color:#aaa;text-align:center;">工程データなし</td></tr>';}
+  jobs.forEach((j,ji)=>{
+    const isCur=j.part===l.part;
+    const a=isCur?l.actual:(j.actualCount||0);
+    // CT達成率：(実績数×標準CT) ÷ 実績時間 × 100
+    const sm2=timeToMin(j.start),em2=timeToMin(j.end);
+    const planNet2=sm2&&em2?netMins(sm2,em2):0;
+    const stdCT2=planNet2>0&&j.plan>0?planNet2/j.plan:0;
+    const jWS2=isCur?(l.workStart||j.actualStart||''):(j.actualStart||'');
+    const jWE2=isCur?(l.workEnd&&l.workEnd!==''?l.workEnd:(j.actualEnd||'')):(j.actualEnd||'');
+    const wsM2=timeToMin(jWS2);
+    const weM2=jWE2&&jWE2!==''?timeToMin(jWE2):(isCur&&a>0?(new Date().getHours()*60+new Date().getMinutes()):null);
+    const actNet2=wsM2&&weM2?netMins(wsM2,weM2):0;
+    const r=stdCT2>0&&actNet2>0&&a>0?Math.round(a*stdCT2/actNet2*100):(j.plan>0&&a>0?Math.round(a/j.plan*100):null);
+    const rc=r===null?'':r>=95?'c-ok':r>=80?'c-wn':'c-ng';
+    // 段取り時間：実績 or 推定（作業開始済みの場合のみ推定計算）
+    const actSU=j.setupActualMin||0;
+    const implSU=jWS2?calcImpliedSetup(jobs,ji,jWS2):null;
+    const dispSU=actSU>0?actSU:(implSU||0);
+    const isImpliedSU=actSU===0&&(implSU||0)>0;
+    const suR=dispSU>0&&stdSetup>0?Math.round(dispSU/stdSetup*100):null;
+    const suCol=suR===null?'#aaa':suR<=100?'#27ae60':suR<=125?'#e67e22':'#c0392b';
+    const suDisp=j.noSetup
+      ?'<span style="color:#aaa;font-size:10px;">段取りなし</span>'
+      :dispSU>0
+        ?`<span style="color:${suCol};font-weight:700;">${dispSU}分</span>`+
+         (suR!==null?`<span style="font-size:9px;color:${suCol};margin-left:3px;">(${suR}%)</span>`:'')+
+         (isImpliedSU?'<span style="font-size:9px;color:#bbb;"> 推定</span>':'')
+        :'<span style="color:#ccc;">--</span>';
+    const rowCls=isCur?'cur':(j.status==='done'?'dn':'');
+    const aTime=j.actualStart&&j.actualEnd?j.actualStart+'〜'+j.actualEnd:'--';
+    const pTime=j.start&&j.end?j.start+'〜'+j.end:'--';
+    h+=`<tr class="${rowCls}">
+      <td>${j.seq}</td>
+      <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${j.part}">${isCur?'▶ ':''}<b>${j.part}</b></td>
+      <td style="text-align:right;">${j.revisedPlan&&j.revisedPlan!==j.plan?j.plan.toLocaleString()+'<span style="color:#e67e22;font-size:9px;">→'+j.revisedPlan.toLocaleString()+'</span>':j.plan.toLocaleString()}</td>
+      <td style="text-align:right;">${a>0?a.toLocaleString():'-'}</td>
+      <td style="min-width:55px;">${r!==null?`<div style="font-weight:700;color:${r>=95?'#27ae60':r>=80?'#e67e22':'#c0392b'}">${r}%</div><div class="pbsm"><div class="pbsm-f ${rc}" style="width:${Math.min(r,100)}%"></div></div>`:'--'}</td>
+      <td style="min-width:70px;">${suDisp}</td>
+      <td style="font-size:10px;color:#888;">${pTime}</td>
+      <td style="font-size:10px;color:#555;">${aTime}</td>
+      <td><button class="btn-to-input" onclick="goToInput('${id}','${j.part}','${j.seq}','${j.start||''}');closeOvD();">入力</button></td>
+    </tr>`;
+  });
+  h+='</tbody></table>';
+  document.getElementById('mbody').innerHTML=h;
+  document.getElementById('ov').classList.add('open');
+};
+window.closeOv=e=>{if(e.target===document.getElementById('ov'))closeOvD();};
+window.closeOvD=()=>document.getElementById('ov').classList.remove('open');
+
+// 工程詳細から実績入力へ
+window.goToInput=function(lineId,part,seq,start){
+  // モーダルを先に閉じる
+  const ov=document.getElementById('ov');
+  if(ov) ov.classList.remove('open');
+  _swSkipLineSel=true;
+  sw('input');
+  const iLine=document.getElementById('iLine');
+  iLine.value=lineId;
+  // ドロップダウンを構築（onLineSelの品番自動選択は使わない）
+  const jobs=(lines[lineId]?.jobs||[]).filter(j=>j.plan>0);
+  const sel=document.getElementById('iPart');
+  sel.innerHTML='<option value="">-- 品番を選択 --</option>'+
+    jobs.map(j=>`<option value="${j.part}" data-plan="${j.plan}" data-seq="${j.seq}" data-start="${j.start||''}" data-end="${j.end||''}">${j.seq}. ${j.part}（${j.plan.toLocaleString()}個　${j.start||'?'}〜${j.end||'?'}）</option>`).join('');
+  _lastLineId=lineId;
+  // 指定されたseq+partのoptionを選択
+  const seqN=seq?parseInt(seq):0;
+  let target=null;
+  if(seqN>0) target=[...sel.options].find(o=>parseInt(o.dataset.seq||'0')===seqN&&o.value===part);
+  if(!target&&start) target=[...sel.options].find(o=>o.value===part&&o.dataset.start===start);
+  if(!target) target=[...sel.options].find(o=>o.value===part);
+  if(target){
+    sel.selectedIndex=[...sel.options].indexOf(target);
+    onPartSel();
+  }
+};
+
+// 実績入力
+let _lastLineId='';
+function restoreJobFields(lineId, partVal, startVal, seqVal){
+  const l=lines[lineId];
+  if(!l) return;
+  // 品番+開始時刻でjobを特定（同一品番が複数ある場合に対応）
+  const job=(l.jobs||[]).find(j=>j.part===partVal&&(!startVal||j.start===startVal))
+         ||(l.jobs||[]).find(j=>j.part===partVal); // fallback
+  const isCurPart=(l.part===partVal&&(!startVal||!job||job.start===startVal||(l.jobs||[]).findIndex(j=>j.part===l.part)===((l.jobs||[]).findIndex(j=>j.part===partVal&&(!startVal||j.start===startVal)))));
+  // 現在のlineレベルのデータがこのjobのものか判定
+  // workStartで現在稼働中jobを特定
+  const curWS3=lines[lineId]?.workStart||'';
+  let activeCurIdx=curWS3?(l.jobs||[]).findIndex(j=>j.part===l.part&&j.actualStart===curWS3):-1;
+  if(activeCurIdx<0) activeCurIdx=(l.jobs||[]).findIndex(j=>j.status==='running'&&j.part===l.part);
+  if(activeCurIdx<0) activeCurIdx=(l.jobs||[]).findIndex(j=>j.part===l.part&&j.plan>0);
+  const selJobIdx=(l.jobs||[]).indexOf(job);
+  const isActivePart=selJobIdx>=0&&selJobIdx===activeCurIdx;
+  const actVal=isActivePart?(l.actual>0?l.actual:''):(job&&job.actualCount>0?job.actualCount:'');
+  const ssVal=isActivePart?(l.setupStartTime||''):(job&&job.setupStartTime||'');
+  const seVal=isActivePart?(l.setupEndTime||''):(job&&job.setupEndTime||'');
+  const wsVal=isActivePart?(l.workStart||''):(job&&job.actualStart||'');
+  const weVal=isActivePart?(l.workEnd||''):(job&&job.actualEnd||'');
+  document.getElementById('iActual').value=actVal;
+  document.getElementById('iRevised').value=(job&&job.revisedPlan>0)?job.revisedPlan:'';
+  document.getElementById('iNote').value=isActivePart?(l.note||''):'';
+  document.getElementById('iSS').value=ssVal;
+  document.getElementById('iSE').value=seVal;
+  document.getElementById('iWS').value=wsVal;
+  document.getElementById('iWE').value=weVal;
+  const noSetupEl=document.getElementById('iNoSetup');
+  if(noSetupEl){noSetupEl.checked=!!(job&&job.noSetup);window.onNoSetupChange();}
+  // 標準CT表示（計画数÷計画時間）
+  const stdCtEl=document.getElementById('iStdCT');
+  if(job&&job.plan>0&&job.start&&job.end){
+    const smC=timeToMin(job.start),emC=timeToMin(job.end);
+    const planNetC=smC&&emC?netMins(smC,emC):0;
+    const stdRate=planNetC>0?Math.round(job.plan/planNetC*60):0;
+    stdCtEl.textContent=stdRate>0?('標準 '+stdRate+'個/h'):'';
+  } else {
+    stdCtEl.textContent='';
+  }
+}
+window.onLineSel=function(){
+  const id=document.getElementById('iLine').value;
+  const jobs=(lines[id]?.jobs||[]).filter(j=>j.plan>0);
+  const sel=document.getElementById('iPart');
+  sel.innerHTML='<option value="">-- 品番を選択 --</option>'+
+    jobs.map(j=>`<option value="${j.part}" data-plan="${j.plan}" data-seq="${j.seq}" data-start="${j.start||''}" data-end="${j.end||''}">${j.seq}. ${j.part}（${j.plan.toLocaleString()}個　${j.start||'?'}〜${j.end||'?'}）</option>`).join('');
+  // 別ラインへの切替ならクリア
+  if(_lastLineId!==''&&_lastLineId!==id){
+    document.getElementById('iActual').value='';
+    document.getElementById('iPlan').value='';
+    document.getElementById('iRevised').value='';
+    document.getElementById('iNote').value='';
+    document.getElementById('iSS').value='';
+    document.getElementById('iWS').value='';
+    document.getElementById('iWE').value='';
+    document.getElementById('iStdCT').textContent='';
+  }
+  // 現在の品番を選択してFirebase値を復元
+  const cur=lines[id]?.part;
+  const curWS=lines[id]?.workStart||'';
+  if(cur){
+    // workStartで同名品番を区別して正確なoptionを選択
+    let o=curWS?[...sel.options].find(opt=>opt.value===cur&&opt.dataset.start===curWS):null;
+    if(!o) o=[...sel.options].find(opt=>opt.value===cur);
+    if(o){
+      sel.selectedIndex=[...sel.options].indexOf(o);
+      onPartSel();
+    }
+  }
+  _lastLineId=id;
+};
+
+window.onPartSel=function(){
+  const opt=document.getElementById('iPart').selectedOptions[0];
+  if(!opt?.value) return;
+  document.getElementById('iPlan').value=opt.dataset.plan||'';
+  const lineId=document.getElementById('iLine').value;
+  const l=lines[lineId];
+  const partVal=opt.value;
+  // 品番切替時：その品番のjobデータを復元（開始時刻もキーに）
+  const startVal=opt.dataset.start||'';
+  restoreJobFields(lineId, partVal, startVal);
+  // 稼働状態の自動セット
+  const seqNum=seqVal?parseInt(seqVal):0;
+  // seq優先、次にstart、最後に品番名のみでjobを特定
+  const job=seqNum>0
+    ?(l?.jobs||[]).find(j=>j.seq===seqNum&&j.part===partVal)
+    :startVal?(l?.jobs||[]).find(j=>j.part===partVal&&j.start===startVal)
+    :(l?.jobs||[]).find(j=>j.part===partVal);
+  const statSel=document.getElementById('iStat');
+  if(job){
+    if(job.status==='done') statSel.value='running'; // 終了済み品番も再入力可能
+    else if(job.status==='running') statSel.value='running';
+    else statSel.value=l?.status||'running';
+  }
+  // 品番切替時のフォームタイトル更新（現在稼働中かどうか表示）
+  const isCur=l?.part===partVal;
+  const partNote=document.getElementById('part-note');
+  if(partNote){
+    partNote.textContent=isCur?'（現在稼働中）':(job?.status==='done'?'（作業終了済み）':'（未着手）');
+    partNote.style.color=isCur?'#27ae60':(job?.status==='done'?'#888':'#e67e22');
+  }
+};
+
+window.onNoSetupChange=function(){
+  const checked=document.getElementById('iNoSetup')?.checked;
+  // 段取り開始・終了フィールドのみグレーアウト（作業開始・終了は常に有効）
+  const fields=document.getElementById('setupOnlyFields');
+  if(fields){fields.style.opacity=checked?'0.35':'1';fields.style.pointerEvents=checked?'none':'';}
+};
+window.setNow=function(id){
+  const n=new Date();
+  document.getElementById(id).value=`${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
+};
+
+window.doSub=function(){
+  const m=document.getElementById('imsg');
+  m.style.color='#888'; m.textContent='送信中...';
+  try{
+    const id=document.getElementById('iLine').value;
+    const stat=document.getElementById('iStat').value;
+    const part=document.getElementById('iPart').value;
+    const plan=parseInt(document.getElementById('iPlan').value);
+    const actual=parseInt(document.getElementById('iActual').value);
+    const revised=parseInt(document.getElementById('iRevised').value);
+    const note=document.getElementById('iNote').value;
+    const ss=document.getElementById('iSS').value;
+    const se=document.getElementById('iSE').value;
+    const ws=document.getElementById('iWS').value;
+    const we=document.getElementById('iWE').value;
+    if(!part){m.style.color='#c0392b';m.textContent='品番を選択してください';return;}
+
+    // 選択中の品番の開始時刻（同名品番の区別に使用）
+    const selOpt=document.getElementById('iPart').selectedOptions[0];
+    const selStart=selOpt?selOpt.dataset.start||'':'';
+    const selSeq=selOpt?parseInt(selOpt.dataset.seq||'0'):0;
+
+    // 前回データ保存
+    const prevA=lines[id]?.actual||0;
+    const prevT=lines[id]?.updatedAt||0;
+    const prev2A=lines[id]?.prevActual||0;
+    const prev2T=lines[id]?.prevUpdatedAt||0;
+
+    // 段取り時間計算
+    let setupMin=null;
+    if(ss&&se){const sh=timeToH(ss),eh=timeToH(se);if(sh&&eh)setupMin=Math.round((eh-sh)*60);}
+    else if(ss&&ws){const sh=timeToH(ss),wh=timeToH(ws);if(sh&&wh)setupMin=Math.round((wh-sh)*60);}
+
+    // jobs配列をコピー
+    const curJobs=[...(lines[id]?.jobs||[])];
+    // job更新からlineレベルへの同期用一時変数
+    let _syncActual=null,_syncWS=null,_syncWE=null,_syncSS=null,_syncSE=null;
+    let _restorePart=null,_restoreWS=null;
+
+    // seqで選択したjobを特定（同名品番対応）
+    const selJi=selSeq>0
+      ?curJobs.findIndex(j=>j.seq===selSeq&&j.part===part)
+      :curJobs.findIndex(j=>j.part===part&&(!selStart||j.start===selStart));
+
+    // 現在稼働中のjobインデックスを特定（lineレベルのpart+現在のjobsから）
+    const curLinePart=lines[id]?.part||'';
+    const curLineStart=lines[id]?.workStart||'';
+    // 現在品番のjobを特定：workStartが一致するjob、なければpart名だけで
+    let curJi=curJobs.findIndex(j=>j.part===curLinePart&&curLineStart&&j.actualStart===curLineStart);
+    if(curJi<0) curJi=curJobs.findIndex(j=>j.part===curLinePart&&j.status==='running');
+    if(curJi<0) curJi=curJobs.findIndex(j=>j.part===curLinePart);
+
+    // 選択したjobを更新
+    if(selJi>=0){
+      const j=curJobs[selJi];
+      const wsM=timeToMin(ws||j.actualStart||j.start||'');
+      const weM=we&&we!==''?timeToMin(we):null;
+      const actVal=isNaN(actual)?(j.actualCount||0):actual;
+      let paceInfo=j.paceInfo||null;
+      if(wsM&&actVal>0){
+        const endM=weM||(new Date().getHours()*60+new Date().getMinutes());
+        const netM=netMins(wsM,endM);
+        if(netM>0){
+          const pace=Math.round(actVal/netM*60);
+          const planMinJ=timeToMin(j.end||'')-timeToMin(j.start||'');
+          const planPaceJ=planMinJ>0?Math.round(j.plan/planMinJ*60):0;
+          paceInfo={pace,planPace:planPaceJ};
+        }
+      }
+      // 入力履歴（達成率スナップショット）を追加
+      const snapHistory=[...(j.snapHistory||[])];
+      if(actVal>0){
+        // 入力時点の達成率を計算
+        const snapNow=Date.now();
+        const snapT=new Date(snapNow);
+        const snapMin=snapT.getHours()*60+snapT.getMinutes();
+        const smSnap=timeToMin(j.start||''),emSnap=timeToMin(j.end||'');
+        const wsSnap=timeToMin(ws||j.actualStart||'');
+        let snapRate=null;
+        if(smSnap&&emSnap&&wsSnap&&smSnap<emSnap){
+          const planNetSnap=netMins(smSnap,emSnap);
+          const standardCTSnap=planNetSnap>0?planNetSnap/j.plan:0; // 標準CT（分/個）
+          const elapsedSnap=netMins(wsSnap,snapMin); // 実際に作業した時間
+          // CT達成率 = (実績数×標準CT) ÷ 実績時間 × 100
+          snapRate=standardCTSnap>0&&elapsedSnap>0?Math.round(actVal*standardCTSnap/elapsedSnap*100):Math.round(actVal/j.plan*100);
+        } else {
+          snapRate=Math.round(actVal/j.plan*100);
+        }
+        const timeStr=snapT.getHours().toString().padStart(2,'0')+':'+snapT.getMinutes().toString().padStart(2,'0');
+        // 同じ時刻の重複は上書き、違う時刻は追加（最大10件）
+        const lastSnap=snapHistory[snapHistory.length-1];
+        if(lastSnap&&lastSnap.t===timeStr){
+          snapHistory[snapHistory.length-1]={t:timeStr,a:actVal,r:snapRate};
+        } else {
+          snapHistory.push({t:timeStr,a:actVal,r:snapRate});
+          if(snapHistory.length>10) snapHistory.shift();
+        }
+      }
+      // weが空欄＝作業終了取り消し→runningに戻す
+      const newStatus=we&&we!==''?'done':(ws&&ws!==''?'running':'waiting');
+      curJobs[selJi]={...j,
+        setupStartTime:ss,
+        setupEndTime:se,
+        actualStart:ws,
+        actualEnd:we,
+        actualCount:actVal,
+        revisedPlan:(!isNaN(revised)&&revised>0)?revised:(j.revisedPlan||null),
+        noSetup:!!(document.getElementById('iNoSetup')?.checked),
+        setupActualMin:setupMin!==null?setupMin:(j.setupActualMin||0),
+        paceInfo,
+        snapHistory,
+        status:newStatus
+      };
+      // lineレベルに反映
+      // 選択jobが現在品番と同じ、またはweが空（終了取り消し）の場合は常に同期
+      if(selJi===curJi||curJobs[selJi].part===curLinePart){
+        _syncActual=actVal; _syncWS=ws; _syncWE=we; _syncSS=ss; _syncSE=se;
+      }
+      // weが空で再保存＝作業終了取り消し：l.partをこのjobに戻す
+      if((!we||we==='')&&newStatus==='running'){
+        _restorePart=curJobs[selJi].part;
+        _restoreWS=ws;
+      }
+    }
+
+    // lineレベルの更新
+    const upd={status:stat,note,updatedAt:Date.now(),jobs:curJobs};
+    // job更新で保存した値をupdに反映
+    if(_syncActual!==null){upd.actual=_syncActual;upd.workStart=_syncWS;upd.workEnd=_syncWE;upd.setupStartTime=_syncSS;upd.setupEndTime=_syncSE;}
+    // 作業終了取り消し：l.partをこのjobに戻す
+    if(_restorePart!==null){
+      upd.part=_restorePart;
+      upd.workStart=_restoreWS;
+      upd.workEnd='';
+      upd.actual=isNaN(actual)?0:actual;
+    }
+    if(prevT>0){upd.prevActual=prevA;upd.prevUpdatedAt=prevT;upd.prev2Actual=prev2A;upd.prev2UpdatedAt=prev2T;}
+    if(!isNaN(plan))upd.plan=plan;
+    if(setupMin!==null)upd.setupMin=setupMin;
+
+    // 作業終了→次品番に切替（選択jobが終了した場合）
+    if(selJi>=0&&we&&we!==''){
+      const activeJobs=curJobs.filter(j=>j.plan>0&&!j.history);
+      const activeSelIdx=activeJobs.findIndex(j=>j===curJobs[selJi]);
+      // 現在稼働中jobが終了した場合のみ次品番に切替
+      const _linePart=lines[id]?.part||'';
+      const _lineWS=lines[id]?.workStart||'';
+      if(activeSelIdx>=0&&activeSelIdx===activeJobs.findIndex(j=>j.part===_linePart&&(!_lineWS||j.actualStart===_lineWS||j.status==='running'))){
+        if(activeSelIdx<activeJobs.length-1){
+          const nj=activeJobs[activeSelIdx+1];
+          upd.part=nj.part;
+          upd.actual=0;
+          upd.workStart='';
+          upd.workEnd='';
+          upd.setupStartTime='';
+          upd.setupEndTime='';
+          upd.prevActual=0;upd.prevUpdatedAt=0;
+          upd.prev2Actual=0;upd.prev2UpdatedAt=0;
+        }
+      }
+    }
+
+    m.textContent='送信中...';
+    update(ref(db,'lines/'+id),upd).then(()=>{
+      m.style.color='#27ae60';
+      m.textContent='✓ 更新しました（'+new Date().toLocaleTimeString('ja-JP')+'）';
+      setTimeout(()=>{m.textContent='';m.style.color='#27ae60';},4000);
+      setTimeout(()=>window.sw('board'),600);
+    }).catch(e=>{
+      m.style.color='#c0392b';
+      m.textContent='❌ エラー: '+e.message;
+    });
+  }catch(e){
+    m.style.color='#c0392b';
+    m.textContent='❌ 例外: '+e.message;
+  }
+};
+
+window.showCor=function(){document.getElementById('corCard').style.display='block';onCorLine();};
+window.hideCor=function(){document.getElementById('corCard').style.display='none';};
+window.onCorLine=function(){
+  const id=document.getElementById('cLine').value;
+  const jobs=(lines[id]?.jobs||[]).filter(j=>j.plan>0);
+  document.getElementById('cJob').innerHTML=jobs.map(j=>`<option value="${j.part}">${j.seq}. ${j.part}（計画${j.plan}個）</option>`).join('');
+};
+window.doCorr=function(){
+  const id=document.getElementById('cLine').value;
+  const part=document.getElementById('cJob').value;
+  const act=parseInt(document.getElementById('cAct').value);
+  const end=document.getElementById('cEnd').value;
+  if(isNaN(act)){alert('実績数を入力してください');return;}
+  const jobs=[...(lines[id]?.jobs||[])].map(j=>j.part===part?{...j,actualCount:act,actualEnd:end||j.actualEnd||'',status:'corrected'}:j);
+  const upd={jobs,updatedAt:Date.now()};
+  if(lines[id]?.part===part){upd.actual=act;if(end)upd.workEnd=end;}
+  update(ref(db,`lines/${id}`),upd);
+  const m=document.getElementById('cmsg');
+  m.textContent=`${lines[id]?.name||id} / ${part} の入力を修正しました ✓`;
+  setTimeout(()=>{m.textContent='';},3000);
+};
+
+window.renderSR=function(){
+  const allIds=getAllIDS();
+  document.getElementById('srRows').innerHTML=allIds.length
+    ?allIds.map(id=>{
+      const sp=setupParams[id]||{};
+      const c=sp.c!==undefined?sp.c:Math.round((sets[id]||45)/2);
+      const p=sp.p!==undefined?sp.p:Math.round((sets[id]||45)/2);
+      return `
+      <div class="sr2-row" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px;">
+        <label style="min-width:70px;">${getLineName(id)}</label>
+        <span style="font-size:11px;color:#888;">片付け</span>
+        <input type="number" id="st-c-${id}" value="${c}" min="0" max="120" style="width:55px;padding:3px 5px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:12px;">
+        <span style="font-size:11px;color:#888;">分 ＋ 準備</span>
+        <input type="number" id="st-p-${id}" value="${p}" min="0" max="120" style="width:55px;padding:3px 5px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:12px;">
+        <span style="font-size:11px;color:#888;">分</span>
+        <span style="font-size:11px;color:#1a1a1a;font-weight:700;">＝ <span id="st-calc-${id}">${c+p}</span>分（1型1人）</span>
+      </div>`;
+    }).join('')
+    :'<div style="color:#aaa;font-size:12px;padding:8px 0;">ラインが登録されていません</div>';
+  // リアルタイム合計表示
+  getAllIDS().forEach(id=>{
+    ['c','p'].forEach(k=>{
+      const el=document.getElementById(`st-${k}-${id}`);
+      if(el) el.addEventListener('input',()=>{
+        const c2=parseInt(document.getElementById(`st-c-${id}`)?.value)||0;
+        const p2=parseInt(document.getElementById(`st-p-${id}`)?.value)||0;
+        const calc=document.getElementById(`st-calc-${id}`);
+        if(calc) calc.textContent=c2+p2;
+      });
+    });
+  });
+};
+window.saveSets=function(){
+  const allIds=getAllIDS();
+  const ns={};    // setupTimes（互換用: C+P合計）
+  const nsp={};   // setupParams（内訳）
+  allIds.forEach(id=>{
+    const c=parseInt(document.getElementById(`st-c-${id}`)?.value);
+    const p=parseInt(document.getElementById(`st-p-${id}`)?.value);
+    const cv=isNaN(c)?15:c, pv=isNaN(p)?15:p;
+    ns[id]=cv+pv;
+    nsp[id]={c:cv,p:pv};
+  });
+  // 保存
+  const cur={}; try{ const snap=window._lastSettingsVal||{}; Object.assign(cur,snap); }catch(e){}
+  cur.setupTimes=ns;
+  cur.setupParams=nsp;
+  cur.groups=groupCfg.map(g=>({gid:g.gid,label:g.label,ids:[...g.ids],importMap:g.importMap||{}}));
+  set(ref(db,'settings'),cur);
+  sets={...SDEFS,...ns};
+  setupParams={...nsp};
+  const m=document.getElementById('smsg');m.textContent='保存しました ✓';setTimeout(()=>{m.textContent='';},2000);
+};
+
+// ===== グループタブ表示・切り替え =====
+function renderGroupTabs(){
+  const el=document.getElementById('grpTabs');
+  if(!el) return;
+  const hasMulti=groupCfg.some(g=>g.ids&&g.ids.length>0);
+  if(!hasMulti||groupCfg.length<=1){el.style.display='none';return;}
+  el.style.display='flex';
+  el.innerHTML=groupCfg.map((g,i)=>{
+    const cnt=g.ids?g.ids.length:0;
+    return `<button class="grp-btn${i===currentGrp?' active':''}" onclick="switchGroup(${i})">${g.label}（${cnt}）</button>`;
+  }).join('');
+}
+window.switchGroup=function(idx){
+  currentGrp=idx;
+  renderGroupTabs();
+  renderBoard();
+};
+
+// ===== ライン選択ドロップダウン更新 =====
+function updateLineSelects(){
+  const allIds=getAllIDS();
+  const opts='<option value="">-- ライン選択 --</option>'+allIds.map(id=>`<option value="${id}">${getLineName(id)}</option>`).join('');
+  ['iLine','cLine'].forEach(sid=>{
+    const el=document.getElementById(sid);
+    if(!el) return;
+    const prev=el.value;
+    el.innerHTML=opts;
+    if(prev&&allIds.includes(prev)) el.value=prev;
+  });
+}
+
+// ===== グループ管理UI =====
+window.renderGrpMgr=function(){
+  const el=document.getElementById('grpMgr');
+  if(!el) return;
+  el.innerHTML=groupCfg.map((g,gi)=>{
+    const mp=g.importMap||{};
+    return `
+    <div class="grp-section">
+      <div class="grp-section-title">
+        グループ名：<input class="grp-name-input" id="gname-${gi}" value="${g.label}" placeholder="グループ名">
+      </div>
+      <div class="grp-line-list" id="glines-${gi}">
+        ${(g.ids||[]).map((id,li)=>`
+          <div class="grp-line-row" style="flex-wrap:wrap;gap:4px;">
+            <span style="font-size:11px;min-width:60px;color:#555;">${id}</span>
+            <input id="gln-${gi}-${li}" value="${getLineName(id)}" placeholder="表示名" style="width:110px;">
+            <label style="display:inline-flex;align-items:center;gap:4px;font-size:10px;color:#888;cursor:pointer;white-space:nowrap;" title="チェックするとこのラインの未報告警告を非表示にします">
+              <input type="checkbox" id="gna-${gi}-${li}" ${lineNoAlertMap[id]?'checked':''}>未報告警告なし
+            </label>
+            <button class="btn-rm" onclick="removeLineFromGroup(${gi},${li})" title="削除">✕</button>
+          </div>`).join('')}
+      </div>
+      <button class="btn-add-line" onclick="addLineToGroup(${gi})">＋ ラインを追加</button>
+      <details style="margin-top:8px;">
+        <summary style="font-size:11px;color:#888;cursor:pointer;padding:4px 0;">📋 Excelインポート設定</summary>
+        <div style="background:#f8f7f2;border-radius:6px;padding:10px;margin-top:6px;font-size:11px;">
+          <!-- モード選択 -->
+          <div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #e8e8e8;">
+            <div style="color:#888;margin-bottom:4px;font-weight:700;">インポート方式</div>
+            <label style="margin-right:16px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
+              <input type="radio" name="mp-${gi}-mode" value="sheet" ${(mp.mode||'sheet')==='sheet'?'checked':''} onchange="onImpModeChange(${gi})"> シートで分ける<span style="color:#aaa;font-size:10px;">（プレスチーム）</span>
+            </label>
+            <label style="cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
+              <input type="radio" name="mp-${gi}-mode" value="filter" ${mp.mode==='filter'?'checked':''} onchange="onImpModeChange(${gi})"> 列でフィルタリング<span style="color:#aaa;font-size:10px;">（別チーム）</span>
+            </label>
+          </div>
+          <!-- 共通列設定 -->
+          <div style="margin-bottom:8px;">
+            <div style="color:#888;margin-bottom:4px;">列設定（共通）</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;">
+              <div><label style="color:#888;display:block;margin-bottom:2px;">ヘッダー行</label><input type="number" id="mp-${gi}-hrow" value="${mp.headerRow||1}" min="0" style="width:55px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;"><span style="color:#aaa;margin-left:3px;">0=なし</span></div>
+              <div><label style="color:#888;display:block;margin-bottom:2px;">品番 列</label><input type="text" id="mp-${gi}-part" value="${mp.partCol||'A'}" placeholder="A" style="width:45px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
+              <div><label style="color:#888;display:block;margin-bottom:2px;">計画数 列</label><input type="text" id="mp-${gi}-plan" value="${mp.planCol||'B'}" placeholder="B" style="width:45px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
+              <div><label style="color:#888;display:block;margin-bottom:2px;">開始時刻 列</label><input type="text" id="mp-${gi}-start" value="${mp.startCol||'C'}" placeholder="C" style="width:45px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
+              <div><label style="color:#888;display:block;margin-bottom:2px;">終了時刻 列</label><input type="text" id="mp-${gi}-end" value="${mp.endCol||'D'}" placeholder="D" style="width:45px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
+              <div><label style="color:#888;display:block;margin-bottom:2px;">型数/人数 列<span style="color:#aaa;font-size:10px;margin-left:3px;">（*型/*人）</span></label><input type="text" id="mp-${gi}-kata" value="${mp.kataCol||''}" placeholder="例: C" style="width:45px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
+              <div style="grid-column:1/-1;"><label style="color:#888;display:block;margin-bottom:2px;">品番が「-」の場合の代替列<span style="color:#aaa;font-size:10px;margin-left:4px;">（空欄=使わない）</span></label><input type="text" id="mp-${gi}-altpart" value="${mp.altPartCol||''}" placeholder="例: C" style="width:45px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
+            </div>
+          </div>
+          <!-- スキップ設定 -->
+          <div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #e8e8e8;">
+            <label style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
+              <input type="checkbox" id="mp-${gi}-skipnot" ${mp.skipNoTime!==false?'checked':''}> <span>開始・終了時刻が空の行はスキップ<span style="color:#aaa;font-size:10px;margin-left:4px;">（メモ行除外）</span></span>
+            </label>
+            <br>
+            <label style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;margin-top:4px;">
+              <input type="checkbox" id="mp-${gi}-hitonext" ${mp.hitoFromNextRow?'checked':''}> <span>計画数（D列）の次行を<b>作業人数</b>として読む<span style="color:#aaa;font-size:10px;margin-left:4px;">（生産数量の直下の行の値）</span></span>
+            </label>
+          </div>
+          <!-- シートモード設定 -->
+          <div id="mp-${gi}-sheet-block" style="display:${(mp.mode||'sheet')==='sheet'?'block':'none'};">
+            <div style="color:#888;margin-bottom:4px;">ライン別シート番号</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+              ${(g.ids||[]).map(id=>`<div style="display:flex;align-items:center;gap:5px;"><span style="min-width:56px;color:#555;">${getLineName(id)}</span><span style="color:#aaa;">シート</span><input type="number" id="mp-${gi}-sh-${id}" value="${(mp.lineSheets||{})[id]||1}" min="1" style="width:46px;padding:3px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;"></div>`).join('')}
+            </div>
+          </div>
+          <!-- フィルターモード設定 -->
+          <div id="mp-${gi}-filter-block" style="display:${mp.mode==='filter'?'block':'none'};">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:6px;">
+              <div><label style="color:#888;display:block;margin-bottom:2px;">フィルタ シート番号</label><input type="number" id="mp-${gi}-fsheet" value="${mp.filterSheet||1}" min="1" style="width:55px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;"></div>
+              <div><label style="color:#888;display:block;margin-bottom:2px;">フィルタ 列</label><input type="text" id="mp-${gi}-fcol" value="${mp.filterCol||'A'}" placeholder="A" style="width:45px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
+            </div>
+            <div style="color:#888;margin-bottom:4px;">ライン別フィルタ値<span style="color:#aaa;margin-left:4px;">（A列の作業者名など）</span></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;">
+              ${(g.ids||[]).map(id=>`<div style="display:flex;align-items:center;gap:5px;"><span style="min-width:56px;color:#555;">${getLineName(id)}</span><input type="text" id="mp-${gi}-fv-${id}" value="${(mp.filterValues||{})[id]||''}" placeholder="フィルタ値" style="width:80px;padding:3px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;"></div>`).join('')}
+            </div>
+          </div>
+        </div>
+      </details>
+    </div>`;
+  }).join('')+
+    `<button class="btn-add-line" style="margin-top:6px;" onclick="addGroup()">＋ グループを追加</button>`;
+};
+// フォームの現在値をgroupCfg/linesメモリに同期（Firebase保存なし）
+function syncGrpMgrForm(){
+  groupCfg.forEach((g,gi)=>{
+    const nm=document.getElementById('gname-'+gi);
+    if(nm&&nm.value.trim()) g.label=nm.value.trim();
+    // ライン表示名・警告設定（lineNamesMap / lineNoAlertMap に反映）
+    (g.ids||[]).forEach((id,li)=>{
+      const ln=document.getElementById(`gln-${gi}-${li}`);
+      if(ln&&ln.value.trim()) lineNamesMap[id]=ln.value.trim();
+      const na=document.getElementById(`gna-${gi}-${li}`);
+      if(na) lineNoAlertMap[id]=na.checked;
+    });
+    // インポート設定（detailsが開いていない場合はDOMに要素が存在しないこともないが念のため）
+    const readV=(sfx,def)=>{const e=document.getElementById(`mp-${gi}-${sfx}`);return e?e.value.trim()||def:def;};
+    const mode=(document.querySelector(`input[name="mp-${gi}-mode"]:checked`)?.value)||'sheet';
+    const lineSheets={};
+    (g.ids||[]).forEach(id=>{const v=parseInt(document.getElementById(`mp-${gi}-sh-${id}`)?.value)||1;lineSheets[id]=v;});
+    const filterValues={};
+    (g.ids||[]).forEach(id=>{filterValues[id]=(document.getElementById(`mp-${gi}-fv-${id}`)?.value||'').trim();});
+    const skipNoTimeEl=document.getElementById(`mp-${gi}-skipnot`);
+    const hitoNextEl=document.getElementById(`mp-${gi}-hitonext`);
+    g.importMap={
+      ...(g.importMap||{}),
+      mode,
+      headerRow:parseInt(readV('hrow','1'))||0,
+      partCol:readV('part','A').toUpperCase(),
+      planCol:readV('plan','B').toUpperCase(),
+      startCol:readV('start','C').toUpperCase(),
+      endCol:readV('end','D').toUpperCase(),
+      lineSheets,
+      filterSheet:parseInt(document.getElementById(`mp-${gi}-fsheet`)?.value)||1,
+      filterCol:(document.getElementById(`mp-${gi}-fcol`)?.value||'A').toUpperCase(),
+      filterValues,
+      skipNoTime:skipNoTimeEl?skipNoTimeEl.checked:true,
+      hitoFromNextRow:hitoNextEl?hitoNextEl.checked:false,
+      kataCol:(document.getElementById(`mp-${gi}-kata`)?.value||'').trim().toUpperCase(),
+      altPartCol:(document.getElementById(`mp-${gi}-altpart`)?.value||'').trim().toUpperCase()
+    };
+  });
+}
+window.addLineToGroup=function(gi){
+  syncGrpMgrForm(); // 編集中の内容を保持
+  const id=prompt('ラインID（例：D1, E1 など）を入力してください:');
+  if(!id||!id.trim()) return;
+  const tid=id.trim().toUpperCase();
+  if(getAllIDS().includes(tid)){alert(tid+' は既に登録されています');return;}
+  const name=prompt('表示名を入力してください（例：D1号機）:');
+  groupCfg[gi].ids.push(tid);
+  // linesデータがなければ仮エントリを作成
+  if(!lines[tid]) lines[tid]={name:name||tid,status:'waiting',plan:0,actual:0,updatedAt:0,jobs:[]};
+  window.renderGrpMgr();
+  updateLineSelects();
+  renderGroupTabs();
+};
+window.removeLineFromGroup=function(gi,li){
+  syncGrpMgrForm(); // 編集中の内容を保持
+  const id=groupCfg[gi].ids[li];
+  if(!confirm(id+' をグループから削除しますか？\n（Firebaseのデータは削除されません）')) return;
+  groupCfg[gi].ids.splice(li,1);
+  window.renderGrpMgr();
+  updateLineSelects();
+  renderGroupTabs();
+  if(currentGrp===gi) renderBoard();
+};
+window.addGroup=function(){
+  syncGrpMgrForm(); // 編集中の内容を保持
+  const label=prompt('新しいグループ名を入力してください:');
+  if(!label||!label.trim()) return;
+  groupCfg.push({gid:'g'+(groupCfg.length+1),label:label.trim(),ids:[]});
+  window.renderGrpMgr();
+  renderGroupTabs();
+};
+window.saveGroups=function(){
+  // グループ名・マッピング設定を反映
+  groupCfg.forEach((g,gi)=>{
+    const inp=document.getElementById('gname-'+gi);
+    if(inp) g.label=inp.value.trim()||g.label;
+    const readV=(sfx,def)=>{const e=document.getElementById(`mp-${gi}-${sfx}`);return e?e.value.trim()||def:def;};
+    const mode=(document.querySelector(`input[name="mp-${gi}-mode"]:checked`)?.value)||'sheet';
+    const lineSheets={};
+    (g.ids||[]).forEach(id=>{const v=parseInt(document.getElementById(`mp-${gi}-sh-${id}`)?.value)||1;lineSheets[id]=v;});
+    const filterValues={};
+    (g.ids||[]).forEach(id=>{filterValues[id]=(document.getElementById(`mp-${gi}-fv-${id}`)?.value||'').trim();});
+    g.importMap={
+      mode,
+      headerRow:parseInt(readV('hrow','1'))||0,
+      partCol:readV('part','A').toUpperCase(),
+      planCol:readV('plan','B').toUpperCase(),
+      startCol:readV('start','C').toUpperCase(),
+      endCol:readV('end','D').toUpperCase(),
+      lineSheets,
+      filterSheet:parseInt(document.getElementById(`mp-${gi}-fsheet`)?.value)||1,
+      filterCol:(document.getElementById(`mp-${gi}-fcol`)?.value||'A').toUpperCase(),
+      filterValues,
+      skipNoTime:(document.getElementById(`mp-${gi}-skipnot`)?.checked!==false),
+      hitoFromNextRow:(document.getElementById(`mp-${gi}-hitonext`)?.checked||false),
+      kataCol:(document.getElementById(`mp-${gi}-kata`)?.value||'').trim().toUpperCase(),
+      altPartCol:(document.getElementById(`mp-${gi}-altpart`)?.value||'').trim().toUpperCase()
+    };
+  });
+  // ライン表示名・未報告警告なし設定を収集
+  const newLineNames={};
+  const newLineNoAlert={};
+  groupCfg.forEach((g,gi)=>{
+    (g.ids||[]).forEach((id,li)=>{
+      const lnInp=document.getElementById(`gln-${gi}-${li}`);
+      if(lnInp&&lnInp.value.trim()) newLineNames[id]=lnInp.value.trim();
+      const naInp=document.getElementById(`gna-${gi}-${li}`);
+      if(naInp) newLineNoAlert[id]=naInp.checked;
+    });
+  });
+  lineNamesMap={...lineNamesMap,...newLineNames};
+  lineNoAlertMap={...lineNoAlertMap,...newLineNoAlert};
+  // メモリ上の lines にも即反映
+  Object.keys(lineNamesMap).forEach(id=>{if(lineNamesMap[id])lines[id]={...(lines[id]||{status:'waiting',plan:0,actual:0,updatedAt:0,jobs:[]}),name:lineNamesMap[id]};});
+  const allIds=getAllIDS();
+  const stNs={};allIds.forEach(id=>{const v=parseInt(document.getElementById('st-'+id)?.value);stNs[id]=isNaN(v)?(sets[id]||45):v;});
+  const saveObj={groups:groupCfg.map(g=>({gid:g.gid,label:g.label,ids:[...g.ids],importMap:g.importMap||{}})),setupTimes:stNs,lineNames:lineNamesMap,lineNoAlert:lineNoAlertMap};
+  // settings として一括保存（lines/ パスには書き込まない）
+  set(ref(db,'settings'),saveObj);
+  const m=document.getElementById('gmsg');m.textContent='保存しました ✓';setTimeout(()=>{m.textContent='';},2000);
+  updateLineSelects();
+  renderGroupTabs();
+};
+
+window.onImpModeChange=function(gi){
+  const mode=document.querySelector(`input[name="mp-${gi}-mode"]:checked`)?.value||'sheet';
+  const shBlk=document.getElementById(`mp-${gi}-sheet-block`);
+  const fiBlk=document.getElementById(`mp-${gi}-filter-block`);
+  if(shBlk) shBlk.style.display=mode==='sheet'?'block':'none';
+  if(fiBlk) fiBlk.style.display=mode==='filter'?'block':'none';
+};
+let _swSkipLineSel=false;
+window.sw=function(tab){
+  ['board','input','import','settings'].forEach(t=>document.getElementById('tab-'+t).style.display=t===tab?'block':'none');
+  document.querySelectorAll('.tb').forEach((b,i)=>b.classList.toggle('active',['board','input','import','settings'][i]===tab));
+  if(tab==='settings'){window.renderSR();window.renderGrpMgr();}
+  if(tab==='import'){renderImpGrpSel();renderPeGrpSel();}
+  if(tab==='input'&&!_swSkipLineSel) onLineSel();
+  _swSkipLineSel=false;
+};
+
+// ===== Excelインポート機能 =====
+// 列文字 → 0始まりインデックス（A=0, B=1, AA=26...）
+function colToIdx(col){
+  if(!col) return -1;
+  col=col.toString().trim().toUpperCase();
+  if(/^\d+$/.test(col)) return parseInt(col)-1; // 数字指定（1始まり）
+  let n=0;for(let c of col) n=n*26+c.charCodeAt(0)-64;
+  return n-1;
+}
+// Excelシリアル時刻 or 文字列 → "HH:MM"
+function parseTime(v){
+  if(v===null||v===undefined||v==='') return '';
+  if(typeof v==='number'){
+    // Excelシリアル値（0〜1）
+    const totalMin=Math.round(v*24*60);
+    const h=Math.floor(totalMin/60)%24, m=totalMin%60;
+    return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
+  }
+  const s=String(v).trim();
+  // "8:00", "08:00", "8時00分", "8:00:00"
+  const m1=s.match(/^(\d{1,2})[:：時](\d{2})/);
+  if(m1) return String(parseInt(m1[1])).padStart(2,'0')+':'+m1[2];
+  return '';
+}
+let _impParsedJobs={}; // プレビュー中のパース済みデータ {lineId:[...jobs]}
+
+function renderImpGrpSel(){
+  const sel=document.getElementById('impGrp');
+  if(!sel) return;
+  sel.innerHTML=groupCfg.map((g,i)=>`<option value="${i}">${g.label}</option>`).join('');
+  onImpGrpSel();
+}
+window.onImpGrpSel=function(){
+  const gi=parseInt(document.getElementById('impGrp').value);
+  const g=groupCfg[gi]||groupCfg[0];
+  const mp=g.importMap||{};
+  const info=document.getElementById('impMapInfo');
+  if(mp.partCol){
+    info.style.display='block';
+    const mode=mp.mode||'sheet';
+    const modeLabel=mode==='filter'?'列フィルタリング':'シートで分ける';
+    let modeDetail='';
+    if(mode==='sheet'){
+      const ls=mp.lineSheets||{};
+      const lsStr=(g.ids||[]).map(id=>getLineName(id)+'=シート'+(ls[id]||1)).join(' ');
+      modeDetail=lsStr?` ／ ${lsStr}`:'';
+    } else {
+      modeDetail=` ／ シート${mp.filterSheet||1}・フィルタ列<b>${mp.filterCol||'A'}</b>`;
+    }
+    const kataInfo = mp.kataCol
+      ? ` 型数/人数<b>${mp.kataCol}</b>`
+      : ` <span style="color:#e67e22;">⚠ 型数/人数列 未設定</span>`;
+    info.innerHTML=`方式：<b>${modeLabel}</b>${modeDetail} ／ 品番<b>${mp.partCol}</b> 計画<b>${mp.planCol}</b> 開始<b>${mp.startCol}</b> 終了<b>${mp.endCol}</b>`+
+      `${kataInfo} ／ ヘッダー行${mp.headerRow||'なし'} ｜ <a href="#" onclick="sw('settings');return false;" style="color:#1a1a1a;">設定変更</a>`;
+  } else {
+    info.style.display='block';
+    info.innerHTML='⚠️ まだ列マッピングが設定されていません。<a href="#" onclick="sw(\'settings\');return false;" style="color:#c0392b;">⚙️設定画面で設定してください</a>';
+  }
+  // ファイルがあれば再プレビュー
+  const f=document.getElementById('impFile')?.files[0];
+  if(f) window.onImpFile();
+};
+window.onImpFile=async function(){
+  const fileEl=document.getElementById('impFile');
+  const f=fileEl?.files[0];
+  if(!f){_impParsedJobs={};document.getElementById('impBtn').disabled=true;return;}
+  const gi=parseInt(document.getElementById('impGrp').value);
+  const g=groupCfg[gi]||groupCfg[0];
+  const mp=g.importMap||{};
+  const mode=mp.mode||'sheet';
+  const headerRow=mp.headerRow||0;
+  const pIdx=colToIdx(mp.partCol||'A');
+  const plIdx=colToIdx(mp.planCol||'B');
+  const stIdx=colToIdx(mp.startCol||'C');
+  const enIdx=colToIdx(mp.endCol||'D');
+  const dataStart=headerRow>0?headerRow:0;
+
+  const skipNoTime=mp.skipNoTime!==false; // デフォルトtrue（時刻なし行をスキップ）
+  const hitoFromNextRow=mp.hitoFromNextRow||false; // 次行を作業人数として読む
+  const kataIdx=colToIdx(mp.kataCol||'');          // 型数/人数列（例: C）
+  const altPIdx=colToIdx(mp.altPartCol||'');        // 代替品番列
+  // 「-」判定（半角・全角ダッシュ・ハイフンのみの文字列）
+  function isDash(s){return /^[-－ー]+$/.test(s);}
+  // セル値から「N型」→型数N、「N人」→人数N を抽出（数値のみでも人数と解釈）
+  function parseKata(cell){const m=String(cell||'').match(/(\d+)\s*型/);return m?parseInt(m[1]):0;}
+  function parseNinzu(cell){
+    // 「N人」の明示フォーマットのみ解釈（誤検知防止のため純粋数値は対象外）
+    const m=String(cell||'').match(/(\d+)\s*人/);return m?parseInt(m[1]):0;
+  }
+  // 行データ配列 → jobsオブジェクト配列
+  function parseRows(rows){
+    const jobs=[];
+    const dataRows=rows.slice(dataStart);
+    for(let i=0;i<dataRows.length;i++){
+      const row=dataRows[i];
+      let part=String(row[pIdx]||'').trim();
+      // 品番が「-」系の場合、代替列から取得
+      if(isDash(part)&&altPIdx>=0){
+        const alt=String(row[altPIdx]||'').trim();
+        if(alt&&!isDash(alt)) part=alt;
+      }
+      if(!part||isDash(part)) continue;
+      const plan=parseInt(String(row[plIdx]||'').replace(/[^\d]/g,''));
+      if(!plan||plan<=0) continue;
+      const start=parseTime(row[stIdx]);
+      const end=parseTime(row[enIdx]);
+      // 時刻なし行スキップ設定が有効なら、開始・終了どちらかが空の行を除外
+      if(skipNoTime&&(!start||!end)) continue;
+      // 型数: 品番の2行下のC列（kataCol）、人数: 品番の3行下のC列
+      let kata=0, ninzu=0, hito=0;
+      if(kataIdx>=0){
+        const raw2 = i+2<dataRows.length ? dataRows[i+2][kataIdx] : undefined;
+        const raw3 = i+3<dataRows.length ? dataRows[i+3][kataIdx] : undefined;
+        // テキスト「N型」「N人」も数値（Excelで書式表示）もどちらも対応
+        kata  = parseKata (String(raw2??'').trim()) || (typeof raw2==='number'&&raw2>=1&&raw2<=20?raw2:0);
+        ninzu = parseNinzu(String(raw3??'').trim()) || (typeof raw3==='number'&&raw3>=1&&raw3<=20?raw3:0);
+      }
+      // D列（planCol）の1行下から作業人数(hito)を取得（hitoFromNextRow有効時のみ）
+      if(hitoFromNextRow && i+1<dataRows.length){
+        const nv=parseInt(String(dataRows[i+1][plIdx]||'').replace(/[^\d]/g,''));
+        if(nv>0&&nv<=100) hito=nv; // 作業人数は100人以下と想定
+      }
+      jobs.push({seq:jobs.length+1,part,plan,kata,ninzu,hito,start,end,status:'waiting',actualCount:0,actualStart:'',actualEnd:''});
+    }
+    return jobs;
+  }
+
+  try{
+    const buf=await f.arrayBuffer();
+    const wb=XLSX.read(buf,{type:'array',cellDates:false,raw:false});
+    const shNames=wb.SheetNames;
+    _impParsedJobs={};
+
+    if(mode==='sheet'){
+      // ─── シートモード：ラインごとに指定シートから読み込み ───
+      const lineSheets=mp.lineSheets||{};
+      for(const id of (g.ids||[])){
+        const shNum=(lineSheets[id]||1)-1;
+        if(shNum>=shNames.length){
+          console.warn(`${id}: シート${shNum+1}が見つかりません（シート数:${shNames.length}）`);
+          _impParsedJobs[id]=[];
+          continue;
+        }
+        const ws=wb.Sheets[shNames[shNum]];
+        const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+        _impParsedJobs[id]=parseRows(rows);
+      }
+    } else {
+      // ─── フィルターモード：1シートを列でフィルタリング ───
+      const fShNum=(mp.filterSheet||1)-1;
+      if(fShNum>=shNames.length){
+        alert(`シート${mp.filterSheet}が見つかりません（シート数:${shNames.length}）`);
+        return;
+      }
+      const ws=wb.Sheets[shNames[fShNum]];
+      const allRows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+      const fIdx=colToIdx(mp.filterCol||'A');
+      const filterValues=mp.filterValues||{};
+      for(const id of (g.ids||[])){
+        const fVal=(filterValues[id]||'').trim().toLowerCase();
+        if(!fVal){_impParsedJobs[id]=[];continue;}
+        // フィルタ値を「含む」行を抽出（大文字小文字無視・部分一致）
+        const filtered=allRows.slice(dataStart).filter(row=>String(row[fIdx]||'').trim().toLowerCase().includes(fVal));
+        // parseRowsに渡す際はdataStart=0で（既にスライス済みのため）
+        const jobs=[];
+        for(let fi=0;fi<filtered.length;fi++){
+          const row=filtered[fi];
+          let part=String(row[pIdx]||'').trim();
+          if(isDash(part)&&altPIdx>=0){const alt=String(row[altPIdx]||'').trim();if(alt&&!isDash(alt))part=alt;}
+          if(!part||isDash(part)) continue;
+          const plan=parseInt(String(row[plIdx]||'').replace(/[^\d]/g,''));
+          if(!plan||plan<=0) continue;
+          const start=parseTime(row[stIdx]);
+          const end=parseTime(row[enIdx]);
+          if(skipNoTime&&(!start||!end)) continue; // メモ行スキップ
+          let kata=0, ninzu=0, hito=0;
+          if(kataIdx>=0){
+            if(fi+2<filtered.length) kata  = parseKata (String(filtered[fi+2][kataIdx]||'').trim());
+            if(fi+3<filtered.length) ninzu = parseNinzu(String(filtered[fi+3][kataIdx]||'').trim());
+          }
+          if(hitoFromNextRow&&fi+1<filtered.length){
+            const nv=parseInt(String(filtered[fi+1][plIdx]||'').replace(/[^\d]/g,''));
+            if(nv>0&&nv<=100) hito=nv; // 作業人数は100人以下と想定
+          }
+          jobs.push({seq:jobs.length+1,part,plan,kata,ninzu,hito,start,end,status:'waiting',actualCount:0,actualStart:'',actualEnd:''});
+        }
+        _impParsedJobs[id]=jobs;
+      }
+    }
+
+    renderImpPreview(_impParsedJobs,mp,g);
+  }catch(e){
+    document.getElementById('impPreview').innerHTML='<div style="color:#c0392b;font-size:12px;">❌ 読み込みエラー：'+e.message+'</div>';
+    console.error(e);
+  }
+};
+function renderImpPreview(jobsObj,mp,g){
+  const prevEl=document.getElementById('impPreview');
+  const btn=document.getElementById('impBtn');
+  const ids=Object.keys(jobsObj);
+  const totalJobs=ids.reduce((s,id)=>s+(jobsObj[id]||[]).length,0);
+  const activeIds=ids.filter(id=>(jobsObj[id]||[]).length>0);
+
+  if(totalJobs===0){
+    prevEl.innerHTML='<div style="color:#e67e22;font-size:12px;padding:8px;">データが見つかりませんでした。設定（方式・列・フィルタ値）を確認してください。</div>';
+    btn.disabled=true;return;
+  }
+
+  let h=`<div style="font-size:11px;color:#27ae60;margin-bottom:6px;">✓ 合計 ${totalJobs}件 / ${activeIds.length}ライン 検出</div>`;
+  for(const id of ids){
+    const jobs=jobsObj[id]||[];
+    const lineName=getLineName(id);
+    if(jobs.length===0){
+      h+=`<div style="font-size:11px;color:#bbb;margin-bottom:4px;">　${lineName}：データなし</div>`;
+      continue;
+    }
+    const hasKata =jobs.some(j=>j.kata >0);
+    const hasNinzu=jobs.some(j=>j.ninzu>0);
+    const hasHito =jobs.some(j=>j.hito >0);
+    h+=`<div style="font-size:11px;font-weight:700;color:#1a1a1a;margin:8px 0 3px;">📌 ${lineName}（${jobs.length}件）</div>`;
+    const colCount=5+(hasKata?1:0)+(hasNinzu?1:0)+(hasHito?1:0);
+    h+=`<div style="overflow-x:auto;margin-bottom:4px;"><table class="jtbl"><thead><tr><th>#</th><th>品番</th><th>計画数</th><th>開始</th><th>終了</th>${hasKata?'<th>型数</th>':''}${hasNinzu?'<th>段取人数</th>':''}${hasHito?'<th>作業人数</th>':''}</tr></thead><tbody>`;
+    jobs.slice(0,8).forEach(j=>{
+      const warn=!j.start||!j.end?' style="background:#fff8e1;"':'';
+      h+=`<tr${warn}><td>${j.seq}</td><td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${j.part}</td><td>${j.plan.toLocaleString()}個</td><td>${j.start||'<span style="color:#e67e22;">--</span>'}</td><td>${j.end||'<span style="color:#e67e22;">--</span>'}</td>${hasKata?`<td style="text-align:center;">${j.kata>0?j.kata+'型':'<span style="color:#aaa;">-</span>'}</td>`:''}${hasNinzu?`<td style="text-align:center;">${j.ninzu>0?j.ninzu+'人':'<span style="color:#aaa;">-</span>'}</td>`:''}${hasHito?`<td style="text-align:center;">${j.hito>0?j.hito+'人':'<span style="color:#aaa;">-</span>'}</td>`:''}</tr>`;
+    });
+    if(jobs.length>8) h+=`<tr><td colspan="${colCount}" style="text-align:center;color:#aaa;font-size:10px;">…他${jobs.length-8}件</td></tr>`;
+    h+='</tbody></table></div>';
+  }
+  prevEl.innerHTML=h;
+  btn.disabled=false;
+}
+// ===== 計画修正（実績を維持したまま計画を変更） =====
+let _peAllLines={}; // {lineId: [...origJobs]}
+
+function _esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+function renderPeGrpSel(){
+  const sel=document.getElementById('peGrp');
+  if(!sel) return;
+  const prev=sel.value;
+  sel.innerHTML=groupCfg.map((g,i)=>`<option value="${i}">${g.label}</option>`).join('');
+  if(prev!==''&&groupCfg[parseInt(prev)]) sel.value=prev;
+}
+
+// グループ内の全ラインを一括表示
+window.loadPlanEdit=function(){
+  const gi=parseInt(document.getElementById('peGrp')?.value)||0;
+  const g=groupCfg[gi]||groupCfg[0];
+  const ids=(g.ids||[]).filter(Boolean);
+  if(!ids.length){alert('このグループにラインがありません');return;}
+  // 各ラインのjobsをディープコピーして保持
+  _peAllLines={};
+  ids.forEach(id=>{
+    _peAllLines[id]=JSON.parse(JSON.stringify(lines[id]?.jobs||[]));
+  });
+  _renderPeAllTables(ids);
+};
+
+// グループ内の全ラインをセクションごとに描画
+function _renderPeAllTables(ids){
+  const container=document.getElementById('peTable');
+  if(!container) return;
+  let h='';
+  ids.forEach(lineId=>{
+    const origJobs=_peAllLines[lineId]||[];
+    h+=`<div class="pe-section" data-lineid="${lineId}" style="margin-bottom:14px;">`;
+    h+=`<div style="font-size:12px;font-weight:700;color:#1a1a1a;margin-bottom:5px;padding-bottom:4px;border-bottom:1px solid #e0e0e0;">${_esc(getLineName(lineId))}</div>`;
+    h+='<div style="overflow-x:auto;"><table class="pe-tbl">';
+    h+='<thead><tr><th>#</th><th>品番</th><th>予定数</th><th>開始</th><th>終了</th><th>段取りなし</th><th>実績状況</th><th></th></tr></thead>';
+    h+=`<tbody class="pe-body" data-lineid="${lineId}">`;
+    if(origJobs.length){
+      origJobs.forEach((j,i)=>{h+=_buildPeRow(j,i,i+1,lineId);});
+    }
+    h+='</tbody></table></div>';
+    h+=`<button class="bp-sub" onclick="window.addPeRow('${lineId}')" style="margin-top:5px;">＋ 品番を追加</button>`;
+    h+='</div>';
+  });
+  // 保存・キャンセルボタン（共通）
+  h+=`<div style="display:flex;gap:8px;margin-top:6px;">
+    <button class="bp" onclick="window.savePlanEdit()">すべて保存する</button>
+    <button class="bp-cancel" onclick="window.cancelPlanEdit()">キャンセル</button>
+  </div>`;
+  h+='<div class="msg" id="pemsg"></div>';
+  container.innerHTML=h;
+  container.style.display='block';
+}
+
+function _buildPeRow(j,origJi,rowNum,lineId){
+  const hasActual=(j.actual>0)||(j.actualStart&&j.actualStart!=='');
+  const actBadge=hasActual
+    ?`<span class="pe-act has">✓ ${j.actual||0}個${j.actualStart?' / '+j.actualStart:''}</span>`
+    :`<span class="pe-act none">未実施</span>`;
+  return `<tr class="pe-row" data-origji="${origJi}" data-lineid="${lineId}">
+    <td style="color:#bbb;font-size:10px;text-align:center;">${rowNum}</td>
+    <td><input class="pe-inp w-part" type="text" value="${_esc(j.part||'')}" placeholder="品番"></td>
+    <td><input class="pe-inp w-qty" type="number" min="0" value="${j.plan||0}"></td>
+    <td><input class="pe-inp w-time" type="time" value="${j.start||''}"></td>
+    <td><input class="pe-inp w-time" type="time" value="${j.end||''}"></td>
+    <td style="text-align:center;"><input type="checkbox" ${j.noSetup?'checked':''}></td>
+    <td>${actBadge}</td>
+    <td><button class="pe-del" onclick="window.removePeRow(this)">削除</button></td>
+  </tr>`;
+}
+
+window.addPeRow=function(lineId){
+  const tbody=document.querySelector(`.pe-body[data-lineid="${lineId}"]`);
+  if(!tbody) return;
+  const rows=tbody.querySelectorAll('.pe-row');
+  const rowNum=rows.length+1;
+  let defStart='';
+  if(rows.length>0){defStart=rows[rows.length-1].querySelectorAll('.pe-inp.w-time')[1]?.value||'';}
+  const tr=document.createElement('tr');
+  tr.className='pe-row';tr.dataset.origji='-1';tr.dataset.lineid=lineId;
+  tr.innerHTML=`
+    <td style="color:#bbb;font-size:10px;text-align:center;">${rowNum}</td>
+    <td><input class="pe-inp w-part" type="text" value="" placeholder="品番"></td>
+    <td><input class="pe-inp w-qty" type="number" min="0" value="0"></td>
+    <td><input class="pe-inp w-time" type="time" value="${defStart}"></td>
+    <td><input class="pe-inp w-time" type="time" value=""></td>
+    <td style="text-align:center;"><input type="checkbox"></td>
+    <td><span class="pe-act none">未実施</span></td>
+    <td><button class="pe-del" onclick="window.removePeRow(this)">削除</button></td>`;
+  tbody.appendChild(tr);
+};
+
+window.removePeRow=function(btn){
+  const row=btn.closest('.pe-row');
+  const origJi=parseInt(row.dataset.origji);
+  const lineId=row.dataset.lineid;
+  const oj=(origJi>=0&&_peAllLines[lineId])?_peAllLines[lineId][origJi]:null;
+  const hasActual=oj&&((oj.actual>0)||(oj.actualStart&&oj.actualStart!==''));
+  if(hasActual&&!confirm('この品番には実績データが入力されています。\n削除すると実績データも失われます。続けますか？')) return;
+  row.remove();
+  const tbody=document.querySelector(`.pe-body[data-lineid="${lineId}"]`);
+  if(tbody) tbody.querySelectorAll('.pe-row').forEach((r,i)=>{r.cells[0].textContent=i+1;});
+};
+
+window.cancelPlanEdit=function(){
+  const c=document.getElementById('peTable');
+  if(c){c.style.display='none';c.innerHTML='';}
+  _peAllLines={};
+};
+
+window.savePlanEdit=async function(){
+  const sections=document.querySelectorAll('.pe-section');
+  if(!sections.length) return;
+  // 全セクションのバリデーション
+  for(const sec of sections){
+    const lineId=sec.dataset.lineid;
+    const rows=sec.querySelectorAll('.pe-row');
+    if([...rows].some(r=>!r.querySelectorAll('.pe-inp')[0].value.trim())){
+      alert(`${getLineName(lineId)}：品番が空の行があります`);return;
+    }
+  }
+  const pemsg=document.getElementById('pemsg');
+  if(pemsg){pemsg.style.color='#888';pemsg.textContent='保存中...';}
+  try{
+    const updates={};
+    sections.forEach(sec=>{
+      const lineId=sec.dataset.lineid;
+      const origJobs=_peAllLines[lineId]||[];
+      const rows=sec.querySelectorAll('.pe-row');
+      const mergedJobs=[...rows].map(row=>{
+        const origJi=parseInt(row.dataset.origji);
+        const oj=(origJi>=0&&origJobs[origJi])?origJobs[origJi]:{};
+        const inps=row.querySelectorAll('.pe-inp');
+        return {
+          part:inps[0].value.trim(),
+          plan:parseInt(inps[1].value)||0,
+          start:inps[2].value,
+          end:inps[3].value,
+          noSetup:row.querySelector('input[type="checkbox"]').checked,
+          actual:oj.actual||0,
+          actualStart:oj.actualStart||'',
+          actualEnd:oj.actualEnd||'',
+          setupActualMin:oj.setupActualMin||0,
+          prevActual:oj.prevActual||0,
+        };
+      });
+      const totalPlan=mergedJobs.reduce((s,j)=>s+j.plan,0);
+      updates['lines/'+lineId+'/jobs']=mergedJobs;
+      updates['lines/'+lineId+'/plan']=totalPlan;
+    });
+    await update(ref(db),updates);
+    const gi=parseInt(document.getElementById('peGrp')?.value)||0;
+    const grpName=groupCfg[gi]?.label||'グループ';
+    if(pemsg){pemsg.style.color='#27ae60';pemsg.textContent=`✓ ${grpName}の計画を更新しました（実績を維持）`;}
+    // origJobsを更新
+    sections.forEach(sec=>{
+      const lineId=sec.dataset.lineid;
+      const rows=sec.querySelectorAll('.pe-row');
+      const newJobs=[...rows].map(row=>{
+        const origJi=parseInt(row.dataset.origji);
+        const oj=(origJi>=0&&(_peAllLines[lineId]||[])[origJi])?_peAllLines[lineId][origJi]:{};
+        const inps=row.querySelectorAll('.pe-inp');
+        return {part:inps[0].value.trim(),plan:parseInt(inps[1].value)||0,start:inps[2].value,end:inps[3].value,noSetup:row.querySelector('input[type="checkbox"]').checked,actual:oj.actual||0,actualStart:oj.actualStart||'',actualEnd:oj.actualEnd||'',setupActualMin:oj.setupActualMin||0,prevActual:oj.prevActual||0};
+      });
+      _peAllLines[lineId]=newJobs;
+    });
+    setTimeout(()=>{if(pemsg)pemsg.textContent='';},4000);
+  }catch(e){
+    if(pemsg){pemsg.style.color='#c0392b';pemsg.textContent='エラー：'+e.message;}
+  }
+};
+
+window.doImport=async function(){
+  const gi=parseInt(document.getElementById('impGrp').value)||0;
+  const g=groupCfg[gi]||groupCfg[0];
+  const allGroupIds=(g.ids||[]);
+  const activeIds=allGroupIds.filter(id=>(_impParsedJobs[id]||[]).length>0);
+  const emptyIds =allGroupIds.filter(id=>!(_impParsedJobs[id]||[]).length); // データなし行
+  if(!activeIds.length && !emptyIds.length){alert('インポートするデータがありません');return;}
+  const totalJobs=activeIds.reduce((s,id)=>s+(_impParsedJobs[id]||[]).length,0);
+  const lineNames=activeIds.map(id=>getLineName(id)).join('、')||'なし';
+  const emptyNames=emptyIds.map(id=>getLineName(id)).join('、');
+  const confirmMsg=`【インポート】${lineNames}　合計${totalJobs}件\n`
+    +(emptyNames?`【データなし→クリア】${emptyNames}\n`:'')
+    +`\n既存の計画データは上書きされます。よろしいですか？`;
+  if(!confirm(confirmMsg)) return;
+  const btn=document.getElementById('impBtn');
+  btn.disabled=true;
+  const m=document.getElementById('impmsg');
+  m.style.color='#888';m.textContent='書き込み中...';
+  try{
+    const updates={};
+    // データありラインを上書き
+    activeIds.forEach(lineId=>{
+      const jobs=_impParsedJobs[lineId];
+      const totalPlan=jobs.reduce((s,j)=>s+j.plan,0);
+      updates['lines/'+lineId]={jobs,plan:totalPlan,actual:0,part:jobs[0]?.part||'',status:'waiting',updatedAt:0,workStart:'',workEnd:''};
+    });
+    // データなしラインはフィールドを個別に上書きクリア（実績・ペース等も含む）
+    emptyIds.forEach(lineId=>{
+      updates['lines/'+lineId+'/jobs']           = [];
+      updates['lines/'+lineId+'/plan']           = 0;
+      updates['lines/'+lineId+'/actual']         = 0;
+      updates['lines/'+lineId+'/part']           = '';
+      updates['lines/'+lineId+'/status']         = 'waiting';
+      updates['lines/'+lineId+'/workStart']      = '';
+      updates['lines/'+lineId+'/workEnd']        = '';
+      updates['lines/'+lineId+'/updatedAt']      = 0;
+      updates['lines/'+lineId+'/prevUpdatedAt']  = 0;
+      updates['lines/'+lineId+'/prev2UpdatedAt'] = 0;
+    });
+    await update(ref(db),updates);
+    m.style.color='#27ae60';
+    m.textContent=`✓ ${activeIds.length}ライン・${totalJobs}件をインポート`+(emptyIds.length?`　${emptyIds.length}ラインをクリア`:'');
+    document.getElementById('impFile').value='';
+    document.getElementById('impPreview').innerHTML='';
+    _impParsedJobs={};btn.disabled=true;
+    setTimeout(()=>{m.textContent='';},4000);
+  }catch(e){
+    m.style.color='#c0392b';m.textContent='エラー：'+e.message;
+    btn.disabled=false;
+  }
+};
+
+window.saveSnapshot=function(){
+  const now=new Date();
+  const dateStr=now.getFullYear()+'年'+(now.getMonth()+1)+'月'+now.getDate()+'日 '
+    +String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+
+  // 既存のオーバーレイがあれば削除
+  const existing=document.getElementById('print-ov');
+  if(existing) existing.remove();
+  const existingStyle=document.getElementById('print-style');
+  if(existingStyle) existingStyle.remove();
+
+  // オーバーレイ本体
+  const ov=document.createElement('div');
+  ov.id='print-ov';
+  ov.style.cssText='position:fixed;inset:0;background:#f0efe8;z-index:9999;overflow-y:auto;padding:16px;font-family:Noto Sans JP,sans-serif;';
+
+  // ヘッダーバー
+  const bar=document.createElement('div');
+  bar.className='print-bar';
+  bar.style.cssText='display:flex;justify-content:space-between;align-items:center;background:#1a1a1a;color:#fff;padding:10px 16px;border-radius:8px;margin-bottom:10px;';
+  const title=document.createElement('span');
+  title.style.cssText='font-weight:700;font-size:14px;';
+  title.textContent='進捗管理スナップショット　'+dateStr;
+  const btnWrap=document.createElement('div');
+  btnWrap.style.cssText='display:flex;gap:8px;';
+  const btnPrint=document.createElement('button');
+  btnPrint.textContent='🖨️ PDF保存（Ctrl+P）';
+  btnPrint.style.cssText='background:#2980b9;color:#fff;border:none;border-radius:5px;padding:6px 14px;font-weight:700;cursor:pointer;font-size:12px;';
+  btnPrint.onclick=function(){window.print();};
+  const btnClose=document.createElement('button');
+  btnClose.textContent='✕ 閉じる';
+  btnClose.style.cssText='background:#555;color:#fff;border:none;border-radius:5px;padding:6px 14px;font-weight:700;cursor:pointer;font-size:12px;';
+  btnClose.onclick=function(){
+    document.getElementById('print-ov').remove();
+    const ps=document.getElementById('print-style');
+    if(ps) ps.remove();
+  };
+  btnWrap.appendChild(btnPrint);
+  btnWrap.appendChild(btnClose);
+  bar.appendChild(title);
+  bar.appendChild(btnWrap);
+  ov.appendChild(bar);
+
+  // アラート
+  const altsDiv=document.createElement('div');
+  altsDiv.style.marginBottom='8px';
+  altsDiv.innerHTML=document.getElementById('alts').innerHTML;
+  ov.appendChild(altsDiv);
+
+  // ボード＋アラートをスケール対象ラッパーで包む
+  const scaleWrap=document.createElement('div');
+  scaleWrap.id='print-scale';
+  scaleWrap.appendChild(altsDiv);
+  const boardDiv=document.createElement('div');
+  boardDiv.style.cssText='display:grid;grid-template-columns:repeat(3,1fr);gap:6px;';
+  boardDiv.innerHTML=document.getElementById('lview').innerHTML;
+  scaleWrap.appendChild(boardDiv);
+  ov.appendChild(scaleWrap);
+
+  document.body.appendChild(ov);
+
+  // 印刷スタイル：A4横1ページに収まるようzoomで縮小
+  const pStyle=document.createElement('style');
+  pStyle.id='print-style';
+  pStyle.textContent=`@media print{
+    @page{size:A4 landscape;margin:5mm;}
+    body>*:not(#print-ov){display:none!important;}
+    #print-ov .print-bar button{display:none!important;}
+    #print-ov{position:static!important;padding:0!important;background:#f0efe8!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    #print-ov .print-bar{background:#1a1a1a!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;border-radius:0!important;margin-bottom:4px!important;padding:6px 12px!important;}
+    #print-scale{zoom:0.62;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .lcard{border-left-width:3px!important;}
+    .rate-bar-bg,.pb,.pbsm{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  }`;
+  document.head.appendChild(pStyle);
+}
+
+function tick(){
+  const n=new Date(),days=['日','月','火','水','木','金','土'];
+  document.getElementById('clk').textContent=`${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}`;
+  document.getElementById('dstr').textContent=`${n.getFullYear()}年${n.getMonth()+1}月${n.getDate()}日（${days[n.getDay()]}）`;
+}
+tick();setInterval(tick,1000);setInterval(()=>{renderAlts();renderBoard();},60000);setInterval(updateTroubleColors,30000);
+</script>
 </body>
 </html>
+
+
+
