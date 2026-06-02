@@ -4198,9 +4198,9 @@ async function importFromProductionPlan(){
         setupStart,
         prodStart:  j.start,
         prodEnd:    j.end,
-        plan:       j.plan || 0,
-        mountCount: j.hito  || 0,   // 作業人数 M（進捗南里から取込）
-        mountKata:  j.kata  || 1,   // 型数 N（進捗南里から取込）
+        plan:       j.plan  || 0,
+        mountCount: j.ninzu || j.hito || 0,  // 段取り人数（C列優先）/ 作業人数（D列）
+        mountKata:  j.kata  || 1,            // 型数 N（進捗南里から取込）
         status,
         roles:      { 条件設定:'', 金型取付:'', リフト:'', 品質確認:'' },
         note:       j.noSetup ? '（段取りなし）' : '',
@@ -4227,8 +4227,8 @@ async function importFromProductionPlan(){
   const preview = Object.entries(byGroup).map(([g, es]) =>
     `[プレス${g}]\n` + es.map(e =>
       `  ${LINE_LABEL[e.lineId]||e.lineId}: ${e.partNo}  ${e.setupStart?e.setupStart+'→':''}${e.prodStart}～${e.prodEnd}` +
-      (e.mountKata > 1 ? `  🔧${e.mountKata}型` : '') +
-      (e.mountCount > 0 ? `  👷${e.mountCount}人` : '')
+      (e.mountKata  > 1 ? `  🔧${e.mountKata}型`  : '') +
+      (e.mountCount > 0 ? `  👷${e.mountCount}人（段取）` : '')
     ).join('\n')
   ).join('\n');
 
