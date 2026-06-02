@@ -469,8 +469,13 @@ header{background:var(--panel);border-bottom:1px solid var(--border);padding:0 1
       <div class="nm-cfg-field"><label>見積工程フィールド</label><input class="w160" id="nmKtEstProc" value="見積工程"></div>
       <div class="nm-cfg-field"><label>実工程フィールド</label><input class="w160" id="nmKtActProc" value="実工程"></div>
       <div class="nm-cfg-field"><label>客先フィールド</label><input class="w160" id="nmKtClient" value="客先"></div>
+      <div class="nm-cfg-field" style="flex-basis:100%;margin-top:6px">
+        <label>GASプロキシURL <span style="color:#888;font-size:9px">（CORS回避用・下記スクリプトをデプロイして取得）</span></label>
+        <input class="w220" id="nmKtGasUrl" placeholder="https://script.google.com/macros/s/..." style="width:420px">
+      </div>
       <button class="btn btn-primary btn-sm" onclick="nmSaveCfg()">保存</button>
       <button class="btn btn-secondary btn-sm" onclick="nmLoadKintone()">接続テスト＆取得</button>
+      <button class="btn btn-secondary btn-sm" onclick="nmShowGas()">📋 GASスクリプトを表示</button>
     </div>
   </div>
 
@@ -519,6 +524,24 @@ header{background:var(--panel);border-bottom:1px solid var(--border);padding:0 1
   </div>
 </div>
 </div><!-- /tab-newmold -->
+
+<!-- GASスクリプト表示モーダル -->
+<div class="nm-modal-ov" id="nmGasModal">
+  <div class="nm-modal" style="width:560px;max-height:85vh;overflow-y:auto">
+    <h3>📋 GASスクリプト（コピーして貼り付けてください）</h3>
+    <div class="nm-meta" style="margin-bottom:10px">
+      ① <a href="https://script.google.com/home" target="_blank" style="color:var(--accent)">Google Apps Script</a> を開き「新しいプロジェクト」を作成<br>
+      ② 下記コードを全選択して貼り付け → 保存<br>
+      ③「デプロイ」→「新しいデプロイ」→ 種類:ウェブアプリ・アクセス:全員 → デプロイ<br>
+      ④ 表示されたウェブアプリURLをコピーして「GASプロキシURL」欄に貼り付け
+    </div>
+    <textarea id="nmGasCode" readonly style="width:100%;height:280px;font-family:monospace;font-size:10px;border:1px solid var(--border);border-radius:4px;padding:8px;background:#f8f9fc;resize:none;color:#1a1f36"></textarea>
+    <div class="nm-modal-footer">
+      <button class="btn btn-secondary btn-sm" onclick="nmCopyGas()">📋 コピー</button>
+      <button class="btn btn-primary btn-sm" onclick="document.getElementById('nmGasModal').classList.remove('open')">閉じる</button>
+    </div>
+  </div>
+</div>
 
 <!-- メモ入力モーダル（新規製作用） -->
 <div class="nm-modal-ov" id="nmNoteModal">
@@ -1701,43 +1724,98 @@ function nmSaveCfg(){
     estProc:document.getElementById('nmKtEstProc').value,
     actProc:document.getElementById('nmKtActProc').value,
     client:document.getElementById('nmKtClient').value,
+    gasUrl:document.getElementById('nmKtGasUrl').value,
   };
   localStorage.setItem(NM_KEY_CFG,JSON.stringify(cfg));
-  nmSetStatus('設定を保存しました');
+  nmSetStatus('✅ 設定を保存しました');
 }
 function nmLoadCfgUI(){
   try{
     const cfg=JSON.parse(localStorage.getItem(NM_KEY_CFG)||'{}');
-    if(cfg.sub) document.getElementById('nmKtSub').value=cfg.sub;
-    if(cfg.app) document.getElementById('nmKtApp').value=cfg.app;
-    if(cfg.tok) document.getElementById('nmKtTok').value=cfg.tok;
+    if(cfg.sub)    document.getElementById('nmKtSub').value=cfg.sub;
+    if(cfg.app)    document.getElementById('nmKtApp').value=cfg.app;
+    if(cfg.tok)    document.getElementById('nmKtTok').value=cfg.tok;
     if(cfg.moldNo) document.getElementById('nmKtMoldNo').value=cfg.moldNo;
     if(cfg.partNo) document.getElementById('nmKtPartNo').value=cfg.partNo;
-    if(cfg.partName) document.getElementById('nmKtPartName').value=cfg.partName;
-    if(cfg.estProc) document.getElementById('nmKtEstProc').value=cfg.estProc;
-    if(cfg.actProc) document.getElementById('nmKtActProc').value=cfg.actProc;
+    if(cfg.partName)document.getElementById('nmKtPartName').value=cfg.partName;
+    if(cfg.estProc)document.getElementById('nmKtEstProc').value=cfg.estProc;
+    if(cfg.actProc)document.getElementById('nmKtActProc').value=cfg.actProc;
     if(cfg.client) document.getElementById('nmKtClient').value=cfg.client;
+    if(cfg.gasUrl) document.getElementById('nmKtGasUrl').value=cfg.gasUrl;
   }catch(e){}
 }
 
-// ----- キントーン取得（GAS JSONPプロキシ経由でCORS回避） -----
+// ----- GASスクリプト表示 -----
+const NM_GAS_CODE=`// =====================================================
+// 新規製作金型 キントーン取得 GASプロキシ
+// デプロイ: ウェブアプリ / アクセス: 全員
+// =====================================================
+function doGet(e) {
+  const p = e.parameter;
+  const subdomain = p.subdomain || '';
+  const app       = p.app || '';
+  const token     = p.token || '';
+  const query     = p.query ? decodeURIComponent(p.query) : 'order by $id asc limit 100';
+  const callback  = p.callback || 'callback';
+
+  if (!subdomain || !app || !token) {
+    return ContentService
+      .createTextOutput(callback + '({"error":"subdomain/app/tokenが未指定です"})')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+
+  const url = 'https://' + subdomain + '.cybozu.com/k/v1/records.json'
+            + '?app=' + app + '&query=' + encodeURIComponent(query) + '&totalCount=true';
+  try {
+    const res = UrlFetchApp.fetch(url, {
+      headers: { 'X-Cybozu-API-Token': token },
+      muteHttpExceptions: true
+    });
+    const data = JSON.parse(res.getContentText());
+    return ContentService
+      .createTextOutput(callback + '(' + JSON.stringify(data) + ')')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  } catch(err) {
+    return ContentService
+      .createTextOutput(callback + '({"error":"' + err.message + '"})')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+}`;
+
+function nmShowGas(){
+  document.getElementById('nmGasCode').value=NM_GAS_CODE;
+  document.getElementById('nmGasModal').classList.add('open');
+}
+function nmCopyGas(){
+  navigator.clipboard.writeText(NM_GAS_CODE).then(()=>alert('コピーしました'));
+}
+
+// ----- キントーン取得（専用GAS JSONPプロキシ経由でCORS回避） -----
 function nmLoadKintone(){
   const cfg=JSON.parse(localStorage.getItem(NM_KEY_CFG)||'{}');
-  if(!cfg.app){
-    nmSetStatus('⚠ キントーン設定が未完了です（アプリIDを入力してください）');
+  // 入力検証
+  if(!cfg.app||!cfg.sub||!cfg.tok){
+    nmSetStatus('⚠ サブドメイン・アプリID・APIトークンを入力してください');
     document.getElementById('nmCfgPanel').classList.add('open');
     return;
   }
-  nmSetStatus('🔄 キントーン取得中...');
+  if(!cfg.gasUrl){
+    nmSetStatus('⚠ GASプロキシURLが未設定です。「📋 GASスクリプトを表示」からセットアップしてください');
+    document.getElementById('nmCfgPanel').classList.add('open');
+    return;
+  }
 
+  nmSetStatus('🔄 キントーン取得中...');
   const cbName='nmKtCb_'+Date.now();
+  // GASにサブドメイン・アプリID・トークンをパラメータで渡す（GAS側でサーバー経由アクセス）
   const q=encodeURIComponent('order by $id asc limit 100');
-  const url=`${GAS_URL}?app=${cfg.app}&query=${q}&callback=${cbName}`;
+  const gasBase=cfg.gasUrl.split('?')[0];
+  const url=`${gasBase}?subdomain=${encodeURIComponent(cfg.sub)}&app=${encodeURIComponent(cfg.app)}&token=${encodeURIComponent(cfg.tok)}&query=${q}&callback=${cbName}`;
 
   const timer=setTimeout(()=>{
     cleanup();
-    nmSetStatus('❌ 取得タイムアウト（GAS URLまたはアプリIDを確認してください）');
-  },15000);
+    nmSetStatus('❌ タイムアウト（GASのデプロイ設定「アクセス:全員」を確認してください）');
+  },20000);
 
   function cleanup(){
     clearTimeout(timer);
@@ -1748,45 +1826,50 @@ function nmLoadKintone(){
 
   window[cbName]=function(data){
     cleanup();
-    if(!data.records||data.error){
-      nmSetStatus('❌ キントーンエラー: '+(data.error||'レコードなし'));
+    if(data.error){
+      nmSetStatus('❌ キントーンエラー: '+data.error);
       return;
     }
+    if(!data.records){
+      nmSetStatus('❌ レスポンス形式エラー（GASスクリプトの内容を確認してください）');
+      return;
+    }
+    let added=0,updated=0;
     data.records.forEach(rec=>{
       const id='kt_'+rec['$id'].value;
       const exist=nmMolds.find(m=>m.id===id);
-      // 見積工程・実工程（複数値対応: 配列またはドロップダウン）
-      const estProcRaw=rec[cfg.estProc||'見積工程'];
-      const actProcRaw=rec[cfg.actProc||'実工程'];
-      const estProc=Array.isArray(estProcRaw?.value)
-        ?estProcRaw.value.join('・')
-        :(estProcRaw?.value||'');
-      const actProc=Array.isArray(actProcRaw?.value)
-        ?actProcRaw.value.join('・')
-        :(actProcRaw?.value||'');
+      // 見積工程・実工程（チェックボックス/複数選択は配列、ドロップダウンは文字列）
+      const fldVal=(key)=>{
+        const raw=rec[key||''];
+        if(!raw) return '';
+        return Array.isArray(raw.value)?raw.value.join('・'):(raw.value||'');
+      };
       const md={
         id,
-        moldNo:(rec[cfg.moldNo||'社内番号']?.value||'').trim(),
-        partNo:(rec[cfg.partNo||'品番']?.value||'').trim(),
+        moldNo: (rec[cfg.moldNo||'社内番号']?.value||'').trim(),
+        partNo: (rec[cfg.partNo||'品番']?.value||'').trim(),
         partName:(rec[cfg.partName||'品名']?.value||'').trim(),
-        client:(rec[cfg.client||'客先']?.value||'').trim(),
-        estProc,  // 見積工程
-        actProc,  // 実工程
-        thumb:rec['サムネイル']?.value?.[0]?.url||rec['thumbnail']?.value?.[0]?.url||'',
-        phases:exist?exist.phases:NM_PHASES.map(p=>({...p})),
+        client: (rec[cfg.client||'客先']?.value||'').trim(),
+        estProc:fldVal(cfg.estProc||'見積工程'),
+        actProc:fldVal(cfg.actProc||'実工程'),
+        thumb:  rec['サムネイル']?.value?.[0]?.url||rec['thumbnail']?.value?.[0]?.url||'',
+        phases: exist?exist.phases:NM_PHASES.map(p=>({...p})),
         src:'kintone',
       };
-      if(exist) Object.assign(exist,md);
-      else nmMolds.push(md);
+      if(exist){Object.assign(exist,md);updated++;}
+      else{nmMolds.push(md);added++;}
     });
     nmSave();nmRender();
-    nmSetStatus(`✅ ${data.records.length}件取得 (${new Date().toLocaleTimeString()})`);
+    nmSetStatus(`✅ ${data.records.length}件取得（新規+${added} 更新+${updated}） ${new Date().toLocaleTimeString()}`);
   };
 
   const script=document.createElement('script');
   script.id='nm_jsonp_script';
   script.src=url;
-  script.onerror=()=>{cleanup();nmSetStatus('❌ GAS接続エラー（GAS URLを確認してください）');};
+  script.onerror=()=>{
+    cleanup();
+    nmSetStatus('❌ GAS接続エラー（URLが正しいか、デプロイ設定「アクセス:全員」になっているか確認してください）');
+  };
   document.head.appendChild(script);
 }
 
