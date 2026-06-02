@@ -4286,12 +4286,19 @@ async function autoAssignRoles(){
   // 作業がある（dantori登録がある）ラインのSet
   const activeLineSet = new Set(sorted.map(d => d.lineId));
 
-  // 同グループで仕事がないラインを取得（そこ担当の人が他ラインに回せる）
+  // 同グループで仕事がないラインを取得（lineIdに近い順でソート）
   function getSameGroupNoWork(lineId){
     if(!dantoriGroupCfg.length) return [];
     const grp = dantoriGroupCfg.find(g => g.ids && g.ids.includes(lineId));
     if(!grp) return [];
-    return grp.ids.filter(id => id !== lineId && !activeLineSet.has(id));
+    const lineIdx = grp.ids.indexOf(lineId);
+    return grp.ids
+      .filter(id => id !== lineId && !activeLineSet.has(id))
+      .sort((a, b) => {
+        const dA = Math.abs(grp.ids.indexOf(a) - lineIdx);
+        const dB = Math.abs(grp.ids.indexOf(b) - lineIdx);
+        return dA !== dB ? dA - dB : grp.ids.indexOf(a) - grp.ids.indexOf(b);
+      });
   }
 
   // 品質確認・初品出しを探す（グループフォールバック付き）
@@ -4325,40 +4332,50 @@ async function autoAssignRoles(){
   // 金型取付を探す
   // ・品質確認/初品出しと同じ人でもOK（thisEntryAssigned の人はisBusy無視）
   // ・ライン外（noLine）は除く
-  // ・優先ライン仕事なし → グループ他ライン応援を次候補に
+  // ・優先ライン仕事なし → グループ内の近いラインから応援（近い順）
+  // ・優先ライン未設定（フローティング）は自動割当対象外
+  // ・PRESS_LINE_MASTER の workers 人数を上限に使用
   function findMountWorkers(lineId, thisEntryAssigned, s, e){
     // 利用可能判定（同エントリの担当者はbusy無視）
     const isAvail = w => {
       if(workerHasRole(w,'noLine')) return false;
-      if(thisEntryAssigned.includes(w)) return !isUnavailableAt(w, s); // 同ライン担当者はbusy無視
+      if(thisEntryAssigned.includes(w)) return !isUnavailableAt(w, s);
       return !isBusy(w, s, e) && !isUnavailableAt(w, s);
     };
 
+    // PRESS_LINE_MASTERの人数が上限（段取り人数の基準）
+    const maxCount = PRESS_LINE_MASTER[lineId]?.workers?.length || 99;
+
     if(hasRoleData){
-      const freeLines = getSameGroupNoWork(lineId);
+      const freeLines = getSameGroupNoWork(lineId); // 近い順にソート済み
+
       // ① 優先ライン一致
       const prio = allPressWorkers.filter(w =>
         WORKER_PRIORITY_LINE[w] === lineId && isAvail(w)
       );
-      if(prio.length) return prio;
-      // ② 同グループで仕事なし（グループ応援）
-      const grp = allPressWorkers.filter(w =>
-        freeLines.includes(WORKER_PRIORITY_LINE[w]) && isAvail(w)
-      );
-      if(grp.length) return grp;
-      // ③ 優先ライン未設定（フローティング）
-      const floating = allPressWorkers.filter(w =>
-        !WORKER_PRIORITY_LINE[w] && isAvail(w)
-      );
-      if(floating.length) return floating;
+      if(prio.length) return prio.slice(0, maxCount);
+
+      // ② 同グループで仕事なしライン（freeLines順 = 近い順でソート）
+      const grp = allPressWorkers
+        .filter(w => freeLines.includes(WORKER_PRIORITY_LINE[w]) && isAvail(w))
+        .sort((a, b) => {
+          // freeLines内でのインデックス（近いほど前）
+          const ia = freeLines.indexOf(WORKER_PRIORITY_LINE[a]);
+          const ib = freeLines.indexOf(WORKER_PRIORITY_LINE[b]);
+          return ia - ib;
+        });
+      if(grp.length) return grp.slice(0, maxCount);
+
+      // ③ フローティング（優先ライン未設定）は自動割当しない
     }
+
     // フォールバック: PRESS_LINE_MASTER.workers
     const plm = PRESS_LINE_MASTER[lineId];
     if(plm){
       const fb = plm.workers.map(resolveWorkerName).filter(w =>
         !workerHasRole(w,'noLine') && !isBusy(w, s, e) && !isUnavailableAt(w, s)
       );
-      if(fb.length) return fb;
+      if(fb.length) return fb.slice(0, maxCount);
     }
     return [];
   }
@@ -4465,27 +4482,30 @@ async function autoAssignRoles(){
   });
 
   // ── 余り時間 計算 ────────────────────────────
+  // shiftS/shiftE はバッファなし（稼働時間外を表示しない）
   const allTimes = targets.flatMap(d => [
     toMin(d.setupStart||d.prodStart), toMin(d.prodEnd)
   ]).filter(v => v !== null);
-  const shiftS = allTimes.length ? Math.min(...allTimes) - 30 : 7*60+30;
-  const shiftE = allTimes.length ? Math.max(...allTimes) + 30 : 17*60;
+  const shiftS = allTimes.length ? Math.min(...allTimes) : 8*60+10;
+  const shiftE = allTimes.length ? Math.max(...allTimes) : 17*60;
 
   function calcFreeSlots(name){
     const att = WORKER_ATTENDANCE[name];
     const amOk = !att || att.am !== false;
     const pmOk = !att || att.pm !== false;
     if(!amOk && !pmOk) return [];
+    // 出勤帯のclamp
     const effS = amOk ? shiftS : Math.max(shiftS, 720);
     const effE = pmOk ? shiftE : Math.min(shiftE, 720);
-    const slots = (busyMap[name]||[]).slice().sort((a,b)=>a.s-b.s);
+    const busy = (busyMap[name]||[]).slice().sort((a,b)=>a.s-b.s);
     const free = [];
+    if(!busy.length) return []; // 仕事が一切なければ余り時間なし
     let cur = effS;
-    for(const slot of slots){
+    for(const slot of busy){
       if(slot.s > cur + 20) free.push({ s:cur, e:slot.s });
       cur = Math.max(cur, slot.e);
     }
-    if(effE > cur + 20) free.push({ s:cur, e:effE });
+    // 最後の仕事後の余り時間は表示しない（稼働終了）
     return free;
   }
 
@@ -4531,27 +4551,42 @@ function aarSwitchTab(tab){
       const iBadge = r.初品出し
         ? `<span style="color:#7c3aed;font-weight:700;">${r.初品出し}</span>`
         : '<span style="color:#94a3b8;font-size:10px;">—</span>';
-      const mBadge = r.金型取付
-        ? r.金型取付
+
+      // 金型取付：ライン外(noLine)除く、役割に応じた色◯で表示
+      const mountNames = (r.金型取付||'').split(/[,、]/).map(s=>s.trim()).filter(Boolean);
+      const mBadge = mountNames.length
+        ? mountNames.map(w => {
+            const isQ = (r.品質確認 === w);
+            const isI = (r.初品出し === w);
+            const dot  = isQ ? `<span style="color:#1d4ed8;font-size:13px;" title="品質確認兼任">●</span>`
+                        : isI ? `<span style="color:#7c3aed;font-size:13px;" title="初品出し兼任">●</span>`
+                        : `<span style="color:#94a3b8;font-size:13px;" title="金型取付">●</span>`;
+            return `<span style="white-space:nowrap;margin-right:6px;">${dot} ${w}</span>`;
+          }).join('')
         : '<span style="color:#dc2626;font-size:10px;">未割当</span>';
+
       return `<tr>
         <td style="white-space:nowrap;">${getLineDisplayName(d.lineId)}</td>
         <td>${d.partNo||'—'}</td>
         <td style="white-space:nowrap;color:#64748b;">${t}</td>
         <td>${qBadge}</td>
         <td>${iBadge}</td>
-        <td>${mBadge}</td>
+        <td style="line-height:1.8;">${mBadge}</td>
       </tr>`;
     }).join('');
-    cont.innerHTML = `<table class="aar-tbl">
-      <thead><tr>
-        <th>ライン</th><th>品番</th><th>時間</th>
-        <th style="color:#1d4ed8;">品質確認</th>
-        <th style="color:#7c3aed;">初品出し</th>
-        <th>金型取付</th>
-      </tr></thead>
-      <tbody>${rows||'<tr><td colspan="6" style="text-align:center;color:#aaa;padding:20px;">対象なし</td></tr>'}</tbody>
-    </table>`;
+    cont.innerHTML = `
+      <div style="font-size:10px;color:#64748b;margin-bottom:6px;padding-left:2px;">
+        ◯凡例：<span style="color:#1d4ed8;">●</span>品質確認兼任　<span style="color:#7c3aed;">●</span>初品出し兼任　<span style="color:#94a3b8;">●</span>金型取付のみ
+      </div>
+      <table class="aar-tbl">
+        <thead><tr>
+          <th>ライン</th><th>品番</th><th>時間</th>
+          <th style="color:#1d4ed8;">品質確認</th>
+          <th style="color:#7c3aed;">初品出し</th>
+          <th>金型取付（◯付き）</th>
+        </tr></thead>
+        <tbody>${rows||'<tr><td colspan="6" style="text-align:center;color:#aaa;padding:20px;">対象なし</td></tr>'}</tbody>
+      </table>`;
 
   } else if(tab === 'warn'){
     if(!_aarConflicts.length && !_aarShortages.length){
@@ -4573,16 +4608,22 @@ function aarSwitchTab(tab){
   } else if(tab === 'free'){
     const fd = window._aarFreeData || [];
     if(!fd.length){
-      cont.innerHTML = '<div style="text-align:center;color:#64748b;padding:30px;">余り時間のある作業者はいません</div>';
+      cont.innerHTML = '<div style="text-align:center;color:#64748b;padding:30px;">仕事の合間の余り時間はありません</div>';
       return;
     }
     const rows = fd.map(d => {
-      const slots = d.free.map(f =>
-        `<span style="background:#e0f2fe;padding:2px 7px;border-radius:8px;margin-right:4px;font-size:11px;">${fmtMin(f.s)}〜${fmtMin(f.e)}</span>`
-      ).join('');
-      return `<div class="aar-free-row">
+      const totalMin = d.free.reduce((sum, f) => sum + (f.e - f.s), 0);
+      const totalStr = totalMin >= 60
+        ? `${Math.floor(totalMin/60)}時間${totalMin%60 ? totalMin%60+'分' : ''}`
+        : `${totalMin}分`;
+      const slots = d.free.map(f => {
+        const dur = f.e - f.s;
+        return `<span style="background:#e0f2fe;padding:2px 8px;border-radius:8px;margin-right:4px;font-size:11px;white-space:nowrap;">${fmtMin(f.s)}〜${fmtMin(f.e)}<span style="color:#64748b;font-size:10px;margin-left:3px;">(${dur}分)</span></span>`;
+      }).join('');
+      return `<div class="aar-free-row" style="align-items:center;">
         <div class="aar-free-name">${d.name} ${d.att}</div>
-        <div class="aar-free-slots">${slots}</div>
+        <div class="aar-free-slots" style="flex:1;">${slots}</div>
+        <div style="white-space:nowrap;font-size:11px;font-weight:700;color:#0369a1;min-width:60px;text-align:right;">計 ${totalStr}</div>
       </div>`;
     }).join('');
     cont.innerHTML = rows;
