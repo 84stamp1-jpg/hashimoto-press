@@ -310,20 +310,8 @@ header{background:var(--panel);border-bottom:1px solid var(--border);padding:0 1
 .nmth-day-we{background:#888;color:#fff;text-align:center;font-size:8px}
 .nmth-day-td{background:#FFD700;color:#1F3864;text-align:center;font-size:8px;font-weight:700}
 
-.nm-r-a .nm-td-no{background:#1F3864}
-.nm-r-b .nm-td-no{background:#375623}
-.nm-td-no{color:#fff;text-align:center;font-weight:700;font-size:9px}
-.nm-td-img{background:#f5f5f5;text-align:center;padding:2px}
-.nm-td-img img{max-width:46px;max-height:36px;object-fit:contain}
-.nm-td-part{background:#EEF4FB}
-.nm-td-partno{font-weight:700;color:#1F3864;font-size:9px}
-.nm-td-partname{color:#2E5D9E;font-size:8px;font-style:italic}
-.nm-td-proc{text-align:center;font-weight:700;font-size:9px;color:#fff}
-.nm-td-charge{text-align:center;font-size:9px;background:#F9F9F9}
-.nm-td-make{text-align:center;font-size:9px;background:#FFFCF0;font-weight:700}
-
 /* ガントセル */
-.gc-cell{cursor:pointer;position:relative;transition:filter .1s}
+.gc-cell{cursor:pointer;position:relative;transition:filter .1s;user-select:none}
 .gc-cell:hover{filter:brightness(.82)}
 .gc-wd{background:#F8FBFF}
 .gc-we{background:#EEEEEE}
@@ -331,11 +319,38 @@ header{background:var(--panel);border-bottom:1px solid var(--border);padding:0 1
 .gc-bar{background:#4472C4}
 .gc-done{background:#375623}
 .gc-ms{background:#C00000;text-align:center;color:#fff;font-size:9px;font-weight:700}
+.gc-selecting{background:#93c5fd !important;opacity:.7}
 .gc-note-dot{position:absolute;top:1px;right:1px;width:5px;height:5px;
   background:#FFD700;border-radius:50%;pointer-events:none}
 
 /* セパレーター行 */
-.nm-sep td{height:2px;background:#1F3864;padding:0;border:none}
+.nm-sep td{height:3px;background:#1F3864;padding:0;border:none}
+
+/* 画像アップロード */
+.nm-img-area{width:100%;min-height:50px;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;cursor:pointer;padding:2px}
+.nm-img-area:hover{background:#eef;}
+.nm-img-area img{max-width:100%;max-height:60px;object-fit:contain}
+input.nm-img-input{display:none}
+
+/* タスク行 */
+.nm-task-row select{width:100%;font-size:9px;border:1px solid #ccc;border-radius:2px;
+  background:#fff;font-family:var(--font);padding:1px;cursor:pointer}
+.nm-task-row select:focus{outline:1px solid var(--accent)}
+.nm-task-content{font-size:9px;outline:none;min-height:16px}
+.nm-task-content:focus{background:#fffff0}
+.nm-done-row{opacity:.5}
+.nm-done-input{width:100%;font-size:7px;border:none;background:transparent;
+  font-family:var(--font);color:#C00000;cursor:pointer}
+
+/* マスタチップ */
+.nm-master-chips{display:flex;flex-wrap:wrap;gap:4px;min-height:24px}
+.nm-chip{display:inline-flex;align-items:center;gap:3px;padding:2px 8px 2px 10px;
+  background:var(--accent-bg);border-radius:12px;font-size:10px;color:var(--accent);
+  border:1px solid #c7d7fd}
+.nm-chip-del{background:none;border:none;cursor:pointer;color:var(--text3);
+  font-size:12px;line-height:1;padding:0 2px}
+.nm-chip-del:hover{color:var(--danger)}
 
 /* メモモーダル */
 .nm-modal-ov{display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);
@@ -446,29 +461,52 @@ header{background:var(--panel);border-bottom:1px solid var(--border);padding:0 1
     <button class="btn btn-secondary btn-sm" onclick="nmLoadKintone()">🔄 キントーン取得</button>
     <button class="btn btn-secondary btn-sm" onclick="nmToggleAdd()">＋ 金型追加</button>
     <button class="btn btn-secondary btn-sm" onclick="nmToggleCfg()">⚙ キントーン設定</button>
+    <button class="btn btn-secondary btn-sm" onclick="nmToggleMaster()">📋 マスタ設定</button>
     <button class="btn btn-secondary btn-sm" onclick="nmShiftWeek(-1)">◀ 前週</button>
     <button class="btn btn-secondary btn-sm" onclick="nmGoToday()">今日</button>
     <button class="btn btn-secondary btn-sm" onclick="nmShiftWeek(1)">次週 ▶</button>
+    <button class="btn btn-secondary btn-sm" id="nmBtnCompleted" onclick="nmToggleAllCompleted()">👁 完了を非表示</button>
     <button class="btn btn-primary btn-sm" onclick="window.print()">🖨 印刷</button>
     <span class="nm-status" id="nmStatus">—</span>
-    <span style="font-size:9px;color:var(--text3);margin-left:8px">
-      🔵作業中 🟢完了 🔴▼納期　シングルクリック=バー入力　ダブルクリック=メモ入力　💛=メモあり
-    </span>
+    <span style="font-size:9px;color:var(--text3);margin-left:8px">ドラッグ=範囲バー入力　ダブルクリック=メモ　💛=メモあり</span>
   </div>
 
   <!-- キントーン設定 -->
   <div class="nm-cfg-panel" id="nmCfgPanel">
     <h4>⚙ キントーン接続設定（新規製作金型アプリ）</h4>
     <div class="nm-cfg-row">
-      <div class="nm-cfg-field"><label>アプリID <span style="color:var(--text3);font-size:9px">（kintone_mold_repair_proxyで KT_TOKEN_[ID] をプロパティ追加）</span></label><input class="w160" id="nmKtApp" placeholder="例: 39"></div>
-      <div class="nm-cfg-field"><label>社内番号フィールド</label><input class="w160" id="nmKtMoldNo" value="社内番号"></div>
-      <div class="nm-cfg-field"><label>品番フィールド</label><input class="w160" id="nmKtPartNo" value="品番"></div>
-      <div class="nm-cfg-field"><label>品名フィールド</label><input class="w160" id="nmKtPartName" value="品名"></div>
-      <div class="nm-cfg-field"><label>見積工程フィールド</label><input class="w160" id="nmKtEstProc" value="見積工程"></div>
-      <div class="nm-cfg-field"><label>実工程フィールド</label><input class="w160" id="nmKtActProc" value="実工程"></div>
-      <div class="nm-cfg-field"><label>客先フィールド</label><input class="w160" id="nmKtClient" value="客先"></div>
+      <div class="nm-cfg-field"><label>アプリID</label><input class="w160" id="nmKtApp" placeholder="例: 39"></div>
+      <div class="nm-cfg-field"><label>社内番号フィールド</label><input class="w160" id="nmKtMoldNo" value="文字列__1行__6"></div>
+      <div class="nm-cfg-field"><label>品番フィールド</label><input class="w160" id="nmKtPartNo" value="文字列__1行__7"></div>
+      <div class="nm-cfg-field"><label>品名フィールド</label><input class="w160" id="nmKtPartName" value="文字列__1行__5"></div>
+      <div class="nm-cfg-field"><label>見積工程フィールド</label><input class="w160" id="nmKtEstProc" value="文字列__複数行_"></div>
+      <div class="nm-cfg-field"><label>実工程フィールド</label><input class="w160" id="nmKtActProc" value="文字列__複数行__0"></div>
+      <div class="nm-cfg-field"><label>客先フィールド</label><input class="w160" id="nmKtClient" value="ルックアップ"></div>
       <button class="btn btn-primary btn-sm" onclick="nmSaveCfg()">保存</button>
       <button class="btn btn-secondary btn-sm" onclick="nmLoadKintone()">接続テスト＆取得</button>
+    </div>
+  </div>
+
+  <!-- マスタ設定 -->
+  <div class="nm-cfg-panel" id="nmMasterPanel">
+    <h4>📋 マスタ設定</h4>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:5px">工程マスタ</div>
+        <div class="nm-master-chips" id="nmProcChips"></div>
+        <div style="display:flex;gap:4px;margin-top:6px">
+          <input class="w160" id="nmNewProc" placeholder="工程名を追加（例: RST）" onkeydown="if(event.key==='Enter')nmAddProc()">
+          <button class="btn btn-primary btn-sm" onclick="nmAddProc()">追加</button>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:5px">担当者マスタ</div>
+        <div class="nm-master-chips" id="nmChargeChips"></div>
+        <div style="display:flex;gap:4px;margin-top:6px">
+          <input class="w160" id="nmNewCharge" placeholder="担当者名を追加" onkeydown="if(event.key==='Enter')nmAddCharge()">
+          <button class="btn btn-primary btn-sm" onclick="nmAddCharge()">追加</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -480,27 +518,10 @@ header{background:var(--panel);border-bottom:1px solid var(--border);padding:0 1
       <div class="nm-cfg-field"><label>品番</label><input class="w160" id="nmFPartNo" placeholder="例: 62115/315-81U00"></div>
       <div class="nm-cfg-field"><label>品名</label><input class="w220" id="nmFPartName" placeholder="例: BRACE, RR FLR SIDE MBR"></div>
       <div class="nm-cfg-field"><label>客先・号型</label><input class="w160" id="nmFClient" placeholder="例: DC5D 10台"></div>
-      <div class="nm-cfg-field"><label>見積工程</label><input class="w160" id="nmFEstProc" placeholder="例: RST・PC"></div>
-      <div class="nm-cfg-field"><label>実工程</label><input class="w160" id="nmFActProc" placeholder="例: TRM"></div>
+      <div class="nm-cfg-field"><label>見積工程（改行区切り）</label><textarea id="nmFEstProc" placeholder="例:&#10;RST&#10;PC&#10;TRM" style="width:140px;height:60px;font-size:11px;border:1px solid #aaa;border-radius:3px;padding:3px;font-family:inherit;resize:vertical"></textarea></div>
       <button class="btn btn-primary btn-sm" onclick="nmAddManual()">追加</button>
       <button class="btn btn-secondary btn-sm" onclick="nmToggleAdd()">キャンセル</button>
     </div>
-  </div>
-
-  <!-- 工程フィルター -->
-  <div class="nm-phase-bar">
-    <span class="nm-phase-label">工程:</span>
-    <button class="nm-phase-btn on" style="background:#1F7C4D" data-ph="設計" onclick="nmTogglePhase(this)">設計</button>
-    <button class="nm-phase-btn on" style="background:#217346" data-ph="出図・データ" onclick="nmTogglePhase(this)">出図・データ</button>
-    <button class="nm-phase-btn on" style="background:#2E75B6" data-ph="組付" onclick="nmTogglePhase(this)">組付</button>
-    <button class="nm-phase-btn on" style="background:#833C00" data-ph="物取" onclick="nmTogglePhase(this)">物取</button>
-    <button class="nm-phase-btn on" style="background:#C00000" data-ph="実機TRY" onclick="nmTogglePhase(this)">実機TRY</button>
-    <button class="nm-phase-btn on" style="background:#595959" data-ph="材料" onclick="nmTogglePhase(this)">材料</button>
-    <button class="nm-phase-btn on" style="background:#404040" data-ph="機械加工" onclick="nmTogglePhase(this)">機械加工</button>
-    <button class="nm-phase-btn on" style="background:#7030A0" data-ph="TRY" onclick="nmTogglePhase(this)">TRY</button>
-    <button class="nm-phase-btn on" style="background:#375623" data-ph="納入" onclick="nmTogglePhase(this)">納入</button>
-    <button class="btn btn-secondary btn-sm" style="margin-left:6px" onclick="nmAllPhases(true)">全表示</button>
-    <button class="btn btn-secondary btn-sm" onclick="nmAllPhases(false)">全非表示</button>
   </div>
 
   <!-- ガントテーブル -->
@@ -1633,31 +1654,25 @@ function switchMainTab(tab){
   document.querySelector('.hdr-right').style.display=repairOnly?'':'none';
 }
 
-// ================================================================
-// ===== 新規製作 日程表 =====
-// ================================================================
-const NM_PHASES=[
-  {name:'設計',       color:'#1F7C4D'},
-  {name:'出図・データ',color:'#217346'},
-  {name:'組付',       color:'#2E75B6'},
-  {name:'物取',       color:'#833C00'},
-  {name:'実機TRY',    color:'#C00000'},
-  {name:'材料',       color:'#595959'},
-  {name:'機械加工',   color:'#404040'},
-  {name:'TRY',        color:'#7030A0'},
-  {name:'納入',       color:'#375623'},
-];
 const NM_DAYS=35;
-const NM_KEY_MOLDS='nm_molds_v2';
-const NM_KEY_GANTT='nm_gantt_v2';
-const NM_KEY_NOTE='nm_note_v2';
-const NM_KEY_CFG='nm_cfg_v2';
+const NM_KEY_MOLDS='nm_molds_v3';
+const NM_KEY_GANTT='nm_gantt_v3';
+const NM_KEY_NOTE='nm_note_v3';
+const NM_KEY_CFG  ='nm_cfg_v2';
+const NM_KEY_PMAST='nm_proc_master';
+const NM_KEY_CMAST='nm_charge_master';
+const NM_KEY_IMGS ='nm_images';
 const WJA=['日','月','火','水','木','金','土'];
+const NM_DEFAULT_PROCS=['RST','PC','TRM','FO','カムRST','機械加工','TRY','出図','組付','板金','BE','BL','設計','検査'];
+const NM_DEFAULT_CHARGES=['大石','松本','松永'];
 
-let nmMolds=[], nmGantt={}, nmNote={};
+let nmMolds=[], nmGantt={}, nmNote={}, nmImages={};
+let nmProcMaster=[...NM_DEFAULT_PROCS];
+let nmChargeMaster=[...NM_DEFAULT_CHARGES];
 let nmStart=nmGetMonday(new Date());
-let nmActivePhases=new Set(NM_PHASES.map(p=>p.name));
 let nmCurrentNoteKey=null;
+let nmShowCompleted=true;
+let nmDrag=null; // {moldId,taskId,startDi,mode}
 
 function nmGetMonday(d){const dt=new Date(d);const dy=dt.getDay();dt.setDate(dt.getDate()-(dy===0?6:dy-1));dt.setHours(0,0,0,0);return dt}
 function nmAddDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r}
@@ -1666,14 +1681,18 @@ function nmIsWE(d){return d.getDay()===0||d.getDay()===6}
 function nmIsToday(d){const t=new Date();return d.toDateString()===t.toDateString()}
 function nmEsc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function nmSetStatus(s){document.getElementById('nmStatus').textContent=s}
+function nmGKey(mId,tId,ds){return mId+'__'+tId+'__'+ds}
 
 // ----- 初期化 -----
 function nmInit(){
   try{
-    nmMolds=JSON.parse(localStorage.getItem(NM_KEY_MOLDS)||'[]');
-    nmGantt=JSON.parse(localStorage.getItem(NM_KEY_GANTT)||'{}');
-    nmNote= JSON.parse(localStorage.getItem(NM_KEY_NOTE)||'{}');
-  }catch(e){nmMolds=[];nmGantt={};nmNote={};}
+    nmMolds       =JSON.parse(localStorage.getItem(NM_KEY_MOLDS)||'[]');
+    nmGantt       =JSON.parse(localStorage.getItem(NM_KEY_GANTT)||'{}');
+    nmNote        =JSON.parse(localStorage.getItem(NM_KEY_NOTE) ||'{}');
+    nmImages      =JSON.parse(localStorage.getItem(NM_KEY_IMGS) ||'{}');
+    nmProcMaster  =JSON.parse(localStorage.getItem(NM_KEY_PMAST)||JSON.stringify(NM_DEFAULT_PROCS));
+    nmChargeMaster=JSON.parse(localStorage.getItem(NM_KEY_CMAST)||JSON.stringify(NM_DEFAULT_CHARGES));
+  }catch(e){nmMolds=[];nmGantt={};nmNote={};nmImages={};}
   nmLoadCfgUI();
   nmRender();
 }
@@ -1683,104 +1702,114 @@ function nmSave(){
     localStorage.setItem(NM_KEY_MOLDS,JSON.stringify(nmMolds));
     localStorage.setItem(NM_KEY_GANTT,JSON.stringify(nmGantt));
     localStorage.setItem(NM_KEY_NOTE, JSON.stringify(nmNote));
+    localStorage.setItem(NM_KEY_IMGS, JSON.stringify(nmImages));
   }catch(e){}
+}
+function nmSaveMasters(){
+  localStorage.setItem(NM_KEY_PMAST,JSON.stringify(nmProcMaster));
+  localStorage.setItem(NM_KEY_CMAST,JSON.stringify(nmChargeMaster));
+}
+
+// ----- 見積工程パース -----
+function nmParseProc(str){
+  if(!str)return[];
+  // 改行・中点・読点で分割、または "1.XXX2.YYY" 形式も対応
+  let lines=str.split(/[\n・,、]+/);
+  // 改行なしで番号連結の場合は番号前で分割（例: "1.BL2.PC"→["1.BL","2.PC"]）
+  if(lines.length===1) lines=str.split(/(?=\d+[\.\)])/);
+  return lines.map(s=>s.replace(/^\d+[\.\)]\s*/,'').trim()).filter(Boolean);
+}
+function nmMakeTasks(estProc){
+  const procs=nmParseProc(estProc);
+  if(!procs.length)return[{id:'t'+Date.now()+'_0',content:'',process:'',charge:'',doneDate:''}];
+  return procs.map((p,i)=>({id:'t'+Date.now()+'_'+i,content:'',process:p,charge:'',doneDate:''}));
 }
 
 // ----- 設定 -----
 function nmToggleCfg(){document.getElementById('nmCfgPanel').classList.toggle('open')}
+function nmToggleMaster(){document.getElementById('nmMasterPanel').classList.toggle('open')}
 function nmSaveCfg(){
-  const cfg={
-    app:     document.getElementById('nmKtApp').value.trim(),
-    moldNo:  document.getElementById('nmKtMoldNo').value.trim(),
-    partNo:  document.getElementById('nmKtPartNo').value.trim(),
+  const cfg={app:document.getElementById('nmKtApp').value.trim(),
+    moldNo:document.getElementById('nmKtMoldNo').value.trim(),
+    partNo:document.getElementById('nmKtPartNo').value.trim(),
     partName:document.getElementById('nmKtPartName').value.trim(),
-    estProc: document.getElementById('nmKtEstProc').value.trim(),
-    actProc: document.getElementById('nmKtActProc').value.trim(),
-    client:  document.getElementById('nmKtClient').value.trim(),
-  };
+    estProc:document.getElementById('nmKtEstProc').value.trim(),
+    actProc:document.getElementById('nmKtActProc').value.trim(),
+    client:document.getElementById('nmKtClient').value.trim()};
   localStorage.setItem(NM_KEY_CFG,JSON.stringify(cfg));
   nmSetStatus('✅ 設定を保存しました');
 }
 function nmLoadCfgUI(){
-  try{
-    const cfg=JSON.parse(localStorage.getItem(NM_KEY_CFG)||'{}');
-    const set=(id,v)=>{if(v) document.getElementById(id).value=v;};
-    set('nmKtApp',cfg.app); set('nmKtMoldNo',cfg.moldNo);
-    set('nmKtPartNo',cfg.partNo); set('nmKtPartName',cfg.partName);
-    set('nmKtEstProc',cfg.estProc); set('nmKtActProc',cfg.actProc);
-    set('nmKtClient',cfg.client);
+  try{const cfg=JSON.parse(localStorage.getItem(NM_KEY_CFG)||'{}');
+    const s=(id,v)=>{const el=document.getElementById(id);if(el&&v)el.value=v;};
+    s('nmKtApp',cfg.app);s('nmKtMoldNo',cfg.moldNo);s('nmKtPartNo',cfg.partNo);
+    s('nmKtPartName',cfg.partName);s('nmKtEstProc',cfg.estProc);
+    s('nmKtActProc',cfg.actProc);s('nmKtClient',cfg.client);
   }catch(e){}
 }
 
-// ----- キントーン取得（既存 kintone_mold_repair_proxy を app パラメータで共用） -----
+// ----- マスタ管理 -----
+function nmAddProc(){const v=document.getElementById('nmNewProc').value.trim();if(!v||nmProcMaster.includes(v))return;nmProcMaster.push(v);nmSaveMasters();nmRenderMasters();document.getElementById('nmNewProc').value='';}
+function nmDelProc(i){nmProcMaster.splice(i,1);nmSaveMasters();nmRenderMasters();}
+function nmAddCharge(){const v=document.getElementById('nmNewCharge').value.trim();if(!v||nmChargeMaster.includes(v))return;nmChargeMaster.push(v);nmSaveMasters();nmRenderMasters();document.getElementById('nmNewCharge').value='';}
+function nmDelCharge(i){nmChargeMaster.splice(i,1);nmSaveMasters();nmRenderMasters();}
+function nmRenderMasters(){
+  const pc=document.getElementById('nmProcChips');
+  if(pc)pc.innerHTML=nmProcMaster.map((p,i)=>`<span class="nm-chip">${nmEsc(p)}<button class="nm-chip-del" onclick="nmDelProc(${i})">×</button></span>`).join('');
+  const cc=document.getElementById('nmChargeChips');
+  if(cc)cc.innerHTML=nmChargeMaster.map((c,i)=>`<span class="nm-chip">${nmEsc(c)}<button class="nm-chip-del" onclick="nmDelCharge(${i})">×</button></span>`).join('');
+}
+
+// ----- 完了表示切替 -----
+function nmToggleAllCompleted(){
+  nmShowCompleted=!nmShowCompleted;
+  document.getElementById('nmBtnCompleted').textContent=nmShowCompleted?'👁 完了を非表示':'👁 完了を表示';
+  nmBuildTbody();
+}
+
+// ----- キントーン取得 -----
 function nmLoadKintone(){
   const cfg=JSON.parse(localStorage.getItem(NM_KEY_CFG)||'{}');
-  if(!cfg.app){
-    nmSetStatus('⚠ アプリIDを入力してください');
-    document.getElementById('nmCfgPanel').classList.add('open');
-    return;
-  }
+  if(!cfg.app){nmSetStatus('⚠ アプリIDを入力してください');document.getElementById('nmCfgPanel').classList.add('open');return;}
   nmSetStatus('🔄 キントーン取得中...');
   const cbName='nmKtCb_'+Date.now();
   const q=encodeURIComponent('order by $id asc limit 100');
   const url=`${GAS_URL}?app=${encodeURIComponent(cfg.app)}&query=${q}&callback=${cbName}`;
-  console.log('[NM] GAS URL:', url);
-
-  const timer=setTimeout(()=>{
-    cleanup();
-    nmSetStatus('❌ タイムアウト（GASのデプロイ・KT_TOKEN_'+cfg.app+'プロパティを確認してください）');
-  },15000);
-
-  function cleanup(){
-    clearTimeout(timer);
-    delete window[cbName];
-    const s=document.getElementById('nm_jsonp_script');
-    if(s) s.remove();
-  }
-
+  const timer=setTimeout(()=>{cleanup();nmSetStatus('❌ タイムアウト（KT_TOKEN_'+cfg.app+'を確認）');},15000);
+  function cleanup(){clearTimeout(timer);delete window[cbName];const s=document.getElementById('nm_jsonp_script');if(s)s.remove();}
   window[cbName]=function(data){
     cleanup();
-    if(data.error){
-      nmSetStatus('❌ キントーンエラー: '+data.error);
-      return;
-    }
-    if(!data.records){
-      nmSetStatus('❌ レスポンス形式エラー（GASスクリプトの内容を確認してください）');
-      return;
-    }
-    let added=0,updated=0;
+    if(data.error){nmSetStatus('❌ キントーンエラー: '+data.error);return;}
+    if(!data.records){nmSetStatus('❌ レスポンス形式エラー');return;}
+    let added=0,updated=0,skipped=0;
     data.records.forEach(rec=>{
+      // 完了フィルタ: チェックボックスに「完了」があればスキップ
+      const cbVal=rec['チェックボックス']?.value||[];
+      if(Array.isArray(cbVal)&&cbVal.includes('完了')){skipped++;return;}
       const id='kt_'+rec['$id'].value;
       const exist=nmMolds.find(m=>m.id===id);
-      // 見積工程・実工程（チェックボックス/複数選択は配列、ドロップダウンは文字列）
-      const fldVal=(key)=>{
-        const raw=rec[key||''];
-        if(!raw) return '';
-        return Array.isArray(raw.value)?raw.value.join('・'):(raw.value||'');
-      };
-      const md={
-        id,
-        moldNo: (rec[cfg.moldNo||'社内番号']?.value||'').trim(),
-        partNo: (rec[cfg.partNo||'品番']?.value||'').trim(),
-        partName:(rec[cfg.partName||'品名']?.value||'').trim(),
-        client: (rec[cfg.client||'客先']?.value||'').trim(),
-        estProc:fldVal(cfg.estProc||'見積工程'),
-        actProc:fldVal(cfg.actProc||'実工程'),
-        thumb:  rec['サムネイル']?.value?.[0]?.url||rec['thumbnail']?.value?.[0]?.url||'',
-        phases: exist?exist.phases:NM_PHASES.map(p=>({...p})),
-        src:'kintone',
-      };
-      if(exist){Object.assign(exist,md);updated++;}
-      else{nmMolds.push(md);added++;}
+      const fv=(k)=>{const r=rec[k||''];if(!r)return'';return Array.isArray(r.value)?r.value.join('\n'):(r.value||'');};
+      const estProc=fv(cfg.estProc||'文字列__複数行_');
+      const md={id,
+        moldNo:(rec[cfg.moldNo||'文字列__1行__6']?.value||'').trim(),
+        partNo:(rec[cfg.partNo||'文字列__1行__7']?.value||'').trim(),
+        partName:(rec[cfg.partName||'文字列__1行__5']?.value||'').trim(),
+        client:(rec[cfg.client||'ルックアップ']?.value||'').trim(),
+        estProc,actProc:fv(cfg.actProc||'文字列__複数行__0'),src:'kintone'};
+      if(exist){
+        Object.assign(exist,md);
+        if(!exist.tasks||!exist.tasks.length)exist.tasks=nmMakeTasks(estProc);
+        updated++;
+      }else{
+        nmMolds.push({...md,eventNote:'',tasks:nmMakeTasks(estProc),showCompleted:true});
+        added++;
+      }
     });
     nmSave();nmRender();
-    nmSetStatus(`✅ ${data.records.length}件取得（新規+${added} 更新+${updated}） ${new Date().toLocaleTimeString()}`);
+    nmSetStatus(`✅ ${data.records.length}件取得（+${added} 更新${updated} 完了スキップ${skipped}） ${new Date().toLocaleTimeString()}`);
   };
-
-  const script=document.createElement('script');
-  script.id='nm_jsonp_script';
-  script.src=url;
-  script.onerror=()=>{cleanup();nmSetStatus('❌ GAS接続エラー（kintone_mold_repair_proxyのデプロイを確認してください）');};
+  const script=document.createElement('script');script.id='nm_jsonp_script';script.src=url;
+  script.onerror=()=>{cleanup();nmSetStatus('❌ GAS接続エラー');};
   document.head.appendChild(script);
 }
 
@@ -1790,89 +1819,80 @@ function nmAddManual(){
   const moldNo=document.getElementById('nmFMoldNo').value.trim();
   const partNo=document.getElementById('nmFPartNo').value.trim();
   if(!moldNo&&!partNo){alert('社内番号または品番を入力してください');return;}
-  nmMolds.push({
-    id:'m'+Date.now(),moldNo,partNo,
+  const estProc=document.getElementById('nmFEstProc').value.trim();
+  nmMolds.push({id:'m'+Date.now(),moldNo,partNo,
     partName:document.getElementById('nmFPartName').value.trim(),
     client:document.getElementById('nmFClient').value.trim(),
-    estProc:document.getElementById('nmFEstProc').value.trim(),
-    actProc:document.getElementById('nmFActProc').value.trim(),
-    thumb:'',phases:NM_PHASES.map(p=>({...p})),src:'manual',
-  });
-  ['nmFMoldNo','nmFPartNo','nmFPartName','nmFClient','nmFEstProc','nmFActProc'].forEach(id=>{document.getElementById(id).value='';});
-  nmSave();nmRender();
-  nmSetStatus(`金型追加（合計${nmMolds.length}件）`);
+    estProc,actProc:'',eventNote:'',tasks:nmMakeTasks(estProc),showCompleted:true,src:'manual'});
+  ['nmFMoldNo','nmFPartNo','nmFPartName','nmFClient','nmFEstProc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  nmSave();nmRender();nmSetStatus(`金型追加（合計${nmMolds.length}件）`);
 }
 function nmDeleteMold(id){
   if(!confirm('この金型を削除しますか？'))return;
   nmMolds=nmMolds.filter(m=>m.id!==id);
-  Object.keys(nmGantt).filter(k=>k.startsWith(id+'_')).forEach(k=>delete nmGantt[k]);
-  Object.keys(nmNote).filter(k=>k.startsWith(id+'_')).forEach(k=>delete nmNote[k]);
+  [nmGantt,nmNote].forEach(obj=>Object.keys(obj).filter(k=>k.startsWith(id+'__')).forEach(k=>delete obj[k]));
+  delete nmImages[id];
   nmSave();nmRender();
 }
+
+// ----- タスク操作 -----
+function nmAddTask(moldId){
+  const m=nmMolds.find(m=>m.id===moldId);if(!m)return;
+  if(!m.tasks)m.tasks=[];
+  m.tasks.push({id:'t'+Date.now(),content:'',process:'',charge:'',doneDate:''});
+  nmSave();nmBuildTbody();
+}
+function nmDelTask(moldId,taskId){
+  const m=nmMolds.find(m=>m.id===moldId);if(!m)return;
+  m.tasks=m.tasks.filter(t=>t.id!==taskId);
+  [nmGantt,nmNote].forEach(obj=>Object.keys(obj).filter(k=>k.startsWith(moldId+'__'+taskId+'__')).forEach(k=>delete obj[k]));
+  nmSave();nmBuildTbody();
+}
+function nmToggleMoldCompleted(moldId){
+  const m=nmMolds.find(m=>m.id===moldId);if(!m)return;
+  m.showCompleted=!m.showCompleted;nmSave();nmBuildTbody();
+}
+
+// ----- 画像 -----
+function nmLoadImage(moldId,input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{nmImages[moldId]=e.target.result;nmSave();nmBuildTbody();};
+  reader.readAsDataURL(file);
+}
+function nmClearImage(moldId){delete nmImages[moldId];nmSave();nmBuildTbody();}
 
 // ----- 週移動 -----
 function nmShiftWeek(n){nmStart=nmAddDays(nmStart,n*7);nmRender()}
 function nmGoToday(){nmStart=nmGetMonday(new Date());nmRender()}
 
-// ----- フェーズフィルター -----
-function nmTogglePhase(btn){
-  const ph=btn.dataset.ph;
-  if(nmActivePhases.has(ph)){nmActivePhases.delete(ph);btn.classList.remove('on');}
-  else{nmActivePhases.add(ph);btn.classList.add('on');}
-  nmBuildTbody();
-}
-function nmAllPhases(show){
-  NM_PHASES.forEach(p=>show?nmActivePhases.add(p.name):nmActivePhases.delete(p.name));
-  document.querySelectorAll('.nm-phase-btn').forEach(b=>show?b.classList.add('on'):b.classList.remove('on'));
-  nmBuildTbody();
-}
-
 // ----- レンダリング -----
-function nmRender(){nmBuildColgroup();nmBuildThead();nmBuildTbody();}
+function nmRender(){nmBuildColgroup();nmBuildThead();nmBuildTbody();nmRenderMasters();}
 
 function nmBuildColgroup(){
-  const cg=document.getElementById('nmCg');
-  cg.innerHTML='';
-  [30,50,130,72,38,20].forEach(w=>{
-    const c=document.createElement('col');c.style.width=w+'px';cg.appendChild(c);
-  });
+  const cg=document.getElementById('nmCg');cg.innerHTML='';
+  [32,54,140,72,50,22].forEach(w=>{const c=document.createElement('col');c.style.width=w+'px';cg.appendChild(c);});
   for(let i=0;i<NM_DAYS;i++){const c=document.createElement('col');c.style.width='20px';cg.appendChild(c);}
 }
 
 function nmBuildThead(){
-  const th=document.getElementById('nmThead');
-  th.innerHTML='';
-  // 行1: 固定列見出し + 月グループ
+  const th=document.getElementById('nmThead');th.innerHTML='';
   const r1=document.createElement('tr');
-  [{t:'No',rs:3},{t:'略図',rs:3},{t:'品番/品名',rs:3},{t:'工程',rs:3},{t:'担当',rs:3},{t:'製',rs:3}].forEach(({t,rs})=>{
+  [{t:'No',rs:3},{t:'略図/完了日',rs:3},{t:'品番/品名・内容',rs:3},{t:'工程',rs:3},{t:'担当',rs:3},{t:'±',rs:3}].forEach(({t,rs})=>{
     const td=document.createElement('th');td.className='nmth-fix';td.rowSpan=rs;td.textContent=t;r1.appendChild(td);
   });
   let i=0;
   while(i<NM_DAYS){
-    const d=nmAddDays(nmStart,i);const mo=d.getMonth();
-    let span=0,j=i;
+    const d=nmAddDays(nmStart,i);const mo=d.getMonth();let span=0,j=i;
     while(j<NM_DAYS&&nmAddDays(nmStart,j).getMonth()===mo){span++;j++;}
-    const td=document.createElement('th');td.className='nmth-mon';td.colSpan=span;
-    td.textContent=(mo+1)+'月';r1.appendChild(td);i+=span;
+    const td=document.createElement('th');td.className='nmth-mon';td.colSpan=span;td.textContent=(mo+1)+'月';r1.appendChild(td);i+=span;
   }
   th.appendChild(r1);
-  // 行2: 曜日
   const r2=document.createElement('tr');
-  for(let i=0;i<NM_DAYS;i++){
-    const d=nmAddDays(nmStart,i);
-    const td=document.createElement('th');
-    td.className=nmIsWE(d)?'nmth-dow-we':'nmth-dow-wd';
-    td.textContent=WJA[d.getDay()];r2.appendChild(td);
-  }
+  for(let i=0;i<NM_DAYS;i++){const d=nmAddDays(nmStart,i);const td=document.createElement('th');td.className=nmIsWE(d)?'nmth-dow-we':'nmth-dow-wd';td.textContent=WJA[d.getDay()];r2.appendChild(td);}
   th.appendChild(r2);
-  // 行3: 日付
   const r3=document.createElement('tr');
-  for(let i=0;i<NM_DAYS;i++){
-    const d=nmAddDays(nmStart,i);
-    const td=document.createElement('th');
-    td.className=nmIsToday(d)?'nmth-day-td':nmIsWE(d)?'nmth-day-we':'nmth-day-wd';
-    td.textContent=d.getDate();r3.appendChild(td);
-  }
+  for(let i=0;i<NM_DAYS;i++){const d=nmAddDays(nmStart,i);const td=document.createElement('th');td.className=nmIsToday(d)?'nmth-day-td':nmIsWE(d)?'nmth-dow-we':'nmth-day-wd';td.textContent=d.getDate();r3.appendChild(td);}
   th.appendChild(r3);
 }
 
@@ -1882,79 +1902,186 @@ function nmBuildTbody(){
     tb.innerHTML='<tr><td colspan="40" style="text-align:center;padding:20px;color:var(--text3)">「キントーン取得」または「金型追加」ボタンで金型を登録してください</td></tr>';
     nmSetStatus('データなし');return;
   }
+  const bgA='#EEF4FB', bgB='#E8F4EE';
   nmMolds.forEach((mold,mi)=>{
-    const vis=mold.phases.filter(p=>nmActivePhases.has(p.name));
-    if(!vis.length)return;
-    const rc=mi%2===0?'nm-r-a':'nm-r-b';
-    vis.forEach((ph,pi)=>{
-      const tr=document.createElement('tr');tr.className=rc;
-      if(pi===0){
-        // No
-        const tNo=document.createElement('td');tNo.className='nm-td-no';tNo.rowSpan=vis.length;
-        tNo.innerHTML=`${nmEsc(mold.moldNo||(mi+1)+'')}<br><span style="font-size:7px;font-weight:400">${nmEsc(mold.client||'')}</span><br><span style="font-size:8px;cursor:pointer;color:#ffaaaa" onclick="nmDeleteMold('${mold.id}')">✕</span>`;
-        tr.appendChild(tNo);
-        // 略図
-        const tImg=document.createElement('td');tImg.className='nm-td-img';tImg.rowSpan=vis.length;
-        tImg.innerHTML=mold.thumb?`<img src="${mold.thumb}" alt="">`:'<div style="width:46px;height:36px;background:#ddd;display:flex;align-items:center;justify-content:center;font-size:7px;color:#888">no img</div>';
-        tr.appendChild(tImg);
-        // 品番/品名
-        const tPart=document.createElement('td');tPart.className='nm-td-part';tPart.rowSpan=vis.length;
-        tPart.innerHTML=`<div class="nm-td-partno">${nmEsc(mold.partNo)}</div><div class="nm-td-partname">${nmEsc(mold.partName)}</div>${mold.estProc?`<div style="font-size:8px;color:#1e40af">見積: ${nmEsc(mold.estProc)}</div>`:''}${mold.actProc?`<div style="font-size:8px;color:#375623;font-weight:700">実: ${nmEsc(mold.actProc)}</div>`:''}`;
-        tr.appendChild(tPart);
-      }
-      // 工程
-      const tProc=document.createElement('td');tProc.className='nm-td-proc';tProc.style.background=ph.color;tProc.textContent=ph.name;tr.appendChild(tProc);
-      // 担当
-      const tCh=document.createElement('td');tCh.className='nm-td-charge';tCh.contentEditable=true;tCh.textContent=mold.charge||'';
-      tCh.addEventListener('blur',()=>{mold.charge=tCh.textContent.trim();nmSave();});
-      tr.appendChild(tCh);
-      // 製
-      const tMk=document.createElement('td');tMk.className='nm-td-make';if(pi===0)tMk.textContent='○';tr.appendChild(tMk);
+    if(!mold.tasks||!mold.tasks.length)mold.tasks=nmMakeTasks(mold.estProc||'');
+    const showTasks=mold.tasks.filter(t=>nmShowCompleted&&mold.showCompleted!==false?true:!t.doneDate);
+    const totalRows=1+showTasks.length;
+    const bg=mi%2===0?bgA:bgB;
+    const noColor=mi%2===0?'#1F3864':'#375623';
+    const img=nmImages[mold.id]||'';
+
+    // === 製品ヘッダー行 ===
+    const htr=document.createElement('tr');
+    // Col1: No (rowspan all)
+    const tdNo=document.createElement('td');tdNo.rowSpan=totalRows;
+    tdNo.style.cssText=`background:${noColor};color:#fff;text-align:center;font-weight:700;font-size:10px;vertical-align:top;padding:3px 2px;`;
+    tdNo.innerHTML=`<div style="font-size:11px">${nmEsc(mold.moldNo||String(mi+1))}</div>
+      <div style="margin-top:6px;display:flex;flex-direction:column;gap:3px;align-items:center">
+        <span style="font-size:8px;cursor:pointer;color:#93c5fd;line-height:1" onclick="nmToggleMoldCompleted('${mold.id}')" title="完了を${mold.showCompleted!==false?'非':''}表示">👁</span>
+        <span style="font-size:8px;cursor:pointer;color:#fca5a5;line-height:1" onclick="nmDeleteMold('${mold.id}')">✕</span>
+      </div>`;
+    htr.appendChild(tdNo);
+
+    // Col2: 略図（ヘッダー行: 画像アップロード）
+    const tdImg=document.createElement('td');tdImg.style.cssText='background:#f5f5f5;vertical-align:top;padding:2px;';
+    const fid='nmf_'+mold.id;
+    tdImg.innerHTML=`<div class="nm-img-area" onclick="document.getElementById('${fid}').click()" title="クリックで画像を選択">
+        ${img?`<img src="${img}" alt="" style="max-width:50px;max-height:60px;object-fit:contain">`:'<div style="font-size:7px;color:#bbb;text-align:center;padding:4px">📷<br>画像追加</div>'}
+      </div>
+      <input type="file" id="${fid}" class="nm-img-input" accept="image/*" onchange="nmLoadImage('${mold.id}',this)">
+      ${img?`<div style="font-size:7px;color:#aaa;text-align:center;cursor:pointer" onclick="nmClearImage('${mold.id}')">削除</div>`:''}`;
+    htr.appendChild(tdImg);
+
+    // Col3: 品番/品名 + イベントメモ + 客先
+    const tdPart=document.createElement('td');tdPart.style.cssText=`background:${bg};vertical-align:top;padding:3px 5px;`;
+    const eventId='nm_ev_'+mold.id;
+    tdPart.innerHTML=`<div style="font-weight:700;color:#1F3864;font-size:13px;line-height:1.3">${nmEsc(mold.partNo)}</div>
+      <div style="color:#2E5D9E;font-size:11px;font-style:italic;line-height:1.3">${nmEsc(mold.partName)}</div>
+      <div id="${eventId}" contenteditable="true" style="font-size:9px;color:#555;background:#FFFCF0;border-top:1px dashed #ccc;margin-top:3px;padding:2px;min-height:14px;outline:none;white-space:pre-wrap"
+        onblur="nmSaveEventNote('${mold.id}',this.textContent)">${nmEsc(mold.eventNote||'')}</div>
+      <div style="font-size:9px;color:#888;margin-top:2px;border-top:1px solid #ddd;padding-top:1px">${nmEsc(mold.client||'')}</div>`;
+    htr.appendChild(tdPart);
+
+    // Col4,5,6: 空 + 追加ボタン
+    ['','',''].forEach((_,ci)=>{
+      const td=document.createElement('td');td.style.cssText=`background:${bg};`;
+      if(ci===2)td.innerHTML=`<button onclick="nmAddTask('${mold.id}')" style="width:100%;background:#EBF0FF;border:1px solid #93c5fd;border-radius:3px;cursor:pointer;font-size:11px;color:#3b6ef8;padding:2px">＋</button>`;
+      htr.appendChild(td);
+    });
+
+    // ヘッダー行のガントセル（表示のみ、入力なし）
+    for(let di=0;di<NM_DAYS;di++){
+      const d=nmAddDays(nmStart,di);const td=document.createElement('td');
+      td.style.cssText='background:'+(nmIsToday(d)?'#FFF8CC':nmIsWE(d)?'#EEEEEE':'#F8FBFF')+';border-bottom:1px solid #e0e0e0;';
+      htr.appendChild(td);
+    }
+    tb.appendChild(htr);
+
+    // === タスク行 ===
+    showTasks.forEach(task=>{
+      const isDone=!!task.doneDate;
+      const tr=document.createElement('tr');tr.className='nm-task-row';
+      if(isDone)tr.className+=' nm-done-row';
+
+      // Col1: (spanned by No)
+
+      // Col2: 完了日
+      const tdDone=document.createElement('td');tdDone.style.cssText='background:#FFF8F0;padding:1px;vertical-align:middle;';
+      tdDone.innerHTML=`<input type="date" class="nm-done-input" value="${task.doneDate||''}" title="完了日"
+        onchange="nmSetTaskDone('${mold.id}','${task.id}',this.value)">`;
+      tr.appendChild(tdDone);
+
+      // Col3: 内容
+      const tdCont=document.createElement('td');tdCont.style.cssText='background:#FAFAFA;padding:2px 4px;vertical-align:middle;';
+      tdCont.contentEditable='true';tdCont.className='nm-task-content';tdCont.textContent=task.content||'';
+      tdCont.addEventListener('blur',()=>{task.content=tdCont.textContent.trim();nmSave();});
+      tr.appendChild(tdCont);
+
+      // Col4: 工程ドロップダウン
+      const tdProc=document.createElement('td');tdProc.style.cssText='padding:1px;vertical-align:middle;';
+      const selP=document.createElement('select');
+      const pOpts=['...', ...nmProcMaster];
+      if(task.process&&!nmProcMaster.includes(task.process))pOpts.splice(1,0,task.process);
+      pOpts.forEach(p=>{const o=document.createElement('option');o.value=p;o.textContent=p;if(p===task.process||(!task.process&&p==='...'))o.selected=true;selP.appendChild(o);});
+      selP.addEventListener('change',()=>{task.process=selP.value==='...'?'':selP.value;nmSave();});
+      tdProc.appendChild(selP);tr.appendChild(tdProc);
+
+      // Col5: 担当ドロップダウン
+      const tdCh=document.createElement('td');tdCh.style.cssText='padding:1px;vertical-align:middle;';
+      const selC=document.createElement('select');
+      const cOpts=['...', ...nmChargeMaster];
+      if(task.charge&&!nmChargeMaster.includes(task.charge))cOpts.splice(1,0,task.charge);
+      cOpts.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;if(c===task.charge||(!task.charge&&c==='...'))o.selected=true;selC.appendChild(o);});
+      selC.addEventListener('change',()=>{task.charge=selC.value==='...'?'':selC.value;nmSave();});
+      tdCh.appendChild(selC);tr.appendChild(tdCh);
+
+      // Col6: タスク削除
+      const tdDel=document.createElement('td');tdDel.style.cssText='text-align:center;padding:1px;vertical-align:middle;';
+      tdDel.innerHTML=`<span style="cursor:pointer;color:#fca5a5;font-size:11px" onclick="nmDelTask('${mold.id}','${task.id}')" title="削除">✕</span>`;
+      tr.appendChild(tdDel);
+
       // ガントセル
       for(let di=0;di<NM_DAYS;di++){
         const d=nmAddDays(nmStart,di);const ds=nmFmt(d);
-        const key=`${mold.id}_${ph.name}_${ds}`;
-        const td=document.createElement('td');td.className='gc-cell';td.dataset.key=key;td.dataset.date=ds;
+        const key=nmGKey(mold.id,task.id,ds);
+        const td=document.createElement('td');td.className='gc-cell';
+        td.dataset.key=key;td.dataset.moldId=mold.id;td.dataset.taskId=task.id;td.dataset.date=ds;td.dataset.di=String(di);
         nmApplyCell(td,key,d);
-        td.addEventListener('click',()=>{nmToggleBar(td,key,d);});
-        td.addEventListener('dblclick',e=>{e.preventDefault();nmOpenNote(key,mold,ph.name,ds);});
+        td.addEventListener('mousedown',e=>{if(e.detail>1)return;nmDragStart(td,key,d,mold.id,task.id,di);e.preventDefault();});
+        td.addEventListener('mouseover',()=>{if(nmDrag)nmDragOver(td,di);});
+        td.addEventListener('dblclick',e=>{e.preventDefault();nmOpenNote(key,mold,task,ds);});
         tr.appendChild(td);
       }
       tb.appendChild(tr);
     });
+
     // セパレーター
     const sep=document.createElement('tr');sep.className='nm-sep';
-    const stc=document.createElement('td');stc.colSpan=6+NM_DAYS;sep.appendChild(stc);tb.appendChild(sep);
+    const sc=document.createElement('td');sc.colSpan=6+NM_DAYS;sep.appendChild(sc);tb.appendChild(sep);
   });
   nmSetStatus(`${nmMolds.length}件の金型を表示中`);
 }
 
-function nmApplyCell(td,key,d){
-  const g=nmGantt[key]||{};const note=nmNote[key]||'';
-  td.querySelectorAll('.gc-note-dot').forEach(e=>e.remove());
-  if(g.done) td.className='gc-cell gc-done';
-  else if(g.bar) td.className='gc-cell gc-bar';
-  else if(g.ms) td.className='gc-cell gc-ms';
+// イベントメモ保存
+function nmSaveEventNote(moldId,text){const m=nmMolds.find(m=>m.id===moldId);if(m){m.eventNote=text.trim();nmSave();}}
+
+// タスク完了日
+function nmSetTaskDone(moldId,taskId,val){
+  const m=nmMolds.find(m=>m.id===moldId);if(!m)return;
+  const t=m.tasks.find(t=>t.id===taskId);if(!t)return;
+  t.doneDate=val;nmSave();
+  const tr=document.querySelector(`tr[data-moldid="${moldId}"][data-taskid="${taskId}"]`);
+  if(tr){tr.className='nm-task-row'+(val?' nm-done-row':'');}
+}
+
+// ----- ガントセルスタイル -----
+function nmApplyCell(td,key,d,note){
+  const g=nmGantt[key]||{};note=note||nmNote[key]||'';
+  td.textContent='';td.querySelectorAll('.gc-note-dot').forEach(e=>e.remove());
+  if(g.done)      td.className='gc-cell gc-done';
+  else if(g.bar)  td.className='gc-cell gc-bar';
+  else if(g.ms)   {td.className='gc-cell gc-ms';td.textContent='▼';}
   else if(nmIsToday(d)) td.className='gc-cell gc-td';
-  else if(nmIsWE(d)) td.className='gc-cell gc-we';
-  else td.className='gc-cell gc-wd';
-  if(g.ms) td.textContent='▼'; else td.textContent='';
+  else if(nmIsWE(d))    td.className='gc-cell gc-we';
+  else            td.className='gc-cell gc-wd';
   if(note){const dot=document.createElement('div');dot.className='gc-note-dot';td.appendChild(dot);}
 }
 
-function nmToggleBar(td,key,d){
+// ----- ドラッグ選択 -----
+function nmDragStart(td,key,d,moldId,taskId,di){
   const g=nmGantt[key]||{};
-  if(!g.bar&&!g.done&&!g.ms) nmGantt[key]={bar:true};
-  else if(g.bar) nmGantt[key]={done:true};
-  else if(g.done) nmGantt[key]={ms:true};
-  else nmGantt[key]={};
-  nmApplyCell(td,key,d);nmSave();
+  let mode;
+  if(!g.bar&&!g.done&&!g.ms)mode='bar';
+  else if(g.bar)mode='done';
+  else if(g.done)mode='ms';
+  else mode='clear';
+  nmDrag={moldId,taskId,mode,applied:new Set()};
+  nmApplyDragCell(td,key,d,mode);
+  nmDrag.applied.add(key);
 }
+function nmDragOver(td,di){
+  if(!nmDrag)return;
+  if(td.dataset.moldId!==nmDrag.moldId||td.dataset.taskId!==nmDrag.taskId)return;
+  const key=td.dataset.key;
+  if(nmDrag.applied.has(key))return;
+  const d=new Date(td.dataset.date+'T00:00:00');
+  nmApplyDragCell(td,key,d,nmDrag.mode);
+  nmDrag.applied.add(key);
+}
+function nmApplyDragCell(td,key,d,mode){
+  if(mode==='bar')nmGantt[key]={bar:true};
+  else if(mode==='done')nmGantt[key]={done:true};
+  else if(mode==='ms')nmGantt[key]={ms:true};
+  else delete nmGantt[key];
+  nmApplyCell(td,key,d);
+}
+document.addEventListener('mouseup',()=>{if(nmDrag){nmSave();nmDrag=null;}});
 
 // ----- メモ -----
-function nmOpenNote(key,mold,ph,ds){
+function nmOpenNote(key,mold,task,ds){
   nmCurrentNoteKey=key;
-  document.getElementById('nmNoteMeta').textContent=`${mold.moldNo||mold.partNo} ／ 工程: ${ph} ／ ${ds}`;
+  document.getElementById('nmNoteMeta').textContent=`${mold.moldNo||mold.partNo} ／ ${task.process||'工程未設定'} ／ ${ds}`;
   document.getElementById('nmNoteText').value=nmNote[key]||'';
   document.getElementById('nmNoteModal').classList.add('open');
   document.getElementById('nmNoteText').focus();
@@ -1963,10 +2090,10 @@ function nmCloseNote(){document.getElementById('nmNoteModal').classList.remove('
 function nmSaveNote(){
   if(!nmCurrentNoteKey)return;
   const txt=document.getElementById('nmNoteText').value.trim();
-  if(txt) nmNote[nmCurrentNoteKey]=txt; else delete nmNote[nmCurrentNoteKey];
+  if(txt)nmNote[nmCurrentNoteKey]=txt;else delete nmNote[nmCurrentNoteKey];
   nmSave();
   const td=document.querySelector(`[data-key="${nmCurrentNoteKey}"]`);
-  if(td){const d=new Date(td.dataset.date+'T00:00:00');nmApplyCell(td,nmCurrentNoteKey,d);}
+  if(td)nmApplyCell(td,nmCurrentNoteKey,new Date(td.dataset.date+'T00:00:00'));
   nmCloseNote();
 }
 function nmClearNote(){document.getElementById('nmNoteText').value='';nmSaveNote();}
