@@ -2238,10 +2238,8 @@ window.onImpFile=async function(){
   // セル値から「N型」→型数N、「N人」→人数N を抽出（数値のみでも人数と解釈）
   function parseKata(cell){const m=String(cell||'').match(/(\d+)\s*型/);return m?parseInt(m[1]):0;}
   function parseNinzu(cell){
-    const s=String(cell||'').trim();
-    const m=s.match(/(\d+)\s*人/);if(m)return parseInt(m[1]);
-    // 「人」なしの純粋な数値（1〜20）は段取り人数と解釈
-    const n=parseInt(s);return(!isNaN(n)&&n>=1&&n<=20)?n:0;
+    // 「N人」の明示フォーマットのみ解釈（誤検知防止のため純粋数値は対象外）
+    const m=String(cell||'').match(/(\d+)\s*人/);return m?parseInt(m[1]):0;
   }
   // 行データ配列 → jobsオブジェクト配列
   function parseRows(rows){
@@ -2262,29 +2260,16 @@ window.onImpFile=async function(){
       const end=parseTime(row[enIdx]);
       // 時刻なし行スキップ設定が有効なら、開始・終了どちらかが空の行を除外
       if(skipNoTime&&(!start||!end)) continue;
-      // 品番行の直後（次の「有効な品番行」まで最大12行）を走査して kata / ninzu / hito を取得
-      // ※「有効な品番行」= 品番 + 開始時刻 + 終了時刻 がある行（中間行は含まない）
+      // 型数: 品番の2行下のC列（kataCol）、人数: 品番の3行下のC列
       let kata=0, ninzu=0, hito=0;
-      for(let la=i+1; la<dataRows.length && la<=i+12; la++){
-        const lr=dataRows[la];
-        const lrPart=String(lr[pIdx]||'').trim();
-        if(lrPart&&!isDash(lrPart)){
-          // 開始・終了時刻もあれば次の製品行 → 走査終了
-          const lrSt=parseTime(lr[stIdx]), lrEn=parseTime(lr[enIdx]);
-          if(lrSt&&lrEn) break;
-          // 時刻なし → 中間行（材質・品目コード等）なのでスキップして続行
-        }
-        // C列（kataCol）から型数・段取人数を取得
-        if(kataIdx>=0){
-          const cv=String(lr[kataIdx]||'').trim();
-          if(!kata  && parseKata(cv))  kata  = parseKata(cv);
-          if(!ninzu && parseNinzu(cv)) ninzu = parseNinzu(cv);
-        }
-        // D列（planCol）次行から作業人数(hito)を取得（hitoFromNextRow有効時のみ）
-        if(!hito && hitoFromNextRow && la===i+1){
-          const nv=parseInt(String(lr[plIdx]||'').replace(/[^\d]/g,''));
-          if(nv>0&&nv<=50) hito=nv;
-        }
+      if(kataIdx>=0){
+        if(i+2<dataRows.length) kata  = parseKata (String(dataRows[i+2][kataIdx]||'').trim());
+        if(i+3<dataRows.length) ninzu = parseNinzu(String(dataRows[i+3][kataIdx]||'').trim());
+      }
+      // D列（planCol）の1行下から作業人数(hito)を取得（hitoFromNextRow有効時のみ）
+      if(hitoFromNextRow && i+1<dataRows.length){
+        const nv=parseInt(String(dataRows[i+1][plIdx]||'').replace(/[^\d]/g,''));
+        if(nv>0&&nv<=50) hito=nv;
       }
       jobs.push({seq:jobs.length+1,part,plan,kata,ninzu,hito,start,end,status:'waiting',actualCount:0,actualStart:'',actualEnd:''});
     }
@@ -2340,22 +2325,13 @@ window.onImpFile=async function(){
           const end=parseTime(row[enIdx]);
           if(skipNoTime&&(!start||!end)) continue; // メモ行スキップ
           let kata=0, ninzu=0, hito=0;
-          for(let la=fi+1; la<filtered.length && la<=fi+12; la++){
-            const lr=filtered[la];
-            const lrPart=String(lr[pIdx]||'').trim();
-            if(lrPart&&!isDash(lrPart)){
-              const lrSt=parseTime(lr[stIdx]),lrEn=parseTime(lr[enIdx]);
-              if(lrSt&&lrEn) break;
-            }
-            if(kataIdx>=0){
-              const cv=String(lr[kataIdx]||'').trim();
-              if(!kata  && parseKata(cv))  kata  = parseKata(cv);
-              if(!ninzu && parseNinzu(cv)) ninzu = parseNinzu(cv);
-            }
-            if(!hito&&hitoFromNextRow&&la===fi+1){
-              const nv=parseInt(String(lr[plIdx]||'').replace(/[^\d]/g,''));
-              if(nv>0&&nv<=50) hito=nv;
-            }
+          if(kataIdx>=0){
+            if(fi+2<filtered.length) kata  = parseKata (String(filtered[fi+2][kataIdx]||'').trim());
+            if(fi+3<filtered.length) ninzu = parseNinzu(String(filtered[fi+3][kataIdx]||'').trim());
+          }
+          if(hitoFromNextRow&&fi+1<filtered.length){
+            const nv=parseInt(String(filtered[fi+1][plIdx]||'').replace(/[^\d]/g,''));
+            if(nv>0&&nv<=50) hito=nv;
           }
           jobs.push({seq:jobs.length+1,part,plan,kata,ninzu,hito,start,end,status:'waiting',actualCount:0,actualStart:'',actualEnd:''});
         }
