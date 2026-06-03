@@ -4432,11 +4432,12 @@ function renderKanbanCard(d){
   const prodTime = d.prodStart
     ? (d.prodEnd ? `${d.prodStart}〜${d.prodEnd}` : `${d.prodStart}〜`) : '';
   const statusMark = d.status==='in_progress'?'▶ ':(d.status==='done'?'✓ ':'');
-  const rolesHtml = (roles.金型取付||roles.初品出し||roles.品質確認) ? `
+  const rolesHtml = (roles.金型取付||roles.初品出し||roles.品質確認||roles.作業者) ? `
     <div class="kcard-roles">
-      ${roles.品質確認?`<div class="kcard-role"><span class="kcard-role-lbl">品質</span><span class="kcard-role-val">${roles.品質確認}</span></div>`:''}
-      ${roles.初品出し?`<div class="kcard-role"><span class="kcard-role-lbl">初品</span><span class="kcard-role-val">${roles.初品出し}</span></div>`:''}
-      ${roles.金型取付?`<div class="kcard-role"><span class="kcard-role-lbl">取付</span><span class="kcard-role-val">${roles.金型取付}</span></div>`:''}
+      ${(!d.noSetup&&roles.品質確認)?`<div class="kcard-role"><span class="kcard-role-lbl">品質</span><span class="kcard-role-val">${roles.品質確認}</span></div>`:''}
+      ${(!d.noSetup&&roles.初品出し)?`<div class="kcard-role"><span class="kcard-role-lbl">初品</span><span class="kcard-role-val">${roles.初品出し}</span></div>`:''}
+      ${(!d.noSetup&&roles.金型取付)?`<div class="kcard-role"><span class="kcard-role-lbl">取付</span><span class="kcard-role-val">${roles.金型取付}</span></div>`:''}
+      ${roles.作業者?`<div class="kcard-role"><span class="kcard-role-lbl">作業</span><span class="kcard-role-val">${roles.作業者}</span></div>`:''}
     </div>` : '';
   const canEdit = d._source==='manual' || d.fromPlan;
   const editBtn = (canEdit && d._id)
@@ -4459,6 +4460,7 @@ function renderKanbanCard(d){
         ${isDefault ? `<span style="color:#f59e0b;">⚠</span>` : ''}
         <span>🔧${kata_ != null ? kata_ : 1}型</span>
         <span>👤${ninzu_ != null ? ninzu_ : 1}人<span style="color:#94a3b8;">（段取）</span></span>
+        <span>👷${worker__ > 0 ? worker__ : '<span style="color:#f59e0b;">?</span>'}人<span style="color:#94a3b8;">（作業）</span></span>
         <span style="color:#94a3b8;">標準${stdMin_}分</span>
       </div>`;
   const cls = d.status==='in_progress'?'kcard k-active':(d.status==='done'?'kcard k-done':'kcard k-scheduled');
