@@ -7283,6 +7283,8 @@ function renderBoard(){
     if(partRate2===null&&partActual>0&&cjCT) partRate2=Math.round(partActual/cjCT.plan*100);
     const proRateDisp=partRate2!==null?partRate2+'%':'-';
     const barW=l.status==='setup'?100:(pv>0?Math.min(Math.round(partActual/pv*100),100):0);
+    // 品番リスト（jobs宣言をここに移動してTDZを回避）
+    const jobs=(l.jobs||[]).filter(j=>j.plan>0);
     // 遅れ分数：スケジュール開始基準で計算（段取・トラブルを含む計画全体の遅れ）
     let delayDisp='';
     if(partActual>0&&!(l.workEnd&&l.workEnd!=='')){
@@ -7367,7 +7369,6 @@ function renderBoard(){
     }
     const paceDisp=pRows.length?'<div style="font-size:10px;color:#555;margin-top:3px;line-height:1.9;">⚡ '+pRows.join('　')+'</div>':'';
     // 品番リスト
-    const jobs=(l.jobs||[]).filter(j=>j.plan>0);
     let sched='';
     if(jobs.length){
       sched='<div class="sched">';
