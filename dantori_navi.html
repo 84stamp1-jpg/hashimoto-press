@@ -4000,17 +4000,29 @@ async function saveWorkerRoleMaster(){
   };
 
   try {
-    const fbUrl = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/, '');
-    // 並行保存
-    const saves = [
-      fetch(`${fbUrl}/settings/workerRoles.json`,        { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newRoles)    }),
-      fetch(`${fbUrl}/settings/pressWorkerList.json`,    { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newList)     }),
-      fetch(`${fbUrl}/settings/workerPriorityLine.json`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newPriLine)  }),
-      fetch(`${fbUrl}/settings/workerAttendance.json`,   { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newAtt)      }),
-      fetch(`${fbUrl}/settings/roleTimeMins.json`,       { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newRoleTime) }),
-    ];
-    const results = await Promise.all(saves);
-    results.forEach(function(r){ if(!r.ok) throw new Error('HTTP ' + r.status); });
+    // ESM Firebase SDK 経由で保存（REST fetchではなくSDKを使うことで認証・ルール問題を回避）
+    const sdk = window._fbSDK;
+    if(sdk && sdk.db && sdk.ref && sdk.update) {
+      await sdk.update(sdk.ref(sdk.db, 'settings'), {
+        workerRoles:        newRoles,
+        pressWorkerList:    newList,
+        workerPriorityLine: newPriLine,
+        workerAttendance:   newAtt,
+        roleTimeMins:       newRoleTime,
+      });
+    } else {
+      // フォールバック: REST fetch（SDK未初期化時）
+      const fbUrl = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/, '');
+      const saves = [
+        fetch(`${fbUrl}/settings/workerRoles.json`,        { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newRoles)    }),
+        fetch(`${fbUrl}/settings/pressWorkerList.json`,    { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newList)     }),
+        fetch(`${fbUrl}/settings/workerPriorityLine.json`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newPriLine)  }),
+        fetch(`${fbUrl}/settings/workerAttendance.json`,   { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newAtt)      }),
+        fetch(`${fbUrl}/settings/roleTimeMins.json`,       { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newRoleTime) }),
+      ];
+      const results = await Promise.all(saves);
+      results.forEach(function(r){ if(!r.ok) throw new Error('HTTP ' + r.status); });
+    }
     // メモリ更新
     WORKER_ROLE_MASTER   = newRoles;
     PRESS_WORKER_LIST    = newList;
@@ -7047,6 +7059,8 @@ onValue(ref(db,'lines'),s=>{
     Object.keys(lineNamesMap).forEach(id=>{if(lineNamesMap[id])lines[id]={...(lines[id]||{status:'waiting',plan:0,actual:0,updatedAt:0,jobs:[]}),name:lineNamesMap[id]};});
     // グローバルに公開（_autoSyncDantoriFromPlan で linesData より優先して使用）
     window._pmLinesRealtime = lines;
+    // Firebase SDK をグローバル公開（非モジュールスクリプトから利用）
+    if(!window._fbSDK) window._fbSDK = { db, ref, update };
     updateLineSelects();
     renderGroupTabs();
     renderBoard();
