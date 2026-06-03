@@ -8383,12 +8383,12 @@ window.saveSets=function(){
     ns[id]=cv+pv;
     nsp[id]={c:cv,p:pv};
   });
-  // 保存
-  const cur={}; try{ const snap=window._lastSettingsVal||{}; Object.assign(cur,snap); }catch(e){}
-  cur.setupTimes=ns;
-  cur.setupParams=nsp;
-  cur.groups=groupCfg.map(g=>({gid:g.gid,label:g.label,ids:[...g.ids],importMap:g.importMap||{}}));
-  set(ref(db,'settings'),cur);
+  // 保存（update で対象フィールドのみ更新し、他設定を保持）
+  update(ref(db,'settings'),{
+    setupTimes:  ns,
+    setupParams: nsp,
+    groups: groupCfg.map(g=>({gid:g.gid,label:g.label,ids:[...g.ids],importMap:g.importMap||{}})),
+  });
   sets={...SDEFS,...ns};
   setupParams={...nsp};
   const m=document.getElementById('smsg');m.textContent='保存しました ✓';setTimeout(()=>{m.textContent='';},2000);
@@ -8607,6 +8607,7 @@ window.saveGroups=function(){
       skipNoTime:(document.getElementById(`mp-${gi}-skipnot`)?.checked!==false),
       hitoFromNextRow:(document.getElementById(`mp-${gi}-hitonext`)?.checked||false),
       kataCol:(document.getElementById(`mp-${gi}-kata`)?.value||'').trim().toUpperCase(),
+      hitoCol:(document.getElementById(`mp-${gi}-hito`)?.value||'').trim().toUpperCase(),
       altPartCol:(document.getElementById(`mp-${gi}-altpart`)?.value||'').trim().toUpperCase()
     };
   });
@@ -8628,8 +8629,8 @@ window.saveGroups=function(){
   const allIds=getAllIDS();
   const stNs={};allIds.forEach(id=>{const v=parseInt(document.getElementById('st-'+id)?.value);stNs[id]=isNaN(v)?(sets[id]||45):v;});
   const saveObj={groups:groupCfg.map(g=>({gid:g.gid,label:g.label,ids:[...g.ids],importMap:g.importMap||{}})),setupTimes:stNs,lineNames:lineNamesMap,lineNoAlert:lineNoAlertMap};
-  // settings として一括保存（lines/ パスには書き込まない）
-  set(ref(db,'settings'),saveObj);
+  // settings として保存（update で対象フィールドのみ更新し、workerRoles等他設定を保持）
+  update(ref(db,'settings'),saveObj);
   const m=document.getElementById('gmsg');m.textContent='保存しました ✓';setTimeout(()=>{m.textContent='';},2000);
   updateLineSelects();
   renderGroupTabs();
@@ -8932,7 +8933,7 @@ function _renderPeAllTables(ids){
     h+=`<div class="pe-section" data-lineid="${lineId}" style="margin-bottom:14px;">`;
     h+=`<div style="font-size:12px;font-weight:700;color:#1a1a1a;margin-bottom:5px;padding-bottom:4px;border-bottom:1px solid #e0e0e0;">${_esc(getLineName(lineId))}</div>`;
     h+='<div style="overflow-x:auto;"><table class="pe-tbl">';
-    h+='<thead><tr><th>#</th><th>品番</th><th>予定数</th><th>開始</th><th>終了</th><th>段取りなし</th><th>実績状況</th><th></th></tr></thead>';
+    h+='<thead><tr><th>#</th><th>品番</th><th>予定数</th><th>開始</th><th>終了</th><th>段取りなし</th><th style="white-space:nowrap;">作業人数</th><th>実績状況</th><th></th></tr></thead>';
     h+=`<tbody class="pe-body" data-lineid="${lineId}">`;
     if(origJobs.length){
       origJobs.forEach((j,i)=>{h+=_buildPeRow(j,i,i+1,lineId);});
@@ -8963,6 +8964,7 @@ function _buildPeRow(j,origJi,rowNum,lineId){
     <td><input class="pe-inp w-time" type="time" value="${j.start||''}"></td>
     <td><input class="pe-inp w-time" type="time" value="${j.end||''}"></td>
     <td style="text-align:center;"><input type="checkbox" ${j.noSetup?'checked':''}></td>
+    <td style="text-align:center;"><input class="pe-inp" type="number" min="0" max="99" value="${j.hito||0}" style="width:44px;padding:3px;text-align:center;" title="作業人数"></td>
     <td>${actBadge}</td>
     <td><button class="pe-del" onclick="window.removePeRow(this)">削除</button></td>
   </tr>`;
@@ -8984,6 +8986,7 @@ window.addPeRow=function(lineId){
     <td><input class="pe-inp w-time" type="time" value="${defStart}"></td>
     <td><input class="pe-inp w-time" type="time" value=""></td>
     <td style="text-align:center;"><input type="checkbox"></td>
+    <td style="text-align:center;"><input class="pe-inp" type="number" min="0" max="99" value="0" style="width:44px;padding:3px;text-align:center;" title="作業人数"></td>
     <td><span class="pe-act none">未実施</span></td>
     <td><button class="pe-del" onclick="window.removePeRow(this)">削除</button></td>`;
   tbody.appendChild(tr);
@@ -9030,15 +9033,16 @@ window.savePlanEdit=async function(){
         const origJi=parseInt(row.dataset.origji);
         const oj=(origJi>=0&&origJobs[origJi])?origJobs[origJi]:{};
         const inps=row.querySelectorAll('.pe-inp');
-        // ...oj で kata/ninzu/hito/status/actualCount 等を保持しつつ編集値で上書き
+        // ...oj で kata/ninzu/status/actualCount 等を保持しつつ編集値で上書き
         return {
           ...oj,
-          seq:ri+1,
-          part:inps[0].value.trim(),
-          plan:parseInt(inps[1].value)||0,
-          start:inps[2].value,
-          end:inps[3].value,
-          noSetup:row.querySelector('input[type="checkbox"]').checked,
+          seq:   ri+1,
+          part:  inps[0].value.trim(),
+          plan:  parseInt(inps[1].value)||0,
+          start: inps[2].value,
+          end:   inps[3].value,
+          noSetup: row.querySelector('input[type="checkbox"]').checked,
+          hito:  parseInt(inps[4]?.value)||0,  // 作業人数（段取り計画・自動割り振りに反映）
         };
       });
       const totalPlan=mergedJobs.reduce((s,j)=>s+j.plan,0);
