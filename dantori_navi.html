@@ -9110,11 +9110,13 @@ window.onImpFile=async function(){
         const s3 = String(raw3??'').trim();
         // 型数セルが「-」系（段取りなしの明示）→ noSetup=true
         if(isDash(s2) || isDash(s3)){
+          // 文字列「-」「－」→ 段取りなし確定
           noSetup = true;
         } else {
-          // 純数値（1,2...）も「N型」「N人」テキストも両対応
           kata  = parseKata (s2) || (typeof raw2==='number'&&raw2>=1&&raw2<=20?Math.round(raw2):0);
           ninzu = parseNinzu(s3) || (typeof raw3==='number'&&raw3>=1&&raw3<=20?Math.round(raw3):0);
+          // 数値ゼロ（Excelで「-」表示）も段取りなし扱い
+          if(kata===0 && ninzu===0) noSetup = true;
         }
       }
       // 作業者人数の読み取り（D列 i+2行目 = 作業者人数結合セル）
@@ -9193,6 +9195,7 @@ window.onImpFile=async function(){
             } else {
               kata  = parseKata (s2v) || (typeof raw2v==='number'&&raw2v>=1&&raw2v<=20?Math.round(raw2v):0);
               ninzu = parseNinzu(s3v) || (typeof raw3v==='number'&&raw3v>=1&&raw3v<=20?Math.round(raw3v):0);
+              if(kata===0 && ninzu===0) noSetup = true;
             }
           }
           // 作業者人数: fi+2行目の hitoIdx列 or planIdx列（同列D）から取得
