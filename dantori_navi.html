@@ -4442,8 +4442,13 @@ function renderKanbanCard(d){
   // 実配置作業者数・不足数
   const assignedWorkers = (roles.作業者||'').split(/[,、]/).map(s=>s.trim()).filter(Boolean);
   const shortage = (worker__ > 0 && assignedWorkers.length < worker__) ? worker__ - assignedWorkers.length : 0;
+  // 空き人員チェック：不足分を補える人が他にいれば「未割当」、いなければ「人員不足」
+  const freeWorkers = shortage > 0 ? _countFreeWorkers(d) : 0;
   const shortageHtml = shortage > 0
-    ? `<span style="color:#dc2626;font-weight:700;">⚠ ${shortage}名不足</span>` : '';
+    ? (freeWorkers >= shortage
+        ? `<span style="color:#d97706;font-weight:700;">⚠ ${shortage}名未割当</span>`
+        : `<span style="color:#dc2626;font-weight:700;">⚠ ${shortage}名人員不足</span>`)
+    : '';
   // noSetupで作業者未設定
   const noSetupUnset = d.noSetup && worker__ > 0 && assignedWorkers.length === 0;
   const kataHtml = d.noSetup
@@ -4663,6 +4668,28 @@ const RT_W     = (RT_END - RT_START) * RT_PPM; // 1080px
 
 function rt_toX(m){ return Math.max(0, Math.min(RT_W, (m - RT_START) * RT_PPM)); }
 function rt_toMin(t){ if(!t) return null; const [h,m] = t.split(':').map(Number); return isNaN(h) ? null : h*60+m; }
+
+// 指定エントリの生産時間帯に空いているプレス作業者数を返す
+// （他のエントリで作業者として割り当て済みの人を除いた残り人数）
+function _countFreeWorkers(entry){
+  const allWorkers = getPressWorkerList();
+  const ps = rt_toMin(entry.prodStart || entry.setupStart);
+  const pe = rt_toMin(entry.prodEnd);
+  const pto = pe !== null ? pe : (ps !== null ? ps + 480 : null);
+  if(ps === null) return allWorkers.length;
+  const busy = new Set();
+  dantoriSchedule.forEach(e => {
+    if(e._id === entry._id) return;
+    const r = e.roles || {};
+    const eps = rt_toMin(e.prodStart || e.setupStart);
+    const epe = rt_toMin(e.prodEnd);
+    const eto = epe !== null ? epe : (eps !== null ? eps + 480 : null);
+    if(eps === null || eto === null) return;
+    if(eps >= pto || eto <= ps) return; // 時間帯が重ならない
+    (r.作業者||'').split(/[,、]/).map(s=>s.trim()).filter(Boolean).forEach(n => busy.add(n));
+  });
+  return allWorkers.filter(n => !busy.has(n)).length;
+}
 
 // 担当者マスター（セクション付き。設定で上書き可）
 const WORKER_MASTER = [
