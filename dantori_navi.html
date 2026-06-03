@@ -1867,6 +1867,11 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
           <option value="done">完了</option>
         </select>
       </div>
+      <div class="form-group" style="margin:0 0 10px;">
+        <label>作業人数 <span style="font-size:10px;color:#94a3b8;font-weight:400;">（生産担当の人数）</span></label>
+        <input type="number" id="dt-worker-count" min="0" max="99" value="0"
+               style="width:80px;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-family:inherit;font-size:13px;"/>
+      </div>
     </div>
     <!-- プレス作業者 datalist（作業者マスタから自動生成） -->
     <datalist id="staffDatalist-press"></datalist>
@@ -3208,7 +3213,7 @@ function _linesJobsHash(lines){
     if(line && Array.isArray(line.jobs)){
       rel[id] = line.jobs
         .filter(j => j && j.part && j.start && j.end && !j.history)
-        .map(j => `${j.part}|${j.start}|${j.end}|${j.kata||0}|${j.ninzu||0}|${!!j.noSetup}`);
+        .map(j => `${j.part}|${j.start}|${j.end}|${j.kata||0}|${j.ninzu||0}|${j.hito||0}|${!!j.noSetup}`);
     }
   });
   return JSON.stringify(rel);
@@ -4225,22 +4230,23 @@ async function saveDantoriEntry(){
   const roleWorker  = chipGetValues('chip-wrap-worker').join(',');
   const note        = document.getElementById('dt-note').value.trim();
   const noSetup     = !!(document.getElementById('dt-no-setup')?.checked);
+  const workerCount = parseInt(document.getElementById('dt-worker-count')?.value) || 0;
 
   if(!partNo){  alert('品番を入力してください'); return; }
   if(!prodStart){ alert('生産開始時刻を入力してください'); return; }
 
-  // 編集時は既存エントリのmountCount/workerCount/mountKataを保持
+  // 編集時は既存エントリのmountCount/mountKataを保持
   const existingEntry = editingDantoriId ? dantoriSchedule.find(e=>e._id===editingDantoriId) : null;
   const entry = {
     lineId, partNo,
     setupStart: noSetup ? '' : setupStart,
     prodStart, prodEnd, status, noSetup,
+    workerCount,
     roles:{ 金型取付:roleMount, 初品出し:roleIppin, 品質確認:roleQuality, 作業者:roleWorker },
     note, updatedAt:Date.now(), isManual:true,
     ...(existingEntry ? {
       plan:       existingEntry.plan       || 0,
       mountCount: existingEntry.mountCount || 0,
-      workerCount:existingEntry.workerCount|| 0,
       mountKata:  existingEntry.mountKata  || 1,
       fromPlan:   existingEntry.fromPlan   || false,
     } : {}),
@@ -4288,6 +4294,7 @@ function showAddDantori(){
   chipSet('chip-wrap-quality', '');
   document.getElementById('dt-note').value         = '';
   document.getElementById('dt-no-setup').checked   = false;
+  document.getElementById('dt-worker-count').value = '0';
   onDtNoSetupChange();
   document.getElementById('dantoriModal').style.display = 'flex';
 }
@@ -4307,8 +4314,9 @@ function showEditDantori(id){
   chipSet('chip-wrap-lift',    (entry.roles&&entry.roles.初品出し)  || '');
   chipSet('chip-wrap-quality', (entry.roles&&entry.roles.品質確認)  || '');
   chipSet('chip-wrap-worker',  (entry.roles&&entry.roles.作業者)    || '');
-  document.getElementById('dt-note').value        = entry.note        || '';
-  document.getElementById('dt-no-setup').checked  = !!(entry.noSetup);
+  document.getElementById('dt-note').value         = entry.note        || '';
+  document.getElementById('dt-no-setup').checked   = !!(entry.noSetup);
+  document.getElementById('dt-worker-count').value = entry.workerCount  || 0;
   onDtNoSetupChange();
   document.getElementById('dantoriModal').style.display = 'flex';
 }
@@ -5039,8 +5047,11 @@ function _mergePlanEntries(entries, existing, dateStr){
 }
 
 async function _autoSyncDantoriFromPlan(){
-  if(!Object.keys(linesData).length) return;
-  const entries = _buildDantoriEntriesFromLines(linesData);
+  // リアルタイムESMデータ(window._pmLinesRealtime)を優先、なければRESTポーリングのlinesData
+  const srcLines = (window._pmLinesRealtime && Object.keys(window._pmLinesRealtime).length)
+    ? window._pmLinesRealtime : linesData;
+  if(!Object.keys(srcLines).length) return;
+  const entries = _buildDantoriEntriesFromLines(srcLines);
   const fbUrl   = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
   const dateStr = getDantoriDatePath();
   try {
@@ -7034,6 +7045,8 @@ onValue(ref(db,'lines'),s=>{
     lines=s.val()||{};
     // lineNamesMap の名前を適用（lines内のname欠損を補完）
     Object.keys(lineNamesMap).forEach(id=>{if(lineNamesMap[id])lines[id]={...(lines[id]||{status:'waiting',plan:0,actual:0,updatedAt:0,jobs:[]}),name:lineNamesMap[id]};});
+    // グローバルに公開（_autoSyncDantoriFromPlan で linesData より優先して使用）
+    window._pmLinesRealtime = lines;
     updateLineSelects();
     renderGroupTabs();
     renderBoard();
@@ -8884,18 +8897,29 @@ function renderImpPreview(jobsObj,mp,g){
     const hasNinzu=jobs.some(j=>j.ninzu>0);
     const hasHito =jobs.some(j=>j.hito >0);
     h+=`<div style="font-size:11px;font-weight:700;color:#1a1a1a;margin:8px 0 3px;">📌 ${lineName}（${jobs.length}件）</div>`;
-    const colCount=5+(hasKata?1:0)+(hasNinzu?1:0)+(hasHito?1:0);
-    h+=`<div style="overflow-x:auto;margin-bottom:4px;"><table class="jtbl"><thead><tr><th>#</th><th>品番</th><th>計画数</th><th>開始</th><th>終了</th>${hasKata?'<th>型数</th>':''}${hasNinzu?'<th>段取人数</th>':''}${hasHito?'<th>作業人数</th>':''}</tr></thead><tbody>`;
-    jobs.slice(0,8).forEach(j=>{
+    const colCount=6+(hasKata?1:0)+(hasNinzu?1:0)+(hasHito?1:0);
+    h+=`<div style="overflow-x:auto;margin-bottom:4px;"><table class="jtbl" data-lineid="${id}"><thead><tr><th>#</th><th>品番</th><th>計画数</th><th>開始</th><th>終了</th>${hasKata?'<th>型数</th>':''}${hasNinzu?'<th>段取人数</th>':''}${hasHito?'<th>作業人数</th>':''}<th style="white-space:nowrap;">段取りなし</th></tr></thead><tbody>`;
+    jobs.forEach((j,ji)=>{
       const warn=!j.start||!j.end?' style="background:#fff8e1;"':'';
-      h+=`<tr${warn}><td>${j.seq}</td><td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${j.part}</td><td>${j.plan.toLocaleString()}個</td><td>${j.start||'<span style="color:#e67e22;">--</span>'}</td><td>${j.end||'<span style="color:#e67e22;">--</span>'}</td>${hasKata?`<td style="text-align:center;">${j.kata>0?j.kata+'型':'<span style="color:#aaa;">-</span>'}</td>`:''}${hasNinzu?`<td style="text-align:center;">${j.ninzu>0?j.ninzu+'人':'<span style="color:#aaa;">-</span>'}</td>`:''}${hasHito?`<td style="text-align:center;">${j.hito>0?j.hito+'人':'<span style="color:#aaa;">-</span>'}</td>`:''}</tr>`;
+      const chk=j.noSetup?'checked':'';
+      h+=`<tr${warn}><td>${j.seq}</td><td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${j.part}</td><td>${j.plan.toLocaleString()}個</td><td>${j.start||'<span style="color:#e67e22;">--</span>'}</td><td>${j.end||'<span style="color:#e67e22;">--</span>'}</td>${hasKata?`<td style="text-align:center;">${j.kata>0?j.kata+'型':'<span style="color:#aaa;">-</span>'}</td>`:''}${hasNinzu?`<td style="text-align:center;">${j.ninzu>0?j.ninzu+'人':'<span style="color:#aaa;">-</span>'}</td>`:''}${hasHito?`<td style="text-align:center;">${j.hito>0?j.hito+'人':'<span style="color:#aaa;">-</span>'}</td>`:''}<td style="text-align:center;"><input type="checkbox" data-lid="${id}" data-ji="${ji}" ${chk} onchange="window._impToggleNoSetup(this)"></td></tr>`;
     });
-    if(jobs.length>8) h+=`<tr><td colspan="${colCount}" style="text-align:center;color:#aaa;font-size:10px;">…他${jobs.length-8}件</td></tr>`;
+    if(jobs.length>8) h+=`<tr><td colspan="${colCount}" style="text-align:center;color:#aaa;font-size:10px;display:none;">（全${jobs.length}件表示中）</td></tr>`;
     h+='</tbody></table></div>';
   }
   prevEl.innerHTML=h;
   btn.disabled=false;
 }
+// インポートプレビューの「段取りなし」チェックボックス変更時に_impParsedJobsを更新
+window._impToggleNoSetup = function(cb){
+  const lid = cb.dataset.lid;
+  const ji  = parseInt(cb.dataset.ji);
+  if(_impParsedJobs[lid] && _impParsedJobs[lid][ji] != null){
+    _impParsedJobs[lid][ji].noSetup = cb.checked;
+    // kata/ninzu は維持（noSetupだけ上書き）
+  }
+};
+
 // ===== 計画修正（実績を維持したまま計画を変更） =====
 let _peAllLines={}; // {lineId: [...origJobs]}
 
