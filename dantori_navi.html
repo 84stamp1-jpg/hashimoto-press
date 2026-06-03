@@ -9094,29 +9094,40 @@ window.onImpFile=async function(){
       const end=parseTime(row[enIdx]);
       // 時刻なし行スキップ設定が有効なら、開始・終了どちらかが空の行を除外
       if(skipNoTime&&(!start||!end)) continue;
-      // Excel行構造（品番を1行目として）:
-      //   i行目(0): 品番 ／ planIdx列: 生産台数（i&i+1結合）
-      //   i+1行目 : planIdx列: 生産台数結合セル末尾（空）
-      //   i+2行目 : kataIdx列(C): 型数「N型」／ hitoIdx列(D): 作業者人数（i+2&i+3結合）
-      //   i+3行目 : kataIdx列(C): 段取人数「N人」／ hitoIdx列(D): 作業者人数結合末尾（空）
+      // ── Excel行構造（品番行をi=0として）────────────────────────────
+      //   i行目  : 品番 ／ C列: 段取分 ／ D列: 生産台数（i&i+1結合）
+      //   i+1行目: 品名  ／ C列: CT    ／ D列: 生産台数結合末尾（空）
+      //   i+2行目: C列=型数（純数値 or「N型」）／ D列=作業者人数（i+2&i+3結合）
+      //   i+3行目: C列=型数と同値（結合末尾）  ／ D列=空（結合末尾）
+      //   i+4行目: 全空（区切り行）
+      // ─────────────────────────────────────────────────────────────
       let kata=0, ninzu=0, hito=0;
+      let noSetup = false; // デフォルトはオフ
       if(kataIdx>=0){
-        const raw2 = i+2<dataRows.length ? dataRows[i+2][kataIdx] : undefined; // 型数
-        const raw3 = i+3<dataRows.length ? dataRows[i+3][kataIdx] : undefined; // 段取人数
-        kata  = parseKata (String(raw2??'').trim()) || (typeof raw2==='number'&&raw2>=1&&raw2<=20?raw2:0);
-        ninzu = parseNinzu(String(raw3??'').trim()) || (typeof raw3==='number'&&raw3>=1&&raw3<=20?raw3:0);
+        const raw2 = i+2<dataRows.length ? dataRows[i+2][kataIdx] : undefined; // C列 i+2 → 型数
+        const raw3 = i+3<dataRows.length ? dataRows[i+3][kataIdx] : undefined; // C列 i+3 → 段取人数(結合)
+        const s2 = String(raw2??'').trim();
+        const s3 = String(raw3??'').trim();
+        // 型数セルが「-」系（段取りなしの明示）→ noSetup=true
+        if(isDash(s2) || isDash(s3)){
+          noSetup = true;
+        } else {
+          // 純数値（1,2...）も「N型」「N人」テキストも両対応
+          kata  = parseKata (s2) || (typeof raw2==='number'&&raw2>=1&&raw2<=20?Math.round(raw2):0);
+          ninzu = parseNinzu(s3) || (typeof raw3==='number'&&raw3>=1&&raw3<=20?Math.round(raw3):0);
+        }
       }
-      if(hitoIdx>=0){
-        // kataIdxが設定されている場合: 生産台数と同列でも i+2行目（作業者人数結合セル）を読む
-        // kataIdxが未設定の場合: 同行（従来の挙動）
-        const hitoRow = kataIdx>=0
-          ? (i+2<dataRows.length ? dataRows[i+2] : row)
-          : row;
-        const hv = hitoRow[hitoIdx];
-        hito = parseNinzu(String(hv??'').trim()) || (typeof hv==='number'&&hv>=1&&hv<=20?hv:0);
+      // 作業者人数の読み取り（D列 i+2行目 = 作業者人数結合セル）
+      {
+        const hitoRow = i+2<dataRows.length ? dataRows[i+2] : null;
+        if(hitoRow){
+          // 優先: hitoIdxが指定されていればその列、未指定ならplanIdx（同列D）を使用
+          const hColIdx = hitoIdx>=0 ? hitoIdx : plIdx;
+          const hv = hitoRow[hColIdx];
+          if(!isDash(String(hv??'').trim()))
+            hito = parseNinzu(String(hv??'').trim()) || (typeof hv==='number'&&hv>=1&&hv<=20?Math.round(hv):0);
+        }
       }
-      // 段取りなし: デフォルトはオフ（インポートプレビューで手動チェック）
-      const noSetup = false;
       jobs.push({seq:jobs.length+1,part,plan,kata,ninzu,hito,start,end,noSetup,status:'waiting',actualCount:0,actualStart:'',actualEnd:''});
     }
     return jobs;
@@ -9171,23 +9182,29 @@ window.onImpFile=async function(){
           const end=parseTime(row[enIdx]);
           if(skipNoTime&&(!start||!end)) continue; // メモ行スキップ
           let kata=0, ninzu=0, hito=0;
+          let noSetup=false;
           if(kataIdx>=0){
-            // fi+2行目(C列): 型数 ／ fi+3行目(C列): 段取人数
             const raw2v = fi+2<filtered.length ? filtered[fi+2][kataIdx] : undefined;
             const raw3v = fi+3<filtered.length ? filtered[fi+3][kataIdx] : undefined;
-            kata  = parseKata (String(raw2v??'').trim()) || (typeof raw2v==='number'&&raw2v>=1&&raw2v<=20?raw2v:0);
-            ninzu = parseNinzu(String(raw3v??'').trim()) || (typeof raw3v==='number'&&raw3v>=1&&raw3v<=20?raw3v:0);
+            const s2v = String(raw2v??'').trim();
+            const s3v = String(raw3v??'').trim();
+            if(isDash(s2v) || isDash(s3v)){
+              noSetup = true;
+            } else {
+              kata  = parseKata (s2v) || (typeof raw2v==='number'&&raw2v>=1&&raw2v<=20?Math.round(raw2v):0);
+              ninzu = parseNinzu(s3v) || (typeof raw3v==='number'&&raw3v>=1&&raw3v<=20?Math.round(raw3v):0);
+            }
           }
-          if(hitoIdx>=0){
-            // kataIdxが設定されている場合: fi+2行目(D列 i+2&i+3結合セル)から作業者人数を読む
-            const hitoRow = kataIdx>=0
-              ? (fi+2<filtered.length ? filtered[fi+2] : row)
-              : row;
-            const hv = hitoRow[hitoIdx];
-            hito = parseNinzu(String(hv??'').trim()) || (typeof hv==='number'&&hv>=1&&hv<=20?hv:0);
+          // 作業者人数: fi+2行目の hitoIdx列 or planIdx列（同列D）から取得
+          {
+            const hitoFRow = fi+2<filtered.length ? filtered[fi+2] : null;
+            if(hitoFRow){
+              const hColIdx = hitoIdx>=0 ? hitoIdx : plIdx;
+              const hv = hitoFRow[hColIdx];
+              if(!isDash(String(hv??'').trim()))
+                hito = parseNinzu(String(hv??'').trim()) || (typeof hv==='number'&&hv>=1&&hv<=20?Math.round(hv):0);
+            }
           }
-          // 段取りなし: デフォルトはオフ（インポートプレビューで手動チェック）
-          const noSetup=false;
           jobs.push({seq:jobs.length+1,part,plan,kata,ninzu,hito,start,end,noSetup,status:'waiting',actualCount:0,actualStart:'',actualEnd:''});
         }
         _impParsedJobs[id]=jobs;
