@@ -4190,19 +4190,21 @@ function chipAddWithConflictCheck(wid, name){
   chipAdd(wid, name);
   const isDantoriChip = _DANTORI_CHIP_WIDS.includes(wid) || wid.startsWith('chip-wrap-shift-');
   if(!isDantoriChip) return;
+  // toMin をここで定義（グローバル未定義のため）
+  const _toMin = t => { if(!t) return null; const [h,m] = t.split(':').map(Number); return isNaN(h) ? null : h*60+m; };
   // モーダルの現在入力時間帯を取得
   const setupStart = document.getElementById('dt-setup-start')?.value;
   const prodStart  = document.getElementById('dt-prod-start')?.value;
   const prodEnd    = document.getElementById('dt-prod-end')?.value;
   const entryStart = setupStart || prodStart;
   if(!entryStart || !prodEnd) return;
-  const s = toMin(entryStart), e = toMin(prodEnd);
+  const s = _toMin(entryStart), e = _toMin(prodEnd);
   if(s === null || e === null || e <= s) return;
   // 同時間帯に同名作業者が割り当てられている他エントリを探す
   const conflicts = (dantoriSchedule||[]).filter(entry => {
     if(entry._id === editingDantoriId) return false;
-    const es = toMin(entry.setupStart || entry.prodStart);
-    const ee = toMin(entry.prodEnd);
+    const es = _toMin(entry.setupStart || entry.prodStart);
+    const ee = _toMin(entry.prodEnd);
     if(es === null || ee === null || ee <= es) return false;
     if(ee <= s || es >= e) return false; // 時間が重ならない
     const roles = entry.roles || {};
@@ -4277,7 +4279,7 @@ function chipOnBlur(wid){
     const dd = w && w.querySelector('.chip-dropdown');
     if(dd && dd.contains(document.activeElement)) return;
     const inp = w && w.querySelector('.chip-text-input');
-    if(inp){ const v=inp.value.trim(); if(v){chipAdd(wid,v);inp.value='';} }
+    if(inp){ const v=inp.value.trim(); if(v){chipAddWithConflictCheck(wid,v);inp.value='';} }
     chipHideDd(wid);
   }, 150);
 }
@@ -5677,21 +5679,34 @@ async function autoAssignRoles(){
   });
 
   // ── 余り時間 計算 ────────────────────────────
-  // 全員共通の稼働時間：8:10〜17:00（ランチ12:00〜13:00を除く）
+  // 全員共通の稼働時間：8:10〜17:00
   const shiftS = 8*60+10;
   const shiftE = 17*60;
-  const LUNCH_S = 12*60, LUNCH_E = 13*60;
 
-  // フリースロットをランチで分割し、ランチ帯を除去するヘルパー
-  function splitByLunch(s, e){
-    const result = [];
-    if(e <= LUNCH_S || s >= LUNCH_E){
-      if(e > s) result.push({s, e});
-    } else {
-      if(s < LUNCH_S) result.push({s, e: LUNCH_S});
-      if(e > LUNCH_E) result.push({s: LUNCH_E, e});
+  // 設定の休憩時間帯を分単位で取得
+  const _cfgBreaks = ((config.breaks && config.breaks.length) ? config.breaks : DEFAULT_BREAKS)
+    .map(({start:bs, end:be}) => {
+      const [sh,sm] = bs.split(':').map(Number);
+      const [eh,em] = be.split(':').map(Number);
+      return { s: sh*60+sm, e: eh*60+em };
+    }).filter(b => b.e > b.s && b.s < shiftE && b.e > shiftS); // 稼働時間内のみ
+
+  // 昼休憩を特定（12:00以降の最初の休憩 = 昼休み = 午前/午後の境界）
+  const _lunchBreak = _cfgBreaks.find(b => b.s >= 12*60) || { s: 12*60, e: 13*60 };
+
+  // フリースロットを休憩帯で分割・除去するヘルパー
+  function splitByBreaks(s, e){
+    let segments = [{s, e}];
+    for(const br of _cfgBreaks){
+      segments = segments.flatMap(seg => {
+        if(seg.e <= br.s || seg.s >= br.e) return [seg]; // 重ならない
+        const parts = [];
+        if(seg.s < br.s) parts.push({s: seg.s, e: br.s});
+        if(seg.e > br.e) parts.push({s: br.e, e: seg.e});
+        return parts;
+      });
     }
-    return result;
+    return segments.filter(seg => seg.e > seg.s);
   }
 
   function calcFreeSlots(name){
@@ -5699,9 +5714,9 @@ async function autoAssignRoles(){
     const amOk = !att || att.am !== false;
     const pmOk = !att || att.pm !== false;
     if(!amOk && !pmOk) return [];
-    // 出勤帯のclamp（午前のみ→〜12:00、午後のみ→13:00〜）
-    const effS = amOk ? shiftS : LUNCH_E;
-    const effE = pmOk ? shiftE : LUNCH_S;
+    // 出勤帯のclamp（午前のみ→〜昼休み開始、午後のみ→昼休み終了〜）
+    const effS = amOk ? shiftS : _lunchBreak.e;
+    const effE = pmOk ? shiftE : _lunchBreak.s;
     if(effE <= effS) return [];
     const busy = (busyMap[name]||[]).slice().sort((a,b)=>a.s-b.s);
     const rawFree = [];
@@ -5716,8 +5731,8 @@ async function autoAssignRoles(){
       // 最後の仕事以降〜17:00も余り時間に含める
       if(effE > cur + 5) rawFree.push({ s:cur, e:effE });
     }
-    // ランチ帯を除去・分割
-    return rawFree.flatMap(f => splitByLunch(f.s, f.e));
+    // 設定の休憩帯を除去・分割
+    return rawFree.flatMap(f => splitByBreaks(f.s, f.e));
   }
 
   // ── モーダルに結果を渡して表示 ─────────────────
