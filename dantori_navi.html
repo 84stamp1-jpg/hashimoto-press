@@ -4424,17 +4424,23 @@ function renderKanbanCard(d){
         <button class="edit-btn" onclick="showEditDantori('${d._id}')">✏</button>
         <button class="del-btn"  onclick="deleteDantoriEntry('${d._id}')">×</button>
        </div>` : '';
-  // 型数・段取人数バッジ（未設定時は⚠1型1人・マスタ標準時間を表示）
+  // 型数・段取人数バッジ（段取りなし時は専用表示）
   const kata_   = (d.mountKata  != null && d.mountKata  > 0) ? d.mountKata  : null;
   const ninzu_  = (d.mountCount != null && d.mountCount > 0) ? d.mountCount : null;
+  const worker__ = d.workerCount || 0;
   const isDefault = (kata_ == null && ninzu_ == null);
-  const stdMin_ = calcDantoriSetupTime(d.lineId, kata_ || 1, ninzu_ || 1);
-  const kataHtml = `<div style="display:flex;gap:5px;flex-wrap:wrap;font-size:10px;color:#64748b;margin:3px 0 1px;">
-      ${isDefault ? `<span style="color:#f59e0b;">⚠</span>` : ''}
-      <span>🔧${kata_ != null ? kata_ : 1}型</span>
-      <span>👤${ninzu_ != null ? ninzu_ : 1}人<span style="color:#94a3b8;">（段取）</span></span>
-      <span style="color:#94a3b8;">標準${stdMin_}分</span>
-    </div>`;
+  const stdMin_ = d.stdSetupMin != null ? d.stdSetupMin : calcDantoriSetupTime(d.lineId, kata_ || 1, ninzu_ || 1);
+  const kataHtml = d.noSetup
+    ? `<div style="display:flex;gap:5px;flex-wrap:wrap;font-size:10px;color:#64748b;margin:3px 0 1px;">
+        <span style="background:#f0fdf4;color:#15803d;padding:1px 6px;border-radius:4px;font-weight:700;">段取りなし</span>
+        <span>👷${worker__>0?worker__:'?'}人<span style="color:#94a3b8;">（作業）</span></span>
+      </div>`
+    : `<div style="display:flex;gap:5px;flex-wrap:wrap;font-size:10px;color:#64748b;margin:3px 0 1px;">
+        ${isDefault ? `<span style="color:#f59e0b;">⚠</span>` : ''}
+        <span>🔧${kata_ != null ? kata_ : 1}型</span>
+        <span>👤${ninzu_ != null ? ninzu_ : 1}人<span style="color:#94a3b8;">（段取）</span></span>
+        <span style="color:#94a3b8;">標準${stdMin_}分</span>
+      </div>`;
   const cls = d.status==='in_progress'?'kcard k-active':(d.status==='done'?'kcard k-done':'kcard k-scheduled');
   return `
   <div class="${cls}">
@@ -5334,12 +5340,16 @@ async function autoAssignRoles(){
     // ④ 作業者（生産フェーズ: prodStart〜prodEnd でbusy）
     // ルール: 金型取付した人を優先して作業者に → 不足分のみ別の作業者を追加
     const wrkCount = entry.workerCount || 0;
-    if(wrkCount > 0 && ps && e && ps < e){
+    // workerCount未設定(0)の場合はPRESS_LINE_MASTERのworkers数 or 1人をデフォルトに
+    const effectiveWrkCount = wrkCount > 0
+      ? wrkCount
+      : (PRESS_LINE_MASTER[entry.lineId]?.workers?.length || 1);
+    if(effectiveWrkCount > 0 && ps && e && ps < e){
       // ベース: 金型取付した人を優先、workerCountを超える場合は先着でカット
-      const workerAvail = mountAvail.slice(0, wrkCount);
+      const workerAvail = mountAvail.slice(0, effectiveWrkCount);
 
       // 不足分を補完（金型取付していない人から、prodStart〜prodEnd で空きのある人）
-      const shortage = wrkCount - workerAvail.length;
+      const shortage = effectiveWrkCount - workerAvail.length;
       if(shortage > 0){
         const additional = findMountWorkers(entry.lineId, [], ps, e, shortage + workerAvail.length)
           .filter(w => !workerAvail.includes(w))
@@ -5351,10 +5361,10 @@ async function autoAssignRoles(){
         roles.作業者 = workerAvail.join('、');
         // 全作業者を prodStart〜prodEnd でbusy登録
         workerAvail.forEach(w => markBusy(w, ps, e, `作業 ${linePart}`));
-        if(workerAvail.length < wrkCount){
+        if(workerAvail.length < effectiveWrkCount){
           shortages.push({ role:'作業者', linePart,
             timeStr: entry.prodStart||timeStr,
-            detail:`人数不足 ${workerAvail.length}人割当 / ${wrkCount}人必要（追加候補なし）` });
+            detail:`人数不足 ${workerAvail.length}人割当 / ${effectiveWrkCount}人必要（追加候補なし）` });
         }
       } else {
         shortages.push({ role:'作業者', linePart,
@@ -5383,7 +5393,11 @@ async function autoAssignRoles(){
     const effE = pmOk ? shiftE : Math.min(shiftE, 720);
     const busy = (busyMap[name]||[]).slice().sort((a,b)=>a.s-b.s);
     const free = [];
-    if(!busy.length) return []; // 仕事が一切なければ余り時間なし
+    if(!busy.length){
+      // 仕事が一切ない人 → 丸ごと余り時間として表示
+      if(effE > effS) free.push({ s:effS, e:effE });
+      return free;
+    }
     let cur = effS;
     for(const slot of busy){
       if(slot.s > cur + 20) free.push({ s:cur, e:slot.s });
