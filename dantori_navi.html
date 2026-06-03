@@ -4439,16 +4439,22 @@ function renderKanbanCard(d){
   const worker__ = d.workerCount || 0;
   const isDefault = (kata_ == null && ninzu_ == null);
   const stdMin_ = d.stdSetupMin != null ? d.stdSetupMin : calcDantoriSetupTime(d.lineId, kata_ || 1, ninzu_ || 1);
-  // 実配置作業者数・不足数
+  // 実配置作業者数・不足数（作業者）
   const assignedWorkers = (roles.作業者||'').split(/[,、]/).map(s=>s.trim()).filter(Boolean);
-  const shortage = (worker__ > 0 && assignedWorkers.length < worker__) ? worker__ - assignedWorkers.length : 0;
-  // 空き人員チェック：不足分を補える人が他にいれば「未割当」、いなければ「人員不足」
-  const freeWorkers = shortage > 0 ? _countFreeWorkers(d) : 0;
-  const shortageHtml = shortage > 0
-    ? (freeWorkers >= shortage
-        ? `<span style="color:#d97706;font-weight:700;">⚠ ${shortage}名未割当</span>`
-        : `<span style="color:#dc2626;font-weight:700;">⚠ ${shortage}名人員不足</span>`)
+  const wrkShortage = (worker__ > 0 && assignedWorkers.length < worker__) ? worker__ - assignedWorkers.length : 0;
+  const freeWorkers = wrkShortage > 0 ? _countFreeWorkers(d) : 0;
+  const wrkShortageHtml = wrkShortage > 0
+    ? (freeWorkers >= wrkShortage
+        ? `<span style="color:#d97706;font-weight:700;">⚠ ${wrkShortage}名未割当</span>`
+        : `<span style="color:#dc2626;font-weight:700;">⚠ ${wrkShortage}名人員不足</span>`)
     : '';
+  // 金型取付の人数不足チェック（段取りありのみ）
+  const assignedMount = (!d.noSetup && roles.金型取付)
+    ? roles.金型取付.split(/[,、]/).map(s=>s.trim()).filter(Boolean).length : 0;
+  const mountNeed = (!d.noSetup && ninzu_ != null) ? ninzu_ : 0;
+  const mountShortage = (mountNeed > 0 && assignedMount < mountNeed) ? mountNeed - assignedMount : 0;
+  const mountShortageHtml = mountShortage > 0
+    ? `<span style="color:#dc2626;font-weight:700;">⚠ 取付${mountShortage}名不足</span>` : '';
   // noSetupで作業者未設定
   const noSetupUnset = d.noSetup && worker__ > 0 && assignedWorkers.length === 0;
   const kataHtml = d.noSetup
@@ -4456,14 +4462,14 @@ function renderKanbanCard(d){
         <span style="background:#f0fdf4;color:#15803d;padding:1px 6px;border-radius:4px;font-weight:700;">段取りなし</span>
         <span>👷${worker__>0?worker__:'?'}人<span style="color:#94a3b8;">（作業）</span></span>
         ${noSetupUnset?`<span style="color:#f59e0b;font-weight:700;">未割当</span>`:''}
-        ${shortageHtml}
+        ${wrkShortageHtml}
       </div>`
     : `<div style="display:flex;gap:5px;flex-wrap:wrap;font-size:10px;color:#64748b;margin:3px 0 1px;">
         ${isDefault ? `<span style="color:#f59e0b;">⚠</span>` : ''}
         <span>🔧${kata_ != null ? kata_ : 1}型</span>
         <span>👤${ninzu_ != null ? ninzu_ : 1}人<span style="color:#94a3b8;">（段取）</span></span>
         <span>👷${worker__ > 0 ? worker__ : '<span style="color:#f59e0b;">?</span>'}人<span style="color:#94a3b8;">（作業）</span></span>
-        ${shortageHtml}
+        ${mountShortageHtml}${wrkShortageHtml}
         <span style="color:#94a3b8;">標準${stdMin_}分</span>
       </div>`;
 
