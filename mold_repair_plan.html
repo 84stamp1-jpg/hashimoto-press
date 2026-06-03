@@ -347,7 +347,10 @@ input.nm-img-input{display:none}
 .nm-task-row select:focus{outline:1px solid var(--accent)}
 .nm-task-content{font-size:9px;outline:none;min-height:16px}
 .nm-task-content:focus{background:#fffff0}
-.nm-done-row{opacity:.5}
+.nm-done-row td{background:#e8fdf0 !important;color:#5a7a6a}
+.nm-done-row .nm-task-content{text-decoration:line-through;color:#8aaa96}
+.nm-done-badge{display:inline-block;font-size:8px;font-weight:700;background:#16a34a;color:#fff;
+  border-radius:3px;padding:0px 4px;margin-left:4px;vertical-align:middle;letter-spacing:.03em}
 .nm-done-input{width:100%;font-size:7px;border:none;background:transparent;
   font-family:var(--font);color:#C00000;cursor:pointer}
 
@@ -1791,6 +1794,11 @@ function nmInit(){
     nmChargeMaster=JSON.parse(localStorage.getItem(NM_KEY_CMAST)||JSON.stringify(NM_DEFAULT_CHARGES));
     // initialized フラグがないタスクは未確定扱い（確定ボタンを表示）
     nmMolds.forEach(m=>(m.tasks||[]).forEach(t=>{if(t.initialized===undefined)t.initialized=false;}));
+    // 既存の全履歴を一度だけクリア（保存ボタン方式への移行）
+    if(!localStorage.getItem('nm_hist_reset_v1')){
+      nmMolds.forEach(m=>(m.tasks||[]).forEach(t=>{t.history=[];delete t.snapshot;}));
+      localStorage.setItem('nm_hist_reset_v1','1');
+    }
   }catch(e){nmMolds=[];nmGantt={};nmNote={};nmImages={};}
   nmLoadCfgUI();
   nmRender();
@@ -1812,8 +1820,8 @@ function nmSaveMasters(){
 // ----- 見積工程パース -----
 function nmParseProc(str){
   if(!str)return[];
-  // 改行・中点・読点で分割、または "1.XXX2.YYY" 形式も対応
-  let lines=str.split(/[\n・,、]+/);
+  // 改行・中点・読点で分割（「,」はカンマのため区切り文字ではない）
+  let lines=str.split(/[\n・、]+/);
   // 改行なしで番号連結の場合は番号前で分割（例: "1.BL2.PC"→["1.BL","2.PC"]）
   if(lines.length===1) lines=str.split(/(?=\d+[\.\)])/);
   return lines.map(s=>s.replace(/^\d+[\.\)]\s*/,'').trim()).filter(Boolean);
@@ -2051,6 +2059,8 @@ function nmBuildColgroup(){
 
 function nmBuildThead(){
   const th=document.getElementById('nmThead');th.innerHTML='';
+  // 各行の高さ（padding:1px 3px + font 8-9px ≒ 14px/行）
+  const H=14;
   const r1=document.createElement('tr');
   [{t:'No',rs:3},{t:'略図/完了日',rs:3},{t:'品番/品名・内容',rs:3},{t:'工程',rs:3},{t:'担当',rs:3},{t:'締切/履歴',rs:3},{t:'±',rs:3}].forEach(({t,rs})=>{
     const td=document.createElement('th');td.className='nmth-fix';td.rowSpan=rs;td.style.top='0';td.textContent=t;r1.appendChild(td);
@@ -2062,29 +2072,26 @@ function nmBuildThead(){
     const td=document.createElement('th');td.className='nmth-mon';td.colSpan=span;td.style.top='0';td.textContent=(mo+1)+'月';r1.appendChild(td);i+=span;
   }
   th.appendChild(r1);
-  // 行1の実際の高さを取得してrow2/row3のtopを設定
-  const h1=r1.getBoundingClientRect().height||18;
   const r2=document.createElement('tr');
   for(let i=0;i<NM_DAYS;i++){
     const d=nmAddDays(nmStart,i);const td=document.createElement('th');
-    td.className=nmIsWE(d)?'nmth-dow-we':'nmth-dow-wd';td.style.top=h1+'px';td.textContent=WJA[d.getDay()];r2.appendChild(td);
+    td.className=nmIsWE(d)?'nmth-dow-we':'nmth-dow-wd';td.style.top=H+'px';td.textContent=WJA[d.getDay()];r2.appendChild(td);
   }
   th.appendChild(r2);
-  const h2=h1+(r2.getBoundingClientRect().height||16);
   const r3=document.createElement('tr');
   for(let i=0;i<NM_DAYS;i++){
     const d=nmAddDays(nmStart,i);const td=document.createElement('th');
-    td.className=nmIsToday(d)?'nmth-day-td':nmIsWE(d)?'nmth-dow-we':'nmth-day-wd';td.style.top=h2+'px';td.textContent=d.getDate();r3.appendChild(td);
+    td.className=nmIsToday(d)?'nmth-day-td':nmIsWE(d)?'nmth-dow-we':'nmth-day-wd';td.style.top=(H*2)+'px';td.textContent=d.getDate();r3.appendChild(td);
   }
   th.appendChild(r3);
-  // getBoundingClientRectはDOMに挿入後でないと0になるため、挿入後に修正
+  // DOM挿入後に実測値で補正
   requestAnimationFrame(()=>{
     const rows=th.querySelectorAll('tr');
-    if(rows.length<2)return;
-    const rh1=rows[0].getBoundingClientRect().height;
-    const rh2=rows[1].getBoundingClientRect().height;
-    rows[1].querySelectorAll('th').forEach(t=>t.style.top=rh1+'px');
-    rows[2].querySelectorAll('th').forEach(t=>t.style.top=(rh1+rh2)+'px');
+    if(rows.length<3)return;
+    const rh1=rows[0].getBoundingClientRect().height||H;
+    const rh2=rows[1].getBoundingClientRect().height||H;
+    rows[1].querySelectorAll('th').forEach(t=>t.style.top=Math.round(rh1)+'px');
+    rows[2].querySelectorAll('th').forEach(t=>t.style.top=Math.round(rh1+rh2)+'px');
   });
 }
 
@@ -2194,9 +2201,16 @@ function nmBuildTbody(){
       // Col1: spanned by No
 
       // Col2: 完了日（略図列に入力）
-      const tdDone=document.createElement('td');tdDone.style.cssText='background:#FFF8F0;padding:1px 2px;vertical-align:middle;';
-      tdDone.innerHTML=`<input type="date" class="nm-done-input" value="${task.doneDate||''}" title="完了日"
-        onchange="nmSetTaskDone('${mold.id}','${task.id}',this.value)">`;
+      const tdDone=document.createElement('td');
+      tdDone.style.cssText=isDone?'background:#c6f0d4;padding:1px 2px;vertical-align:middle;text-align:center;':'background:#FFF8F0;padding:1px 2px;vertical-align:middle;';
+      tdDone.innerHTML=isDone
+        ?`<div style="font-size:8px;font-weight:700;color:#16a34a;line-height:1.2">✓完了</div>
+           <div style="font-size:8px;color:#3a7a50">${task.doneDate}</div>
+           <input type="date" class="nm-done-input" value="${task.doneDate}" title="完了日を変更"
+             style="font-size:8px;margin-top:1px;width:100%"
+             onchange="nmSetTaskDone('${mold.id}','${task.id}',this.value)">`
+        :`<input type="date" class="nm-done-input" value="" title="完了日"
+            onchange="nmSetTaskDone('${mold.id}','${task.id}',this.value)">`;
       tr.appendChild(tdDone);
 
       // Col3: 内容（品番/品名列に入力）
@@ -2204,7 +2218,6 @@ function nmBuildTbody(){
       tdCont.contentEditable='true';tdCont.className='nm-task-content';tdCont.textContent=task.content||'';
       tdCont.addEventListener('blur',()=>{
         const nv=tdCont.textContent.trim();
-        nmRecordHistory(task,'内容',task.content||'',nv);
         task.content=nv;nmSave();
       });
       tr.appendChild(tdCont);
@@ -2217,7 +2230,6 @@ function nmBuildTbody(){
       if(task.process&&!pOpts.includes(task.process))pOpts.splice(1,0,task.process);
       pOpts.forEach(p=>{const o=document.createElement('option');o.value=p;o.textContent=p;if(p===task.process||(p==='...'&&!task.process))o.selected=true;selP.appendChild(o);});
       selP.addEventListener('change',()=>{
-        nmRecordHistory(task,'工程',task.process||'',selP.value==='...'?'':selP.value);
         task.process=selP.value==='...'?'':selP.value;nmSave();
       });
       tdProc.appendChild(selP);tr.appendChild(tdProc);
@@ -2229,7 +2241,6 @@ function nmBuildTbody(){
       if(task.charge&&!nmChargeMaster.includes(task.charge))cOpts.splice(1,0,task.charge);
       cOpts.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;if(c===task.charge||(c==='...'&&!task.charge))o.selected=true;selC.appendChild(o);});
       selC.addEventListener('change',()=>{
-        nmRecordHistory(task,'担当',task.charge,selC.value==='...'?'':selC.value);
         task.charge=selC.value==='...'?'':selC.value;nmSave();
       });
       tdCh.appendChild(selC);tr.appendChild(tdCh);
@@ -2238,7 +2249,9 @@ function nmBuildTbody(){
       const tdDL=document.createElement('td');tdDL.style.cssText='padding:2px 3px;vertical-align:middle;';
       const dlBadge=dlCls?`<span class="nm-deadline-badge">${dlCls==='nm-overdue'?'⚠期限超過':dlCls==='nm-urgent'?'🔴3日以内':'🟡7日以内'}</span>`:'';
       const actionBtn=task.initialized
-        ?`<button class="nm-hist-btn" onclick="nmShowHist('${mold.id}','${task.id}')" title="変更履歴を表示">📋 履歴(${task.history?.length||0})</button>`
+        ?`<button class="nm-hist-btn" onclick="nmSaveTask('${mold.id}','${task.id}')"
+            style="background:#EBF0FF;border-color:#93c5fd;color:#3b6ef8;font-weight:700" title="変更を履歴に保存">💾 保存</button>
+           <button class="nm-hist-btn" onclick="nmShowHist('${mold.id}','${task.id}')" title="変更履歴を表示">📋 履歴(${task.history?.length||0})</button>`
         :`<button class="nm-hist-btn" onclick="nmConfirmTask('${mold.id}','${task.id}')"
             style="background:#dcfce7;border-color:#86efac;color:#16a34a;font-weight:700" title="内容を確定して履歴管理を開始">✅ 確定</button>`;
       tdDL.innerHTML=`
@@ -2299,7 +2312,6 @@ function nmDeadlineClass(deadline){
 function nmSetDeadline(moldId,taskId,val,inputEl){
   const m=nmMolds.find(m=>m.id===moldId);if(!m)return;
   const t=m.tasks.find(t=>t.id===taskId);if(!t)return;
-  nmRecordHistory(t,'締切日',t.deadline||'',val);
   t.deadline=val;nmSave();
   // 行の警告クラスを即時更新
   const tr=document.querySelector(`tr[data-moldid="${moldId}"][data-taskid="${taskId}"]`);
@@ -2311,22 +2323,59 @@ function nmSetDeadline(moldId,taskId,val,inputEl){
 
 // ===== 変更履歴 =====
 function nmTs(){return new Date().toLocaleString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});}
-function nmRecordHistory(task,field,fromVal,toVal,note=''){
-  if(!task.initialized)return; // 未確定タスクは履歴記録しない
-  if(fromVal===toVal||toVal===undefined)return;
+function nmPushHistory(task,field,from,to,note=''){
   if(!task.history)task.history=[];
-  task.history.push({ts:nmTs(),field,from:String(fromVal||'（空）'),to:String(toVal||'（空）'),note});
+  task.history.push({ts:nmTs(),field,from:String(from||'（空）'),to:String(to||'（空）'),note});
 }
-function nmRecordGanttHistory(task,dateRange,fromName,toName){
-  if(!task.initialized)return;
-  if(!task.history)task.history=[];
-  task.history.push({ts:nmTs(),field:'ガント',from:fromName||'（なし）',to:toName||'クリア',note:dateRange});
+function nmTakeSnapshot(moldId,taskId,task){
+  const pfx=moldId+'__'+taskId+'__';
+  task.snapshot={
+    content:task.content||'',process:task.process||'',charge:task.charge||'',
+    deadline:task.deadline||'',doneDate:task.doneDate||'',
+    gantt:Object.fromEntries(Object.entries(nmGantt).filter(([k])=>k.startsWith(pfx)))
+  };
 }
-// 確定ボタン処理
+// 初回確定ボタン
 function nmConfirmTask(moldId,taskId){
+  if(!confirm('このタスクを確定しますか？\n確定後は「💾保存」ボタンで変更履歴が記録されます。'))return;
   const m=nmMolds.find(m=>m.id===moldId);if(!m)return;
   const t=m.tasks?.find(t=>t.id===taskId);if(!t)return;
   t.initialized=true;
+  nmTakeSnapshot(moldId,taskId,t);
+  nmSave();nmBuildTbody();
+}
+// 保存ボタン（確定後の変更を履歴に記録）
+function nmSaveTask(moldId,taskId){
+  const m=nmMolds.find(m=>m.id===moldId);if(!m)return;
+  const t=m.tasks?.find(t=>t.id===taskId);if(!t||!t.initialized)return;
+  const snap=t.snapshot||{};
+  // テキスト系フィールドの差分を記録
+  [['内容','content'],['工程','process'],['担当','charge'],['締切日','deadline'],['完了日','doneDate']].forEach(([label,field])=>{
+    const ov=snap[field]||'',nv=t[field]||'';
+    if(ov!==nv)nmPushHistory(t,label,ov,nv);
+  });
+  // ガント差分を記録
+  const pfx=moldId+'__'+taskId+'__';
+  const snapG=snap.gantt||{};
+  const curKeys=new Set(Object.keys(nmGantt).filter(k=>k.startsWith(pfx)));
+  const snapKeys=new Set(Object.keys(snapG));
+  const allKeys=new Set([...curKeys,...snapKeys]);
+  const changes=[];
+  allKeys.forEach(k=>{
+    const cur=nmGantt[k],old=snapG[k];
+    const cn=cur?nmGetLegend(cur.lid)?.name||'不明':null;
+    const on=old?nmGetLegend(old.lid)?.name||'不明':null;
+    if(cn!==on){const ds=k.split('__')[2];changes.push({date:ds,from:on||'（なし）',to:cn||'クリア'});}
+  });
+  if(changes.length){
+    const dates=changes.map(c=>c.date).sort();
+    const dr=dates.length===1?dates[0]:dates[0]+'〜'+dates[dates.length-1];
+    const froms=[...new Set(changes.map(c=>c.from))].join('・');
+    const tos=[...new Set(changes.map(c=>c.to))].join('・');
+    nmPushHistory(t,'ガント',froms,tos,dr);
+  }
+  // スナップショット更新
+  nmTakeSnapshot(moldId,taskId,t);
   nmSave();nmBuildTbody();
 }
 
@@ -2374,7 +2423,7 @@ function nmAddHistNote(){
   const m=nmMolds.find(m=>m.id===moldId);
   const t=m?.tasks?.find(t=>t.id===taskId);
   if(!t)return;
-  nmRecordHistory(t,'メモ','',note);
+  nmPushHistory(t,'メモ','',note);
   nmSave();
   nmShowHist(moldId,taskId); // 再描画
 }
@@ -2398,7 +2447,6 @@ function nmEditEstProc(moldId){
 function nmSetTaskDone(moldId,taskId,val){
   const m=nmMolds.find(m=>m.id===moldId);if(!m)return;
   const t=m.tasks.find(t=>t.id===taskId);if(!t)return;
-  nmRecordHistory(t,'完了日',t.doneDate||'',val);
   t.doneDate=val;nmSave();
   const tr=document.querySelector(`tr[data-moldid="${moldId}"][data-taskid="${taskId}"]`);
   if(tr){
@@ -2436,7 +2484,7 @@ function nmApplyCell(td,key,d){
 
 // ----- ドラッグ選択（選択中の凡例を塗る / null=クリア） -----
 function nmDragStart(td,key,d,moldId,taskId){
-  nmDrag={moldId,taskId,applied:new Set(),ganttChanges:[]};
+  nmDrag={moldId,taskId,applied:new Set()};
   nmApplyDragCell(td,key,d);
   nmDrag.applied.add(key);
 }
@@ -2450,42 +2498,15 @@ function nmDragOver(td){
   nmDrag.applied.add(key);
 }
 function nmApplyDragCell(td,key,d){
-  // 変更前の状態を保存
-  const oldG=nmGantt[key]?{...nmGantt[key]}:null;
   if(nmActiveLegendId){
     const lg=nmGetLegend(nmActiveLegendId);
     if(lg) nmGantt[key]={lid:nmActiveLegendId,color:lg.color};
   } else {
-    delete nmGantt[key]; // クリアモード
-  }
-  // ガント変更を収集（HEADER行は除外）
-  if(nmDrag&&nmDrag.taskId!=='HEADER'){
-    const newG=nmGantt[key]||null;
-    const oldName=oldG?nmGetLegend(oldG.lid)?.name||'不明':'（なし）';
-    const newName=newG?nmGetLegend(newG.lid)?.name||'不明':'クリア';
-    if(oldName!==newName){
-      nmDrag.ganttChanges.push({date:td.dataset.date,from:oldName,to:newName});
-    }
+    delete nmGantt[key];
   }
   nmApplyCell(td,key,d);
 }
-document.addEventListener('mouseup',()=>{
-  if(nmDrag){
-    // ガント履歴をバッチで記録
-    if(nmDrag.ganttChanges.length&&nmDrag.taskId!=='HEADER'){
-      const m=nmMolds.find(m=>m.id===nmDrag.moldId);
-      const t=m?.tasks?.find(t=>t.id===nmDrag.taskId);
-      if(t&&t.initialized){
-        const dates=nmDrag.ganttChanges.map(c=>c.date).sort();
-        const toNames=[...new Set(nmDrag.ganttChanges.map(c=>c.to))].join('・');
-        const fromNames=[...new Set(nmDrag.ganttChanges.map(c=>c.from))].join('・');
-        const dateRange=dates.length===1?dates[0]:dates[0]+'〜'+dates[dates.length-1];
-        nmRecordGanttHistory(t,dateRange,fromNames,toNames);
-      }
-    }
-    nmSave();nmDrag=null;
-  }
-});
+document.addEventListener('mouseup',()=>{if(nmDrag){nmSave();nmDrag=null;}});
 
 // ----- メモ -----
 function nmOpenNote(key,mold,task,ds){
