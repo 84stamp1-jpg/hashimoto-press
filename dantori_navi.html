@@ -1928,6 +1928,18 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
               onblur="chipOnBlur('chip-wrap-worker')"/>
           </div>
         </div>
+        <!-- 作業者交代 -->
+        <div class="form-group" style="margin:6px 0 0;grid-column:1/-1;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+            <span style="font-size:11px;color:#6366f1;font-weight:600;">⏱ 作業者交代</span>
+            <button type="button" onclick="addShiftChange()"
+              style="font-size:11px;padding:2px 8px;border:1px solid #6366f1;border-radius:4px;background:#eef2ff;color:#6366f1;cursor:pointer;font-weight:600;">
+              ＋ 交代を追加
+            </button>
+          </div>
+          <div id="dt-shift-container" style="display:flex;flex-direction:column;gap:4px;"></div>
+          <div style="font-size:10px;color:#94a3b8;margin-top:3px;">交代時刻と交代後の作業者を設定します。複数回の交代も登録できます。</div>
+        </div>
       </div>
     </div>
     <div class="form-group">
@@ -4248,9 +4260,10 @@ async function saveDantoriEntry(){
   const roleQuality = chipGetValues('chip-wrap-quality').join(',');
   const roleWorker  = chipGetValues('chip-wrap-worker').join(',');
   const note        = document.getElementById('dt-note').value.trim();
-  const noSetup     = !!(document.getElementById('dt-no-setup')?.checked);
-  const noWorker    = !!(document.getElementById('dt-no-worker')?.checked);
-  const workerCount = parseInt(document.getElementById('dt-worker-count')?.value) || 0;
+  const noSetup      = !!(document.getElementById('dt-no-setup')?.checked);
+  const noWorker     = !!(document.getElementById('dt-no-worker')?.checked);
+  const workerCount  = parseInt(document.getElementById('dt-worker-count')?.value) || 0;
+  const shiftChanges = getShiftChanges();
 
   if(!partNo){  alert('品番を入力してください'); return; }
   if(!prodStart){ alert('生産開始時刻を入力してください'); return; }
@@ -4261,7 +4274,7 @@ async function saveDantoriEntry(){
     lineId, partNo,
     setupStart: noSetup ? '' : setupStart,
     prodStart, prodEnd, status, noSetup, noWorker,
-    workerCount,
+    workerCount, shiftChanges,
     roles:{ 金型取付:roleMount, 初品出し:roleIppin, 品質確認:roleQuality, 作業者:roleWorker },
     note, updatedAt:Date.now(), isManual:true,
     ...(existingEntry ? {
@@ -4316,6 +4329,7 @@ function showAddDantori(){
   document.getElementById('dt-no-setup').checked   = false;
   document.getElementById('dt-no-worker').checked  = false;
   document.getElementById('dt-worker-count').value = '0';
+  clearShiftChanges();
   onDtNoSetupChange();
   document.getElementById('dantoriModal').style.display = 'flex';
 }
@@ -4339,6 +4353,7 @@ function showEditDantori(id){
   document.getElementById('dt-no-setup').checked   = !!(entry.noSetup);
   document.getElementById('dt-no-worker').checked  = !!(entry.noWorker);
   document.getElementById('dt-worker-count').value = entry.workerCount  || 0;
+  setShiftChanges(entry.shiftChanges || []);
   onDtNoSetupChange();
   document.getElementById('dantoriModal').style.display = 'flex';
 }
@@ -4349,6 +4364,34 @@ function onDtNoSetupChange(){
   if(grp) grp.style.display = checked ? 'none' : '';
   if(checked) document.getElementById('dt-setup-start').value = '';
 }
+
+// ===== 作業者交代 =====
+function addShiftChange(time='', workers=''){
+  const container = document.getElementById('dt-shift-container');
+  const row = document.createElement('div');
+  row.className = 'sc-row';
+  row.style.cssText = 'display:flex;gap:6px;align-items:center;background:#f5f3ff;border:1px solid #c4b5fd;border-radius:6px;padding:5px 8px;';
+  row.innerHTML = `
+    <span style="font-size:10px;color:#6366f1;white-space:nowrap;font-weight:600;">交代</span>
+    <input type="time" class="sc-time" value="${time}"
+      style="border:1px solid #ddd;border-radius:4px;padding:3px 6px;font-size:12px;width:88px;">
+    <span style="font-size:10px;color:#64748b;white-space:nowrap;">〜 作業者</span>
+    <input type="text" class="sc-workers" value="${workers}"
+      placeholder="名前をカンマ区切りで入力" list="staffDatalist-press"
+      style="flex:1;border:1px solid #ddd;border-radius:4px;padding:3px 6px;font-size:12px;">
+    <button type="button" onclick="removeShiftChange(this)"
+      style="font-size:13px;color:#dc2626;background:none;border:none;cursor:pointer;padding:0 2px;line-height:1;">✕</button>
+  `;
+  container.appendChild(row);
+}
+function removeShiftChange(btn){ btn.closest('.sc-row').remove(); }
+function getShiftChanges(){
+  return Array.from(document.querySelectorAll('#dt-shift-container .sc-row'))
+    .map(r => ({ time: r.querySelector('.sc-time').value, workers: r.querySelector('.sc-workers').value.trim() }))
+    .filter(c => c.time && c.workers);
+}
+function clearShiftChanges(){ const c=document.getElementById('dt-shift-container'); if(c) c.innerHTML=''; }
+function setShiftChanges(changes){ clearShiftChanges(); (changes||[]).forEach(c=>addShiftChange(c.time||'',c.workers||'')); }
 
 function closeDantoriModal(){
   document.getElementById('dantoriModal').style.display = 'none';
@@ -4498,6 +4541,7 @@ function renderKanbanCard(d){
       ${(!d.noSetup)?`${roles.初品出し?`<div class="kcard-role"><span class="kcard-role-lbl">初品</span><span class="kcard-role-val">${roles.初品出し}</span></div>`:`<div class="kcard-role"><span class="kcard-role-lbl" style="color:#94a3b8;">初品</span><span class="kcard-role-val" style="color:#f59e0b;">未定</span></div>`}`:''}
       ${(!d.noSetup)?`${roles.金型取付?`<div class="kcard-role"><span class="kcard-role-lbl">取付</span><span class="kcard-role-val">${roles.金型取付}</span></div>`:`<div class="kcard-role"><span class="kcard-role-lbl" style="color:#94a3b8;">取付</span><span class="kcard-role-val" style="color:#f59e0b;">未定</span></div>`}`:''}
       ${roles.作業者?`<div class="kcard-role"><span class="kcard-role-lbl">作業</span><span class="kcard-role-val">${roles.作業者}</span></div>`:''}
+      ${(d.shiftChanges||[]).map(c=>`<div class="kcard-role"><span class="kcard-role-lbl" style="color:#6366f1;">⏱${c.time}</span><span class="kcard-role-val" style="color:#4338ca;">${c.workers}</span></div>`).join('')}
     </div>` : '';
   const canEdit = d._source==='manual' || d.fromPlan;
   const editBtn = (canEdit && d._id)
@@ -4688,6 +4732,29 @@ const RT_W     = (RT_END - RT_START) * RT_PPM; // 1080px
 function rt_toX(m){ return Math.max(0, Math.min(RT_W, (m - RT_START) * RT_PPM)); }
 function rt_toMin(t){ if(!t) return null; const [h,m] = t.split(':').map(Number); return isNaN(h) ? null : h*60+m; }
 
+// 作業者交代を考慮した生産時間帯の区間リストを返す
+// 戻り値: [{start:分, end:分, workers:[名前,...]}]
+function buildShiftRanges(entry){
+  const ps = rt_toMin(entry.prodStart || entry.setupStart);
+  const pe = rt_toMin(entry.prodEnd);
+  const workers0 = (entry.roles?.作業者||'').split(/[,、]/).map(s=>s.trim()).filter(Boolean);
+  if(!entry.shiftChanges || !entry.shiftChanges.length || ps === null){
+    return [{ start: ps, end: pe, workers: workers0 }];
+  }
+  const changes = [...entry.shiftChanges]
+    .map(c => ({ time: rt_toMin(c.time), workers: (c.workers||'').split(/[,、]/).map(s=>s.trim()).filter(Boolean) }))
+    .filter(c => c.time !== null)
+    .sort((a, b) => a.time - b.time);
+  const ranges = [];
+  let prev = ps, prevW = workers0;
+  changes.forEach(c => {
+    if(c.time > prev) ranges.push({ start: prev, end: c.time, workers: prevW });
+    prev = c.time; prevW = c.workers;
+  });
+  if(pe !== null && pe > prev) ranges.push({ start: prev, end: pe, workers: prevW });
+  return ranges;
+}
+
 // 指定エントリの生産時間帯に空いているプレス作業者数を返す
 // （他のエントリで作業者として割り当て済みの人を除いた残り人数）
 function _countFreeWorkers(entry){
@@ -4778,10 +4845,14 @@ function getAllWorkerNames(){
 function getWorkerSchedule(name, allEntries){
   return allEntries.filter(e => {
     const r = e.roles || {};
-    return r.初品出し === name
-        || r.品質確認 === name
-        || (r.金型取付||'').split(/[,、]/).map(s=>s.trim()).includes(name)
-        || (r.作業者  ||'').split(/[,、]/).map(s=>s.trim()).includes(name);
+    if(r.初品出し === name) return true;
+    if(r.品質確認 === name) return true;
+    if((r.金型取付||'').split(/[,、]/).map(s=>s.trim()).includes(name)) return true;
+    if((r.作業者  ||'').split(/[,、]/).map(s=>s.trim()).includes(name)) return true;
+    // 交代後の作業者にも含まれるか確認
+    if(e.shiftChanges && e.shiftChanges.some(c =>
+      (c.workers||'').split(/[,、]/).map(s=>s.trim()).includes(name))) return true;
+    return false;
   }).sort((a,b) => (a.sortKey||'').localeCompare(b.sortKey||''));
 }
 
@@ -4920,15 +4991,21 @@ function renderPressTimeline(allEntries){
         }
       }
       if(isWorker){
-        // 作業者: 生産時間帯のみ（prodStart〜prodEnd）
-        if(ps !== null){
-          const px = rt_toX(ps);
-          const pw = pe !== null ? Math.max(rt_toX(pe) - px, 8) : 90 * RT_PPM;
-          blk += `<div class="rt-block" style="left:${px}px;width:${pw}px;background:${color};opacity:0.8;" title="${tip}">${prodBarInner}</div>`;
-        } else if(d.noSetup && sm !== null){
-          const sx = rt_toX(sm);
-          const sw = pe !== null ? Math.max(rt_toX(pe) - sx, 8) : 90 * RT_PPM;
-          blk += `<div class="rt-block" style="left:${sx}px;width:${sw}px;background:${color};opacity:0.8;" title="${tip}">${prodBarInner}</div>`;
+        // 作業者: 交代を考慮した区間ごとにバー描画
+        const ranges = buildShiftRanges(d);
+        ranges.forEach(range => {
+          if(!range.workers.includes(name)) return;
+          const rxStart = range.start !== null ? range.start : (ps !== null ? ps : sm);
+          if(rxStart === null) return;
+          const rxEnd = range.end;
+          const px = rt_toX(rxStart);
+          const pw = rxEnd !== null ? Math.max(rt_toX(rxEnd) - px, 8) : 90 * RT_PPM;
+          const isShifted = range.start !== ps; // 交代後の区間はスタイルを変える
+          blk += `<div class="rt-block" style="left:${px}px;width:${pw}px;background:${color};opacity:${isShifted?'0.65':'0.8'};${isShifted?'border-top:2px solid #6366f1;':''}" title="${tip}">${prodBarInner}</div>`;
+        });
+        // shiftChangesに含まれていてroles.作業者に含まれていない場合もチェック
+        if(!(entry=>((entry.roles?.作業者||'').split(/[,、]/).map(s=>s.trim()).includes(name)))(d)){
+          // 交代後のみ担当の場合はbuildShiftRangesで既にカバー済み
         }
       }
     });
