@@ -7536,7 +7536,7 @@ function renderBoard(){
           if(jWE) setupParts2.push('終了 '+jWE);
           const setupRow2=setupParts2.join('  ');
           sched+='<div class="sr'+(cur?' cur':'')+'">'+
-            '<span class="sn">'+j.seq+'</span>'+
+            '<span class="sn">'+(j.seq!=null?j.seq:jIdx+1)+'</span>'+
             '<span class="sp">'+(cur?'▶ ':'')+j.part+'</span>'+
             '<span style="display:flex;flex-wrap:wrap;align-items:baseline;gap:3px;min-width:0;">'+col3+'</span>'+
             (setupRow2?
@@ -9026,21 +9026,19 @@ window.savePlanEdit=async function(){
       const lineId=sec.dataset.lineid;
       const origJobs=_peAllLines[lineId]||[];
       const rows=sec.querySelectorAll('.pe-row');
-      const mergedJobs=[...rows].map(row=>{
+      const mergedJobs=[...rows].map((row,ri)=>{
         const origJi=parseInt(row.dataset.origji);
         const oj=(origJi>=0&&origJobs[origJi])?origJobs[origJi]:{};
         const inps=row.querySelectorAll('.pe-inp');
+        // ...oj で kata/ninzu/hito/status/actualCount 等を保持しつつ編集値で上書き
         return {
+          ...oj,
+          seq:ri+1,
           part:inps[0].value.trim(),
           plan:parseInt(inps[1].value)||0,
           start:inps[2].value,
           end:inps[3].value,
           noSetup:row.querySelector('input[type="checkbox"]').checked,
-          actual:oj.actual||0,
-          actualStart:oj.actualStart||'',
-          actualEnd:oj.actualEnd||'',
-          setupActualMin:oj.setupActualMin||0,
-          prevActual:oj.prevActual||0,
         };
       });
       const totalPlan=mergedJobs.reduce((s,j)=>s+j.plan,0);
