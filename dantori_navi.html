@@ -4475,6 +4475,12 @@ function renderKanbanCard(d){
       ${(!d.noSetup)?`${roles.金型取付?`<div class="kcard-role"><span class="kcard-role-lbl">取付</span><span class="kcard-role-val">${roles.金型取付}</span></div>`:`<div class="kcard-role"><span class="kcard-role-lbl" style="color:#94a3b8;">取付</span><span class="kcard-role-val" style="color:#f59e0b;">未定</span></div>`}`:''}
       ${roles.作業者?`<div class="kcard-role"><span class="kcard-role-lbl">作業</span><span class="kcard-role-val">${roles.作業者}</span></div>`:''}
     </div>` : '';
+  const canEdit = d._source==='manual' || d.fromPlan;
+  const editBtn = (canEdit && d._id)
+    ? `<div style="margin-top:5px;display:flex;gap:3px;">
+        <button class="edit-btn" onclick="showEditDantori('${d._id}')">✏</button>
+        <button class="del-btn"  onclick="deleteDantoriEntry('${d._id}')">×</button>
+       </div>` : '';
   const cls = d.status==='in_progress'?'kcard k-active':(d.status==='done'?'kcard k-done':'kcard k-scheduled');
   return `
   <div class="${cls}">
@@ -4833,42 +4839,50 @@ function renderPressTimeline(allEntries){
       const color   = LINE_COLORS_MAP[d.lineId] || '#6b7280';
       const label   = getLineDisplayName(d.lineId);
       const part    = d.partNo || '';
-      const barLabel = part ? `${label} ${part}` : label;
       const r       = d.roles || {};
-      const isSetupRole = (r.金型取付||'').split(/[,、]/).map(s=>s.trim()).includes(name)
-                       || r.初品出し === name
-                       || r.品質確認 === name;
+      const isMount   = (r.金型取付||'').split(/[,、]/).map(s=>s.trim()).includes(name);
+      const isIppin   = r.初品出し === name;
+      const isQuality = r.品質確認 === name;
+      const isSetupRole = isMount || isIppin || isQuality;
       const isWorker    = (r.作業者||'').split(/[,、]/).map(s=>s.trim()).includes(name);
-      const roleStr = [
-        (r.金型取付||'').split(/[,、]/).map(s=>s.trim()).includes(name) ? '取付' : '',
-        r.初品出し === name ? '初品' : '',
-        r.品質確認 === name ? '品質' : '',
-        isWorker ? '作業' : '',
+      // 段取りバー用ロール文字列（作業は含めない）
+      const setupRoleStr = [
+        isMount   ? '取付' : '',
+        isIppin   ? '初品' : '',
+        isQuality ? '品質' : '',
       ].filter(Boolean).join('·');
-      const tip = `${label}  ${part}  [${roleStr||'担当'}]  ${d.setupStart||d.prodStart||''}〜${d.prodEnd||''}`;
+      // ツールチップ用（全役割）
+      const allRoleStr = [setupRoleStr, isWorker ? '生産' : ''].filter(Boolean).join('+');
+      const tip = `${label} ｜ ${part}  [${allRoleStr||'担当'}]  ${d.setupStart||d.prodStart||''}〜${d.prodEnd||''}`;
       const sm = rt_toMin(d.setupStart), ps = rt_toMin(d.prodStart), pe = rt_toMin(d.prodEnd);
+      // バー内ラベル：役割/ライン ＋ 区切り ＋ 品番
+      const setupBarInner = part
+        ? `${setupRoleStr||'段取'}<span style="opacity:0.5;margin:0 2px;">｜</span><span style="font-size:0.85em;">${part}</span>`
+        : (setupRoleStr||'段取');
+      const prodBarInner = part
+        ? `${label}<span style="opacity:0.5;margin:0 2px;">｜</span><span style="font-size:0.85em;">${part}</span>`
+        : label;
 
       if(isSetupRole){
-        // 段取り担当（品質/初品/取付）: 段取り時間帯のみ表示（setupStart〜prodStart）
+        // 段取り担当（品質/初品/取付）: 段取り時間帯のみ（setupStart〜prodStart）
         if(sm !== null && ps !== null && ps > sm){
           const sx = rt_toX(sm), sw = Math.max(rt_toX(ps) - sx, 8);
-          blk += `<div class="rt-block rt-setup" style="left:${sx}px;width:${sw}px;background:${color};" title="${tip}">${roleStr} ${part}</div>`;
+          blk += `<div class="rt-block rt-setup" style="left:${sx}px;width:${sw}px;background:${color};" title="${tip}">${setupBarInner}</div>`;
         } else if(sm !== null && ps === null){
           const sx = rt_toX(sm), sw = 60 * RT_PPM;
-          blk += `<div class="rt-block rt-setup" style="left:${sx}px;width:${sw}px;background:${color};" title="${tip}">段取中 ${part}</div>`;
+          blk += `<div class="rt-block rt-setup" style="left:${sx}px;width:${sw}px;background:${color};" title="${tip}">段取中<span style="opacity:0.5;margin:0 2px;">｜</span><span style="font-size:0.85em;">${part}</span></div>`;
         }
       }
       if(isWorker){
-        // 作業者: 生産時間帯のみ表示（prodStart〜prodEnd）
+        // 作業者: 生産時間帯のみ（prodStart〜prodEnd）
         if(ps !== null){
           const px = rt_toX(ps);
           const pw = pe !== null ? Math.max(rt_toX(pe) - px, 8) : 90 * RT_PPM;
-          blk += `<div class="rt-block" style="left:${px}px;width:${pw}px;background:${color};opacity:0.85;" title="${tip}">${barLabel}</div>`;
+          blk += `<div class="rt-block" style="left:${px}px;width:${pw}px;background:${color};opacity:0.8;" title="${tip}">${prodBarInner}</div>`;
         } else if(d.noSetup && sm !== null){
-          // noSetup: setupStart=prodStart なので setupStartから
           const sx = rt_toX(sm);
           const sw = pe !== null ? Math.max(rt_toX(pe) - sx, 8) : 90 * RT_PPM;
-          blk += `<div class="rt-block" style="left:${sx}px;width:${sw}px;background:${color};opacity:0.85;" title="${tip}">${barLabel}</div>`;
+          blk += `<div class="rt-block" style="left:${sx}px;width:${sw}px;background:${color};opacity:0.8;" title="${tip}">${prodBarInner}</div>`;
         }
       }
     });
