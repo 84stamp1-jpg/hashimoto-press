@@ -5273,44 +5273,39 @@ async function autoAssignRoles(){
     return null;
   }
 
-  // 金型取付を探す
-  // ・品質確認/初品出しと同じ人でもOK（thisEntryAssigned の人はisBusy無視）
-  // ・ライン外（noLine）は除く
-  // ・優先ライン仕事なし → グループ内の近いラインから応援（近い順）
-  // ・優先ライン未設定（フローティング）は自動割当対象外
-  // ・mountCount（進捗南里 作業人数）> 0 ならその人数を上限、なければPRESS_LINE_MASTERの人数
-  function findMountWorkers(lineId, thisEntryAssigned, s, e, mountCount){
-    // 利用可能判定（同エントリの担当者はbusy無視）
+  // 金型取付を探す（段取り専任: allowFloating=false で優先ライン付き作業者のみ）
+  // allowFloating=true にすると優先ライン未設定の作業者も対象にする（作業者割り当て用）
+  function findMountWorkers(lineId, thisEntryAssigned, s, e, mountCount, allowFloating=false){
     const isAvail = w => {
       if(workerHasRole(w,'noLine')) return false;
       if(thisEntryAssigned.includes(w)) return !isUnavailableAt(w, s);
       return !isBusy(w, s, e) && !isUnavailableAt(w, s);
     };
-
-    // 段取り人数上限：進捗南里の作業人数 > 0 ならそれを優先、なければPRESS_LINE_MASTERの人数
     const maxCount = (mountCount > 0) ? mountCount : (PRESS_LINE_MASTER[lineId]?.workers?.length || 99);
 
     if(hasRoleData){
-      const freeLines = getSameGroupNoWork(lineId); // 近い順にソート済み
+      const freeLines = getSameGroupNoWork(lineId);
+      const result = [];
 
       // ① 優先ライン一致
-      const prio = allPressWorkers.filter(w =>
-        WORKER_PRIORITY_LINE[w] === lineId && isAvail(w)
-      );
-      if(prio.length) return prio.slice(0, maxCount);
+      result.push(...allPressWorkers.filter(w => WORKER_PRIORITY_LINE[w] === lineId && isAvail(w)));
+      if(!allowFloating && result.length) return result.slice(0, maxCount);
+      if(result.length >= maxCount) return result.slice(0, maxCount);
 
-      // ② 同グループで仕事なしライン（freeLines順 = 近い順でソート）
+      // ② 同グループで仕事なしライン（近い順）
       const grp = allPressWorkers
-        .filter(w => freeLines.includes(WORKER_PRIORITY_LINE[w]) && isAvail(w))
-        .sort((a, b) => {
-          // freeLines内でのインデックス（近いほど前）
-          const ia = freeLines.indexOf(WORKER_PRIORITY_LINE[a]);
-          const ib = freeLines.indexOf(WORKER_PRIORITY_LINE[b]);
-          return ia - ib;
-        });
-      if(grp.length) return grp.slice(0, maxCount);
+        .filter(w => freeLines.includes(WORKER_PRIORITY_LINE[w]) && isAvail(w) && !result.includes(w))
+        .sort((a, b) => freeLines.indexOf(WORKER_PRIORITY_LINE[a]) - freeLines.indexOf(WORKER_PRIORITY_LINE[b]));
+      result.push(...grp);
+      if(!allowFloating && result.length) return result.slice(0, maxCount);
+      if(result.length >= maxCount) return result.slice(0, maxCount);
 
-      // ③ フローティング（優先ライン未設定）は自動割当しない
+      // ③ フローティング（優先ライン未設定）: 作業者割り当て時のみ使用
+      if(allowFloating){
+        const floating = allPressWorkers.filter(w => !WORKER_PRIORITY_LINE[w] && isAvail(w) && !result.includes(w));
+        result.push(...floating);
+      }
+      if(result.length) return result.slice(0, maxCount);
     }
 
     // フォールバック: PRESS_LINE_MASTER.workers
@@ -5440,15 +5435,33 @@ async function autoAssignRoles(){
       ? wrkCount
       : (PRESS_LINE_MASTER[entry.lineId]?.workers?.length || 1);
     if(effectiveWrkCount > 0 && ps && e && ps < e){
-      // ベース: 金型取付した人を優先、workerCountを超える場合は先着でカット
+      // ベース: 金型取付した人を優先
       const workerAvail = mountAvail.slice(0, effectiveWrkCount);
 
-      // 不足分を補完（金型取付していない人から、prodStart〜prodEnd で空きのある人）
-      const shortage = effectiveWrkCount - workerAvail.length;
-      if(shortage > 0){
-        const additional = findMountWorkers(entry.lineId, [], ps, e, shortage + workerAvail.length)
-          .filter(w => !workerAvail.includes(w))
-          .slice(0, shortage);
+      // 不足分を補完: 「優先ラインに計画があるか」ではなく「実際にbusyか」で判定
+      // → 自分のラインに計画があっても未割当なら空き人員として使う
+      const wrkNeed = effectiveWrkCount - workerAvail.length;
+      if(wrkNeed > 0){
+        const additional = allPressWorkers
+          .filter(w =>
+            !workerAvail.includes(w) &&
+            !workerHasRole(w, 'noLine') &&
+            !isBusy(w, ps, e) &&
+            !isUnavailableAt(w, ps)
+          )
+          .sort((a, b) => {
+            // 同ライン優先 → 同グループ優先 → その他
+            const aLine = WORKER_PRIORITY_LINE[a];
+            const bLine = WORKER_PRIORITY_LINE[b];
+            const score = w => {
+              if(w === entry.lineId) return 0;
+              const grp = dantoriGroupCfg.find(g => g.ids && g.ids.includes(entry.lineId));
+              if(grp && grp.ids.includes(w)) return 1;
+              return w ? 2 : 3; // 優先ラインあり他グループ → フローティング
+            };
+            return score(aLine) - score(bLine);
+          })
+          .slice(0, wrkNeed);
         workerAvail.push(...additional);
       }
 
