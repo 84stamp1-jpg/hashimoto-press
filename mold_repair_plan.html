@@ -333,6 +333,16 @@ header{background:var(--panel);border-bottom:1px solid var(--border);padding:0 1
 
 /* セパレーター行 */
 .nm-sep td{height:3px;background:#1F3864;padding:0;border:none}
+/* 品番行ドラッグ */
+.nm-no-cell{cursor:grab;transition:opacity .15s}
+.nm-no-cell:active{cursor:grabbing}
+.nm-no-cell.nm-dragging{opacity:.35}
+.nm-drag-over td{border-top:2px solid #3b6ef8 !important}
+/* 品番行メモセル */
+.nm-hdr-memo{font-size:11px;color:#444;border:1px dashed #c8d8f0;border-radius:3px;
+  padding:2px 4px;min-height:18px;outline:none;white-space:pre-wrap;cursor:text;
+  background:#f8faff;width:100%;display:block}
+.nm-hdr-memo:focus{border-color:var(--accent);background:#fff}
 
 /* 画像アップロード */
 .nm-img-area{width:100%;min-height:50px;display:flex;flex-direction:column;
@@ -1773,6 +1783,7 @@ let nmStart=nmGetMonday(new Date());
 let nmCurrentNoteKey=null;
 let nmShowCompleted=true;
 let nmDrag=null;
+let nmMoldDrag=null; // ドラッグ移動中の moldId
 
 function nmGetMonday(d){const dt=new Date(d);const dy=dt.getDay();dt.setDate(dt.getDate()-(dy===0?6:dy-1));dt.setHours(0,0,0,0);return dt}
 function nmAddDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r}
@@ -2119,57 +2130,73 @@ function nmBuildTbody(){
     const htr=document.createElement('tr');
     htr.dataset.moldId=mold.id;
 
-    // Col1: No (rowspan all) ＋ ↑↓並び替えボタン
+    // Col1: No (rowspan all) ＋ ドラッグハンドル ＋ 👁 ✕
     const tdNo=document.createElement('td');tdNo.rowSpan=totalRows;
+    tdNo.className='nm-no-cell';
     tdNo.style.cssText=`background:${noColor};color:#fff;text-align:center;font-weight:700;font-size:11px;vertical-align:top;padding:2px 1px;`;
-    tdNo.innerHTML=`<div>${nmEsc(mold.moldNo||String(mi+1))}</div>
-      <div style="margin-top:5px;display:flex;flex-direction:column;gap:4px;align-items:center">
-        <button class="nm-move-btn" onclick="nmMoveMold('${mold.id}',-1)" title="上へ移動" ${mi===0?'disabled style="opacity:.3"':''}>↑</button>
-        <button class="nm-move-btn" onclick="nmMoveMold('${mold.id}',1)" title="下へ移動" ${mi===last?'disabled style="opacity:.3"':''}>↓</button>
-        <span style="font-size:11px;cursor:pointer;color:#93c5fd;margin-top:2px" onclick="nmToggleMoldCompleted('${mold.id}')" title="完了${mold.showCompleted!==false?'非':''}表示">👁</span>
+    tdNo.innerHTML=`<div style="font-size:9px;color:rgba(255,255,255,.45);line-height:1;margin-bottom:2px">≡</div>
+      <div>${nmEsc(mold.moldNo||String(mi+1))}</div>
+      <div style="margin-top:4px;display:flex;flex-direction:column;gap:3px;align-items:center">
+        <span style="font-size:11px;cursor:pointer;color:#93c5fd" onclick="nmToggleMoldCompleted('${mold.id}')" title="完了${mold.showCompleted!==false?'非':''}表示">👁</span>
         <span style="font-size:11px;cursor:pointer;color:#fca5a5" onclick="nmDeleteMold('${mold.id}')">✕</span>
       </div>`;
+    tdNo.draggable=true;
+    tdNo.addEventListener('dragstart',e=>{
+      nmMoldDrag=mold.id;
+      e.dataTransfer.effectAllowed='move';
+      setTimeout(()=>tdNo.classList.add('nm-dragging'),0);
+    });
+    tdNo.addEventListener('dragend',()=>{
+      tdNo.classList.remove('nm-dragging');
+      document.querySelectorAll('.nm-drag-over').forEach(el=>el.classList.remove('nm-drag-over'));
+      nmMoldDrag=null;
+    });
     htr.appendChild(tdNo);
 
-    // Col2: 略図（padding:0 で余白なし）
+    // Col2: 略図
     const tdImg=document.createElement('td');
     tdImg.style.cssText='background:#f5f5f5;vertical-align:top;padding:0;overflow:hidden;';
     const fid='nmf_'+mold.id;
     tdImg.innerHTML=`
-      <div class="nm-img-area" onclick="document.getElementById('${fid}').click()" title="クリックで画像選択（ExcelからコピーしたPNG/JPG）" style="padding:0">
+      <div class="nm-img-area" onclick="document.getElementById('${fid}').click()" title="クリックで画像選択" style="padding:0">
         ${img
           ?`<img src="${img}" alt="" style="width:100%;height:100%;object-fit:cover;display:block">`
-          :'<div style="font-size:10px;color:#bbb;text-align:center;padding:6px 2px;line-height:1.6">📷<br>画像<br>追加</div>'}
+          :'<div style="font-size:10px;color:#bbb;text-align:center;padding:6px 2px;line-height:1.6">📷<br>画像</div>'}
       </div>
       <input type="file" id="${fid}" class="nm-img-input" accept="image/*" onchange="nmLoadImage('${mold.id}',this)">
       ${img?`<div style="font-size:10px;color:#aaa;text-align:center;cursor:pointer;padding:1px;background:#eee" onclick="nmClearImage('${mold.id}')">削除</div>`:''}`;
     htr.appendChild(tdImg);
 
-    // Col3: 品番/品名（大）＋ イベント・物出し日程メモ ＋ 客先（最下部）＋ 工程編集
-    const tdPart=document.createElement('td');tdPart.style.cssText=`background:${bg};vertical-align:top;padding:2px 4px;`;
+    // Col3: 品番/品名 ＋ 🔧工程ボタン
+    const tdPart=document.createElement('td');tdPart.style.cssText=`background:${bg};vertical-align:middle;padding:2px 4px;`;
     tdPart.innerHTML=`
       <input class="nm-edit-field" value="${nmEsc(mold.partNo)}" placeholder="品番"
         style="font-weight:700;color:#1F3864;font-size:13px;line-height:1.3;display:block"
         onblur="nmSaveMoldField('${mold.id}','partNo',this.value)">
       <input class="nm-edit-field" value="${nmEsc(mold.partName)}" placeholder="品名"
-        style="color:#2E5D9E;font-size:11px;font-style:italic;line-height:1.3;margin-bottom:2px;display:block"
+        style="color:#2E5D9E;font-size:11px;font-style:italic;line-height:1.2;display:block"
         onblur="nmSaveMoldField('${mold.id}','partName',this.value)">
-      <div contenteditable="true"
-        style="font-size:11px;color:#444;background:#FFFCF0;border:1px dashed #ddd;border-radius:2px;
-               padding:1px 3px;min-height:14px;outline:none;white-space:pre-wrap;cursor:text"
-        placeholder="📅 客先イベント・物出し日程・備考"
-        onblur="nmSaveEventNote('${mold.id}',this.textContent)">${nmEsc(mold.eventNote||'')}</div>
-      <div style="display:flex;align-items:center;gap:4px;margin-top:2px;border-top:1px solid #e0e0e0;padding-top:2px">
-        <input class="nm-edit-field" value="${nmEsc(mold.client||'')}" placeholder="客先"
-          style="font-size:11px;color:#999;flex:1"
-          onblur="nmSaveMoldField('${mold.id}','client',this.value)">
-        <button onclick="nmEditEstProc('${mold.id}')" title="見積工程を編集（工程ドロップダウンに反映）"
-          style="font-size:10px;padding:1px 4px;border:1px solid #93c5fd;border-radius:3px;background:#EBF0FF;color:#3b6ef8;cursor:pointer;white-space:nowrap;flex-shrink:0">🔧工程</button>
-      </div>`;
+      <button onclick="nmEditEstProc('${mold.id}')" title="見積工程を編集"
+        style="font-size:10px;padding:1px 4px;border:1px solid #93c5fd;border-radius:3px;background:#EBF0FF;color:#3b6ef8;cursor:pointer;white-space:nowrap;margin-top:2px">🔧工程</button>`;
     htr.appendChild(tdPart);
 
-    // Col4,5,6: 空
-    [bgA,bg,bg].forEach(b=>{const td=document.createElement('td');td.style.cssText=`background:${b};`;htr.appendChild(td);});
+    // Col4 (工程列): 客先名
+    const tdClient=document.createElement('td');tdClient.style.cssText=`background:${bg};vertical-align:middle;padding:2px 3px;`;
+    tdClient.innerHTML=`<input class="nm-edit-field" value="${nmEsc(mold.client||'')}" placeholder="客先"
+      style="font-size:11px;color:#555;width:100%;font-weight:600"
+      onblur="nmSaveMoldField('${mold.id}','client',this.value)">`;
+    htr.appendChild(tdClient);
+
+    // Col5+Col6 (担当+締切列 colspan=2): イベント・日程メモ
+    const tdMemo=document.createElement('td');tdMemo.colSpan=2;tdMemo.style.cssText=`background:${bg};vertical-align:middle;padding:2px 4px;`;
+    const memoDiv=document.createElement('div');
+    memoDiv.className='nm-hdr-memo';memoDiv.contentEditable='true';
+    memoDiv.textContent=mold.eventNote||'';
+    memoDiv.setAttribute('placeholder','📅 客先イベント・物出し日程・備考メモ');
+    memoDiv.addEventListener('blur',()=>nmSaveEventNote(mold.id,memoDiv.textContent));
+    tdMemo.appendChild(memoDiv);
+    htr.appendChild(tdMemo);
+
     // Col7: ＋タスク追加
     const tdAdd=document.createElement('td');tdAdd.style.cssText=`background:${bg};text-align:center;vertical-align:middle;padding:2px;`;
     tdAdd.innerHTML=`<button onclick="nmAddTask('${mold.id}')"
@@ -2287,9 +2314,37 @@ function nmBuildTbody(){
     const sc=document.createElement('td');sc.colSpan=6+NM_DAYS;sep.appendChild(sc);tb.appendChild(sep);
   });
   nmSetStatus(`${nmMolds.length}件の金型を表示中`);
+
+  // ===== ドラッグ並び替え（tbodyで委譲） =====
+  tb.addEventListener('dragover',e=>{
+    if(!nmMoldDrag)return;
+    const tr=e.target.closest('tr[data-moldid]');
+    if(!tr||tr.dataset.moldId===nmMoldDrag)return;
+    e.preventDefault();
+    document.querySelectorAll('.nm-drag-over').forEach(el=>el.classList.remove('nm-drag-over'));
+    tr.classList.add('nm-drag-over');
+  });
+  tb.addEventListener('dragleave',e=>{
+    if(!tb.contains(e.relatedTarget))
+      document.querySelectorAll('.nm-drag-over').forEach(el=>el.classList.remove('nm-drag-over'));
+  });
+  tb.addEventListener('drop',e=>{
+    e.preventDefault();
+    document.querySelectorAll('.nm-drag-over').forEach(el=>el.classList.remove('nm-drag-over'));
+    if(!nmMoldDrag)return;
+    const tr=e.target.closest('tr[data-moldid]');
+    if(!tr||tr.dataset.moldId===nmMoldDrag)return;
+    const fi=nmMolds.findIndex(m=>m.id===nmMoldDrag);
+    const ti=nmMolds.findIndex(m=>m.id===tr.dataset.moldId);
+    if(fi<0||ti<0)return;
+    const [item]=nmMolds.splice(fi,1);
+    nmMolds.splice(ti,0,item);
+    nmMoldDrag=null;
+    nmSave();nmBuildTbody();
+  });
 }
 
-// ----- 金型並び替え -----
+// ----- 金型並び替え（矢印ボタン用・ドラッグの代替として残す） -----
 function nmMoveMold(id,dir){
   const i=nmMolds.findIndex(m=>m.id===id);if(i<0)return;
   const j=i+dir;if(j<0||j>=nmMolds.length)return;
