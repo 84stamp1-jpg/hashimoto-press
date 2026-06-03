@@ -1846,6 +1846,13 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
           <span style="font-size:10px;color:#94a3b8;font-weight:400;">（品質確認・初品出し・金型取付は不要）</span>
         </label>
       </div>
+      <div class="form-group" style="margin:0 0 10px;">
+        <label style="display:flex;align-items:center;gap:8px;">
+          <input type="checkbox" id="dt-no-worker"/>
+          👥 作業者配置なし
+          <span style="font-size:10px;color:#94a3b8;font-weight:400;">（ロボットライン等、プレス作業者が不要な場合）</span>
+        </label>
+      </div>
       <div class="form-group" style="margin:0 0 10px;" id="dt-setup-start-group">
         <label>段取り開始</label>
         <input type="time" id="dt-setup-start"/>
@@ -4242,6 +4249,7 @@ async function saveDantoriEntry(){
   const roleWorker  = chipGetValues('chip-wrap-worker').join(',');
   const note        = document.getElementById('dt-note').value.trim();
   const noSetup     = !!(document.getElementById('dt-no-setup')?.checked);
+  const noWorker    = !!(document.getElementById('dt-no-worker')?.checked);
   const workerCount = parseInt(document.getElementById('dt-worker-count')?.value) || 0;
 
   if(!partNo){  alert('品番を入力してください'); return; }
@@ -4252,7 +4260,7 @@ async function saveDantoriEntry(){
   const entry = {
     lineId, partNo,
     setupStart: noSetup ? '' : setupStart,
-    prodStart, prodEnd, status, noSetup,
+    prodStart, prodEnd, status, noSetup, noWorker,
     workerCount,
     roles:{ 金型取付:roleMount, 初品出し:roleIppin, 品質確認:roleQuality, 作業者:roleWorker },
     note, updatedAt:Date.now(), isManual:true,
@@ -4306,6 +4314,7 @@ function showAddDantori(){
   chipSet('chip-wrap-quality', '');
   document.getElementById('dt-note').value         = '';
   document.getElementById('dt-no-setup').checked   = false;
+  document.getElementById('dt-no-worker').checked  = false;
   document.getElementById('dt-worker-count').value = '0';
   onDtNoSetupChange();
   document.getElementById('dantoriModal').style.display = 'flex';
@@ -4328,6 +4337,7 @@ function showEditDantori(id){
   chipSet('chip-wrap-worker',  (entry.roles&&entry.roles.作業者)    || '');
   document.getElementById('dt-note').value         = entry.note        || '';
   document.getElementById('dt-no-setup').checked   = !!(entry.noSetup);
+  document.getElementById('dt-no-worker').checked  = !!(entry.noWorker);
   document.getElementById('dt-worker-count').value = entry.workerCount  || 0;
   onDtNoSetupChange();
   document.getElementById('dantoriModal').style.display = 'flex';
@@ -4439,9 +4449,9 @@ function renderKanbanCard(d){
   const worker__ = d.workerCount || 0;
   const isDefault = (kata_ == null && ninzu_ == null);
   const stdMin_ = d.stdSetupMin != null ? d.stdSetupMin : calcDantoriSetupTime(d.lineId, kata_ || 1, ninzu_ || 1);
-  // 実配置作業者数・不足数（作業者）
+  // 実配置作業者数・不足数（作業者）※noWorker=trueの場合は不足チェックしない
   const assignedWorkers = (roles.作業者||'').split(/[,、]/).map(s=>s.trim()).filter(Boolean);
-  const wrkShortage = (worker__ > 0 && assignedWorkers.length < worker__) ? worker__ - assignedWorkers.length : 0;
+  const wrkShortage = (!d.noWorker && worker__ > 0 && assignedWorkers.length < worker__) ? worker__ - assignedWorkers.length : 0;
   const freeWorkers = wrkShortage > 0 ? _countFreeWorkers(d) : 0;
   const wrkShortageHtml = wrkShortage > 0
     ? (freeWorkers >= wrkShortage
@@ -4460,15 +4470,18 @@ function renderKanbanCard(d){
   const kataHtml = d.noSetup
     ? `<div style="display:flex;gap:5px;flex-wrap:wrap;font-size:10px;color:#64748b;margin:3px 0 1px;">
         <span style="background:#f0fdf4;color:#15803d;padding:1px 6px;border-radius:4px;font-weight:700;">段取りなし</span>
-        <span>👷${worker__>0?worker__:'?'}人<span style="color:#94a3b8;">（作業）</span></span>
-        ${noSetupUnset?`<span style="color:#f59e0b;font-weight:700;">未割当</span>`:''}
+        ${d.noWorker?`<span style="background:#f1f5f9;color:#475569;padding:1px 6px;border-radius:4px;font-weight:700;">👥配置なし</span>`:
+          `<span>👷${worker__>0?worker__:'?'}人<span style="color:#94a3b8;">（作業）</span></span>`}
+        ${(!d.noWorker&&noSetupUnset)?`<span style="color:#f59e0b;font-weight:700;">未割当</span>`:''}
         ${wrkShortageHtml}
       </div>`
     : `<div style="display:flex;gap:5px;flex-wrap:wrap;font-size:10px;color:#64748b;margin:3px 0 1px;">
         ${isDefault ? `<span style="color:#f59e0b;">⚠</span>` : ''}
         <span>🔧${kata_ != null ? kata_ : 1}型</span>
         <span>👤${ninzu_ != null ? ninzu_ : 1}人<span style="color:#94a3b8;">（段取）</span></span>
-        <span>👷${worker__ > 0 ? worker__ : '<span style="color:#f59e0b;">?</span>'}人<span style="color:#94a3b8;">（作業）</span></span>
+        ${d.noWorker
+          ? `<span style="background:#f1f5f9;color:#475569;padding:1px 6px;border-radius:4px;font-weight:700;">👥配置なし</span>`
+          : `<span>👷${worker__ > 0 ? worker__ : '<span style="color:#f59e0b;">?</span>'}人<span style="color:#94a3b8;">（作業）</span></span>`}
         ${mountShortageHtml}${wrkShortageHtml}
         <span style="color:#94a3b8;">標準${stdMin_}分</span>
       </div>`;
@@ -5290,20 +5303,24 @@ async function autoAssignRoles(){
     const maxCount = (mountCount > 0) ? mountCount : (PRESS_LINE_MASTER[lineId]?.workers?.length || 99);
 
     if(hasRoleData){
-      const freeLines = getSameGroupNoWork(lineId);
+      // 同グループのライン一覧（計画有無に関わらず）
+      const sameGroupIds = (dantoriGroupCfg.find(g => g.ids && g.ids.includes(lineId))?.ids || [])
+        .filter(id => id !== lineId);
       const result = [];
 
       // ① 優先ライン一致
       result.push(...allPressWorkers.filter(w => WORKER_PRIORITY_LINE[w] === lineId && isAvail(w)));
-      if(!allowFloating && result.length) return result.slice(0, maxCount);
       if(result.length >= maxCount) return result.slice(0, maxCount);
 
-      // ② 同グループで仕事なしライン（近い順）
+      // ② 同グループで実際に空いている人（ラインに計画があっても本人がbusyでなければOK）
       const grp = allPressWorkers
-        .filter(w => freeLines.includes(WORKER_PRIORITY_LINE[w]) && isAvail(w) && !result.includes(w))
-        .sort((a, b) => freeLines.indexOf(WORKER_PRIORITY_LINE[a]) - freeLines.indexOf(WORKER_PRIORITY_LINE[b]));
+        .filter(w => sameGroupIds.includes(WORKER_PRIORITY_LINE[w]) && isAvail(w) && !result.includes(w))
+        .sort((a, b) => {
+          const ia = sameGroupIds.indexOf(WORKER_PRIORITY_LINE[a]);
+          const ib = sameGroupIds.indexOf(WORKER_PRIORITY_LINE[b]);
+          return ia - ib;
+        });
       result.push(...grp);
-      if(!allowFloating && result.length) return result.slice(0, maxCount);
       if(result.length >= maxCount) return result.slice(0, maxCount);
 
       // ③ フローティング（優先ライン未設定）: 作業者割り当て時のみ使用
@@ -5434,13 +5451,12 @@ async function autoAssignRoles(){
     } // end !noSetup
 
     // ④ 作業者（生産フェーズ: prodStart〜prodEnd でbusy）
-    // ルール: 金型取付した人を優先して作業者に → 不足分のみ別の作業者を追加
+    // noWorker=true の場合はスキップ（ロボットライン等、プレス作業者が不要な場合）
     const wrkCount = entry.workerCount || 0;
-    // workerCount未設定(0)の場合はPRESS_LINE_MASTERのworkers数 or 1人をデフォルトに
     const effectiveWrkCount = wrkCount > 0
       ? wrkCount
       : (PRESS_LINE_MASTER[entry.lineId]?.workers?.length || 1);
-    if(effectiveWrkCount > 0 && ps && e && ps < e){
+    if(!entry.noWorker && effectiveWrkCount > 0 && ps && e && ps < e){
       // ベース: 金型取付した人を優先
       const workerAvail = mountAvail.slice(0, effectiveWrkCount);
 
