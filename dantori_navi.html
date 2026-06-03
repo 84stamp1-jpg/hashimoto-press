@@ -3691,23 +3691,29 @@ function renderDantoriCard(d){
   // ライン表示名（「ライン」の重複を防ぐ）
   const lineName = getLineDisplayName(d.lineId);
 
-  // 型数・段取人数・標準時間バッジ（常に表示、未設定時は⚠1型1人・マスタ標準時間）
+  // 型数・段取人数・標準時間バッジ（段取りなし時は専用表示）
   const kata_    = (d.mountKata  != null && d.mountKata  > 0) ? d.mountKata  : null;
   const ninzu_   = (d.mountCount != null && d.mountCount > 0) ? d.mountCount : null;
   const worker_  = d.workerCount != null ? d.workerCount : 0;
   const isDefault_ = (kata_ == null && ninzu_ == null);
-  const stdMin_  = calcDantoriSetupTime(d.lineId, kata_ || 1, ninzu_ || 1);
-  const kataInfoHtml = `<div style="display:flex;gap:6px;align-items:center;padding:2px 14px 4px;font-size:10px;color:#64748b;flex-wrap:wrap;">
-      ${isDefault_ ? `<span style="color:#f59e0b;">⚠ 未設定</span>` : ''}
-      <span>🔧 ${kata_ != null ? kata_ : 1}型</span>
-      <span>🔩 ${ninzu_ != null ? ninzu_ : 1}人<span style="color:#94a3b8;">（段取）</span></span>
-      <span>👷 ${worker_ > 0 ? worker_ : '<span style="color:#f59e0b;">未設定</span>'}人<span style="color:#94a3b8;">（作業）</span></span>
-      <span style="color:#94a3b8;">標準${stdMin_}分</span>
-    </div>`;
+  // stdSetupMin: 保存済み固定値を優先、なければ動的計算
+  const stdMin_  = d.stdSetupMin != null ? d.stdSetupMin : calcDantoriSetupTime(d.lineId, kata_ || 1, ninzu_ || 1);
+  const kataInfoHtml = d.noSetup
+    ? `<div style="display:flex;gap:6px;align-items:center;padding:2px 14px 4px;font-size:10px;color:#64748b;flex-wrap:wrap;">
+        <span style="background:#f0fdf4;color:#15803d;padding:1px 7px;border-radius:4px;font-weight:700;">段取りなし</span>
+        <span>👷 ${worker_ > 0 ? worker_ : '<span style="color:#f59e0b;">未設定</span>'}人<span style="color:#94a3b8;">（作業）</span></span>
+      </div>`
+    : `<div style="display:flex;gap:6px;align-items:center;padding:2px 14px 4px;font-size:10px;color:#64748b;flex-wrap:wrap;">
+        ${isDefault_ ? `<span style="color:#f59e0b;">⚠ 未設定</span>` : ''}
+        <span>🔧 ${kata_ != null ? kata_ : 1}型</span>
+        <span>🔩 ${ninzu_ != null ? ninzu_ : 1}人<span style="color:#94a3b8;">（段取）</span></span>
+        <span>👷 ${worker_ > 0 ? worker_ : '<span style="color:#f59e0b;">未設定</span>'}人<span style="color:#94a3b8;">（作業）</span></span>
+        <span style="color:#94a3b8;">標準${stdMin_}分</span>
+      </div>`;
 
-  // 段取り時間バー（段取り開始〜生産開始 実績/予定）
+  // 段取り時間バー（noSetup時は非表示、それ以外は段取り開始〜生産開始）
   let setupBar = '';
-  if(d.setupStart && d.prodStart){
+  if(!d.noSetup && d.setupStart && d.prodStart){
     const actualMin = calcDurMin(d.setupStart, d.prodStart);
     const ratio  = (actualMin && stdMin_) ? Math.round(actualMin / stdMin_ * 100) : null;
     const ratioStr = ratio !== null
@@ -3729,11 +3735,12 @@ function renderDantoriCard(d){
   // プレスラインのエントリかどうか（作業者行を表示するか判定）
   const isPressEntry = !!PRESS_LINE_MASTER[d.lineId];
   const unset = `<span class="ptag ptag-unset">未割当</span>`;
+  // noSetup時は作業者のみ表示（品質確認・初品出し・金型取付は段取り不要のため非表示）
   const rolesHtml = (hasRoles || d.fromPlan || isPressEntry) ? `
     <div class="dc-roles">
-      ${(roles.品質確認||isPressEntry)?`<div class="role-row"><div class="role-label">品質確認</div><div class="person-tags">${roles.品質確認?toTags(roles.品質確認):unset}</div></div>`:''}
-      ${(roles.初品出し||isPressEntry)?`<div class="role-row"><div class="role-label">初品出し</div><div class="person-tags">${roles.初品出し?toTags(roles.初品出し):'<span style="color:#94a3b8;font-size:11px;">—</span>'}</div></div>`:''}
-      ${(roles.金型取付||isPressEntry)?`<div class="role-row"><div class="role-label" title="段取り専任">金型取付</div><div class="person-tags">${roles.金型取付?toTags(roles.金型取付):unset}</div></div>`:''}
+      ${(!d.noSetup&&(roles.品質確認||isPressEntry))?`<div class="role-row"><div class="role-label">品質確認</div><div class="person-tags">${roles.品質確認?toTags(roles.品質確認):unset}</div></div>`:''}
+      ${(!d.noSetup&&(roles.初品出し||isPressEntry))?`<div class="role-row"><div class="role-label">初品出し</div><div class="person-tags">${roles.初品出し?toTags(roles.初品出し):'<span style="color:#94a3b8;font-size:11px;">—</span>'}</div></div>`:''}
+      ${(!d.noSetup&&(roles.金型取付||isPressEntry))?`<div class="role-row"><div class="role-label" title="段取り専任">金型取付</div><div class="person-tags">${roles.金型取付?toTags(roles.金型取付):unset}</div></div>`:''}
       ${(roles.作業者||isPressEntry)?`<div class="role-row"><div class="role-label" title="生産担当">作業者</div><div class="person-tags">${roles.作業者?toTags(roles.作業者):unset}</div></div>`:''}
     </div>`
   : '';
@@ -4916,22 +4923,15 @@ async function importFromProductionPlan(){
   const dateStr = getDantoriDatePath();
 
   try {
-    const newData = {};
-    // 手動エントリを保持
-    dantoriSchedule.filter(e => e.isManual === true).forEach(e => {
-      const {_id, ...rest} = e;
-      newData[_id] = rest;
-    });
-    // 計画エントリを連番キーで追加
-    entries.forEach((e, i) => {
-      const {_key, ...rest} = e;
-      newData[`plan_${dateStr}_${String(i).padStart(3,'0')}`] = rest;
-    });
+    // 既存データ取得（roles・stdSetupMin保持のため）
+    const res2 = await fetch(`${fbUrl}/dantori/${dateStr}.json`);
+    const existing = res2.ok ? (await res2.json() || {}) : {};
+    const newData = _mergePlanEntries(entries, existing, dateStr);
 
     await fetch(`${fbUrl}/dantori/${dateStr}.json`,
       {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newData)});
     await loadDantoriSchedule();
-    alert(`✓ ${entries.length} 件の段取り計画を取り込みました\n\n計画修正時は「📥 計画取込」を再度押すと上書き更新されます`);
+    alert(`✓ ${entries.length} 件の段取り計画を取り込みました\n\n計画修正時は「📥 今すぐ同期」を再度押すと上書き更新されます`);
   } catch(e){
     alert('取込エラー: ' + e.message);
   }
@@ -4995,25 +4995,52 @@ function _debouncedDantoriAutoSync(){
   _dantoriAutoSyncTimer = setTimeout(_autoSyncDantoriFromPlan, 2000);
 }
 
+// 既存のplanエントリ(fromPlan)を lineId+partNo+prodStart で照合し
+// roles・stdSetupMin・Firebaseキーを引き継いでマージする共通処理
+function _mergePlanEntries(entries, existing, dateStr){
+  // 既存planエントリをキーでインデックス化
+  const existMap = {};
+  Object.entries(existing).forEach(([id, v]) => {
+    if(v && v.fromPlan){
+      const k = `${v.lineId}||${v.partNo}||${v.prodStart}`;
+      existMap[k] = {id, entry: v};
+    }
+  });
+  const newData = {};
+  // 手動エントリをそのまま保持
+  Object.entries(existing).forEach(([id, v]) => {
+    if(v && v.isManual === true) newData[id] = v;
+  });
+  // 計画エントリ：既存rolesとFBキーを引き継ぎ、stdSetupMinを初回固定
+  entries.forEach((e, i) => {
+    const {_key, ...rest} = e;
+    const matchKey = `${rest.lineId}||${rest.partNo}||${rest.prodStart}`;
+    const prev = existMap[matchKey];
+    const fbKey = prev ? prev.id : `plan_${dateStr}_${String(i).padStart(3,'0')}`;
+    const prevRoles = prev?.entry?.roles || {};
+    const hasRoles = Object.values(prevRoles).some(v => v);
+    // 標準段取り時間：既存値があれば引き継ぐ、なければ今のマスタで計算して固定
+    const stdSetupMin = prev?.entry?.stdSetupMin != null
+      ? prev.entry.stdSetupMin
+      : calcDantoriSetupTime(rest.lineId, rest.mountKata||1, rest.mountCount||1);
+    newData[fbKey] = {
+      ...rest,
+      roles: hasRoles ? prevRoles : rest.roles,
+      stdSetupMin,
+    };
+  });
+  return newData;
+}
+
 async function _autoSyncDantoriFromPlan(){
   if(!Object.keys(linesData).length) return;
   const entries = _buildDantoriEntriesFromLines(linesData);
   const fbUrl   = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
   const dateStr = getDantoriDatePath();
   try {
-    // 既存データ取得（手動エントリを保持するため）
     const res = await fetch(`${fbUrl}/dantori/${dateStr}.json`);
     const existing = res.ok ? (await res.json() || {}) : {};
-    const newData = {};
-    // 手動エントリを保持
-    Object.entries(existing).forEach(([id, v]) => {
-      if(v && v.isManual === true) newData[id] = v;
-    });
-    // 計画エントリを上書き
-    entries.forEach((e, i) => {
-      const {_key, ...rest} = e;
-      newData[`plan_${dateStr}_${String(i).padStart(3,'0')}`] = rest;
-    });
+    const newData = _mergePlanEntries(entries, existing, dateStr);
     await fetch(`${fbUrl}/dantori/${dateStr}.json`,
       {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newData)});
     await loadDantoriSchedule();
