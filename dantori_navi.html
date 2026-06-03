@@ -8471,6 +8471,7 @@ window.renderGrpMgr=function(){
               <div><label style="color:#888;display:block;margin-bottom:2px;">開始時刻 列</label><input type="text" id="mp-${gi}-start" value="${mp.startCol||'C'}" placeholder="C" style="width:45px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
               <div><label style="color:#888;display:block;margin-bottom:2px;">終了時刻 列</label><input type="text" id="mp-${gi}-end" value="${mp.endCol||'D'}" placeholder="D" style="width:45px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
               <div><label style="color:#888;display:block;margin-bottom:2px;">型数/人数 列<span style="color:#aaa;font-size:10px;margin-left:3px;">（*型/*人）</span></label><input type="text" id="mp-${gi}-kata" value="${mp.kataCol||''}" placeholder="例: C" style="width:45px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
+              <div><label style="color:#888;display:block;margin-bottom:2px;">作業人数 列<span style="color:#aaa;font-size:10px;margin-left:3px;">（数値）</span></label><input type="text" id="mp-${gi}-hito" value="${mp.hitoCol||''}" placeholder="例: D" style="width:45px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
               <div style="grid-column:1/-1;"><label style="color:#888;display:block;margin-bottom:2px;">品番が「-」の場合の代替列<span style="color:#aaa;font-size:10px;margin-left:4px;">（空欄=使わない）</span></label><input type="text" id="mp-${gi}-altpart" value="${mp.altPartCol||''}" placeholder="例: C" style="width:45px;padding:4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;font-size:11px;text-transform:uppercase;"></div>
             </div>
           </div>
@@ -8544,6 +8545,7 @@ function syncGrpMgrForm(){
       skipNoTime:skipNoTimeEl?skipNoTimeEl.checked:true,
       hitoFromNextRow:hitoNextEl?hitoNextEl.checked:false,
       kataCol:(document.getElementById(`mp-${gi}-kata`)?.value||'').trim().toUpperCase(),
+      hitoCol:(document.getElementById(`mp-${gi}-hito`)?.value||'').trim().toUpperCase(),
       altPartCol:(document.getElementById(`mp-${gi}-altpart`)?.value||'').trim().toUpperCase()
     };
   });
@@ -8730,6 +8732,7 @@ window.onImpFile=async function(){
   const skipNoTime=mp.skipNoTime!==false; // デフォルトtrue（時刻なし行をスキップ）
   const hitoFromNextRow=mp.hitoFromNextRow||false; // 次行を作業人数として読む
   const kataIdx=colToIdx(mp.kataCol||'');          // 型数/人数列（例: C）
+  const hitoIdx=colToIdx(mp.hitoCol||'');          // 作業人数列（例: D）
   const altPIdx=colToIdx(mp.altPartCol||'');        // 代替品番列
   // 「-」判定（半角・全角ダッシュ・ハイフンのみの文字列）
   function isDash(s){return /^[-－ー]+$/.test(s);}
@@ -8767,10 +8770,13 @@ window.onImpFile=async function(){
         kata  = parseKata (String(raw2??'').trim()) || (typeof raw2==='number'&&raw2>=1&&raw2<=20?raw2:0);
         ninzu = parseNinzu(String(raw3??'').trim()) || (typeof raw3==='number'&&raw3>=1&&raw3<=20?raw3:0);
       }
-      // D列（planCol）の1行下から作業人数(hito)を取得（hitoFromNextRow有効時のみ）
-      if(hitoFromNextRow && i+1<dataRows.length){
+      // 作業人数列が指定されていれば同行から取得、なければ次行（hitoFromNextRow）で取得
+      if(hitoIdx>=0){
+        const nv=parseInt(String(row[hitoIdx]||'').replace(/[^\d]/g,''));
+        if(nv>0&&nv<=100) hito=nv;
+      } else if(hitoFromNextRow && i+1<dataRows.length){
         const nv=parseInt(String(dataRows[i+1][plIdx]||'').replace(/[^\d]/g,''));
-        if(nv>0&&nv<=100) hito=nv; // 作業人数は100人以下と想定
+        if(nv>0&&nv<=100) hito=nv;
       }
       // C列の型数・人数が両方0の場合は段取りなし扱い
       const noSetup = (kata === 0 && ninzu === 0);
@@ -8832,9 +8838,12 @@ window.onImpFile=async function(){
             if(fi+2<filtered.length) kata  = parseKata (String(filtered[fi+2][kataIdx]||'').trim());
             if(fi+3<filtered.length) ninzu = parseNinzu(String(filtered[fi+3][kataIdx]||'').trim());
           }
-          if(hitoFromNextRow&&fi+1<filtered.length){
+          if(hitoIdx>=0){
+            const nv=parseInt(String(row[hitoIdx]||'').replace(/[^\d]/g,''));
+            if(nv>0&&nv<=100) hito=nv;
+          } else if(hitoFromNextRow&&fi+1<filtered.length){
             const nv=parseInt(String(filtered[fi+1][plIdx]||'').replace(/[^\d]/g,''));
-            if(nv>0&&nv<=100) hito=nv; // 作業人数は100人以下と想定
+            if(nv>0&&nv<=100) hito=nv;
           }
           // C列の型数・人数が両方0の場合は段取りなし扱い
           const noSetup=(kata===0&&ninzu===0);
