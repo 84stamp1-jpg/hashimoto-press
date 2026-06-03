@@ -4183,6 +4183,46 @@ function chipRemove(wid, name){
   const chip = w.querySelector(`.chip[data-n="${name}"]`);
   if(chip) chip.remove();
 }
+
+// 段取りモーダルのチップ追加時に重複チェックを行う
+const _DANTORI_CHIP_WIDS = ['chip-wrap-quality','chip-wrap-lift','chip-wrap-mount','chip-wrap-worker'];
+function chipAddWithConflictCheck(wid, name){
+  chipAdd(wid, name);
+  const isDantoriChip = _DANTORI_CHIP_WIDS.includes(wid) || wid.startsWith('chip-wrap-shift-');
+  if(!isDantoriChip) return;
+  // モーダルの現在入力時間帯を取得
+  const setupStart = document.getElementById('dt-setup-start')?.value;
+  const prodStart  = document.getElementById('dt-prod-start')?.value;
+  const prodEnd    = document.getElementById('dt-prod-end')?.value;
+  const entryStart = setupStart || prodStart;
+  if(!entryStart || !prodEnd) return;
+  const s = toMin(entryStart), e = toMin(prodEnd);
+  if(s === null || e === null || e <= s) return;
+  // 同時間帯に同名作業者が割り当てられている他エントリを探す
+  const conflicts = (dantoriSchedule||[]).filter(entry => {
+    if(entry._id === editingDantoriId) return false;
+    const es = toMin(entry.setupStart || entry.prodStart);
+    const ee = toMin(entry.prodEnd);
+    if(es === null || ee === null || ee <= es) return false;
+    if(ee <= s || es >= e) return false; // 時間が重ならない
+    const roles = entry.roles || {};
+    const assigned = [
+      roles.品質確認, roles.初品出し, roles.金型取付,
+      ...(roles.作業者 ? roles.作業者.split(/[,、]/).map(v=>v.trim()) : []),
+      ...(entry.shiftChanges||[]).flatMap(sc =>
+        sc.workers ? sc.workers.split(/[,、]/).map(v=>v.trim()) : []
+      )
+    ].filter(Boolean);
+    return assigned.includes(name);
+  });
+  if(conflicts.length > 0){
+    const lines = conflicts.map(en =>
+      `・${en.lineId} ${en.partNo||''} ${en.setupStart||en.prodStart}〜${en.prodEnd}`
+    ).join('\n');
+    const keep = confirm(`⚠️ ${name} は同時間帯に以下の作業と重複しています：\n\n${lines}\n\nそれでも追加しますか？`);
+    if(!keep) chipRemove(wid, name);
+  }
+}
 // ドロップダウンを（現在の入力テキストでフィルタして）表示
 function chipShowDd(wid){
   const w = document.getElementById(wid);
@@ -4199,8 +4239,8 @@ function chipShowDd(wid){
   if(!filtered.length){ dd.style.display='none'; return; }
   dd.innerHTML = filtered.map(c=>
     `<div class="chip-dd-item" tabindex="0"
-      onmousedown="event.preventDefault();chipAdd('${wid}','${c}');document.getElementById('${wid}').querySelector('.chip-text-input').value='';chipHideDd('${wid}')"
-      onkeydown="if(event.key==='Enter'){event.preventDefault();chipAdd('${wid}','${c}');document.getElementById('${wid}').querySelector('.chip-text-input').value='';chipHideDd('${wid}');document.getElementById('${wid}').querySelector('.chip-text-input').focus();}"
+      onmousedown="event.preventDefault();chipAddWithConflictCheck('${wid}','${c}');document.getElementById('${wid}').querySelector('.chip-text-input').value='';chipHideDd('${wid}')"
+      onkeydown="if(event.key==='Enter'){event.preventDefault();chipAddWithConflictCheck('${wid}','${c}');document.getElementById('${wid}').querySelector('.chip-text-input').value='';chipHideDd('${wid}');document.getElementById('${wid}').querySelector('.chip-text-input').focus();}"
     >${c}</div>`
   ).join('');
   dd.style.display='block';
@@ -4222,7 +4262,7 @@ function chipOnKeydown(e, wid){
   } else if(e.key==='Enter'||e.key===','||e.key==='Tab'){
     e.preventDefault();
     const v = inp.value.trim().replace(/[,、]$/,'');
-    if(v){ chipAdd(wid,v); inp.value=''; chipHideDd(wid); }
+    if(v){ chipAddWithConflictCheck(wid,v); inp.value=''; chipHideDd(wid); }
   } else if(e.key==='Backspace' && !inp.value){
     const chips = w.querySelectorAll('.chip[data-n]');
     if(chips.length) chips[chips.length-1].remove();
@@ -5637,35 +5677,47 @@ async function autoAssignRoles(){
   });
 
   // ── 余り時間 計算 ────────────────────────────
-  // shiftS/shiftE はバッファなし（稼働時間外を表示しない）
-  const allTimes = targets.flatMap(d => [
-    toMin(d.setupStart||d.prodStart), toMin(d.prodEnd)
-  ]).filter(v => v !== null);
-  const shiftS = allTimes.length ? Math.min(...allTimes) : 8*60+10;
-  const shiftE = allTimes.length ? Math.max(...allTimes) : 17*60;
+  // 全員共通の稼働時間：8:10〜17:00（ランチ12:00〜13:00を除く）
+  const shiftS = 8*60+10;
+  const shiftE = 17*60;
+  const LUNCH_S = 12*60, LUNCH_E = 13*60;
+
+  // フリースロットをランチで分割し、ランチ帯を除去するヘルパー
+  function splitByLunch(s, e){
+    const result = [];
+    if(e <= LUNCH_S || s >= LUNCH_E){
+      if(e > s) result.push({s, e});
+    } else {
+      if(s < LUNCH_S) result.push({s, e: LUNCH_S});
+      if(e > LUNCH_E) result.push({s: LUNCH_E, e});
+    }
+    return result;
+  }
 
   function calcFreeSlots(name){
     const att = WORKER_ATTENDANCE[name];
     const amOk = !att || att.am !== false;
     const pmOk = !att || att.pm !== false;
     if(!amOk && !pmOk) return [];
-    // 出勤帯のclamp
-    const effS = amOk ? shiftS : Math.max(shiftS, 720);
-    const effE = pmOk ? shiftE : Math.min(shiftE, 720);
+    // 出勤帯のclamp（午前のみ→〜12:00、午後のみ→13:00〜）
+    const effS = amOk ? shiftS : LUNCH_E;
+    const effE = pmOk ? shiftE : LUNCH_S;
+    if(effE <= effS) return [];
     const busy = (busyMap[name]||[]).slice().sort((a,b)=>a.s-b.s);
-    const free = [];
+    const rawFree = [];
     if(!busy.length){
-      // 仕事が一切ない人 → 丸ごと余り時間として表示
-      if(effE > effS) free.push({ s:effS, e:effE });
-      return free;
+      rawFree.push({ s:effS, e:effE });
+    } else {
+      let cur = effS;
+      for(const slot of busy){
+        if(slot.s > cur + 5) rawFree.push({ s:cur, e:slot.s });
+        cur = Math.max(cur, slot.e);
+      }
+      // 最後の仕事以降〜17:00も余り時間に含める
+      if(effE > cur + 5) rawFree.push({ s:cur, e:effE });
     }
-    let cur = effS;
-    for(const slot of busy){
-      if(slot.s > cur + 20) free.push({ s:cur, e:slot.s });
-      cur = Math.max(cur, slot.e);
-    }
-    // 最後の仕事後の余り時間は表示しない（稼働終了）
-    return free;
+    // ランチ帯を除去・分割
+    return rawFree.flatMap(f => splitByLunch(f.s, f.e));
   }
 
   // ── モーダルに結果を渡して表示 ─────────────────
@@ -5797,7 +5849,7 @@ function aarSwitchTab(tab){
         ? `${Math.floor(totalMin/60)}時間${totalMin%60 ? totalMin%60+'分' : ''}`
         : `${totalMin}分`;
       const slots = d.free.map(f => {
-        const dur = f.e - f.s;
+        const dur = f.e - f.s; // splitByLunchで既にランチ除外済み
         return `<span style="background:#e0f2fe;padding:2px 8px;border-radius:8px;margin-right:4px;font-size:11px;white-space:nowrap;">${fmtMin(f.s)}〜${fmtMin(f.e)}<span style="color:#64748b;font-size:10px;margin-left:3px;">(${dur}分)</span></span>`;
       }).join('');
       return `<div class="aar-free-row" style="align-items:center;">
