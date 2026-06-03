@@ -9494,7 +9494,23 @@ window.saveSnapshot=function(){
   const btnPrint=document.createElement('button');
   btnPrint.textContent='🖨️ PDF保存（Ctrl+P）';
   btnPrint.style.cssText='background:#2980b9;color:#fff;border:none;border-radius:5px;padding:6px 14px;font-weight:700;cursor:pointer;font-size:12px;';
-  btnPrint.onclick=function(){window.print();};
+  btnPrint.onclick=function(){
+    // position:fixed のままだとChromeの印刷プレビューで白紙になるため
+    // 印刷前に通常フローに切り替え、印刷後に戻す
+    const ov=document.getElementById('print-ov');
+    ov.style.position='static';
+    ov.style.overflow='visible';
+    ov.style.height='auto';
+    // ヘッダーバーを印刷時非表示に（すでにCSSでボタンは非表示だが念のため）
+    window.print();
+    // 印刷ダイアログが閉じたら元に戻す
+    window.addEventListener('afterprint',function restore(){
+      ov.style.position='fixed';
+      ov.style.overflow='auto';
+      ov.style.height='';
+      window.removeEventListener('afterprint',restore);
+    });
+  };
   const btnClose=document.createElement('button');
   btnClose.textContent='✕ 閉じる';
   btnClose.style.cssText='background:#555;color:#fff;border:none;border-radius:5px;padding:6px 14px;font-weight:700;cursor:pointer;font-size:12px;';
@@ -9584,11 +9600,11 @@ window.saveSnapshot=function(){
     @page{size:A4 landscape;margin:5mm;}
     body>*:not(#print-ov){display:none!important;}
     #print-ov .print-bar button{display:none!important;}
-    #print-ov{position:static!important;padding:0!important;background:#f0efe8!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    #print-ov{position:static!important;overflow:visible!important;height:auto!important;padding:0!important;background:#f0efe8!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
     #print-ov .print-bar{background:#1a1a1a!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;border-radius:0!important;margin-bottom:4px!important;padding:6px 12px!important;}
     #print-scale{zoom:0.62;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-    #print-ov .lcard{border-left-width:3px!important;}
-    #print-ov .rate-bar-bg,#print-ov .pb,#print-ov .pbsm{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    #print-ov .lcard{border-left-width:3px!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    #print-ov .rate-bar-bg,#print-ov .pb,#print-ov .pbsm,#print-ov .bdg,#print-ov .rate-banner,#print-ov .nb{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   }`;
   document.head.appendChild(pStyle);
 }
