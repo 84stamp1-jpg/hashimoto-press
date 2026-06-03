@@ -1781,6 +1781,8 @@ function nmInit(){
     nmImages      =JSON.parse(localStorage.getItem(NM_KEY_IMGS) ||'{}');
     nmLegendMaster=JSON.parse(localStorage.getItem(NM_KEY_LGMAST)||JSON.stringify(NM_DEFAULT_LEGENDS));
     nmChargeMaster=JSON.parse(localStorage.getItem(NM_KEY_CMAST)||JSON.stringify(NM_DEFAULT_CHARGES));
+    // 既存タスクに initialized フラグがない場合は確定済みとして扱う（後方互換）
+    nmMolds.forEach(m=>(m.tasks||[]).forEach(t=>{if(t.initialized===undefined)t.initialized=true;}));
   }catch(e){nmMolds=[];nmGantt={};nmNote={};nmImages={};}
   nmLoadCfgUI();
   nmRender();
@@ -1810,8 +1812,8 @@ function nmParseProc(str){
 }
 function nmMakeTasks(estProc){
   const procs=nmParseProc(estProc);
-  if(!procs.length)return[{id:'t'+Date.now()+'_0',content:'',process:'',charge:'',doneDate:''}];
-  return procs.map((p,i)=>({id:'t'+Date.now()+'_'+i,content:'',process:p,charge:'',doneDate:''}));
+  if(!procs.length)return[{id:'t'+Date.now()+'_0',content:'',process:'',charge:'',doneDate:'',initialized:false}];
+  return procs.map((p,i)=>({id:'t'+Date.now()+'_'+i,content:'',process:p,charge:'',doneDate:'',initialized:false}));
 }
 
 // ----- 設定 -----
@@ -1933,12 +1935,14 @@ function nmLoadKintone(){
     cleanup();
     if(data.error){nmSetStatus('❌ キントーンエラー: '+data.error);return;}
     if(!data.records){nmSetStatus('❌ レスポンス形式エラー');return;}
-    let added=0,updated=0,skipped=0;
+    let added=0,updated=0,skipped=0,removed=0;
+    const receivedIds=new Set();
     data.records.forEach(rec=>{
       // 完了フィルタ: チェックボックスに「完了」があればスキップ
       const cbVal=rec['チェックボックス']?.value||[];
       if(Array.isArray(cbVal)&&cbVal.includes('完了')){skipped++;return;}
       const id='kt_'+rec['$id'].value;
+      receivedIds.add(id);
       const exist=nmMolds.find(m=>m.id===id);
       const fv=(k)=>{const r=rec[k||''];if(!r)return'';return Array.isArray(r.value)?r.value.join('\n'):(r.value||'');};
       const estProc=fv(cfg.estProc||'文字列__複数行_');
@@ -1957,8 +1961,18 @@ function nmLoadKintone(){
         added++;
       }
     });
+    // kintone由来で今回取得されなかった金型（完了済み等）のデータを削除
+    nmMolds.filter(m=>m.src==='kintone'&&!receivedIds.has(m.id)).forEach(m=>{
+      (m.tasks||[]).forEach(t=>{
+        Object.keys(nmGantt).filter(k=>k.startsWith(m.id+'__')).forEach(k=>delete nmGantt[k]);
+        Object.keys(nmNote).filter(k=>k.startsWith(m.id+'__')).forEach(k=>delete nmNote[k]);
+      });
+      delete nmImages[m.id];
+      removed++;
+    });
+    nmMolds=nmMolds.filter(m=>m.src!=='kintone'||receivedIds.has(m.id));
     nmSave();nmRender();
-    nmSetStatus(`✅ ${data.records.length}件取得（+${added} 更新${updated} 完了スキップ${skipped}） ${new Date().toLocaleTimeString()}`);
+    nmSetStatus(`✅ ${data.records.length}件取得（+${added} 更新${updated} 完了スキップ${skipped} 削除${removed}） ${new Date().toLocaleTimeString()}`);
   };
   const script=document.createElement('script');script.id='nm_jsonp_script';script.src=url;
   script.onerror=()=>{cleanup();nmSetStatus('❌ GAS接続エラー');};
@@ -1991,7 +2005,7 @@ function nmDeleteMold(id){
 function nmAddTask(moldId){
   const m=nmMolds.find(m=>m.id===moldId);if(!m)return;
   if(!m.tasks)m.tasks=[];
-  m.tasks.push({id:'t'+Date.now(),content:'',process:'',charge:'',doneDate:''});
+  m.tasks.push({id:'t'+Date.now(),content:'',process:'',charge:'',doneDate:'',initialized:false});
   nmSave();nmBuildTbody();
 }
 function nmDelTask(moldId,taskId){
@@ -2184,17 +2198,18 @@ function nmBuildTbody(){
       });
       tdCh.appendChild(selC);tr.appendChild(tdCh);
 
-      // Col6: 締切日 ＋ 履歴ボタン
+      // Col6: 締切日 ＋ 確定/履歴ボタン
       const tdDL=document.createElement('td');tdDL.style.cssText='padding:2px 3px;vertical-align:middle;';
       const dlBadge=dlCls?`<span class="nm-deadline-badge">${dlCls==='nm-overdue'?'⚠期限超過':dlCls==='nm-urgent'?'🔴3日以内':'🟡7日以内'}</span>`:'';
+      const actionBtn=task.initialized
+        ?`<button class="nm-hist-btn" onclick="nmShowHist('${mold.id}','${task.id}')" title="変更履歴を表示">📋 履歴${task.history?.length?` (${task.history.length})`:''}</button>`
+        :`<button class="nm-hist-btn" onclick="nmConfirmTask('${mold.id}','${task.id}')"
+            style="background:#dcfce7;border-color:#86efac;color:#16a34a;font-weight:700" title="内容を確定して履歴管理を開始">✅ 確定</button>`;
       tdDL.innerHTML=`
         <input type="date" class="nm-deadline-input" value="${task.deadline||''}"
           title="締切日（期限）" onchange="nmSetDeadline('${mold.id}','${task.id}',this.value,this)">
         ${dlBadge}
-        <div style="display:flex;gap:2px;margin-top:2px">
-          <button class="nm-hist-btn" onclick="nmShowHist('${mold.id}','${task.id}')" title="変更履歴を表示">📋 履歴${task.history?.length?` (${task.history.length})`:''}
-          </button>
-        </div>`;
+        <div style="display:flex;gap:2px;margin-top:2px">${actionBtn}</div>`;
       tr.appendChild(tdDL);
 
       // Col7: タスク削除
@@ -2259,13 +2274,24 @@ function nmSetDeadline(moldId,taskId,val,inputEl){
 }
 
 // ===== 変更履歴 =====
+function nmTs(){return new Date().toLocaleString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});}
 function nmRecordHistory(task,field,fromVal,toVal,note=''){
+  if(!task.initialized)return; // 未確定タスクは履歴記録しない
   if(fromVal===toVal||toVal===undefined)return;
   if(!task.history)task.history=[];
-  task.history.push({
-    ts:new Date().toLocaleString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}),
-    field,from:String(fromVal||'（空）'),to:String(toVal||'（空）'),note
-  });
+  task.history.push({ts:nmTs(),field,from:String(fromVal||'（空）'),to:String(toVal||'（空）'),note});
+}
+function nmRecordGanttHistory(task,dateRange,fromName,toName){
+  if(!task.initialized)return;
+  if(!task.history)task.history=[];
+  task.history.push({ts:nmTs(),field:'ガント',from:fromName||'（なし）',to:toName||'クリア',note:dateRange});
+}
+// 確定ボタン処理
+function nmConfirmTask(moldId,taskId){
+  const m=nmMolds.find(m=>m.id===moldId);if(!m)return;
+  const t=m.tasks?.find(t=>t.id===taskId);if(!t)return;
+  t.initialized=true;
+  nmSave();nmBuildTbody();
 }
 
 let nmHistTarget=null; // {moldId, taskId}
@@ -2353,7 +2379,7 @@ function nmApplyCell(td,key,d){
 
 // ----- ドラッグ選択（選択中の凡例を塗る / null=クリア） -----
 function nmDragStart(td,key,d,moldId,taskId){
-  nmDrag={moldId,taskId,applied:new Set()};
+  nmDrag={moldId,taskId,applied:new Set(),ganttChanges:[]};
   nmApplyDragCell(td,key,d);
   nmDrag.applied.add(key);
 }
@@ -2367,15 +2393,42 @@ function nmDragOver(td){
   nmDrag.applied.add(key);
 }
 function nmApplyDragCell(td,key,d){
+  // 変更前の状態を保存
+  const oldG=nmGantt[key]?{...nmGantt[key]}:null;
   if(nmActiveLegendId){
     const lg=nmGetLegend(nmActiveLegendId);
     if(lg) nmGantt[key]={lid:nmActiveLegendId,color:lg.color};
   } else {
     delete nmGantt[key]; // クリアモード
   }
+  // ガント変更を収集（HEADER行は除外）
+  if(nmDrag&&nmDrag.taskId!=='HEADER'){
+    const newG=nmGantt[key]||null;
+    const oldName=oldG?nmGetLegend(oldG.lid)?.name||'不明':'（なし）';
+    const newName=newG?nmGetLegend(newG.lid)?.name||'不明':'クリア';
+    if(oldName!==newName){
+      nmDrag.ganttChanges.push({date:td.dataset.date,from:oldName,to:newName});
+    }
+  }
   nmApplyCell(td,key,d);
 }
-document.addEventListener('mouseup',()=>{if(nmDrag){nmSave();nmDrag=null;}});
+document.addEventListener('mouseup',()=>{
+  if(nmDrag){
+    // ガント履歴をバッチで記録
+    if(nmDrag.ganttChanges.length&&nmDrag.taskId!=='HEADER'){
+      const m=nmMolds.find(m=>m.id===nmDrag.moldId);
+      const t=m?.tasks?.find(t=>t.id===nmDrag.taskId);
+      if(t&&t.initialized){
+        const dates=nmDrag.ganttChanges.map(c=>c.date).sort();
+        const toNames=[...new Set(nmDrag.ganttChanges.map(c=>c.to))].join('・');
+        const fromNames=[...new Set(nmDrag.ganttChanges.map(c=>c.from))].join('・');
+        const dateRange=dates.length===1?dates[0]:dates[0]+'〜'+dates[dates.length-1];
+        nmRecordGanttHistory(t,dateRange,fromNames,toNames);
+      }
+    }
+    nmSave();nmDrag=null;
+  }
+});
 
 // ----- メモ -----
 function nmOpenNote(key,mold,task,ds){
