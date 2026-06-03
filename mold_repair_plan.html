@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>金型改修計画表</title>
+<title>金型管理システム</title>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <style>
@@ -343,6 +343,40 @@ input.nm-img-input{display:none}
 .nm-done-input{width:100%;font-size:7px;border:none;background:transparent;
   font-family:var(--font);color:#C00000;cursor:pointer}
 
+/* 期限警告 */
+.nm-overdue  { background:#FFE4E4 !important; }
+.nm-overdue .nm-deadline-badge { background:#C00000; color:#fff; }
+.nm-urgent   { background:#FFF0E0 !important; }
+.nm-urgent .nm-deadline-badge  { background:#E06000; color:#fff; }
+.nm-soon     { background:#FFFFF0 !important; }
+.nm-soon .nm-deadline-badge    { background:#B8A000; color:#fff; }
+.nm-deadline-badge { display:inline-block; font-size:7px; padding:1px 4px;
+  border-radius:3px; font-weight:700; white-space:nowrap; }
+.nm-deadline-input { width:100%; font-size:8px; border:1px solid #ddd;
+  border-radius:2px; padding:1px; font-family:inherit; background:#fff; }
+.nm-deadline-input:focus { outline:1px solid var(--accent); }
+
+/* 履歴モーダル */
+.nm-hist-item { border-left:3px solid var(--accent); padding:5px 8px;
+  margin-bottom:8px; background:var(--panel2); border-radius:0 4px 4px 0; }
+.nm-hist-item.nm-hist-first { border-color:#059669; }
+.nm-hist-time { font-family:var(--mono); font-size:9px; color:var(--text3); margin-bottom:3px; }
+.nm-hist-field { font-size:9px; font-weight:600; color:var(--text2); }
+.nm-hist-arrow { color:var(--text3); margin:0 4px; }
+.nm-hist-from { color:var(--danger); text-decoration:line-through; font-size:9px; }
+.nm-hist-to   { color:var(--ok); font-weight:700; font-size:9px; }
+.nm-hist-note { font-size:9px; color:var(--text2); margin-top:2px; font-style:italic; }
+.nm-hist-empty { text-align:center; padding:20px; color:var(--text3); font-size:11px; }
+.nm-hist-note-input { width:100%; font-size:10px; border:1px solid var(--border);
+  border-radius:4px; padding:4px 7px; font-family:var(--font); outline:none;
+  margin-top:6px; }
+.nm-hist-note-input:focus { border-color:var(--accent); }
+
+/* 履歴ボタン */
+.nm-hist-btn { background:none; border:1px solid var(--border2); border-radius:3px;
+  cursor:pointer; font-size:9px; color:var(--text2); padding:1px 4px; line-height:1.4; }
+.nm-hist-btn:hover { background:var(--accent-bg); color:var(--accent); }
+
 /* マスタチップ */
 .nm-master-chips{display:flex;flex-wrap:wrap;gap:4px;min-height:24px}
 .nm-chip{display:inline-flex;align-items:center;gap:3px;padding:2px 8px 2px 10px;
@@ -386,7 +420,7 @@ input.nm-img-input{display:none}
 <body>
 
 <header>
-  <div class="logo">⚙ <span>金型</span>改修計画表</div>
+  <div class="logo">⚙ <span>金型</span>管理システム</div>
   <div class="main-tab-bar">
     <button class="main-tab-btn active" id="mainTabRepair" onclick="switchMainTab('repair')">🔧 改修計画表</button>
     <button class="main-tab-btn" id="mainTabNew" onclick="switchMainTab('newmold')">🏗️ 新規製作 日程表</button>
@@ -564,6 +598,23 @@ input.nm-img-input{display:none}
   </div>
 </div>
 </div><!-- /tab-newmold -->
+
+<!-- 履歴モーダル -->
+<div class="nm-modal-ov" id="nmHistModal">
+  <div class="nm-modal" style="width:480px;max-height:80vh;overflow-y:auto">
+    <h3>📋 変更履歴</h3>
+    <div class="nm-meta" id="nmHistMeta" style="margin-bottom:10px"></div>
+    <div id="nmHistList"></div>
+    <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px">
+      <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:4px">📝 変更メモを追加（理由・経緯など）</div>
+      <input type="text" class="nm-hist-note-input" id="nmHistNoteInput" placeholder="例: 材料入荷遅延のため、設計変更により延期">
+    </div>
+    <div class="nm-modal-footer">
+      <button class="btn btn-secondary btn-sm" onclick="nmCloseHist()">閉じる</button>
+      <button class="btn btn-primary btn-sm" onclick="nmAddHistNote()">メモを記録</button>
+    </div>
+  </div>
+</div>
 
 <!-- メモ入力モーダル（新規製作用） -->
 <div class="nm-modal-ov" id="nmNoteModal">
@@ -1972,14 +2023,14 @@ function nmRender(){nmBuildColgroup();nmBuildThead();nmBuildTbody();nmRenderMast
 
 function nmBuildColgroup(){
   const cg=document.getElementById('nmCg');cg.innerHTML='';
-  [32,54,140,72,50,22].forEach(w=>{const c=document.createElement('col');c.style.width=w+'px';cg.appendChild(c);});
+  [32,54,140,72,50,78,22].forEach(w=>{const c=document.createElement('col');c.style.width=w+'px';cg.appendChild(c);});
   for(let i=0;i<NM_DAYS;i++){const c=document.createElement('col');c.style.width='20px';cg.appendChild(c);}
 }
 
 function nmBuildThead(){
   const th=document.getElementById('nmThead');th.innerHTML='';
   const r1=document.createElement('tr');
-  [{t:'No',rs:3},{t:'略図/完了日',rs:3},{t:'品番/品名・内容',rs:3},{t:'工程',rs:3},{t:'担当',rs:3},{t:'±',rs:3}].forEach(({t,rs})=>{
+  [{t:'No',rs:3},{t:'略図/完了日',rs:3},{t:'品番/品名・内容',rs:3},{t:'工程',rs:3},{t:'担当',rs:3},{t:'締切/履歴',rs:3},{t:'±',rs:3}].forEach(({t,rs})=>{
     const td=document.createElement('th');td.className='nmth-fix';td.rowSpan=rs;td.textContent=t;r1.appendChild(td);
   });
   let i=0;
@@ -2060,13 +2111,9 @@ function nmBuildTbody(){
       <div style="font-size:9px;color:#999;margin-top:2px;border-top:1px solid #e0e0e0;padding-top:2px">${nmEsc(mold.client||'')}</div>`;
     htr.appendChild(tdPart);
 
-    // Col4: 工程（ヘッダー行は空）
-    const tdPH=document.createElement('td');tdPH.style.cssText=`background:${bg};`;
-    htr.appendChild(tdPH);
-    // Col5: 担当（ヘッダー行は空）
-    const tdCH=document.createElement('td');tdCH.style.cssText=`background:${bg};`;
-    htr.appendChild(tdCH);
-    // Col6: ＋タスク追加
+    // Col4,5,6: 空
+    [bgA,bg,bg].forEach(b=>{const td=document.createElement('td');td.style.cssText=`background:${b};`;htr.appendChild(td);});
+    // Col7: ＋タスク追加
     const tdAdd=document.createElement('td');tdAdd.style.cssText=`background:${bg};text-align:center;vertical-align:middle;padding:2px;`;
     tdAdd.innerHTML=`<button onclick="nmAddTask('${mold.id}')"
       style="background:#EBF0FF;border:1px solid #93c5fd;border-radius:3px;cursor:pointer;font-size:12px;color:#3b6ef8;padding:1px 6px;line-height:1.4" title="タスク追加">＋</button>`;
@@ -2089,8 +2136,9 @@ function nmBuildTbody(){
     // ===== タスク行 =====
     showTasks.forEach(task=>{
       const isDone=!!task.doneDate;
+      const dlCls=isDone?'':nmDeadlineClass(task.deadline);
       const tr=document.createElement('tr');
-      tr.className='nm-task-row'+(isDone?' nm-done-row':'');
+      tr.className='nm-task-row'+(isDone?' nm-done-row':'')+(dlCls?' '+dlCls:'');
       tr.dataset.moldId=mold.id;tr.dataset.taskId=task.id;
 
       // Col1: spanned by No
@@ -2104,7 +2152,11 @@ function nmBuildTbody(){
       // Col3: 内容（品番/品名列に入力）
       const tdCont=document.createElement('td');tdCont.style.cssText='background:#FAFAFA;padding:2px 4px;vertical-align:middle;';
       tdCont.contentEditable='true';tdCont.className='nm-task-content';tdCont.textContent=task.content||'';
-      tdCont.addEventListener('blur',()=>{task.content=tdCont.textContent.trim();nmSave();});
+      tdCont.addEventListener('blur',()=>{
+        const nv=tdCont.textContent.trim();
+        nmRecordHistory(task,'内容',task.content||'',nv);
+        task.content=nv;nmSave();
+      });
       tr.appendChild(tdCont);
 
       // Col4: 工程ドロップダウン（部品固有工程＋凡例マスタ）
@@ -2114,7 +2166,10 @@ function nmBuildTbody(){
       const pOpts=['...', ...moldProcs];
       if(task.process&&!pOpts.includes(task.process))pOpts.splice(1,0,task.process);
       pOpts.forEach(p=>{const o=document.createElement('option');o.value=p;o.textContent=p;if(p===task.process||(p==='...'&&!task.process))o.selected=true;selP.appendChild(o);});
-      selP.addEventListener('change',()=>{task.process=selP.value==='...'?'':selP.value;nmSave();});
+      selP.addEventListener('change',()=>{
+        nmRecordHistory(task,'工程',task.process||'',selP.value==='...'?'':selP.value);
+        task.process=selP.value==='...'?'':selP.value;nmSave();
+      });
       tdProc.appendChild(selP);tr.appendChild(tdProc);
 
       // Col5: 担当ドロップダウン
@@ -2123,10 +2178,26 @@ function nmBuildTbody(){
       const cOpts=['...', ...nmChargeMaster];
       if(task.charge&&!nmChargeMaster.includes(task.charge))cOpts.splice(1,0,task.charge);
       cOpts.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;if(c===task.charge||(c==='...'&&!task.charge))o.selected=true;selC.appendChild(o);});
-      selC.addEventListener('change',()=>{task.charge=selC.value==='...'?'':selC.value;nmSave();});
+      selC.addEventListener('change',()=>{
+        nmRecordHistory(task,'担当',task.charge,selC.value==='...'?'':selC.value);
+        task.charge=selC.value==='...'?'':selC.value;nmSave();
+      });
       tdCh.appendChild(selC);tr.appendChild(tdCh);
 
-      // Col6: タスク削除
+      // Col6: 締切日 ＋ 履歴ボタン
+      const tdDL=document.createElement('td');tdDL.style.cssText='padding:2px 3px;vertical-align:middle;';
+      const dlBadge=dlCls?`<span class="nm-deadline-badge">${dlCls==='nm-overdue'?'⚠期限超過':dlCls==='nm-urgent'?'🔴3日以内':'🟡7日以内'}</span>`:'';
+      tdDL.innerHTML=`
+        <input type="date" class="nm-deadline-input" value="${task.deadline||''}"
+          title="締切日（期限）" onchange="nmSetDeadline('${mold.id}','${task.id}',this.value,this)">
+        ${dlBadge}
+        <div style="display:flex;gap:2px;margin-top:2px">
+          <button class="nm-hist-btn" onclick="nmShowHist('${mold.id}','${task.id}')" title="変更履歴を表示">📋 履歴${task.history?.length?` (${task.history.length})`:''}
+          </button>
+        </div>`;
+      tr.appendChild(tdDL);
+
+      // Col7: タスク削除
       const tdDel=document.createElement('td');tdDel.style.cssText='text-align:center;padding:1px;vertical-align:middle;';
       tdDel.innerHTML=`<span style="cursor:pointer;color:#fca5a5;font-size:12px" onclick="nmDelTask('${mold.id}','${task.id}')" title="タスク削除">✕</span>`;
       tr.appendChild(tdDel);
@@ -2161,6 +2232,91 @@ function nmMoveMold(id,dir){
   nmSave();nmBuildTbody();
 }
 
+// ===== 期限警告クラス =====
+function nmDeadlineClass(deadline){
+  if(!deadline)return'';
+  const today=new Date();today.setHours(0,0,0,0);
+  const dl=new Date(deadline+'T00:00:00');
+  const diff=Math.floor((dl-today)/(86400000));
+  if(diff<0)return'nm-overdue';
+  if(diff<=3)return'nm-urgent';
+  if(diff<=7)return'nm-soon';
+  return'';
+}
+
+// ===== 締切日設定 =====
+function nmSetDeadline(moldId,taskId,val,inputEl){
+  const m=nmMolds.find(m=>m.id===moldId);if(!m)return;
+  const t=m.tasks.find(t=>t.id===taskId);if(!t)return;
+  nmRecordHistory(t,'締切日',t.deadline||'',val);
+  t.deadline=val;nmSave();
+  // 行の警告クラスを即時更新
+  const tr=document.querySelector(`tr[data-moldid="${moldId}"][data-taskid="${taskId}"]`);
+  if(tr&&!t.doneDate){
+    tr.classList.remove('nm-overdue','nm-urgent','nm-soon');
+    const dc=nmDeadlineClass(val);if(dc)tr.classList.add(dc);
+  }
+}
+
+// ===== 変更履歴 =====
+function nmRecordHistory(task,field,fromVal,toVal,note=''){
+  if(fromVal===toVal||toVal===undefined)return;
+  if(!task.history)task.history=[];
+  task.history.push({
+    ts:new Date().toLocaleString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}),
+    field,from:String(fromVal||'（空）'),to:String(toVal||'（空）'),note
+  });
+}
+
+let nmHistTarget=null; // {moldId, taskId}
+
+function nmShowHist(moldId,taskId){
+  const m=nmMolds.find(m=>m.id===moldId);
+  const t=m?.tasks?.find(t=>t.id===taskId);
+  if(!t)return;
+  nmHistTarget={moldId,taskId};
+  const hist=t.history||[];
+  document.getElementById('nmHistMeta').innerHTML=
+    `<b>${nmEsc(m.moldNo||m.partNo)}</b> / 内容: ${nmEsc(t.content||'未入力')} / 工程: ${nmEsc(t.process||'未設定')}`;
+  const list=document.getElementById('nmHistList');
+  if(!hist.length){
+    list.innerHTML='<div class="nm-hist-empty">📭 まだ変更履歴はありません</div>';
+  }else{
+    // 新しい順に表示
+    list.innerHTML=[...hist].reverse().map((h,i)=>`
+      <div class="nm-hist-item${i===hist.length-1?' nm-hist-first':''}">
+        <div class="nm-hist-time">🕐 ${nmEsc(h.ts)}</div>
+        <div>
+          <span class="nm-hist-field">${nmEsc(h.field)}</span>
+          <span class="nm-hist-arrow">›</span>
+          <span class="nm-hist-from">${nmEsc(h.from)}</span>
+          <span class="nm-hist-arrow">→</span>
+          <span class="nm-hist-to">${nmEsc(h.to)}</span>
+        </div>
+        ${h.note?`<div class="nm-hist-note">📝 ${nmEsc(h.note)}</div>`:''}
+      </div>`).join('');
+  }
+  document.getElementById('nmHistNoteInput').value='';
+  document.getElementById('nmHistModal').classList.add('open');
+}
+
+function nmCloseHist(){
+  document.getElementById('nmHistModal').classList.remove('open');
+  nmHistTarget=null;
+}
+
+function nmAddHistNote(){
+  const note=document.getElementById('nmHistNoteInput').value.trim();
+  if(!note||!nmHistTarget)return;
+  const {moldId,taskId}=nmHistTarget;
+  const m=nmMolds.find(m=>m.id===moldId);
+  const t=m?.tasks?.find(t=>t.id===taskId);
+  if(!t)return;
+  nmRecordHistory(t,'メモ','',note);
+  nmSave();
+  nmShowHist(moldId,taskId); // 再描画
+}
+
 // イベントメモ保存
 function nmSaveEventNote(moldId,text){const m=nmMolds.find(m=>m.id===moldId);if(m){m.eventNote=text.trim();nmSave();}}
 
@@ -2168,9 +2324,14 @@ function nmSaveEventNote(moldId,text){const m=nmMolds.find(m=>m.id===moldId);if(
 function nmSetTaskDone(moldId,taskId,val){
   const m=nmMolds.find(m=>m.id===moldId);if(!m)return;
   const t=m.tasks.find(t=>t.id===taskId);if(!t)return;
+  nmRecordHistory(t,'完了日',t.doneDate||'',val);
   t.doneDate=val;nmSave();
   const tr=document.querySelector(`tr[data-moldid="${moldId}"][data-taskid="${taskId}"]`);
-  if(tr){tr.className='nm-task-row'+(val?' nm-done-row':'');}
+  if(tr){
+    tr.classList.remove('nm-overdue','nm-urgent','nm-soon');
+    tr.className='nm-task-row'+(val?' nm-done-row':'');
+    if(!val){const dc=nmDeadlineClass(t.deadline);if(dc)tr.classList.add(dc);}
+  }
 }
 
 // ----- ガントセルスタイル -----
@@ -2235,7 +2396,7 @@ function nmSaveNote(){
   nmCloseNote();
 }
 function nmClearNote(){document.getElementById('nmNoteText').value='';nmSaveNote();}
-document.addEventListener('keydown',e=>{if(e.key==='Escape')nmCloseNote();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){nmCloseNote();nmCloseHist();}});
 
 // 初期化実行
 nmInit();
