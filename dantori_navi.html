@@ -9509,36 +9509,86 @@ window.saveSnapshot=function(){
   bar.appendChild(btnWrap);
   ov.appendChild(bar);
 
-  // アラート
-  const altsDiv=document.createElement('div');
-  altsDiv.style.marginBottom='8px';
-  altsDiv.innerHTML=document.getElementById('alts').innerHTML;
-  ov.appendChild(altsDiv);
-
   // ボード＋アラートをスケール対象ラッパーで包む
   const scaleWrap=document.createElement('div');
   scaleWrap.id='print-scale';
+
+  // アラート（scaleWrap内にのみ追加）
+  const altsDiv=document.createElement('div');
+  altsDiv.style.marginBottom='8px';
+  altsDiv.innerHTML=document.getElementById('alts').innerHTML;
   scaleWrap.appendChild(altsDiv);
+
   const boardDiv=document.createElement('div');
-  boardDiv.style.cssText='display:grid;grid-template-columns:repeat(3,1fr);gap:6px;';
+  boardDiv.className='lines';
   boardDiv.innerHTML=document.getElementById('lview').innerHTML;
   scaleWrap.appendChild(boardDiv);
   ov.appendChild(scaleWrap);
 
   document.body.appendChild(ov);
 
-  // 印刷スタイル：A4横1ページに収まるようzoomで縮小
+  // スナップショット用スタイル：#tab-progress スコープを #print-ov に置き換えて再定義
   const pStyle=document.createElement('style');
   pStyle.id='print-style';
-  pStyle.textContent=`@media print{
+  pStyle.textContent=`
+  #print-ov .lines{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
+  #print-ov .lcard{background:#fff;border-radius:8px;border:1px solid #ddd;border-left:4px solid #ddd;padding:10px 12px;min-width:0;overflow:hidden;}
+  #print-ov .lcard.s-ng{border-left-color:#e74c3c;}
+  #print-ov .lcard.s-wn{border-left-color:#e67e22;}
+  #print-ov .lcard.s-ok{border-left-color:#27ae60;}
+  #print-ov .lcard.s-su{border-left-color:#2980b9;}
+  #print-ov .lcard.s-st{border-left-color:#95a5a6;}
+  #print-ov .lcard.s-wt{border-left-color:#bdc3c7;}
+  #print-ov .lhead{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;}
+  #print-ov .lname{font-size:17px;font-weight:700;color:#1a1a1a;}
+  #print-ov .lpart{font-size:13px;color:#888;margin-top:2px;}
+  #print-ov .bdg{font-size:11px;padding:3px 10px;border-radius:10px;font-weight:700;white-space:nowrap;}
+  #print-ov .bdg.ok{background:#eafaf1;color:#1e8449;}
+  #print-ov .bdg.wn{background:#fef3e2;color:#d35400;}
+  #print-ov .bdg.ng{background:#fdecea;color:#c0392b;}
+  #print-ov .bdg.su{background:#ebf5fb;color:#1a5276;}
+  #print-ov .bdg.st{background:#f5f5f5;color:#888;}
+  #print-ov .bdg.wt{background:#f5f5f5;color:#aaa;}
+  #print-ov .pb{height:5px;background:#f0efe8;border-radius:3px;overflow:hidden;margin-bottom:7px;}
+  #print-ov .pb-f{height:100%;border-radius:3px;}
+  #print-ov .c-ok{background:#27ae60;} #print-ov .c-wn{background:#e67e22;} #print-ov .c-ng{background:#e74c3c;}
+  #print-ov .c-su{background:#2980b9;} #print-ov .c-st{background:#95a5a6;} #print-ov .c-wt{background:#ddd;}
+  #print-ov .nums{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;margin-bottom:6px;}
+  #print-ov .nb{background:#f8f7f2;border-radius:4px;padding:4px;text-align:center;}
+  #print-ov .nv{font-size:16px;font-weight:700;color:#1a1a1a;}
+  #print-ov .nv.red{color:#c0392b;}
+  #print-ov .nl{font-size:8px;color:#aaa;margin-top:1px;}
+  #print-ov .sched{border-top:0.5px solid #f0efe8;padding-top:5px;margin-top:5px;}
+  #print-ov .sr{display:grid;grid-template-columns:18px 130px minmax(0,1fr);gap:2px 4px;padding:4px 0;border-bottom:0.5px solid #f8f7f2;font-size:12px;align-items:baseline;}
+  #print-ov .sr:last-child{border-bottom:none;}
+  #print-ov .sr.cur{background:#fffbf0;margin:0 -2px;padding:3px 2px;border-radius:3px;border-bottom:none;}
+  #print-ov .sn{color:#ccc;min-width:12px;font-size:9px;}
+  #print-ov .sp{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;width:130px;}
+  #print-ov .sr.cur .sp{font-weight:700;color:#1a1a1a;}
+  #print-ov .sq{color:#888;min-width:50px;text-align:right;}
+  #print-ov .sa{text-align:right;font-size:10px;font-weight:700;}
+  #print-ov .sa.ok{color:#27ae60;} #print-ov .sa.wn{color:#e67e22;} #print-ov .sa.ng{color:#c0392b;} #print-ov .sa.none{color:#ccc;}
+  #print-ov .upd{font-size:11px;color:#bbb;text-align:right;margin-top:4px;}
+  #print-ov .rate-banner{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;margin-bottom:7px;}
+  #print-ov .rate-banner.ok{background:#eafaf1;} #print-ov .rate-banner.wn{background:#fef9ec;} #print-ov .rate-banner.ng{background:#fdecea;} #print-ov .rate-banner.wt{background:#f5f5f5;}
+  #print-ov .rate-num{font-size:22px;font-weight:700;line-height:1;}
+  #print-ov .rate-num.ok{color:#27ae60;} #print-ov .rate-num.wn{color:#e67e22;} #print-ov .rate-num.ng{color:#c0392b;} #print-ov .rate-num.wt{color:#bbb;}
+  #print-ov .rate-info{flex:1;font-size:11px;}
+  #print-ov .rate-bar-bg{height:7px;background:rgba(0,0,0,0.08);border-radius:4px;overflow:hidden;margin-top:4px;}
+  #print-ov .rate-bar-fill{height:100%;border-radius:4px;}
+  #print-ov .tbar{border-radius:4px;padding:4px 10px;margin-bottom:4px;display:flex;align-items:center;gap:8px;font-size:10px;}
+  #print-ov .tbar.ongoing{background:#fdf5f5;border-left:3px solid #c0392b;}
+  #print-ov .tbar.done{background:#fefbf0;border-left:3px solid #d68910;}
+  #print-ov .trouble-btn{display:none;}
+  @media print{
     @page{size:A4 landscape;margin:5mm;}
     body>*:not(#print-ov){display:none!important;}
     #print-ov .print-bar button{display:none!important;}
     #print-ov{position:static!important;padding:0!important;background:#f0efe8!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
     #print-ov .print-bar{background:#1a1a1a!important;-webkit-print-color-adjust:exact;print-color-adjust:exact;border-radius:0!important;margin-bottom:4px!important;padding:6px 12px!important;}
     #print-scale{zoom:0.62;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-    .lcard{border-left-width:3px!important;}
-    .rate-bar-bg,.pb,.pbsm{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    #print-ov .lcard{border-left-width:3px!important;}
+    #print-ov .rate-bar-bg,#print-ov .pb,#print-ov .pbsm{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   }`;
   document.head.appendChild(pStyle);
 }
