@@ -1979,6 +1979,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
             <th style="padding:7px 5px;border-bottom:2px solid #e2e8f0;white-space:nowrap;">ライン<br><span style="font-weight:normal;color:#666;font-size:10px;">外</span></th>
             <th style="padding:7px 8px;border-bottom:2px solid #e2e8f0;white-space:nowrap;min-width:110px;">優先ライン</th>
             <th style="padding:7px 6px;border-bottom:2px solid #e2e8f0;white-space:nowrap;min-width:80px;">出勤<br><span style="font-weight:normal;color:#666;font-size:10px;">午前／午後</span></th>
+            <th style="padding:7px 5px;border-bottom:2px solid #e2e8f0;white-space:nowrap;">残業<br><span style="font-weight:normal;color:#f59e0b;font-size:10px;">可</span></th>
             <th style="padding:7px 4px;border-bottom:2px solid #e2e8f0;width:28px;"></th>
           </tr>
         </thead>
@@ -3845,6 +3846,10 @@ let WORKER_PRIORITY_LINE = {};
 // Firebase settings/workerAttendance — 当日出勤状況 {フルネーム: {am:bool, pm:bool}}
 // am/pm 両方true=終日, amのみ=午前のみ, pmのみ=午後のみ, 両方false=欠勤
 let WORKER_ATTENDANCE = {};
+// Firebase settings/workerOvertime — 残業可否 {フルネーム: true}（登録=残業可、未登録=残業不可）
+// 17:00以降のエントリへの自動割り振り対象かどうかを制御
+const OVERTIME_START_MIN = 17 * 60; // 17:00 = 1020分
+let WORKER_OVERTIME = {};
 // Firebase settings/roleTimeMins — 品質確認・初品出しの標準作業時間（分）
 let ROLE_TIME_MINS = { quality: 5, ippin: 10 };
 
@@ -3906,6 +3911,7 @@ function _workerRoleAppendRow(tbody, name){
   const chkN  = roles.includes('noLine')  ? 'checked' : '';
   const chkAm = (att.am !== false) ? 'checked' : '';
   const chkPm = (att.pm !== false) ? 'checked' : '';
+  const chkOt = WORKER_OVERTIME[name] ? 'checked' : '';
   // 欠勤時は行を薄くする
   const absent = !att.am && !att.pm;
   const tr = document.createElement('tr');
@@ -3950,6 +3956,11 @@ function _workerRoleAppendRow(tbody, name){
       </div>
     </td>
     <td style="padding:5px 4px;text-align:center;">
+      <input type="checkbox" class="wrm-overtime" ${chkOt}
+        style="width:15px;height:15px;accent-color:#f59e0b;cursor:pointer;"
+        title="17:00以降のエントリにも割り当て対象とする">
+    </td>
+    <td style="padding:5px 4px;text-align:center;">
       <button onclick="workerRoleDeleteRow(this)"
         style="padding:2px 7px;font-size:12px;border:1px solid #fca5a5;border-radius:4px;background:#fff1f2;color:#dc2626;cursor:pointer;line-height:1.3;">×</button>
     </td>
@@ -3986,6 +3997,7 @@ async function saveWorkerRoleMaster(){
   const newRoles    = {};
   const newPriLine  = {};
   const newAtt      = {};
+  const newOvertime = {};
 
   rows.forEach(function(tr){
     const nameEl = tr.querySelector('.wrm-name');
@@ -4006,6 +4018,9 @@ async function saveWorkerRoleMaster(){
     const am = amEl ? amEl.checked : true;
     const pm = pmEl ? pmEl.checked : true;
     if(!am || !pm) newAtt[name] = { am, pm }; // 終日出勤はデフォルトなので省略
+    // 残業可
+    const otEl = tr.querySelector('.wrm-overtime');
+    if(otEl && otEl.checked) newOvertime[name] = true;
   });
 
   const statusEl = document.getElementById('workerRoleSaveStatus');
@@ -4027,6 +4042,7 @@ async function saveWorkerRoleMaster(){
         pressWorkerList:    newList,
         workerPriorityLine: newPriLine,
         workerAttendance:   newAtt,
+        workerOvertime:     newOvertime,
         roleTimeMins:       newRoleTime,
       });
     } else {
@@ -4047,6 +4063,7 @@ async function saveWorkerRoleMaster(){
     PRESS_WORKER_LIST    = newList;
     WORKER_PRIORITY_LINE = newPriLine;
     WORKER_ATTENDANCE    = newAtt;
+    WORKER_OVERTIME      = newOvertime;
     ROLE_TIME_MINS       = newRoleTime;
     updateStaffDatalist();
     statusEl.style.color = '#059669';
@@ -4104,6 +4121,9 @@ async function loadDantoriSettings(){
     }
     if(s.workerAttendance && typeof s.workerAttendance === 'object'){
       WORKER_ATTENDANCE = s.workerAttendance;
+    }
+    if(s.workerOvertime && typeof s.workerOvertime === 'object'){
+      WORKER_OVERTIME = s.workerOvertime;
     }
     if(s.roleTimeMins && typeof s.roleTimeMins === 'object'){
       ROLE_TIME_MINS = { quality: s.roleTimeMins.quality || 5, ippin: s.roleTimeMins.ippin || 10 };
@@ -4366,28 +4386,41 @@ function onDtNoSetupChange(){
 }
 
 // ===== 作業者交代 =====
+let _scIdx = 0; // 交代行チップIDの連番
 function addShiftChange(time='', workers=''){
   const container = document.getElementById('dt-shift-container');
+  const uid = 'chip-wrap-shift-' + (_scIdx++);
   const row = document.createElement('div');
   row.className = 'sc-row';
-  row.style.cssText = 'display:flex;gap:6px;align-items:center;background:#f5f3ff;border:1px solid #c4b5fd;border-radius:6px;padding:5px 8px;';
+  row.dataset.chipId = uid;
+  row.style.cssText = 'display:flex;gap:6px;align-items:center;background:#f5f3ff;border:1px solid #c4b5fd;border-radius:6px;padding:5px 8px;flex-wrap:wrap;';
   row.innerHTML = `
     <span style="font-size:10px;color:#6366f1;white-space:nowrap;font-weight:600;">交代</span>
     <input type="time" class="sc-time" value="${time}"
       style="border:1px solid #ddd;border-radius:4px;padding:3px 6px;font-size:12px;width:88px;">
     <span style="font-size:10px;color:#64748b;white-space:nowrap;">〜 作業者</span>
-    <input type="text" class="sc-workers" value="${workers}"
-      placeholder="名前をカンマ区切りで入力" list="staffDatalist-press"
-      style="flex:1;border:1px solid #ddd;border-radius:4px;padding:3px 6px;font-size:12px;">
+    <div id="${uid}" class="chip-wrap" data-dlid="staffDatalist-press"
+      style="flex:1;min-width:120px;min-height:28px;"
+      onmousedown="chipWrapMousedown(event,'${uid}')">
+      <input class="chip-text-input" placeholder="名前を選択/入力" autocomplete="off"
+        oninput="chipOnInput('${uid}')"
+        onkeydown="chipOnKeydown(event,'${uid}')"
+        onblur="chipOnBlur('${uid}')"/>
+    </div>
     <button type="button" onclick="removeShiftChange(this)"
-      style="font-size:13px;color:#dc2626;background:none;border:none;cursor:pointer;padding:0 2px;line-height:1;">✕</button>
+      style="font-size:13px;color:#dc2626;background:none;border:none;cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0;">✕</button>
   `;
   container.appendChild(row);
+  // 初期値があればチップとして設定
+  if(workers) chipSet(uid, workers);
 }
 function removeShiftChange(btn){ btn.closest('.sc-row').remove(); }
 function getShiftChanges(){
   return Array.from(document.querySelectorAll('#dt-shift-container .sc-row'))
-    .map(r => ({ time: r.querySelector('.sc-time').value, workers: r.querySelector('.sc-workers').value.trim() }))
+    .map(r => ({
+      time:    r.querySelector('.sc-time').value,
+      workers: chipGetValues(r.dataset.chipId).join('、'),
+    }))
     .filter(c => c.time && c.workers);
 }
 function clearShiftChanges(){ const c=document.getElementById('dt-shift-container'); if(c) c.innerHTML=''; }
@@ -5273,25 +5306,26 @@ async function autoAssignRoles(){
   const fmtMin = m => { const h=Math.floor(m/60); return `${String(h).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; };
 
   // ── 出勤状況チェック ──────────────────────────
-  // att: {am, pm} デフォルトは両方true（終日出勤）
   function isUnavailableAt(name, startMin){
-    const att = WORKER_ATTENDANCE[name];
-    if(!att) return false;
+    const att = WORKER_ATTENDANCE[name] || {};
     const am = att.am !== false;
     const pm = att.pm !== false;
     if(!am && !pm) return true;        // 欠勤
-    if(!am && startMin < 720) return true;  // 午前休：午前帯は不可
-    if(!pm && startMin >= 720) return true; // 午後休：午後帯は不可
+    if(!am && startMin < 720) return true;  // 午前休
+    if(!pm && startMin >= 720 && startMin < OVERTIME_START_MIN) return true; // 午後休（残業時間帯は別途チェック）
+    // 残業チェック：17:00以降は「残業可」フラグがある人のみ割り振り対象
+    if(startMin >= OVERTIME_START_MIN && !WORKER_OVERTIME[name]) return true;
     return false;
   }
   function attBadge(name){
-    const att = WORKER_ATTENDANCE[name];
-    if(!att) return '<span class="aar-badge aar-badge-ok">終日</span>';
+    const att = WORKER_ATTENDANCE[name] || {};
     const am = att.am !== false, pm = att.pm !== false;
+    const ot = !!WORKER_OVERTIME[name];
+    const otBadge = ot ? '<span class="aar-badge" style="background:#fef3c7;color:#92400e;border:1px solid #fcd34d;">残業</span>' : '';
     if(!am && !pm) return '<span class="aar-badge aar-badge-ng">欠勤</span>';
-    if(!am) return '<span class="aar-badge aar-badge-half">午後</span>';
-    if(!pm) return '<span class="aar-badge aar-badge-half">午前</span>';
-    return '<span class="aar-badge aar-badge-ok">終日</span>';
+    if(!am) return '<span class="aar-badge aar-badge-half">午後</span>' + otBadge;
+    if(!pm) return '<span class="aar-badge aar-badge-half">午前</span>' + otBadge;
+    return '<span class="aar-badge aar-badge-ok">終日</span>' + otBadge;
   }
 
   // ── 時間重複チェック ──────────────────────────
@@ -5444,7 +5478,27 @@ async function autoAssignRoles(){
     const lineDisp = getLineDisplayName(entry.lineId);
     const linePart = `${lineDisp}（${entry.partNo||'品番不明'}）`;
     const timeStr  = entry.setupStart||entry.prodStart||'';
-    const ps       = toMin(entry.prodStart);  // 生産開始（金型取付終了の基準）
+    const ps       = toMin(entry.prodStart);
+
+    // ── 完了・実施中は既存割り当てを固定（busyMapに登録してスキップ） ──
+    if(entry.status === 'done' || entry.status === 'in_progress'){
+      const r = entry.roles || {};
+      const mountEnd = (ps !== null && s !== null && ps > s) ? ps : (s !== null ? s + 1 : null);
+      if(r.品質確認 && s !== null) markBusy(r.品質確認, s, s + (QUALITY_BUSY_MIN||5), `品質確認（固定）`);
+      if(r.初品出し 　&& s !== null) markBusy(r.初品出し,  s, s + (IPPIN_BUSY_MIN||10), `初品出し（固定）`);
+      (r.金型取付||'').split(/[,、]/).map(w=>w.trim()).filter(Boolean)
+        .forEach(w => s !== null && mountEnd !== null && markBusy(w, s, mountEnd, `金型取付（固定）`));
+      (r.作業者||'').split(/[,、]/).map(w=>w.trim()).filter(Boolean)
+        .forEach(w => ps !== null && e !== null && markBusy(w, ps, e, `作業（固定）`));
+      // 交代後の作業者もbusyに登録
+      (entry.shiftChanges||[]).forEach(c => {
+        const ct = toMin(c.time);
+        (c.workers||'').split(/[,、]/).map(w=>w.trim()).filter(Boolean)
+          .forEach(w => ct !== null && e !== null && markBusy(w, ct, e, `作業交代（固定）`));
+      });
+      return; // 再割り振りせずスキップ
+    }
+
     const roles    = { 品質確認:'', 初品出し:'', 金型取付:'', 作業者:'' };
 
     // 段取りなしの場合は①②③をスキップ（品質確認・初品出し・金型取付は不要）
