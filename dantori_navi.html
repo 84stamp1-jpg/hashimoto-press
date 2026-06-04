@@ -438,8 +438,8 @@ html, body {
 #qc-viewer-retake{color:#1F4E79;font-size:14px;padding:8px 24px;border:2px solid #1F4E79;border-radius:8px;cursor:pointer;background:#fff;font-weight:700;}
 .qc-cam-modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.92);z-index:400;display:none;flex-direction:column;align-items:center;justify-content:center;padding:12px;}
 .qc-cam-modal.on{display:flex;}
-.qc-cam-video-wrap{position:relative;width:min(96vw,800px);background:#000;border-radius:10px;overflow:hidden;}
-#qc-cam-video{width:100%;display:block;max-height:72vh;object-fit:contain;}
+.qc-cam-video-wrap{position:relative;width:min(60vh,560px);aspect-ratio:210/297;background:#000;border-radius:10px;overflow:hidden;}
+#qc-cam-video{width:100%;height:100%;display:block;object-fit:cover;}
 .qc-cam-preview-strip{display:flex;gap:6px;margin:8px 0;min-height:56px;flex-wrap:wrap;justify-content:center;}
 .qc-cam-preview-item{position:relative;}
 .qc-cam-preview-item img{height:56px;border-radius:6px;border:2px solid #7eb8f7;}
@@ -7065,7 +7065,8 @@ async function qcStartCamera(){
     var devices=await navigator.mediaDevices.enumerateDevices();
     QC_CAM_DEVICES=devices.filter(function(d){ return d.kind==='videoinput'&&d.deviceId; });
     if(QC_CAM_DEVICE_IDX>=QC_CAM_DEVICES.length) QC_CAM_DEVICE_IDX=0;
-    var stream=null, A4={width:{ideal:1600},height:{ideal:1200}};
+    // A4縦：210mm×297mm → 比率 1:1.4142
+    var stream=null, A4={width:{ideal:1240},height:{ideal:1754},aspectRatio:{ideal:210/297}};
     if(QC_CAM_DEVICES.length>0){ try{ stream=await navigator.mediaDevices.getUserMedia({video:Object.assign({deviceId:{exact:QC_CAM_DEVICES[QC_CAM_DEVICE_IDX].deviceId}},A4)}); }catch(e1){ stream=await navigator.mediaDevices.getUserMedia({video:A4}); } }
     else{ stream=await navigator.mediaDevices.getUserMedia({video:A4}); }
     QC_CAM_STREAM=stream; document.getElementById('qc-cam-video').srcObject=QC_CAM_STREAM; document.getElementById('qc-cam-err').textContent='';
@@ -7083,7 +7084,13 @@ async function qcStartCamera(){
 window.qcSwitchCamera = async function(){ QC_CAM_DEVICE_IDX=(QC_CAM_DEVICE_IDX+1)%Math.max(1,QC_CAM_DEVICES.length); await qcStartCamera(); };
 window.qcCamShutter = function(){
   var video=document.getElementById('qc-cam-video'); if(!video.srcObject) return;
-  var c=document.createElement('canvas'); c.width=video.videoWidth||1280; c.height=video.videoHeight||720; c.getContext('2d').drawImage(video,0,0);
+  var vw=video.videoWidth||1240, vh=video.videoHeight||1754;
+  // A4縦（210:297）にセンタークロップ
+  var a4r=210/297, cropW,cropH,cropX,cropY;
+  if(vw/vh > a4r){ cropH=vh; cropW=Math.round(vh*a4r); cropX=Math.round((vw-cropW)/2); cropY=0; }
+  else            { cropW=vw; cropH=Math.round(vw/a4r); cropX=0; cropY=Math.round((vh-cropH)/2); }
+  var c=document.createElement('canvas'); c.width=cropW; c.height=cropH;
+  c.getContext('2d').drawImage(video,cropX,cropY,cropW,cropH,0,0,cropW,cropH);
   var dataUrl=c.toDataURL('image/jpeg',0.9);
   var img2=new Image(); img2.onload=function(){
     var w=img2.width,h=img2.height,mp=1200; if(w>mp||h>mp){ if(w>h){h=Math.round(h*mp/w);w=mp;}else{w=Math.round(w*mp/h);h=mp;} }
