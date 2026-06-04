@@ -479,6 +479,7 @@ input.nm-img-input{display:none}
     <button class="btn btn-secondary btn-sm" onclick="autoAll()">⚡ 自動配置</button>
     <button class="btn btn-danger btn-sm" onclick="resetDayTasks()" title="当日の配置を全て削除">🗑 配置リセット</button>
     <button class="btn btn-secondary btn-sm" id="btnTmMaster" onclick="openTmMaster()">⚙ 工数マスタ</button>
+    <button class="btn btn-secondary btn-sm" onclick="resetKtEdits()" title="kintone改修依頼の工数編集をすべてリセット（kintone元値に戻す）">↩ 編集リセット</button>
     <button class="btn btn-secondary btn-sm" onclick="exportLocalStorage()" title="設定データをエクスポート">📤 Export</button>
     <button class="btn btn-secondary btn-sm" onclick="importLocalStorage()" title="設定データをインポート">📥 Import</button>
     <button class="btn btn-primary btn-sm" onclick="window.print()">🖨 印刷</button>
@@ -501,17 +502,6 @@ input.nm-img-input{display:none}
     </div>
     <div class="req-list" id="reqList">
       <div class="loading"><div class="spinner"></div>kintoneから取得中...</div>
-    </div>
-
-    <!-- 任意作業 別パネル -->
-    <div id="manualReqSection" style="border-top:2px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;max-height:260px">
-      <div class="ph" style="background:#fff7ed;border-bottom:1px solid #fde68a;flex-shrink:0">
-        <span class="ptitle" style="color:#92400e">📝 任意作業</span>
-        <span class="badge badge-warn" id="bdgManual" style="display:none">0件</span>
-      </div>
-      <div id="manualReqList" style="overflow-y:auto;padding:5px;flex:1;min-height:32px">
-        <div style="font-size:11px;color:var(--text3);padding:8px;text-align:center">任意作業なし</div>
-      </div>
     </div>
 
     <div class="manual">
@@ -555,6 +545,18 @@ input.nm-img-input{display:none}
       </div>
     </div>
     <div class="gwrap"><div class="gcont" id="gcont"></div></div>
+
+    <!-- 任意作業パネル（ガント下） -->
+    <div id="manualRightPanel" style="display:none;border-top:2px solid #fde68a;background:#fffbf5;padding:8px 14px;flex-shrink:0">
+      <div style="font-size:10px;font-weight:700;color:#92400e;letter-spacing:.06em;margin-bottom:6px;display:flex;align-items:center;gap:6px">
+        📝 任意作業
+        <span id="bdgManualR" class="badge badge-warn">0件</span>
+        <span style="font-size:9px;color:var(--text3);font-weight:400">クリックで詳細 / 直接割付ボタンで割付</span>
+        <button onclick="toggleMF()" style="margin-left:auto;font-size:10px;padding:2px 8px;border:1.5px dashed #fde68a;border-radius:4px;background:transparent;color:#92400e;cursor:pointer;font-family:inherit">＋ 追加</button>
+      </div>
+      <div id="manualRightList" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+    </div>
+
     <div class="load-panel" id="loadPanel">
       <div class="load-panel-hdr" onclick="toggleLoadPanel()">
         <span class="load-panel-title">📊 週間負荷サマリー（依頼合計・累計）</span>
@@ -1135,6 +1137,7 @@ function importKintone(records){
     };
   });
   requests.sort((a,b)=>a.deadline.localeCompare(b.deadline));
+  applyKtEdits(); // 保存済み編集を復元
   syncAssignedState();
   autoArrange(curDate);
   requestAnimationFrame(()=>{
@@ -1171,50 +1174,50 @@ function loadManualReqs(){
   try{return JSON.parse(localStorage.getItem(MANUAL_KEY)||'[]');}catch(e){return[];}
 }
 
-// ===== 任意作業パネル描画 =====
+// ===== 任意作業パネル描画（ガント下・横並びカード）=====
 function renderManualList(){
   const manuals=requests.filter(r=>r.source==='manual');
-  const el=document.getElementById('manualReqList');
-  const bdg=document.getElementById('bdgManual');
-  if(bdg){bdg.style.display=manuals.length?'':'none';bdg.textContent=manuals.length+'件';}
-  if(!el)return;
-  if(!manuals.length){
-    el.innerHTML='<div style="font-size:11px;color:var(--text3);padding:8px;text-align:center">任意作業なし</div>';return;
-  }
-  el.innerHTML=manuals.map(r=>{
+  const rPanel=document.getElementById('manualRightPanel');
+  const rList=document.getElementById('manualRightList');
+  const rBdg=document.getElementById('bdgManualR');
+  if(rPanel)rPanel.style.display=manuals.length?'':'none';
+  if(rBdg){rBdg.style.display=manuals.length?'':'none';rBdg.textContent=manuals.length+'件';}
+  if(!rList)return;
+  if(!manuals.length){rList.innerHTML='';return;}
+  rList.innerHTML=manuals.map(r=>{
     const assignedDate=Object.entries(tasksByDate).find(([d,ts])=>ts.some(t=>t.reqId===r.id))?.[0]||null;
     const isSel=selReqId===r.id;
-    return`<div class="card ${r.assigned?'done':''} ${isSel?'sel':''}"
-      style="background:#fffbf5;border-color:#fde68a;margin-bottom:4px" onclick="selReq('${r.id}')">
-      <div class="card-main" style="padding:7px 10px">
-        <div class="ctop">
-          <span class="ctitle" style="font-size:12px">${r.hinban}${r.hinmei?' / '+r.hinmei:''}</span>
-          ${r.assigned?`<span class="badge badge-warn" style="margin-left:auto;font-size:9px">${r.assignee==='matsumoto'?'松本':'松永'}</span>`:''}
-        </div>
-        <div class="cbot" style="margin-top:3px">
-          <span class="ctime">⏱ ${r.hours}H</span>
-          ${r.deadline?`<span style="font-size:10px;color:var(--text2);margin-left:auto">期限: ${r.deadline}</span>`:''}
-        </div>
-        ${assignedDate?`<div style="font-size:10px;font-weight:700;color:var(--ok)">📅 作業日: ${assignedDate}</div>`:''}
+    return`<div style="background:var(--panel);border:1.5px solid ${isSel?'var(--accent)':'#fde68a'};
+      border-radius:7px;padding:8px 11px;min-width:180px;max-width:220px;cursor:pointer;
+      box-shadow:${isSel?'0 0 0 3px var(--accent-bg)':''}"
+      onclick="selManual('${r.id}')">
+      <div style="font-size:12px;font-weight:700;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+        ${r.hinban}${r.hinmei?' / '+r.hinmei:''}
       </div>
-      ${isSel?`<div class="card-det" style="display:block" onclick="event.stopPropagation()">
-        <div class="total-box"><span class="total-label">合計工数</span><span class="total-val">${r.hours}H</span></div>
-        ${!r.assigned
-          ?`<div class="assign-row">
-              <button class="assign-btn ab-m" onclick="assignTo('${r.id}','matsumoto')">松本に割付</button>
-              <button class="assign-btn ab-n" onclick="assignTo('${r.id}','matsunaga')">松永に割付</button>
-            </div>`
-          :`<div style="display:flex;align-items:center;justify-content:space-between;padding:4px">
-              <span style="font-size:11px;color:var(--text2)">割付済 (${r.assignee==='matsumoto'?'松本':'松永'} / ${assignedDate||'?'})</span>
-              <button onclick="unassignReq('${r.id}')" style="font-size:10px;padding:1px 7px;border:1px solid #fca5a5;border-radius:3px;background:#fee2e2;color:#dc2626;cursor:pointer;font-family:inherit">割付解除</button>
-            </div>`}
-        <div style="margin-top:5px;text-align:right">
-          <button onclick="deleteManualReq('${r.id}')" style="font-size:10px;padding:2px 8px;border:1px solid #fca5a5;border-radius:4px;background:#fee2e2;color:#dc2626;cursor:pointer;font-family:inherit">🗑 削除</button>
-        </div>
-      </div>`:''}
+      <div style="font-size:10px;color:var(--text2);margin-bottom:5px">
+        ⏱ ${r.hours}H${r.deadline?' ／ 期限:'+r.deadline:''}
+      </div>
+      ${assignedDate
+        ?`<div style="font-size:10px;font-weight:700;color:var(--ok)">✓ ${r.assignee==='matsumoto'?'松本':'松永'} ／ ${assignedDate}</div>
+           <div style="display:flex;gap:3px;margin-top:4px">
+             <button onclick="event.stopPropagation();unassignReq('${r.id}')"
+               style="flex:1;font-size:9px;padding:2px 4px;border:1px solid #fca5a5;border-radius:3px;background:#fee2e2;color:#dc2626;cursor:pointer;font-family:inherit">割付解除</button>
+             <button onclick="event.stopPropagation();deleteManualReq('${r.id}')"
+               style="font-size:9px;padding:2px 4px;border:1px solid #fca5a5;border-radius:3px;background:#fee2e2;color:#dc2626;cursor:pointer;font-family:inherit">🗑</button>
+           </div>`
+        :`<div style="display:flex;gap:3px">
+            <button onclick="event.stopPropagation();assignTo('${r.id}','matsumoto')"
+              style="flex:1;font-size:11px;font-weight:700;padding:3px 2px;border:1px solid var(--m-bd);border-radius:4px;background:var(--m-bg);color:var(--m);cursor:pointer;font-family:inherit">松本</button>
+            <button onclick="event.stopPropagation();assignTo('${r.id}','matsunaga')"
+              style="flex:1;font-size:11px;font-weight:700;padding:3px 2px;border:1px solid var(--n-bd);border-radius:4px;background:var(--n-bg);color:var(--n);cursor:pointer;font-family:inherit">松永</button>
+            <button onclick="event.stopPropagation();deleteManualReq('${r.id}')"
+              style="font-size:10px;padding:3px 5px;border:1px solid #fca5a5;border-radius:4px;background:#fee2e2;color:#dc2626;cursor:pointer;font-family:inherit">🗑</button>
+          </div>`}
     </div>`;
   }).join('');
 }
+let _selManualId=null;
+function selManual(id){_selManualId=_selManualId===id?null:id;selReqId=id;renderManualList();}
 
 // ===== 依頼カード描画 =====
 function renderRequestList(){
@@ -1352,23 +1355,52 @@ function showAllReqs(){_showAll=true;renderRequestList();}
 
 function selReq(id){selReqId=selReqId===id?null:id;renderRequestList();}
 
+// ===== kintone改修依頼の編集内容をlocalStorageに保存 =====
+const KT_EDITS_KEY='repair_kt_edits_v1';
+function saveKtEdit(rid){
+  const r=requests.find(x=>x.id===rid);
+  if(!r||r.source==='manual')return; // 手動追加は対象外
+  try{
+    const edits=JSON.parse(localStorage.getItem(KT_EDITS_KEY)||'{}');
+    edits[rid]={kubunInputs:r.kubunInputs,moldType:r.moldType,
+      trialSteps:r.trialSteps,trialH:r.trialH??null,
+      customMemo:r.customMemo||'',hours:r.hours};
+    localStorage.setItem(KT_EDITS_KEY,JSON.stringify(edits));
+  }catch(e){}
+}
+function applyKtEdits(){
+  try{
+    const edits=JSON.parse(localStorage.getItem(KT_EDITS_KEY)||'{}');
+    requests.forEach(r=>{
+      const ed=edits[r.id];
+      if(!ed)return;
+      if(ed.kubunInputs?.length)r.kubunInputs=ed.kubunInputs;
+      if(ed.moldType)r.moldType=ed.moldType;
+      if(ed.trialSteps!==undefined)r.trialSteps=ed.trialSteps;
+      if(ed.trialH!==null&&ed.trialH!==undefined)r.trialH=ed.trialH;
+      if(ed.customMemo!==undefined)r.customMemo=ed.customMemo;
+      r.hours=calcHWithTrialH(r.kubunInputs,r.moldType,r.trialSteps,r.trialH??null);
+    });
+  }catch(e){}
+}
+
 // ===== 工数更新関数 =====
 function updateKubunKey(rid,idx,val){
   const r=requests.find(x=>x.id===rid);if(!r)return;
   r.kubunInputs[idx].key=val;
   r.kubunInputs[idx].name=TM[val]?.label||val;
-  refreshH(r);
+  refreshH(r);saveKtEdit(rid);
 }
 function updateKubunUnits(rid,idx,val){
   const r=requests.find(x=>x.id===rid);if(!r)return;
   const isC=(r.kubunInputs[idx].key||nk(r.kubunInputs[idx].name))==='custom';
   r.kubunInputs[idx].units=Math.max(0,isC?Math.round(parseFloat(val)*4)/4:parseInt(val)||0);
-  refreshH(r);
+  refreshH(r);saveKtEdit(rid);
 }
 function addKubun(rid){
   const r=requests.find(x=>x.id===rid);if(!r)return;
   r.kubunInputs.push({name:'バリ改修',units:1,key:'bari'});
-  refreshH(r);
+  refreshH(r);saveKtEdit(rid);
   selReqId=rid;
   renderRequestList();
 }
@@ -1377,10 +1409,10 @@ function removeKubun(rid,idx){
   if(r.kubunInputs.length<=1){alert('最低1つ必要です');return}
   r.kubunInputs.splice(idx,1);
   selReqId=rid;
-  refreshH(r);
+  refreshH(r);saveKtEdit(rid);
   renderRequestList();
 }
-function updateMold(rid,val){const r=requests.find(x=>x.id===rid);if(!r)return;r.moldType=val;refreshH(r)}
+function updateMold(rid,val){const r=requests.find(x=>x.id===rid);if(!r)return;r.moldType=val;refreshH(r);saveKtEdit(rid);}
 function updateTrial(rid,val){
   const r=requests.find(x=>x.id===rid);if(!r)return;
   r.trialSteps=Math.max(0,parseInt(val)||0);
@@ -1391,9 +1423,9 @@ function updateTrialH(rid,val){
   const r=requests.find(x=>x.id===rid);if(!r)return;
   r.trialH=Math.max(0,Math.round(parseFloat(val)*4)/4);
   const el=document.getElementById('th_'+rid);if(el)el.textContent=r.trialH+'H';
-  refreshH(r);
+  refreshH(r);saveKtEdit(rid);
 }
-function updateNote(rid,val){const r=requests.find(x=>x.id===rid);if(r)r.customMemo=val}
+function updateNote(rid,val){const r=requests.find(x=>x.id===rid);if(r){r.customMemo=val;saveKtEdit(rid);}}
 function refreshH(r){
   const effectiveTrial=r.trialH!=null?r.trialH:null;
   r.hours=calcHWithTrialH(r.kubunInputs,r.moldType,r.trialSteps,r.trialH);
@@ -2280,6 +2312,12 @@ function toggleHideAssigned(){
     btn.textContent=_hideAssigned?'👁 全表示':'👁 割付済';
   }
   renderRequestList();
+}
+
+function resetKtEdits(){
+  if(!confirm('kintone改修依頼の工数編集をすべてリセットしますか？\n（kintoneの元の値に戻ります）'))return;
+  localStorage.removeItem(KT_EDITS_KEY);
+  loadKintone(); // 再取得して元値に戻す
 }
 
 // ===== localStorage Export/Import =====
