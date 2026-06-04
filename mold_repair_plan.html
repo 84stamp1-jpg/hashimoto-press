@@ -572,6 +572,7 @@ input.nm-img-input{display:none}
     <button class="btn btn-secondary btn-sm" id="nmBtnCompleted" onclick="nmToggleAllCompleted()">👁 完了を非表示</button>
     <button class="btn btn-primary btn-sm" onclick="window.print()">🖨 印刷</button>
     <span class="nm-status" id="nmStatus">—</span>
+    <span id="nmSyncStatus" style="font-size:10px;margin-left:8px;font-weight:600"></span>
     <span style="font-size:9px;color:var(--text3);margin-left:8px">ドラッグ=範囲バー入力　ダブルクリック=メモ　💛=メモあり</span>
   </div>
 
@@ -745,10 +746,37 @@ input.nm-img-input{display:none}
       <div id="pauseTotalRow" style="display:none;font-size:11px;font-weight:600;color:var(--warn);margin-top:4px"></div>
     </div>
 
+    <!-- インライン工数編集（折りたたみ） -->
+    <div id="inlineEditSection" style="display:none;border-top:1px solid var(--border);margin-top:8px;padding-top:8px">
+      <div class="yj-sec-title" style="margin-bottom:8px">⚙ 工数編集</div>
+      <div class="f2col" style="margin-bottom:8px">
+        <div>
+          <label class="flabel">合計工数 (H)</label>
+          <input class="finput" id="inHours" type="number" min=".5" max="20" step=".5"/>
+        </div>
+        <div>
+          <label class="flabel">トライ工程数</label>
+          <input class="finput" id="inTrials" type="number" min="0" max="5"/>
+        </div>
+      </div>
+      <div class="f2col">
+        <div>
+          <label class="flabel">予定開始</label>
+          <input class="finput" id="inStart" type="time" step="600"/>
+        </div>
+        <div>
+          <label class="flabel">担当者</label>
+          <select class="finput" id="inAssign">
+            <option value="matsumoto">松本</option>
+            <option value="matsunaga">松永</option>
+          </select>
+        </div>
+      </div>
+    </div>
     <div class="mfooter">
       <button class="btn btn-danger btn-sm" onclick="deleteTaskModal()">削除</button>
       <button class="btn btn-secondary btn-sm" id="delTrialBtn" onclick="deleteTrialBlock()" style="display:none">🗑 トライ削除</button>
-      <button class="btn btn-secondary btn-sm" onclick="openEditFromAct()">⚙ 工数編集</button>
+      <button class="btn btn-secondary btn-sm" id="btnInlineEdit" onclick="toggleInlineEdit()">⚙ 工数編集</button>
       <button class="btn btn-secondary btn-sm" onclick="closeActModal()">閉じる</button>
       <button class="btn btn-primary btn-sm" onclick="saveActual()">保存</button>
     </div>
@@ -1448,8 +1476,14 @@ function renderGantt(){
       const bc=a==='matsumoto'?'bm':'bn';
 
       const rx=mx(t.startMin),rw=dw(t.startMin,repEnd);
-      const res=[`<div class="gblock ${bc}${blockClass}" style="left:${rx}px;width:${rw}px;top:2px;height:42px${blockStyle}"
-        onclick="openActModal('${t.id}')" title="${t.name}">
+      const res=[`<div class="gblock ${bc}${blockClass}"
+        draggable="true"
+        ondragstart="ganttBlockDragStart(event,'${t.id}','${a}')"
+        ondragover="ganttBlockDragOver(event,'${t.id}')"
+        ondrop="ganttBlockDrop(event,'${t.id}')"
+        ondragend="ganttBlockDragEnd()"
+        style="left:${rx}px;width:${rw}px;top:2px;height:42px${blockStyle};cursor:grab"
+        onclick="openActModal('${t.id}')" title="${t.name} (ドラッグで順序変更)">
         <div class="blabel">${t.name}</div>
         <div class="btime">${fmtMin(t.startMin)}〜${fmtMin(repEnd)}</div>
       </div>`];
@@ -1696,10 +1730,11 @@ function _renderDetailOld(){
 function renderLoadSummary(){
   const el=document.getElementById('loadDays');
   if(!el)return;
-  // 週の日付リスト（weekStart から7日）
+  // 今日から14日間（当日が一番左）
   const days=[];
-  for(let i=0;i<7;i++){
-    days.push(fmt(addDays(weekStart,i)));
+  const loadStart=new Date(todayStr()+'T00:00:00');
+  for(let i=0;i<14;i++){
+    days.push(fmt(addDays(loadStart,i)));
   }
   // 日付ごとの依頼工数集計（deadline基準）
   const dayH={};
@@ -1733,8 +1768,8 @@ function renderLoadSummary(){
     const isWE=new Date(d+'T00:00:00').getDay()===0||new Date(d+'T00:00:00').getDay()===6;
     const dLabel=d.slice(5).replace('-','/')+'('+['日','月','火','水','木','金','土'][new Date(d+'T00:00:00').getDay()]+')';
     const barH=Math.round(cum/maxCum*44);
-    const isOver=cum>DAILY_CAP_M*7; // 1週間分を超えるか
-    const isCaution=cum>DAILY_CAP_M*5;
+    const isOver=cum>DAILY_CAP_M*14; // 2週間分を超えるか
+    const isCaution=cum>DAILY_CAP_M*10;
     const barColor=isOver?'var(--danger)':isCaution?'var(--warn)':'var(--m)';
     const numCls=isOver?'load-over':isCaution?'load-caution':'';
     return`<div class="load-day">
@@ -1853,7 +1888,53 @@ function openActModal(idOrEl){
   // トライ削除ボタン：trialSteps>0のときのみ表示
   const trialBtn=document.getElementById('delTrialBtn');
   if(trialBtn) trialBtn.style.display=(t.trialSteps>0)?'':'none';
+  // 工数編集フィールドに現在値をセット
+  const ih=document.getElementById('inHours');if(ih)ih.value=t.hours;
+  const it=document.getElementById('inTrials');if(it)it.value=t.trialSteps||0;
+  const ist=document.getElementById('inStart');
+  if(ist)ist.value=t.startMin!=null?fmtMin(t.startMin):'';
+  const ia=document.getElementById('inAssign');if(ia)ia.value=t.assignee||'matsumoto';
+  // 工数編集セクションは閉じた状態でリセット
+  const sec=document.getElementById('inlineEditSection');if(sec)sec.style.display='none';
+  const btn=document.getElementById('btnInlineEdit');if(btn)btn.textContent='⚙ 工数編集';
   document.getElementById('actModal').classList.add('open');
+}
+// ===== ガントブロックのドラッグ並び替え =====
+function ganttBlockDragStart(e,id,assignee){
+  ganttBlockDrag={id,assignee};
+  e.dataTransfer.effectAllowed='move';
+  e.stopPropagation();
+}
+function ganttBlockDragOver(e,targetId){
+  if(!ganttBlockDrag||ganttBlockDrag.id===targetId)return;
+  e.preventDefault();e.stopPropagation();
+  e.currentTarget.style.outline='2px dashed var(--accent)';
+}
+function ganttBlockDrop(e,targetId){
+  e.preventDefault();e.stopPropagation();
+  if(!ganttBlockDrag||ganttBlockDrag.id===targetId)return;
+  e.currentTarget.style.outline='';
+  const tasks=getDate(curDate);
+  const fi=tasks.findIndex(t=>t.id===ganttBlockDrag.id);
+  const ti=tasks.findIndex(t=>t.id===targetId);
+  if(fi<0||ti<0)return;
+  const [item]=tasks.splice(fi,1);
+  tasks.splice(ti,0,item);
+  ganttBlockDrag=null;
+  autoArrange(curDate);saveTasksToFirebase();renderGantt();renderDetail();
+}
+function ganttBlockDragEnd(){
+  // ドロップされなかった場合にアウトラインをリセット
+  document.querySelectorAll('.gblock').forEach(el=>el.style.outline='');
+  ganttBlockDrag=null;
+}
+function toggleInlineEdit(){
+  const sec=document.getElementById('inlineEditSection');
+  const btn=document.getElementById('btnInlineEdit');
+  if(!sec)return;
+  const open=sec.style.display==='none';
+  sec.style.display=open?'':'none';
+  if(btn)btn.textContent=open?'▲ 工数を閉じる':'⚙ 工数編集';
 }
 function deleteTrialBlock(){
   if(!actTaskId)return;
@@ -1900,6 +1981,20 @@ function saveActual(){
   t.actual.start=document.getElementById('inActS').value;
   t.actual.end=document.getElementById('inActE').value;
   t.actual.note=document.getElementById('inActNote').value;
+  if(t.actual.start) t.actual.status=t.actual.end?'done':'working';
+  // 工数編集セクションが開いていれば工数も保存
+  const sec=document.getElementById('inlineEditSection');
+  if(sec&&sec.style.display!=='none'){
+    const nh=parseFloat(document.getElementById('inHours')?.value);
+    const nt=parseInt(document.getElementById('inTrials')?.value)||0;
+    const ns=document.getElementById('inStart')?.value;
+    const na=document.getElementById('inAssign')?.value;
+    if(!isNaN(nh)&&nh>0) t.hours=nh;
+    t.trialSteps=nt;
+    if(ns){const[h,m]=ns.split(':').map(Number);t.startMin=h*60+m;}
+    if(na) t.assignee=na;
+    autoArrange(curDate);
+  }
   saveTasksToFirebase();closeActModal();renderGantt();renderDetail();
 }
 function closeActModal(){document.getElementById('actModal').classList.remove('open');actTaskId=null}
@@ -2210,7 +2305,9 @@ function switchMainTab(tab){
 
 const NM_DAYS=35;
 const NM_FB_PATH='/newMoldSchedule'; // Firebase パス（改修計画と別パス）
-let nmFbRef=null, nmFbSaveTimer=null, nmFbPushing=false;
+// セッションIDで自分の送信を識別（時間ベースのフラグより確実）
+const NM_SESSION_ID=Date.now()+'_'+Math.random().toString(36).slice(2,7);
+let nmFbRef=null, nmFbSaveTimer=null;
 const NM_KEY_MOLDS='nm_molds_v3';
 const NM_KEY_GANTT='nm_gantt_v3';
 const NM_KEY_NOTE='nm_note_v3';
@@ -2240,6 +2337,7 @@ let nmCurrentNoteKey=null;
 let nmShowCompleted=true;
 let nmDrag=null;
 let nmMoldDrag=null; // ドラッグ移動中の moldId
+let ganttBlockDrag=null; // 改修ガントブロックのドラッグ {id, assignee}
 
 function nmGetMonday(d){const dt=new Date(d);const dy=dt.getDay();dt.setDate(dt.getDate()-(dy===0?6:dy-1));dt.setHours(0,0,0,0);return dt}
 function nmAddDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r}
@@ -2293,25 +2391,35 @@ function nmSaveMasters(){
 }
 function nmPushToFirebase(){
   if(!nmFbRef)return;
-  nmFbPushing=true;
+  nmSetSyncStatus('saving');
   const payload={
     molds:nmMolds, gantt:nmGantt, note:nmNote,
     legends:nmLegendMaster, charges:nmChargeMaster,
-    ts:Date.now()
+    ts:Date.now(),
+    sid:NM_SESSION_ID  // 送信元セッションID（自分のエコーを識別）
   };
   nmFbRef.set(payload)
-    .then(()=>setTimeout(()=>{nmFbPushing=false;},2000))
-    .catch(e=>{nmFbPushing=false;console.log('NM Firebase保存エラー:',e);});
+    .then(()=>nmSetSyncStatus('saved'))
+    .catch(e=>{nmSetSyncStatus('error');console.log('NM Firebase保存エラー:',e);});
+}
+function nmSetSyncStatus(state){
+  const el=document.getElementById('nmSyncStatus');
+  if(!el)return;
+  const map={saving:['🔄 同期中...','#f59e0b'],saved:['☁ 同期済','#16a34a'],error:['⚠ 同期失敗','#dc2626']};
+  const [text,color]=map[state]||['',''];
+  el.textContent=text;el.style.color=color;
+  if(state==='saved')setTimeout(()=>{if(el.textContent==='☁ 同期済')el.textContent='';},3000);
 }
 function nmInitFirebase(){
   try{
     const db=firebase.database(firebase.apps.length?firebase.apps[0]:firebase.initializeApp({databaseURL:FB_URL}));
     nmFbRef=db.ref(NM_FB_PATH);
     nmFbRef.on('value',snap=>{
-      if(nmFbPushing)return; // 自分の送信に対するエコーは無視
       const data=snap.val();
       if(!data)return;
-      // Firebase のデータで上書き（画像はlocalStorageのみ）
+      // 自分の送信のエコーはセッションIDで識別してスキップ
+      if(data.sid===NM_SESSION_ID)return;
+      // 他PCからの更新を反映
       if(data.molds!==undefined)nmMolds=data.molds;
       if(data.gantt!==undefined)nmGantt=data.gantt;
       if(data.note!==undefined)nmNote=data.note;
@@ -2325,12 +2433,12 @@ function nmInitFirebase(){
         localStorage.setItem(NM_KEY_LGMAST,JSON.stringify(nmLegendMaster));
         localStorage.setItem(NM_KEY_CMAST, JSON.stringify(nmChargeMaster));
       }catch(e){}
-      // 既存タスクに initialized フラグがない場合は未確定扱い
       nmMolds.forEach(m=>(m.tasks||[]).forEach(t=>{if(t.initialized===undefined)t.initialized=false;}));
       nmRender();
-      console.log('NM Firebase同期受信');
+      nmSetSyncStatus('saved');
+      console.log('NM Firebase同期受信 from',data.sid);
     });
-    console.log('NM Firebase接続OK');
+    console.log('NM Firebase接続OK セッション:',NM_SESSION_ID);
   }catch(e){console.log('NM Firebase初期化失敗:',e);}
 }
 
