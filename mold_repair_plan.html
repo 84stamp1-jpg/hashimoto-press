@@ -477,7 +477,10 @@ input.nm-img-input{display:none}
   <div class="hdr-right">
     <button class="btn btn-secondary btn-sm" onclick="loadKintone()">🔄 kintone同期</button>
     <button class="btn btn-secondary btn-sm" onclick="autoAll()">⚡ 自動配置</button>
+    <button class="btn btn-danger btn-sm" onclick="resetDayTasks()" title="当日の配置を全て削除">🗑 配置リセット</button>
     <button class="btn btn-secondary btn-sm" id="btnTmMaster" onclick="openTmMaster()">⚙ 工数マスタ</button>
+    <button class="btn btn-secondary btn-sm" onclick="exportLocalStorage()" title="設定データをエクスポート">📤 Export</button>
+    <button class="btn btn-secondary btn-sm" onclick="importLocalStorage()" title="設定データをインポート">📥 Import</button>
     <button class="btn btn-primary btn-sm" onclick="window.print()">🖨 印刷</button>
   </div>
 </header>
@@ -491,6 +494,10 @@ input.nm-img-input{display:none}
       <span class="badge" id="bdgU">0件</span>
       <span class="badge badge-warn" id="bdgW" style="display:none">⚠急</span>
       <span class="badge badge-ok"   id="bdgA" style="display:none">✓割付済</span>
+      <button id="btnHideAssigned" onclick="toggleHideAssigned()"
+        style="margin-left:auto;font-size:9px;padding:2px 6px;border:1px solid var(--border2);
+               border-radius:3px;background:var(--panel);cursor:pointer;font-family:var(--font);
+               white-space:nowrap" title="割付済みを非表示">👁 割付済</button>
     </div>
     <div class="req-list" id="reqList">
       <div class="loading"><div class="spinner"></div>kintoneから取得中...</div>
@@ -1115,15 +1122,19 @@ function renderRequestList(){
 
   if(!requests.length){document.getElementById('reqList').innerHTML='<div class="empty">依頼がありません</div>';return}
 
+  // 割付済み非表示フィルタ
+  const filteredReqs=_hideAssigned?requests.filter(r=>!r.assigned):requests;
   // 大量データでのフリーズ防止: 表示数を制限
-  const MAX_DISPLAY=_showAll?requests.length:50;
-  const displayReqs=requests.slice(0,MAX_DISPLAY);
+  const MAX_DISPLAY=_showAll?filteredReqs.length:50;
+  const displayReqs=filteredReqs.slice(0,MAX_DISPLAY);
   const moreCount=requests.length-MAX_DISPLAY;
 
   document.getElementById('reqList').innerHTML=displayReqs.map(r=>{
     const dl=r.deadline,dlCls=dl<today?'cdl-u':dl===today?'cdl-n':'';
     const tomorrow=fmt(addDays(new Date(),1));
     const urgencyIcon=dl<today?'🔥':dl===today?'🔥':dl===tomorrow?'⚡':'';
+    // 割付済みの日付を取得
+    const assignedDate=Object.entries(tasksByDate).find(([d,tasks])=>tasks.some(t=>t.reqId===r.id))?.[0]||null;
     const tags=(r.kubunInputs||[]).map(ki=>`<span class="${tagCls(ki.name)}">${ki.name}</span>`).join('');
     const src=`<span class="src-tag src-${r.source}">${r.source}</span>`;
     const isSel=selReqId===r.id;
@@ -1175,6 +1186,7 @@ function renderRequestList(){
         <div class="cbot">
           <span class="ctime">⏱ ${r.hours}H</span>
           <div style="margin-left:auto;text-align:right">
+            ${assignedDate?'<div style="font-size:10px;font-weight:700;color:var(--ok)">📅 作業日: '+assignedDate+'</div>':''}
             ${dl?'<div class="cdl '+dlCls+'" style="font-size:11px;font-weight:700">'+urgencyIcon+'完了希望: '+dl+'</div>':''}
             ${r.createdDate?'<div style="font-size:9px;color:var(--text3)">依頼日: '+r.createdDate+'</div>':''}
           </div>
@@ -1213,7 +1225,10 @@ function renderRequestList(){
         ${!r.assigned?`<div class="assign-row">
           <button class="assign-btn ab-m" onclick="assignTo('${r.id}','matsumoto')">松本に割付</button>
           <button class="assign-btn ab-n" onclick="assignTo('${r.id}','matsunaga')">松永に割付</button>
-        </div>`:`<div style="text-align:center;font-size:11px;color:var(--text2);padding:4px">割付済（ブロックをクリックで編集）</div>`}
+        </div>`:`<div style="display:flex;align-items:center;justify-content:space-between;padding:4px">
+          <span style="font-size:11px;color:var(--text2)">割付済 (${r.assignee==='matsumoto'?'松本':'松永'} / ${assignedDate||'?'})</span>
+          <button onclick="unassignReq('${r.id}')" style="font-size:10px;padding:1px 7px;border:1px solid #fca5a5;border-radius:3px;background:#fee2e2;color:#dc2626;cursor:pointer;font-family:inherit">割付解除</button>
+        </div>`}
         ${r.source==='manual'?`<div style="margin-top:5px;text-align:right">
           <button onclick="deleteManualReq('${r.id}')" style="font-size:10px;padding:2px 8px;border:1px solid #fca5a5;border-radius:4px;background:#fee2e2;color:#dc2626;cursor:pointer;font-family:inherit">🗑 この任意作業を削除</button>
         </div>`:''}
@@ -1526,6 +1541,20 @@ function renderGantt(){
             <span style="font-size:8px;color:${over?'var(--danger)':'var(--text2)'};font-family:var(--mono)">${pct}%</span>
           </div>`;
         }
+        const hasStart=!!t.actual.start,hasEnd=!!t.actual.end,isPaused2=!!t.actual.pausedAt;
+        const actBtns=hasEnd
+          ?`<span style="font-size:10px;color:var(--ok);font-weight:700">✓ 完了 ${t.actual.end}</span>`
+          :hasStart
+            ?`<button onclick="event.stopPropagation();togglePauseDetail('${t.id}')"
+                style="font-size:9px;padding:1px 5px;border:1px solid ${isPaused2?'var(--ok)':'var(--warn)'};
+                border-radius:3px;background:${isPaused2?'var(--trial-bg)':'var(--warn-bg)'};
+                color:${isPaused2?'var(--ok)':'var(--warn)'};cursor:pointer">${isPaused2?'▶再開':'⏸停止'}</button>
+               <button onclick="event.stopPropagation();stampNow('${t.id}','end')"
+                style="font-size:9px;padding:1px 5px;border:1px solid #fca5a5;border-radius:3px;
+                background:#fee2e2;color:#dc2626;cursor:pointer">■終了</button>`
+            :`<button onclick="event.stopPropagation();stampNow('${t.id}','start')"
+                style="font-size:9px;padding:1px 5px;border:1px solid var(--ok);border-radius:3px;
+                background:var(--ok-bg);color:var(--ok);cursor:pointer;font-weight:700">▶開始</button>`;
         return`<div class="ditem" onclick="openActModal('${t.id}')" style="cursor:pointer">
           <div class="dcolor" style="background:${a==='matsumoto'?'var(--m)':'var(--n)'}"></div>
           <div class="dinfo">
@@ -1535,6 +1564,9 @@ function renderGantt(){
             </div>
             <div class="dmeta">${planStr} / ${t.hours}H</div>
             ${yjHtml}
+            <div style="display:flex;gap:4px;margin-top:3px;align-items:center" onclick="event.stopPropagation()">
+              ${actBtns}
+            </div>
           </div>
         </div>`;
       }).join('');
@@ -1972,6 +2004,74 @@ function resetTmMaster(){
   openTmMaster(); // 値を再描画
 }
 
+// ===== 配置リセット =====
+function resetDayTasks(){
+  if(!confirm(`${curDate} の配置を全て削除しますか？`))return;
+  tasksByDate[curDate]=[];
+  // 全日付に存在しなくなったreqをunassign
+  requests.forEach(r=>{
+    const still=Object.values(tasksByDate).some(tasks=>tasks.some(t=>t.reqId===r.id));
+    if(!still){r.assigned=false;r.assignee=null;}
+  });
+  saveTasksToFirebase();renderRequestList();renderGantt();renderDetail();
+}
+
+// ===== 割付解除 =====
+function unassignReq(rid){
+  const r=requests.find(x=>x.id===rid);if(!r)return;
+  if(!confirm(`「${r.hinban}」の割付を解除しますか？`))return;
+  Object.keys(tasksByDate).forEach(d=>{
+    tasksByDate[d]=(tasksByDate[d]||[]).filter(t=>t.reqId!==rid);
+  });
+  r.assigned=false;r.assignee=null;
+  saveTasksToFirebase();renderRequestList();renderGantt();renderDetail();
+}
+
+// ===== 割付済み非表示トグル =====
+let _hideAssigned=false;
+function toggleHideAssigned(){
+  _hideAssigned=!_hideAssigned;
+  const btn=document.getElementById('btnHideAssigned');
+  if(btn){
+    btn.style.background=_hideAssigned?'var(--accent)':'var(--panel)';
+    btn.style.color=_hideAssigned?'#fff':'';
+    btn.textContent=_hideAssigned?'👁 全表示':'👁 割付済';
+  }
+  renderRequestList();
+}
+
+// ===== localStorage Export/Import =====
+function exportLocalStorage(){
+  const keys=['nm_molds_v3','nm_gantt_v3','nm_note_v3','nm_cfg_v2','nm_legend_master_v2',
+              'nm_charge_master','nm_images','repair_tm_v1','repair_ot_v1'];
+  const data={};
+  keys.forEach(k=>{const v=localStorage.getItem(k);if(v)data[k]=v;});
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`mold_system_backup_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+}
+function importLocalStorage(){
+  const input=document.createElement('input');
+  input.type='file';input.accept='.json';
+  input.onchange=e=>{
+    const file=e.target.files[0];if(!file)return;
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      try{
+        const data=JSON.parse(ev.target.result);
+        if(!confirm(`${Object.keys(data).length}件のデータを復元します。\n現在のデータは上書きされます。よろしいですか？`))return;
+        Object.entries(data).forEach(([k,v])=>localStorage.setItem(k,v));
+        alert('インポート完了。ページを再読み込みします。');
+        location.reload();
+      }catch(err){alert('ファイルの読み込みに失敗しました: '+err.message);}
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+
 function deleteManualReq(id){
   const r=requests.find(x=>x.id===id);
   if(!r||r.source!=='manual')return;
@@ -2088,6 +2188,8 @@ function switchMainTab(tab){
 }
 
 const NM_DAYS=35;
+const NM_FB_PATH='/newMoldSchedule'; // Firebase パス（改修計画と別パス）
+let nmFbRef=null, nmFbSaveTimer=null, nmFbPushing=false;
 const NM_KEY_MOLDS='nm_molds_v3';
 const NM_KEY_GANTT='nm_gantt_v3';
 const NM_KEY_NOTE='nm_note_v3';
@@ -2146,6 +2248,8 @@ function nmInit(){
   }catch(e){nmMolds=[];nmGantt={};nmNote={};nmImages={};}
   nmLoadCfgUI();
   nmRender();
+  // Firebase接続（初期表示後に同期）
+  nmInitFirebase();
 }
 
 function nmSave(){
@@ -2155,10 +2259,57 @@ function nmSave(){
     localStorage.setItem(NM_KEY_NOTE, JSON.stringify(nmNote));
     localStorage.setItem(NM_KEY_IMGS, JSON.stringify(nmImages));
   }catch(e){}
+  // Firebase へデバウンス保存（2秒後、連続操作でリセット）
+  clearTimeout(nmFbSaveTimer);
+  nmFbSaveTimer=setTimeout(nmPushToFirebase,2000);
 }
 function nmSaveMasters(){
   localStorage.setItem(NM_KEY_LGMAST,JSON.stringify(nmLegendMaster));
   localStorage.setItem(NM_KEY_CMAST, JSON.stringify(nmChargeMaster));
+  clearTimeout(nmFbSaveTimer);
+  nmFbSaveTimer=setTimeout(nmPushToFirebase,2000);
+}
+function nmPushToFirebase(){
+  if(!nmFbRef)return;
+  nmFbPushing=true;
+  const payload={
+    molds:nmMolds, gantt:nmGantt, note:nmNote,
+    legends:nmLegendMaster, charges:nmChargeMaster,
+    ts:Date.now()
+  };
+  nmFbRef.set(payload)
+    .then(()=>setTimeout(()=>{nmFbPushing=false;},2000))
+    .catch(e=>{nmFbPushing=false;console.log('NM Firebase保存エラー:',e);});
+}
+function nmInitFirebase(){
+  try{
+    const db=firebase.database(firebase.apps.length?firebase.apps[0]:firebase.initializeApp({databaseURL:FB_URL}));
+    nmFbRef=db.ref(NM_FB_PATH);
+    nmFbRef.on('value',snap=>{
+      if(nmFbPushing)return; // 自分の送信に対するエコーは無視
+      const data=snap.val();
+      if(!data)return;
+      // Firebase のデータで上書き（画像はlocalStorageのみ）
+      if(data.molds!==undefined)nmMolds=data.molds;
+      if(data.gantt!==undefined)nmGantt=data.gantt;
+      if(data.note!==undefined)nmNote=data.note;
+      if(data.legends!==undefined)nmLegendMaster=data.legends;
+      if(data.charges!==undefined)nmChargeMaster=data.charges;
+      // localStorageにも保存（オフライン時に使用）
+      try{
+        localStorage.setItem(NM_KEY_MOLDS,JSON.stringify(nmMolds));
+        localStorage.setItem(NM_KEY_GANTT,JSON.stringify(nmGantt));
+        localStorage.setItem(NM_KEY_NOTE, JSON.stringify(nmNote));
+        localStorage.setItem(NM_KEY_LGMAST,JSON.stringify(nmLegendMaster));
+        localStorage.setItem(NM_KEY_CMAST, JSON.stringify(nmChargeMaster));
+      }catch(e){}
+      // 既存タスクに initialized フラグがない場合は未確定扱い
+      nmMolds.forEach(m=>(m.tasks||[]).forEach(t=>{if(t.initialized===undefined)t.initialized=false;}));
+      nmRender();
+      console.log('NM Firebase同期受信');
+    });
+    console.log('NM Firebase接続OK');
+  }catch(e){console.log('NM Firebase初期化失敗:',e);}
 }
 
 // ----- 見積工程パース -----
