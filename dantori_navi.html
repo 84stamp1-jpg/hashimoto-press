@@ -1136,8 +1136,16 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
           <div class="qc-fld"><label>その他（個）</label><input type="number" id="qc-sonota" min="0" placeholder="0"></div>
         </div>
         <div class="qc-fld"><label>その他メモ</label>
-          <input type="text" id="qc-sonota-memo" list="qc-sonota-list" placeholder="その他の内容（任意）" autocomplete="off">
-          <datalist id="qc-sonota-list"><option value="トライ用"><option value="トップ・エンド"></datalist>
+          <div id="qc-sonota-chips" style="min-height:4px;margin-bottom:4px;"></div>
+          <div style="display:flex;gap:6px;align-items:center;">
+            <input type="text" id="qc-sonota-memo-sel" list="qc-sonota-list" placeholder="選択または入力してから＋追加" autocomplete="off" style="flex:1;"
+              onchange="qcSonotaAdd('qc-sonota-memo-sel','qc-sonota-memo','qc-sonota-chips')"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();qcSonotaAdd('qc-sonota-memo-sel','qc-sonota-memo','qc-sonota-chips');}">
+            <button type="button" onclick="qcSonotaAdd('qc-sonota-memo-sel','qc-sonota-memo','qc-sonota-chips')"
+              style="padding:5px 10px;background:#8e24aa;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;">＋追加</button>
+          </div>
+          <input type="hidden" id="qc-sonota-memo">
+          <datalist id="qc-sonota-list"><option value="トライ用"><option value="トップ・エンド"><option value="破壊"></datalist>
         </div>
         <div class="qc-fld">
           <label>実績区分</label>
@@ -1221,8 +1229,16 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
         <div class="qc-fld"><label>その他（個）</label><input type="number" id="qc-bulk-sonota" min="0" placeholder="0"></div>
       </div>
       <div class="qc-fld"><label>その他メモ</label>
-        <input type="text" id="qc-bulk-sonota-memo" list="qc-sonota-list2" placeholder="その他の内容（任意）" autocomplete="off">
-        <datalist id="qc-sonota-list2"><option value="トライ用"><option value="トップ・エンド"></datalist>
+        <div id="qc-bulk-sonota-chips" style="min-height:4px;margin-bottom:4px;"></div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <input type="text" id="qc-bulk-sonota-memo-sel" list="qc-sonota-list2" placeholder="選択または入力してから＋追加" autocomplete="off" style="flex:1;"
+            onchange="qcSonotaAdd('qc-bulk-sonota-memo-sel','qc-bulk-sonota-memo','qc-bulk-sonota-chips')"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();qcSonotaAdd('qc-bulk-sonota-memo-sel','qc-bulk-sonota-memo','qc-bulk-sonota-chips');}">
+          <button type="button" onclick="qcSonotaAdd('qc-bulk-sonota-memo-sel','qc-bulk-sonota-memo','qc-bulk-sonota-chips')"
+            style="padding:5px 10px;background:#8e24aa;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;">＋追加</button>
+        </div>
+        <input type="hidden" id="qc-bulk-sonota-memo">
+        <datalist id="qc-sonota-list2"><option value="トライ用"><option value="トップ・エンド"><option value="破壊"></datalist>
       </div>
       <div class="qc-fld"><label>作業者</label>
         <select id="qc-bulk-op">
@@ -1287,8 +1303,16 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
       <div class="qc-fld"><label>その他</label><input type="number" id="qc-e-sonota" min="0"></div>
     </div>
     <div class="qc-fld"><label>その他メモ</label>
-      <input type="text" id="qc-e-sonota-memo" list="qc-sonota-list3" autocomplete="off">
-      <datalist id="qc-sonota-list3"><option value="トライ用"><option value="トップ・エンド"></datalist>
+      <div id="qc-e-sonota-chips" style="min-height:4px;margin-bottom:4px;"></div>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <input type="text" id="qc-e-sonota-memo-sel" list="qc-sonota-list3" placeholder="選択または入力してから＋追加" autocomplete="off" style="flex:1;"
+          onchange="qcSonotaAdd('qc-e-sonota-memo-sel','qc-e-sonota-memo','qc-e-sonota-chips')"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();qcSonotaAdd('qc-e-sonota-memo-sel','qc-e-sonota-memo','qc-e-sonota-chips');}">
+        <button type="button" onclick="qcSonotaAdd('qc-e-sonota-memo-sel','qc-e-sonota-memo','qc-e-sonota-chips')"
+          style="padding:5px 10px;background:#8e24aa;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;">＋追加</button>
+      </div>
+      <input type="hidden" id="qc-e-sonota-memo">
+      <datalist id="qc-sonota-list3"><option value="トライ用"><option value="トップ・エンド"><option value="破壊"></datalist>
     </div>
     <div class="qc-fld"><label>実績区分</label>
       <select id="qc-e-kanno">
@@ -6129,6 +6153,43 @@ loadDantoriSettings();
 updateStaffDatalist();
 
 // ============================================================
+// ===== その他メモ チップ入力ヘルパー =====
+function qcSonotaAdd(selId, hidId, chipsId){
+  var sel=document.getElementById(selId);
+  var val=(sel.value||'').trim();
+  sel.value='';
+  if(!val) return;
+  var hid=document.getElementById(hidId);
+  var arr=hid.value?hid.value.split('、').map(function(s){return s.trim();}).filter(Boolean):[];
+  if(arr.indexOf(val)<0) arr.push(val);
+  hid.value=arr.join('、');
+  _qcSonotaRender(hidId,chipsId);
+}
+function _qcSonotaRender(hidId,chipsId){
+  var hid=document.getElementById(hidId);
+  var wrap=document.getElementById(chipsId);
+  if(!wrap||!hid) return;
+  var arr=hid.value?hid.value.split('、').map(function(s){return s.trim();}).filter(Boolean):[];
+  wrap.innerHTML=arr.map(function(v){
+    var ev=v.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    return '<span style="display:inline-flex;align-items:center;gap:3px;background:#f3e5f5;border:1px solid #ce93d8;border-radius:12px;padding:2px 8px 2px 10px;font-size:11px;margin:2px 2px 2px 0;">'+
+      v+'<button type="button" onclick="qcSonotaRemove(\''+hidId+'\',\''+chipsId+'\',\''+ev+'\')" '+
+      'style="background:none;border:none;cursor:pointer;color:#7b1fa2;font-size:13px;padding:0 0 1px 2px;line-height:1;">×</button></span>';
+  }).join('');
+}
+function qcSonotaRemove(hidId,chipsId,val){
+  var hid=document.getElementById(hidId);
+  var arr=hid.value?hid.value.split('、').map(function(s){return s.trim();}).filter(Boolean):[];
+  arr=arr.filter(function(v){return v!==val;});
+  hid.value=arr.join('、');
+  _qcSonotaRender(hidId,chipsId);
+}
+function qcSonotaLoad(hidId,chipsId,val){
+  var hid=document.getElementById(hidId);
+  if(hid) hid.value=val||'';
+  _qcSonotaRender(hidId,chipsId);
+}
+
 // ===== 品質チェックシート統合モジュール =====
 // ============================================================
 (function(){
@@ -6725,7 +6786,7 @@ window.qcResetForm = function(){
   document.getElementById('qc-bunno-info').style.display='none';
   document.getElementById('qc-op').value='';
   ['qc-prod','qc-ng','qc-hokyu','qc-sonota'].forEach(function(id){ document.getElementById(id).value=''; });
-  document.getElementById('qc-sonota-memo').value='';
+  qcSonotaLoad('qc-sonota-memo','qc-sonota-chips','');
   document.getElementById('qc-mo').value='';
   qcRenderPhotoGrid();
   var btn=document.getElementById('qc-sb'); btn.disabled=false; btn.textContent='記録を保存する';
@@ -6973,7 +7034,7 @@ function qcOpenEditModal(r){
   document.getElementById('qc-e-ng').value=r[6]||'0';
   document.getElementById('qc-e-hokyu').value=r[17]||'0';
   document.getElementById('qc-e-sonota').value=r[18]||'0';
-  document.getElementById('qc-e-sonota-memo').value=r[19]||'';
+  qcSonotaLoad('qc-e-sonota-memo','qc-e-sonota-chips',r[19]||'');
   var kv=r[7]||''; document.getElementById('qc-e-kanno').value=(kv==='完納'||kv==='分納'||kv==='中間実績')?kv:'完納';
   document.getElementById('qc-e-zairyo').value=(r[8]==='あり'||r[8]==='なし')?r[8]:'あり';
   document.getElementById('qc-e-mo').value=r[9]||'';
@@ -7033,7 +7094,7 @@ window.qcOpenBulkMode = function(){
   else{ var q=prompt('品番を入力してください'); if(!q) return; QC_BULK_HINBAN=q.trim(); QC_BULK_JUNJO=null; }
   document.getElementById('qc-bulk-hinban').textContent=QC_BULK_HINBAN+(QC_BULK_JUNJO?' 工順'+QC_BULK_JUNJO:'');
   ['qc-bulk-prod','qc-bulk-ng','qc-bulk-hokyu','qc-bulk-sonota'].forEach(function(id){ document.getElementById(id).value=''; });
-  document.getElementById('qc-bulk-sonota-memo').value='';
+  qcSonotaLoad('qc-bulk-sonota-memo','qc-bulk-sonota-chips','');
   document.getElementById('qc-bulk-op').value='';
   QC_BULK_PHOTO=null;
   document.getElementById('qc-bulk-sz').textContent='';
