@@ -8854,9 +8854,12 @@ window.beaconMgrLoad = async function(sfx=''){
   const fbUrl = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
   const msg = _beaconMgrMsgEl(sfx);
   if(msg){ msg.style.color='#64748b'; msg.textContent='読み込み中...'; }
+  console.log('[beaconMgr] load 開始 url=', fbUrl+'/beacons.json');
   try {
     const res = await fetch(`${fbUrl}/beacons.json`);
+    console.log('[beaconMgr] fetch status=', res.status);
     const data = res.ok ? await res.json() : null;
+    console.log('[beaconMgr] data=', data);
     _beaconMgrData = {};
     if(data){
       Object.entries(data).forEach(([id, b]) => {
@@ -8872,9 +8875,13 @@ window.beaconMgrLoad = async function(sfx=''){
         _beaconMgrData[id] = { name, type, area };
       });
     }
+    console.log('[beaconMgr] _beaconMgrData件数=', Object.keys(_beaconMgrData).length, _beaconMgrData);
     beaconMgrRender();
-    if(msg) msg.textContent = '';
+    if(msg){ msg.style.color = Object.keys(_beaconMgrData).length ? '#16a34a' : '#64748b';
+             msg.textContent = Object.keys(_beaconMgrData).length ? `${Object.keys(_beaconMgrData).length}件読み込み ✓` : 'データなし'; }
+    setTimeout(()=>{ if(msg) msg.textContent=''; },2000);
   } catch(e){
+    console.error('[beaconMgr] load エラー', e);
     if(msg){ msg.style.color='#dc2626'; msg.textContent='読み込みエラー：'+e.message; }
   }
 };
@@ -8963,10 +8970,14 @@ window.beaconMgrAdd = async function(sfx=''){
   if(!name){ showMsg('#dc2626','名前を入力してください'); return; }
   if(_beaconMgrData[id]){ showMsg('#dc2626','このIDは既に登録されています'); return; }
   const fbUrl = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
+  console.log('[beaconMgr] add id=', id, 'name=', name, 'url=', `${fbUrl}/beacons/${encodeURIComponent(id)}/meta.json`);
   try {
-    await fetch(`${fbUrl}/beacons/${encodeURIComponent(id)}/meta.json`,
+    const putRes = await fetch(`${fbUrl}/beacons/${encodeURIComponent(id)}/meta.json`,
       {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, type})});
+    console.log('[beaconMgr] PUT status=', putRes.status);
+    if(!putRes.ok){ const txt=await putRes.text(); throw new Error(`HTTP ${putRes.status}: ${txt}`); }
     _beaconMgrData[id] = { name, type, area:'' };
+    console.log('[beaconMgr] _beaconMgrData=', _beaconMgrData);
     beaconMgrRender();
     const idEl = document.getElementById('beacon-new-id'+s); if(idEl) idEl.value='';
     const nmEl = document.getElementById('beacon-new-name'+s); if(nmEl) nmEl.value='';
