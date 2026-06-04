@@ -1586,7 +1586,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
       <div class="ftitle">📡 ビーコン管理</div>
       <div style="font-size:11px;color:#888;margin-bottom:10px;line-height:1.6;">
         工場レイアウトに表示するビーコンの名前・種別を登録します。<br>
-        ビーコンID はBLEタグの <b>MACアドレス</b>（例：AA:BB:CC:DD:EE:FF）またはシステムが使用するIDを入力してください。
+        ビーコンID はBLEタグの <b>MACアドレス</b>（例：AC:23:3F:AC:6A:74）を入力してください。コロンあり・なしどちらでも自動変換します。
       </div>
       <!-- 登録済みビーコン一覧 -->
       <div id="beacon-mgr-list" style="margin-bottom:12px;"></div>
@@ -1596,7 +1596,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
         <div style="display:grid;grid-template-columns:2fr 1.5fr 1fr auto;gap:8px;align-items:end;">
           <div class="fi" style="margin:0;">
             <label style="font-size:11px;">ビーコンID <span style="color:#dc2626;">*</span></label>
-            <input type="text" id="beacon-new-id" placeholder="例：AA:BB:CC:DD:EE:FF"
+            <input type="text" id="beacon-new-id" placeholder="例：AC:23:3F:AC:6A:74"
               style="width:100%;padding:7px 9px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:monospace;">
           </div>
           <div class="fi" style="margin:0;">
@@ -1860,7 +1860,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
       <div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:6px;">📡 ビーコン管理</div>
       <div style="font-size:11px;color:#888;margin-bottom:10px;line-height:1.6;">
         工場レイアウトに表示するビーコンの名前・種別を登録します。<br>
-        ビーコンIDはBLEタグの<b>MACアドレス</b>（例：AA:BB:CC:DD:EE:FF）を入力してください。
+        ビーコンIDはBLEタグの<b>MACアドレス</b>（例：AC:23:3F:AC:6A:74）を入力してください。コロンあり・なしどちらでも自動変換します。
       </div>
       <div id="beacon-mgr-list-m" style="margin-bottom:10px;"></div>
       <div style="background:#f8f7f2;border:1px solid #e2e8f0;border-radius:8px;padding:10px;margin-bottom:8px;">
@@ -1868,7 +1868,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
         <div style="display:grid;grid-template-columns:2fr 1.5fr 1fr auto;gap:6px;align-items:end;">
           <div>
             <div style="font-size:10px;color:#64748b;margin-bottom:3px;">ビーコンID <span style="color:#dc2626;">*</span></div>
-            <input type="text" id="beacon-new-id-m" placeholder="AA:BB:CC:DD:EE:FF"
+            <input type="text" id="beacon-new-id-m" placeholder="AC:23:3F:AC:6A:74"
               style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:5px;font-size:11px;font-family:monospace;">
           </div>
           <div>
@@ -8941,10 +8941,20 @@ window.beaconMgrEdit = async function(el){
   }
 };
 
+// MACアドレスをFirebaseキー形式に正規化（コロンなし小文字）
+// 例: "AC:23:3F:AC:6A:74" → "ac233fac6a74"
+function normBeaconId(raw){
+  // コロン/ハイフン区切りのMAC形式ならコロンなし小文字に変換
+  const stripped = raw.replace(/[:\-]/g,'').toLowerCase();
+  if(/^[0-9a-f]{12}$/.test(stripped)) return stripped;
+  return raw; // MAC形式でない場合はそのまま
+}
+
 // 新規追加
 window.beaconMgrAdd = async function(sfx=''){
   const s = sfx ? '-'+sfx : '';
-  const id   = (document.getElementById('beacon-new-id'+s)||{}).value?.trim();
+  const rawId = (document.getElementById('beacon-new-id'+s)||{}).value?.trim();
+  const id   = rawId ? normBeaconId(rawId) : '';
   const name = (document.getElementById('beacon-new-name'+s)||{}).value?.trim();
   const type = (document.getElementById('beacon-new-type'+s)||{}).value || 'leader';
   const msg  = _beaconMgrMsgEl(sfx);
