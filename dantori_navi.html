@@ -1862,34 +1862,34 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
         工場レイアウトに表示するビーコンの名前・種別を登録します。<br>
         ビーコンIDはBLEタグの<b>MACアドレス</b>（例：AA:BB:CC:DD:EE:FF）を入力してください。
       </div>
-      <div id="beacon-mgr-list" style="margin-bottom:10px;"></div>
+      <div id="beacon-mgr-list-m" style="margin-bottom:10px;"></div>
       <div style="background:#f8f7f2;border:1px solid #e2e8f0;border-radius:8px;padding:10px;margin-bottom:8px;">
         <div style="font-size:11px;font-weight:700;color:#334155;margin-bottom:8px;">➕ 新規追加</div>
         <div style="display:grid;grid-template-columns:2fr 1.5fr 1fr auto;gap:6px;align-items:end;">
           <div>
             <div style="font-size:10px;color:#64748b;margin-bottom:3px;">ビーコンID <span style="color:#dc2626;">*</span></div>
-            <input type="text" id="beacon-new-id" placeholder="AA:BB:CC:DD:EE:FF"
+            <input type="text" id="beacon-new-id-m" placeholder="AA:BB:CC:DD:EE:FF"
               style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:5px;font-size:11px;font-family:monospace;">
           </div>
           <div>
             <div style="font-size:10px;color:#64748b;margin-bottom:3px;">名前 <span style="color:#dc2626;">*</span></div>
-            <input type="text" id="beacon-new-name" placeholder="山田 太郎"
+            <input type="text" id="beacon-new-name-m" placeholder="山田 太郎"
               style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:5px;font-size:12px;">
           </div>
           <div>
             <div style="font-size:10px;color:#64748b;margin-bottom:3px;">種別</div>
-            <select id="beacon-new-type" style="width:100%;padding:6px 5px;border:1px solid #ddd;border-radius:5px;font-size:12px;font-family:inherit;">
+            <select id="beacon-new-type-m" style="width:100%;padding:6px 5px;border:1px solid #ddd;border-radius:5px;font-size:12px;font-family:inherit;">
               <option value="leader">👤 人</option>
               <option value="lift">🚜 リフト</option>
             </select>
           </div>
-          <button onclick="beaconMgrAdd()"
+          <button onclick="beaconMgrAdd('m')"
             style="padding:6px 12px;background:#1a1a1a;color:#fff;border:none;border-radius:5px;font-size:12px;cursor:pointer;white-space:nowrap;">追加</button>
         </div>
       </div>
-      <button onclick="beaconMgrLoad()"
+      <button onclick="beaconMgrLoad('m')"
         style="padding:5px 12px;background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;border-radius:5px;font-size:11px;cursor:pointer;">🔄 一覧を更新</button>
-      <div class="msg" id="beacon-mgr-msg" style="margin-top:6px;"></div>
+      <div class="msg" id="beacon-mgr-msg-m" style="margin-top:6px;"></div>
     </div>
 
     <!-- PIN変更セクション -->
@@ -2219,7 +2219,7 @@ function _showConfigDirect(){
   document.getElementById('fieldDetectMsg').textContent = '';
   document.getElementById('configModal').style.display = 'flex';
   // ビーコン一覧を自動読み込み
-  if(window.beaconMgrLoad) window.beaconMgrLoad();
+  if(window.beaconMgrLoad) window.beaconMgrLoad('m');
 }
 function closeConfig(){ document.getElementById('configModal').style.display='none'; }
 function closeConfigIfBg(e){ if(e.target===document.getElementById('configModal')) closeConfig(); }
@@ -8848,10 +8848,12 @@ window.renderSR=function(){
 let _beaconMgrData = {}; // { id: {name, type, area} } 読み込みキャッシュ
 
 // ビーコン一覧をFirebaseから読み込んで表示
-window.beaconMgrLoad = async function(){
+function _beaconMgrMsgEl(sfx){ return document.getElementById('beacon-mgr-msg'+(sfx?'-'+sfx:'')); }
+
+window.beaconMgrLoad = async function(sfx=''){
   const fbUrl = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
-  const msg = document.getElementById('beacon-mgr-msg');
-  msg.style.color='#64748b'; msg.textContent='読み込み中...';
+  const msg = _beaconMgrMsgEl(sfx);
+  if(msg){ msg.style.color='#64748b'; msg.textContent='読み込み中...'; }
   try {
     const res = await fetch(`${fbUrl}/beacons.json`);
     const data = res.ok ? await res.json() : null;
@@ -8862,7 +8864,6 @@ window.beaconMgrLoad = async function(){
         const meta = b.meta || {};
         const name = meta.name || b.name || '';
         const type = meta.type || b.type || 'leader';
-        // 現在のエリア（scanners から最強を取得）
         let area = '';
         if(b.scanners){
           const sc = Object.values(b.scanners).filter(s=>s&&s.area&&s.rssi!=null);
@@ -8872,23 +8873,19 @@ window.beaconMgrLoad = async function(){
       });
     }
     beaconMgrRender();
-    msg.textContent = '';
+    if(msg) msg.textContent = '';
   } catch(e){
-    msg.style.color='#dc2626'; msg.textContent='読み込みエラー：'+e.message;
+    if(msg){ msg.style.color='#dc2626'; msg.textContent='読み込みエラー：'+e.message; }
   }
 };
 
-// 一覧を描画
+// 一覧を描画（両コンテナを同時更新）
 function beaconMgrRender(){
-  const el = document.getElementById('beacon-mgr-list');
-  if(!el) return;
   const entries = Object.entries(_beaconMgrData);
-  if(!entries.length){
-    el.innerHTML='<div style="color:#94a3b8;font-size:12px;padding:8px;">登録済みビーコンはありません</div>';
-    return;
-  }
-  const typeLabel = t => t==='lift'?'🚜 リフト':'👤 人';
-  let h = `<table style="width:100%;border-collapse:collapse;font-size:12px;">
+  const emptyHtml = '<div style="color:#94a3b8;font-size:12px;padding:8px;">登録済みビーコンはありません</div>';
+  let tableHtml = '';
+  if(entries.length){
+    tableHtml = `<table style="width:100%;border-collapse:collapse;font-size:12px;">
     <thead><tr style="background:#f1f5f9;color:#475569;">
       <th style="padding:6px 10px;text-align:left;border-bottom:1px solid #e2e8f0;">ビーコンID</th>
       <th style="padding:6px 10px;text-align:left;border-bottom:1px solid #e2e8f0;">名前</th>
@@ -8896,9 +8893,9 @@ function beaconMgrRender(){
       <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #e2e8f0;">現在エリア</th>
       <th style="padding:6px 8px;border-bottom:1px solid #e2e8f0;"></th>
     </tr></thead><tbody>`;
-  entries.forEach(([id, b]) => {
-    const escapedId = id.replace(/"/g,'&quot;');
-    h += `<tr style="border-bottom:1px solid #f1f5f9;" id="beacon-row-${CSS.escape(id)}">
+    entries.forEach(([id, b]) => {
+      const escapedId = id.replace(/"/g,'&quot;');
+      tableHtml += `<tr style="border-bottom:1px solid #f1f5f9;">
       <td style="padding:6px 10px;font-family:monospace;color:#475569;font-size:11px;">${id}</td>
       <td style="padding:6px 10px;">
         <input type="text" value="${b.name.replace(/"/g,'&quot;')}" data-bid="${escapedId}" data-field="name"
@@ -8918,9 +8915,13 @@ function beaconMgrRender(){
           style="background:#fef2f2;color:#dc2626;border:1px solid #fca5a5;border-radius:4px;padding:3px 10px;font-size:11px;cursor:pointer;">削除</button>
       </td>
     </tr>`;
+    });
+    tableHtml += '</tbody></table>';
+  }
+  ['beacon-mgr-list', 'beacon-mgr-list-m'].forEach(elId => {
+    const el = document.getElementById(elId);
+    if(el) el.innerHTML = entries.length ? tableHtml : emptyHtml;
   });
-  h += '</tbody></table>';
-  el.innerHTML = h;
 }
 
 // インライン編集（名前・種別）
@@ -8934,35 +8935,34 @@ window.beaconMgrEdit = async function(el){
     await fetch(`${fbUrl}/beacons/${encodeURIComponent(id)}/meta/${field}.json`,
       {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(val)});
     if(_beaconMgrData[id]) _beaconMgrData[id][field] = val;
-    const msg = document.getElementById('beacon-mgr-msg');
-    msg.style.color='#16a34a'; msg.textContent='更新しました ✓';
-    setTimeout(()=>{ msg.textContent=''; },1500);
+    ['', 'm'].forEach(sfx => { const m=_beaconMgrMsgEl(sfx); if(m){ m.style.color='#16a34a'; m.textContent='更新しました ✓'; setTimeout(()=>{ m.textContent=''; },1500); } });
   } catch(e){
     alert('更新エラー：'+e.message);
   }
 };
 
 // 新規追加
-window.beaconMgrAdd = async function(){
-  const id   = document.getElementById('beacon-new-id').value.trim();
-  const name = document.getElementById('beacon-new-name').value.trim();
-  const type = document.getElementById('beacon-new-type').value;
-  const msg  = document.getElementById('beacon-mgr-msg');
-  if(!id){ msg.style.color='#dc2626'; msg.textContent='ビーコンIDを入力してください'; setTimeout(()=>msg.textContent='',2000); return; }
-  if(!name){ msg.style.color='#dc2626'; msg.textContent='名前を入力してください'; setTimeout(()=>msg.textContent='',2000); return; }
-  if(_beaconMgrData[id]){ msg.style.color='#dc2626'; msg.textContent='このIDは既に登録されています'; setTimeout(()=>msg.textContent='',2000); return; }
+window.beaconMgrAdd = async function(sfx=''){
+  const s = sfx ? '-'+sfx : '';
+  const id   = (document.getElementById('beacon-new-id'+s)||{}).value?.trim();
+  const name = (document.getElementById('beacon-new-name'+s)||{}).value?.trim();
+  const type = (document.getElementById('beacon-new-type'+s)||{}).value || 'leader';
+  const msg  = _beaconMgrMsgEl(sfx);
+  const showMsg = (color, text) => { if(msg){ msg.style.color=color; msg.textContent=text; setTimeout(()=>{ if(msg) msg.textContent=''; },2000); } };
+  if(!id){ showMsg('#dc2626','ビーコンIDを入力してください'); return; }
+  if(!name){ showMsg('#dc2626','名前を入力してください'); return; }
+  if(_beaconMgrData[id]){ showMsg('#dc2626','このIDは既に登録されています'); return; }
   const fbUrl = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
   try {
     await fetch(`${fbUrl}/beacons/${encodeURIComponent(id)}/meta.json`,
       {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name, type})});
     _beaconMgrData[id] = { name, type, area:'' };
     beaconMgrRender();
-    document.getElementById('beacon-new-id').value   = '';
-    document.getElementById('beacon-new-name').value = '';
-    msg.style.color='#16a34a'; msg.textContent=`「${name}」を追加しました ✓`;
-    setTimeout(()=>msg.textContent='',2500);
+    const idEl = document.getElementById('beacon-new-id'+s); if(idEl) idEl.value='';
+    const nmEl = document.getElementById('beacon-new-name'+s); if(nmEl) nmEl.value='';
+    if(msg){ msg.style.color='#16a34a'; msg.textContent=`「${name}」を追加しました ✓`; setTimeout(()=>{ if(msg) msg.textContent=''; },2500); }
   } catch(e){
-    msg.style.color='#dc2626'; msg.textContent='追加エラー：'+e.message;
+    if(msg){ msg.style.color='#dc2626'; msg.textContent='追加エラー：'+e.message; }
   }
 };
 
@@ -8974,9 +8974,7 @@ window.beaconMgrDelete = async function(id){
     await fetch(`${fbUrl}/beacons/${encodeURIComponent(id)}.json`, {method:'DELETE'});
     delete _beaconMgrData[id];
     beaconMgrRender();
-    const msg = document.getElementById('beacon-mgr-msg');
-    msg.style.color='#16a34a'; msg.textContent='削除しました ✓';
-    setTimeout(()=>msg.textContent='',2000);
+    ['', 'm'].forEach(sfx => { const m=_beaconMgrMsgEl(sfx); if(m){ m.style.color='#16a34a'; m.textContent='削除しました ✓'; setTimeout(()=>{ m.textContent=''; },2000); } });
   } catch(e){
     alert('削除エラー：'+e.message);
   }
