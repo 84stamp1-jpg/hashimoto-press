@@ -1380,6 +1380,11 @@ function applyKtEdits(){
       if(ed.trialH!==null&&ed.trialH!==undefined)r.trialH=ed.trialH;
       if(ed.customMemo!==undefined)r.customMemo=ed.customMemo;
       r.hours=calcHWithTrialH(r.kubunInputs,r.moldType,r.trialSteps,r.trialH??null);
+      // tasksByDate内の対応タスクにも時間を反映（繰越日付含む全日付を検索）
+      for(const tasks of Object.values(tasksByDate)){
+        const t=tasks.find(t=>t.reqId===r.id);
+        if(t){t.hours=r.hours;t.trialSteps=r.trialSteps;break;}
+      }
     });
   }catch(e){}
 }
@@ -1440,9 +1445,19 @@ function refreshH(r){
   if(r.assigned){
     clearTimeout(r._refreshTimer);
     r._refreshTimer=setTimeout(()=>{
-      const tasks=getDate(curDate);
-      const t=tasks.find(t=>t.reqId===r.id);
-      if(t){t.hours=r.hours;t.trialSteps=r.trialSteps;autoArrange(curDate);renderGantt();renderDetail()}
+      // curDateだけでなく全日付を検索（繰越タスク対応）
+      let foundTask=null,foundDate=null;
+      for(const [ds,tasks] of Object.entries(tasksByDate)){
+        const t=tasks.find(t=>t.reqId===r.id);
+        if(t){foundTask=t;foundDate=ds;break;}
+      }
+      if(foundTask){
+        foundTask.hours=r.hours;
+        foundTask.trialSteps=r.trialSteps;
+        autoArrange(foundDate);
+        saveTasksToFirebase();
+        renderGantt();renderDetail();
+      }
     },300);
   }
 }
@@ -1685,8 +1700,8 @@ function renderGantt(){
         border-left:2px dashed var(--n);pointer-events:none;z-index:1" title="残業枠 ${ot}H"></div>`;
     }
 
-    // 担当者直下の予実詳細
-    const myTasks2=tasks.filter(t=>t.assignee===a);
+    // 担当者直下の予実詳細（ガントバーと同じ時刻順にソート）
+    const myTasks2=tasks.filter(t=>t.assignee===a).sort((x,y)=>(x.startMin??99999)-(y.startMin??99999));
     let detailHtml='';
     if(!myTasks2.length){
       detailHtml=`<div class="person-detail empty">作業割付なし</div>`;
