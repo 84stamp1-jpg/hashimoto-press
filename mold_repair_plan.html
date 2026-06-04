@@ -716,6 +716,7 @@ input.nm-img-input{display:none}
 
     <div class="mfooter">
       <button class="btn btn-danger btn-sm" onclick="deleteTaskModal()">削除</button>
+      <button class="btn btn-secondary btn-sm" id="delTrialBtn" onclick="deleteTrialBlock()" style="display:none">🗑 トライ削除</button>
       <button class="btn btn-secondary btn-sm" onclick="openEditFromAct()">⚙ 工数編集</button>
       <button class="btn btn-secondary btn-sm" onclick="closeActModal()">閉じる</button>
       <button class="btn btn-primary btn-sm" onclick="saveActual()">保存</button>
@@ -1275,18 +1276,16 @@ function autoAll(){
     alert('kintoneのデータ取得中です。しばらく待ってから再試行してください。');return;
   }
   const ua=requests.filter(r=>!r.assigned);
-  if(!ua.length){
-    alert('未割付の依頼がありません。\n（全件が既に割付済みか、kintone同期ボタンを押してください）');return;
+  if(ua.length){
+    // 未割付を今日の日付に割り付け（負荷均等）
+    ua.forEach(r=>{
+      const mTasks=getDate(curDate).filter(t=>t.assignee==='matsumoto').length;
+      const nTasks=getDate(curDate).filter(t=>t.assignee==='matsunaga').length;
+      const a=mTasks<=nTasks?'matsumoto':'matsunaga';
+      pushTask(r,a,curDate);r.assigned=true;r.assignee=a;
+    });
   }
-  // 担当者に交互割付
-  let mIdx=0,nIdx=0;
-  ua.forEach(r=>{
-    // 既存タスクの末尾に追加（担当者の負荷を均等に）
-    const mTasks=getDate(curDate).filter(t=>t.assignee==='matsumoto').length;
-    const nTasks=getDate(curDate).filter(t=>t.assignee==='matsunaga').length;
-    const a=mTasks<=nTasks?'matsumoto':'matsunaga';
-    pushTask(r,a,curDate);r.assigned=true;r.assignee=a;
-  });
+  // 割付済み・未割付どちらでも時間を自動整列
   autoArrange(curDate);
   saveTasksToFirebase();
   requestAnimationFrame(()=>{
@@ -1604,7 +1603,27 @@ function openActModal(idOrEl){
   document.getElementById('pauseBtn').textContent=isPaused?'▶ 再開':'⏸ 一時停止';
   document.getElementById('pauseBtn').style.background=isPaused?'var(--trial-bg)':'';
   document.getElementById('pauseStatus').textContent=isPaused?'一時停止中 ('+t.actual.pausedAt+')':'';
+  // トライ削除ボタン：trialSteps>0のときのみ表示
+  const trialBtn=document.getElementById('delTrialBtn');
+  if(trialBtn) trialBtn.style.display=(t.trialSteps>0)?'':'none';
   document.getElementById('actModal').classList.add('open');
+}
+function deleteTrialBlock(){
+  if(!actTaskId)return;
+  const t=getDate(curDate).find(x=>x.id===actTaskId);
+  if(!t||!t.trialSteps)return;
+  if(!confirm('このタスクのトライブロックを削除しますか？\n（作業本体はそのまま残ります）'))return;
+  t.trialSteps=0;t.trialH=0;
+  t.hours=calcHWithTrialH(
+    getDate(curDate).find(x=>x.id===actTaskId)?.kubun?.map(k=>({name:k,units:1,key:nk(k)}))
+    || [{name:'作業',units:1,key:'custom',customH:t.hours}],
+    t.moldType||'none', 0, 0
+  );
+  // 工数を直接（トライ分を引く）
+  const r=requests.find(x=>x.id===t.reqId);
+  if(r){r.trialSteps=0;r.trialH=0;r.hours=calcHWithTrialH(r.kubunInputs,r.moldType,0,0);}
+  autoArrange(curDate);saveTasksToFirebase();
+  closeActModal();renderGantt();renderDetail();
 }
 function updateYjDiff(t){
   const as=minToMs(t.actual.start),ae=minToMs(t.actual.end);
@@ -1769,7 +1788,7 @@ function deleteManualReq(id){
   });
   requests=requests.filter(x=>x.id!==id);
   saveTasksToFirebase();
-  if(selectedReqId===id)selectedReqId=null;
+  if(selReqId===id)selReqId=null;
   renderRequestList();renderGantt();renderDetail();
 }
 function addManual(){
