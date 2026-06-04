@@ -5317,18 +5317,27 @@ async function importFromProductionPlan(){
 
   const fbUrl   = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
   const dateStr = getDantoriDatePath();
+  console.log('[sync] entries件数=', entries.length, 'dateStr=', dateStr);
+  console.log('[sync] entries=', JSON.stringify(entries.map(e=>({lineId:e.lineId,partNo:e.partNo,prodStart:e.prodStart,prodEnd:e.prodEnd}))));
 
   try {
     // 既存データ取得（roles・stdSetupMin保持のため）
     const res2 = await fetch(`${fbUrl}/dantori/${dateStr}.json`);
+    console.log('[sync] existing fetch status=', res2.status);
     const existing = res2.ok ? (await res2.json() || {}) : {};
+    console.log('[sync] existing件数=', Object.keys(existing).length, Object.keys(existing));
     const newData = _mergePlanEntries(entries, existing, dateStr);
+    console.log('[sync] newData件数=', Object.keys(newData).length, JSON.stringify(Object.entries(newData).map(([k,v])=>({k,lineId:v.lineId,partNo:v.partNo}))));
 
-    await fetch(`${fbUrl}/dantori/${dateStr}.json`,
+    const putRes = await fetch(`${fbUrl}/dantori/${dateStr}.json`,
       {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newData)});
+    console.log('[sync] PUT status=', putRes.status);
+    if(!putRes.ok){ const t=await putRes.text(); throw new Error(`HTTP ${putRes.status}: ${t}`); }
     await loadDantoriSchedule();
+    console.log('[sync] loadDantoriSchedule完了 dantoriSchedule件数=', dantoriSchedule.length);
     alert(`✓ ${entries.length} 件の段取り計画を取り込みました\n\n計画修正時は「📥 今すぐ同期」を再度押すと上書き更新されます`);
   } catch(e){
+    console.error('[sync] エラー', e);
     alert('取込エラー: ' + e.message);
   }
 }
