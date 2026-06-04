@@ -1583,6 +1583,29 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
       <div class="msg" id="smsg"></div>
     </div>
     <div class="fc" style="margin-top:8px;">
+      <div class="ftitle">🏭 組立・検査メンバー設定</div>
+      <div style="font-size:11px;color:#888;margin-bottom:10px;line-height:1.6;">
+        「段取り指示」タブの<b>組立・検査</b>列と<b>担当者パネル</b>に表示する名前を設定します。<br>
+        名前はカンマ（,）または改行で区切って入力してください。
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px;">
+        <div class="fi">
+          <label>🔧 組立・検査 列メンバー <span style="font-size:10px;color:#aaa;">（段取り指示タブ）</span></label>
+          <textarea id="cfg-kumitate-members" rows="5"
+            style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:inherit;resize:vertical;"
+            placeholder="永丘&#10;近藤&#10;大塚&#10;鈴木&#10;野口"></textarea>
+        </div>
+        <div class="fi">
+          <label>👤 担当者パネル メンバー <span style="font-size:10px;color:#aaa;">（配置表左側）</span></label>
+          <textarea id="cfg-staff-persons" rows="5"
+            style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;font-size:12px;font-family:inherit;resize:vertical;"
+            placeholder="大塚&#10;鈴木&#10;野口&#10;近藤&#10;坂田"></textarea>
+        </div>
+      </div>
+      <button class="bp" onclick="saveKumitateMembers()">保存する</button>
+      <div class="msg" id="kumitate-msg"></div>
+    </div>
+    <div class="fc" style="margin-top:8px;">
       <div class="ftitle">トラブル背景色のしきい値（分）</div>
       <div style="font-size:11px;color:#888;margin-bottom:10px;">トラブル開始からの経過時間に応じてラインカードの背景色が変わります</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-bottom:10px;">
@@ -1824,7 +1847,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
       <div class="form-group" style="margin:0 0 10px;">
         <label>ライン</label>
-        <select id="dt-line">
+        <select id="dt-line" onchange="onDtLineChange()">
           <option value="A1">A1</option>
           <option value="A2">A2</option>
           <option value="B1">B1</option>
@@ -3368,7 +3391,7 @@ function updateFactoryView(lines){
 }
 
 // ===== 担当者パネル =====
-const STAFF_PERSONS = ['大塚','鈴木','野口','近藤','坂田'];
+let STAFF_PERSONS = ['大塚','鈴木','野口','近藤','坂田'];
 
 function timeToMins(t){
   if(!t || typeof t !== 'string') return null;
@@ -3812,6 +3835,9 @@ function renderDantori(){
 function refreshDantori(){ fetchFirebaseLines(); loadDantoriSchedule(); }
 
 // ===== カンバンボード設定 =====
+// 組立・検査メンバー（設定から動的に変更可）
+let KUMITATE_MEMBERS = ['永丘','近藤','大塚','鈴木','野口'];
+
 const KANBAN_PAGES = [
   {
     id:'kp1', label:'A・Bライン', type:'line',
@@ -3827,7 +3853,7 @@ const KANBAN_PAGES = [
   },
   {
     id:'kp3', label:'組立・検査', type:'person',
-    cols:[{name:'永丘'},{name:'近藤'},{name:'大塚'},{name:'鈴木'},{name:'野口'}]
+    get cols(){ return KUMITATE_MEMBERS.map(n=>({name:n})); }
   },
   {
     id:'kp4', label:'配置表', type:'press'
@@ -4130,8 +4156,21 @@ async function loadDantoriSettings(){
     }
     if(s.setupTimes  && typeof s.setupTimes  === 'object') dantoriSetupTimes  = s.setupTimes;
     if(s.setupParams && typeof s.setupParams === 'object') dantoriSetupParams = s.setupParams;
+    // 組立・検査メンバー設定
+    if(s.kumitateMembers && Array.isArray(s.kumitateMembers) && s.kumitateMembers.length){
+      KUMITATE_MEMBERS = s.kumitateMembers;
+    }
+    if(s.staffPersons && Array.isArray(s.staffPersons) && s.staffPersons.length){
+      STAFF_PERSONS = s.staffPersons;
+    }
+    // 設定画面の入力欄に現在値を反映
+    const elKm = document.getElementById('cfg-kumitate-members');
+    const elSp = document.getElementById('cfg-staff-persons');
+    if(elKm) elKm.value = KUMITATE_MEMBERS.join('\n');
+    if(elSp) elSp.value = STAFF_PERSONS.join('\n');
     updateStaffDatalist(); // 作業者マスタ読み込み後にdatalist更新
     renderDantori(); // グループ情報が揃ったら再描画
+    updatePersonPanel();
   } catch(e){ console.warn('settings load:', e); }
 }
 
@@ -4393,6 +4432,7 @@ function showAddDantori(){
   document.getElementById('dt-worker-count').value = '0';
   clearShiftChanges();
   onDtNoSetupChange();
+  onDtLineChange(); // ロボットラインなら作業者配置なしを自動ON
   document.getElementById('dantoriModal').style.display = 'flex';
 }
 
@@ -4418,6 +4458,18 @@ function showEditDantori(id){
   setShiftChanges(entry.shiftChanges || []);
   onDtNoSetupChange();
   document.getElementById('dantoriModal').style.display = 'flex';
+}
+
+// ロボットライン等「作業者配置なし」がデフォルトのラインID
+const ROBOT_LINE_IDS = ['ロボットライン'];
+function isRobotLine(lineId){ return ROBOT_LINE_IDS.includes(lineId); }
+
+// ライン選択変更時：ロボットラインなら「作業者配置なし」を自動チェック
+function onDtLineChange(){
+  const lineId = document.getElementById('dt-line')?.value;
+  if(isRobotLine(lineId)){
+    document.getElementById('dt-no-worker').checked = true;
+  }
 }
 
 function onDtNoSetupChange(){
@@ -5152,6 +5204,7 @@ async function importFromProductionPlan(){
         workerCount: j.hito  || 0,  // 作業人数（D列次行、hitoFromNextRow設定で取得）
         mountKata:   j.kata  || 0,  // 型数 N（0=未設定）
         noSetup:     isNoSetup,
+        noWorker:    isRobotLine(lineId) ? true : false, // ロボットラインは作業者配置なし
         status,
         roles: { 条件設定:'', 金型取付:'', リフト:'', 品質確認:'', 初品出し:'', 作業者:'' },
         note:        isNoSetup ? '（段取りなし）' : '',
@@ -5240,6 +5293,7 @@ function _buildDantoriEntriesFromLines(lines){
         workerCount: j.hito  || 0,
         mountKata:   j.kata  || 0,
         noSetup:     isNoSetup,
+        noWorker:    isRobotLine(lineId) ? true : false, // ロボットラインは作業者配置なし
         status,
         roles: { 条件設定:'', 金型取付:'', リフト:'', 品質確認:'', 初品出し:'', 作業者:'' },
         note:        isNoSetup ? '（段取りなし）' : '',
@@ -5437,10 +5491,15 @@ async function autoAssignRoles(){
       if(floating.length) return floating[0];
     }
     // フォールバック: PRESS_LINE_MASTER
+    // ※ 作業者マスタにロールデータがある場合は、対象ロールを持つ人のみフォールバック対象
     const plm = PRESS_LINE_MASTER[lineId];
     if(plm){
       const fb = resolveWorkerName(role === 'quality' ? plm.quality : plm.ippin);
-      if(fb && canWork(fb)) return fb;
+      if(fb && canWork(fb)){
+        // hasRoleData=true かつ fb がそのロールを持っていない場合はスキップ
+        if(hasRoleData && !workerHasRole(fb, role)) return null;
+        return fb;
+      }
     }
     return null;
   }
@@ -8704,6 +8763,32 @@ window.renderSR=function(){
     });
   });
 };
+// 組立・検査メンバー設定の保存
+window.saveKumitateMembers = function(){
+  const parse = id => {
+    const val = document.getElementById(id)?.value || '';
+    return val.split(/[,、\n]/).map(s=>s.trim()).filter(Boolean);
+  };
+  const members = parse('cfg-kumitate-members');
+  const staff   = parse('cfg-staff-persons');
+  if(!members.length && !staff.length){
+    const m=document.getElementById('kumitate-msg');
+    m.style.color='#dc2626'; m.textContent='名前を入力してください';
+    setTimeout(()=>{m.textContent='';},2500); return;
+  }
+  if(members.length) KUMITATE_MEMBERS = members;
+  if(staff.length)   STAFF_PERSONS    = staff;
+  update(ref(db,'settings'),{
+    kumitateMembers: KUMITATE_MEMBERS,
+    staffPersons:    STAFF_PERSONS,
+  });
+  renderKanban();
+  updatePersonPanel();
+  const m=document.getElementById('kumitate-msg');
+  m.style.color='#16a34a'; m.textContent='保存しました ✓';
+  setTimeout(()=>{m.textContent='';},2500);
+};
+
 window.saveSets=function(){
   const allIds=getAllIDS();
   const ns={};    // setupTimes（互換用: C+P合計）
