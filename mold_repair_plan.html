@@ -847,22 +847,32 @@ function initFirebase(){
     // リアルタイム受信
     let fbInitialized=false;
     fbRef.on('value', snap=>{
-      const data = snap.val();
-      if(data){
-        const cutoff=fmt(addDays(new Date(),-3));
-        let changed=false;
-        Object.keys(data).forEach(ds=>{
-          if(ds>=cutoff){
-            const newStr=JSON.stringify(data[ds]);
-            const curStr=JSON.stringify(tasksByDate[ds]||{});
-            if(newStr!==curStr){ tasksByDate[ds]=data[ds]; changed=true; }
-          }
-        });
-        try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(tasksByDate)); }catch(e){}
-        if(changed){
-          if(requests.length) syncAssignedState();
-          requestAnimationFrame(()=>{ renderGantt(); renderDetail(); });
+      const data = snap.val() || {}; // nullの場合は空オブジェクト
+      const cutoff=fmt(addDays(new Date(),-3));
+      let changed=false;
+
+      // ① Firebaseにあるデータを反映
+      Object.keys(data).forEach(ds=>{
+        if(ds>=cutoff){
+          const newVal=data[ds]||[]; // nullの場合は空配列
+          const newStr=JSON.stringify(newVal);
+          const curStr=JSON.stringify(tasksByDate[ds]||[]);
+          if(newStr!==curStr){ tasksByDate[ds]=newVal; changed=true; }
         }
+      });
+
+      // ② Firebaseにないキー＝リセット済み → ローカルのタスクを削除
+      Object.keys(tasksByDate).forEach(ds=>{
+        if(ds>=cutoff && data[ds]===undefined && (tasksByDate[ds]||[]).length>0){
+          tasksByDate[ds]=[];
+          changed=true;
+        }
+      });
+
+      try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(tasksByDate)); }catch(e){}
+      if(changed){
+        if(requests.length) syncAssignedState();
+        requestAnimationFrame(()=>{ renderGantt(); renderDetail(); });
       }
       fbInitialized=true;
     });
@@ -873,17 +883,20 @@ function initFirebase(){
 }
 
 function saveTasksToFirebase(){
-  if(!fbRef){ saveTasksToFirebase(); return; }
+  if(!fbRef){ console.log('Firebase未接続 - localStorage のみ保存');
+    try{localStorage.setItem(STORAGE_KEY,JSON.stringify(tasksByDate));}catch(e){}; return; }
   // 3日以内のみ保存
   const cutoff=fmt(addDays(new Date(),-3));
   const filtered={};
   Object.keys(tasksByDate).forEach(ds=>{
-    if(ds>=cutoff) filtered[ds]=tasksByDate[ds];
+    if(ds>=cutoff){
+      // Firebaseは空配列をnullとして扱い削除するため、空の場合は番兵値を使う
+      filtered[ds]=tasksByDate[ds]&&tasksByDate[ds].length>0 ? tasksByDate[ds] : null;
+    }
   });
-  tasksByDate=filtered;
+  tasksByDate=Object.fromEntries(Object.entries(tasksByDate).filter(([ds])=>ds>=cutoff));
   fbRef.set(filtered).catch(e=>console.log('Firebase保存失敗:',e));
-  // localStorageにもバックアップ
-  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered)); }catch(e){}
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(tasksByDate)); }catch(e){}
 }
 
 const GAS_URL='https://script.google.com/macros/s/AKfycbyVyBCDB--oV8YUQhBIM-PoS9MMkUheYinHAl_GXArNWyoe9JXJG8MR0XVdNrf7SvaPZQ/exec';
