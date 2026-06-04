@@ -1146,6 +1146,9 @@ function renderRequestList(){
           <button class="assign-btn ab-m" onclick="assignTo('${r.id}','matsumoto')">松本に割付</button>
           <button class="assign-btn ab-n" onclick="assignTo('${r.id}','matsunaga')">松永に割付</button>
         </div>`:`<div style="text-align:center;font-size:11px;color:var(--text2);padding:4px">割付済（ブロックをクリックで編集）</div>`}
+        ${r.source==='manual'?`<div style="margin-top:5px;text-align:right">
+          <button onclick="deleteManualReq('${r.id}')" style="font-size:10px;padding:2px 8px;border:1px solid #fca5a5;border-radius:4px;background:#fee2e2;color:#dc2626;cursor:pointer;font-family:inherit">🗑 この任意作業を削除</button>
+        </div>`:''}
       </div>
     </div>`;
   }).join('')+(moreCount>0?`<div class='empty' style='cursor:pointer;color:var(--accent)' onclick='showAllReqs()'>▼ 残り${moreCount}件を表示</div>`:'')+
@@ -1652,6 +1655,19 @@ function closeEditModal(){document.getElementById('editModal').classList.remove(
 
 // ===== 手動追加 =====
 function toggleMF(){document.getElementById('mForm').classList.toggle('open')}
+function deleteManualReq(id){
+  const r=requests.find(x=>x.id===id);
+  if(!r||r.source!=='manual')return;
+  if(!confirm(`「${r.hinban}」を削除しますか？`))return;
+  // ガント割付がある場合は全日付から除去
+  Object.keys(tasksByDate).forEach(d=>{
+    tasksByDate[d]=(tasksByDate[d]||[]).filter(t=>t.reqId!==id);
+  });
+  requests=requests.filter(x=>x.id!==id);
+  saveTasksToFirebase();
+  if(selectedReqId===id)selectedReqId=null;
+  renderRequestList();renderGantt();renderDetail();
+}
 function addManual(){
   const name=document.getElementById('mName').value.trim();
   if(!name){alert('品番/作業内容を入力してください');return}
