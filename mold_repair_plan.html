@@ -1542,19 +1542,39 @@ function renderGantt(){
           </div>`;
         }
         const hasStart=!!t.actual.start,hasEnd=!!t.actual.end,isPaused2=!!t.actual.pausedAt;
+        // 現在のステータスバッジ
+        const stBadge=hasEnd
+          ?`<span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;
+              background:#dcfce7;color:var(--ok);border:1px solid #86efac">✓ 完了</span>`
+          :isPaused2
+            ?`<span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;
+                background:#fff7ed;color:#c2410c;border:1px solid #fed7aa">⏸ 停止中</span>`
+            :hasStart
+              ?`<span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;
+                  background:#dcfce7;color:var(--ok);border:1px solid #86efac;
+                  animation:working-pulse 1.8s ease-in-out infinite">▶ 作業中</span>`
+              :`<span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;
+                  background:var(--panel2);color:var(--text3);border:1px solid var(--border)">○ 未着手</span>`;
+        // 操作ボタン（次のアクション）
         const actBtns=hasEnd
-          ?`<span style="font-size:10px;color:var(--ok);font-weight:700">✓ 完了 ${t.actual.end}</span>`
-          :hasStart
+          ?`<span style="font-size:9px;color:var(--text3)">${t.actual.start}〜${t.actual.end}</span>`
+          :isPaused2
             ?`<button onclick="event.stopPropagation();togglePauseDetail('${t.id}')"
-                style="font-size:9px;padding:1px 5px;border:1px solid ${isPaused2?'var(--ok)':'var(--warn)'};
-                border-radius:3px;background:${isPaused2?'var(--trial-bg)':'var(--warn-bg)'};
-                color:${isPaused2?'var(--ok)':'var(--warn)'};cursor:pointer">${isPaused2?'▶再開':'⏸停止'}</button>
+                style="font-size:9px;padding:1px 6px;border:1px solid var(--ok);border-radius:3px;
+                background:var(--ok-bg);color:var(--ok);cursor:pointer;font-weight:700">▶ 再開</button>
                <button onclick="event.stopPropagation();stampNow('${t.id}','end')"
-                style="font-size:9px;padding:1px 5px;border:1px solid #fca5a5;border-radius:3px;
-                background:#fee2e2;color:#dc2626;cursor:pointer">■終了</button>`
-            :`<button onclick="event.stopPropagation();stampNow('${t.id}','start')"
-                style="font-size:9px;padding:1px 5px;border:1px solid var(--ok);border-radius:3px;
-                background:var(--ok-bg);color:var(--ok);cursor:pointer;font-weight:700">▶開始</button>`;
+                style="font-size:9px;padding:1px 6px;border:1px solid #fca5a5;border-radius:3px;
+                background:#fee2e2;color:#dc2626;cursor:pointer">■ 終了</button>`
+            :hasStart
+              ?`<button onclick="event.stopPropagation();togglePauseDetail('${t.id}')"
+                  style="font-size:9px;padding:1px 6px;border:1px solid var(--warn);border-radius:3px;
+                  background:var(--warn-bg);color:var(--warn);cursor:pointer">⏸ 停止</button>
+                 <button onclick="event.stopPropagation();stampNow('${t.id}','end')"
+                  style="font-size:9px;padding:1px 6px;border:1px solid #fca5a5;border-radius:3px;
+                  background:#fee2e2;color:#dc2626;cursor:pointer">■ 終了</button>`
+              :`<button onclick="event.stopPropagation();stampNow('${t.id}','start')"
+                  style="font-size:9px;padding:1px 6px;border:1px solid var(--ok);border-radius:3px;
+                  background:var(--ok-bg);color:var(--ok);cursor:pointer;font-weight:700">▶ 開始</button>`;
         return`<div class="ditem" onclick="openActModal('${t.id}')" style="cursor:pointer">
           <div class="dcolor" style="background:${a==='matsumoto'?'var(--m)':'var(--n)'}"></div>
           <div class="dinfo">
@@ -1564,8 +1584,9 @@ function renderGantt(){
             </div>
             <div class="dmeta">${planStr} / ${t.hours}H</div>
             ${yjHtml}
-            <div style="display:flex;gap:4px;margin-top:3px;align-items:center" onclick="event.stopPropagation()">
-              ${actBtns}
+            <div style="display:flex;gap:4px;margin-top:4px;align-items:center;flex-wrap:wrap" onclick="event.stopPropagation()">
+              ${stBadge}
+              <div style="display:flex;gap:3px;align-items:center">${actBtns}</div>
             </div>
           </div>
         </div>`;
@@ -2248,6 +2269,7 @@ function nmInit(){
   }catch(e){nmMolds=[];nmGantt={};nmNote={};nmImages={};}
   nmLoadCfgUI();
   nmRender();
+  nmInitDragListeners(); // ドラッグ並び替えリスナー（1回のみ）
   // Firebase接続（初期表示後に同期）
   nmInitFirebase();
 }
@@ -2805,11 +2827,19 @@ function nmBuildTbody(){
     const sc=document.createElement('td');sc.colSpan=6+NM_DAYS;sep.appendChild(sc);tb.appendChild(sep);
   });
   nmSetStatus(`${nmMolds.length}件の金型を表示中`);
+}
 
-  // ===== ドラッグ並び替え（tbodyで委譲） =====
+// ===== ドラッグ並び替え（1回だけ登録） =====
+let _nmDragListenerSet=false;
+function nmInitDragListeners(){
+  if(_nmDragListenerSet)return;
+  _nmDragListenerSet=true;
+  const tb=document.getElementById('nmTbody');
+  if(!tb)return;
+  // data-mold-id（dataset.moldId が作る属性名）で検索
   tb.addEventListener('dragover',e=>{
     if(!nmMoldDrag)return;
-    const tr=e.target.closest('tr[data-moldid]');
+    const tr=e.target.closest('tr[data-mold-id]');
     if(!tr||tr.dataset.moldId===nmMoldDrag)return;
     e.preventDefault();
     document.querySelectorAll('.nm-drag-over').forEach(el=>el.classList.remove('nm-drag-over'));
@@ -2823,7 +2853,7 @@ function nmBuildTbody(){
     e.preventDefault();
     document.querySelectorAll('.nm-drag-over').forEach(el=>el.classList.remove('nm-drag-over'));
     if(!nmMoldDrag)return;
-    const tr=e.target.closest('tr[data-moldid]');
+    const tr=e.target.closest('tr[data-mold-id]');
     if(!tr||tr.dataset.moldId===nmMoldDrag)return;
     const fi=nmMolds.findIndex(m=>m.id===nmMoldDrag);
     const ti=nmMolds.findIndex(m=>m.id===tr.dataset.moldId);
