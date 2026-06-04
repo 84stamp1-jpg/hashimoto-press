@@ -502,6 +502,18 @@ input.nm-img-input{display:none}
     <div class="req-list" id="reqList">
       <div class="loading"><div class="spinner"></div>kintoneから取得中...</div>
     </div>
+
+    <!-- 任意作業 別パネル -->
+    <div id="manualReqSection" style="border-top:2px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;max-height:260px">
+      <div class="ph" style="background:#fff7ed;border-bottom:1px solid #fde68a;flex-shrink:0">
+        <span class="ptitle" style="color:#92400e">📝 任意作業</span>
+        <span class="badge badge-warn" id="bdgManual" style="display:none">0件</span>
+      </div>
+      <div id="manualReqList" style="overflow-y:auto;padding:5px;flex:1;min-height:32px">
+        <div style="font-size:11px;color:var(--text3);padding:8px;text-align:center">任意作業なし</div>
+      </div>
+    </div>
+
     <div class="manual">
       <button class="mtoggle" onclick="toggleMF()">＋ 任意作業を追加</button>
       <div class="mform" id="mForm">
@@ -1150,10 +1162,66 @@ function loadSample(){
   renderRequestList();renderGantt();renderDetail();
 }
 
+// ===== 任意作業 永続化 =====
+const MANUAL_KEY='repair_manual_reqs_v1';
+function saveManualReqs(){
+  try{localStorage.setItem(MANUAL_KEY,JSON.stringify(requests.filter(r=>r.source==='manual')));}catch(e){}
+}
+function loadManualReqs(){
+  try{return JSON.parse(localStorage.getItem(MANUAL_KEY)||'[]');}catch(e){return[];}
+}
+
+// ===== 任意作業パネル描画 =====
+function renderManualList(){
+  const manuals=requests.filter(r=>r.source==='manual');
+  const el=document.getElementById('manualReqList');
+  const bdg=document.getElementById('bdgManual');
+  if(bdg){bdg.style.display=manuals.length?'':'none';bdg.textContent=manuals.length+'件';}
+  if(!el)return;
+  if(!manuals.length){
+    el.innerHTML='<div style="font-size:11px;color:var(--text3);padding:8px;text-align:center">任意作業なし</div>';return;
+  }
+  el.innerHTML=manuals.map(r=>{
+    const assignedDate=Object.entries(tasksByDate).find(([d,ts])=>ts.some(t=>t.reqId===r.id))?.[0]||null;
+    const isSel=selReqId===r.id;
+    return`<div class="card ${r.assigned?'done':''} ${isSel?'sel':''}"
+      style="background:#fffbf5;border-color:#fde68a;margin-bottom:4px" onclick="selReq('${r.id}')">
+      <div class="card-main" style="padding:7px 10px">
+        <div class="ctop">
+          <span class="ctitle" style="font-size:12px">${r.hinban}${r.hinmei?' / '+r.hinmei:''}</span>
+          ${r.assigned?`<span class="badge badge-warn" style="margin-left:auto;font-size:9px">${r.assignee==='matsumoto'?'松本':'松永'}</span>`:''}
+        </div>
+        <div class="cbot" style="margin-top:3px">
+          <span class="ctime">⏱ ${r.hours}H</span>
+          ${r.deadline?`<span style="font-size:10px;color:var(--text2);margin-left:auto">期限: ${r.deadline}</span>`:''}
+        </div>
+        ${assignedDate?`<div style="font-size:10px;font-weight:700;color:var(--ok)">📅 作業日: ${assignedDate}</div>`:''}
+      </div>
+      ${isSel?`<div class="card-det" style="display:block" onclick="event.stopPropagation()">
+        <div class="total-box"><span class="total-label">合計工数</span><span class="total-val">${r.hours}H</span></div>
+        ${!r.assigned
+          ?`<div class="assign-row">
+              <button class="assign-btn ab-m" onclick="assignTo('${r.id}','matsumoto')">松本に割付</button>
+              <button class="assign-btn ab-n" onclick="assignTo('${r.id}','matsunaga')">松永に割付</button>
+            </div>`
+          :`<div style="display:flex;align-items:center;justify-content:space-between;padding:4px">
+              <span style="font-size:11px;color:var(--text2)">割付済 (${r.assignee==='matsumoto'?'松本':'松永'} / ${assignedDate||'?'})</span>
+              <button onclick="unassignReq('${r.id}')" style="font-size:10px;padding:1px 7px;border:1px solid #fca5a5;border-radius:3px;background:#fee2e2;color:#dc2626;cursor:pointer;font-family:inherit">割付解除</button>
+            </div>`}
+        <div style="margin-top:5px;text-align:right">
+          <button onclick="deleteManualReq('${r.id}')" style="font-size:10px;padding:2px 8px;border:1px solid #fca5a5;border-radius:4px;background:#fee2e2;color:#dc2626;cursor:pointer;font-family:inherit">🗑 削除</button>
+        </div>
+      </div>`:''}
+    </div>`;
+  }).join('');
+}
+
 // ===== 依頼カード描画 =====
 function renderRequestList(){
   const today=todayStr();
-  const ua=requests.filter(r=>!r.assigned),aa=requests.filter(r=>r.assigned);
+  // 手動追加タスクは別パネルで表示するため除外
+  const nonManual=requests.filter(r=>r.source!=='manual');
+  const ua=nonManual.filter(r=>!r.assigned),aa=nonManual.filter(r=>r.assigned);
   const urg=ua.filter(r=>r.deadline<=today);
   document.getElementById('bdgU').textContent=`${ua.length}件`;
   const bw=document.getElementById('bdgW');
@@ -1161,14 +1229,14 @@ function renderRequestList(){
   const ba=document.getElementById('bdgA');
   aa.length?Object.assign(ba,{style:'',textContent:`✓${aa.length}件`}):(ba.style.display='none');
 
-  if(!requests.length){document.getElementById('reqList').innerHTML='<div class="empty">依頼がありません</div>';return}
+  if(!nonManual.length){document.getElementById('reqList').innerHTML='<div class="empty">依頼がありません</div>';renderManualList();return}
 
   // 割付済み非表示フィルタ
-  const filteredReqs=_hideAssigned?requests.filter(r=>!r.assigned):requests;
+  const filteredReqs=_hideAssigned?nonManual.filter(r=>!r.assigned):nonManual;
   // 大量データでのフリーズ防止: 表示数を制限
   const MAX_DISPLAY=_showAll?filteredReqs.length:50;
   const displayReqs=filteredReqs.slice(0,MAX_DISPLAY);
-  const moreCount=requests.length-MAX_DISPLAY;
+  const moreCount=nonManual.length-MAX_DISPLAY;
 
   document.getElementById('reqList').innerHTML=displayReqs.map(r=>{
     const dl=r.deadline,dlCls=dl<today?'cdl-u':dl===today?'cdl-n':'';
@@ -1276,12 +1344,13 @@ function renderRequestList(){
       </div>
     </div>`;
   }).join('')+(moreCount>0?`<div class='empty' style='cursor:pointer;color:var(--accent)' onclick='showAllReqs()'>▼ 残り${moreCount}件を表示</div>`:'')+
-    (requests.length>MAX_DISPLAY?`<div class='empty' style='font-size:10px'>※全${requests.length}件中${Math.min(MAX_DISPLAY,requests.length)}件表示</div>`:'');
+    (nonManual.length>MAX_DISPLAY?`<div class='empty' style='font-size:10px'>※全${nonManual.length}件中${Math.min(MAX_DISPLAY,nonManual.length)}件表示</div>`:'');
+  renderManualList();
 }
 let _showAll=false;
-function showAllReqs(){_showAll=true;const MAX_DISPLAY=requests.length;renderRequestList()}
+function showAllReqs(){_showAll=true;renderRequestList();}
 
-function selReq(id){selReqId=selReqId===id?null:id;renderRequestList()}
+function selReq(id){selReqId=selReqId===id?null:id;renderRequestList();}
 
 // ===== 工数更新関数 =====
 function updateKubunKey(rid,idx,val){
@@ -2254,6 +2323,7 @@ function deleteManualReq(id){
     tasksByDate[d]=(tasksByDate[d]||[]).filter(t=>t.reqId!==id);
   });
   requests=requests.filter(x=>x.id!==id);
+  saveManualReqs();
   saveTasksToFirebase();
   if(selReqId===id)selReqId=null;
   renderRequestList();renderGantt();renderDetail();
@@ -2289,6 +2359,7 @@ function addManual(){
   };
   requests.push(req);
   requests.sort((a,b)=>a.deadline.localeCompare(b.deadline));
+  saveManualReqs();
   document.getElementById('mName').value='';
   document.getElementById('mHinmei').value='';
   toggleMF();renderRequestList();
@@ -2353,6 +2424,12 @@ function clearSavedTasks(){
 requestAnimationFrame(()=>{
   buildDateNav();
   loadSavedTasks();  // まずlocalStorageから復元
+  // 任意作業をlocalStorageから復元（kintone取得前に先読み）
+  const savedManuals=loadManualReqs();
+  if(savedManuals.length){
+    requests.push(...savedManuals);
+    renderManualList();
+  }
   initFirebase();    // Firebase接続（リアルタイム同期）
   loadKintone();     // kintoneからデータ取得
 });
