@@ -1855,6 +1855,43 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
       <button class="save-btn" onclick="saveConfig()">保存して接続</button>
     </div>
 
+    <!-- ビーコン管理セクション -->
+    <div style="border-top:1px solid #f0f0f0;margin-top:18px;padding-top:14px;">
+      <div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:6px;">📡 ビーコン管理</div>
+      <div style="font-size:11px;color:#888;margin-bottom:10px;line-height:1.6;">
+        工場レイアウトに表示するビーコンの名前・種別を登録します。<br>
+        ビーコンIDはBLEタグの<b>MACアドレス</b>（例：AA:BB:CC:DD:EE:FF）を入力してください。
+      </div>
+      <div id="beacon-mgr-list" style="margin-bottom:10px;"></div>
+      <div style="background:#f8f7f2;border:1px solid #e2e8f0;border-radius:8px;padding:10px;margin-bottom:8px;">
+        <div style="font-size:11px;font-weight:700;color:#334155;margin-bottom:8px;">➕ 新規追加</div>
+        <div style="display:grid;grid-template-columns:2fr 1.5fr 1fr auto;gap:6px;align-items:end;">
+          <div>
+            <div style="font-size:10px;color:#64748b;margin-bottom:3px;">ビーコンID <span style="color:#dc2626;">*</span></div>
+            <input type="text" id="beacon-new-id" placeholder="AA:BB:CC:DD:EE:FF"
+              style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:5px;font-size:11px;font-family:monospace;">
+          </div>
+          <div>
+            <div style="font-size:10px;color:#64748b;margin-bottom:3px;">名前 <span style="color:#dc2626;">*</span></div>
+            <input type="text" id="beacon-new-name" placeholder="山田 太郎"
+              style="width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:5px;font-size:12px;">
+          </div>
+          <div>
+            <div style="font-size:10px;color:#64748b;margin-bottom:3px;">種別</div>
+            <select id="beacon-new-type" style="width:100%;padding:6px 5px;border:1px solid #ddd;border-radius:5px;font-size:12px;font-family:inherit;">
+              <option value="leader">👤 人</option>
+              <option value="lift">🚜 リフト</option>
+            </select>
+          </div>
+          <button onclick="beaconMgrAdd()"
+            style="padding:6px 12px;background:#1a1a1a;color:#fff;border:none;border-radius:5px;font-size:12px;cursor:pointer;white-space:nowrap;">追加</button>
+        </div>
+      </div>
+      <button onclick="beaconMgrLoad()"
+        style="padding:5px 12px;background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;border-radius:5px;font-size:11px;cursor:pointer;">🔄 一覧を更新</button>
+      <div class="msg" id="beacon-mgr-msg" style="margin-top:6px;"></div>
+    </div>
+
     <!-- PIN変更セクション -->
     <div style="border-top:1px solid #f0f0f0;margin-top:18px;padding-top:14px;">
       <div style="font-size:12px;font-weight:600;color:#666;margin-bottom:10px;">🔒 管理者PIN変更</div>
@@ -2181,6 +2218,8 @@ function _showConfigDirect(){
   document.getElementById('fld-boxCount').value        = FIELD_MAP.boxCount        || '箱入数';
   document.getElementById('fieldDetectMsg').textContent = '';
   document.getElementById('configModal').style.display = 'flex';
+  // ビーコン一覧を自動読み込み
+  if(window.beaconMgrLoad) window.beaconMgrLoad();
 }
 function closeConfig(){ document.getElementById('configModal').style.display='none'; }
 function closeConfigIfBg(e){ if(e.target===document.getElementById('configModal')) closeConfig(); }
