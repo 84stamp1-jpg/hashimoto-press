@@ -996,7 +996,7 @@ function buildDateNav(){
     btn.onclick=()=>{curDate=ds;buildDateNav();renderGantt();renderDetail()};
     nav.insertBefore(btn,lastArrow);
   }
-  document.getElementById('dpDate').textContent=curDate;
+  const dpDate=document.getElementById('dpDate');if(dpDate)dpDate.textContent=curDate;
 }
 function shiftWeek(dir){weekStart=addDays(weekStart,dir*7);buildDateNav()}
 
@@ -1564,9 +1564,7 @@ function renderGantt(){
 
 // ===== 予実パネル =====
 function renderDetail(){
-  // 予実は renderGantt 内の担当者直下に統合済み
-  // 後方互換のため残すが、実体は renderGantt で描画
-  renderGantt();
+  // 予実は renderGantt 内の担当者直下に統合済み → 何もしない
 }
 function _renderDetailOld(){
   const tasks=getDate(curDate);
@@ -1645,12 +1643,10 @@ function _renderDetailOld(){
 function renderLoadSummary(){
   const el=document.getElementById('loadDays');
   if(!el)return;
-  // 週の日付リスト（curDate を含む前後を含む表示週）
+  // 週の日付リスト（weekStart から7日）
   const days=[];
   for(let i=0;i<7;i++){
-    const d=new Date(weekStart+'T00:00:00');
-    d.setDate(d.getDate()+i);
-    days.push(fmt(d));
+    days.push(fmt(addDays(weekStart,i)));
   }
   // 日付ごとの依頼工数集計（deadline基準）
   const dayH={};
