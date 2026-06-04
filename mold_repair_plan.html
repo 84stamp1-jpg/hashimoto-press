@@ -181,13 +181,37 @@ header{background:var(--panel);border-bottom:1px solid var(--border);padding:0 1
 .actual-m{background:var(--m);border-color:var(--m)}
 .actual-n{background:var(--n);border-color:var(--n)}
 
-/* DETAIL PANEL */
-.dpanel{border-top:1px solid var(--border);background:var(--panel);padding:9px 14px;flex-shrink:0;max-height:200px;overflow-y:auto}
+/* DETAIL PANEL → 担当者直下インライン予実 */
+.dpanel{border-top:2px solid var(--border);background:var(--panel);padding:8px 14px;flex-shrink:0;overflow-y:auto;max-height:160px}
 .dpanel::-webkit-scrollbar{width:4px}
 .dpanel::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
-.dphdr{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.dphdr{display:flex;align-items:center;gap:8px;margin-bottom:5px}
 .dptitle{font-size:10px;font-weight:700;color:var(--text2);letter-spacing:.1em;text-transform:uppercase}
 .dgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:5px}
+/* 担当者セクション */
+.person-section{margin-bottom:4px}
+.person-divider{height:3px;background:linear-gradient(90deg,var(--m-bg),var(--n-bg));margin:4px 0;border-radius:2px}
+.person-detail{background:var(--panel);border:1px solid var(--border);border-top:none;border-radius:0 0 6px 6px;
+  padding:5px 8px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:4px;margin-left:78px}
+.person-detail.empty{color:var(--text3);font-size:11px;padding:6px 10px;grid-template-columns:1fr}
+/* 残業入力 */
+.ot-input{width:36px;font-size:10px;text-align:center;border:1px solid currentColor;
+  border-radius:3px;background:transparent;color:inherit;padding:1px 2px;opacity:.85;font-family:var(--mono)}
+.ot-input:focus{opacity:1;outline:none}
+/* 負荷サマリーパネル */
+.load-panel{border-top:2px solid var(--border);background:var(--panel);padding:8px 14px;flex-shrink:0}
+.load-panel-hdr{display:flex;align-items:center;gap:8px;margin-bottom:6px;cursor:pointer;user-select:none}
+.load-panel-title{font-size:10px;font-weight:700;color:var(--text2);letter-spacing:.1em;text-transform:uppercase}
+.load-days{display:flex;gap:6px;overflow-x:auto;align-items:flex-end}
+.load-day{display:flex;flex-direction:column;align-items:center;min-width:60px;flex-shrink:0}
+.load-day-label{font-size:9px;color:var(--text3);margin-bottom:3px;font-family:var(--mono);text-align:center}
+.load-bar-wrap{width:52px;background:var(--panel2);border:1px solid var(--border);border-radius:3px;overflow:hidden;height:48px;position:relative;display:flex;flex-direction:column;justify-content:flex-end}
+.load-bar-fill{width:100%;transition:height .3s}
+.load-day-nums{font-size:9px;color:var(--text2);text-align:center;margin-top:3px;line-height:1.4}
+.load-day-nums .cum{font-weight:700;font-family:var(--mono)}
+.load-day-nums .daily{color:var(--text3)}
+.load-over{color:var(--danger);font-weight:700}
+.load-caution{color:var(--warn);font-weight:700}
 .ditem{background:var(--panel2);border:1px solid var(--border);border-radius:6px;padding:7px 9px;display:flex;align-items:stretch;gap:7px;cursor:pointer;transition:border-color .15s}
 .ditem:hover{border-color:var(--accent)}
 .dcolor{width:4px;border-radius:2px;flex-shrink:0}
@@ -512,12 +536,12 @@ input.nm-img-input{display:none}
       </div>
     </div>
     <div class="gwrap"><div class="gcont" id="gcont"></div></div>
-    <div class="dpanel">
-      <div class="dphdr">
-        <span class="dptitle">予実管理</span>
-        <span id="dpDate" style="font-size:11px;color:var(--text2)"></span>
+    <div class="load-panel" id="loadPanel">
+      <div class="load-panel-hdr" onclick="toggleLoadPanel()">
+        <span class="load-panel-title">📊 週間負荷サマリー（依頼合計・累計）</span>
+        <span id="loadPanelToggle" style="font-size:10px;color:var(--text2);margin-left:auto">▲</span>
       </div>
-      <div class="dgrid" id="dgrid"><div class="empty">作業を割付けると表示されます</div></div>
+      <div id="loadDays" class="load-days"></div>
     </div>
   </div>
 </div>
@@ -830,7 +854,25 @@ function saveTasksToFirebase(){
 const GAS_URL='https://script.google.com/macros/s/AKfycbyVyBCDB--oV8YUQhBIM-PoS9MMkUheYinHAl_GXArNWyoe9JXJG8MR0XVdNrf7SvaPZQ/exec';
 const APP_ID=6;
 const WORK_START=8*60+10,WORK_END=20*60,TOTAL_MIN=WORK_END-WORK_START;
+const WORK_STD_END=17*60; // 標準終業 17:00
 const BREAKS=[{s:600,e:610},{s:730,e:770},{s:890,e:900},{s:1020,e:1030}];
+// 残業設定（分単位で保持）
+let overtimeH={matsumoto:0,matsunaga:0};
+try{const _ot=JSON.parse(localStorage.getItem('repair_ot_v1')||'null');if(_ot)Object.assign(overtimeH,_ot);}catch(e){}
+function effectiveWorkEnd(a){return WORK_STD_END+Math.round((overtimeH[a]||0)*60);}
+function setOvertime(a,h){
+  overtimeH[a]=Math.max(0,Math.min(5,h));
+  localStorage.setItem('repair_ot_v1',JSON.stringify(overtimeH));
+  autoArrange(curDate);saveTasksToFirebase();renderGantt();
+}
+let loadPanelOpen=true;
+function toggleLoadPanel(){
+  loadPanelOpen=!loadPanelOpen;
+  const el=document.getElementById('loadDays');
+  if(el)el.style.display=loadPanelOpen?'flex':'none';
+  const tog=document.getElementById('loadPanelToggle');
+  if(tog)tog.textContent=loadPanelOpen?'▲':'▼';
+}
 
 // ===== 改修区分マスタ =====
 const KMAP={
@@ -1299,24 +1341,49 @@ function nextAvail(m){
   let v=Math.max(m,WORK_START);
   for(const b of BREAKS){if(v>=b.s&&v<b.e)v=b.e}return v;
 }
-function addWork(start,workMin){
-  let cur=start,rem=workMin;
+function addWork(start,workMin,wEnd=WORK_END){
+  let cur=start,rem=workMin,safety=0;
   while(rem>0){
-    let nb=WORK_END;
+    if(cur>=wEnd||safety++>5000)return cur;
+    let nb=wEnd;
     for(const b of BREAKS){if(b.s>cur){nb=Math.min(nb,b.s);break}}
-    const av=nb-cur;
+    const av=Math.max(0,nb-cur);
+    if(av===0){
+      cur=nb;
+      for(const b of BREAKS){if(b.s===cur){cur=b.e;break}}
+      continue;
+    }
     if(av>=rem){cur+=rem;rem=0}
     else{rem-=av;cur=nb;for(const b of BREAKS){if(b.s===cur){cur=b.e;break}}}
   }
   return cur;
 }
+function nextWorkDay(ds){
+  const d=new Date(ds+'T00:00:00');
+  do{d.setDate(d.getDate()+1);}while(d.getDay()===0||d.getDay()===6);
+  return fmt(d);
+}
 function autoArrange(ds){
   const tasks=getDate(ds);
+  const tmr=nextWorkDay(ds);
   ['matsumoto','matsunaga'].forEach(a=>{
+    const wEnd=effectiveWorkEnd(a);
     let cur=WORK_START;
     tasks.filter(t=>t.assignee===a).forEach(t=>{
-      cur=nextAvail(cur);t.startMin=cur;
-      cur=addWork(cur,Math.round(t.hours*60));
+      cur=nextAvail(cur);
+      if(cur>=wEnd){
+        // 翌営業日に繰越
+        t.overflow=true;
+        t.planDate=tmr;
+        if(!tasksByDate[tmr])tasksByDate[tmr]=[];
+        if(!tasksByDate[tmr].find(x=>x.id===t.id))tasksByDate[tmr].push(t);
+        tasksByDate[ds]=(tasksByDate[ds]||[]).filter(x=>x.id!==t.id);
+        t.startMin=null;
+        return;
+      }
+      t.overflow=false;
+      t.startMin=cur;
+      cur=addWork(cur,Math.round(t.hours*60),wEnd);
     });
   });
 }
@@ -1420,22 +1487,93 @@ function renderGantt(){
       return res;
     });
 
-    return`<div class="grow">
-      <div class="glabel ${lc}" style="min-height:90px;width:78px;min-width:78px;flex-shrink:0">${lbl}</div>
-      <div class="gtrack" style="width:${tw}px;height:90px">${gridWithDiv}${blocks.join('')}</div>
+    // 残業ゾーン表示
+    const wEnd=effectiveWorkEnd(a);
+    const ot=overtimeH[a]||0;
+    let otZone='';
+    if(ot>0){
+      const ox=mx(WORK_STD_END),ow=Math.max(0,mx(wEnd)-ox);
+      otZone=`<div style="position:absolute;left:${ox}px;width:${ow}px;top:0;bottom:0;
+        background:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(234,108,10,.08) 3px,rgba(234,108,10,.08) 6px);
+        border-left:2px dashed var(--n);pointer-events:none;z-index:1" title="残業枠 ${ot}H"></div>`;
+    }
+
+    // 担当者直下の予実詳細
+    const myTasks2=tasks.filter(t=>t.assignee===a);
+    let detailHtml='';
+    if(!myTasks2.length){
+      detailHtml=`<div class="person-detail empty">作業割付なし</div>`;
+    }else{
+      const items=myTasks2.map(t=>{
+        const planEndMin=t.startMin!=null?addWork(t.startMin,Math.round(t.hours*60),wEnd):null;
+        const planStr=t.startMin!=null?fmtMin(t.startMin)+'〜'+fmtMin(planEndMin):'未配置';
+        const as=minToMs(t.actual.start),ae=minToMs(t.actual.end);
+        const ds2=(t.actual?.start&&t.actual?.end)?'done':(t.actual?.start&&!t.actual?.end)?'working':'pending';
+        const statusIcon=ds2==='done'?'✓':ds2==='working'?'▶':'○';
+        const statusColor=ds2==='done'?'var(--ok)':ds2==='working'?'var(--danger)':'var(--text3)';
+        const overflowBadge=t.overflow?`<span style="font-size:8px;background:#fee2e2;color:#dc2626;border-radius:2px;padding:0 3px">翌日繰越</span>`:'';
+        let yjHtml='';
+        if(t.startMin!=null&&as!==null){
+          const planMin=Math.round(t.hours*60);
+          const actMin=ae!==null?(ae-as):(new Date().getHours()*60+new Date().getMinutes()-as);
+          const pct=Math.min(120,Math.round(actMin/planMin*100));
+          const over=ae!==null&&actMin>planMin;
+          const barW=Math.min(100,pct);
+          yjHtml=`<div style="display:flex;align-items:center;gap:3px;margin-top:2px">
+            <div style="flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden">
+              <div style="height:100%;width:${barW}%;background:${over?'var(--danger)':'var(--ok)'};border-radius:2px"></div>
+            </div>
+            <span style="font-size:8px;color:${over?'var(--danger)':'var(--text2)'};font-family:var(--mono)">${pct}%</span>
+          </div>`;
+        }
+        return`<div class="ditem" onclick="openActModal('${t.id}')" style="cursor:pointer">
+          <div class="dcolor" style="background:${a==='matsumoto'?'var(--m)':'var(--n)'}"></div>
+          <div class="dinfo">
+            <div style="display:flex;align-items:center;gap:4px">
+              <span style="color:${statusColor};font-size:10px">${statusIcon}</span>
+              <span class="dname" style="font-size:10px">${t.name}</span>${overflowBadge}
+            </div>
+            <div class="dmeta">${planStr} / ${t.hours}H</div>
+            ${yjHtml}
+          </div>
+        </div>`;
+      }).join('');
+      detailHtml=`<div class="person-detail">${items}</div>`;
+    }
+
+    return`<div class="person-section">
+      <div class="grow">
+        <div class="glabel ${lc}" style="min-height:90px;width:78px;min-width:78px;flex-shrink:0;flex-direction:column;gap:3px;justify-content:center">
+          <div>${lbl}</div>
+          <div style="font-size:9px;opacity:.7">残業</div>
+          <div style="display:flex;align-items:center;gap:2px">
+            <input class="ot-input" type="number" min="0" max="5" step="0.5" value="${ot}"
+              onchange="setOvertime('${a}',parseFloat(this.value)||0)" title="残業時間(H)">
+            <span style="font-size:9px;opacity:.7">H</span>
+          </div>
+        </div>
+        <div class="gtrack" style="width:${tw}px;height:90px">${gridWithDiv}${otZone}${blocks.join('')}</div>
+      </div>
+      ${detailHtml}
     </div>`;
-  }).join('');
+  }).join('<div class="person-divider"></div>');
 
   cont.innerHTML=`<div class="ghdr"><div></div><div class="gruler" style="width:${tw}px">${ticks.join('')}</div></div>${rows}`;
+  renderLoadSummary();
 }
 
 // ===== 予実パネル =====
 function renderDetail(){
+  // 予実は renderGantt 内の担当者直下に統合済み
+  // 後方互換のため残すが、実体は renderGantt で描画
+  renderGantt();
+}
+function _renderDetailOld(){
   const tasks=getDate(curDate);
   const grid=document.getElementById('dgrid');
   const dpDate=document.getElementById('dpDate');
   if(dpDate) dpDate.textContent=curDate;
-  if(!tasks.length){grid.innerHTML='<div class="empty">作業を割付けると表示されます</div>';return}
+  if(!tasks.length){grid&&(grid.innerHTML='<div class="empty">作業を割付けると表示されます</div>');return}
 
   let html='';
   tasks.forEach(function(t){
@@ -1500,7 +1638,67 @@ function renderDetail(){
       +pauseLog
       +'</div></div>';
   });
-  grid.innerHTML=html;
+  if(grid)grid.innerHTML=html;
+}
+
+// ===== 週間負荷サマリー =====
+function renderLoadSummary(){
+  const el=document.getElementById('loadDays');
+  if(!el)return;
+  // 週の日付リスト（curDate を含む前後を含む表示週）
+  const days=[];
+  for(let i=0;i<7;i++){
+    const d=new Date(weekStart+'T00:00:00');
+    d.setDate(d.getDate()+i);
+    days.push(fmt(d));
+  }
+  // 日付ごとの依頼工数集計（deadline基準）
+  const dayH={};
+  days.forEach(d=>dayH[d]=0);
+  requests.forEach(r=>{
+    if(dayH.hasOwnProperty(r.deadline))dayH[r.deadline]+=r.hours;
+    else{/* 範囲外の日付 */}
+  });
+  // 累計計算（その日以前の全依頼合計）
+  const allDates=[...new Set(requests.map(r=>r.deadline))].sort();
+  const cumH={};
+  let runTotal=0;
+  // 全リクエストを期限順にソートして累計
+  const sortedReqs=[...requests].sort((a,b)=>a.deadline.localeCompare(b.deadline));
+  days.forEach(d=>{
+    runTotal+=sortedReqs.filter(r=>r.deadline===d).reduce((s,r)=>s+r.hours,0);
+    // この日より前に既に加算済みの分も含む
+    cumH[d]=sortedReqs.filter(r=>r.deadline<=d).reduce((s,r)=>s+r.hours,0);
+  });
+
+  // 最大値（バーの高さ計算用）
+  const maxCum=Math.max(8,...Object.values(cumH));
+
+  // 松本1人の1日標準処理可能工数
+  const DAILY_CAP_M=8+(overtimeH.matsumoto||0);
+
+  el.innerHTML=days.map(d=>{
+    const dh=dayH[d]||0;
+    const cum=cumH[d]||0;
+    const isToday=d===curDate;
+    const isWE=new Date(d+'T00:00:00').getDay()===0||new Date(d+'T00:00:00').getDay()===6;
+    const dLabel=d.slice(5).replace('-','/')+'('+['日','月','火','水','木','金','土'][new Date(d+'T00:00:00').getDay()]+')';
+    const barH=Math.round(cum/maxCum*44);
+    const isOver=cum>DAILY_CAP_M*7; // 1週間分を超えるか
+    const isCaution=cum>DAILY_CAP_M*5;
+    const barColor=isOver?'var(--danger)':isCaution?'var(--warn)':'var(--m)';
+    const numCls=isOver?'load-over':isCaution?'load-caution':'';
+    return`<div class="load-day">
+      <div class="load-day-label" style="${isToday?'color:var(--accent);font-weight:700':isWE?'color:var(--text3)':''}">${dLabel}</div>
+      <div class="load-bar-wrap" title="${d} 依頼:${dh}H 累計:${cum}H">
+        <div class="load-bar-fill" style="height:${barH}px;background:${barColor};opacity:${isWE?.4:1}"></div>
+      </div>
+      <div class="load-day-nums">
+        <div class="cum ${numCls}">${cum}H</div>
+        <div class="daily">+${dh}H</div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function setAct(id,type,val){
