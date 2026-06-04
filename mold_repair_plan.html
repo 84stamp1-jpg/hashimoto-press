@@ -508,7 +508,8 @@ input.nm-img-input{display:none}
         <div class="frow"><label class="flabel">品番 / 作業内容</label><input class="finput" id="mName" placeholder="例: ABC-123 バリ取り"/></div>
         <div class="f2col">
           <div class="frow"><label class="flabel">改修区分</label>
-            <select class="finput" id="mCat">
+            <select class="finput" id="mCat" onchange="onManualCatChange(this.value)">
+              <option value="custom" selected>任意（直接入力）</option>
               <option value="bari">バリ改修 (3H/箇所)</option>
               <option value="seido">精度調整 (1H/箇所)</option>
               <option value="taikyuu">耐久性不足 (4H)</option>
@@ -516,13 +517,12 @@ input.nm-img-input{display:none}
               <option value="spare">スペア交換 (0.5H/個)</option>
               <option value="height">ハイト合わせ (4H)</option>
               <option value="maint">定期メンテ</option>
-              <option value="custom">任意</option>
             </select></div>
-          <div class="frow"><label class="flabel">箇所数/個数</label><input class="finput" id="mUnits" type="number" min="1" max="30" value="1"/></div>
+          <div class="frow"><label class="flabel" id="mUnitsLabel">工数(H)</label><input class="finput" id="mUnits" type="number" min="0.5" max="30" step="0.5" value="1"/></div>
         </div>
         <div class="f2col">
           <div class="frow"><label class="flabel">型種別</label>
-            <select class="finput" id="mMold"><option value="single">単発</option><option value="prog">順送(PRG)</option></select></div>
+            <select class="finput" id="mMold"><option value="none" selected>なし（搬入0H）</option><option value="single">単発</option><option value="prog">順送(PRG)</option></select></div>
           <div class="frow"><label class="flabel">完了希望日</label><input class="finput" id="mDL" type="date"/></div>
         </div>
         <div class="frow"><label class="flabel">品名（任意）</label><input class="finput" id="mHinmei" placeholder="例: フランジブラケット"/></div>
@@ -1445,8 +1445,34 @@ function autoArrange(ds){
 }
 function getDate(ds){return tasksByDate[ds]||[]}
 
+// ===== 未配置タスク（翌日繰越など）のstartMinを補完 =====
+function fillNullStartMins(ds){
+  const tasks=getDate(ds);
+  if(!tasks.some(t=>t.startMin===null))return; // 未配置なし
+  ['matsumoto','matsunaga'].forEach(a=>{
+    const wEnd=effectiveWorkEnd(a);
+    const myTasks=tasks.filter(t=>t.assignee===a);
+    // 既に配置済みのタスクの終了時刻を求める
+    const positioned=myTasks.filter(t=>t.startMin!==null).sort((x,y)=>x.startMin-y.startMin);
+    let cur=WORK_START;
+    if(positioned.length){
+      const last=positioned[positioned.length-1];
+      cur=addWork(last.startMin,Math.round(last.hours*60),wEnd);
+    }
+    // startMin=nullのタスクを後ろに詰めて配置
+    myTasks.filter(t=>t.startMin===null).forEach(t=>{
+      cur=nextAvail(cur);
+      if(cur>=wEnd)return; // 収まらない場合はそのまま（表示不可）
+      t.overflow=false;
+      t.startMin=cur;
+      cur=addWork(cur,Math.round(t.hours*60),wEnd);
+    });
+  });
+}
+
 // ===== ガント描画 =====
 function renderGantt(){
+  fillNullStartMins(curDate); // 翌日繰越タスクの時刻を補完
   const cont=document.getElementById('gcont');
   const wrap=cont?cont.parentElement:document.querySelector('.gwrap');
   // ガント幅: 17:10（休憩終了）まで画面いっぱい
@@ -1492,11 +1518,9 @@ function renderGantt(){
       const res=[`<div class="gblock ${bc}${blockClass}"
         draggable="true"
         ondragstart="ganttBlockDragStart(event,'${t.id}','${a}')"
-        ondragover="ganttBlockDragOver(event,'${t.id}')"
-        ondrop="ganttBlockDrop(event,'${t.id}')"
         ondragend="ganttBlockDragEnd()"
         style="left:${rx}px;width:${rw}px;top:2px;height:42px${blockStyle};cursor:grab"
-        onclick="openActModal('${t.id}')" title="${t.name} (ドラッグで順序変更)">
+        onclick="openActModal('${t.id}')" title="${t.name} (ドラッグで時間帯を移動 / 担当行をまたいで担当変更可)">
         <div class="blabel">${t.name}</div>
         <div class="btime">${fmtMin(t.startMin)}〜${fmtMin(repEnd)}</div>
       </div>`];
@@ -1505,8 +1529,8 @@ function renderGantt(){
         const tx=mx(repEnd),ttw=dw(repEnd,trialEnd);
         res.push(`<div class="gblock btrial${blockClass}" style="left:${tx}px;width:${ttw}px;top:2px;height:42px${blockStyle}"
           onclick="openActModal('${t.id}')" title="${t.name} トライ">
-          <div class="blabel">▶トライ</div>
-          <div class="btime">${fmtMin(repEnd)}〜${fmtMin(trialEnd)}</div>
+          <div class="blabel">${t.name}</div>
+          <div class="btime">TRY ${fmtMin(repEnd)}〜${fmtMin(trialEnd)}</div>
         </div>`);
       }
 
@@ -1652,7 +1676,9 @@ function renderGantt(){
             <span style="font-size:9px;opacity:.7">H</span>
           </div>
         </div>
-        <div class="gtrack" style="width:${tw}px;height:90px">${gridWithDiv}${otZone}${blocks.join('')}</div>
+        <div class="gtrack" style="width:${tw}px;height:90px"
+          ondragover="ganttTrackDragOver(event)"
+          ondrop="ganttTrackDrop(event,'${a}')">${gridWithDiv}${otZone}${blocks.join('')}</div>
       </div>
       ${detailHtml}
     </div>`;
@@ -1912,33 +1938,51 @@ function openActModal(idOrEl){
   const btn=document.getElementById('btnInlineEdit');if(btn)btn.textContent='⚙ 工数編集';
   document.getElementById('actModal').classList.add('open');
 }
-// ===== ガントブロックのドラッグ並び替え =====
+// ===== ガントブロックのドラッグ（時間帯移動・担当者変更） =====
 function ganttBlockDragStart(e,id,assignee){
-  ganttBlockDrag={id,assignee};
+  const rect=e.currentTarget.getBoundingClientRect();
+  ganttBlockDrag={id,assignee,clickOffsetX:e.clientX-rect.left};
   e.dataTransfer.effectAllowed='move';
+  e.dataTransfer.setData('text/plain',id);
   e.stopPropagation();
 }
-function ganttBlockDragOver(e,targetId){
-  if(!ganttBlockDrag||ganttBlockDrag.id===targetId)return;
-  e.preventDefault();e.stopPropagation();
-  e.currentTarget.style.outline='2px dashed var(--accent)';
+function ganttTrackDragOver(e){
+  if(!ganttBlockDrag)return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect='move';
 }
-function ganttBlockDrop(e,targetId){
-  e.preventDefault();e.stopPropagation();
-  if(!ganttBlockDrag||ganttBlockDrag.id===targetId)return;
-  e.currentTarget.style.outline='';
+function ganttTrackDrop(e,assignee){
+  e.preventDefault();
+  if(!ganttBlockDrag)return;
+  const track=e.currentTarget;
+  const trackRect=track.getBoundingClientRect();
+  const dropX=e.clientX-trackRect.left-(ganttBlockDrag.clickOffsetX||0);
+  // renderGanttと同じ計算でpx→分変換
+  const wrap=document.querySelector('.gwrap');
+  const wrapW=wrap?wrap.getBoundingClientRect().width:800;
+  const viewW=Math.max(500,wrapW-82);
+  const VIEW_END=17*60+10;
+  const VIEW_MIN=VIEW_END-WORK_START;
+  const HOUR_PX=Math.floor(viewW/VIEW_MIN*60);
+  const tw=(WORK_END-WORK_START)/60*HOUR_PX;
+  const rawMin=WORK_START+dropX/tw*(WORK_END-WORK_START);
+  const snapMin=Math.round(rawMin/5)*5; // 5分単位でスナップ
   const tasks=getDate(curDate);
-  const fi=tasks.findIndex(t=>t.id===ganttBlockDrag.id);
-  const ti=tasks.findIndex(t=>t.id===targetId);
-  if(fi<0||ti<0)return;
-  const [item]=tasks.splice(fi,1);
-  tasks.splice(ti,0,item);
+  const t=tasks.find(t=>t.id===ganttBlockDrag.id);
+  if(t){
+    t.startMin=Math.max(WORK_START,Math.min(WORK_END-30,snapMin));
+    if(t.assignee!==assignee){
+      // 担当者またぎドラッグ → 担当変更
+      t.assignee=assignee;
+      const r=requests.find(r=>r.id===t.reqId);
+      if(r){r.assignee=assignee;}
+      renderRequestList();
+    }
+    saveTasksToFirebase();renderGantt();renderDetail();
+  }
   ganttBlockDrag=null;
-  autoArrange(curDate);saveTasksToFirebase();renderGantt();renderDetail();
 }
 function ganttBlockDragEnd(){
-  // ドロップされなかった場合にアウトラインをリセット
-  document.querySelectorAll('.gblock').forEach(el=>el.style.outline='');
   ganttBlockDrag=null;
 }
 function toggleInlineEdit(){
@@ -2214,11 +2258,24 @@ function deleteManualReq(id){
   if(selReqId===id)selReqId=null;
   renderRequestList();renderGantt();renderDetail();
 }
+function onManualCatChange(cat){
+  const lbl=document.getElementById('mUnitsLabel');
+  const inp=document.getElementById('mUnits');
+  if(cat==='custom'){
+    if(lbl)lbl.textContent='工数(H)';
+    if(inp){inp.step='0.5';inp.min='0.5';}
+  }else{
+    if(lbl)lbl.textContent='箇所数/個数';
+    if(inp){inp.step='1';inp.min='1';}
+  }
+}
 function addManual(){
   const name=document.getElementById('mName').value.trim();
   if(!name){alert('品番/作業内容を入力してください');return}
   const cat=document.getElementById('mCat').value;
-  const units=parseInt(document.getElementById('mUnits').value)||1;
+  const units=cat==='custom'
+    ?Math.round((parseFloat(document.getElementById('mUnits').value)||1)*4)/4
+    :parseInt(document.getElementById('mUnits').value)||1;
   const moldType=document.getElementById('mMold').value;
   const deadline=document.getElementById('mDL').value||todayStr();
   const hinmei=document.getElementById('mHinmei').value.trim();
@@ -2226,8 +2283,8 @@ function addManual(){
   const kubunInputs=[{name:label,units,key:cat}];
   const req={
     id:'m'+Date.now(),hinban:name,hinmei,process:'',
-    kubunInputs,moldType,trialSteps:1,
-    hours:calcH(kubunInputs,moldType,1),
+    kubunInputs,moldType,trialSteps:0,trialH:0,
+    hours:calcH(kubunInputs,moldType,0),
     deadline,assigned:false,assignee:null,source:'manual',note:''
   };
   requests.push(req);
