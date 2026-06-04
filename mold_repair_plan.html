@@ -453,6 +453,7 @@ input.nm-img-input{display:none}
   <div class="hdr-right">
     <button class="btn btn-secondary btn-sm" onclick="loadKintone()">🔄 kintone同期</button>
     <button class="btn btn-secondary btn-sm" onclick="autoAll()">⚡ 自動配置</button>
+    <button class="btn btn-secondary btn-sm" id="btnTmMaster" onclick="openTmMaster()">⚙ 工数マスタ</button>
     <button class="btn btn-primary btn-sm" onclick="window.print()">🖨 印刷</button>
   </div>
 </header>
@@ -746,6 +747,27 @@ input.nm-img-input{display:none}
   </div>
 </div>
 
+<!-- 工数マスタ設定モーダル -->
+<div class="moverlay" id="tmMasterModal" onclick="if(event.target===this)closeTmMaster()">
+  <div class="mdlg" style="width:500px">
+    <div class="mtitle">⚙ 工数マスタ設定</div>
+    <p style="font-size:11px;color:var(--text2);margin-bottom:12px">改修区分ごとの標準工数を変更できます。変更後は「保存」を押してください。</p>
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="background:var(--panel2)">
+        <th style="padding:5px 8px;text-align:left;border:1px solid var(--border);font-weight:600">区分</th>
+        <th style="padding:5px 8px;text-align:center;border:1px solid var(--border);font-weight:600">工数（H）</th>
+        <th style="padding:5px 8px;text-align:left;border:1px solid var(--border);font-weight:600">単位</th>
+      </tr></thead>
+      <tbody id="tmMasterBody"></tbody>
+    </table>
+    <div class="mfooter" style="margin-top:14px">
+      <button class="btn btn-secondary btn-sm" onclick="resetTmMaster()">デフォルトに戻す</button>
+      <button class="btn btn-secondary btn-sm" onclick="closeTmMaster()">キャンセル</button>
+      <button class="btn btn-primary btn-sm" onclick="saveTmMaster()">💾 保存</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ===== CONFIG =====
 // ===== Firebase設定 =====
@@ -825,12 +847,15 @@ const TM={
   seido:  {label:'精度調整',    hpu:1.0, pu:true},
   taikyuu:{label:'耐久性不足',  hpu:4.0, pu:true},
   mistake:{label:'作業ミス',    hpu:2.0, pu:true},
-  spare:  {label:'スペア交換',  hpu:0.5, pu:true},   // ← perUnit:true に修正
+  spare:  {label:'スペア交換',  hpu:0.5, pu:true},
   height: {label:'ハイト合わせ',hpu:4.0, pu:false},
   scrap:  {label:'スクラップ',  hpu:1.0, pu:true, extra:.5},
   maint:  {label:'定期メンテ',  hs:1.0,  hp:2.0,  isMaint:true},
   custom: {label:'任意（時間入力）', hpu:1.0, pu:true, isCustomH:true},
 };
+// localStorageから工数マスタを読み込んで上書き
+try{const _sv=JSON.parse(localStorage.getItem('repair_tm_v1')||'null');
+  if(_sv)Object.keys(_sv).forEach(k=>{if(TM[k])Object.assign(TM[k],_sv[k]);});}catch(e){}
 // 選択肢リスト（カード内セレクトに使用）
 const KUBUN_OPTIONS=[
   {k:'bari',  label:'バリ改修'},
@@ -1655,6 +1680,85 @@ function closeEditModal(){document.getElementById('editModal').classList.remove(
 
 // ===== 手動追加 =====
 function toggleMF(){document.getElementById('mForm').classList.toggle('open')}
+// ===== 工数マスタ =====
+const TM_DEFAULT={
+  bari:{hpu:3.0},seido:{hpu:1.0},taikyuu:{hpu:4.0},mistake:{hpu:2.0},
+  spare:{hpu:0.5},height:{hpu:4.0},scrap:{hpu:1.0},maint:{hs:1.0,hp:2.0}
+};
+const TM_META=[
+  {k:'bari',   label:'バリ改修',    type:'hpu', unit:'H/箇所'},
+  {k:'seido',  label:'精度調整',    type:'hpu', unit:'H/箇所'},
+  {k:'taikyuu',label:'耐久性不足',  type:'hpu', unit:'H'},
+  {k:'mistake',label:'作業ミス',    type:'hpu', unit:'H'},
+  {k:'spare',  label:'スペア交換',  type:'hpu', unit:'H/個'},
+  {k:'height', label:'ハイト合わせ',type:'hpu', unit:'H'},
+  {k:'scrap',  label:'スクラップ',  type:'hpu', unit:'H（+0.5H/箇所目）'},
+  {k:'maint',  label:'定期メンテ',  type:'maint',unit:'H/型'},
+];
+function openTmMaster(){
+  const body=document.getElementById('tmMasterBody');
+  body.innerHTML=TM_META.map(m=>{
+    if(m.type==='maint'){
+      return `<tr>
+        <td style="padding:5px 8px;border:1px solid var(--border)">${m.label}</td>
+        <td style="padding:5px 8px;border:1px solid var(--border);text-align:center">
+          <div style="display:flex;align-items:center;gap:6px;justify-content:center">
+            <label style="font-size:10px;color:var(--text2)">単発</label>
+            <input type="number" id="tm_${m.k}_hs" min="0.25" max="20" step="0.25"
+              value="${TM[m.k].hs}" style="width:60px;padding:2px 4px;border:1px solid var(--border);border-radius:3px;font-size:12px;text-align:center">
+            <label style="font-size:10px;color:var(--text2)">順送</label>
+            <input type="number" id="tm_${m.k}_hp" min="0.25" max="20" step="0.25"
+              value="${TM[m.k].hp}" style="width:60px;padding:2px 4px;border:1px solid var(--border);border-radius:3px;font-size:12px;text-align:center">
+          </div>
+        </td>
+        <td style="padding:5px 8px;border:1px solid var(--border);color:var(--text2)">${m.unit}</td>
+      </tr>`;
+    }
+    return `<tr>
+      <td style="padding:5px 8px;border:1px solid var(--border)">${m.label}</td>
+      <td style="padding:5px 8px;border:1px solid var(--border);text-align:center">
+        <input type="number" id="tm_${m.k}" min="0.25" max="20" step="0.25"
+          value="${TM[m.k].hpu}" style="width:80px;padding:2px 4px;border:1px solid var(--border);border-radius:3px;font-size:13px;text-align:center;font-weight:600">
+      </td>
+      <td style="padding:5px 8px;border:1px solid var(--border);color:var(--text2)">${m.unit}</td>
+    </tr>`;
+  }).join('')+
+  `<tr style="background:var(--panel2)">
+    <td style="padding:5px 8px;border:1px solid var(--border);color:var(--text3)">任意（自由入力）</td>
+    <td style="padding:5px 8px;border:1px solid var(--border);text-align:center;color:var(--text3)">—</td>
+    <td style="padding:5px 8px;border:1px solid var(--border);color:var(--text3)">直接入力</td>
+  </tr>`;
+  document.getElementById('tmMasterModal').classList.add('open');
+}
+function closeTmMaster(){document.getElementById('tmMasterModal').classList.remove('open');}
+function saveTmMaster(){
+  const saved={};
+  TM_META.forEach(m=>{
+    if(m.type==='maint'){
+      const hs=parseFloat(document.getElementById(`tm_${m.k}_hs`)?.value)||TM_DEFAULT.maint.hs;
+      const hp=parseFloat(document.getElementById(`tm_${m.k}_hp`)?.value)||TM_DEFAULT.maint.hp;
+      TM[m.k].hs=hs;TM[m.k].hp=hp;
+      saved[m.k]={hs,hp};
+    } else {
+      const hpu=parseFloat(document.getElementById(`tm_${m.k}`)?.value)||TM_DEFAULT[m.k]?.hpu;
+      TM[m.k].hpu=hpu;
+      saved[m.k]={hpu};
+    }
+  });
+  localStorage.setItem('repair_tm_v1',JSON.stringify(saved));
+  closeTmMaster();
+  // 工数を再計算して一覧を更新
+  requests.forEach(r=>{r.hours=calcHWithTrialH(r.kubunInputs,r.moldType,r.trialSteps,r.trialH??null);});
+  renderRequestList();renderGantt();
+  alert('工数マスタを保存しました。');
+}
+function resetTmMaster(){
+  if(!confirm('工数マスタをデフォルト値に戻しますか？'))return;
+  localStorage.removeItem('repair_tm_v1');
+  Object.keys(TM_DEFAULT).forEach(k=>Object.assign(TM[k],TM_DEFAULT[k]));
+  openTmMaster(); // 値を再描画
+}
+
 function deleteManualReq(id){
   const r=requests.find(x=>x.id===id);
   if(!r||r.source!=='manual')return;
