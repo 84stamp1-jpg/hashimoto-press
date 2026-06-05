@@ -1095,6 +1095,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
         <div class="qc-fld">
           <label>品番・品名で検索</label>
           <input type="text" id="qc-sakuyo-search" placeholder="数字または品名を入力　例: 18181" autocomplete="off">
+          <div id="qc-sakuyo-status" style="font-size:11px;color:#888;margin-top:3px;"></div>
           <div id="qc-sakuyo-sug"></div>
           <div id="qc-sakuyo-sel"></div>
           <div id="qc-bunno-info"></div>
@@ -6253,15 +6254,34 @@ window.qcOnTabActivated = function(){
     document.getElementById('qc-bulk-pi-retake').addEventListener('change', function(){ qcAddBulkPhoto(this.files[0]); this.value=''; qcCloseViewer(); });
     // 作業予定・記録読み込み
     qcGasPost('getRecords', {}, function(res){ if(res&&res.ok){ QC_ALL_RECORDS=res.records||[]; qcUpdatePendingBadge(); }}, function(){});
+    // QC_SAKUYO 読み込み状態を表示するヘルパー
+    function _setSakuyoStatus(msg, color){
+      var el=document.getElementById('qc-sakuyo-status');
+      if(el){ el.textContent=msg; el.style.color=color||'#888'; }
+    }
+    _setSakuyoStatus('⏳ 生産予定データを読み込み中...','#1F4E79');
     qcGasPost('getSakuyoData', {}, function(res){
       QC_SAKUYO = qcFilterSakuyo((res&&res.ok) ? (res.data||[]) : []);
-    }, function(){
+      console.log('[QC] getSakuyoData ok=', res&&res.ok, 'count=', QC_SAKUYO.length);
+      if(QC_SAKUYO.length){
+        _setSakuyoStatus('✓ '+QC_SAKUYO.length+'件読み込み済み（スプレッドシート）','#15803d');
+        // localStorageにも保存
+        try{ localStorage.setItem('qcSakuyoCache',JSON.stringify(QC_SAKUYO)); localStorage.setItem('qcSakuyoCacheDate',new Date().toLocaleString('ja-JP')); localStorage.setItem('qcSakuyoCacheCount',String(QC_SAKUYO.length)); }catch(e){}
+      } else {
+        _setSakuyoStatus('⚠️ スプレッドシート取得0件 → キャッシュを確認中...','#b45309');
+        // 0件の場合もキャッシュフォールバック
+        try{ var c=localStorage.getItem('qcSakuyoCache'); if(c){ QC_SAKUYO=JSON.parse(c); _setSakuyoStatus('✓ '+QC_SAKUYO.length+'件読み込み済み（キャッシュ）','#15803d'); return; } }catch(e){}
+        _setSakuyoStatus('❌ データなし。「📤 予定更新」からファイルを読み込んでください','#dc2626');
+      }
+    }, function(e){
+      console.warn('[QC] getSakuyoData GAS失敗:', e);
       // GAS失敗 → localStorageキャッシュから復元
       try {
         var cached = localStorage.getItem('qcSakuyoCache');
-        if(cached){ QC_SAKUYO = JSON.parse(cached); return; }
-      } catch(e){}
+        if(cached){ QC_SAKUYO = JSON.parse(cached); _setSakuyoStatus('✓ '+QC_SAKUYO.length+'件読み込み済み（キャッシュ）','#15803d'); return; }
+      } catch(e2){}
       QC_SAKUYO = [];
+      _setSakuyoStatus('❌ GAS接続失敗 & キャッシュなし。「📤 予定更新」からファイルを読み込んでください','#dc2626');
     });
     // sakuyo検索
     document.getElementById('qc-sakuyo-search').addEventListener('input', qcOnSakuyoInput);
