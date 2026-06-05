@@ -2110,19 +2110,36 @@ function ganttDragUp(e){
   const snapMin=Math.round((WORK_START+dropX/tw*(WORK_END-WORK_START))/5)*5;
 
   // 全日付から対象タスクを検索（繰越日付も含む）
-  let foundTask=null;
-  for(const tasks of Object.values(tasksByDate)){
+  let foundTask=null, foundDate=curDate;
+  for(const [ds,tasks] of Object.entries(tasksByDate)){
     const t=tasks.find(t=>t.id===ganttBlockDrag.id);
-    if(t){foundTask=t;break;}
+    if(t){foundTask=t;foundDate=ds;break;}
   }
   if(foundTask){
-    foundTask.startMin=Math.max(WORK_START,Math.min(WORK_END-30,snapMin));
+    const targetAss=targetAssignee||foundTask.assignee;
+
+    // ① 担当者変更
     if(targetAssignee&&foundTask.assignee!==targetAssignee){
       foundTask.assignee=targetAssignee;
       const r=requests.find(r=>r.id===foundTask.reqId);
       if(r){r.assignee=targetAssignee;}
       renderRequestList();
     }
+
+    // ② ドロップ位置を仮セット（順序決定用）
+    foundTask.startMin=Math.max(WORK_START,Math.min(WORK_END-30,snapMin));
+
+    // ③ 同担当者タスクをstartMin昇順で並び替え（挿入位置を反映）
+    const dayTasks=tasksByDate[foundDate]||[];
+    dayTasks.sort((a,b)=>{
+      if(a.assignee!==b.assignee)return 0; // 別担当者の相対順は維持
+      return(a.startMin??99999)-(b.startMin??99999);
+    });
+
+    // ④ その担当者のstartMinをリセット → autoArrangeで隙間なく詰め直す
+    dayTasks.filter(t=>t.assignee===targetAss).forEach(t=>t.startMin=null);
+    autoArrange(foundDate);
+
     saveTasksToFirebase();renderGantt();renderDetail();
   }
   ganttBlockDrag=null;
