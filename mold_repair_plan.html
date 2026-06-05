@@ -1611,8 +1611,11 @@ function renderGantt(){
   for(let h=8;h<=20;h++){const m=h*60;if(m<WORK_START||m>WORK_END)continue;glines.push(`<div class="gline h" style="left:${mx(m)}px"></div>`)}
   const bzs=BREAKS.map(b=>`<div class="bzone" style="left:${mx(b.s)}px;width:${dw(b.s,b.e)}px"></div>`).join('');
   const grid=`<div class="ggrid">${glines.join('')}${bzs}</div>`;
-  // 仕切り線（予定と実績の境界線）
-  const divLine=`<div style='position:absolute;left:0;right:0;top:34px;height:1px;background:var(--border);pointer-events:none;z-index:1'></div>`;
+  // 仕切り線（計画2段 と 実績1段 の境界）
+  // 計画行: top:2px h:30px (row0) / top:34px h:30px (row1)  → 64px まで
+  // 実績行: top:66px h:28px
+  const PLAN_H=30, PLAN_R0=2, PLAN_R1=34, ACT_TOP=66, ACT_H=28, TRACK_H=96;
+  const divLine=`<div style='position:absolute;left:0;right:0;top:64px;height:1px;background:var(--border);pointer-events:none;z-index:1'></div>`;
   const gridWithDiv=grid+divLine;
 
   const tasks=getDate(curDate);
@@ -1622,87 +1625,94 @@ function renderGantt(){
     const lc=a==='matsumoto'?'lm':'ln';
     const myTasks=tasks.filter(t=>t.assignee===a);
 
-    const blocks=myTasks.flatMap(t=>{
-      if(t.startMin===null)return[];
+    // ===== 計画バー：2段レイアウト（重なる場合は2段目に配置） =====
+    // 各行の末尾の終端時刻を記録して重複判定
+    const planRowEnd=[0,0]; // row0, row1 の終端（分）
+    const taskMeta=myTasks.filter(t=>t.startMin!==null).map(t=>{
       const tStatus=t.actual?.status||'pending';
       const isWorking=tStatus==='working'||(!!t.actual?.start&&!t.actual?.end);
       const isDone=tStatus==='done'||(!!t.actual?.start&&!!t.actual?.end);
-      const blockStyle=isWorking?';z-index:5':isDone?';opacity:.7':'';  const blockClass=isWorking?' working-block':'';
       const repMin=Math.round((t.hours-trialH(t.trialSteps))*60);
       const planRepEnd=addWork(t.startMin,repMin);
-      // 早期完了判定：実績終了が計画終了より早い場合
       const ae=minToMs(t.actual?.end);
       const isDoneEarly=isDone&&ae!==null&&ae<planRepEnd;
-      const repEnd=isDoneEarly?ae:planRepEnd; // バー終端（早期完了時は短縮）
+      const repEnd=isDoneEarly?ae:planRepEnd;
       const trialEnd=addWork(planRepEnd,Math.round(trialH(t.trialSteps)*60));
-      const bc=a==='matsumoto'?'bm':'bn';
+      const visualEnd=Math.max(planRepEnd,trialEnd);
+      // 行割り当て：row0 に収まらなければ row1 へ
+      let row=0;
+      if(t.startMin<planRowEnd[0]){
+        row=(t.startMin>=planRowEnd[1])?1:0; // row1が空いていれば1、両方埋まっていれば0に重ねる
+      }
+      planRowEnd[row]=Math.max(planRowEnd[row],visualEnd);
+      return{t,tStatus,isWorking,isDone,planRepEnd,ae,isDoneEarly,repEnd,trialEnd,row};
+    });
 
+    const blocks=taskMeta.flatMap(({t,tStatus,isWorking,isDone,planRepEnd,ae,isDoneEarly,repEnd,trialEnd,row})=>{
+      const blockStyle=isWorking?';z-index:5':isDone?';opacity:.75':'';
+      const blockClass=isWorking?' working-block':'';
+      const bc=a==='matsumoto'?'bm':'bn';
+      const planTop=row===0?PLAN_R0:PLAN_R1; // 1段目:2px / 2段目:34px
+
+      // --- 計画バー ---
       const rx=mx(t.startMin),rw=Math.max(4,mx(repEnd)-mx(t.startMin));
       const res=[`<div class="gblock ${bc}${blockClass}"
-        style="left:${rx}px;width:${rw}px;top:2px;height:42px${blockStyle};cursor:grab;user-select:none"
+        style="left:${rx}px;width:${rw}px;top:${planTop}px;height:${PLAN_H}px${blockStyle};cursor:grab;user-select:none"
         onmousedown="ganttBlockMouseDown(event,'${t.id}','${a}')"
-        title="${t.name} (ドラッグで時間帯を移動 / 担当行をまたいで担当変更可)">
-        <div class="blabel">${t.name}</div>
-        <div class="btime">${fmtMin(t.startMin)}〜${fmtMin(repEnd)}${isDoneEarly?'✓':''}</div>
+        title="${t.name} (ドラッグで時間帯を移動)">
+        <div class="blabel" style="font-size:11px">${t.name}</div>
+        <div class="btime" style="font-size:9px">${fmtMin(t.startMin)}〜${fmtMin(repEnd)}${isDoneEarly?'✓':''}</div>
       </div>`];
 
-      // 早期完了の空き時間を緑斜線で表示（この時間帯に新しい作業を割付可）
+      // 早期完了の空き時間（緑斜線）
       if(isDoneEarly){
         const savedX=mx(ae),savedW=Math.max(0,mx(planRepEnd)-savedX);
         if(savedW>2){
           const savedMin=Math.round((planRepEnd-ae)/60*10)/10;
-          res.push(`<div style="position:absolute;left:${savedX}px;width:${savedW}px;top:2px;height:42px;
-            background:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(22,163,74,.15) 3px,rgba(22,163,74,.15) 6px);
+          res.push(`<div style="position:absolute;left:${savedX}px;width:${savedW}px;top:${planTop}px;height:${PLAN_H}px;
+            background:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(22,163,74,.18) 3px,rgba(22,163,74,.18) 6px);
             border-top:1.5px dashed #16a34a;border-right:1.5px dashed #16a34a;border-bottom:1.5px dashed #16a34a;
-            border-radius:0 5px 5px 0;pointer-events:none;z-index:2"
-            title="早期完了で空いた時間（${savedMin}H）- 新しい作業を割付できます"></div>`);
+            border-radius:0 4px 4px 0;pointer-events:none;z-index:2"
+            title="早期完了 空き${savedMin}H"></div>`);
         }
       }
 
+      // トライバー（計画バーと同じ段）
       if(t.trialSteps>0&&trialEnd>planRepEnd){
         const tx=mx(planRepEnd),ttw=dw(planRepEnd,trialEnd);
-        res.push(`<div class="gblock btrial${blockClass}" style="left:${tx}px;width:${ttw}px;top:2px;height:42px${blockStyle}"
-          onclick="openActModal('${t.id}')" title="${t.name} トライ">
-          <div class="blabel">${t.name}</div>
-          <div class="btime">TRY ${fmtMin(planRepEnd)}〜${fmtMin(trialEnd)}</div>
+        res.push(`<div class="gblock btrial${blockClass}"
+          style="left:${tx}px;width:${ttw}px;top:${planTop}px;height:${PLAN_H}px${blockStyle}"
+          onclick="openActModal('${t.id}')" title="${t.name} TRY">
+          <div class="blabel" style="font-size:11px">${t.name}</div>
+          <div class="btime" style="font-size:9px">TRY ${fmtMin(planRepEnd)}〜${fmtMin(trialEnd)}</div>
         </div>`);
       }
 
-      // 実績バー（下段）
+      // --- 実績バー（1段・固定位置） ---
       const as=minToMs(t.actual.start),ae2=minToMs(t.actual.end);
-      const ay=48,ah=36;
       const planTotalMin=Math.round(t.hours*60);
       if(as!==null){
-        // 作業中（開始のみ）または完了（開始+終了）
         const dispEnd=ae2!==null?ae2:new Date().getHours()*60+new Date().getMinutes();
-        const actMin=dispEnd-as;
-        const ox=mx(as);
-        const ow=Math.max(30,ae2!==null?mx(ae2)-mx(as):mx(dispEnd)-mx(as));
+        const ox=mx(as),ow=Math.max(30,ae2!==null?mx(ae2)-mx(as):mx(dispEnd)-mx(as));
         const oc=a==='matsumoto'?'act-bar-m':'act-bar-n';
-        // 差異計算（予定終了 vs 実績終了）
         const planEndMin=addWork(t.startMin,planTotalMin);
         const diffMin=ae2!==null?ae2-planEndMin:null;
         const diffTxt=diffMin===null?'作業中':diffMin===0?'±0':diffMin>0?'+'+diffMin+'分遅':diffMin+'分早';
         const diffColor=diffMin===null?'#6b7394':diffMin>5?'var(--danger)':diffMin<-5?'var(--ok)':'var(--text2)';
-        const shortName=t.name;  // 幅に応じてoverflowで制御
         const actBarDiv=document.createElement('div');
         actBarDiv.className=oc;
-        actBarDiv.style.cssText='position:absolute;left:'+ox+'px;width:'+ow+'px;top:'+ay+'px;height:'+ah+'px;border-radius:4px;cursor:pointer;display:flex;align-items:center;padding:0 5px;overflow:hidden;gap:4px';
+        actBarDiv.style.cssText=`position:absolute;left:${ox}px;width:${ow}px;top:${ACT_TOP}px;height:${ACT_H}px;border-radius:4px;cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;padding:2px 5px;overflow:hidden`;
         actBarDiv.dataset.tid=t.id;
         actBarDiv.title=t.name+' 実績: '+t.actual.start+'〜'+(t.actual.end||'進行中')+' ('+diffTxt+')';
-        actBarDiv.style.flexDirection='column';
-        actBarDiv.style.alignItems='flex-start';
-        actBarDiv.style.padding='2px 5px';
-        actBarDiv.innerHTML='<span style="font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;width:100%;line-height:1.3">'+shortName+'</span>'
-          +'<span style="font-size:10px;color:'+diffColor+';font-weight:700;line-height:1.3">'+diffTxt+'</span>';
+        actBarDiv.innerHTML=`<span style="font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;width:100%;line-height:1.3">${t.name}</span>`
+          +`<span style="font-size:10px;color:${diffColor};font-weight:700;line-height:1.3">${diffTxt}</span>`;
         actBarDiv.onclick=function(){openActModal(this.dataset.tid);};
         res.push(actBarDiv.outerHTML);
       } else {
         // 実績未入力：ストライプ
         const planEnd=trialEnd>planRepEnd?trialEnd:planRepEnd;
         const ox=mx(t.startMin),ow=Math.max(4,mx(planEnd)-mx(t.startMin));
-        const stripeId=t.id;
-        res.push('<div style="position:absolute;left:'+ox+'px;width:'+ow+'px;top:'+ay+'px;height:'+ah+'px;border-radius:4px;cursor:pointer;background:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(0,0,0,.04) 3px,rgba(0,0,0,.04) 6px);border:1px dashed var(--border2)" data-tid="'+stripeId+'" onclick="openActModal(this.dataset.tid)" title="実績未入力（クリックで入力）"></div>');
+        res.push(`<div style="position:absolute;left:${ox}px;width:${ow}px;top:${ACT_TOP}px;height:${ACT_H}px;border-radius:4px;cursor:pointer;background:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(0,0,0,.04) 3px,rgba(0,0,0,.04) 6px);border:1px dashed var(--border2)" data-tid="${t.id}" onclick="openActModal(this.dataset.tid)" title="実績未入力（クリックで入力）"></div>`);
       }
       return res;
     });
@@ -1801,7 +1811,7 @@ function renderGantt(){
 
     return`<div class="person-section">
       <div class="grow">
-        <div class="glabel ${lc}" style="min-height:90px;width:78px;min-width:78px;flex-shrink:0;flex-direction:column;gap:3px;justify-content:center">
+        <div class="glabel ${lc}" style="min-height:${TRACK_H}px;width:78px;min-width:78px;flex-shrink:0;flex-direction:column;gap:3px;justify-content:center">
           <div>${lbl}</div>
           <div style="font-size:9px;opacity:.7">残業</div>
           <div style="display:flex;align-items:center;gap:2px">
@@ -1810,7 +1820,7 @@ function renderGantt(){
             <span style="font-size:9px;opacity:.7">H</span>
           </div>
         </div>
-        <div class="gtrack" data-assignee="${a}" style="width:${tw}px;height:90px">${gridWithDiv}${otZone}${blocks.join('')}</div>
+        <div class="gtrack" data-assignee="${a}" style="width:${tw}px;height:${TRACK_H}px">${gridWithDiv}${otZone}${blocks.join('')}</div>
       </div>
       ${detailHtml}
     </div>`;
