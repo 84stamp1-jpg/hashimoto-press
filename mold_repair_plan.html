@@ -2064,9 +2064,7 @@ function ganttBlockMouseDown(e,id,assignee){
 function ganttDragMove(e){
   if(!ganttBlockDrag)return;
   if(!ganttBlockDrag.moving){
-    const dx=Math.abs(e.clientX-ganttBlockDrag.startX);
-    const dy=Math.abs(e.clientY-ganttBlockDrag.startY);
-    if(dx>5||dy>5){
+    if(Math.abs(e.clientX-ganttBlockDrag.startX)>4||Math.abs(e.clientY-ganttBlockDrag.startY)>4){
       ganttBlockDrag.moving=true;
       document.body.style.cursor='grabbing';
     }
@@ -2078,71 +2076,94 @@ function ganttDragUp(e){
   document.removeEventListener('mouseup',ganttDragUp);
   document.body.style.cursor='';
 
-  if(!ganttBlockDrag.moving){
-    // 移動なし＝クリック → 実績モーダルを開く
-    openActModal(ganttBlockDrag.id);
-    ganttBlockDrag=null;
+  const dragId=ganttBlockDrag.id;
+  const blockOffsetX=ganttBlockDrag.blockOffsetX;
+  const wasDragging=ganttBlockDrag.moving;
+  ganttBlockDrag=null; // 先にリセット
+
+  if(!wasDragging){
+    // クリック（4px未満の移動）→ 実績モーダルを開く
+    // 繰越タスクも対応（全日付を検索してcurDateを一時切替）
+    for(const [ds,tasks] of Object.entries(tasksByDate)){
+      if(tasks.some(t=>t.id===dragId)){
+        const saved=curDate; curDate=ds;
+        openActModal(dragId);
+        if(curDate!==saved){curDate=saved;buildDateNav();}
+        break;
+      }
+    }
     return;
   }
 
-  // ドロップ先のgtrackを特定（全担当行を検索）
+  // ===== ドラッグ確定 =====
+
+  // ① ドロップ先担当者を特定
+  //    person-section全体（ガントバー＋下の詳細カード）を判定エリアにして寛容に判定
   let targetTrack=null;
-  document.querySelectorAll('.gtrack').forEach(track=>{
-    const r=track.getBoundingClientRect();
-    if(e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom){
-      targetTrack=track;
-    }
+  document.querySelectorAll('.person-section').forEach(section=>{
+    const r=section.getBoundingClientRect();
+    if(e.clientY>=r.top&&e.clientY<=r.bottom) targetTrack=section.querySelector('.gtrack');
   });
-  if(!targetTrack){ganttBlockDrag=null;return;}
+  // フォールバック：最も近いtrackを使用
+  if(!targetTrack){
+    let minDist=Infinity;
+    document.querySelectorAll('.gtrack').forEach(track=>{
+      const r=track.getBoundingClientRect();
+      const dist=Math.abs(e.clientY-(r.top+r.bottom)/2);
+      if(dist<minDist){minDist=dist;targetTrack=track;}
+    });
+  }
+  if(!targetTrack)return;
 
   const targetAssignee=targetTrack.dataset.assignee;
   const trackRect=targetTrack.getBoundingClientRect();
-  const dropX=e.clientX-trackRect.left-ganttBlockDrag.blockOffsetX;
+  const dropX=e.clientX-trackRect.left-blockOffsetX;
 
-  // px → 分変換（renderGanttと同じ計算）
+  // ② px→分変換（renderGanttと同じ計算）
   const wrap=document.querySelector('.gwrap');
   const wrapW=wrap?wrap.getBoundingClientRect().width:800;
   const viewW=Math.max(500,wrapW-82);
-  const VIEW_END=17*60+10;
-  const VIEW_MIN=VIEW_END-WORK_START;
-  const HOUR_PX=Math.floor(viewW/VIEW_MIN*60);
-  const tw=(WORK_END-WORK_START)/60*HOUR_PX;
-  const snapMin=Math.round((WORK_START+dropX/tw*(WORK_END-WORK_START))/5)*5;
+  const VIEW_MIN=(17*60+10)-WORK_START;
+  const tw=(WORK_END-WORK_START)/60*Math.floor(viewW/VIEW_MIN*60);
+  const snapMin=Math.max(WORK_START,Math.min(WORK_END-60,
+    Math.round((WORK_START+dropX/tw*(WORK_END-WORK_START))/5)*5));
 
-  // 全日付から対象タスクを検索（繰越日付も含む）
-  let foundTask=null, foundDate=curDate;
+  // ③ 全日付から対象タスクを検索
+  let foundTask=null,foundDate=curDate;
   for(const [ds,tasks] of Object.entries(tasksByDate)){
-    const t=tasks.find(t=>t.id===ganttBlockDrag.id);
+    const t=tasks.find(t=>t.id===dragId);
     if(t){foundTask=t;foundDate=ds;break;}
   }
-  if(foundTask){
-    const targetAss=targetAssignee||foundTask.assignee;
+  if(!foundTask)return;
 
-    // ① 担当者変更
-    if(targetAssignee&&foundTask.assignee!==targetAssignee){
-      foundTask.assignee=targetAssignee;
-      const r=requests.find(r=>r.id===foundTask.reqId);
-      if(r){r.assignee=targetAssignee;}
-      renderRequestList();
-    }
-
-    // ② ドロップ位置を仮セット（順序決定用）
-    foundTask.startMin=Math.max(WORK_START,Math.min(WORK_END-30,snapMin));
-
-    // ③ 同担当者タスクをstartMin昇順で並び替え（挿入位置を反映）
-    const dayTasks=tasksByDate[foundDate]||[];
-    dayTasks.sort((a,b)=>{
-      if(a.assignee!==b.assignee)return 0; // 別担当者の相対順は維持
-      return(a.startMin??99999)-(b.startMin??99999);
-    });
-
-    // ④ その担当者のstartMinをリセット → autoArrangeで隙間なく詰め直す
-    dayTasks.filter(t=>t.assignee===targetAss).forEach(t=>t.startMin=null);
-    autoArrange(foundDate);
-
-    saveTasksToFirebase();renderGantt();renderDetail();
+  // ④ 担当者変更
+  if(targetAssignee&&foundTask.assignee!==targetAssignee){
+    foundTask.assignee=targetAssignee;
+    const r=requests.find(r=>r.id===foundTask.reqId);
+    if(r) r.assignee=targetAssignee;
   }
-  ganttBlockDrag=null;
+  const targetAss=foundTask.assignee;
+
+  // ⑤ ドロップ位置で順序を決める（仮startMin）
+  foundTask.startMin=snapMin;
+
+  // ⑥ 同担当者タスクをstartMin昇順でソートし配列順を確定
+  //    → autoArrangeがこの順序で詰め直す
+  const arr=tasksByDate[foundDate];
+  if(arr){
+    const sameAss=arr.filter(t=>t.assignee===targetAss)
+                     .sort((a,b)=>(a.startMin??99999)-(b.startMin??99999));
+    const otherAss=arr.filter(t=>t.assignee!==targetAss);
+    tasksByDate[foundDate]=[...sameAss,...otherAss]; // 順序確定
+    sameAss.forEach(t=>t.startMin=null); // autoArrangeに詰め直しを委ねる
+  }
+
+  // ⑦ 詰め直し＆保存
+  autoArrange(foundDate);
+  renderRequestList();
+  saveTasksToFirebase();
+  renderGantt();
+  renderDetail();
 }
 function toggleInlineEdit(){
   const sec=document.getElementById('inlineEditSection');
