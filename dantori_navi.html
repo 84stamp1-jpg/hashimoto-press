@@ -6260,21 +6260,55 @@ window.qcOnTabActivated = function(){
       var el=document.getElementById('qc-sakuyo-status');
       if(el){ el.textContent=msg; el.style.color=color||'#888'; }
     }
-    // まずlocalStorageキャッシュを即時反映
+    // まずlocalStorageキャッシュを即時反映（このPC用）
     try{
       var _initCache = localStorage.getItem('qcSakuyoCache');
       if(_initCache){
         QC_SAKUYO = JSON.parse(_initCache);
-        QC_SAKUYO_FROM_FILE = (localStorage.getItem('qcSakuyoFromFile') === '1');
-        var src = QC_SAKUYO_FROM_FILE ? 'ファイル' : 'キャッシュ';
-        _setSakuyoStatus('✓ '+QC_SAKUYO.length+'件（'+src+'）','#15803d');
+        QC_SAKUYO_FROM_FILE = true;
+        _setSakuyoStatus('✓ '+QC_SAKUYO.length+'件（キャッシュ）— 最新データ確認中...','#15803d');
       } else {
-        _setSakuyoStatus('⏳ 生産予定データを読み込み中...','#1F4E79');
+        _setSakuyoStatus('⏳ 生産予定データをFirebaseから取得中...','#1F4E79');
       }
-    }catch(e){ _setSakuyoStatus('⏳ 生産予定データを読み込み中...','#1F4E79'); }
+    }catch(e){ _setSakuyoStatus('⏳ 生産予定データをFirebaseから取得中...','#1F4E79'); }
 
-    // 作業予定はExcelアップロード専用（GASのkintone取得は使用しない）
-    if(!QC_SAKUYO || !QC_SAKUYO.length){
+    // Firebaseから最新データを取得（全PC共有データ）
+    var _fbUrl = (config.firebaseUrl || '').replace(/\/+$/,'');
+    if(_fbUrl){
+      fetch(_fbUrl+'/settings/qcSakuyo.json')
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(fbData){
+          if(fbData && fbData.data && fbData.data.length > 0){
+            // ローカルキャッシュより新しければ更新
+            var localDate = parseInt(localStorage.getItem('qcSakuyoFbUpdatedAt')||'0');
+            if(!QC_SAKUYO || !QC_SAKUYO.length || fbData.updatedAt > localDate){
+              QC_SAKUYO = fbData.data;
+              QC_SAKUYO_FROM_FILE = true;
+              try{
+                localStorage.setItem('qcSakuyoCache', JSON.stringify(fbData.data));
+                localStorage.setItem('qcSakuyoCacheDate', new Date(fbData.updatedAt).toLocaleString('ja-JP'));
+                localStorage.setItem('qcSakuyoCacheCount', String(fbData.count||fbData.data.length));
+                localStorage.setItem('qcSakuyoFromFile', '1');
+                localStorage.setItem('qcSakuyoFbUpdatedAt', String(fbData.updatedAt));
+              }catch(e){}
+              _setSakuyoStatus('✓ '+QC_SAKUYO.length+'件（Firebase共有データ）','#15803d');
+            } else {
+              _setSakuyoStatus('✓ '+QC_SAKUYO.length+'件（最新）','#15803d');
+            }
+          } else if(!QC_SAKUYO || !QC_SAKUYO.length){
+            _setSakuyoStatus('❌ データなし。「📤 予定更新」からExcelを読み込んでください','#dc2626');
+          } else {
+            _setSakuyoStatus('✓ '+QC_SAKUYO.length+'件','#15803d');
+          }
+        })
+        .catch(function(){
+          if(!QC_SAKUYO || !QC_SAKUYO.length){
+            _setSakuyoStatus('❌ データなし。「📤 予定更新」からExcelを読み込んでください','#dc2626');
+          } else {
+            _setSakuyoStatus('✓ '+QC_SAKUYO.length+'件（キャッシュ）','#15803d');
+          }
+        });
+    } else if(!QC_SAKUYO || !QC_SAKUYO.length){
       _setSakuyoStatus('❌ データなし。「📤 予定更新」からExcelを読み込んでください','#dc2626');
     }
     // sakuyo検索
@@ -6478,17 +6512,41 @@ window.qcSendSakuyoToGas = function(){
   var filtered = qcFilterSakuyo(QC_UPLOAD_PARSED);
   var excluded = QC_UPLOAD_PARSED.length - filtered.length;
 
-  // QC_SAKUYO に即座に反映（ファイル優先フラグを立てる）
+  // QC_SAKUYO に即座に反映
   QC_SAKUYO = filtered;
   QC_SAKUYO_FROM_FILE = true;
 
-  // localStorageにキャッシュ保存（次回起動時も保持）
+  // localStorageにキャッシュ保存（このPC用）
   try {
     localStorage.setItem('qcSakuyoCache',      JSON.stringify(filtered));
     localStorage.setItem('qcSakuyoCacheDate',  new Date().toLocaleString('ja-JP'));
     localStorage.setItem('qcSakuyoCacheCount', String(filtered.length));
-    localStorage.setItem('qcSakuyoFromFile',   '1'); // ファイル由来フラグ
+    localStorage.setItem('qcSakuyoFromFile',   '1');
   } catch(e){ console.warn('localStorage保存失敗:', e); }
+
+  // Firebaseにも保存（全PC共有）
+  var fbUrl = (config.firebaseUrl || '').replace(/\/+$/,'');
+  if(fbUrl){
+    statusEl.textContent = '⏳ Firebaseに保存中...';
+    fetch(fbUrl+'/settings/qcSakuyo.json', {
+      method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ data: filtered, updatedAt: Date.now(), count: filtered.length })
+    }).then(function(r){
+      if(r.ok){
+        statusEl.style.color='#15803d';
+        statusEl.textContent='✓ '+filtered.length+'件を読み込み、全PCに共有しました（'+new Date().toLocaleString('ja-JP')+'）';
+      } else {
+        statusEl.style.color='#b45309';
+        statusEl.textContent='⚠ ローカルには保存済み。Firebase保存失敗（HTTP '+r.status+'）';
+      }
+    }).catch(function(e){
+      statusEl.style.color='#b45309';
+      statusEl.textContent='⚠ ローカルには保存済み。Firebase接続エラー: '+e.message;
+    });
+    sendBtn.disabled = false;
+    return; // 以降のstatusEl設定をスキップ
+  }
 
   statusEl.style.display = 'block';
   statusEl.style.color   = '#15803d';
