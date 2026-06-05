@@ -1555,7 +1555,10 @@ function autoArrange(ds){
       }
       t.overflow=false;
       t.startMin=cur;
-      cur=addWork(cur,Math.round(t.hours*60),wEnd);
+      // 実績終了時刻がある場合はそれを次タスクの開始基点に使う
+      // （早期完了→繰り上げ、遅延→後続を押し出し）
+      const ae=minToMs(t.actual?.end);
+      cur=(ae!==null&&ae>cur)?ae:addWork(cur,Math.round(t.hours*60),wEnd);
     });
   });
 }
@@ -1624,44 +1627,61 @@ function renderGantt(){
       const tStatus=t.actual?.status||'pending';
       const isWorking=tStatus==='working'||(!!t.actual?.start&&!t.actual?.end);
       const isDone=tStatus==='done'||(!!t.actual?.start&&!!t.actual?.end);
-      const blockStyle=isWorking?';z-index:5':isDone?';opacity:.55':'';  const blockClass=isWorking?' working-block':'';
+      const blockStyle=isWorking?';z-index:5':isDone?';opacity:.7':'';  const blockClass=isWorking?' working-block':'';
       const repMin=Math.round((t.hours-trialH(t.trialSteps))*60);
-      const repEnd=addWork(t.startMin,repMin);
-      const trialEnd=addWork(repEnd,Math.round(trialH(t.trialSteps)*60));
+      const planRepEnd=addWork(t.startMin,repMin);
+      // 早期完了判定：実績終了が計画終了より早い場合
+      const ae=minToMs(t.actual?.end);
+      const isDoneEarly=isDone&&ae!==null&&ae<planRepEnd;
+      const repEnd=isDoneEarly?ae:planRepEnd; // バー終端（早期完了時は短縮）
+      const trialEnd=addWork(planRepEnd,Math.round(trialH(t.trialSteps)*60));
       const bc=a==='matsumoto'?'bm':'bn';
 
-      const rx=mx(t.startMin),rw=dw(t.startMin,repEnd);
+      const rx=mx(t.startMin),rw=Math.max(4,mx(repEnd)-mx(t.startMin));
       const res=[`<div class="gblock ${bc}${blockClass}"
         style="left:${rx}px;width:${rw}px;top:2px;height:42px${blockStyle};cursor:grab;user-select:none"
         onmousedown="ganttBlockMouseDown(event,'${t.id}','${a}')"
         title="${t.name} (ドラッグで時間帯を移動 / 担当行をまたいで担当変更可)">
         <div class="blabel">${t.name}</div>
-        <div class="btime">${fmtMin(t.startMin)}〜${fmtMin(repEnd)}</div>
+        <div class="btime">${fmtMin(t.startMin)}〜${fmtMin(repEnd)}${isDoneEarly?'✓':''}</div>
       </div>`];
 
-      if(t.trialSteps>0&&trialEnd>repEnd){
-        const tx=mx(repEnd),ttw=dw(repEnd,trialEnd);
+      // 早期完了の空き時間を緑斜線で表示（この時間帯に新しい作業を割付可）
+      if(isDoneEarly){
+        const savedX=mx(ae),savedW=Math.max(0,mx(planRepEnd)-savedX);
+        if(savedW>2){
+          const savedMin=Math.round((planRepEnd-ae)/60*10)/10;
+          res.push(`<div style="position:absolute;left:${savedX}px;width:${savedW}px;top:2px;height:42px;
+            background:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(22,163,74,.15) 3px,rgba(22,163,74,.15) 6px);
+            border-top:1.5px dashed #16a34a;border-right:1.5px dashed #16a34a;border-bottom:1.5px dashed #16a34a;
+            border-radius:0 5px 5px 0;pointer-events:none;z-index:2"
+            title="早期完了で空いた時間（${savedMin}H）- 新しい作業を割付できます"></div>`);
+        }
+      }
+
+      if(t.trialSteps>0&&trialEnd>planRepEnd){
+        const tx=mx(planRepEnd),ttw=dw(planRepEnd,trialEnd);
         res.push(`<div class="gblock btrial${blockClass}" style="left:${tx}px;width:${ttw}px;top:2px;height:42px${blockStyle}"
           onclick="openActModal('${t.id}')" title="${t.name} トライ">
           <div class="blabel">${t.name}</div>
-          <div class="btime">TRY ${fmtMin(repEnd)}〜${fmtMin(trialEnd)}</div>
+          <div class="btime">TRY ${fmtMin(planRepEnd)}〜${fmtMin(trialEnd)}</div>
         </div>`);
       }
 
       // 実績バー（下段）
-      const as=minToMs(t.actual.start),ae=minToMs(t.actual.end);
+      const as=minToMs(t.actual.start),ae2=minToMs(t.actual.end);
       const ay=48,ah=36;
       const planTotalMin=Math.round(t.hours*60);
       if(as!==null){
         // 作業中（開始のみ）または完了（開始+終了）
-        const dispEnd=ae!==null?ae:new Date().getHours()*60+new Date().getMinutes();
+        const dispEnd=ae2!==null?ae2:new Date().getHours()*60+new Date().getMinutes();
         const actMin=dispEnd-as;
         const ox=mx(as);
-        const ow=Math.max(30,ae!==null?mx(ae)-mx(as):mx(dispEnd)-mx(as));
+        const ow=Math.max(30,ae2!==null?mx(ae2)-mx(as):mx(dispEnd)-mx(as));
         const oc=a==='matsumoto'?'act-bar-m':'act-bar-n';
         // 差異計算（予定終了 vs 実績終了）
         const planEndMin=addWork(t.startMin,planTotalMin);
-        const diffMin=ae!==null?ae-planEndMin:null;
+        const diffMin=ae2!==null?ae2-planEndMin:null;
         const diffTxt=diffMin===null?'作業中':diffMin===0?'±0':diffMin>0?'+'+diffMin+'分遅':diffMin+'分早';
         const diffColor=diffMin===null?'#6b7394':diffMin>5?'var(--danger)':diffMin<-5?'var(--ok)':'var(--text2)';
         const shortName=t.name;  // 幅に応じてoverflowで制御
@@ -1679,7 +1699,7 @@ function renderGantt(){
         res.push(actBarDiv.outerHTML);
       } else {
         // 実績未入力：ストライプ
-        const planEnd=trialEnd>repEnd?trialEnd:repEnd;
+        const planEnd=trialEnd>planRepEnd?trialEnd:planRepEnd;
         const ox=mx(t.startMin),ow=Math.max(4,mx(planEnd)-mx(t.startMin));
         const stripeId=t.id;
         res.push('<div style="position:absolute;left:'+ox+'px;width:'+ow+'px;top:'+ay+'px;height:'+ah+'px;border-radius:4px;cursor:pointer;background:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(0,0,0,.04) 3px,rgba(0,0,0,.04) 6px);border:1px dashed var(--border2)" data-tid="'+stripeId+'" onclick="openActModal(this.dataset.tid)" title="実績未入力（クリックで入力）"></div>');

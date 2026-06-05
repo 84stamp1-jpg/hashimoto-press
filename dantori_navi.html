@@ -6267,7 +6267,8 @@ window.qcOnTabActivated = function(){
     }catch(e){ _setSakuyoStatus('⏳ 生産予定データを読み込み中...','#1F4E79'); }
 
     qcGasPost('getSakuyoData', {}, function(res){
-      var fetched = qcFilterSakuyo((res&&res.ok) ? (res.data||[]) : []);
+      var raw = (res&&res.ok) ? (res.data||[]) : [];
+      var fetched = qcFilterSakuyo(raw);
       if(fetched.length > 0){
         // GASから有効データ → 上書きしてキャッシュ更新
         QC_SAKUYO = fetched;
@@ -6321,6 +6322,8 @@ function qcUpdateCacheInfo(){
 
 // ----- 外注プレス等を除外するフィルタ -----
 // kosei（工程）に「外注」が含まれる行は表示しない
+// ----- 外注プレス等を除外するフィルタ -----
+// Excelアップロードで完全上書きするため、日付フィルターは不要
 function qcFilterSakuyo(data){
   return (data||[]).filter(function(s){
     return String(s.kosei||'').indexOf('外注') < 0;
@@ -6334,7 +6337,9 @@ window.qcReloadSakuyo = function(){
   st.style.color = '#1F4E79';
   st.textContent = '⏳ データを取得中…';
   qcGasPost('getSakuyoData', {}, function(res){
-    var fetched = qcFilterSakuyo((res && res.ok) ? (res.data || []) : []);
+    var raw = (res && res.ok) ? (res.data || []) : [];
+    var fetched = qcFilterSakuyo(raw);
+    if(raw.length > 0) QC_SAKUYO_RAW = raw;
     if(fetched.length > 0){
       // GASから有効データが取れた場合のみ上書き
       QC_SAKUYO = fetched;
@@ -6505,7 +6510,7 @@ window.qcSendSakuyoToGas = function(){
   var statusEl = document.getElementById('qc-upload-send-status');
   var sendBtn  = document.getElementById('qc-upload-send-btn');
 
-  // 外注プレスをフィルタリング
+  // 外注プレスをフィルタリング（元データをRAWとして保持）
   var filtered = qcFilterSakuyo(QC_UPLOAD_PARSED);
   var excluded = QC_UPLOAD_PARSED.length - filtered.length;
 
