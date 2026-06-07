@@ -4350,7 +4350,8 @@ function chipAddWithConflictCheck(wid, name){
       roles.品質確認, roles.初品出し, roles.金型取付,
       ...(roles.作業者 ? roles.作業者.split(/[,、]/).map(v=>v.trim()) : []),
       ...(entry.shiftChanges||[]).flatMap(sc =>
-        sc.workers ? sc.workers.split(/[,、]/).map(v=>v.trim()) : []
+        sc.inWorker ? [sc.inWorker] :
+        sc.workers  ? sc.workers.split(/[,、]/).map(v=>v.trim()) : []
       )
     ].filter(Boolean);
     return assigned.includes(name);
@@ -4580,7 +4581,7 @@ function onDtNoSetupChange(){
 
 // ===== 作業者交代 =====
 let _scIdx = 0; // 交代行チップIDの連番
-function addShiftChange(time='', workers=''){
+function addShiftChange(time='', outWorker='', inWorker=''){
   const container = document.getElementById('dt-shift-container');
   const uid = 'chip-wrap-shift-' + (_scIdx++);
   const row = document.createElement('div');
@@ -4588,36 +4589,44 @@ function addShiftChange(time='', workers=''){
   row.dataset.chipId = uid;
   row.style.cssText = 'display:flex;gap:6px;align-items:center;background:#f5f3ff;border:1px solid #c4b5fd;border-radius:6px;padding:5px 8px;flex-wrap:wrap;';
   row.innerHTML = `
-    <span style="font-size:10px;color:#6366f1;white-space:nowrap;font-weight:600;">交代</span>
+    <span style="font-size:10px;color:#6366f1;white-space:nowrap;font-weight:600;">⏱ 交代</span>
     <input type="time" class="sc-time" value="${time}"
       style="border:1px solid #ddd;border-radius:4px;padding:3px 6px;font-size:12px;width:88px;">
-    <span style="font-size:10px;color:#64748b;white-space:nowrap;">〜 作業者</span>
-    <div id="${uid}" class="chip-wrap" data-dlid="staffDatalist-press"
-      style="flex:1;min-width:120px;min-height:28px;"
-      onmousedown="chipWrapMousedown(event,'${uid}')">
-      <input class="chip-text-input" placeholder="名前を選択/入力" autocomplete="off"
-        oninput="chipOnInput('${uid}')"
-        onkeydown="chipOnKeydown(event,'${uid}')"
-        onblur="chipOnBlur('${uid}')"/>
-    </div>
+    <span style="font-size:10px;color:#dc2626;white-space:nowrap;font-weight:600;">退:</span>
+    <input list="staffDatalist-press" class="sc-out" value="${outWorker}" placeholder="退場者"
+      style="border:1px solid #fca5a5;border-radius:4px;padding:3px 6px;font-size:12px;width:90px;background:#fff5f5;">
+    <span style="font-size:12px;color:#64748b;">→</span>
+    <span style="font-size:10px;color:#16a34a;white-space:nowrap;font-weight:600;">入:</span>
+    <input list="staffDatalist-press" class="sc-in" value="${inWorker}" placeholder="入場者"
+      style="border:1px solid #86efac;border-radius:4px;padding:3px 6px;font-size:12px;width:90px;background:#f0fdf4;">
     <button type="button" onclick="removeShiftChange(this)"
       style="font-size:13px;color:#dc2626;background:none;border:none;cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0;">✕</button>
   `;
   container.appendChild(row);
-  // 初期値があればチップとして設定
-  if(workers) chipSet(uid, workers);
 }
 function removeShiftChange(btn){ btn.closest('.sc-row').remove(); }
 function getShiftChanges(){
   return Array.from(document.querySelectorAll('#dt-shift-container .sc-row'))
     .map(r => ({
-      time:    r.querySelector('.sc-time').value,
-      workers: chipGetValues(r.dataset.chipId).join('、'),
+      time:      r.querySelector('.sc-time').value,
+      outWorker: (r.querySelector('.sc-out').value||'').trim(),
+      inWorker:  (r.querySelector('.sc-in').value||'').trim(),
     }))
-    .filter(c => c.time && c.workers);
+    .filter(c => c.time && c.inWorker);
 }
 function clearShiftChanges(){ const c=document.getElementById('dt-shift-container'); if(c) c.innerHTML=''; }
-function setShiftChanges(changes){ clearShiftChanges(); (changes||[]).forEach(c=>addShiftChange(c.time||'',c.workers||'')); }
+function setShiftChanges(changes){
+  clearShiftChanges();
+  (changes||[]).forEach(c => {
+    // 旧フォーマット(workers)と新フォーマット(outWorker/inWorker)両対応
+    if(c.inWorker !== undefined){
+      addShiftChange(c.time||'', c.outWorker||'', c.inWorker||'');
+    } else {
+      // 旧データ：workers全体を入場者として表示（互換）
+      addShiftChange(c.time||'', '', c.workers||'');
+    }
+  });
+}
 
 function closeDantoriModal(){
   document.getElementById('dantoriModal').style.display = 'none';
@@ -4767,7 +4776,12 @@ function renderKanbanCard(d){
       ${(!d.noSetup)?`${roles.初品出し?`<div class="kcard-role"><span class="kcard-role-lbl">初品</span><span class="kcard-role-val">${roles.初品出し}</span></div>`:`<div class="kcard-role"><span class="kcard-role-lbl" style="color:#94a3b8;">初品</span><span class="kcard-role-val" style="color:#f59e0b;">未定</span></div>`}`:''}
       ${(!d.noSetup)?`${roles.金型取付?`<div class="kcard-role"><span class="kcard-role-lbl">取付</span><span class="kcard-role-val">${roles.金型取付}</span></div>`:`<div class="kcard-role"><span class="kcard-role-lbl" style="color:#94a3b8;">取付</span><span class="kcard-role-val" style="color:#f59e0b;">未定</span></div>`}`:''}
       ${roles.作業者?`<div class="kcard-role"><span class="kcard-role-lbl">作業</span><span class="kcard-role-val">${roles.作業者}</span></div>`:''}
-      ${(d.shiftChanges||[]).map(c=>`<div class="kcard-role"><span class="kcard-role-lbl" style="color:#6366f1;">⏱${c.time}</span><span class="kcard-role-val" style="color:#4338ca;">${c.workers}</span></div>`).join('')}
+      ${(d.shiftChanges||[]).map(c=>{
+        const outTxt = c.outWorker||'';
+        const inTxt  = c.inWorker ||(c.workers||'');
+        const swapTxt = outTxt ? `${outTxt}→${inTxt}` : inTxt;
+        return `<div class="kcard-role"><span class="kcard-role-lbl" style="color:#6366f1;">⏱${c.time}</span><span class="kcard-role-val" style="color:#4338ca;">${swapTxt}</span></div>`;
+      }).join('')}
     </div>` : '';
   const canEdit = d._source==='manual' || d.fromPlan;
   const editBtn = (canEdit && d._id)
@@ -4968,14 +4982,32 @@ function buildShiftRanges(entry){
     return [{ start: ps, end: pe, workers: workers0 }];
   }
   const changes = [...entry.shiftChanges]
-    .map(c => ({ time: rt_toMin(c.time), workers: (c.workers||'').split(/[,、]/).map(s=>s.trim()).filter(Boolean) }))
+    .map(c => ({
+      time: rt_toMin(c.time),
+      outWorker: (c.outWorker||'').trim(),
+      inWorker:  (c.inWorker||'').trim(),
+      // 旧フォーマット互換：workersが存在する場合はそのまま全置換
+      _legacyWorkers: (c.inWorker === undefined && c.workers)
+        ? c.workers.split(/[,、]/).map(s=>s.trim()).filter(Boolean)
+        : null
+    }))
     .filter(c => c.time !== null)
     .sort((a, b) => a.time - b.time);
   const ranges = [];
   let prev = ps, prevW = workers0;
   changes.forEach(c => {
     if(c.time > prev) ranges.push({ start: prev, end: c.time, workers: prevW });
-    prev = c.time; prevW = c.workers;
+    let newW;
+    if(c._legacyWorkers){
+      // 旧データ：全置換（互換）
+      newW = c._legacyWorkers;
+    } else {
+      // 新ロジック：outWorkerを除いてinWorkerを追加（スワップ）
+      newW = [...prevW];
+      if(c.outWorker) newW = newW.filter(w => w !== c.outWorker);
+      if(c.inWorker && !newW.includes(c.inWorker)) newW.push(c.inWorker);
+    }
+    prev = c.time; prevW = newW;
   });
   if(pe !== null && pe > prev) ranges.push({ start: prev, end: pe, workers: prevW });
   return ranges;
@@ -5077,7 +5109,8 @@ function getWorkerSchedule(name, allEntries){
     if((r.作業者  ||'').split(/[,、]/).map(s=>s.trim()).includes(name)) return true;
     // 交代後の作業者にも含まれるか確認
     if(e.shiftChanges && e.shiftChanges.some(c =>
-      (c.workers||'').split(/[,、]/).map(s=>s.trim()).includes(name))) return true;
+      (c.inWorker && c.inWorker === name) ||
+      (!c.inWorker && (c.workers||'').split(/[,、]/).map(s=>s.trim()).includes(name)))) return true;
     return false;
   }).sort((a,b) => (a.sortKey||'').localeCompare(b.sortKey||''));
 }
@@ -5707,8 +5740,10 @@ async function autoAssignRoles(){
       // 交代後の作業者もbusyに登録
       (entry.shiftChanges||[]).forEach(c => {
         const ct = toMin(c.time);
-        (c.workers||'').split(/[,、]/).map(w=>w.trim()).filter(Boolean)
-          .forEach(w => ct !== null && e !== null && markBusy(w, ct, e, `作業交代（固定）`));
+        // 入場者をbusyに登録（旧フォーマット互換）
+        const inWorkers = c.inWorker ? [c.inWorker]
+          : (c.workers||'').split(/[,、]/).map(w=>w.trim()).filter(Boolean);
+        inWorkers.forEach(w => ct !== null && e !== null && markBusy(w, ct, e, `作業交代（固定）`));
       });
       return; // 再割り振りせずスキップ
     }
@@ -9991,25 +10026,9 @@ window.saveSnapshot=function(){
   btnPrint.textContent='🖨️ PDF保存（Ctrl+P）';
   btnPrint.style.cssText='background:#2980b9;color:#fff;border:none;border-radius:5px;padding:6px 14px;font-weight:700;cursor:pointer;font-size:12px;';
   btnPrint.onclick=function(){
-    // position:fixed のままだとChromeの印刷プレビューで白紙になるため
-    // 印刷前に通常フローに切り替え、リペイントを2フレーム待ってから印刷
-    const ov=document.getElementById('print-ov');
-    ov.style.position='static';
-    ov.style.overflow='visible';
-    ov.style.height='auto';
-    // 印刷ダイアログが閉じたら元に戻す（先に登録）
-    window.addEventListener('afterprint',function restore(){
-      ov.style.position='fixed';
-      ov.style.overflow='auto';
-      ov.style.height='';
-      window.removeEventListener('afterprint',restore);
-    });
-    // Chromeがリペイントするのを2フレーム待ってからwindow.print()を呼ぶ
-    requestAnimationFrame(function(){
-      requestAnimationFrame(function(){
-        window.print();
-      });
-    });
+    // @media print CSS側で position:static!important / body>*:not(#print-ov){display:none}
+    // を設定済みのため、JS側での位置変更は不要（変更すると画面が白くなるバグの原因）
+    window.print();
   };
   const btnClose=document.createElement('button');
   btnClose.textContent='✕ 閉じる';
