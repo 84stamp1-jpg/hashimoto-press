@@ -9992,19 +9992,23 @@ window.saveSnapshot=function(){
   btnPrint.style.cssText='background:#2980b9;color:#fff;border:none;border-radius:5px;padding:6px 14px;font-weight:700;cursor:pointer;font-size:12px;';
   btnPrint.onclick=function(){
     // position:fixed のままだとChromeの印刷プレビューで白紙になるため
-    // 印刷前に通常フローに切り替え、印刷後に戻す
+    // 印刷前に通常フローに切り替え、リペイントを2フレーム待ってから印刷
     const ov=document.getElementById('print-ov');
     ov.style.position='static';
     ov.style.overflow='visible';
     ov.style.height='auto';
-    // ヘッダーバーを印刷時非表示に（すでにCSSでボタンは非表示だが念のため）
-    window.print();
-    // 印刷ダイアログが閉じたら元に戻す
+    // 印刷ダイアログが閉じたら元に戻す（先に登録）
     window.addEventListener('afterprint',function restore(){
       ov.style.position='fixed';
       ov.style.overflow='auto';
       ov.style.height='';
       window.removeEventListener('afterprint',restore);
+    });
+    // Chromeがリペイントするのを2フレーム待ってからwindow.print()を呼ぶ
+    requestAnimationFrame(function(){
+      requestAnimationFrame(function(){
+        window.print();
+      });
     });
   };
   const btnClose=document.createElement('button');
