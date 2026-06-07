@@ -29,6 +29,20 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .act-bar-m{background:#fffbe6;border:1px solid #d4a017;color:#5a4000}
 .act-bar-n{background:#fffbe6;border:1px solid #d4a017;color:#5a4000}
 .act-bar-carried{background:#fff8e1;border:1.5px dashed #f59e0b;color:#92400e}
+/* 勤怠バナー */
+#attendanceBanner{background:#fff;border-bottom:1px solid var(--border);padding:4px 16px;display:none;flex-wrap:wrap;gap:6px;align-items:center;font-size:11px}
+#attendanceBanner.has-data{display:flex}
+.att-banner-label{font-weight:700;color:var(--text2);font-size:10px;white-space:nowrap}
+.att-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;white-space:nowrap}
+.att-chip-absent{background:#fee2e2;color:#dc2626;border:1px solid #fca5a5}
+.att-chip-late{background:#fff7ed;color:#c2410c;border:1px solid #fdba74}
+.att-chip-early{background:#eff6ff;color:#1d4ed8;border:1px solid #93c5fd}
+.att-chip-date{font-size:9px;opacity:.8;margin-left:2px}
+/* ガントバッジ */
+.att-badge{display:inline-block;padding:1px 5px;border-radius:4px;font-size:9px;font-weight:700;line-height:1.4}
+.att-badge-absent{background:#fee2e2;color:#dc2626}
+.att-badge-late{background:#fff7ed;color:#c2410c}
+.att-badge-early{background:#eff6ff;color:#1d4ed8}
 @keyframes working-pulse{0%,100%{box-shadow:0 0 0 2px var(--danger)}50%{box-shadow:0 0 0 4px var(--danger),0 0 12px rgba(220,38,38,.4)}}
 .working-block{animation:working-pulse 1.8s ease-in-out infinite}
 /* HEADER */
@@ -484,9 +498,65 @@ input.nm-img-input{display:none}
     <button class="btn btn-secondary btn-sm" onclick="resetKtEdits()" title="kintone改修依頼の工数編集をすべてリセット（kintone元値に戻す）">↩ 編集リセット</button>
     <button class="btn btn-secondary btn-sm" onclick="exportLocalStorage()" title="設定データをエクスポート">📤 Export</button>
     <button class="btn btn-secondary btn-sm" onclick="importLocalStorage()" title="設定データをインポート">📥 Import</button>
+    <button class="btn btn-secondary btn-sm" onclick="openAttendanceModal()" title="欠席・遅刻・早退を登録">🗓 勤怠登録</button>
     <button class="btn btn-primary btn-sm" onclick="window.print()">🖨 印刷</button>
   </div>
 </header>
+
+<!-- 勤怠バナー -->
+<div id="attendanceBanner">
+  <span class="att-banner-label">📋 勤怠情報</span>
+  <div id="attBannerItems" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+</div>
+
+<!-- 勤怠登録モーダル -->
+<div id="attModal" class="moverlay" style="z-index:300">
+  <div class="mdlg" style="max-width:520px;width:520px;max-height:80vh;overflow-y:auto">
+    <div class="mtitle" style="display:flex;justify-content:space-between;align-items:center">
+      <span>🗓 勤怠登録</span>
+      <button class="btn btn-secondary btn-sm" onclick="closeAttendanceModal()" style="font-size:11px;padding:2px 8px">✕</button>
+    </div>
+    <div style="padding:12px 16px">
+      <!-- 入力フォーム -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+        <div>
+          <label style="font-size:11px;color:var(--text2);font-weight:600">日付</label>
+          <input type="date" id="attInDate" class="finput" style="width:100%">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text2);font-weight:600">担当者</label>
+          <select id="attInAssignee" class="finput" style="width:100%">
+            <option value="matsumoto">松本</option>
+            <option value="nakamura">中村</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text2);font-weight:600">区分</label>
+          <select id="attInType" class="finput" style="width:100%" onchange="updateAttTimeFields()">
+            <option value="absent">欠席</option>
+            <option value="late">遅刻</option>
+            <option value="early">早退</option>
+          </select>
+        </div>
+        <div id="attTimeArea">
+          <label style="font-size:11px;color:var(--text2);font-weight:600" id="attTimeLabel">出勤予定時刻</label>
+          <input type="time" id="attInTime" class="finput" style="width:100%" placeholder="HH:MM">
+        </div>
+        <div style="grid-column:1/-1">
+          <label style="font-size:11px;color:var(--text2);font-weight:600">メモ</label>
+          <input type="text" id="attInNote" class="finput" style="width:100%" placeholder="例：体調不良、通院など">
+        </div>
+      </div>
+      <button class="btn btn-primary btn-sm" style="width:100%;margin-bottom:14px" onclick="addAttendanceEntry()">＋ 追加</button>
+      <!-- 登録済み一覧 -->
+      <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:6px">登録済み勤怠情報</div>
+      <div id="attList" style="display:flex;flex-direction:column;gap:5px;max-height:300px;overflow-y:auto"></div>
+    </div>
+    <div class="mfooter">
+      <button class="btn btn-secondary btn-sm" onclick="closeAttendanceModal()">閉じる</button>
+    </div>
+  </div>
+</div>
 
 <div id="tab-repair" class="tab-pane active">
 <div class="layout">
@@ -896,9 +966,167 @@ function initFirebase(){
       fbInitialized=true;
     });
     console.log('Firebase接続OK');
+    initAttendanceFb();
   } catch(e) {
     console.log('Firebase初期化失敗:', e);
   }
+}
+
+// ===== 勤怠管理 =====
+// attendanceData[dateStr][assignee] = {type:'absent'|'late'|'early', time:'HH:MM', note:''}
+let attendanceData = {};
+let attFbRef = null;
+
+function initAttendanceFb(){
+  try {
+    if(!fbDb) return;
+    attFbRef = fbDb.ref('/attendance');
+    attFbRef.on('value', snap=>{
+      attendanceData = snap.val() || {};
+      renderAttendanceBanner();
+      renderGantt(); // ガントのバッジも更新
+    });
+  } catch(e){ console.log('勤怠Firebase初期化失敗:', e); }
+}
+
+function saveAttendanceToFb(){
+  if(attFbRef){
+    attFbRef.set(attendanceData).catch(e=>console.log('勤怠保存失敗:',e));
+  }
+}
+
+function getAttendanceForDate(dateStr){
+  return attendanceData[dateStr] || {};
+}
+
+function getAttendanceBadgeHtml(assignee, dateStr){
+  const rec = (attendanceData[dateStr]||{})[assignee];
+  if(!rec) return '';
+  const labels = {absent:'欠席',late:'遅刻',early:'早退'};
+  const cls = {absent:'att-badge-absent',late:'att-badge-late',early:'att-badge-early'};
+  const timeStr = rec.time ? ` ${rec.time}` : '';
+  return `<span class="att-badge ${cls[rec.type]||''}">${labels[rec.type]||rec.type}${timeStr}</span>`;
+}
+
+function renderAttendanceBanner(){
+  const banner = document.getElementById('attendanceBanner');
+  const items = document.getElementById('attBannerItems');
+  if(!banner||!items) return;
+  const today = todayStr();
+  const chips = [];
+  // 本日〜14日先まで表示
+  for(let i=0;i<14;i++){
+    const d = fmt(addDays(new Date(), i));
+    const dayRec = attendanceData[d] || {};
+    Object.entries(dayRec).forEach(([assignee, rec])=>{
+      const nameMap = {matsumoto:'松本',nakamura:'中村'};
+      const typeLabels = {absent:'欠席',late:'遅刻',early:'早退'};
+      const cls = {absent:'att-chip-absent',late:'att-chip-late',early:'att-chip-early'};
+      const timeStr = rec.time ? ` ${rec.time}` : '';
+      const dateLabel = d===today ? '本日' : d.slice(5).replace('-','/');
+      const noteStr = rec.note ? `（${rec.note}）` : '';
+      chips.push(`<span class="att-chip ${cls[rec.type]||''}">
+        ${nameMap[assignee]||assignee}：${typeLabels[rec.type]||rec.type}${timeStr}${noteStr}
+        <span class="att-chip-date">${dateLabel}</span>
+      </span>`);
+    });
+  }
+  if(chips.length){
+    items.innerHTML = chips.join('');
+    banner.classList.add('has-data');
+  } else {
+    items.innerHTML = '';
+    banner.classList.remove('has-data');
+  }
+}
+
+function openAttendanceModal(){
+  const d = document.getElementById('attInDate');
+  if(d) d.value = todayStr();
+  updateAttTimeFields();
+  renderAttList();
+  document.getElementById('attModal').classList.add('open');
+}
+
+function closeAttendanceModal(){
+  document.getElementById('attModal').classList.remove('open');
+}
+
+function updateAttTimeFields(){
+  const type = document.getElementById('attInType').value;
+  const lbl = document.getElementById('attTimeLabel');
+  const area = document.getElementById('attTimeArea');
+  if(type==='absent'){
+    area.style.visibility='hidden';
+  } else {
+    area.style.visibility='visible';
+    if(lbl) lbl.textContent = type==='late' ? '出勤予定時刻' : '早退予定時刻';
+  }
+}
+
+function addAttendanceEntry(){
+  const dateStr = document.getElementById('attInDate').value;
+  const assignee = document.getElementById('attInAssignee').value;
+  const type = document.getElementById('attInType').value;
+  const time = document.getElementById('attInTime').value;
+  const note = document.getElementById('attInNote').value.trim();
+  if(!dateStr||!assignee){alert('日付と担当者を選択してください');return;}
+  if(!attendanceData[dateStr]) attendanceData[dateStr]={};
+  attendanceData[dateStr][assignee]={type, time: type==='absent'?'':time, note};
+  saveAttendanceToFb();
+  renderAttList();
+  renderAttendanceBanner();
+  renderGantt();
+  // フォームリセット
+  document.getElementById('attInNote').value='';
+  document.getElementById('attInTime').value='';
+}
+
+function deleteAttendanceEntry(dateStr, assignee){
+  if(!attendanceData[dateStr]) return;
+  delete attendanceData[dateStr][assignee];
+  if(!Object.keys(attendanceData[dateStr]).length) delete attendanceData[dateStr];
+  saveAttendanceToFb();
+  renderAttList();
+  renderAttendanceBanner();
+  renderGantt();
+}
+
+function renderAttList(){
+  const el = document.getElementById('attList');
+  if(!el) return;
+  const nameMap = {matsumoto:'松本',nakamura:'中村'};
+  const typeLabels = {absent:'欠席',late:'遅刻',early:'早退'};
+  const cls = {absent:'att-badge-absent',late:'att-badge-late',early:'att-badge-early'};
+  const today = todayStr();
+  // 日付順に並べる
+  const entries = [];
+  Object.entries(attendanceData).sort((a,b)=>a[0]<b[0]?-1:1).forEach(([ds, assignees])=>{
+    Object.entries(assignees).forEach(([assignee, rec])=>{
+      entries.push({ds, assignee, rec});
+    });
+  });
+  if(!entries.length){
+    el.innerHTML='<div style="font-size:11px;color:var(--text3);text-align:center;padding:12px">登録なし</div>';
+    return;
+  }
+  el.innerHTML = entries.map(({ds, assignee, rec})=>{
+    const isPast = ds < today;
+    const dateLabel = ds===today?'本日':ds.slice(5).replace('-','/');
+    const timeStr = rec.time ? ` ${rec.time}` : '';
+    const noteStr = rec.note ? `<span style="color:var(--text2);font-size:10px"> ／ ${rec.note}</span>`:'';
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border:1px solid var(--border);border-radius:5px;background:${isPast?'#f9fafb':'var(--panel)'}">
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:10px;color:var(--text2);min-width:32px">${dateLabel}</span>
+        <span style="font-size:11px;font-weight:600">${nameMap[assignee]||assignee}</span>
+        <span class="att-badge ${cls[rec.type]||''}">${typeLabels[rec.type]||rec.type}${timeStr}</span>
+        ${noteStr}
+        ${isPast?'<span style="font-size:9px;color:var(--text3)">(過去)</span>':''}
+      </div>
+      <button onclick="deleteAttendanceEntry('${ds}','${assignee}')"
+        style="font-size:10px;background:none;border:none;cursor:pointer;color:var(--text3);padding:2px 5px" title="削除">✕</button>
+    </div>`;
+  }).join('');
 }
 
 function saveTasksToFirebase(){
@@ -1927,6 +2155,7 @@ function renderGantt(){
       <div class="grow">
         <div class="glabel ${lc}" style="min-height:${TRACK_H}px;width:78px;min-width:78px;flex-shrink:0;flex-direction:column;gap:3px;justify-content:center">
           <div>${lbl}</div>
+          ${getAttendanceBadgeHtml(a, curDate)}
           <div style="font-size:9px;opacity:.7">残業</div>
           <div style="display:flex;align-items:center;gap:2px">
             <input class="ot-input" type="number" min="0" max="5" step="0.5" value="${ot}"
@@ -2692,6 +2921,7 @@ requestAnimationFrame(()=>{
     renderManualList();
   }
   initFirebase();    // Firebase接続（リアルタイム同期）
+  renderAttendanceBanner(); // 勤怠バナー初期表示
   loadKintone();     // kintoneからデータ取得
 });
 

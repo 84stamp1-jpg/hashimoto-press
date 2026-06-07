@@ -10026,9 +10026,46 @@ window.saveSnapshot=function(){
   btnPrint.textContent='🖨️ PDF保存（Ctrl+P）';
   btnPrint.style.cssText='background:#2980b9;color:#fff;border:none;border-radius:5px;padding:6px 14px;font-weight:700;cursor:pointer;font-size:12px;';
   btnPrint.onclick=function(){
-    // @media print CSS側で position:static!important / body>*:not(#print-ov){display:none}
-    // を設定済みのため、JS側での位置変更は不要（変更すると画面が白くなるバグの原因）
-    window.print();
+    // position:fixed はChromeの印刷エンジンで白紙になる既知の問題があるため
+    // 別ウィンドウにコンテンツをコピーして印刷する方式を使用
+    const ovEl = document.getElementById('print-ov');
+    const pStyleEl = document.getElementById('print-style');
+    // #print-ov スコープのCSSを汎用CSSに変換（#print-ov プレフィックスを除去）
+    let css = pStyleEl ? pStyleEl.textContent : '';
+    css = css.replace(/@media\s+print\s*\{[\s\S]*$/, ''); // @media print ブロックを除去
+    css = css.replace(/#print-ov\s*/g, '');               // #print-ov プレフィックスを除去
+    const win = window.open('', '_blank');
+    if(!win){
+      alert('ポップアップがブロックされました。\nブラウザのアドレスバー右側のポップアップブロック解除アイコンをクリックして許可してください。');
+      return;
+    }
+    win.document.write(`<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>進捗スナップショット</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans JP',sans-serif;background:#f0efe8;padding:12px;}
+${css}
+.print-bar button{display:none!important;}
+@page{size:A4 landscape;margin:5mm;}
+@media print{
+  body{padding:0!important;}
+  #print-scale{zoom:0.62;}
+  .lcard,.bdg,.rate-banner,.nb,.pb,.rate-bar-bg,.pb-f,.rate-bar-fill{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+}
+</style>
+</head>
+<body>
+${ovEl.innerHTML}
+</body>
+</html>`);
+    win.document.close();
+    win.focus();
+    // フォント読み込みを待ってから印刷ダイアログを開く
+    setTimeout(function(){ win.print(); }, 800);
   };
   const btnClose=document.createElement('button');
   btnClose.textContent='✕ 閉じる';
