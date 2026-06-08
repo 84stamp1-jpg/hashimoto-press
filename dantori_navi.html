@@ -3932,7 +3932,7 @@ function renderDantori(){
   renderKanban();
 }
 
-function refreshDantori(){ fetchFirebaseLines(); loadDantoriSchedule(); }
+function refreshDantori(){ fetchFirebaseLines(); loadDantoriSettings().then(()=>{ loadDantoriSchedule(); }); }
 
 // ===== カンバンボード設定 =====
 // 組立・検査メンバー（設定から動的に変更可）
@@ -5970,8 +5970,11 @@ async function autoAssignRoles(){
       ? wrkCount
       : (PRESS_LINE_MASTER[entry.lineId]?.workers?.length || 1);
     if(!entry.noWorker && effectiveWrkCount > 0 && ps && e && ps < e){
-      // ベース: 金型取付した人を優先
-      const workerAvail = mountAvail.slice(0, effectiveWrkCount);
+      // ベース: 金型取付した人を優先（ただし生産時間帯ps〜eで出勤可能な人のみ）
+      // 例：午後休の人は取付（午前のみ）はOKだが、生産担当（午後まで）は不可
+      const workerAvail = mountAvail
+        .filter(w => !isUnavailableAt(w, ps, e))
+        .slice(0, effectiveWrkCount);
 
       // 不足分を補完: 「優先ラインに計画があるか」ではなく「実際にbusyか」で判定
       // → 自分のラインに計画があっても未割当なら空き人員として使う
