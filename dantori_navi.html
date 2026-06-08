@@ -5715,9 +5715,15 @@ async function autoAssignRoles(){
   const allPressWorkers = getPressWorkerList();
 
   // ── 時刻順ソート（先にソートしてactiveLineSetを確定） ──
-  const sorted = [...targets].sort((a, b) =>
-    (toMin(a.setupStart||a.prodStart)||9999) - (toMin(b.setupStart||b.prodStart)||9999)
-  );
+  // 同時刻の場合: 優先ライン一致人数が多いエントリを先に処理
+  // （例: Bライン08:10に吉田が優先設定 → B2より先に処理して吉田をBラインに確保）
+  const _prioCount = entry => allPressWorkers.filter(w => WORKER_PRIORITY_LINE[w] === entry.lineId).length;
+  const sorted = [...targets].sort((a, b) => {
+    const aTime = toMin(a.setupStart||a.prodStart)||9999;
+    const bTime = toMin(b.setupStart||b.prodStart)||9999;
+    if(aTime !== bTime) return aTime - bTime;
+    return _prioCount(b) - _prioCount(a);
+  });
 
   // 作業がある（dantori登録がある）ラインのSet
   const activeLineSet = new Set(sorted.map(d => d.lineId));
