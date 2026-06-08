@@ -4724,6 +4724,16 @@ const DEFAULT_BREAKS = [
   {start:'17:00', end:'17:10'},
   {start:'20:10', end:'20:30'},
 ];
+// 昼休憩境界（午前終了 / 午後開始）— 出勤区分チェックに使用
+// DEFAULT_BREAKSの昼休憩（12:00以降の最初の休憩）から自動計算
+function _getLunchBoundary(){
+  const toM = t => { const [h,m]=t.split(':').map(Number); return h*60+m; };
+  const lunch = DEFAULT_BREAKS.find(b => toM(b.start) >= 12*60);
+  return lunch
+    ? { amEnd: toM(lunch.start), pmStart: toM(lunch.end) }
+    : { amEnd: 12*60, pmStart: 13*60 };
+}
+const LUNCH_BOUNDARY = _getLunchBoundary(); // { amEnd:730, pmStart:770 } = 12:10 / 12:50
 
 // HH:MM 形式の2時刻から所要分数を計算（日をまたぐ場合も対応）
 function calcDurMin(start, end){
@@ -5357,14 +5367,14 @@ function renderPressTimeline(allEntries){
       unavailOverlay = `<div style="position:absolute;left:0;top:0;width:${RT_W}px;height:100%;background:${STRIPE_GRAY};pointer-events:none;"></div>`;
       rowOpacity = 'opacity:0.45;';
     } else if(!amOk){
-      // 午前休
-      const aw = rt_toX(12*60);
+      // 午前休：08:00〜12:10（昼休憩開始）をシェード
+      const aw = rt_toX(LUNCH_BOUNDARY.amEnd);
       attTag = '<span style="margin-left:4px;font-size:9px;padding:1px 4px;border-radius:3px;background:#fef3c7;color:#b45309;font-weight:700;flex-shrink:0;">午前休</span>';
       unavailOverlay = `<div style="position:absolute;left:0;top:0;width:${aw}px;height:100%;background:${STRIPE_GRAY};pointer-events:none;"></div>`
         + `<div style="position:absolute;left:2px;top:8px;font-size:9px;color:#b45309;font-weight:700;background:rgba(254,243,199,0.85);padding:1px 4px;border-radius:2px;pointer-events:none;">午前休</div>`;
     } else if(!pmOk){
-      // 午後休
-      const px0 = rt_toX(12*60), pw0 = rt_toX(17*60) - px0;
+      // 午後休：12:50（昼休憩終了）〜17:00をシェード
+      const px0 = rt_toX(LUNCH_BOUNDARY.pmStart), pw0 = rt_toX(17*60) - px0;
       attTag = '<span style="margin-left:4px;font-size:9px;padding:1px 4px;border-radius:3px;background:#fef3c7;color:#b45309;font-weight:700;flex-shrink:0;">午後休</span>';
       unavailOverlay = `<div style="position:absolute;left:${px0}px;top:0;width:${pw0}px;height:100%;background:${STRIPE_GRAY};pointer-events:none;"></div>`
         + `<div style="position:absolute;left:${px0+2}px;top:8px;font-size:9px;color:#b45309;font-weight:700;background:rgba(254,243,199,0.85);padding:1px 4px;border-radius:2px;pointer-events:none;">午後休</div>`;
@@ -5649,14 +5659,20 @@ async function autoAssignRoles(){
   const fmtMin = m => { const h=Math.floor(m/60); return `${String(h).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; };
 
   // ── 出勤状況チェック ──────────────────────────
-  function isUnavailableAt(name, startMin){
+  // endMin: ジョブの終了時刻（分）。省略時はstartMinのみで判定
+  function isUnavailableAt(name, startMin, endMin=null){
     const att = WORKER_ATTENDANCE[name] || {};
     const am = att.am !== false;
     const pm = att.pm !== false;
     if(att.otherWork) return true;     // 他作業（出勤中だが配置外）
     if(!am && !pm) return true;        // 欠勤
-    if(!am && startMin < 720) return true;  // 午前休
-    if(!pm && startMin >= 720 && startMin < OVERTIME_START_MIN) return true; // 午後休（残業時間帯は別途チェック）
+    // 午前休：開始が昼休憩開始（12:10）より前なら不可
+    if(!am && startMin < LUNCH_BOUNDARY.amEnd) return true;
+    // 午後休：終了時刻が昼休憩開始（12:10）を超える仕事は不可
+    if(!pm){
+      const jobEnd = endMin !== null ? endMin : startMin;
+      if(jobEnd > LUNCH_BOUNDARY.amEnd) return true; // 12:10以降にかかるジョブは割り当て不可
+    }
     // 残業チェック：17:00以降は「残業可」フラグがある人のみ割り振り対象
     if(startMin >= OVERTIME_START_MIN && !WORKER_OVERTIME[name]) return true;
     return false;
@@ -5724,7 +5740,7 @@ async function autoAssignRoles(){
   // 品質確認・初品出しを探す（グループフォールバック付き）
   // allowBusy: 同一エントリで既に別役割を持つ人（busyチェック免除）
   function findWorker(role, lineId, s, e, allowBusy=[]){
-    const canWork = w => !isUnavailableAt(w, s) && (!isBusy(w, s, e) || allowBusy.includes(w));
+    const canWork = w => !isUnavailableAt(w, s, e) && (!isBusy(w, s, e) || allowBusy.includes(w));
     if(hasRoleData){
       const cands = allPressWorkers.filter(w => workerHasRole(w, role));
       // ① 優先ライン一致
@@ -5757,8 +5773,8 @@ async function autoAssignRoles(){
   function findMountWorkers(lineId, thisEntryAssigned, s, e, mountCount, allowFloating=false){
     const isAvail = w => {
       if(workerHasRole(w,'noLine')) return false;
-      if(thisEntryAssigned.includes(w)) return !isUnavailableAt(w, s);
-      return !isBusy(w, s, e) && !isUnavailableAt(w, s);
+      if(thisEntryAssigned.includes(w)) return !isUnavailableAt(w, s, e);
+      return !isBusy(w, s, e) && !isUnavailableAt(w, s, e);
     };
     const maxCount = (mountCount > 0) ? mountCount : (PRESS_LINE_MASTER[lineId]?.workers?.length || 99);
 
@@ -5795,7 +5811,7 @@ async function autoAssignRoles(){
     const plm = PRESS_LINE_MASTER[lineId];
     if(plm){
       const fb = plm.workers.map(resolveWorkerName).filter(w =>
-        !workerHasRole(w,'noLine') && !isBusy(w, s, e) && !isUnavailableAt(w, s)
+        !workerHasRole(w,'noLine') && !isBusy(w, s, e) && !isUnavailableAt(w, s, e)
       );
       if(fb.length) return fb.slice(0, maxCount);
     }
@@ -5873,7 +5889,7 @@ async function autoAssignRoles(){
           const slot = busySlotOf(w, s, e);
           return `${w}（${slot ? slot.label : '他作業中'} ${slot ? fmtMin(slot.s)+'〜'+fmtMin(slot.e) : ''}）`;
         });
-        const qualAbsent = qualAll.filter(w => isUnavailableAt(w, s)).map(w => `${w}（出勤なし）`);
+        const qualAbsent = qualAll.filter(w => isUnavailableAt(w, s, e)).map(w => `${w}（出勤なし）`);
         const detail = [...qualConflict, ...qualAbsent].join('、') || '候補なし';
         conflicts.push({ type:'conflict', role:'品質確認', linePart, timeStr, detail });
       }
@@ -5894,7 +5910,7 @@ async function autoAssignRoles(){
           const slot = busySlotOf(w, s, e);
           return `${w}（${slot ? slot.label : '他作業中'} ${slot ? fmtMin(slot.s)+'〜'+fmtMin(slot.e) : ''}）`;
         });
-        const ippinAbsent = ippinAll.filter(w => isUnavailableAt(w, s)).map(w => `${w}（出勤なし）`);
+        const ippinAbsent = ippinAll.filter(w => isUnavailableAt(w, s, e)).map(w => `${w}（出勤なし）`);
         if(ippinAll.length){
           const detail = [...ippinConflict, ...ippinAbsent].join('、') || '候補なし';
           conflicts.push({ type:'conflict', role:'初品出し', linePart, timeStr, detail });
@@ -5921,7 +5937,7 @@ async function autoAssignRoles(){
           const slot = busySlotOf(w, s, mountEnd);
           return `${w}（${slot ? slot.label : '他'} ${slot ? fmtMin(slot.s)+'〜'+fmtMin(slot.e) : ''}）`;
         });
-        const absentOnes = mountAll.filter(w => isUnavailableAt(w, s) && !thisEntryAssigned.includes(w))
+        const absentOnes = mountAll.filter(w => isUnavailableAt(w, s, e) && !thisEntryAssigned.includes(w))
           .map(w => `${w}（出勤なし）`);
         const noLineOnes = (hasRoleData ? allPressWorkers : []).filter(w =>
           workerHasRole(w,'noLine') && (WORKER_PRIORITY_LINE[w] === entry.lineId || !WORKER_PRIORITY_LINE[w])
@@ -5954,7 +5970,7 @@ async function autoAssignRoles(){
             !workerAvail.includes(w) &&
             !workerHasRole(w, 'noLine') &&
             !isBusy(w, ps, e) &&
-            !isUnavailableAt(w, ps)
+            !isUnavailableAt(w, ps, e)
           )
           .sort((a, b) => {
             // 同ライン優先 → 同グループ優先 → その他
