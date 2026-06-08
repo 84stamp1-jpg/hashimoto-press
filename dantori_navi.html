@@ -2099,6 +2099,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
             <th style="padding:7px 5px;border-bottom:2px solid #e2e8f0;white-space:nowrap;">ライン<br><span style="font-weight:normal;color:#666;font-size:10px;">外</span></th>
             <th style="padding:7px 8px;border-bottom:2px solid #e2e8f0;white-space:nowrap;min-width:110px;">優先ライン</th>
             <th style="padding:7px 6px;border-bottom:2px solid #e2e8f0;white-space:nowrap;min-width:80px;">出勤<br><span style="font-weight:normal;color:#666;font-size:10px;">午前／午後</span></th>
+            <th style="padding:7px 5px;border-bottom:2px solid #e2e8f0;white-space:nowrap;min-width:52px;">他<br><span style="font-weight:normal;color:#7c3aed;font-size:10px;">作業</span></th>
             <th style="padding:7px 5px;border-bottom:2px solid #e2e8f0;white-space:nowrap;">残業<br><span style="font-weight:normal;color:#f59e0b;font-size:10px;">可</span></th>
             <th style="padding:7px 4px;border-bottom:2px solid #e2e8f0;width:28px;"></th>
           </tr>
@@ -3968,8 +3969,9 @@ let WORKER_ROLE_MASTER = {};
 let PRESS_WORKER_LIST = null;
 // Firebase settings/workerPriorityLine — 作業者ごとの優先ライン {フルネーム: lineId}
 let WORKER_PRIORITY_LINE = {};
-// Firebase settings/workerAttendance — 当日出勤状況 {フルネーム: {am:bool, pm:bool}}
-// am/pm 両方true=終日, amのみ=午前のみ, pmのみ=午後のみ, 両方false=欠勤
+// Firebase settings/workerAttendance — 当日出勤状況 {フルネーム: {am:bool, pm:bool, otherWork:bool}}
+// am/pm 両方true=終日出勤, amのみ=午前のみ, pmのみ=午後のみ, 両方false=欠勤
+// otherWork=true: 出勤しているがプレス配置外（他の作業・別業務）
 let WORKER_ATTENDANCE = {};
 // Firebase settings/workerOvertime — 残業可否 {フルネーム: true}（登録=残業可、未登録=残業不可）
 // 17:00以降のエントリへの自動割り振り対象かどうかを制御
@@ -4036,9 +4038,10 @@ function _workerRoleAppendRow(tbody, name){
   const chkN  = roles.includes('noLine')  ? 'checked' : '';
   const chkAm = (att.am !== false) ? 'checked' : '';
   const chkPm = (att.pm !== false) ? 'checked' : '';
+  const chkOw = att.otherWork ? 'checked' : '';
   const chkOt = WORKER_OVERTIME[name] ? 'checked' : '';
-  // 欠勤時は行を薄くする
-  const absent = !att.am && !att.pm;
+  // 欠勤時は行を薄くする（他作業は出勤中なので薄くしない）
+  const absent = !att.am && !att.pm && !att.otherWork;
   const tr = document.createElement('tr');
   tr.className = 'wrm-row';
   tr.style.cssText = `border-bottom:1px solid #f1f5f9;${absent ? 'opacity:0.45;' : ''}`;
@@ -4081,6 +4084,12 @@ function _workerRoleAppendRow(tbody, name){
       </div>
     </td>
     <td style="padding:5px 4px;text-align:center;">
+      <input type="checkbox" class="wrm-other-work" ${chkOw}
+        style="width:15px;height:15px;accent-color:#7c3aed;cursor:pointer;"
+        title="出勤しているがプレス配置外（他の作業・別業務）。配置表に「他作業」と表示。"
+        onchange="wrmUpdateRowOpacity(this)">
+    </td>
+    <td style="padding:5px 4px;text-align:center;">
       <input type="checkbox" class="wrm-overtime" ${chkOt}
         style="width:15px;height:15px;accent-color:#f59e0b;cursor:pointer;"
         title="17:00以降のエントリにも割り当て対象とする">
@@ -4099,7 +4108,9 @@ function wrmUpdateRowOpacity(cb){
   if(!tr) return;
   const am = tr.querySelector('.wrm-att-am');
   const pm = tr.querySelector('.wrm-att-pm');
-  tr.style.opacity = (!am.checked && !pm.checked) ? '0.45' : '1';
+  const ow = tr.querySelector('.wrm-other-work');
+  // 欠勤（am/pm両方オフ）かつ「他作業」でもない場合に薄くする
+  tr.style.opacity = (!am.checked && !pm.checked && !ow?.checked) ? '0.45' : '1';
 }
 
 function workerRoleAddRow(){
@@ -4140,9 +4151,11 @@ async function saveWorkerRoleMaster(){
     // attendance
     const amEl = tr.querySelector('.wrm-att-am');
     const pmEl = tr.querySelector('.wrm-att-pm');
+    const owEl = tr.querySelector('.wrm-other-work');
     const am = amEl ? amEl.checked : true;
     const pm = pmEl ? pmEl.checked : true;
-    if(!am || !pm) newAtt[name] = { am, pm }; // 終日出勤はデフォルトなので省略
+    const ow = owEl ? owEl.checked : false;
+    if(!am || !pm || ow) newAtt[name] = { am, pm, ...(ow ? {otherWork:true} : {}) };
     // 残業可
     const otEl = tr.querySelector('.wrm-overtime');
     if(otEl && otEl.checked) newOvertime[name] = true;
@@ -4581,7 +4594,7 @@ function onDtNoSetupChange(){
 
 // ===== 作業者交代 =====
 let _scIdx = 0; // 交代行チップIDの連番
-function addShiftChange(time='', outWorker='', inWorker=''){
+function addShiftChange(time='', outWorker='', inWorker='', endTime=''){
   const container = document.getElementById('dt-shift-container');
   const uid = 'chip-wrap-shift-' + (_scIdx++);
   const row = document.createElement('div');
@@ -4591,10 +4604,15 @@ function addShiftChange(time='', outWorker='', inWorker=''){
   row.innerHTML = `
     <span style="font-size:10px;color:#6366f1;white-space:nowrap;font-weight:600;">⏱ 交代</span>
     <input type="time" class="sc-time" value="${time}"
-      style="border:1px solid #ddd;border-radius:4px;padding:3px 6px;font-size:12px;width:88px;"
+      style="border:1px solid #ddd;border-radius:4px;padding:3px 6px;font-size:12px;width:84px;"
       oninput="validateShiftTime(this)">
+    <span style="font-size:10px;color:#94a3b8;white-space:nowrap;">〜</span>
+    <input type="time" class="sc-end" value="${endTime}" title="終了時間（空欄=終わりまで）"
+      style="border:1px solid #ddd;border-radius:4px;padding:3px 6px;font-size:12px;width:84px;background:#fafafa;"
+      placeholder="終了(任意)">
+    <span style="font-size:9px;color:#94a3b8;white-space:nowrap;">(任意)</span>
     <span style="font-size:10px;color:#dc2626;white-space:nowrap;font-weight:600;">退:</span>
-    <input list="staffDatalist-press" class="sc-out" value="${outWorker}" placeholder="退場者"
+    <input list="staffDatalist-press" class="sc-out" value="${outWorker}" placeholder="退場者(任意)"
       style="border:1px solid #fca5a5;border-radius:4px;padding:3px 6px;font-size:12px;width:90px;background:#fff5f5;">
     <span style="font-size:12px;color:#64748b;">→</span>
     <span style="font-size:10px;color:#16a34a;white-space:nowrap;font-weight:600;">入:</span>
@@ -4641,6 +4659,7 @@ function getShiftChanges(){
   return Array.from(document.querySelectorAll('#dt-shift-container .sc-row'))
     .map(r => ({
       time:      r.querySelector('.sc-time').value,
+      endTime:   (r.querySelector('.sc-end')?.value||'').trim(),
       outWorker: (r.querySelector('.sc-out').value||'').trim(),
       inWorker:  (r.querySelector('.sc-in').value||'').trim(),
     }))
@@ -4650,12 +4669,11 @@ function clearShiftChanges(){ const c=document.getElementById('dt-shift-containe
 function setShiftChanges(changes){
   clearShiftChanges();
   (changes||[]).forEach(c => {
-    // 旧フォーマット(workers)と新フォーマット(outWorker/inWorker)両対応
     if(c.inWorker !== undefined){
-      addShiftChange(c.time||'', c.outWorker||'', c.inWorker||'');
+      addShiftChange(c.time||'', c.outWorker||'', c.inWorker||'', c.endTime||'');
     } else {
-      // 旧データ：workers全体を入場者として表示（互換）
-      addShiftChange(c.time||'', '', c.workers||'');
+      // 旧データ互換
+      addShiftChange(c.time||'', '', c.workers||'', '');
     }
   });
 }
@@ -4809,10 +4827,11 @@ function renderKanbanCard(d){
       ${(!d.noSetup)?`${roles.金型取付?`<div class="kcard-role"><span class="kcard-role-lbl">取付</span><span class="kcard-role-val">${roles.金型取付}</span></div>`:`<div class="kcard-role"><span class="kcard-role-lbl" style="color:#94a3b8;">取付</span><span class="kcard-role-val" style="color:#f59e0b;">未定</span></div>`}`:''}
       ${roles.作業者?`<div class="kcard-role"><span class="kcard-role-lbl">作業</span><span class="kcard-role-val">${roles.作業者}</span></div>`:''}
       ${(d.shiftChanges||[]).map(c=>{
-        const outTxt = c.outWorker||'';
-        const inTxt  = c.inWorker ||(c.workers||'');
+        const outTxt  = c.outWorker||'';
+        const inTxt   = c.inWorker||(c.workers||'');
+        const timeTxt = c.endTime ? `${c.time}〜${c.endTime}` : c.time;
         const swapTxt = outTxt ? `${outTxt}→${inTxt}` : inTxt;
-        return `<div class="kcard-role"><span class="kcard-role-lbl" style="color:#6366f1;">⏱${c.time}</span><span class="kcard-role-val" style="color:#4338ca;">${swapTxt}</span></div>`;
+        return `<div class="kcard-role"><span class="kcard-role-lbl" style="color:#6366f1;">⏱${timeTxt}</span><span class="kcard-role-val" style="color:#4338ca;">${swapTxt}</span></div>`;
       }).join('')}
     </div>` : '';
   const canEdit = d._source==='manual' || d.fromPlan;
@@ -5013,37 +5032,40 @@ function buildShiftRanges(entry){
   if(!entry.shiftChanges || !entry.shiftChanges.length || ps === null){
     return [{ start: ps, end: pe, workers: workers0 }];
   }
-  const changes = [...entry.shiftChanges]
-    .map(c => ({
-      time: rt_toMin(c.time),
-      outWorker: (c.outWorker||'').trim(),
-      inWorker:  (c.inWorker||'').trim(),
-      // 旧フォーマット互換：workersが存在する場合はそのまま全置換
-      _legacyWorkers: (c.inWorker === undefined && c.workers)
-        ? c.workers.split(/[,、]/).map(s=>s.trim()).filter(Boolean)
-        : null
-    }))
-    .filter(c => c.time !== null)
-    .sort((a, b) => a.time - b.time);
+  // 交代データをイベント列に展開（開始イベント＋終了イベント）
+  // endTimeが設定されていれば「終了時刻に逆スワップ」イベントを追加
+  const events = [];
+  entry.shiftChanges.forEach(c => {
+    const t  = rt_toMin(c.time);
+    const et = rt_toMin(c.endTime||'');
+    if(t === null) return;
+    const out = (c.outWorker||'').trim();
+    const inp = (c.inWorker !== undefined ? c.inWorker : (c.workers||'')).trim();
+    // 旧フォーマット(workers)の場合は全置換イベント
+    const isLegacy = (c.inWorker === undefined && c.workers);
+    events.push({ time: t, out, in: inp, legacy: isLegacy ? c.workers.split(/[,、]/).map(s=>s.trim()).filter(Boolean) : null });
+    if(et !== null){
+      // 終了時刻に「入場者が退場、退場者が戻る」逆イベントを追加
+      events.push({ time: et, out: inp, in: out, legacy: null });
+    }
+  });
+  events.sort((a, b) => a.time - b.time);
+
   const ranges = [];
   let prev = ps, prevW = workers0;
-  changes.forEach(c => {
-    // 交代時刻が生産終了以降の場合はスキップ（無効な交代）
-    if(pe !== null && c.time >= pe) return;
-    // 前の区間は「prev〜min(交代時刻, pe)」に限定
-    const segEnd = (pe !== null) ? Math.min(c.time, pe) : c.time;
+  events.forEach(ev => {
+    if(pe !== null && ev.time >= pe) return; // 生産終了以降は無効
+    const segEnd = (pe !== null) ? Math.min(ev.time, pe) : ev.time;
     if(segEnd > prev) ranges.push({ start: prev, end: segEnd, workers: prevW });
     let newW;
-    if(c._legacyWorkers){
-      // 旧データ：全置換（互換）
-      newW = c._legacyWorkers;
+    if(ev.legacy){
+      newW = ev.legacy; // 旧データ全置換
     } else {
-      // 新ロジック：outWorkerを除いてinWorkerを追加（スワップ）
       newW = [...prevW];
-      if(c.outWorker) newW = newW.filter(w => w !== c.outWorker);
-      if(c.inWorker && !newW.includes(c.inWorker)) newW.push(c.inWorker);
+      if(ev.out) newW = newW.filter(w => w !== ev.out);
+      if(ev.in  && !newW.includes(ev.in)) newW.push(ev.in);
     }
-    prev = c.time; prevW = newW;
+    prev = ev.time; prevW = newW;
   });
   if(pe !== null && pe > prev) ranges.push({ start: prev, end: pe, workers: prevW });
   return ranges;
@@ -5320,34 +5342,33 @@ function renderPressTimeline(allEntries){
     const attInfo = WORKER_ATTENDANCE[name] || {};
     const amOk = attInfo.am !== false;
     const pmOk = attInfo.pm !== false;
-    // 名前欄バッジ
-    let attTag = '';
-    if(!amOk && !pmOk){
+    const isOtherWork = !!attInfo.otherWork;
+    const STRIPE_GRAY   = 'repeating-linear-gradient(45deg,rgba(100,100,100,0.10),rgba(100,100,100,0.10) 3px,transparent 3px,transparent 8px)';
+    const STRIPE_PURPLE = 'repeating-linear-gradient(45deg,rgba(124,58,237,0.08),rgba(124,58,237,0.08) 3px,transparent 3px,transparent 8px)';
+    let attTag = '', unavailOverlay = '', rowOpacity = '';
+    if(isOtherWork){
+      // 他作業：出勤中だが配置外 → 紫バッジ＋紫ストライプ（行は薄くしない）
+      attTag = '<span style="margin-left:4px;font-size:9px;padding:1px 4px;border-radius:3px;background:#ede9fe;color:#7c3aed;font-weight:700;flex-shrink:0;">他作業</span>';
+      unavailOverlay = `<div style="position:absolute;left:0;top:0;width:${RT_W}px;height:100%;background:${STRIPE_PURPLE};pointer-events:none;"></div>`
+        + `<div style="position:absolute;left:2px;top:8px;font-size:9px;color:#7c3aed;font-weight:700;background:rgba(237,233,254,0.9);padding:1px 4px;border-radius:2px;pointer-events:none;">他作業</div>`;
+    } else if(!amOk && !pmOk){
+      // 欠勤：全体グレーストライプ＋行を薄く
       attTag = '<span style="margin-left:4px;font-size:9px;padding:1px 4px;border-radius:3px;background:#e5e7eb;color:#6b7280;font-weight:700;flex-shrink:0;">休</span>';
+      unavailOverlay = `<div style="position:absolute;left:0;top:0;width:${RT_W}px;height:100%;background:${STRIPE_GRAY};pointer-events:none;"></div>`;
+      rowOpacity = 'opacity:0.45;';
     } else if(!amOk){
-      attTag = '<span style="margin-left:4px;font-size:9px;padding:1px 4px;border-radius:3px;background:#fef3c7;color:#b45309;font-weight:700;flex-shrink:0;">午前休</span>';
-    } else if(!pmOk){
-      attTag = '<span style="margin-left:4px;font-size:9px;padding:1px 4px;border-radius:3px;background:#fef3c7;color:#b45309;font-weight:700;flex-shrink:0;">午後休</span>';
-    }
-    // トラック上の不在帯（ストライプ）
-    const STRIPE = 'repeating-linear-gradient(45deg,rgba(100,100,100,0.10),rgba(100,100,100,0.10) 3px,transparent 3px,transparent 8px)';
-    let unavailOverlay = '';
-    if(!amOk && !pmOk){
-      // 終日不在：全体をグレーストライプ
-      unavailOverlay = `<div style="position:absolute;left:0;top:0;width:${RT_W}px;height:100%;background:${STRIPE};pointer-events:none;border-radius:2px;"></div>`;
-    } else if(!amOk){
-      // 午前不在：08:00〜12:00 をシェード
+      // 午前休
       const aw = rt_toX(12*60);
-      unavailOverlay = `<div style="position:absolute;left:0;top:0;width:${aw}px;height:100%;background:${STRIPE};pointer-events:none;"></div>`
-        + `<div style="position:absolute;left:0;top:8px;font-size:9px;color:#b45309;font-weight:700;background:rgba(254,243,199,0.85);padding:1px 4px;border-radius:2px;pointer-events:none;">午前休</div>`;
+      attTag = '<span style="margin-left:4px;font-size:9px;padding:1px 4px;border-radius:3px;background:#fef3c7;color:#b45309;font-weight:700;flex-shrink:0;">午前休</span>';
+      unavailOverlay = `<div style="position:absolute;left:0;top:0;width:${aw}px;height:100%;background:${STRIPE_GRAY};pointer-events:none;"></div>`
+        + `<div style="position:absolute;left:2px;top:8px;font-size:9px;color:#b45309;font-weight:700;background:rgba(254,243,199,0.85);padding:1px 4px;border-radius:2px;pointer-events:none;">午前休</div>`;
     } else if(!pmOk){
-      // 午後不在：12:00〜17:00 をシェード
+      // 午後休
       const px0 = rt_toX(12*60), pw0 = rt_toX(17*60) - px0;
-      unavailOverlay = `<div style="position:absolute;left:${px0}px;top:0;width:${pw0}px;height:100%;background:${STRIPE};pointer-events:none;"></div>`
+      attTag = '<span style="margin-left:4px;font-size:9px;padding:1px 4px;border-radius:3px;background:#fef3c7;color:#b45309;font-weight:700;flex-shrink:0;">午後休</span>';
+      unavailOverlay = `<div style="position:absolute;left:${px0}px;top:0;width:${pw0}px;height:100%;background:${STRIPE_GRAY};pointer-events:none;"></div>`
         + `<div style="position:absolute;left:${px0+2}px;top:8px;font-size:9px;color:#b45309;font-weight:700;background:rgba(254,243,199,0.85);padding:1px 4px;border-radius:2px;pointer-events:none;">午後休</div>`;
     }
-    // 欠勤は行全体を薄く
-    const rowOpacity = (!amOk && !pmOk) ? 'opacity:0.45;' : '';
     rowsHtml += `<div class="rt-row" style="${rowOpacity}">
       <div class="rt-name" title="${name}">${name}${attTag}</div>
       <div class="rt-track" style="width:${RT_W}px;">${blk}${unavailOverlay}</div>
@@ -5632,6 +5653,7 @@ async function autoAssignRoles(){
     const att = WORKER_ATTENDANCE[name] || {};
     const am = att.am !== false;
     const pm = att.pm !== false;
+    if(att.otherWork) return true;     // 他作業（出勤中だが配置外）
     if(!am && !pm) return true;        // 欠勤
     if(!am && startMin < 720) return true;  // 午前休
     if(!pm && startMin >= 720 && startMin < OVERTIME_START_MIN) return true; // 午後休（残業時間帯は別途チェック）
@@ -5819,13 +5841,14 @@ async function autoAssignRoles(){
         .forEach(w => ps !== null && e !== null && markBusy(w, ps, e, `作業（固定）`));
       // 交代後の作業者もbusyに登録（交代時刻が生産終了以降は無効なのでスキップ）
       (entry.shiftChanges||[]).forEach(c => {
-        const ct = toMin(c.time);
+        const ct  = toMin(c.time);
+        const cet = toMin(c.endTime||''); // 終了時刻（応援など時間帯指定がある場合）
         if(ct === null || e === null) return;
-        if(ct >= e) return; // 交代時刻 >= 生産終了 → 無効な交代、busyMap登録しない
-        // 入場者をbusyに登録（旧フォーマット互換）
+        if(ct >= e) return; // 交代時刻 >= 生産終了 → 無効
+        const busyEnd = (cet !== null && cet > ct && cet <= e) ? cet : e; // endTimeが有効なら優先
         const inWorkers = c.inWorker ? [c.inWorker]
           : (c.workers||'').split(/[,、]/).map(w=>w.trim()).filter(Boolean);
-        inWorkers.forEach(w => markBusy(w, ct, e, `作業交代（固定）`));
+        inWorkers.forEach(w => markBusy(w, ct, busyEnd, `作業交代（固定）`));
       });
       return; // 再割り振りせずスキップ
     }
