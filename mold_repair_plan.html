@@ -1512,20 +1512,25 @@ function loadManualReqs(){
 
 // ===== 任意作業パネル描画（ガント下・横並びカード）=====
 function renderManualList(){
-  const manuals=requests.filter(r=>r.source==='manual'||r.source==='continuation');
+  const assigneeNames={matsumoto_t:'松本利',matsunaga:'松永',matsumura:'村松',matsumoto_m:'松本み',endo:'遠藤',oishi:'大石',nema:'根間',matsumoto:'松本',nakamura:'中村'};
+  const manuals=requests.filter(r=>r.source==='manual');
+  const conts=requests.filter(r=>r.source==='continuation');
+  const all=[...manuals,...conts];
   const rPanel=document.getElementById('manualRightPanel');
   const rList=document.getElementById('manualRightList');
   const rBdg=document.getElementById('bdgManualR');
-  if(rPanel)rPanel.style.display=manuals.length?'':'none';
-  if(rBdg){rBdg.style.display=manuals.length?'':'none';rBdg.textContent=manuals.length+'件';}
+  if(rPanel)rPanel.style.display=all.length?'':'none';
+  if(rBdg){rBdg.style.display=all.length?'':'none';rBdg.textContent=all.length+'件';}
   if(!rList)return;
-  if(!manuals.length){rList.innerHTML='';return;}
-  rList.innerHTML=manuals.map(r=>{
+  if(!all.length){rList.innerHTML='';return;}
+
+  function makeCard(r){
     const assignedDate=Object.entries(tasksByDate).find(([d,ts])=>ts.some(t=>t.reqId===r.id))?.[0]||null;
     const isSel=selReqId===r.id;
     const isCont=r.source==='continuation';
-    const cardBorder=isSel?'var(--accent)':isCont?'#f59e0b':'#fde68a';
-    const cardBg=isCont?'#fffde7':'var(--panel)';
+    const cardBorder=isSel?'var(--accent)':isCont?'#f59e0b':'#86efac';
+    const cardBg=isCont?'#fffde7':'#f0fdf4';
+    const assigneeName=assigneeNames[r.assignee]||r.assignee||'';
     return`<div style="background:${cardBg};border:1.5px solid ${cardBorder};
       border-radius:7px;padding:8px 11px;min-width:180px;max-width:220px;cursor:pointer;
       box-shadow:${isSel?'0 0 0 3px var(--accent-bg)':''}"
@@ -1537,7 +1542,7 @@ function renderManualList(){
         ⏱ ${r.hours}H${r.deadline?' ／ 期限:'+r.deadline:''}
       </div>
       ${assignedDate
-        ?`<div style="font-size:10px;font-weight:700;color:var(--ok)">✓ ${r.assignee==='matsumoto'?'松本':'松永'} ／ ${assignedDate}</div>
+        ?`<div style="font-size:10px;font-weight:700;color:var(--ok)">✓ ${assigneeName} ／ ${assignedDate}</div>
            <div style="display:flex;gap:3px;margin-top:4px">
              <button onclick="event.stopPropagation();unassignReq('${r.id}')"
                style="flex:1;font-size:9px;padding:2px 4px;border:1px solid #fca5a5;border-radius:3px;background:#fee2e2;color:#dc2626;cursor:pointer;font-family:inherit">割付解除</button>
@@ -1545,15 +1550,36 @@ function renderManualList(){
                style="font-size:9px;padding:2px 4px;border:1px solid #fca5a5;border-radius:3px;background:#fee2e2;color:#dc2626;cursor:pointer;font-family:inherit">🗑</button>
            </div>`
         :`<div style="display:flex;gap:3px">
-            <button onclick="event.stopPropagation();assignTo('${r.id}','matsumoto')"
-              style="flex:1;font-size:11px;font-weight:700;padding:3px 2px;border:1px solid var(--m-bd);border-radius:4px;background:var(--m-bg);color:var(--m);cursor:pointer;font-family:inherit">松本</button>
+            <button onclick="event.stopPropagation();assignTo('${r.id}','matsumoto_t')"
+              style="flex:1;font-size:10px;font-weight:700;padding:3px 2px;border:1px solid var(--m-bd);border-radius:4px;background:var(--m-bg);color:var(--m);cursor:pointer;font-family:inherit">松本利</button>
             <button onclick="event.stopPropagation();assignTo('${r.id}','matsunaga')"
-              style="flex:1;font-size:11px;font-weight:700;padding:3px 2px;border:1px solid var(--n-bd);border-radius:4px;background:var(--n-bg);color:var(--n);cursor:pointer;font-family:inherit">松永</button>
+              style="flex:1;font-size:10px;font-weight:700;padding:3px 2px;border:1px solid var(--n-bd);border-radius:4px;background:var(--n-bg);color:var(--n);cursor:pointer;font-family:inherit">松永</button>
             <button onclick="event.stopPropagation();deleteManualReq('${r.id}')"
               style="font-size:10px;padding:3px 5px;border:1px solid #fca5a5;border-radius:4px;background:#fee2e2;color:#dc2626;cursor:pointer;font-family:inherit">🗑</button>
           </div>`}
     </div>`;
-  }).join('');
+  }
+
+  let html='';
+  if(manuals.length){
+    html+=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+      <span style="font-size:10px;font-weight:700;color:#166534;background:#dcfce7;border:1px solid #86efac;border-radius:4px;padding:1px 8px">＋ 任意作業</span>
+      <span style="font-size:10px;color:var(--text3)">${manuals.length}件</span>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:${conts.length?'10px':'0'}">
+      ${manuals.map(makeCard).join('')}
+    </div>`;
+  }
+  if(conts.length){
+    html+=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px${manuals.length?';border-top:1px dashed var(--border);padding-top:9px':''}">
+      <span style="font-size:10px;font-weight:700;color:#92400e;background:#fff8e1;border:1px solid #f59e0b;border-radius:4px;padding:1px 8px">⏭ 持越し続き</span>
+      <span style="font-size:10px;color:var(--text3)">${conts.length}件</span>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px">
+      ${conts.map(makeCard).join('')}
+    </div>`;
+  }
+  rList.innerHTML=html;
 }
 let _selManualId=null;
 function selManual(id){_selManualId=_selManualId===id?null:id;selReqId=id;renderManualList();}
