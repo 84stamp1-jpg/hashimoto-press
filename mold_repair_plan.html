@@ -1311,7 +1311,7 @@ async function loadKintone(){
   const timeout = setTimeout(()=>{
     console.log('kintone取得タイムアウト');
     cleanup();
-    loadSample();
+    showKintoneError('接続タイムアウト（15秒）');
   }, 15000);
 
   function cleanup(){
@@ -1327,14 +1327,14 @@ async function loadKintone(){
       importKintone(data.records);
     } else {
       console.log('kintone: レコードなし or エラー', data);
-      loadSample();
+      showKintoneError('レコードが取得できませんでした');
     }
   };
 
   const script = document.createElement('script');
   script.id = 'jsonp_mold';
   script.src = url;
-  script.onerror = ()=>{ cleanup(); loadSample(); };
+  script.onerror = ()=>{ cleanup(); showKintoneError('ネットワークエラー'); };
   document.head.appendChild(script);
 }
 
@@ -1394,25 +1394,14 @@ function importKintone(records){
   });
 }
 
-function loadSample(){
-  const t=todayStr(),t1=fmt(addDays(new Date(),1)),t2=fmt(addDays(new Date(),2));
-  const base=[
-    {id:'1',hinban:'HB-2541',hinmei:'フランジブラケット',process:'プレスA/曲げ',kubunInputs:[{name:'バリ改修',units:2,key:'bari'}],moldType:'single',trialSteps:1,deadline:t,kintoneNote:'成形工程でバリが多発。※TRY必要',source:'sample'},
-    {id:'2',hinban:'HB-1832',hinmei:'サポートプレート',process:'プレスB',kubunInputs:[{name:'精度不良',units:1,key:'seido'}],moldType:'prog',trialSteps:2,deadline:t,source:'sample'},
-    {id:'3',hinban:'HC-0921',hinmei:'ブラケットASSY',process:'順送プレス',kubunInputs:[{name:'スペア交換',units:3,key:'spare'},{name:'バリ改修',units:1,key:'bari'}],moldType:'prog',trialSteps:1,deadline:t1,source:'sample'},
-    {id:'4',hinban:'HB-3310',hinmei:'ロアーアーム',process:'プレスC',kubunInputs:[{name:'耐久性不足',units:1,key:'taikyuu'}],moldType:'single',trialSteps:1,deadline:t1,source:'sample'},
-    {id:'5',hinban:'HD-0112',hinmei:'カバープレート',process:'定期点検',kubunInputs:[{name:'定期メンテ',units:2,key:'maint'}],moldType:'prog',trialSteps:0,deadline:t2,source:'sample'},
-  ];
-  const manualReqs2 = requests.filter(r=>r.source==='manual'||r.source==='continuation');
-  requests=base.map(r=>({...r,hours:calcHWithTrialH(r.kubunInputs,r.moldType,r.trialSteps,null),assigned:false,assignee:null,note:''}));
-  manualReqs2.forEach(mr=>{ if(!requests.find(r=>r.id===mr.id)) requests.push(mr); });
-  // 当日納期分を自動割付
-  requests.filter(r=>r.deadline===t).forEach((r,i)=>{
-    const assignee=i%2===0?'matsumoto':'matsunaga';
-    pushTask(r,assignee,t);r.assigned=true;r.assignee=assignee;
-  });
-  autoArrange(curDate);
-  renderRequestList();renderGantt();renderDetail();
+function showKintoneError(reason){
+  const el=document.getElementById('reqList');
+  if(el) el.innerHTML=`<div style="padding:16px;text-align:center;color:#dc2626">
+    <div style="font-size:14px;font-weight:700;margin-bottom:6px">⚠ kintone接続エラー</div>
+    <div style="font-size:11px;color:#7f1d1d;margin-bottom:10px">${reason}</div>
+    <button class="btn btn-secondary btn-sm" onclick="loadKintone()">🔄 再接続</button>
+  </div>`;
+  renderManualList();
 }
 
 // ===== 全日付タスク検索ヘルパー =====
