@@ -5316,9 +5316,41 @@ function renderPressTimeline(allEntries){
         });
       }
     });
-    rowsHtml += `<div class="rt-row">
-      <div class="rt-name" title="${name}">${name}</div>
-      <div class="rt-track" style="width:${RT_W}px;">${blk}</div>
+    // ── 出勤状況バッジ＆不在シェーディング ──
+    const attInfo = WORKER_ATTENDANCE[name] || {};
+    const amOk = attInfo.am !== false;
+    const pmOk = attInfo.pm !== false;
+    // 名前欄バッジ
+    let attTag = '';
+    if(!amOk && !pmOk){
+      attTag = '<span style="margin-left:4px;font-size:9px;padding:1px 4px;border-radius:3px;background:#e5e7eb;color:#6b7280;font-weight:700;flex-shrink:0;">休</span>';
+    } else if(!amOk){
+      attTag = '<span style="margin-left:4px;font-size:9px;padding:1px 4px;border-radius:3px;background:#fef3c7;color:#b45309;font-weight:700;flex-shrink:0;">午前休</span>';
+    } else if(!pmOk){
+      attTag = '<span style="margin-left:4px;font-size:9px;padding:1px 4px;border-radius:3px;background:#fef3c7;color:#b45309;font-weight:700;flex-shrink:0;">午後休</span>';
+    }
+    // トラック上の不在帯（ストライプ）
+    const STRIPE = 'repeating-linear-gradient(45deg,rgba(100,100,100,0.10),rgba(100,100,100,0.10) 3px,transparent 3px,transparent 8px)';
+    let unavailOverlay = '';
+    if(!amOk && !pmOk){
+      // 終日不在：全体をグレーストライプ
+      unavailOverlay = `<div style="position:absolute;left:0;top:0;width:${RT_W}px;height:100%;background:${STRIPE};pointer-events:none;border-radius:2px;"></div>`;
+    } else if(!amOk){
+      // 午前不在：08:00〜12:00 をシェード
+      const aw = rt_toX(12*60);
+      unavailOverlay = `<div style="position:absolute;left:0;top:0;width:${aw}px;height:100%;background:${STRIPE};pointer-events:none;"></div>`
+        + `<div style="position:absolute;left:0;top:8px;font-size:9px;color:#b45309;font-weight:700;background:rgba(254,243,199,0.85);padding:1px 4px;border-radius:2px;pointer-events:none;">午前休</div>`;
+    } else if(!pmOk){
+      // 午後不在：12:00〜17:00 をシェード
+      const px0 = rt_toX(12*60), pw0 = rt_toX(17*60) - px0;
+      unavailOverlay = `<div style="position:absolute;left:${px0}px;top:0;width:${pw0}px;height:100%;background:${STRIPE};pointer-events:none;"></div>`
+        + `<div style="position:absolute;left:${px0+2}px;top:8px;font-size:9px;color:#b45309;font-weight:700;background:rgba(254,243,199,0.85);padding:1px 4px;border-radius:2px;pointer-events:none;">午後休</div>`;
+    }
+    // 欠勤は行全体を薄く
+    const rowOpacity = (!amOk && !pmOk) ? 'opacity:0.45;' : '';
+    rowsHtml += `<div class="rt-row" style="${rowOpacity}">
+      <div class="rt-name" title="${name}">${name}${attTag}</div>
+      <div class="rt-track" style="width:${RT_W}px;">${blk}${unavailOverlay}</div>
     </div>`;
   });
 
