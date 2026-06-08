@@ -437,6 +437,15 @@ html, body {
 #qc-viewer-close{color:#fff;font-size:14px;margin-top:14px;padding:8px 24px;border:2px solid #fff;border-radius:8px;cursor:pointer;background:none;}
 #qc-viewer-retake{color:#1F4E79;font-size:14px;padding:8px 24px;border:2px solid #1F4E79;border-radius:8px;cursor:pointer;background:#fff;font-weight:700;}
 .qc-cam-modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.92);z-index:400;display:none;flex-direction:column;align-items:center;justify-content:center;padding:12px;}
+/* 写真ソース選択シート */
+#qc-src-sheet{position:fixed;inset:0;z-index:410;display:none;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.45);}
+#qc-src-sheet.on{display:flex;}
+.qc-src-inner{width:100%;max-width:480px;background:#fff;border-radius:18px 18px 0 0;padding:18px 16px 28px;box-shadow:0 -4px 20px rgba(0,0,0,.15);}
+.qc-src-title{text-align:center;font-size:13px;color:#888;margin-bottom:14px;font-weight:600;}
+.qc-src-btn{width:100%;padding:15px;margin-bottom:10px;font-size:15px;font-weight:700;border:none;border-radius:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;}
+.qc-src-btn-cam{background:#1F4E79;color:#fff;}
+.qc-src-btn-file{background:#f0f6ff;color:#1F4E79;border:2px solid #bfdbfe;}
+.qc-src-btn-cancel{background:#f3f4f6;color:#555;margin-bottom:0;margin-top:4px;}
 .qc-cam-modal.on{display:flex;}
 .qc-cam-video-wrap{position:relative;width:min(60vh,560px);aspect-ratio:210/297;background:#000;border-radius:10px;overflow:hidden;}
 #qc-cam-video{width:100%;height:100%;display:block;object-fit:cover;}
@@ -2166,6 +2175,18 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 </div>
 <input type="file" id="qc-pi-retake" accept="image/*" capture="environment" style="display:none">
 <input type="file" id="qc-bulk-pi-retake" accept="image/*" capture="environment" style="display:none">
+<!-- ファイル選択用（captureなし・ギャラリー/ファイルから） -->
+<input type="file" id="qc-pi-file" accept="image/*" multiple style="display:none">
+<input type="file" id="qc-bulk-pi-file" accept="image/*" style="display:none">
+<!-- 写真ソース選択シート -->
+<div id="qc-src-sheet" onclick="qcSrcSheetClose(event)">
+  <div class="qc-src-inner">
+    <div class="qc-src-title">写真の追加方法を選んでください</div>
+    <button class="qc-src-btn qc-src-btn-cam" onclick="qcSrcChooseCam()">📷 カメラで撮影</button>
+    <button class="qc-src-btn qc-src-btn-file" onclick="qcSrcChooseFile()">🖼 ライブラリ・ファイルから選択</button>
+    <button class="qc-src-btn qc-src-btn-cancel" onclick="qcSrcSheetClose()">キャンセル</button>
+  </div>
+</div>
 <div class="qc-modal-bg" id="qc-modal-del">
   <div class="qc-modal">
     <div class="qc-modal-title" style="color:#E24B4A">🗑️ 記録を削除</div>
@@ -6422,6 +6443,14 @@ window.qcOnTabActivated = function(){
     }, {passive:false});
     // ファイル入力リスナー
     document.getElementById('qc-pi').addEventListener('change', function(){ qcAddPhoto(this.files[0]); this.value=''; });
+    // ギャラリー/ファイルから複数選択（captureなし）
+    document.getElementById('qc-pi-file').addEventListener('change', function(){
+      var files = Array.from(this.files||[]);
+      var remain = QC_MAX_PHOTOS - QC_PHOTOS.length;
+      files.slice(0, remain).forEach(function(f){ qcAddPhoto(f); });
+      this.value='';
+    });
+    document.getElementById('qc-bulk-pi-file').addEventListener('change', function(){ qcAddBulkPhoto(this.files[0]); this.value=''; });
     document.getElementById('qc-pi-retake').addEventListener('change', function(){
       if(this.files[0] && QC_VIEWER_INDEX!==null){
         qcCompressImage(this.files[0], function(data,ok,ck){ QC_PHOTOS[QC_VIEWER_INDEX]={data:data,origKB:ok,compKB:ck,rotation:0}; qcRenderPhotoGrid(); document.getElementById('qc-viewer-img').src=data; qcCloseViewer(); });
@@ -6985,7 +7014,25 @@ function qcRenderPhotoGrid(){
   var addBtn=document.getElementById('qc-photo-add-btn');
   if(addBtn){ addBtn.style.display=QC_PHOTOS.length>=QC_MAX_PHOTOS?'none':'block'; addBtn.textContent='📷 写真を追加（'+QC_PHOTOS.length+'/'+QC_MAX_PHOTOS+'枚）'; }
 }
-window.qcOpenCamOrFile = function(){ if(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)){ document.getElementById('qc-pi').click(); } else { QC_CAM_TARGET='form'; qcOpenCamModal(); } };
+// ソース選択シートを開く（カメラ or ファイル）
+var _qcSrcTarget = 'form'; // 'form' or 'bulk'
+window.qcOpenCamOrFile = function(){ _qcSrcTarget='form'; document.getElementById('qc-src-sheet').classList.add('on'); };
+window.qcBulkOpenSrc = function(){ _qcSrcTarget='bulk'; document.getElementById('qc-src-sheet').classList.add('on'); };
+window.qcSrcSheetClose = function(e){ if(!e||e.target===document.getElementById('qc-src-sheet')||e.target.classList.contains('qc-src-btn-cancel')) document.getElementById('qc-src-sheet').classList.remove('on'); };
+window.qcSrcChooseCam = function(){
+  document.getElementById('qc-src-sheet').classList.remove('on');
+  if(_qcSrcTarget==='bulk'){ QC_CAM_TARGET='bulk'; }
+  else { QC_CAM_TARGET='form'; }
+  if(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)){
+    document.getElementById(_qcSrcTarget==='bulk'?'qc-bulk-pi':'qc-pi').click();
+  } else {
+    qcOpenCamModal();
+  }
+};
+window.qcSrcChooseFile = function(){
+  document.getElementById('qc-src-sheet').classList.remove('on');
+  document.getElementById(_qcSrcTarget==='bulk'?'qc-bulk-pi-file':'qc-pi-file').click();
+};
 window.qcOpenViewer = function(i){ QC_VIEWER_INDEX=i; document.getElementById('qc-viewer-img').src=QC_PHOTOS[i].data; document.getElementById('qc-viewer-retake').style.display='inline-block'; document.getElementById('qc-bulk-viewer-retake').style.display='none'; document.getElementById('qc-bulk-viewer-delete').style.display='none'; document.getElementById('qc-photo-viewer').className='on'; };
 window.qcCloseViewer = function(){ document.getElementById('qc-photo-viewer').className=''; QC_VIEWER_INDEX=null; };
 window.qcRetakePhoto = function(){ document.getElementById('qc-pi-retake').click(); };
@@ -7353,7 +7400,7 @@ window.qcOpenBulkMode = function(){
   qcShowScreen('bulk');
   qcRenderBulkProgress();
 };
-window.qcBulkPhotoTap = function(){ if(QC_BULK_PHOTO) qcOpenBulkViewer(); else { if(/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) document.getElementById('qc-bulk-pi').click(); else { QC_CAM_TARGET='bulk'; qcOpenCamModal(); } } };
+window.qcBulkPhotoTap = function(){ if(QC_BULK_PHOTO) qcOpenBulkViewer(); else qcBulkOpenSrc(); };
 window.qcOpenBulkViewer = function(){ document.getElementById('qc-viewer-img').src=QC_BULK_PHOTO; document.getElementById('qc-viewer-retake').style.display='none'; document.getElementById('qc-bulk-viewer-retake').style.display='inline-block'; document.getElementById('qc-bulk-viewer-delete').style.display='inline-block'; document.getElementById('qc-photo-viewer').className='on'; };
 window.qcBulkRetake = function(){ document.getElementById('qc-bulk-pi-retake').click(); };
 window.qcDeleteBulkPhoto = function(){ QC_BULK_PHOTO=null; document.getElementById('qc-bulk-sz').textContent=''; document.getElementById('qc-bulk-prev').style.display='none'; document.getElementById('qc-bulk-pb').classList.remove('ok'); document.getElementById('qc-bulk-pt').textContent='タップして撮影（必須）'; qcCloseViewer(); };
