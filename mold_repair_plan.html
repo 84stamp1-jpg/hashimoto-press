@@ -1344,6 +1344,12 @@ function importKintone(records){
     const st = r['ステータス']?.value||'';
     return st==='依頼書発行' || st==='作業着手';
   });
+  // 手動追加・持越しタスクを退避（メモリ＋localStorageの両方から確保）
+  const manualReqs = [
+    ...requests.filter(r=>r.source==='manual'||r.source==='continuation'),
+    ...loadManualReqs().filter(mr=>!requests.find(r=>r.id===mr.id))
+  ];
+
   requests=records.map(r=>{
     const hinban  = r['ルックアップ_1']?.value||'';
     const hinmei  = r['文字列__1行__0']?.value||'';    // 品名
@@ -1374,6 +1380,10 @@ function importKintone(records){
       customMemo:'', extraH:0
     };
   });
+  // 手動追加・持越しタスクをkintoneデータに再マージ
+  manualReqs.forEach(mr=>{
+    if(!requests.find(r=>r.id===mr.id)) requests.push(mr);
+  });
   requests.sort((a,b)=>a.deadline.localeCompare(b.deadline));
   applyKtEdits(); // 保存済み編集を復元
   syncAssignedState();
@@ -1393,7 +1403,9 @@ function loadSample(){
     {id:'4',hinban:'HB-3310',hinmei:'ロアーアーム',process:'プレスC',kubunInputs:[{name:'耐久性不足',units:1,key:'taikyuu'}],moldType:'single',trialSteps:1,deadline:t1,source:'sample'},
     {id:'5',hinban:'HD-0112',hinmei:'カバープレート',process:'定期点検',kubunInputs:[{name:'定期メンテ',units:2,key:'maint'}],moldType:'prog',trialSteps:0,deadline:t2,source:'sample'},
   ];
+  const manualReqs2 = requests.filter(r=>r.source==='manual'||r.source==='continuation');
   requests=base.map(r=>({...r,hours:calcHWithTrialH(r.kubunInputs,r.moldType,r.trialSteps,null),assigned:false,assignee:null,note:''}));
+  manualReqs2.forEach(mr=>{ if(!requests.find(r=>r.id===mr.id)) requests.push(mr); });
   // 当日納期分を自動割付
   requests.filter(r=>r.deadline===t).forEach((r,i)=>{
     const assignee=i%2===0?'matsumoto':'matsunaga';
