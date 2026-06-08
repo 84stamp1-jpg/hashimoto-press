@@ -5875,12 +5875,12 @@ async function autoAssignRoles(){
       return; // 再割り振りせずスキップ
     }
 
-    // ── 既存の「予定」割り当てから出勤不可の作業者を事前クリーン ──
-    // （午後休設定後に自動割り振りを再実行した際、古い割り当てが残らないようにする）
+    // ── 既存の「予定」割り当てから出勤不可・busy作業者を事前クリーン ──
+    // （午後休設定後、優先ライン変更後に自動割り振りを再実行した際、古い割り当てが残らないようにする）
     const _existRoles = entry.roles || {};
     const _cleanWorkers = str => (str||'').split(/[,、]/).map(w=>w.trim()).filter(Boolean)
-      .filter(w => !isUnavailableAt(w, s, e)).join('、');
-    const _cleanSingle = name => (name && !isUnavailableAt(name, s, e)) ? name : '';
+      .filter(w => !isUnavailableAt(w, s, e) && !isBusy(w, s, e)).join('、');
+    const _cleanSingle = name => (name && !isUnavailableAt(name, s, e) && !isBusy(name, s, e)) ? name : '';
 
     const roles    = {
       品質確認: _cleanSingle(_existRoles.品質確認),
