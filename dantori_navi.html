@@ -326,6 +326,24 @@ html, body {
 .qc-tab.qc-active{color:#fff;border-bottom:3px solid #7eb8f7;}
 .qc-screen{display:none;}.qc-screen.qc-on{display:block;}
 #tab-quality{background:#f0f4f8;}
+/* 品質チェックタブ：スクロール時にサブタブを固定 */
+#tab-quality.active{
+  display:flex !important;
+  flex-direction:column;
+  height:calc(100vh - 44px); /* メインタブバーの高さ分を引く */
+  overflow:hidden;
+}
+/* pending badge と qc-tabs は flex-shrink:0 で高さを保持 */
+#tab-quality #qc-pending-badge,
+#tab-quality .qc-tabs{ flex-shrink:0; }
+/* コンテンツエリアだけスクロール → タブは常に上部に固定される */
+#tab-quality .qc-screen{
+  flex:1;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+  min-height:0;
+}
+#tab-quality .qc-screen.qc-on{display:block;}
 .qc-cont{padding:12px;max-width:500px;margin:0 auto;}
 .qc-card{background:#fff;border-radius:12px;padding:14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);}
 .qc-card-title{font-size:12px;font-weight:700;color:#1F4E79;margin-bottom:10px;padding-bottom:7px;border-bottom:1px solid #e8f0f8;}
@@ -1225,6 +1243,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
   <div class="qc-cont">
     <div class="qc-alloc-card">
       <div class="qc-alloc-title">📦 一括振り分け</div>
+      <div class="qc-fld"><label>生産日</label><input type="date" id="qc-bulk-dt"></div>
       <div class="qc-fld"><label>品番</label>
         <div id="qc-bulk-hinban" style="font-size:15px;font-weight:700;color:#1F4E79;padding:8px 0"></div>
       </div>
@@ -5749,6 +5768,24 @@ async function autoAssignRoles(){
   // 作業がある（dantori登録がある）ラインのSet
   const activeLineSet = new Set(sorted.map(d => d.lineId));
 
+  // ── 各ラインの生産時間帯マップ（優先ライン流出防止に使用） ──
+  // lineId → [{s, e}] の配列。「優先ラインに同時間帯の予定がある人は他ラインに使わない」判定用
+  const _lineProdRanges = {};
+  sorted.forEach(ent => {
+    const pS = toMin(ent.prodStart);
+    const pE = toMin(ent.prodEnd || ent.prodStart);
+    if(pS !== null){
+      if(!_lineProdRanges[ent.lineId]) _lineProdRanges[ent.lineId] = [];
+      _lineProdRanges[ent.lineId].push({ s: pS, e: pE !== null ? pE : pS + 1 });
+    }
+  });
+  // 作業者wの優先ラインがcurrentLineと異なり、かつprodRange[s〜e]で稼働中かどうか
+  function _isPriorityLineConflict(w, currentLineId, s, e){
+    const priLine = WORKER_PRIORITY_LINE[w];
+    if(!priLine || priLine === currentLineId) return false;
+    return (_lineProdRanges[priLine] || []).some(r => r.s < e && r.e > s);
+  }
+
   // 同グループで仕事がないラインを取得（lineIdに近い順でソート）
   function getSameGroupNoWork(lineId){
     if(!dantoriGroupCfg.length) return [];
@@ -5816,8 +5853,10 @@ async function autoAssignRoles(){
       if(result.length >= maxCount) return result.slice(0, maxCount);
 
       // ② 同グループで実際に空いている人（ラインに計画があっても本人がbusyでなければOK）
+      // ただし優先ラインに同時間帯の予定がある作業者は除外（優先ライン流出防止）
       const grp = allPressWorkers
-        .filter(w => sameGroupIds.includes(WORKER_PRIORITY_LINE[w]) && isAvail(w) && !result.includes(w))
+        .filter(w => sameGroupIds.includes(WORKER_PRIORITY_LINE[w]) && isAvail(w) && !result.includes(w) &&
+          !_isPriorityLineConflict(w, lineId, s, e))
         .sort((a, b) => {
           const ia = sameGroupIds.indexOf(WORKER_PRIORITY_LINE[a]);
           const ib = sameGroupIds.indexOf(WORKER_PRIORITY_LINE[b]);
@@ -6003,8 +6042,8 @@ async function autoAssignRoles(){
         .filter(w => !isUnavailableAt(w, ps, e))
         .slice(0, effectiveWrkCount);
 
-      // 不足分を補完: 「優先ラインに計画があるか」ではなく「実際にbusyか」で判定
-      // → 自分のラインに計画があっても未割当なら空き人員として使う
+      // 不足分を補完
+      // 優先ラインが現ラインと異なりかつ優先ラインに同時間帯の予定がある作業者は除外
       const wrkNeed = effectiveWrkCount - workerAvail.length;
       if(wrkNeed > 0){
         const additional = allPressWorkers
@@ -6012,7 +6051,8 @@ async function autoAssignRoles(){
             !workerAvail.includes(w) &&
             !workerHasRole(w, 'noLine') &&
             !isBusy(w, ps, e) &&
-            !isUnavailableAt(w, ps, e)
+            !isUnavailableAt(w, ps, e) &&
+            !_isPriorityLineConflict(w, entry.lineId, ps, e)
           )
           .sort((a, b) => {
             // 同ライン優先 → 同グループ優先 → その他
@@ -6953,13 +6993,15 @@ function qcGetExifOrientation(buf){
 function qcCompressImage(file, cb){
   var ok=Math.round(file.size/1024);
   if(typeof createImageBitmap==='function'){
-    createImageBitmap(file,{imageOrientation:'from-image'}).then(function(bmp){
-      var w=bmp.width,h=bmp.height,scale=(w>QC_MAX_PX||h>QC_MAX_PX)?QC_MAX_PX/Math.max(w,h):1;
-      var c=document.createElement('canvas'); c.width=Math.round(w*scale); c.height=Math.round(h*scale);
-      c.getContext('2d').drawImage(bmp,0,0,c.width,c.height); bmp.close();
-      var data=c.toDataURL('image/jpeg',QC_QUALITY);
-      cb(data,ok,Math.round(data.length*0.75/1024));
-    }).catch(function(){ qcCompressImageLegacy(file,ok,cb); });
+    try {
+      createImageBitmap(file,{imageOrientation:'from-image'}).then(function(bmp){
+        var w=bmp.width,h=bmp.height,scale=(w>QC_MAX_PX||h>QC_MAX_PX)?QC_MAX_PX/Math.max(w,h):1;
+        var c=document.createElement('canvas'); c.width=Math.round(w*scale); c.height=Math.round(h*scale);
+        c.getContext('2d').drawImage(bmp,0,0,c.width,c.height); bmp.close();
+        var data=c.toDataURL('image/jpeg',QC_QUALITY);
+        cb(data,ok,Math.round(data.length*0.75/1024));
+      }).catch(function(){ qcCompressImageLegacy(file,ok,cb); });
+    } catch(e){ qcCompressImageLegacy(file,ok,cb); }
   } else { qcCompressImageLegacy(file,ok,cb); }
 }
 function qcCompressImageLegacy(file,ok,cb){
@@ -6978,7 +7020,8 @@ function qcCompressImageLegacy(file,ok,cb){
       var data=c.toDataURL('image/jpeg',QC_QUALITY);
       cb(data,ok,Math.round(data.length*0.75/1024));
     };
-    img.src=URL.createObjectURL(new Blob([buf]));
+    img.onerror=function(){ URL.revokeObjectURL(img.src); alert('この画像ファイルは読み込めませんでした。別のファイルをお試しください。'); };
+    img.src=URL.createObjectURL(new Blob([buf],{type:file.type||'image/jpeg'}));
   };
   reader.readAsArrayBuffer(file);
 }
@@ -7387,6 +7430,7 @@ window.qcOpenBulkMode = function(){
   else{ var q=prompt('品番を入力してください'); if(!q) return; QC_BULK_HINBAN=q.trim(); QC_BULK_JUNJO=null; }
   document.getElementById('qc-bulk-hinban').textContent=QC_BULK_HINBAN+(QC_BULK_JUNJO?' 工順'+QC_BULK_JUNJO:'');
   ['qc-bulk-prod','qc-bulk-ng','qc-bulk-hokyu','qc-bulk-sonota'].forEach(function(id){ document.getElementById(id).value=''; });
+  var _td=new Date(); document.getElementById('qc-bulk-dt').value=_td.getFullYear()+'-'+('0'+(_td.getMonth()+1)).slice(-2)+'-'+('0'+_td.getDate()).slice(-2);
   qcSonotaLoad('qc-bulk-sonota-memo','qc-bulk-sonota-chips','');
   document.getElementById('qc-bulk-op').value='';
   QC_BULK_PHOTO=null;
@@ -7473,7 +7517,7 @@ window.qcSaveAlloc = function(){
   var prod=parseInt(document.getElementById('qc-bulk-prod').value||0)||0;
   var ng=parseInt(document.getElementById('qc-bulk-ng').value||0)||0;
   var op=document.getElementById('qc-bulk-op').value;
-  var t=new Date(), dateStr=t.getFullYear()+'-'+('0'+(t.getMonth()+1)).slice(-2)+'-'+('0'+t.getDate()).slice(-2);
+  var _bdv=document.getElementById('qc-bulk-dt').value; var t=new Date(); var dateStr=_bdv||t.getFullYear()+'-'+('0'+(t.getMonth()+1)).slice(-2)+'-'+('0'+t.getDate()).slice(-2);
   var hokyu=parseInt(document.getElementById('qc-bulk-hokyu').value||0)||0;
   var sonota=parseInt(document.getElementById('qc-bulk-sonota').value||0)||0;
   var sonotaMemo=document.getElementById('qc-bulk-sonota-memo').value||'';
