@@ -163,7 +163,7 @@ header{background:var(--panel);border-bottom:1px solid var(--border);padding:0 1
 .f2col{display:grid;grid-template-columns:1fr 1fr;gap:5px}
 
 /* RIGHT */
-.right{display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;background:var(--bg);height:100%}
+.right{display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;background:var(--panel);height:100%}
 .gctrl{padding:9px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0;background:var(--panel);box-shadow:0 1px 4px rgba(0,0,0,.04)}
 .ginfo{font-size:11px;color:var(--text2)}
 .glegend{display:flex;gap:10px;align-items:center;margin-left:auto}
@@ -229,7 +229,7 @@ header{background:var(--panel);border-bottom:1px solid var(--border);padding:0 1
   border-radius:3px;background:transparent;color:inherit;padding:1px 2px;opacity:.85;font-family:var(--mono)}
 .ot-input:focus{opacity:1;outline:none}
 /* 負荷サマリーパネル */
-.load-panel{border-top:2px solid var(--border);background:var(--panel);padding:8px 14px;flex-shrink:0}
+.load-panel{border-top:2px solid var(--border);background:var(--panel);padding:8px 14px;flex-shrink:0;flex:0 0 auto}
 .load-panel-hdr{display:flex;align-items:center;gap:8px;margin-bottom:6px;cursor:pointer;user-select:none}
 .load-panel-title{font-size:10px;font-weight:700;color:var(--text2);letter-spacing:.1em;text-transform:uppercase}
 .load-days{display:flex;gap:6px;overflow-x:auto;align-items:flex-end}
@@ -645,7 +645,7 @@ input.nm-img-input{display:none}
     <div class="gwrap"><div class="gcont" id="gcont"></div></div>
 
     <!-- 任意作業パネル（ガント下） -->
-    <div id="manualRightPanel" style="display:none;border-top:2px solid #fde68a;background:#fffbf5;padding:5px 14px;flex:1 1 auto;min-height:80px;max-height:300px;overflow-y:auto">
+    <div id="manualRightPanel" style="display:none;border-top:2px solid #fde68a;background:#fffbf5;padding:5px 14px;flex:1 1 0;min-height:100px;overflow-y:auto">
       <div style="font-size:10px;font-weight:700;color:#92400e;letter-spacing:.06em;margin-bottom:6px;display:flex;align-items:center;gap:6px">
         📝 任意作業
         <span id="bdgManualR" class="badge badge-warn">0件</span>
@@ -1000,7 +1000,7 @@ const FB_URL='https://hashimoto-press-default-rtdb.asia-southeast1.firebasedatab
 const FB_PATH='/moldRepairPlan/tasks';
 const FB_MANUAL_PATH='/moldRepairPlan/manualReqs'; // 続き・任意作業タスクのFirebase保存先
 let fbApp=null, fbDb=null, fbRef=null, fbListener=null;
-let fbManualRef=null;
+let fbManualRef=null, _fbManualIgnoreNext=false;
 
 function initFirebase(){
   try {
@@ -1043,21 +1043,24 @@ function initFirebase(){
       }
       fbInitialized=true;
     });
-    // 続き・任意作業タスクのリアルタイム同期
+    // 続き・任意作業タスクのリアルタイム同期（他PCの変更を受信）
     fbManualRef=fbDb.ref(FB_MANUAL_PATH);
     fbManualRef.on('value', snap=>{
-      const fbManuals=snap.val()||[];
-      if(!Array.isArray(fbManuals))return;
-      // メモリ上のmanual/continuationとマージ（Firebase優先）
-      const merged=[...fbManuals];
-      requests.filter(r=>r.source==='manual'||r.source==='continuation').forEach(r=>{
-        if(!merged.find(m=>m.id===r.id)) merged.push(r);
+      if(_fbManualIgnoreNext){ _fbManualIgnoreNext=false; return; }
+      const fbManuals=snap.val();
+      if(!fbManuals||!Array.isArray(fbManuals))return;
+      // ローカルにないものだけ追加（削除はしない＝ローカル操作優先）
+      fbManuals.forEach(r=>{
+        if(!requests.find(x=>x.id===r.id)) requests.push(r);
       });
-      // requestsのmanual/continuationを入れ替え
-      requests=requests.filter(r=>r.source!=='manual'&&r.source!=='continuation');
-      merged.forEach(r=>{ if(!requests.find(x=>x.id===r.id)) requests.push(r); });
+      // ローカルにあってFirebaseにないものは削除（削除同期）
+      const fbIds=new Set(fbManuals.map(r=>r.id));
+      requests=requests.filter(r=>{
+        if(r.source!=='manual'&&r.source!=='continuation') return true;
+        return fbIds.has(r.id);
+      });
       syncAssignedState();
-      try{localStorage.setItem(MANUAL_KEY,JSON.stringify(merged));}catch(e){}
+      try{localStorage.setItem(MANUAL_KEY,JSON.stringify(fbManuals));}catch(e){}
       renderManualList&&renderManualList();
       renderRequestList&&renderRequestList();
     });
@@ -1631,9 +1634,10 @@ function saveManualReqs(){
   const data=requests.filter(r=>r.source==='manual'||r.source==='continuation');
   // localStorage（ローカルキャッシュ）
   try{localStorage.setItem(MANUAL_KEY,JSON.stringify(data));}catch(e){}
-  // Firebase（全PC共有）
+  // Firebase（全PC共有）- 自分自身のset()トリガーを無視するフラグをセット
   if(fbManualRef){
-    fbManualRef.set(data).catch(e=>console.log('manualReqs Firebase保存失敗:',e));
+    _fbManualIgnoreNext=true;
+    fbManualRef.set(data).catch(e=>{ _fbManualIgnoreNext=false; console.log('manualReqs Firebase保存失敗:',e); });
   }
 }
 function loadManualReqs(){
@@ -2375,8 +2379,12 @@ function renderGantt(){
         const oc=isCarriedTask?'act-bar-carried':cfg.actCls;
         const planEndMin=addWork(t.startMin,planTotalMin);
         const diffMin=ae2!==null?ae2-planEndMin:null;
+        const _ctodayH=isCarriedTask?calcWorkedH([t]):0;
+        const _cprevH=isCarriedTask?(t.actual._prevWorkedH||0):0;
+        const _ctotalH=isCarriedTask?Math.round((_cprevH+_ctodayH)*10)/10:0;
+        const _cremainH=isCarriedTask?Math.max(0,Math.round((t.hours-_ctotalH)*10)/10):0;
         const diffTxt=isCarriedTask
-          ?`累計${t.actual.totalWorkedH||0}H / 残${Math.max(0,Math.round((t.hours-(t.actual.totalWorkedH||0))*10)/10)}H`
+          ?`当日${_ctodayH}H / 残${_cremainH}H`
           :diffMin===null?'作業中':diffMin===0?'±0':diffMin>0?'+'+diffMin+'分遅':diffMin+'分早';
         const diffColor=isCarriedTask?'#92400e':diffMin===null?'#6b7394':diffMin>5?'var(--danger)':diffMin<-5?'var(--ok)':'var(--text2)';
         const actBarDiv=document.createElement('div');
