@@ -924,6 +924,7 @@ input.nm-img-input{display:none}
         style="background:#fff8e1;border:1px solid #f59e0b;color:#92400e;font-weight:700"
         title="実績開始〜終了の実働時間を計算して記録し、残り工数を続きとして追加します">⏭ 持越し</button>
       <button class="btn btn-secondary btn-sm" onclick="closeActModal()">閉じる</button>
+      <button class="btn btn-sm" id="btnRevertComplete" onclick="revertComplete()" style="display:none;background:#f3f4f6;border:1px solid #9ca3af;color:#374151;font-weight:700" title="完了を取り消して作業中に戻します">↩ 完了取消</button>
       <button class="btn btn-sm" id="btnComplete" onclick="completeTask()"
         style="background:#dcfce7;border:1px solid #86efac;color:#166534;font-weight:700"
         title="終了時刻を確定して完了にします">✓ 完了</button>
@@ -2767,6 +2768,20 @@ function openActModal(idOrEl){
   // 工数編集セクションは閉じた状態でリセット
   const sec=document.getElementById('inlineEditSection');if(sec)sec.style.display='none';
   const btn=document.getElementById('btnInlineEdit');if(btn)btn.textContent='⚙ 工数編集';
+  // 完了済みタスクはボタン表示を切り替え
+  const isDone=t.actual.status==='done'||(t.actual.start&&t.actual.end&&t.actual.status!=='carried');
+  const btnCO=document.getElementById('btnCarryOver');
+  const btnCmp=document.getElementById('btnComplete');
+  const btnRev=document.getElementById('btnRevertComplete');
+  if(isDone){
+    if(btnCO) btnCO.style.display='none';
+    if(btnCmp) btnCmp.style.display='none';
+    if(btnRev) btnRev.style.display='';
+  } else {
+    if(btnCO) btnCO.style.display='';
+    if(btnCmp) btnCmp.style.display='';
+    if(btnRev) btnRev.style.display='none';
+  }
   document.getElementById('actModal').classList.add('open');
 }
 // ===== ガントブロックのドラッグ（マウスイベントベース・時間帯移動・担当者変更） =====
@@ -2972,6 +2987,22 @@ function completeTask(){
   if(!t.actual.start){alert('開始時刻が未記録です。先に開始時刻を入力してください。');return;}
   t.actual.status='done';
   saveTasksToFirebase();closeActModal();renderGantt();renderDetail();
+}
+function revertComplete(){
+  // 完了を取り消して「作業中」に戻す
+  const t=getDate(curDate).find(x=>x.id===actTaskId);if(!t)return;
+  if(!confirm('完了を取り消して「作業中」に戻します。\n実績終了時刻はクリアされます。よろしいですか？'))return;
+  t.actual.end='';
+  t.actual.status='working';
+  document.getElementById('inActE').value='';
+  // ボタン表示を戻す
+  const btnCO=document.getElementById('btnCarryOver');
+  const btnCmp=document.getElementById('btnComplete');
+  const btnRev=document.getElementById('btnRevertComplete');
+  if(btnCO) btnCO.style.display='';
+  if(btnCmp) btnCmp.style.display='';
+  if(btnRev) btnRev.style.display='none';
+  saveTasksToFirebase();renderGantt();renderDetail();
 }
 function closeActModal(){document.getElementById('actModal').classList.remove('open');actTaskId=null}
 function openEditFromAct(){
