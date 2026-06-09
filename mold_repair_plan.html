@@ -925,6 +925,7 @@ input.nm-img-input{display:none}
         title="実績開始〜終了の実働時間を計算して記録し、残り工数を続きとして追加します">⏭ 持越し</button>
       <button class="btn btn-secondary btn-sm" onclick="closeActModal()">閉じる</button>
       <button class="btn btn-sm" id="btnRevertComplete" onclick="revertComplete()" style="display:none;background:#f3f4f6;border:1px solid #9ca3af;color:#374151;font-weight:700" title="完了を取り消して作業中に戻します">↩ 完了取消</button>
+      <button class="btn btn-sm" id="btnRevertCarry" onclick="revertCarry()" style="display:none;background:#fef3c7;border:1px solid #f59e0b;color:#92400e;font-weight:700" title="持越しを取り消して作業中に戻します">↩ 持越取消</button>
       <button class="btn btn-sm" id="btnComplete" onclick="completeTask()"
         style="background:#dcfce7;border:1px solid #86efac;color:#166534;font-weight:700"
         title="終了時刻を確定して完了にします">✓ 完了</button>
@@ -1523,6 +1524,8 @@ function carryOverTask(taskId){
 
   // タスクを「持越済」状態にする
   foundTask.actual.status='carried';
+  foundTask.actual._prevWorkedH=prevWorkedH; // 持越取消時の復元用
+  foundTask.actual._carryContId=(existCont?.id)||null; // 取消時に削除する続きタスクID（後で上書き）
   foundTask.actual.totalWorkedH=confirmedWorkedH;
   foundTask.actual.carriedDate=todayStr();
 
@@ -1556,6 +1559,7 @@ function carryOverTask(taskId){
       };
       requests.push(contReq);
       requests.sort((a,b)=>a.deadline.localeCompare(b.deadline));
+      foundTask.actual._carryContId=contReq.id; // 取消用に記録
     }
   } else if(existCont){
     // 残り0Hなら既存の続きタスクを削除
@@ -2167,6 +2171,41 @@ function fillNullStartMins(ds){
   });
 }
 
+// ===== 担当者の当日実働時間計算（並行作業対応） =====
+function calcWorkedH(tasks){
+  // 各タスクの実働区間を収集（一時停止を除外した実働セグメント）
+  const segs=[];
+  tasks.forEach(t=>{
+    const as=minToMs(t.actual?.start);
+    if(as===null)return;
+    const now=new Date().getHours()*60+new Date().getMinutes();
+    const ae=minToMs(t.actual?.end)??now; // 作業中は現在時刻まで
+    if(ae<=as)return;
+    // 一時停止区間でセグメントを分割
+    const pauses=(t.actual?.pauses||[])
+      .map(p=>({f:minToMs(p.from),t:minToMs(p.to)}))
+      .filter(p=>p.f!==null&&p.t!==null&&p.t>p.f)
+      .sort((a,b)=>a.f-b.f);
+    let cur=as;
+    for(const p of pauses){
+      if(p.f>cur) segs.push([cur,Math.min(p.f,ae)]);
+      cur=Math.max(cur,p.t);
+      if(cur>=ae)break;
+    }
+    if(cur<ae) segs.push([cur,ae]);
+  });
+  if(!segs.length)return 0;
+  // 区間を結合して重複カウントを除去
+  segs.sort((a,b)=>a[0]-b[0]);
+  let total=0,cs=segs[0][0],ce=segs[0][1];
+  for(let i=1;i<segs.length;i++){
+    if(segs[i][0]<=ce) ce=Math.max(ce,segs[i][1]);
+    else{total+=ce-cs;cs=segs[i][0];ce=segs[i][1];}
+  }
+  total+=ce-cs;
+  return Math.round(total/60*10)/10;
+}
+
 // ===== ガント描画 =====
 function renderGantt(){
   fillNullStartMins(curDate); // 翌日繰越タスクの時刻を補完
@@ -2414,6 +2453,13 @@ function renderGantt(){
         <div class="glabel ${lc}" style="min-height:${TRACK_H}px;width:78px;min-width:78px;flex-shrink:0;flex-direction:column;gap:3px;justify-content:center">
           <div>${lbl}</div>
           ${getAttendanceBadgeHtml(a, curDate)}
+          ${(()=>{
+            const wh=calcWorkedH(myTasks);
+            const hasWork=myTasks.some(t=>t.actual?.start);
+            if(!hasWork)return '';
+            const isWorking=myTasks.some(t=>t.actual?.start&&!t.actual?.end&&t.actual?.status!=='carried');
+            return `<div style="font-size:9px;font-weight:700;color:${isWorking?'var(--danger)':'var(--ok)'};background:${isWorking?'rgba(220,38,38,.07)':'rgba(34,197,94,.07)'};border-radius:3px;padding:1px 4px;text-align:center">${isWorking?'▶':' ✓'} ${wh}H</div>`;
+          })()}
           <div style="font-size:9px;opacity:.7">残業</div>
           <div style="display:flex;align-items:center;gap:2px">
             <input class="ot-input" type="number" min="0" max="5" step="0.5" value="${ot}"
@@ -2768,19 +2814,31 @@ function openActModal(idOrEl){
   // 工数編集セクションは閉じた状態でリセット
   const sec=document.getElementById('inlineEditSection');if(sec)sec.style.display='none';
   const btn=document.getElementById('btnInlineEdit');if(btn)btn.textContent='⚙ 工数編集';
-  // 完了済みタスクはボタン表示を切り替え
-  const isDone=t.actual.status==='done'||(t.actual.start&&t.actual.end&&t.actual.status!=='carried');
+  // ステータス別にボタン表示を切り替え
+  const isCarriedTask=t.actual.status==='carried';
+  const isDone=!isCarriedTask&&(t.actual.status==='done'||(t.actual.start&&t.actual.end));
   const btnCO=document.getElementById('btnCarryOver');
   const btnCmp=document.getElementById('btnComplete');
   const btnRev=document.getElementById('btnRevertComplete');
-  if(isDone){
+  const btnRevC=document.getElementById('btnRevertCarry');
+  if(isCarriedTask){
+    // 持越済：持越取消のみ
+    if(btnCO) btnCO.style.display='none';
+    if(btnCmp) btnCmp.style.display='none';
+    if(btnRev) btnRev.style.display='none';
+    if(btnRevC) btnRevC.style.display='';
+  } else if(isDone){
+    // 完了済：完了取消のみ
     if(btnCO) btnCO.style.display='none';
     if(btnCmp) btnCmp.style.display='none';
     if(btnRev) btnRev.style.display='';
+    if(btnRevC) btnRevC.style.display='none';
   } else {
+    // 作業中・未着手：通常
     if(btnCO) btnCO.style.display='';
     if(btnCmp) btnCmp.style.display='';
     if(btnRev) btnRev.style.display='none';
+    if(btnRevC) btnRevC.style.display='none';
   }
   document.getElementById('actModal').classList.add('open');
 }
@@ -2987,6 +3045,33 @@ function completeTask(){
   if(!t.actual.start){alert('開始時刻が未記録です。先に開始時刻を入力してください。');return;}
   t.actual.status='done';
   saveTasksToFirebase();closeActModal();renderGantt();renderDetail();
+}
+function revertCarry(){
+  const t=getDate(curDate).find(x=>x.id===actTaskId);if(!t)return;
+  if(!confirm('持越しを取り消して「作業中」に戻します。\n追加された続きタスクは削除されます。よろしいですか？'))return;
+  // 続きタスクを削除
+  const contId=t.actual._carryContId;
+  if(contId){
+    requests=requests.filter(r=>r.id!==contId);
+    Object.keys(tasksByDate).forEach(ds=>{
+      tasksByDate[ds]=(tasksByDate[ds]||[]).filter(t2=>t2.reqId!==contId);
+    });
+  }
+  // ステータスを作業中に戻す・累計を前回値に戻す
+  t.actual.status='working';
+  t.actual.totalWorkedH=t.actual._prevWorkedH||0;
+  delete t.actual._prevWorkedH;
+  delete t.actual._carryContId;
+  delete t.actual.carriedDate;
+  // ボタン表示を戻す
+  const btnCO=document.getElementById('btnCarryOver');
+  const btnCmp=document.getElementById('btnComplete');
+  const btnRevC=document.getElementById('btnRevertCarry');
+  if(btnCO) btnCO.style.display='';
+  if(btnCmp) btnCmp.style.display='';
+  if(btnRevC) btnRevC.style.display='none';
+  saveManualReqs();
+  saveTasksToFirebase();renderGantt();renderDetail();renderRequestList();renderManualList();
 }
 function revertComplete(){
   // 完了を取り消して「作業中」に戻す
