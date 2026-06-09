@@ -1595,9 +1595,16 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
       </div>
       <div id="impMapInfo" style="font-size:11px;color:#888;background:#f8f7f2;border-radius:6px;padding:6px 10px;margin-bottom:8px;display:none;"></div>
       <div id="impPreview" style="margin-bottom:8px;"></div>
+      <div style="margin-bottom:8px;background:#fff8e1;border:1px solid #f9a825;border-radius:7px;padding:8px 12px;display:flex;align-items:flex-start;gap:8px;">
+        <input type="checkbox" id="impKeepActual" style="margin-top:2px;flex-shrink:0;width:16px;height:16px;cursor:pointer;" onchange="var n=document.getElementById('impOverwriteNote');if(n)n.textContent=this.checked?'✅ 実績・稼働状況を維持し、生産計画のみ上書きします':'※既存の計画データは上書きされます';">
+        <label for="impKeepActual" style="font-size:12px;color:#795548;cursor:pointer;line-height:1.5;">
+          <b>実績・稼働状況を維持してインポート</b><br>
+          <span style="font-size:11px;font-weight:400;">当日の計画を修正する場合に使用。実績数・稼働開始/終了時刻・ステータスはそのままで、生産計画（品番・台数・時刻）のみ上書きします。</span>
+        </label>
+      </div>
       <div style="display:flex;gap:8px;align-items:center;">
         <button class="bp" id="impBtn" onclick="doImport()" disabled>この内容でインポート</button>
-        <span style="font-size:11px;color:#aaa;">※既存の計画データは上書きされます</span>
+        <span id="impOverwriteNote" style="font-size:11px;color:#aaa;">※既存の計画データは上書きされます</span>
       </div>
       <div class="msg" id="impmsg"></div>
     </div>
@@ -10185,12 +10192,15 @@ window.doImport=async function(){
   const activeIds=allGroupIds.filter(id=>(_impParsedJobs[id]||[]).length>0);
   const emptyIds =allGroupIds.filter(id=>!(_impParsedJobs[id]||[]).length); // データなし行
   if(!activeIds.length && !emptyIds.length){alert('インポートするデータがありません');return;}
+  const keepActual=!!(document.getElementById('impKeepActual')?.checked);
   const totalJobs=activeIds.reduce((s,id)=>s+(_impParsedJobs[id]||[]).length,0);
   const lineNames=activeIds.map(id=>getLineName(id)).join('、')||'なし';
   const emptyNames=emptyIds.map(id=>getLineName(id)).join('、');
   const confirmMsg=`【インポート】${lineNames}　合計${totalJobs}件\n`
     +(emptyNames?`【データなし→クリア】${emptyNames}\n`:'')
-    +`\n既存の計画データは上書きされます。よろしいですか？`;
+    +'\n'+(keepActual
+      ? '✅ 実績・稼働状況を維持したまま、生産計画のみ上書きします。\nよろしいですか？'
+      : '既存の計画データ・実績はすべて上書きされます。よろしいですか？');
   if(!confirm(confirmMsg)) return;
   const btn=document.getElementById('impBtn');
   btn.disabled=true;
@@ -10198,28 +10208,45 @@ window.doImport=async function(){
   m.style.color='#888';m.textContent='書き込み中...';
   try{
     const updates={};
-    // データありラインを上書き
-    activeIds.forEach(lineId=>{
-      const jobs=_impParsedJobs[lineId];
-      const totalPlan=jobs.reduce((s,j)=>s+j.plan,0);
-      updates['lines/'+lineId]={jobs,plan:totalPlan,actual:0,part:jobs[0]?.part||'',status:'waiting',updatedAt:0,workStart:'',workEnd:''};
-    });
-    // データなしラインはフィールドを個別に上書きクリア（実績・ペース等も含む）
-    emptyIds.forEach(lineId=>{
-      updates['lines/'+lineId+'/jobs']           = [];
-      updates['lines/'+lineId+'/plan']           = 0;
-      updates['lines/'+lineId+'/actual']         = 0;
-      updates['lines/'+lineId+'/part']           = '';
-      updates['lines/'+lineId+'/status']         = 'waiting';
-      updates['lines/'+lineId+'/workStart']      = '';
-      updates['lines/'+lineId+'/workEnd']        = '';
-      updates['lines/'+lineId+'/updatedAt']      = 0;
-      updates['lines/'+lineId+'/prevUpdatedAt']  = 0;
-      updates['lines/'+lineId+'/prev2UpdatedAt'] = 0;
-    });
+    if(keepActual){
+      // 実績維持モード: jobs・plan のみ部分更新、actual/status/workStart/workEnd は触らない
+      activeIds.forEach(lineId=>{
+        const jobs=_impParsedJobs[lineId];
+        const totalPlan=jobs.reduce((s,j)=>s+j.plan,0);
+        updates['lines/'+lineId+'/jobs'] = jobs;
+        updates['lines/'+lineId+'/plan'] = totalPlan;
+        updates['lines/'+lineId+'/part'] = jobs[0]?.part||'';
+      });
+      // データなしライン: jobs・plan のみクリア（実績は維持）
+      emptyIds.forEach(lineId=>{
+        updates['lines/'+lineId+'/jobs'] = [];
+        updates['lines/'+lineId+'/plan'] = 0;
+        updates['lines/'+lineId+'/part'] = '';
+      });
+    } else {
+      // 通常モード: ライン全体を上書き（実績もリセット）
+      activeIds.forEach(lineId=>{
+        const jobs=_impParsedJobs[lineId];
+        const totalPlan=jobs.reduce((s,j)=>s+j.plan,0);
+        updates['lines/'+lineId]={jobs,plan:totalPlan,actual:0,part:jobs[0]?.part||'',status:'waiting',updatedAt:0,workStart:'',workEnd:''};
+      });
+      // データなしラインはフィールドを個別に上書きクリア（実績・ペース等も含む）
+      emptyIds.forEach(lineId=>{
+        updates['lines/'+lineId+'/jobs']           = [];
+        updates['lines/'+lineId+'/plan']           = 0;
+        updates['lines/'+lineId+'/actual']         = 0;
+        updates['lines/'+lineId+'/part']           = '';
+        updates['lines/'+lineId+'/status']         = 'waiting';
+        updates['lines/'+lineId+'/workStart']      = '';
+        updates['lines/'+lineId+'/workEnd']        = '';
+        updates['lines/'+lineId+'/updatedAt']      = 0;
+        updates['lines/'+lineId+'/prevUpdatedAt']  = 0;
+        updates['lines/'+lineId+'/prev2UpdatedAt'] = 0;
+      });
+    }
     await update(ref(db),updates);
     m.style.color='#27ae60';
-    m.textContent=`✓ ${activeIds.length}ライン・${totalJobs}件をインポート`+(emptyIds.length?`　${emptyIds.length}ラインをクリア`:'');
+    m.textContent=`✓ ${activeIds.length}ライン・${totalJobs}件をインポート`+(emptyIds.length?`　${emptyIds.length}ラインをクリア`:'')+(keepActual?' （実績維持）':'');
     document.getElementById('impFile').value='';
     document.getElementById('impPreview').innerHTML='';
     _impParsedJobs={};btn.disabled=true;
