@@ -29,6 +29,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .act-bar-m{background:#fffbe6;border:1px solid #d4a017;color:#5a4000}
 .act-bar-n{background:#fffbe6;border:1px solid #d4a017;color:#5a4000}
 .act-bar-carried{background:#fff8e1;border:1.5px dashed #f59e0b;color:#92400e}
+.burgent{background:#fee2e2;border:1.5px solid #fca5a5;color:#991b1b}
 /* 勤怠バナー */
 #attendanceBanner{background:#fff;border-bottom:1px solid var(--border);padding:4px 16px;display:none;flex-wrap:wrap;gap:6px;align-items:center;font-size:11px}
 #attendanceBanner.has-data{display:flex}
@@ -619,6 +620,7 @@ input.nm-img-input{display:none}
         <div class="legitem"><div class="legdot" style="background:var(--n)"></div>松永</div>
         <div class="legitem"><div class="legdot" style="background:var(--trial)"></div>トライ</div>
         <div class="legitem"><div class="legdot" style="background:var(--m);opacity:.6;border:1px solid var(--m)"></div>実績</div>
+        <div class="legitem"><div class="legdot" style="background:#fee2e2;border:1.5px solid #fca5a5"></div>突発</div>
       </div>
     </div>
     <!-- ズレ警告バナー -->
@@ -1969,6 +1971,7 @@ function insertTaskAt(rid, assignee, startMin){
   }
   newTask.startMin=startMin;
   newTask.overflow=false;
+  newTask.urgent=true; // 突発割込みフラグ
 
   // 同担当者の未着手タスク（開始時刻>=挿入点）を後ろにずらす
   const wEnd=effectiveWorkEnd(assignee);
@@ -2187,7 +2190,7 @@ function renderGantt(){
       const isCarriedTask=tStatus==='carried';
       const blockStyle=isWorking?';z-index:5':isDone?';opacity:.75':isCarriedTask?';opacity:.6;border-style:dashed':'';
       const blockClass=isWorking?' working-block':'';
-      const bc=a==='matsumoto'?'bm':'bn';
+      const bc=t.urgent?'burgent':a==='matsumoto'?'bm':'bn';
       const planTop=row===0?PLAN_R0:PLAN_R1; // 1段目:2px / 2段目:34px
 
       // --- 計画バー ---
