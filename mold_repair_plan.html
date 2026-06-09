@@ -911,9 +911,12 @@ input.nm-img-input{display:none}
       <button class="btn btn-secondary btn-sm" id="btnInlineEdit" onclick="toggleInlineEdit()">⚙ 工数編集</button>
       <button class="btn btn-sm" id="btnCarryOver" onclick="carryOverTask(actTaskId)"
         style="background:#fff8e1;border:1px solid #f59e0b;color:#92400e;font-weight:700"
-        title="当日分の実績を記録して、残り工数を改修依頼一覧に追加します">⏭ 翌日持越</button>
+        title="実績開始〜終了の実働時間を計算して記録し、残り工数を続きとして追加します">⏭ 持越し</button>
       <button class="btn btn-secondary btn-sm" onclick="closeActModal()">閉じる</button>
-      <button class="btn btn-primary btn-sm" onclick="saveActual()">保存</button>
+      <button class="btn btn-sm" id="btnComplete" onclick="completeTask()"
+        style="background:#dcfce7;border:1px solid #86efac;color:#166534;font-weight:700"
+        title="終了時刻を確定して完了にします">✓ 完了</button>
+      <button class="btn btn-secondary btn-sm" onclick="saveActual()" title="時刻・メモを保存します（ステータス変更なし）">保存</button>
     </div>
   </div>
 </div>
@@ -1462,73 +1465,104 @@ function carryOverTask(taskId){
   // 開始時刻がない場合は持越し不可
   if(!foundTask.actual.start){alert('作業開始時刻が記録されていません。\n開始ボタンを押してから持越してください。');return;}
 
+  // モーダルが開いていれば入力中の終了時刻を先に反映
+  const inE=document.getElementById('inActE');
+  if(inE&&inE.value) foundTask.actual.end=inE.value;
+
   // 終了時刻がなければ現在時刻をセット
   if(!foundTask.actual.end){
     const n=new Date();
     foundTask.actual.end=p2(n.getHours())+':'+p2(n.getMinutes());
-    foundTask.actual.status='working';
+    if(inE) inE.value=foundTask.actual.end;
   }
 
   // 実作業時間を計算（停止時間を差し引く）
   const as=minToMs(foundTask.actual.start);
   const ae=minToMs(foundTask.actual.end);
-  let workedMin=ae-as;
+  let workedMin=Math.max(0, ae-as);
   (foundTask.actual.pauses||[]).forEach(p=>{
     const pf=minToMs(p.from),pt2=minToMs(p.to);
     if(pf!==null&&pt2!==null)workedMin-=(pt2-pf);
   });
   workedMin=Math.max(0,workedMin);
-  // 既存の持越し分の作業時間を累算
   const prevWorkedH=foundTask.actual.totalWorkedH||0;
   const todayWorkedH=Math.round(workedMin/60*10)/10;
   const totalWorkedH=Math.round((prevWorkedH+todayWorkedH)*10)/10;
-  const remainingH=Math.max(0,Math.round((foundTask.hours-totalWorkedH)*10)/10);
+  const calcRemainH=Math.max(0,Math.round((foundTask.hours-totalWorkedH)*10)/10);
 
-  const msg=remainingH>0
-    ?`本日の作業時間: ${todayWorkedH}H\n累計作業時間: ${totalWorkedH}H\n残り工数: ${remainingH}H\n\n改修依頼一覧に「続き（${remainingH}H）」として追加します。\nよろしいですか？`
-    :`本日の作業時間: ${todayWorkedH}H\n累計: ${totalWorkedH}H（計画工数を超えています）\n\n翌日持越しますか？`;
-  if(!confirm(msg))return;
+  // 残り工数を確認・補正できるダイアログ
+  const pauseMin=(foundTask.actual.pauses||[]).reduce((s,p)=>{
+    const pf=minToMs(p.from),pt2=minToMs(p.to);
+    return s+(pf!==null&&pt2!==null?pt2-pf:0);
+  },0);
+  let detail=`【計算内訳】\n`;
+  detail+=`  開始: ${foundTask.actual.start}　終了: ${foundTask.actual.end}\n`;
+  detail+=`  経過時間: ${ae-as}分`;
+  if(pauseMin>0) detail+=`　一時停止: ${pauseMin}分`;
+  detail+=`\n  本日実働: ${todayWorkedH}H`;
+  if(prevWorkedH>0) detail+=`\n  前回までの累計: ${prevWorkedH}H`;
+  detail+=`\n  累計合計: ${totalWorkedH}H　計画: ${foundTask.hours}H\n\n`;
+  detail+=`残り工数（修正可）:`;
+
+  const input=prompt(detail, calcRemainH);
+  if(input===null)return; // キャンセル
+  const remainingH=Math.max(0,Math.round(parseFloat(input)*10)/10);
+  if(isNaN(remainingH)){alert('正しい数値を入力してください');return;}
+
+  // 累計作業時間を残り工数から逆算して保存
+  const confirmedWorkedH=Math.round((foundTask.hours-remainingH)*10)/10;
 
   // タスクを「持越済」状態にする
   foundTask.actual.status='carried';
-  foundTask.actual.totalWorkedH=totalWorkedH;
+  foundTask.actual.totalWorkedH=confirmedWorkedH;
   foundTask.actual.carriedDate=todayStr();
 
   // 元の依頼情報を取得
   const origReq=requests.find(r=>r.id===foundTask.reqId);
 
-  // 残り工数 > 0 なら「続き」依頼を改修依頼一覧に追加
+  // 残り工数 > 0 なら「続き」依頼を追加（既存があれば更新）
+  const existCont=requests.find(r=>r.source==='continuation'&&r.originalTaskId===foundTask.id);
   if(remainingH>0){
-    const contReq={
-      id:'cont_'+foundTask.id+'_'+Date.now(),
-      hinban:'🔄 '+( origReq?.hinban||foundTask.name),
-      hinmei:(origReq?.hinmei||'')+' [続き]',
-      process:origReq?.process||'',
-      client:origReq?.client||'',
-      kubunInputs:[{name:'残り作業',units:remainingH,key:'custom'}],
-      moldType:'none', trialSteps:0, trialH:0,
-      hours:remainingH,
-      deadline:origReq?.deadline||'',
-      assigned:false, assignee:null,
-      source:'continuation',
-      kintoneNote:`本日(${todayStr()})の持越し。累計作業${totalWorkedH}H / 残り${remainingH}H`,
-      originalTaskId:foundTask.id,
-      originalReqId:foundTask.reqId,
-      createdDate:todayStr()
-    };
-    requests.push(contReq);
-    requests.sort((a,b)=>a.deadline.localeCompare(b.deadline));
-    saveManualReqs();
+    if(existCont){
+      existCont.hours=remainingH;
+      existCont.kintoneNote=`本日(${todayStr()})の持越し。累計作業${confirmedWorkedH}H / 残り${remainingH}H`;
+      Object.values(tasksByDate).flat().forEach(t=>{ if(t.reqId===existCont.id) t.hours=remainingH; });
+    } else {
+      const contReq={
+        id:'cont_'+foundTask.id+'_'+Date.now(),
+        hinban:'🔄 '+(origReq?.hinban||foundTask.name),
+        hinmei:(origReq?.hinmei||'')+' [続き]',
+        process:origReq?.process||'',
+        client:origReq?.client||'',
+        kubunInputs:[{name:'残り作業',units:remainingH,key:'custom'}],
+        moldType:'none',trialSteps:0,trialH:0,
+        hours:remainingH,
+        deadline:origReq?.deadline||'',
+        assigned:false,assignee:null,
+        source:'continuation',
+        kintoneNote:`本日(${todayStr()})の持越し。累計作業${confirmedWorkedH}H / 残り${remainingH}H`,
+        originalTaskId:foundTask.id,
+        originalReqId:foundTask.reqId,
+        createdDate:todayStr()
+      };
+      requests.push(contReq);
+      requests.sort((a,b)=>a.deadline.localeCompare(b.deadline));
+    }
+  } else if(existCont){
+    // 残り0Hなら既存の続きタスクを削除
+    requests=requests.filter(r=>r.id!==existCont.id);
+    Object.keys(tasksByDate).forEach(ds=>{
+      tasksByDate[ds]=(tasksByDate[ds]||[]).filter(t=>t.reqId!==existCont.id);
+    });
   }
 
+  saveManualReqs();
   saveTasksToFirebase();
   closeActModal();
-  renderRequestList();
-  renderGantt();
-  renderDetail();
+  renderRequestList();renderGantt();renderDetail();renderManualList();
   alert(remainingH>0
-    ?`✅ 持越しました。\n改修依頼一覧に「続き（${remainingH}H）」が追加されました。`
-    :`✅ 持越しました（残り工数なし）。`);
+    ?`✅ 持越しました。\n本日実働: ${todayWorkedH}H　累計: ${confirmedWorkedH}H\n続き（${remainingH}H）を追加しました。`
+    :`✅ 持越しました（残り工数なし）。\n本日実働: ${todayWorkedH}H`);
 }
 
 // ===== 任意作業 永続化 =====
@@ -2321,7 +2355,10 @@ function renderGantt(){
         // 操作ボタン（次のアクション）
         const actH2=(as!==null&&ae!==null)?Math.round((ae-as)/60*10)/10:null;
         const actBtns=isCarried
-          ?`<span style="font-size:9px;color:#92400e;font-weight:600">累計${t.actual.totalWorkedH||0}H作業済 / 残り${remainH}H</span>`
+          ?`<span style="font-size:9px;color:#92400e;font-weight:600">累計${t.actual.totalWorkedH||0}H作業済 / 残り${remainH}H</span>
+             <button onclick="event.stopPropagation();fixRemainH('${t.id}')"
+               style="font-size:9px;padding:1px 5px;border:1px solid #f59e0b;border-radius:3px;background:#fff8e1;color:#92400e;cursor:pointer;margin-left:3px"
+               title="実際の残り工数を手動で修正する">✏ 残り修正</button>`
           :hasEnd
           ?`<span style="font-size:9px;color:var(--text2);font-weight:600">${t.actual.start}〜${t.actual.end}${actH2!==null?' ('+actH2+'H)':''}</span>`
           :isPaused2
@@ -2387,6 +2424,83 @@ function renderGantt(){
   cont.innerHTML=`<div class="ghdr"><div></div><div class="gruler" style="width:${tw}px">${ticks.join('')}</div></div>${rows}`;
   renderLoadSummary();
   checkDisplacedTasks();
+}
+
+// ===== 持越し残り工数の修正 =====
+function fixRemainH(taskId){
+  // 全日付からタスクを検索
+  let task=null;
+  for(const tasks of Object.values(tasksByDate)){
+    task=tasks.find(t=>t.id===taskId);
+    if(task)break;
+  }
+  if(!task)return;
+
+  const currentRemain=Math.max(0,Math.round((task.hours-(task.actual.totalWorkedH||0))*10)/10);
+  const currentWorked=task.actual.totalWorkedH||0;
+
+  const input=prompt(
+    `残り工数を入力してください。\n\n計画工数: ${task.hours}H\n累計作業済: ${currentWorked}H\n現在の残り: ${currentRemain}H\n\n実際の残り工数 (H):`,
+    currentRemain
+  );
+  if(input===null)return; // キャンセル
+  const newRemain=Math.round(parseFloat(input)*10)/10;
+  if(isNaN(newRemain)||newRemain<0){alert('正しい数値を入力してください');return;}
+
+  // totalWorkedHを逆算して更新
+  const newWorked=Math.round((task.hours-newRemain)*10)/10;
+  task.actual.totalWorkedH=newWorked;
+
+  // 既存の続きタスクを更新 or 新規作成
+  const origReq=requests.find(r=>r.id===task.reqId);
+  const existCont=requests.find(r=>r.source==='continuation'&&r.originalTaskId===taskId);
+
+  if(newRemain>0){
+    if(existCont){
+      // 既存の続きタスクの工数を更新
+      existCont.hours=newRemain;
+      existCont.kintoneNote=`残り工数を手動修正: ${newRemain}H`;
+      // ガントに割付済みなら工数も更新
+      Object.values(tasksByDate).flat().forEach(t=>{
+        if(t.reqId===existCont.id) t.hours=newRemain;
+      });
+    } else {
+      // 続きタスクを新規作成
+      const contReq={
+        id:'cont_'+taskId+'_'+Date.now(),
+        hinban:'🔄 '+(origReq?.hinban||task.name),
+        hinmei:(origReq?.hinmei||'')+' [続き]',
+        process:origReq?.process||'',
+        client:origReq?.client||'',
+        kubunInputs:[{name:'残り作業',units:newRemain,key:'custom'}],
+        moldType:'none',trialSteps:0,trialH:0,
+        hours:newRemain,
+        deadline:origReq?.deadline||'',
+        assigned:false,assignee:null,
+        source:'continuation',
+        kintoneNote:`残り工数を手動修正: ${newRemain}H`,
+        originalTaskId:taskId,
+        originalReqId:task.reqId,
+        createdDate:todayStr()
+      };
+      requests.push(contReq);
+      requests.sort((a,b)=>a.deadline.localeCompare(b.deadline));
+    }
+  } else {
+    // 残り0Hなら続きタスクを削除
+    if(existCont){
+      requests=requests.filter(r=>r.id!==existCont.id);
+      Object.keys(tasksByDate).forEach(ds=>{
+        tasksByDate[ds]=(tasksByDate[ds]||[]).filter(t=>t.reqId!==existCont.id);
+      });
+    }
+  }
+
+  saveManualReqs();
+  saveTasksToFirebase();
+  renderGantt();renderDetail();renderManualList();renderRequestList();
+  alert(`✅ 残り工数を ${newRemain}H に修正しました。`+
+    (newRemain>0?'\n続きタスクが任意作業に追加されました。':''));
 }
 
 // ===== ズレタスク検出・復元 =====
@@ -2853,12 +2967,11 @@ function stampNowModal(type){
   const t=getDate(curDate).find(x=>x.id===actTaskId);
   if(t){t.actual[type]=v;updateYjDiff(t);}
 }
-function saveActual(){
-  const t=getDate(curDate).find(x=>x.id===actTaskId);if(!t)return;
+function _saveActualFields(t){
+  // 共通：フォームの値をtaskに反映
   t.actual.start=document.getElementById('inActS').value;
   t.actual.end=document.getElementById('inActE').value;
   t.actual.note=document.getElementById('inActNote').value;
-  if(t.actual.start) t.actual.status=t.actual.end?'done':'working';
   // 工数編集セクションが開いていれば工数も保存
   const sec=document.getElementById('inlineEditSection');
   if(sec&&sec.style.display!=='none'){
@@ -2872,6 +2985,27 @@ function saveActual(){
     if(na) t.assignee=na;
     autoArrange(curDate);
   }
+}
+function saveActual(){
+  // 保存 = 時刻・メモを保存するだけ。ステータスは変えない
+  const t=getDate(curDate).find(x=>x.id===actTaskId);if(!t)return;
+  _saveActualFields(t);
+  // 開始時刻があれば最低限 working に（pending → working の遷移のみ）
+  if(t.actual.start && t.actual.status==='pending') t.actual.status='working';
+  saveTasksToFirebase();closeActModal();renderGantt();renderDetail();
+}
+function completeTask(){
+  // 完了 = 終了時刻を確定してdoneにする
+  const t=getDate(curDate).find(x=>x.id===actTaskId);if(!t)return;
+  _saveActualFields(t);
+  // 終了時刻が未入力なら現在時刻をセット
+  if(!t.actual.end){
+    const now=new Date();
+    t.actual.end=p2(now.getHours())+':'+p2(now.getMinutes());
+    document.getElementById('inActE').value=t.actual.end;
+  }
+  if(!t.actual.start){alert('開始時刻が未記録です。先に開始時刻を入力してください。');return;}
+  t.actual.status='done';
   saveTasksToFirebase();closeActModal();renderGantt();renderDetail();
 }
 function closeActModal(){document.getElementById('actModal').classList.remove('open');actTaskId=null}
