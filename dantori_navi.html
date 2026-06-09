@@ -6578,11 +6578,32 @@ function qcUpdateCacheInfo(){
     var count = localStorage.getItem('qcSakuyoCacheCount');
     if(date && count){
       el.innerHTML = '✅ <b>ファイルから読み込み済み</b>　' + count + '件<br>'
-        + '<span style="color:#888;">読み込み日時: ' + date + '</span>';
+        + '<span style="color:#888;">読込日時: ' + date + '</span>';
+      el.style.color = '#15803d';
+    } else if(QC_SAKUYO && QC_SAKUYO.length){
+      el.innerHTML = '✅ <b>スプレッドシートから取得済み</b>　' + QC_SAKUYO.length + '件';
       el.style.color = '#15803d';
     } else {
-      el.innerHTML = '🔄 スプレッドシートから自動取得中（またはキャッシュなし）';
-      el.style.color = '#555';
+      el.innerHTML = '⏳ 生産予定データ未取得。ファイルを読み込むか、スプレッドシートから再取得してください。';
+      el.style.color = '#b45309';
+    }
+    // Firebaseの最終更新日時も取得して表示
+    var fbUrl = (typeof config !== 'undefined' && config.firebaseUrl || '').replace(/\/+$/,'');
+    if(fbUrl){
+      fetch(fbUrl+'/settings/qcSakuyo/updatedAtStr.json')
+        .then(function(r){ return r.ok?r.json():null; })
+        .then(function(v){
+          if(v && typeof v === 'string'){
+            var fbLine = document.getElementById('qc-cache-fb-date');
+            if(!fbLine){
+              fbLine = document.createElement('span');
+              fbLine.id = 'qc-cache-fb-date';
+              fbLine.style.cssText = 'display:block;font-size:11px;color:#888;margin-top:2px;';
+              el.appendChild(fbLine);
+            }
+            fbLine.textContent = '（全PC最終共有: ' + v + '）';
+          }
+        }).catch(function(){});
     }
   } catch(e){
     el.innerHTML = '—';
@@ -6780,22 +6801,29 @@ window.qcSendSakuyoToGas = function(){
   // Firebaseにも保存（全PC共有）
   var fbUrl = (config.firebaseUrl || '').replace(/\/+$/,'');
   if(fbUrl){
-    statusEl.textContent = '⏳ Firebaseに保存中...';
+    statusEl.style.display = 'block';
+    statusEl.style.color = '#888';
+    statusEl.textContent = '⏳ 保存中...';
+    var nowStr = new Date().toLocaleString('ja-JP');
     fetch(fbUrl+'/settings/qcSakuyo.json', {
       method:'PUT',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ data: filtered, updatedAt: Date.now(), count: filtered.length })
+      body: JSON.stringify({ data: filtered, updatedAt: Date.now(), updatedAtStr: nowStr, count: filtered.length })
     }).then(function(r){
       if(r.ok){
         statusEl.style.color='#15803d';
-        statusEl.textContent='✓ '+filtered.length+'件を読み込み、全PCに共有しました（'+new Date().toLocaleString('ja-JP')+'）';
+        statusEl.textContent='✅ '+filtered.length+'件を読み込みました'
+          +(excluded>0?'（外注プレス '+excluded+'件を除外）':'')
+          +'　読込日時: '+nowStr;
       } else {
         statusEl.style.color='#b45309';
-        statusEl.textContent='⚠ ローカルには保存済み。Firebase保存失敗（HTTP '+r.status+'）';
+        statusEl.textContent='⚠ ローカル保存済み・Firebase共有失敗（HTTP '+r.status+'）　読込日時: '+nowStr;
       }
+      qcUpdateCacheInfo();
     }).catch(function(e){
       statusEl.style.color='#b45309';
-      statusEl.textContent='⚠ ローカルには保存済み。Firebase接続エラー: '+e.message;
+      statusEl.textContent='⚠ ローカル保存済み・Firebase接続エラー: '+e.message+'　読込日時: '+nowStr;
+      qcUpdateCacheInfo();
     });
     sendBtn.disabled = false;
     return; // 以降のstatusEl設定をスキップ
@@ -7493,13 +7521,22 @@ function qcRenderAllocRows(){
   var prod=parseInt(document.getElementById('qc-bulk-prod').value||0)||0;
   var el=document.getElementById('qc-alloc-rows'); el.innerHTML='';
   var visibleData=QC_ALLOC_DATA.filter(function(d){ return d.remain>0&&d.alloc>0; });
-  visibleData.forEach(function(d){
+  var photoIdx=visibleData.length-1; // 納期最遅（最後）の行に写真が付く
+  visibleData.forEach(function(d,vi){
     var origIdx=QC_ALLOC_DATA.indexOf(d);
+    var isPhotoRow=(vi===photoIdx);
     var row=document.createElement('div'); row.className='qc-alloc-row';
+    if(isPhotoRow) row.style.cssText='border:2px solid #1F4E79;border-radius:8px;padding:10px;margin-bottom:8px;background:#f0f6ff;';
     var top=document.createElement('div'); top.className='qc-alloc-row-top';
     var sz=document.createElement('div'); sz.className='qc-alloc-seizo'; sz.textContent=d.seizoNo+'　工順'+d.junjo; top.appendChild(sz);
     if(d.nouki){ var nk=document.createElement('div'); nk.className='qc-alloc-nouki'; nk.textContent='納期: '+d.nouki; top.appendChild(nk); }
     row.appendChild(top);
+    if(isPhotoRow){
+      var pb=document.createElement('div');
+      pb.style.cssText='font-size:11px;background:#1F4E79;color:#fff;border-radius:4px;padding:2px 8px;display:inline-block;margin-bottom:4px;';
+      pb.textContent='📷 チェックシート写真はこの製造番号に添付されます';
+      row.appendChild(pb);
+    }
     var meta=document.createElement('div'); meta.className='qc-alloc-meta'; meta.textContent='指示: '+d.shiji+'個　既実績: '+d.done+'個　残: '+d.remain+'個'; row.appendChild(meta);
     var inputs=document.createElement('div'); inputs.className='qc-alloc-inputs';
     var nd=document.createElement('div'); var nl=document.createElement('label'); nl.style.cssText='font-size:11px;color:#555;margin-bottom:3px;display:block'; nl.textContent='振分数（個）';
