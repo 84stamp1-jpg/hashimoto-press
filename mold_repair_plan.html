@@ -621,6 +621,11 @@ input.nm-img-input{display:none}
         <div class="legitem"><div class="legdot" style="background:var(--m);opacity:.6;border:1px solid var(--m)"></div>実績</div>
       </div>
     </div>
+    <!-- ズレ警告バナー -->
+<div id="displacedBanner" style="display:none;margin:4px 0;padding:7px 12px;background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;font-size:11px;color:#92400e">
+  <span id="displacedMsg"></span>
+  <button onclick="restoreDisplacedTasks()" style="margin-left:10px;padding:2px 10px;border:1px solid #f59e0b;border-radius:4px;background:#fff8e1;color:#92400e;font-weight:700;cursor:pointer;font-size:11px">↩ 今日に戻す</button>
+</div>
     <div class="gwrap"><div class="gcont" id="gcont"></div></div>
 
     <!-- 任意作業パネル（ガント下） -->
@@ -771,6 +776,40 @@ input.nm-img-input{display:none}
       <button class="btn btn-danger btn-sm" onclick="nmClearNote()">削除</button>
       <button class="btn btn-secondary btn-sm" onclick="nmCloseNote()">キャンセル</button>
       <button class="btn btn-primary btn-sm" onclick="nmSaveNote()">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 突発割込みモーダル -->
+<div class="moverlay" id="insertModal">
+  <div class="mdlg" style="width:360px">
+    <div class="mtitle">⚡ 突発割込み配置</div>
+    <div style="margin-bottom:10px;padding:8px 10px;background:#fff8e1;border:1px solid #f59e0b;border-radius:6px;font-size:11px;color:#92400e">
+      指定した時刻に挿入し、<b>未着手の後続タスクを後ろにずらします。</b>
+    </div>
+    <div id="insertTaskName" style="font-size:13px;font-weight:700;margin-bottom:12px;color:var(--text)"></div>
+    <div class="f2col" style="margin-bottom:8px">
+      <div>
+        <label class="flabel">担当者</label>
+        <select id="insertAssignee" class="finput" onchange="updateInsertPreview()">
+          <option value="matsumoto_t">松本利</option>
+          <option value="matsunaga">松永</option>
+          <option value="matsumura">村松</option>
+          <option value="matsumoto_m">松本み</option>
+          <option value="endo">遠藤</option>
+          <option value="oishi">大石</option>
+          <option value="nema">根間</option>
+        </select>
+      </div>
+      <div>
+        <label class="flabel">開始時刻</label>
+        <input type="time" id="insertStartTime" class="finput" step="600" oninput="updateInsertPreview()">
+      </div>
+    </div>
+    <div id="insertShiftPreview" style="font-size:11px;color:var(--text2);margin-bottom:12px;min-height:36px"></div>
+    <div class="mfooter">
+      <button class="btn btn-secondary btn-sm" onclick="closeInsertModal()">キャンセル</button>
+      <button class="btn btn-sm" style="background:#fff8e1;border:1px solid #f59e0b;color:#92400e;font-weight:700" onclick="confirmInsert()">⚡ この時刻で割付・後続をずらす</button>
     </div>
   </div>
 </div>
@@ -1387,7 +1426,8 @@ function importKintone(records){
   requests.sort((a,b)=>a.deadline.localeCompare(b.deadline));
   applyKtEdits(); // 保存済み編集を復元
   syncAssignedState();
-  autoArrange(curDate);
+  // kintone同期ではautoArrangeを実行しない（作業中タスクが移動するため）
+  // ガントの並び直しは「⚡ 自動配置」ボタンで明示的に行う
   requestAnimationFrame(()=>{
     renderRequestList();
     requestAnimationFrame(()=>{ renderGantt(); renderDetail(); });
@@ -1532,19 +1572,26 @@ function renderManualList(){
       </div>
       ${assignedDate
         ?`<div style="font-size:10px;font-weight:700;color:var(--ok)">✓ ${assigneeName} ／ ${assignedDate}</div>
-           <div style="display:flex;gap:3px;margin-top:4px">
+           <div style="display:flex;gap:3px;margin-top:4px;flex-wrap:wrap">
+             <button onclick="event.stopPropagation();openInsertModal('${r.id}')"
+               style="flex:1;font-size:9px;font-weight:700;padding:2px 4px;border:1px solid #f59e0b;border-radius:3px;background:#fff8e1;color:#92400e;cursor:pointer;font-family:inherit">⚡ 時刻変更</button>
              <button onclick="event.stopPropagation();unassignReq('${r.id}')"
                style="flex:1;font-size:9px;padding:2px 4px;border:1px solid #fca5a5;border-radius:3px;background:#fee2e2;color:#dc2626;cursor:pointer;font-family:inherit">割付解除</button>
              <button onclick="event.stopPropagation();deleteManualReq('${r.id}')"
                style="font-size:9px;padding:2px 4px;border:1px solid #fca5a5;border-radius:3px;background:#fee2e2;color:#dc2626;cursor:pointer;font-family:inherit">🗑</button>
            </div>`
-        :`<div style="display:flex;gap:3px">
-            <button onclick="event.stopPropagation();assignTo('${r.id}','matsumoto_t')"
-              style="flex:1;font-size:10px;font-weight:700;padding:3px 2px;border:1px solid var(--m-bd);border-radius:4px;background:var(--m-bg);color:var(--m);cursor:pointer;font-family:inherit">松本利</button>
-            <button onclick="event.stopPropagation();assignTo('${r.id}','matsunaga')"
-              style="flex:1;font-size:10px;font-weight:700;padding:3px 2px;border:1px solid var(--n-bd);border-radius:4px;background:var(--n-bg);color:var(--n);cursor:pointer;font-family:inherit">松永</button>
-            <button onclick="event.stopPropagation();deleteManualReq('${r.id}')"
-              style="font-size:10px;padding:3px 5px;border:1px solid #fca5a5;border-radius:4px;background:#fee2e2;color:#dc2626;cursor:pointer;font-family:inherit">🗑</button>
+        :`<div style="display:flex;flex-direction:column;gap:3px">
+            <div style="display:flex;gap:3px">
+              <button onclick="event.stopPropagation();assignTo('${r.id}','matsumoto_t')"
+                style="flex:1;font-size:10px;font-weight:700;padding:3px 2px;border:1px solid var(--m-bd);border-radius:4px;background:var(--m-bg);color:var(--m);cursor:pointer;font-family:inherit">松本利</button>
+              <button onclick="event.stopPropagation();assignTo('${r.id}','matsunaga')"
+                style="flex:1;font-size:10px;font-weight:700;padding:3px 2px;border:1px solid var(--n-bd);border-radius:4px;background:var(--n-bg);color:var(--n);cursor:pointer;font-family:inherit">松永</button>
+              <button onclick="event.stopPropagation();deleteManualReq('${r.id}')"
+                style="font-size:10px;padding:3px 5px;border:1px solid #fca5a5;border-radius:4px;background:#fee2e2;color:#dc2626;cursor:pointer;font-family:inherit">🗑</button>
+            </div>
+            <button onclick="event.stopPropagation();openInsertModal('${r.id}')"
+              style="width:100%;font-size:10px;font-weight:700;padding:3px 4px;border:1px solid #f59e0b;border-radius:4px;background:#fff8e1;color:#92400e;cursor:pointer;font-family:inherit"
+              title="時刻を指定して挿入し、後続タスクを後ろにずらす">⚡ 時刻指定で割付（後続をずらす）</button>
           </div>`}
     </div>`;
   }
@@ -1692,9 +1739,17 @@ function renderRequestList(){
         ${!r.assigned?`<div class="assign-row">
           <button class="assign-btn ab-m" onclick="assignTo('${r.id}','matsumoto')">松本に割付</button>
           <button class="assign-btn ab-n" onclick="assignTo('${r.id}','matsunaga')">松永に割付</button>
-        </div>`:`<div style="display:flex;align-items:center;justify-content:space-between;padding:4px">
-          <span style="font-size:11px;color:var(--text2)">割付済 (${r.assignee==='matsumoto'?'松本':'松永'} / ${assignedDate||'?'})</span>
-          <button onclick="unassignReq('${r.id}')" style="font-size:10px;padding:1px 7px;border:1px solid #fca5a5;border-radius:3px;background:#fee2e2;color:#dc2626;cursor:pointer;font-family:inherit">割付解除</button>
+          <button onclick="openInsertModal('${r.id}')"
+            style="font-size:10px;font-weight:700;padding:3px 7px;border:1px solid #f59e0b;border-radius:4px;background:#fff8e1;color:#92400e;cursor:pointer;font-family:inherit;margin-top:3px;width:100%"
+            title="時刻を指定して挿入し、後続タスクを後ろにずらす">⚡ 時刻指定で割付（後続をずらす）</button>
+        </div>`:`<div style="display:flex;align-items:center;justify-content:space-between;padding:4px;flex-wrap:wrap;gap:3px">
+          <span style="font-size:11px;color:var(--text2)">割付済 / ${assignedDate||'?'}</span>
+          <div style="display:flex;gap:3px">
+            <button onclick="openInsertModal('${r.id}')"
+              style="font-size:10px;padding:1px 6px;border:1px solid #f59e0b;border-radius:3px;background:#fff8e1;color:#92400e;cursor:pointer;font-family:inherit"
+              title="時刻を変更して後続をずらす">⚡ 時刻変更</button>
+            <button onclick="unassignReq('${r.id}')" style="font-size:10px;padding:1px 7px;border:1px solid #fca5a5;border-radius:3px;background:#fee2e2;color:#dc2626;cursor:pointer;font-family:inherit">割付解除</button>
+          </div>
         </div>`}
         ${r.source==='manual'?`<div style="margin-top:5px;text-align:right">
           <button onclick="deleteManualReq('${r.id}')" style="font-size:10px;padding:2px 8px;border:1px solid #fca5a5;border-radius:4px;background:#fee2e2;color:#dc2626;cursor:pointer;font-family:inherit">🗑 この任意作業を削除</button>
@@ -1840,6 +1895,113 @@ function assignTo(rid,assignee){
   autoArrange(curDate);saveTasksToFirebase();selReqId=null;
   renderRequestList();renderGantt();renderDetail();
 }
+
+// ===== 突発割込み =====
+let _insertReqId=null;
+function openInsertModal(rid){
+  const r=requests.find(x=>x.id===rid);if(!r)return;
+  _insertReqId=rid;
+  document.getElementById('insertTaskName').textContent=
+    r.hinban+(r.hinmei?' / '+r.hinmei:'')+' ('+r.hours+'H)';
+  // デフォルト開始時刻：現在時刻を5分刻みで
+  const now=new Date();
+  const m=Math.ceil((now.getHours()*60+now.getMinutes())/5)*5;
+  document.getElementById('insertStartTime').value=
+    String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
+  updateInsertPreview();
+  document.getElementById('insertModal').classList.add('open');
+}
+function closeInsertModal(){
+  document.getElementById('insertModal').classList.remove('open');
+  _insertReqId=null;
+}
+function updateInsertPreview(){
+  const el=document.getElementById('insertShiftPreview');
+  if(!el||!_insertReqId)return;
+  const r=requests.find(x=>x.id===_insertReqId);if(!r)return;
+  const assignee=document.getElementById('insertAssignee').value;
+  const timeVal=document.getElementById('insertStartTime').value;
+  if(!timeVal){el.textContent='';return;}
+  const startMin=minToMs(timeVal);
+  const wEnd=effectiveWorkEnd(assignee);
+  const endMin=addWork(startMin,Math.round(r.hours*60),wEnd);
+  const tasks=getDate(curDate).filter(t=>
+    t.assignee===assignee && !t.actual?.start &&
+    t.startMin!==null && t.startMin>=startMin
+  );
+  if(!tasks.length){
+    el.innerHTML='<span style="color:var(--ok)">✓ 後続に未着手タスクなし。そのまま挿入します。</span>';
+  } else {
+    el.innerHTML=`後続の未着手タスク <b>${tasks.length}件</b> を後ろにずらします。<br>`+
+      tasks.map(t=>`<span style="color:var(--text3)">　→ ${t.name}</span>`).join('<br>');
+  }
+}
+function confirmInsert(){
+  if(!_insertReqId)return;
+  const r=requests.find(x=>x.id===_insertReqId);if(!r)return;
+  const assignee=document.getElementById('insertAssignee').value;
+  const timeVal=document.getElementById('insertStartTime').value;
+  if(!timeVal){alert('開始時刻を入力してください');return;}
+  const startMin=minToMs(timeVal);
+  insertTaskAt(_insertReqId, assignee, startMin);
+  closeInsertModal();
+}
+function insertTaskAt(rid, assignee, startMin){
+  const r=requests.find(x=>x.id===rid);if(!r)return;
+  // すでに割付済みなら既存タスクを使う、なければ新規追加
+  let newTask=Object.values(tasksByDate).flat().find(t=>t.reqId===rid);
+  if(!newTask){
+    newTask=pushTask(r,assignee,curDate);
+    r.assigned=true;r.assignee=assignee;
+  } else {
+    // 割付先を変更
+    newTask.assignee=assignee;
+    newTask.planDate=curDate;
+    // 別の日に入っていれば今日に移動
+    Object.keys(tasksByDate).forEach(ds=>{
+      if(ds!==curDate){
+        tasksByDate[ds]=(tasksByDate[ds]||[]).filter(x=>x.id!==newTask.id);
+      }
+    });
+    if(!tasksByDate[curDate])tasksByDate[curDate]=[];
+    if(!tasksByDate[curDate].find(x=>x.id===newTask.id))
+      tasksByDate[curDate].push(newTask);
+  }
+  newTask.startMin=startMin;
+  newTask.overflow=false;
+
+  // 同担当者の未着手タスク（開始時刻>=挿入点）を後ろにずらす
+  const wEnd=effectiveWorkEnd(assignee);
+  const newEnd=addWork(startMin,Math.round(r.hours*60),wEnd);
+  const tmr=nextWorkDay(curDate);
+  const toShift=getDate(curDate).filter(t=>
+    t.id!==newTask.id &&
+    t.assignee===assignee &&
+    !t.actual?.start &&
+    t.startMin!==null &&
+    t.startMin>=startMin
+  ).sort((a,b)=>a.startMin-b.startMin);
+
+  let cur=newEnd;
+  toShift.forEach(t=>{
+    cur=nextAvail(cur);
+    if(cur>=wEnd){
+      t.overflow=true; t.planDate=tmr;
+      if(!tasksByDate[tmr])tasksByDate[tmr]=[];
+      if(!tasksByDate[tmr].find(x=>x.id===t.id))tasksByDate[tmr].push(t);
+      tasksByDate[curDate]=(tasksByDate[curDate]||[]).filter(x=>x.id!==t.id);
+      t.startMin=null;
+    } else {
+      t.overflow=false;
+      t.startMin=cur;
+      cur=addWork(cur,Math.round(t.hours*60),wEnd);
+    }
+  });
+
+  saveTasksToFirebase();selReqId=null;
+  renderRequestList();renderGantt();renderDetail();
+  renderManualList();
+}
 function autoAll(){
   if(!requests.length){
     alert('kintoneのデータ取得中です。しばらく待ってから再試行してください。');return;
@@ -1893,10 +2055,25 @@ function nextWorkDay(ds){
 function autoArrange(ds){
   const tasks=getDate(ds);
   const tmr=nextWorkDay(ds);
-  ['matsumoto','matsunaga'].forEach(a=>{
+  // 全担当者（ガントに存在する担当者）を対象にする
+  const assignees=[...new Set(tasks.map(t=>t.assignee).filter(Boolean))];
+  assignees.forEach(a=>{
     const wEnd=effectiveWorkEnd(a);
     let cur=WORK_START;
     tasks.filter(t=>t.assignee===a).forEach(t=>{
+      // 作業開始済み・完了・持越済タスクは位置を変えない
+      const st=t.actual?.status;
+      const hasStarted=!!(t.actual?.start);
+      if(hasStarted){
+        // 実績開始時刻をstartMinに反映（ズレていれば修正）
+        const as=minToMs(t.actual.start);
+        if(as!==null) t.startMin=as;
+        // カーソルは実績終了 or 計画終了で進める
+        const ae=minToMs(t.actual?.end);
+        cur=(ae!==null&&ae>cur)?ae:Math.max(cur,addWork(t.startMin,Math.round(t.hours*60),wEnd));
+        t.overflow=false;
+        return;
+      }
       cur=nextAvail(cur);
       if(cur>=wEnd){
         // 翌営業日に繰越
@@ -1911,7 +2088,6 @@ function autoArrange(ds){
       t.overflow=false;
       t.startMin=cur;
       // 実績終了時刻がある場合はそれを次タスクの開始基点に使う
-      // （早期完了→繰り上げ、遅延→後続を押し出し）
       const ae=minToMs(t.actual?.end);
       cur=(ae!==null&&ae>cur)?ae:addWork(cur,Math.round(t.hours*60),wEnd);
     });
@@ -1923,7 +2099,8 @@ function getDate(ds){return tasksByDate[ds]||[]}
 function fillNullStartMins(ds){
   const tasks=getDate(ds);
   if(!tasks.some(t=>t.startMin===null))return; // 未配置なし
-  ['matsumoto','matsunaga'].forEach(a=>{
+  const assignees=[...new Set(tasks.map(t=>t.assignee).filter(Boolean))];
+  assignees.forEach(a=>{
     const wEnd=effectiveWorkEnd(a);
     const myTasks=tasks.filter(t=>t.assignee===a);
     // 既に配置済みのタスクの終了時刻を求める
@@ -1983,7 +2160,8 @@ function renderGantt(){
     // ===== 計画バー：2段レイアウト（重なる場合は2段目に配置） =====
     // 各行の末尾の終端時刻を記録して重複判定
     const planRowEnd=[0,0]; // row0, row1 の終端（分）
-    const taskMeta=myTasks.filter(t=>t.startMin!==null).map(t=>{
+    // startMin昇順にソートしてから2段割り当て（作業中タスクより後から来る突発が正しくrow1に入るよう）
+    const taskMeta=myTasks.filter(t=>t.startMin!==null).sort((a,b)=>a.startMin-b.startMin).map(t=>{
       const tStatus=t.actual?.status||'pending';
       const isWorking=tStatus==='working'||(!!t.actual?.start&&!t.actual?.end);
       const isDone=tStatus==='done'||(!!t.actual?.start&&!!t.actual?.end);
@@ -1995,9 +2173,11 @@ function renderGantt(){
       const trialEnd=addWork(planRepEnd,Math.round(trialH(t.trialSteps)*60));
       const visualEnd=Math.max(planRepEnd,trialEnd);
       // 行割り当て：row0 に収まらなければ row1 へ
+      // 実績開始がある場合はその時刻を占有開始として使う（計画startMinより早い場合を考慮）
+      const occupyStart=minToMs(t.actual?.start)??t.startMin;
       let row=0;
-      if(t.startMin<planRowEnd[0]){
-        row=(t.startMin>=planRowEnd[1])?1:0; // row1が空いていれば1、両方埋まっていれば0に重ねる
+      if(occupyStart<planRowEnd[0]){
+        row=(occupyStart>=planRowEnd[1])?1:0; // row1が空いていれば1、両方埋まっていれば0に重ねる
       }
       planRowEnd[row]=Math.max(planRowEnd[row],visualEnd);
       return{t,tStatus,isWorking,isDone,planRepEnd,ae,isDoneEarly,repEnd,trialEnd,row};
@@ -2203,6 +2383,58 @@ function renderGantt(){
 
   cont.innerHTML=`<div class="ghdr"><div></div><div class="gruler" style="width:${tw}px">${ticks.join('')}</div></div>${rows}`;
   renderLoadSummary();
+  checkDisplacedTasks();
+}
+
+// ===== ズレタスク検出・復元 =====
+function checkDisplacedTasks(){
+  const today=todayStr();
+  const banner=document.getElementById('displacedBanner');
+  const msg=document.getElementById('displacedMsg');
+  if(!banner||!msg)return;
+  // 今日より後の日付に実績データ（actual.start）があるタスクを検出
+  const displaced=[];
+  Object.entries(tasksByDate).forEach(([ds,tasks])=>{
+    if(ds<=today)return;
+    (tasks||[]).forEach(t=>{
+      if(t.actual?.start){
+        displaced.push({ds,t});
+      }
+    });
+  });
+  if(displaced.length){
+    msg.textContent=`⚠ 実績ありのタスクが${displaced.length}件、本日以降の日付にズレています。`;
+    banner.style.display='block';
+  } else {
+    banner.style.display='none';
+  }
+}
+function restoreDisplacedTasks(){
+  const today=todayStr();
+  let count=0;
+  Object.keys(tasksByDate).forEach(ds=>{
+    if(ds<=today)return;
+    const displaced=(tasksByDate[ds]||[]).filter(t=>t.actual?.start);
+    if(!displaced.length)return;
+    displaced.forEach(t=>{
+      // 今日に移動
+      if(!tasksByDate[today])tasksByDate[today]=[];
+      if(!tasksByDate[today].find(x=>x.id===t.id)){
+        t.planDate=today;
+        t.overflow=false;
+        tasksByDate[today].push(t);
+      }
+      tasksByDate[ds]=(tasksByDate[ds]||[]).filter(x=>x.id!==t.id);
+      count++;
+    });
+  });
+  if(count>0){
+    saveTasksToFirebase();
+    renderGantt();renderDetail();
+    alert(`✅ ${count}件のタスクを本日に戻しました。`);
+  } else {
+    alert('戻すべきタスクが見つかりませんでした。');
+  }
 }
 
 // ===== 予実パネル =====
