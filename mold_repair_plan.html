@@ -3445,8 +3445,9 @@ function importLocalStorage(){
 
 function deleteManualReq(id){
   const r=requests.find(x=>x.id===id);
-  if(!r||r.source!=='manual')return;
-  if(!confirm(`「${r.hinban}」を削除しますか？`))return;
+  if(!r||(r.source!=='manual'&&r.source!=='continuation'))return;
+  const label=r.source==='continuation'?'持越し続き':'任意作業';
+  if(!confirm(`「${r.hinban}」（${label}）を削除しますか？`))return;
   // ガント割付がある場合は全日付から除去
   Object.keys(tasksByDate).forEach(d=>{
     tasksByDate[d]=(tasksByDate[d]||[]).filter(t=>t.reqId!==id);
