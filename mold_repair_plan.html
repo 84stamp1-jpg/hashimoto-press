@@ -30,6 +30,17 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .act-bar-n{background:#fffbe6;border:1px solid #d4a017;color:#5a4000}
 .act-bar-carried{background:#fff8e1;border:1.5px dashed #f59e0b;color:#92400e}
 .burgent{background:#fee2e2;border:1.5px solid #fca5a5;color:#991b1b}
+/* 追加担当者カラー */
+.bw{background:#d1fae5;border-color:#6ee7b7}.bw .blabel,.bw .btime{color:#065f46}
+.bv{background:#ede9fe;border-color:#c4b5fd}.bv .blabel,.bv .btime{color:#5b21b6}
+.bp{background:#fce7f3;border-color:#f9a8d4}.bp .blabel,.bp .btime{color:#9d174d}
+.bt{background:#e0f2fe;border-color:#7dd3fc}.bt .blabel,.bt .btime{color:#0369a1}
+.by{background:#fef9c3;border-color:#fde047}.by .blabel,.by .btime{color:#854d0e}
+/* 追加担当者 実績バー */
+.act-bar-w{background:#6ee7b7;border:1px solid #10b981}.act-bar-v{background:#c4b5fd;border:1px solid #7c3aed}
+.act-bar-p{background:#f9a8d4;border:1px solid #db2777}.act-bar-t{background:#7dd3fc;border:1px solid #0284c7}
+.act-bar-y{background:#fde047;border:1px solid #ca8a04}
+/* 担当者ラベル動的（インラインスタイルで上書き） */
 /* 勤怠バナー */
 #attendanceBanner{background:#fff;border-bottom:1px solid var(--border);padding:4px 16px;display:none;flex-wrap:wrap;gap:6px;align-items:center;font-size:11px}
 #attendanceBanner.has-data{display:flex}
@@ -160,9 +171,11 @@ header{background:var(--panel);border-bottom:1px solid var(--border);padding:0 1
 .legdot{width:10px;height:10px;border-radius:3px}
 
 /* GANTT */
-.gwrap{flex:1;overflow-x:auto;overflow-y:auto;padding:10px 12px;scroll-behavior:smooth}
-.gwrap::-webkit-scrollbar{height:6px;width:4px}
-.gwrap::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+.gwrap{flex:1;overflow-x:auto;overflow-y:auto;padding:6px 8px;scroll-behavior:smooth}
+.gwrap::-webkit-scrollbar{height:14px;width:6px}
+.gwrap::-webkit-scrollbar-track{background:#f1f3f5;border-radius:7px;margin:2px}
+.gwrap::-webkit-scrollbar-thumb{background:#94a3b8;border-radius:7px;border:3px solid #f1f3f5}
+.gwrap::-webkit-scrollbar-thumb:hover{background:#64748b}
 .gcont{min-width:820px}
 .ghdr{display:flex;margin-bottom:5px;position:sticky;top:0;z-index:11;background:var(--bg)}
 .ghdr>div:first-child{width:78px;min-width:78px;flex-shrink:0}
@@ -208,7 +221,8 @@ header{background:var(--panel);border-bottom:1px solid var(--border);padding:0 1
 .person-section{margin-bottom:4px}
 .person-divider{height:3px;background:linear-gradient(90deg,var(--m-bg),var(--n-bg));margin:4px 0;border-radius:2px}
 .person-detail{background:var(--panel);border:1px solid var(--border);border-top:none;border-radius:0 0 6px 6px;
-  padding:5px 8px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:4px;margin-left:78px}
+  padding:3px 6px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:3px;margin-left:78px}
+.person-section{margin-bottom:2px}
 .person-detail.empty{color:var(--text3);font-size:11px;padding:6px 10px;grid-template-columns:1fr}
 /* 残業入力 */
 .ot-input{width:36px;font-size:10px;text-align:center;border:1px solid currentColor;
@@ -644,9 +658,9 @@ input.nm-img-input{display:none}
     <div class="load-panel" id="loadPanel">
       <div class="load-panel-hdr" onclick="toggleLoadPanel()">
         <span class="load-panel-title">📊 週間負荷サマリー（依頼合計・累計）</span>
-        <span id="loadPanelToggle" style="font-size:10px;color:var(--text2);margin-left:auto">▲</span>
+        <span id="loadPanelToggle" style="font-size:10px;color:var(--text2);margin-left:auto">▼</span>
       </div>
-      <div id="loadDays" class="load-days"></div>
+      <div id="loadDays" class="load-days" style="display:none"></div>
     </div>
   </div>
 </div>
@@ -1211,6 +1225,19 @@ function saveTasksToFirebase(){
 const GAS_URL='https://script.google.com/macros/s/AKfycbyVyBCDB--oV8YUQhBIM-PoS9MMkUheYinHAl_GXArNWyoe9JXJG8MR0XVdNrf7SvaPZQ/exec';
 const APP_ID=6;
 const WORK_START=8*60+10,WORK_END=20*60,TOTAL_MIN=WORK_END-WORK_START;
+// 担当者カラー設定（動的対応）
+const WORKER_CONFIG={
+  matsumoto:   {name:'松本',   bg:'var(--m-bg)',   bd:'var(--m-bd)',   fg:'var(--m)',   blockCls:'bm', actCls:'act-bar-m'},
+  matsumoto_t: {name:'松本利', bg:'var(--m-bg)',   bd:'var(--m-bd)',   fg:'var(--m)',   blockCls:'bm', actCls:'act-bar-m'},
+  matsunaga:   {name:'松永',   bg:'var(--n-bg)',   bd:'var(--n-bd)',   fg:'var(--n)',   blockCls:'bn', actCls:'act-bar-n'},
+  matsumura:   {name:'村松',   bg:'#d1fae5',       bd:'#6ee7b7',       fg:'#065f46',   blockCls:'bw', actCls:'act-bar-w'},
+  matsumoto_m: {name:'松本み', bg:'#ede9fe',       bd:'#c4b5fd',       fg:'#5b21b6',   blockCls:'bv', actCls:'act-bar-v'},
+  endo:        {name:'遠藤',   bg:'#fce7f3',       bd:'#f9a8d4',       fg:'#9d174d',   blockCls:'bp', actCls:'act-bar-p'},
+  oishi:       {name:'大石',   bg:'#e0f2fe',       bd:'#7dd3fc',       fg:'#0369a1',   blockCls:'bt', actCls:'act-bar-t'},
+  nema:        {name:'根間',   bg:'#fef9c3',       bd:'#fde047',       fg:'#854d0e',   blockCls:'by', actCls:'act-bar-y'},
+};
+const ASSIGNEE_ORDER=['matsumoto_t','matsumoto','matsunaga','matsumura','matsumoto_m','endo','oishi','nema'];
+function wcfg(a){return WORKER_CONFIG[a]||{name:a,bg:'#f3f4f6',bd:'#d1d5db',fg:'#374151',blockCls:'bn',actCls:'act-bar-n'};}
 const WORK_STD_END=17*60; // 標準終業 17:00
 const BREAKS=[{s:600,e:610},{s:730,e:770},{s:890,e:900},{s:1020,e:1030}];
 // 残業設定（分単位で保持）
@@ -1222,7 +1249,7 @@ function setOvertime(a,h){
   localStorage.setItem('repair_ot_v1',JSON.stringify(overtimeH));
   autoArrange(curDate);saveTasksToFirebase();renderGantt();
 }
-let loadPanelOpen=true;
+let loadPanelOpen=false;
 function toggleLoadPanel(){
   loadPanelOpen=!loadPanelOpen;
   const el=document.getElementById('loadDays');
@@ -2237,9 +2264,14 @@ function renderGantt(){
 
   const tasks=getDate(curDate);
 
-  const rows=['matsumoto','matsunaga'].map(a=>{
-    const lbl=a==='matsumoto'?'松本':'松永';
-    const lc=a==='matsumoto'?'lm':'ln';
+  // 当日タスクに存在する担当者を動的に取得（ASSIGNEE_ORDERで並び替え）
+  const assigneesOnDay=[...new Set(tasks.map(t=>t.assignee).filter(Boolean))];
+  assigneesOnDay.sort((x,y)=>{const ix=ASSIGNEE_ORDER.indexOf(x),iy=ASSIGNEE_ORDER.indexOf(y);return(ix<0?99:ix)-(iy<0?99:iy);});
+  if(!assigneesOnDay.length) assigneesOnDay.push('matsumoto','matsunaga'); // タスクなし時のデフォルト
+
+  const rows=assigneesOnDay.map(a=>{
+    const cfg=wcfg(a);
+    const lbl=cfg.name;
     const myTasks=tasks.filter(t=>t.assignee===a);
 
     // ===== 計画バー：2段レイアウト（重なる場合は2段目に配置） =====
@@ -2272,7 +2304,7 @@ function renderGantt(){
       const isCarriedTask=tStatus==='carried';
       const blockStyle=isWorking?';z-index:5':isDone?';opacity:.75':isCarriedTask?';opacity:.6;border-style:dashed':'';
       const blockClass=isWorking?' working-block':'';
-      const bc=t.urgent?'burgent':a==='matsumoto'?'bm':'bn';
+      const bc=t.urgent?'burgent':cfg.blockCls;
       const planTop=row===0?PLAN_R0:PLAN_R1; // 1段目:2px / 2段目:34px
 
       // --- 計画バー ---
@@ -2315,7 +2347,7 @@ function renderGantt(){
       if(as!==null){
         const dispEnd=ae2!==null?ae2:new Date().getHours()*60+new Date().getMinutes();
         const ox=mx(as),ow=Math.max(30,ae2!==null?mx(ae2)-mx(as):mx(dispEnd)-mx(as));
-        const oc=isCarriedTask?'act-bar-carried':(a==='matsumoto'?'act-bar-m':'act-bar-n');
+        const oc=isCarriedTask?'act-bar-carried':cfg.actCls;
         const planEndMin=addWork(t.startMin,planTotalMin);
         const diffMin=ae2!==null?ae2-planEndMin:null;
         const diffTxt=isCarriedTask
@@ -2350,7 +2382,7 @@ function renderGantt(){
       const ox=mx(WORK_STD_END),ow=Math.max(0,mx(wEnd)-ox);
       otZone=`<div style="position:absolute;left:${ox}px;width:${ow}px;top:0;bottom:0;
         background:repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(234,108,10,.08) 3px,rgba(234,108,10,.08) 6px);
-        border-left:2px dashed var(--n);pointer-events:none;z-index:1" title="残業枠 ${ot}H"></div>`;
+        border-left:2px dashed ${cfg.fg};pointer-events:none;z-index:1" title="残業枠 ${ot}H"></div>`;
     }
 
     // 担当者直下の予実詳細（ガントバーと同じ時刻順にソート）
@@ -2430,7 +2462,7 @@ function renderGantt(){
                   style="font-size:9px;padding:1px 6px;border:1px solid var(--ok);border-radius:3px;
                   background:var(--ok-bg);color:var(--ok);cursor:pointer;font-weight:700">▶ 開始</button>`;
         return`<div class="ditem" onclick="openActModal('${t.id}')" style="cursor:pointer">
-          <div class="dcolor" style="background:${a==='matsumoto'?'var(--m)':'var(--n)'}"></div>
+          <div class="dcolor" style="background:${cfg.fg}"></div>
           <div class="dinfo">
             <div style="display:flex;align-items:center;gap:4px">
               <span style="color:${statusColor};font-size:10px">${statusIcon}</span>
@@ -2450,7 +2482,7 @@ function renderGantt(){
 
     return`<div class="person-section">
       <div class="grow">
-        <div class="glabel ${lc}" style="min-height:${TRACK_H}px;width:78px;min-width:78px;flex-shrink:0;flex-direction:column;gap:3px;justify-content:center">
+        <div class="glabel" style="min-height:${TRACK_H}px;width:78px;min-width:78px;flex-shrink:0;flex-direction:column;gap:3px;justify-content:center;background:${cfg.bg};color:${cfg.fg};border:1px solid ${cfg.bd};border-right:none;border-radius:6px 0 0 6px">
           <div>${lbl}</div>
           ${getAttendanceBadgeHtml(a, curDate)}
           ${(()=>{
@@ -2471,7 +2503,7 @@ function renderGantt(){
       </div>
       ${detailHtml}
     </div>`;
-  }).join('<div class="person-divider"></div>');
+  }).join('<div style="height:2px;background:var(--border);margin:2px 0;border-radius:2px"></div>');
 
   cont.innerHTML=`<div class="ghdr"><div></div><div class="gruler" style="width:${tw}px">${ticks.join('')}</div></div>${rows}`;
   renderLoadSummary();
@@ -2987,13 +3019,41 @@ function updateYjDiff(t){
   const planEndMin=t.startMin!=null?addWork(t.startMin,Math.round(t.hours*60)):null;
   const el=document.getElementById('yjDiff');
   if(!el)return;
+  // 持越済タスク: 当日実働時間と累計を表示（完了扱いしない）
+  if(t.actual.status==='carried'){
+    const prevH=t.actual.totalWorkedH||0;
+    const pauseMin=(t.actual.pauses||[]).reduce((s,p)=>{
+      const pf=minToMs(p.from),pt=minToMs(p.to);
+      return s+(pf!==null&&pt!==null?Math.max(0,pt-pf):0);
+    },0);
+    if(as!==null&&ae!==null){
+      const todayMin=Math.max(0,(ae-as)-pauseMin);
+      const todayH=Math.round(todayMin/6)/10;
+      const totalH=Math.round((prevH+todayH)*10)/10;
+      const remainH=Math.max(0,Math.round((t.hours-totalH)*10)/10);
+      el.className='yj-diff yj-diff-none';
+      el.style.background='#fff8e1';el.style.color='#92400e';
+      el.textContent=`⏭ 持越済 ─ 当日実働 ${todayH}H（累計 ${totalH}H / 残り ${remainH}H）`;
+    } else {
+      el.className='yj-diff yj-diff-none';
+      el.style.background='#fff8e1';el.style.color='#92400e';
+      el.textContent='⏭ 持越済タスク';
+    }
+    return;
+  }
+  el.style.background='';el.style.color='';
   if(as===null||ae===null||t.startMin===null){
     el.className='yj-diff yj-diff-none';
     el.textContent='実績を入力すると差異が表示されます';
     return;
   }
   const planMin=planEndMin-t.startMin;
-  const actMin=ae-as;
+  // 一時停止を除いた実績時間で比較
+  const pauseMin=(t.actual.pauses||[]).reduce((s,p)=>{
+    const pf=minToMs(p.from),pt=minToMs(p.to);
+    return s+(pf!==null&&pt!==null?Math.max(0,pt-pf):0);
+  },0);
+  const actMin=Math.max(0,(ae-as)-pauseMin);
   const diff=actMin-planMin;
   if(diff>5){el.className='yj-diff yj-diff-over';el.textContent='⚠ 計画より '+Math.abs(diff)+'分 超過（計画'+planMin+'分→実績'+actMin+'分）';}
   else if(diff<-5){el.className='yj-diff yj-diff-ok';el.textContent='✓ 計画より '+Math.abs(diff)+'分 早く完了（計画'+planMin+'分→実績'+actMin+'分）';}
