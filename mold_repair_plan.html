@@ -163,7 +163,7 @@ header{background:var(--panel);border-bottom:1px solid var(--border);padding:0 1
 .f2col{display:grid;grid-template-columns:1fr 1fr;gap:5px}
 
 /* RIGHT */
-.right{display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;background:var(--bg)}
+.right{display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;background:var(--bg);height:100%}
 .gctrl{padding:9px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0;background:var(--panel);box-shadow:0 1px 4px rgba(0,0,0,.04)}
 .ginfo{font-size:11px;color:var(--text2)}
 .glegend{display:flex;gap:10px;align-items:center;margin-left:auto}
@@ -645,7 +645,7 @@ input.nm-img-input{display:none}
     <div class="gwrap"><div class="gcont" id="gcont"></div></div>
 
     <!-- 任意作業パネル（ガント下） -->
-    <div id="manualRightPanel" style="display:none;border-top:2px solid #fde68a;background:#fffbf5;padding:5px 14px;flex-shrink:0;max-height:90px;overflow-y:auto">
+    <div id="manualRightPanel" style="display:none;border-top:2px solid #fde68a;background:#fffbf5;padding:5px 14px;flex:1 1 auto;min-height:80px;max-height:300px;overflow-y:auto">
       <div style="font-size:10px;font-weight:700;color:#92400e;letter-spacing:.06em;margin-bottom:6px;display:flex;align-items:center;gap:6px">
         📝 任意作業
         <span id="bdgManualR" class="badge badge-warn">0件</span>
@@ -998,7 +998,9 @@ input.nm-img-input{display:none}
 // ===== Firebase設定 =====
 const FB_URL='https://hashimoto-press-default-rtdb.asia-southeast1.firebasedatabase.app';
 const FB_PATH='/moldRepairPlan/tasks';
+const FB_MANUAL_PATH='/moldRepairPlan/manualReqs'; // 続き・任意作業タスクのFirebase保存先
 let fbApp=null, fbDb=null, fbRef=null, fbListener=null;
+let fbManualRef=null;
 
 function initFirebase(){
   try {
@@ -1040,6 +1042,24 @@ function initFirebase(){
         requestAnimationFrame(()=>{ renderGantt(); renderDetail(); });
       }
       fbInitialized=true;
+    });
+    // 続き・任意作業タスクのリアルタイム同期
+    fbManualRef=fbDb.ref(FB_MANUAL_PATH);
+    fbManualRef.on('value', snap=>{
+      const fbManuals=snap.val()||[];
+      if(!Array.isArray(fbManuals))return;
+      // メモリ上のmanual/continuationとマージ（Firebase優先）
+      const merged=[...fbManuals];
+      requests.filter(r=>r.source==='manual'||r.source==='continuation').forEach(r=>{
+        if(!merged.find(m=>m.id===r.id)) merged.push(r);
+      });
+      // requestsのmanual/continuationを入れ替え
+      requests=requests.filter(r=>r.source!=='manual'&&r.source!=='continuation');
+      merged.forEach(r=>{ if(!requests.find(x=>x.id===r.id)) requests.push(r); });
+      syncAssignedState();
+      try{localStorage.setItem(MANUAL_KEY,JSON.stringify(merged));}catch(e){}
+      renderManualList&&renderManualList();
+      renderRequestList&&renderRequestList();
     });
     console.log('Firebase接続OK');
     initAttendanceFb();
@@ -1608,8 +1628,13 @@ function carryOverTask(taskId){
 // ===== 任意作業 永続化 =====
 const MANUAL_KEY='repair_manual_reqs_v1';
 function saveManualReqs(){
-  // 手動追加＋持越し「続き」タスクを保存
-  try{localStorage.setItem(MANUAL_KEY,JSON.stringify(requests.filter(r=>r.source==='manual'||r.source==='continuation')));}catch(e){}
+  const data=requests.filter(r=>r.source==='manual'||r.source==='continuation');
+  // localStorage（ローカルキャッシュ）
+  try{localStorage.setItem(MANUAL_KEY,JSON.stringify(data));}catch(e){}
+  // Firebase（全PC共有）
+  if(fbManualRef){
+    fbManualRef.set(data).catch(e=>console.log('manualReqs Firebase保存失敗:',e));
+  }
 }
 function loadManualReqs(){
   try{return JSON.parse(localStorage.getItem(MANUAL_KEY)||'[]');}catch(e){return[];}
