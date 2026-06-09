@@ -2753,10 +2753,15 @@ function stampNow(id,type){
   if(!t)return;
   t.actual[type]=v;
   if(type==='start') t.actual.status='working';
-  if(type==='end')   t.actual.status='done';
+  if(type==='end'){
+    t.actual.status='done';
+    _removeContTaskFor(t); // 完了時：続きタスクを自動削除
+    saveManualReqs();
+  }
   const el=document.getElementById((type==='start'?'as_':'ae_')+id);
   if(el)el.value=v;
   saveTasksToFirebase();renderGantt();renderDetail();
+  if(type==='end'){renderManualList();renderRequestList();}
 }
 function togglePauseDetail(id){
   // 予実パネルの一時停止ボタン
@@ -3132,6 +3137,20 @@ function saveActual(){
   if(t.actual.start && t.actual.status==='pending') t.actual.status='working';
   saveTasksToFirebase();closeActModal();renderGantt();renderDetail();
 }
+// 完了・削除時に紐づく「続き」タスクを requests から除去
+function _removeContTaskFor(t){
+  const contsBefore=requests.filter(r=>r.source==='continuation'&&
+    (r.originalTaskId===t.id || r.originalReqId===t.reqId));
+  if(!contsBefore.length) return;
+  // ガント上の割付も削除
+  contsBefore.forEach(cont=>{
+    Object.keys(tasksByDate).forEach(ds=>{
+      tasksByDate[ds]=(tasksByDate[ds]||[]).filter(gt=>gt.reqId!==cont.id);
+    });
+  });
+  requests=requests.filter(r=>!(r.source==='continuation'&&
+    (r.originalTaskId===t.id || r.originalReqId===t.reqId)));
+}
 function completeTask(){
   // 完了 = 終了時刻を確定してdoneにする
   const t=getDate(curDate).find(x=>x.id===actTaskId);if(!t)return;
@@ -3144,7 +3163,9 @@ function completeTask(){
   }
   if(!t.actual.start){alert('開始時刻が未記録です。先に開始時刻を入力してください。');return;}
   t.actual.status='done';
-  saveTasksToFirebase();closeActModal();renderGantt();renderDetail();
+  // 完了時：このタスクに紐づく「続き」タスクを自動削除
+  _removeContTaskFor(t);
+  saveTasksToFirebase();saveManualReqs();closeActModal();renderGantt();renderDetail();renderManualList();renderRequestList();
 }
 function recreateContTask(taskId){
   // 持越済タスクの続きタスクを再作成（消えた場合の復旧）
