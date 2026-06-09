@@ -874,8 +874,19 @@ input.nm-img-input{display:none}
         <button class="btn btn-secondary btn-sm" id="pauseBtn" onclick="togglePause()" style="flex:1">⏸ 一時停止</button>
         <span id="pauseStatus" style="font-size:11px;color:var(--text2);align-self:center"></span>
       </div>
+      <!-- 停止記録一覧（編集・削除可） -->
       <div id="pauseLog" style="font-size:10px;color:var(--text2);line-height:1.8"></div>
       <div id="pauseTotalRow" style="display:none;font-size:11px;font-weight:600;color:var(--warn);margin-top:4px"></div>
+      <!-- 停止時間を手動追加 -->
+      <div style="margin-top:6px;padding:6px 8px;background:var(--panel2);border:1px solid var(--border);border-radius:5px">
+        <div style="font-size:10px;font-weight:600;color:var(--text2);margin-bottom:4px">＋ 停止時間を追加（押し忘れ補正用）</div>
+        <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
+          <input type="time" id="addPauseFrom" class="finput" style="width:90px;font-size:11px;padding:3px 6px" placeholder="開始">
+          <span style="font-size:11px;color:var(--text2)">〜</span>
+          <input type="time" id="addPauseTo" class="finput" style="width:90px;font-size:11px;padding:3px 6px" placeholder="終了">
+          <button onclick="addPauseEntry()" class="btn btn-secondary btn-sm" style="font-size:11px;padding:3px 10px">追加</button>
+        </div>
+      </div>
     </div>
 
     <!-- インライン工数編集（折りたたみ） -->
@@ -1490,27 +1501,24 @@ function carryOverTask(taskId){
   const totalWorkedH=Math.round((prevWorkedH+todayWorkedH)*10)/10;
   const calcRemainH=Math.max(0,Math.round((foundTask.hours-totalWorkedH)*10)/10);
 
-  // 残り工数を確認・補正できるダイアログ
+  // 確認ダイアログ（手修正なし・計算内訳の表示のみ）
   const pauseMin=(foundTask.actual.pauses||[]).reduce((s,p)=>{
     const pf=minToMs(p.from),pt2=minToMs(p.to);
-    return s+(pf!==null&&pt2!==null?pt2-pf:0);
+    return s+(pf!==null&&pt2!==null?Math.max(0,pt2-pf):0);
   },0);
-  let detail=`【計算内訳】\n`;
+  let detail=`【実働時間の計算内訳】\n`;
   detail+=`  開始: ${foundTask.actual.start}　終了: ${foundTask.actual.end}\n`;
   detail+=`  経過時間: ${ae-as}分`;
-  if(pauseMin>0) detail+=`　一時停止: ${pauseMin}分`;
+  if(pauseMin>0) detail+=`　停止合計: ${pauseMin}分`;
   detail+=`\n  本日実働: ${todayWorkedH}H`;
   if(prevWorkedH>0) detail+=`\n  前回までの累計: ${prevWorkedH}H`;
-  detail+=`\n  累計合計: ${totalWorkedH}H　計画: ${foundTask.hours}H\n\n`;
-  detail+=`残り工数（修正可）:`;
+  detail+=`\n  累計合計: ${totalWorkedH}H　計画: ${foundTask.hours}H\n`;
+  detail+=`  残り工数: ${calcRemainH}H\n\n`;
+  detail+=`停止時間に誤りがある場合は「キャンセル」して\nモーダルの一時停止ログで修正してください。\n\nこの内容で持越しますか？`;
 
-  const input=prompt(detail, calcRemainH);
-  if(input===null)return; // キャンセル
-  const remainingH=Math.max(0,Math.round(parseFloat(input)*10)/10);
-  if(isNaN(remainingH)){alert('正しい数値を入力してください');return;}
-
-  // 累計作業時間を残り工数から逆算して保存
-  const confirmedWorkedH=Math.round((foundTask.hours-remainingH)*10)/10;
+  if(!confirm(detail))return;
+  const remainingH=calcRemainH;
+  const confirmedWorkedH=totalWorkedH;
 
   // タスクを「持越済」状態にする
   foundTask.actual.status='carried';
@@ -2355,10 +2363,7 @@ function renderGantt(){
         // 操作ボタン（次のアクション）
         const actH2=(as!==null&&ae!==null)?Math.round((ae-as)/60*10)/10:null;
         const actBtns=isCarried
-          ?`<span style="font-size:9px;color:#92400e;font-weight:600">累計${t.actual.totalWorkedH||0}H作業済 / 残り${remainH}H</span>
-             <button onclick="event.stopPropagation();fixRemainH('${t.id}')"
-               style="font-size:9px;padding:1px 5px;border:1px solid #f59e0b;border-radius:3px;background:#fff8e1;color:#92400e;cursor:pointer;margin-left:3px"
-               title="実際の残り工数を手動で修正する">✏ 残り修正</button>`
+          ?`<span style="font-size:9px;color:#92400e;font-weight:600">累計${t.actual.totalWorkedH||0}H作業済 / 残り${remainH}H</span>`
           :hasEnd
           ?`<span style="font-size:9px;color:var(--text2);font-weight:600">${t.actual.start}〜${t.actual.end}${actH2!==null?' ('+actH2+'H)':''}</span>`
           :isPaused2
@@ -2424,83 +2429,6 @@ function renderGantt(){
   cont.innerHTML=`<div class="ghdr"><div></div><div class="gruler" style="width:${tw}px">${ticks.join('')}</div></div>${rows}`;
   renderLoadSummary();
   checkDisplacedTasks();
-}
-
-// ===== 持越し残り工数の修正 =====
-function fixRemainH(taskId){
-  // 全日付からタスクを検索
-  let task=null;
-  for(const tasks of Object.values(tasksByDate)){
-    task=tasks.find(t=>t.id===taskId);
-    if(task)break;
-  }
-  if(!task)return;
-
-  const currentRemain=Math.max(0,Math.round((task.hours-(task.actual.totalWorkedH||0))*10)/10);
-  const currentWorked=task.actual.totalWorkedH||0;
-
-  const input=prompt(
-    `残り工数を入力してください。\n\n計画工数: ${task.hours}H\n累計作業済: ${currentWorked}H\n現在の残り: ${currentRemain}H\n\n実際の残り工数 (H):`,
-    currentRemain
-  );
-  if(input===null)return; // キャンセル
-  const newRemain=Math.round(parseFloat(input)*10)/10;
-  if(isNaN(newRemain)||newRemain<0){alert('正しい数値を入力してください');return;}
-
-  // totalWorkedHを逆算して更新
-  const newWorked=Math.round((task.hours-newRemain)*10)/10;
-  task.actual.totalWorkedH=newWorked;
-
-  // 既存の続きタスクを更新 or 新規作成
-  const origReq=requests.find(r=>r.id===task.reqId);
-  const existCont=requests.find(r=>r.source==='continuation'&&r.originalTaskId===taskId);
-
-  if(newRemain>0){
-    if(existCont){
-      // 既存の続きタスクの工数を更新
-      existCont.hours=newRemain;
-      existCont.kintoneNote=`残り工数を手動修正: ${newRemain}H`;
-      // ガントに割付済みなら工数も更新
-      Object.values(tasksByDate).flat().forEach(t=>{
-        if(t.reqId===existCont.id) t.hours=newRemain;
-      });
-    } else {
-      // 続きタスクを新規作成
-      const contReq={
-        id:'cont_'+taskId+'_'+Date.now(),
-        hinban:'🔄 '+(origReq?.hinban||task.name),
-        hinmei:(origReq?.hinmei||'')+' [続き]',
-        process:origReq?.process||'',
-        client:origReq?.client||'',
-        kubunInputs:[{name:'残り作業',units:newRemain,key:'custom'}],
-        moldType:'none',trialSteps:0,trialH:0,
-        hours:newRemain,
-        deadline:origReq?.deadline||'',
-        assigned:false,assignee:null,
-        source:'continuation',
-        kintoneNote:`残り工数を手動修正: ${newRemain}H`,
-        originalTaskId:taskId,
-        originalReqId:task.reqId,
-        createdDate:todayStr()
-      };
-      requests.push(contReq);
-      requests.sort((a,b)=>a.deadline.localeCompare(b.deadline));
-    }
-  } else {
-    // 残り0Hなら続きタスクを削除
-    if(existCont){
-      requests=requests.filter(r=>r.id!==existCont.id);
-      Object.keys(tasksByDate).forEach(ds=>{
-        tasksByDate[ds]=(tasksByDate[ds]||[]).filter(t=>t.reqId!==existCont.id);
-      });
-    }
-  }
-
-  saveManualReqs();
-  saveTasksToFirebase();
-  renderGantt();renderDetail();renderManualList();renderRequestList();
-  alert(`✅ 残り工数を ${newRemain}H に修正しました。`+
-    (newRemain>0?'\n続きタスクが任意作業に追加されました。':''));
 }
 
 // ===== ズレタスク検出・復元 =====
@@ -2753,19 +2681,56 @@ function renderPauseLog(t){
   const logEl=document.getElementById('pauseLog');
   const totalEl=document.getElementById('pauseTotalRow');
   if(!pauses.length){
-    logEl.textContent='一時停止の記録なし';
+    logEl.innerHTML='<span style="color:var(--text3)">一時停止の記録なし</span>';
     totalEl.style.display='none';
     return;
   }
   let totalMin=0;
   logEl.innerHTML=pauses.map((p,i)=>{
     const fm=minToMs(p.from),tm=minToMs(p.to);
-    const dur=fm!=null&&tm!=null?tm-fm:0;
-    totalMin+=dur;
-    return `${i+1}. ${p.from}〜${p.to}（${dur}分）`;
-  }).join('<br>');
+    const dur=(fm!=null&&tm!=null)?tm-fm:0;
+    totalMin+=Math.max(0,dur);
+    return `<div style="display:flex;align-items:center;gap:5px;margin-bottom:2px">
+      <span style="min-width:130px">${i+1}. ${p.from}〜${p.to||'...'} （${Math.max(0,dur)}分）</span>
+      <input type="time" value="${p.from}" style="width:78px;font-size:10px;padding:1px 4px;border:1px solid var(--border);border-radius:3px"
+        onchange="editPause(${i},'from',this.value)">
+      <span style="font-size:10px">〜</span>
+      <input type="time" value="${p.to||''}" style="width:78px;font-size:10px;padding:1px 4px;border:1px solid var(--border);border-radius:3px"
+        onchange="editPause(${i},'to',this.value)">
+      <button onclick="deletePause(${i})" style="font-size:10px;padding:1px 5px;border:1px solid #fca5a5;border-radius:3px;background:#fee2e2;color:#dc2626;cursor:pointer">✕</button>
+    </div>`;
+  }).join('');
   totalEl.style.display='block';
-  totalEl.textContent=`合計停止時間: ${totalMin}分（実作業から除外してください）`;
+  totalEl.innerHTML=`合計停止時間: <b>${totalMin}分</b>（実働時間から除外されます）`;
+}
+function editPause(idx, key, val){
+  const t=getDate(curDate).find(x=>x.id===actTaskId);if(!t)return;
+  if(!t.actual.pauses||!t.actual.pauses[idx])return;
+  t.actual.pauses[idx][key]=val;
+  renderPauseLog(t);
+  saveTasksToFirebase();
+}
+function deletePause(idx){
+  const t=getDate(curDate).find(x=>x.id===actTaskId);if(!t)return;
+  if(!t.actual.pauses)return;
+  t.actual.pauses.splice(idx,1);
+  renderPauseLog(t);
+  saveTasksToFirebase();
+}
+function addPauseEntry(){
+  const t=getDate(curDate).find(x=>x.id===actTaskId);if(!t)return;
+  const from=document.getElementById('addPauseFrom').value;
+  const to=document.getElementById('addPauseTo').value;
+  if(!from||!to){alert('開始・終了時刻を両方入力してください');return;}
+  if(minToMs(from)>=minToMs(to)){alert('終了は開始より後の時刻にしてください');return;}
+  if(!t.actual.pauses)t.actual.pauses=[];
+  t.actual.pauses.push({from,to});
+  // 時刻順にソート
+  t.actual.pauses.sort((a,b)=>minToMs(a.from)-minToMs(b.from));
+  document.getElementById('addPauseFrom').value='';
+  document.getElementById('addPauseTo').value='';
+  renderPauseLog(t);
+  saveTasksToFirebase();
 }
 function openActModal(idOrEl){
   // data-tid経由とID直接指定の両方に対応
