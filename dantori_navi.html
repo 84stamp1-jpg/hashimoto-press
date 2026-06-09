@@ -7466,7 +7466,8 @@ window.qcShowAllocList = function(){
   var doneSeizoSet={};
   QC_ALL_RECORDS.forEach(function(r){ if(r[7]==='完納') doneSeizoSet[(r[13]||'')+'_'+(r[14]||'')]=true; });
   var list=QC_SAKUYO.filter(function(s){ if(s.hinban!==QC_BULK_HINBAN) return false; if(QC_BULK_JUNJO&&String(s.junjo)!==String(QC_BULK_JUNJO)) return false; return !doneSeizoSet[s.seizoNo+'_'+s.junjo]; });
-  list.sort(function(a,b){ return (a['納期']||'99/99').localeCompare(b['納期']||'99/99'); });
+  function _noukiVal(s){ var p=(s||'99/99').split('/'); return (parseInt(p[0])||99)*100+(parseInt(p[1])||99); }
+  list.sort(function(a,b){ return _noukiVal(a['納期'])-_noukiVal(b['納期']); });
   if(!list.length){ alert('未完納の製造番号が見つかりません'); return; }
   list.forEach(function(s){ var done=QC_ALL_RECORDS.filter(function(r){ return r[13]===s.seizoNo&&String(r[14])===String(s.junjo)&&r[7]!=='中間実績'; }).reduce(function(sum,r){ return sum+(parseInt(r[5]||0)||0); },0); s._done=done; s._remain=Math.max(0,(parseInt(s.shiji)||0)-done); });
   var remain=prod;
