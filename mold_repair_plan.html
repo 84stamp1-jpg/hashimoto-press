@@ -1259,14 +1259,17 @@ const WORKER_CONFIG={
   oishi:       {name:'大石',   bg:'#e0f2fe',       bd:'#7dd3fc',       fg:'#0369a1',   blockCls:'bt', actCls:'act-bar-t'},
   nema:        {name:'根間',   bg:'#fef9c3',       bd:'#fde047',       fg:'#854d0e',   blockCls:'by', actCls:'act-bar-y'},
 };
-const ASSIGNEE_ORDER=['matsumoto_t','matsumoto','matsunaga','matsumura','matsumoto_m','endo','oishi','nema'];
-function wcfg(a){return WORKER_CONFIG[a]||{name:a,bg:'#f3f4f6',bd:'#d1d5db',fg:'#374151',blockCls:'bn',actCls:'act-bar-n'};}
+const ASSIGNEE_ORDER=['matsumoto_t','matsunaga','matsumura','matsumoto_m','endo','oishi','nema'];
+// 旧キー → 新キーへの正規化マップ（'matsumoto' は 'matsumoto_t' として扱う）
+const ASSIGNEE_NORM={'matsumoto':'matsumoto_t'};
+function normA(a){return ASSIGNEE_NORM[a]||a;}
+function wcfg(a){return WORKER_CONFIG[normA(a)]||{name:a,bg:'#f3f4f6',bd:'#d1d5db',fg:'#374151',blockCls:'bn',actCls:'act-bar-n'};}
 const WORK_STD_END=17*60; // 標準終業 17:00
 const BREAKS=[{s:600,e:610},{s:730,e:770},{s:890,e:900},{s:1020,e:1030}];
 // 残業設定（分単位で保持）
 let overtimeH={matsumoto:0,matsunaga:0};
 try{const _ot=JSON.parse(localStorage.getItem('repair_ot_v1')||'null');if(_ot)Object.assign(overtimeH,_ot);}catch(e){}
-function effectiveWorkEnd(a){return WORK_STD_END+Math.round((overtimeH[a]||0)*60);}
+function effectiveWorkEnd(a){return WORK_STD_END+Math.round((overtimeH[normA(a)]||overtimeH[a]||0)*60);}
 function setOvertime(a,h){
   overtimeH[a]=Math.max(0,Math.min(5,h));
   localStorage.setItem('repair_ot_v1',JSON.stringify(overtimeH));
@@ -2293,15 +2296,16 @@ function renderGantt(){
 
   const tasks=getDate(curDate);
 
-  // 当日タスクに存在する担当者を動的に取得（ASSIGNEE_ORDERで並び替え）
-  const assigneesOnDay=[...new Set(tasks.map(t=>t.assignee).filter(Boolean))];
+  // 当日タスクに存在する担当者を動的に取得（正規化して重複除去・ASSIGNEE_ORDERで並び替え）
+  const assigneesOnDay=[...new Set(tasks.map(t=>normA(t.assignee)).filter(Boolean))];
   assigneesOnDay.sort((x,y)=>{const ix=ASSIGNEE_ORDER.indexOf(x),iy=ASSIGNEE_ORDER.indexOf(y);return(ix<0?99:ix)-(iy<0?99:iy);});
-  if(!assigneesOnDay.length) assigneesOnDay.push('matsumoto','matsunaga'); // タスクなし時のデフォルト
+  if(!assigneesOnDay.length) assigneesOnDay.push('matsumoto_t','matsunaga'); // タスクなし時のデフォルト
 
   const rows=assigneesOnDay.map(a=>{
     const cfg=wcfg(a);
     const lbl=cfg.name;
-    const myTasks=tasks.filter(t=>t.assignee===a);
+    // 正規化後のキーが一致するタスクを全て対象に（matsumoto も matsumoto_t も同じ行）
+    const myTasks=tasks.filter(t=>normA(t.assignee)===a);
 
     // ===== 計画バー：2段レイアウト（重なる場合は2段目に配置） =====
     // 各行の末尾の終端時刻を記録して重複判定
@@ -2418,8 +2422,8 @@ function renderGantt(){
         border-left:2px dashed ${cfg.fg};pointer-events:none;z-index:1" title="残業枠 ${ot}H"></div>`;
     }
 
-    // 担当者直下の予実詳細（ガントバーと同じ時刻順にソート）
-    const myTasks2=tasks.filter(t=>t.assignee===a).sort((x,y)=>(x.startMin??99999)-(y.startMin??99999));
+    // 担当者直下の予実詳細（正規化キーで一致・時刻順にソート）
+    const myTasks2=tasks.filter(t=>normA(t.assignee)===a).sort((x,y)=>(x.startMin??99999)-(y.startMin??99999));
     let detailHtml='';
     if(!myTasks2.length){
       detailHtml=`<div class="person-detail empty">作業割付なし</div>`;
