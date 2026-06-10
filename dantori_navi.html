@@ -10701,19 +10701,12 @@ function apGetJobs() {
   (QC_ALL_RECORDS || []).forEach(rec => {
     if (rec[7] === '完納' || rec[7] === '完了') doneSet.add((rec[13]||'')+'_'+(rec[14]||''));
   });
+  const AP_KOSEI = ['溶接','フート','油圧','検査','脱脂','組付','ハンドワーク','タップ','旋盤','バフ','プレス　D','プレスD'];
   return QC_SAKUYO.filter(s => {
     const key = s.seizoNo + '_' + s.junjo;
     if (doneSet.has(key)) return false;
-    const b = String(s.bumon||'');
     const k = String(s.kosei||'');
-    // 部門フィールドがある場合はそちらで判定
-    if (b) {
-      if (b.includes('組立')) return true;
-      if (b.includes('プレス') && k.includes('プレスD')) return true;
-      return false;
-    }
-    // 部門フィールドがない旧データは工程名で判定
-    return k.includes('溶接') || k.includes('フート') || k.includes('検査') || k.includes('プレスD');
+    return AP_KOSEI.some(kw => k.includes(kw));
   });
 }
 
