@@ -681,6 +681,7 @@ input.nm-img-input{display:none}
     <button class="btn btn-secondary btn-sm" onclick="nmShiftWeek(-1)">◀ 前週</button>
     <button class="btn btn-secondary btn-sm" onclick="nmGoToday()">今日</button>
     <button class="btn btn-secondary btn-sm" onclick="nmShiftWeek(1)">次週 ▶</button>
+    <button class="btn btn-secondary btn-sm" id="nmBtnSortDl" onclick="nmSortByDeadline()" title="各金型の最も近い期限が早い順に並べ替えます">📅 期限順</button>
     <button class="btn btn-secondary btn-sm" id="nmBtnCompleted" onclick="nmToggleAllCompleted()">👁 完了を非表示</button>
     <button class="btn btn-primary btn-sm" onclick="window.print()">🖨 印刷</button>
     <span class="nm-status" id="nmStatus">—</span>
@@ -2937,13 +2938,75 @@ function ganttBlockMouseDown(e,id,assignee){
   document.addEventListener('mousemove',ganttDragMove,{passive:false});
   document.addEventListener('mouseup',ganttDragUp);
 }
+let _dragGhost=null,_dragTimeLine=null;
+function _removeDragGhost(){
+  if(_dragGhost){_dragGhost.remove();_dragGhost=null;}
+  if(_dragTimeLine){_dragTimeLine.remove();_dragTimeLine=null;}
+}
+function _calcSnapMin(clientX){
+  const wrap=document.querySelector('.gwrap');
+  // gtrackの最初の要素を基準にする
+  const track=document.querySelector('.gtrack');
+  if(!track)return null;
+  const trackRect=track.getBoundingClientRect();
+  const wrapW=wrap?wrap.getBoundingClientRect().width:800;
+  const viewW=Math.max(500,wrapW-82);
+  const VIEW_MIN=(17*60+10)-WORK_START;
+  const HOUR_PX=Math.floor(viewW/VIEW_MIN*60);
+  const tw=(WORK_END-WORK_START)/60*HOUR_PX;
+  const scrollLeft=wrap?wrap.scrollLeft:0;
+  const dropX=clientX-trackRect.left+scrollLeft-ganttBlockDrag.blockOffsetX;
+  return Math.max(WORK_START,Math.min(WORK_END-60,
+    Math.round((WORK_START+dropX/tw*(WORK_END-WORK_START))/5)*5));
+}
 function ganttDragMove(e){
   if(!ganttBlockDrag)return;
+  e.preventDefault();
   if(!ganttBlockDrag.moving){
     if(Math.abs(e.clientX-ganttBlockDrag.startX)>4||Math.abs(e.clientY-ganttBlockDrag.startY)>4){
       ganttBlockDrag.moving=true;
       document.body.style.cursor='grabbing';
     }
+  }
+  if(!ganttBlockDrag.moving)return;
+  // ゴースト要素を作成/更新
+  const snap=_calcSnapMin(e.clientX);
+  if(snap===null)return;
+  const snapLabel=snap!=null?fmtMin(snap)+' →':'';
+  if(!_dragGhost){
+    _dragGhost=document.createElement('div');
+    _dragGhost.style.cssText='position:fixed;pointer-events:none;z-index:9999;'
+      +'background:rgba(59,110,248,.85);color:#fff;padding:4px 10px;border-radius:6px;'
+      +'font-size:12px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.3);white-space:nowrap;';
+    document.body.appendChild(_dragGhost);
+  }
+  _dragGhost.style.left=(e.clientX+14)+'px';
+  _dragGhost.style.top=(e.clientY-20)+'px';
+  // ドラッグ中タスク名を取得
+  let tname='';
+  for(const tasks of Object.values(tasksByDate)){
+    const t=tasks.find(t=>t.id===ganttBlockDrag.id);
+    if(t){tname=t.name;break;}
+  }
+  _dragGhost.textContent='⏱ '+snapLabel+' '+tname;
+  // タイムライン上の縦線インジケーター
+  const wrap=document.querySelector('.gwrap');
+  const track=document.querySelector('.gtrack');
+  if(track&&wrap){
+    const trackRect=track.getBoundingClientRect();
+    const wrapW=wrap.getBoundingClientRect().width;
+    const viewW=Math.max(500,wrapW-82);
+    const VIEW_MIN=(17*60+10)-WORK_START;
+    const HOUR_PX=Math.floor(viewW/VIEW_MIN*60);
+    const tw=(WORK_END-WORK_START)/60*HOUR_PX;
+    const lineX=trackRect.left+(snap-WORK_START)/TOTAL_MIN*tw-wrap.scrollLeft;
+    if(!_dragTimeLine){
+      _dragTimeLine=document.createElement('div');
+      _dragTimeLine.style.cssText='position:fixed;pointer-events:none;z-index:9998;'
+        +'width:2px;background:rgba(59,110,248,.7);top:0;bottom:0;';
+      document.body.appendChild(_dragTimeLine);
+    }
+    _dragTimeLine.style.left=lineX+'px';
   }
 }
 function ganttDragUp(e){
@@ -2951,6 +3014,7 @@ function ganttDragUp(e){
   document.removeEventListener('mousemove',ganttDragMove);
   document.removeEventListener('mouseup',ganttDragUp);
   document.body.style.cursor='';
+  _removeDragGhost();
 
   const dragId=ganttBlockDrag.id;
   const blockOffsetX=ganttBlockDrag.blockOffsetX;
@@ -2993,14 +3057,16 @@ function ganttDragUp(e){
 
   const targetAssignee=targetTrack.dataset.assignee;
   const trackRect=targetTrack.getBoundingClientRect();
-  const dropX=e.clientX-trackRect.left-blockOffsetX;
 
-  // ② px→分変換（renderGanttと同じ計算）
+  // ② px→分変換（スクロール量を考慮）
   const wrap=document.querySelector('.gwrap');
+  const scrollLeft=wrap?wrap.scrollLeft:0;
+  const dropX=e.clientX-trackRect.left+scrollLeft-blockOffsetX;
   const wrapW=wrap?wrap.getBoundingClientRect().width:800;
   const viewW=Math.max(500,wrapW-82);
   const VIEW_MIN=(17*60+10)-WORK_START;
-  const tw=(WORK_END-WORK_START)/60*Math.floor(viewW/VIEW_MIN*60);
+  const HOUR_PX=Math.floor(viewW/VIEW_MIN*60);
+  const tw=(WORK_END-WORK_START)/60*HOUR_PX;
   const snapMin=Math.max(WORK_START,Math.min(WORK_END-60,
     Math.round((WORK_START+dropX/tw*(WORK_END-WORK_START))/5)*5));
 
@@ -4295,6 +4361,28 @@ function nmMoveMold(id,dir){
 }
 
 // ===== 期限警告クラス =====
+function nmGetEarliestDeadline(mold){
+  // 未完了タスクの中で最も近い期限を返す（なければ完了済みも含める）
+  const dates=(mold.tasks||[]).map(t=>t.deadline).filter(Boolean);
+  if(!dates.length)return'';
+  return dates.sort()[0];
+}
+function nmSortByDeadline(){
+  const btn=document.getElementById('nmBtnSortDl');
+  // 期限なし（空）は末尾
+  nmMolds.sort((a,b)=>{
+    const da=nmGetEarliestDeadline(a);
+    const db=nmGetEarliestDeadline(b);
+    if(!da&&!db)return 0;
+    if(!da)return 1;
+    if(!db)return -1;
+    return da.localeCompare(db);
+  });
+  nmSave();nmRender();
+  if(btn){btn.style.background='var(--accent)';btn.style.color='#fff';
+    setTimeout(()=>{btn.style.background='';btn.style.color='';},1200);}
+  nmSetStatus('📅 期限の近い順に並べ替えました');
+}
 function nmDeadlineClass(deadline){
   if(!deadline)return'';
   const today=new Date();today.setHours(0,0,0,0);
