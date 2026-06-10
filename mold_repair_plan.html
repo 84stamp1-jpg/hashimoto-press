@@ -839,9 +839,12 @@ input.nm-img-input{display:none}
     <div class="yj-section">
       <div class="yj-sec-title">📊 予定 vs 実績</div>
       <div class="yj-times">
-        <div class="yj-time-block">
-          <div class="yj-time-label">予定 開始</div>
+        <div class="yj-time-block" style="cursor:pointer" title="クリックして予定開始時刻を変更" onclick="togglePlanStartEdit()">
+          <div class="yj-time-label">予定 開始 ✏️</div>
           <div class="yj-time-val" id="planStart">—</div>
+          <input type="time" step="600" id="planStartInput"
+            style="display:none;margin-top:3px;font-size:13px;border:1px solid #93c5fd;border-radius:4px;padding:2px 4px;width:90px"
+            onchange="applyPlanStart(this.value)" onblur="togglePlanStartEdit(true)"/>
         </div>
         <div class="yj-time-block">
           <div class="yj-time-label">予定 終了</div>
@@ -3015,24 +3018,13 @@ function ganttDragUp(e){
     const r=requests.find(r=>r.id===foundTask.reqId);
     if(r) r.assignee=targetAssignee;
   }
-  const targetAss=foundTask.assignee;
-
-  // ⑤ ドロップ位置で順序を決める（仮startMin）
+  // ⑤ ドロップ位置に直接startMinを設定（他タスクは動かさない）
   foundTask.startMin=snapMin;
+  // request側も同期
+  const reqR=requests.find(r=>r.id===foundTask.reqId);
+  if(reqR) reqR.startMin=snapMin;
 
-  // ⑥ 同担当者タスクをstartMin昇順でソートし配列順を確定
-  //    → autoArrangeがこの順序で詰め直す
-  const arr=tasksByDate[foundDate];
-  if(arr){
-    const sameAss=arr.filter(t=>t.assignee===targetAss)
-                     .sort((a,b)=>(a.startMin??99999)-(b.startMin??99999));
-    const otherAss=arr.filter(t=>t.assignee!==targetAss);
-    tasksByDate[foundDate]=[...sameAss,...otherAss]; // 順序確定
-    sameAss.forEach(t=>t.startMin=null); // autoArrangeに詰め直しを委ねる
-  }
-
-  // ⑦ 詰め直し＆保存
-  autoArrange(foundDate);
+  // ⑥ 保存＆再描画（autoArrangeしない → ドロップ位置を尊重）
   renderRequestList();
   saveTasksToFirebase();
   renderGantt();
@@ -3251,6 +3243,45 @@ function revertComplete(){
   saveTasksToFirebase();renderGantt();renderDetail();
 }
 function closeActModal(){document.getElementById('actModal').classList.remove('open');actTaskId=null}
+
+// 予定開始時刻インライン編集
+function togglePlanStartEdit(forceClose){
+  const val=document.getElementById('planStart');
+  const inp=document.getElementById('planStartInput');
+  if(!val||!inp)return;
+  if(forceClose||inp.style.display!=='none'){
+    inp.style.display='none';val.style.display='';
+    return;
+  }
+  // 現在値をinputに反映
+  const cur=val.textContent.trim();
+  inp.value=(cur&&cur!=='—')?cur:'08:10';
+  val.style.display='none';
+  inp.style.display='';
+  inp.focus();
+}
+function applyPlanStart(timeVal){
+  if(!actTaskId||!timeVal)return;
+  // 全日付から対象タスクを探す
+  let foundTask=null;
+  for(const [ds,tasks] of Object.entries(tasksByDate)){
+    const t=tasks.find(x=>x.id===actTaskId);
+    if(t){foundTask=t;break;}
+  }
+  if(!foundTask)return;
+  const[h,m]=timeVal.split(':').map(Number);
+  foundTask.startMin=h*60+m;
+  // request側も同期
+  const req=requests.find(r=>r.id===foundTask.reqId);
+  if(req) req.startMin=foundTask.startMin;
+  // planStart表示を更新
+  const planEndMin=addWork(foundTask.startMin,Math.round(foundTask.hours*60));
+  document.getElementById('planStart').textContent=fmtMin(foundTask.startMin);
+  document.getElementById('planEnd').textContent=planEndMin!=null?fmtMin(planEndMin):'—';
+  togglePlanStartEdit(true);
+  saveTasksToFirebase();
+  renderGantt();renderDetail();
+}
 function openEditFromAct(){
   const id=actTaskId;closeActModal();
   const t=getDate(curDate).find(x=>x.id===id);if(!t)return;
@@ -3288,7 +3319,8 @@ function saveEdit(){
   if(st){const[h,m]=st.split(':').map(Number);t.startMin=h*60+m}
   t.assignee=document.getElementById('eAssign').value;
   t.memo=document.getElementById('eMemo').value;
-  autoArrange(curDate);saveTasksToFirebase();closeEditModal();renderGantt();renderDetail();
+  // autoArrangeを呼ばずに開始時刻入力値を尊重して直接保存
+  saveTasksToFirebase();closeEditModal();renderGantt();renderDetail();
 }
 function closeEditModal(){document.getElementById('editModal').classList.remove('open');editTaskId=null}
 
