@@ -2713,7 +2713,14 @@ function renderLoadSummary(){
     const rangeStr=fmt(mon).slice(5).replace('-','/')+'(月)〜'+fmt(fri).slice(5).replace('-','/')+'(金)';
 
     const weekReqs=pending.filter(r=>days.includes(r.deadline));
-    const totalH=Math.round(weekReqs.reduce((s,r)=>s+r.hours,0)*10)/10;
+    // 残工数 = 元工数 − 実働済み時間（calcWorkedHで並行作業も正確に計算）
+    const totalH=Math.round(weekReqs.reduce((s,r)=>{
+      // このrequestに紐づく全タスクを取得
+      const relTasks=Object.values(tasksByDate).flat().filter(t=>t.reqId===r.id);
+      const workedH=relTasks.length?calcWorkedH(relTasks):0;
+      const remainH=Math.max(0,r.hours-workedH);
+      return s+remainH;
+    },0)*10)/10;
     // 今週は今日以降の残稼働日、来週は5日
     const todayDs=todayStr();
     const workDays=offset===0
