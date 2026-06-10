@@ -656,11 +656,11 @@ input.nm-img-input{display:none}
     </div>
 
     <div class="load-panel" id="loadPanel">
-      <div class="load-panel-hdr" onclick="toggleLoadPanel()">
-        <span class="load-panel-title">📊 週間負荷サマリー（依頼合計・累計）</span>
-        <span id="loadPanelToggle" style="font-size:10px;color:var(--text2);margin-left:auto">▼</span>
+      <div class="load-panel-hdr" style="cursor:default;margin-bottom:6px">
+        <span class="load-panel-title">📊 週次負荷（残工数）</span>
+        <span style="font-size:9px;color:var(--text3);margin-left:8px">1人工=8H基準 ／ 未完了依頼のdeadline集計</span>
       </div>
-      <div id="loadDays" class="load-days" style="display:none"></div>
+      <div id="loadWeeks" style="display:flex;gap:10px"></div>
     </div>
   </div>
 </div>
@@ -1277,14 +1277,6 @@ function setOvertime(a,h){
   overtimeH[a]=Math.max(0,Math.min(5,h));
   localStorage.setItem('repair_ot_v1',JSON.stringify(overtimeH));
   autoArrange(curDate);saveTasksToFirebase();renderGantt();
-}
-let loadPanelOpen=false;
-function toggleLoadPanel(){
-  loadPanelOpen=!loadPanelOpen;
-  const el=document.getElementById('loadDays');
-  if(el)el.style.display=loadPanelOpen?'flex':'none';
-  const tog=document.getElementById('loadPanelToggle');
-  if(tog)tog.textContent=loadPanelOpen?'▲':'▼';
 }
 
 // ===== 改修区分マスタ =====
@@ -2685,63 +2677,60 @@ function _renderDetailOld(){
   if(grid)grid.innerHTML=html;
 }
 
-// ===== 週間負荷サマリー =====
-function renderLoadSummary(){
-  const el=document.getElementById('loadDays');
-  if(!el)return;
-  // 今日から14日間（当日が一番左）
+// ===== 週次負荷（残工数ベース） =====
+const NINKU_H=8; // 1人工=8H
+function _weekRange(offsetWeeks){
+  // offsetWeeks=0:今週, 1:来週
+  const today=new Date(todayStr()+'T00:00:00');
+  const dow=today.getDay(); // 0=日
+  const toMon=(dow===0)?-6:(1-dow); // 今週月曜までのオフセット
+  const mon=addDays(today,toMon+offsetWeeks*7);
   const days=[];
-  const loadStart=new Date(todayStr()+'T00:00:00');
-  for(let i=0;i<14;i++){
-    days.push(fmt(addDays(loadStart,i)));
-  }
-  // 日付ごとの依頼工数集計（deadline基準）
-  const dayH={};
-  days.forEach(d=>dayH[d]=0);
-  requests.forEach(r=>{
-    if(dayH.hasOwnProperty(r.deadline))dayH[r.deadline]+=r.hours;
-    else{/* 範囲外の日付 */}
-  });
-  // 累計計算（その日以前の全依頼合計）
-  const allDates=[...new Set(requests.map(r=>r.deadline))].sort();
-  const cumH={};
-  let runTotal=0;
-  // 全リクエストを期限順にソートして累計
-  const sortedReqs=[...requests].sort((a,b)=>a.deadline.localeCompare(b.deadline));
-  days.forEach(d=>{
-    runTotal+=sortedReqs.filter(r=>r.deadline===d).reduce((s,r)=>s+r.hours,0);
-    // この日より前に既に加算済みの分も含む
-    cumH[d]=sortedReqs.filter(r=>r.deadline<=d).reduce((s,r)=>s+r.hours,0);
-  });
+  for(let i=0;i<5;i++) days.push(fmt(addDays(mon,i))); // 月〜金
+  return{mon,fri:addDays(mon,4),days};
+}
+function renderLoadSummary(){
+  const el=document.getElementById('loadWeeks');
+  if(!el)return;
 
-  // 最大値（バーの高さ計算用）
-  const maxCum=Math.max(8,...Object.values(cumH));
+  // 未完了依頼（done以外）
+  const pending=requests.filter(r=>r.status!=='done');
 
-  // 松本1人の1日標準処理可能工数
-  const DAILY_CAP_M=8+(overtimeH.matsumoto||0);
+  const html=[0,1].map(offset=>{
+    const {mon,fri,days}=_weekRange(offset);
+    const label=offset===0?'今週':'来週';
+    const rangeStr=fmt(mon).slice(5).replace('-','/')+'(月)〜'+fmt(fri).slice(5).replace('-','/')+'(金)';
 
-  el.innerHTML=days.map(d=>{
-    const dh=dayH[d]||0;
-    const cum=cumH[d]||0;
-    const isToday=d===curDate;
-    const isWE=new Date(d+'T00:00:00').getDay()===0||new Date(d+'T00:00:00').getDay()===6;
-    const dLabel=d.slice(5).replace('-','/')+'('+['日','月','火','水','木','金','土'][new Date(d+'T00:00:00').getDay()]+')';
-    const barH=Math.round(cum/maxCum*44);
-    const isOver=cum>DAILY_CAP_M*14; // 2週間分を超えるか
-    const isCaution=cum>DAILY_CAP_M*10;
-    const barColor=isOver?'var(--danger)':isCaution?'var(--warn)':'var(--m)';
-    const numCls=isOver?'load-over':isCaution?'load-caution':'';
-    return`<div class="load-day">
-      <div class="load-day-label" style="${isToday?'color:var(--accent);font-weight:700':isWE?'color:var(--text3)':''}">${dLabel}</div>
-      <div class="load-bar-wrap" title="${d} 依頼:${dh}H 累計:${cum}H">
-        <div class="load-bar-fill" style="height:${barH}px;background:${barColor};opacity:${isWE?.4:1}"></div>
+    const weekReqs=pending.filter(r=>days.includes(r.deadline));
+    const totalH=Math.round(weekReqs.reduce((s,r)=>s+r.hours,0)*10)/10;
+    // 今週は今日以降の残稼働日、来週は5日
+    const todayDs=todayStr();
+    const workDays=offset===0
+      ? days.filter(d=>d>=todayDs).length||1  // 今日〜金曜の稼働日数（最低1）
+      : 5;
+    const avgH=Math.round(totalH/workDays*10)/10;
+    const ninku=Math.round(avgH/NINKU_H*100)/100;
+
+    // 件数内訳
+    const cntPending=weekReqs.filter(r=>!r.assigned).length;
+    const cntWorking=weekReqs.filter(r=>r.assigned&&r.status!=='done').length;
+
+    // 色分け：1人工以上=赤, 0.8以上=黄, それ以下=緑
+    const nColor=ninku>=1.0?'var(--danger)':ninku>=0.8?'var(--warn)':'#16a34a';
+    const bgColor=ninku>=1.0?'#fee2e2':ninku>=0.8?'#fef3c7':'#f0fdf4';
+    const bdColor=ninku>=1.0?'#fca5a5':ninku>=0.8?'#fde68a':'#86efac';
+
+    return`<div style="flex:1;background:${bgColor};border:1.5px solid ${bdColor};border-radius:8px;padding:8px 12px;min-width:160px">
+      <div style="font-size:10px;font-weight:700;color:var(--text2);margin-bottom:4px">${label}　<span style="font-weight:400;color:var(--text3)">${rangeStr}</span></div>
+      <div style="display:flex;align-items:baseline;gap:4px;margin-bottom:3px">
+        <span style="font-size:26px;font-weight:800;color:${nColor};line-height:1">${ninku}</span>
+        <span style="font-size:12px;color:var(--text2);font-weight:600">人工/日</span>
       </div>
-      <div class="load-day-nums">
-        <div class="cum ${numCls}">${cum}H</div>
-        <div class="daily">+${dh}H</div>
-      </div>
+      <div style="font-size:11px;color:var(--text2)">残 <b>${totalH}H</b> ÷ ${workDays}日 = ${avgH}H/日</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:3px">対象 ${weekReqs.length}件（未割付 ${cntPending}件・作業中 ${cntWorking}件）</div>
     </div>`;
   }).join('');
+  el.innerHTML=html;
 }
 
 function setAct(id,type,val){
