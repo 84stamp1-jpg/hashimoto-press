@@ -31,6 +31,7 @@ html, body {
 .content{padding:4px;display:none;}
 .content.active{display:block;}
 .content#tab-progress.active{display:flex!important;}
+.content#tab-asmplan.active{display:flex!important;}
 
 
 /* ===== SEARCH TAB ===== */
@@ -737,6 +738,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
   <div class="tab" onclick="switchTab('progress')">📊 進捗管理</div>
   <div class="tab" onclick="switchTab('quality')">✅ 品質チェック</div>
   <div class="tab" onclick="switchTab('dantori')">📋 段取り指示</div>
+  <div class="tab" onclick="switchTab('asmplan')">🔧 組立計画</div>
   <div class="tab" onclick="switchTab('search')">🔍 品番検索</div>
   <div style="margin-left:auto;display:flex;align-items:center;gap:8px;padding:0 10px;flex-shrink:0;">
     <span class="clock" id="clockEl">--:--</span>
@@ -1070,6 +1072,135 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 </div>
 
 <!-- ===== 段取り指示タブ ===== -->
+<!-- ===== 組立計画タブ ===== -->
+<div class="content" id="tab-asmplan" style="padding:0;overflow:hidden;height:calc(100vh - 35px);display:none;flex-direction:column;">
+
+<!-- ヘッダー -->
+<div style="background:#1a1a1a;color:#fff;padding:8px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;">
+  <span style="font-size:13px;font-weight:700;">🔧 組立計画</span>
+  <input type="date" id="ap-date" style="padding:3px 8px;border:1px solid #555;border-radius:5px;background:#333;color:#fff;font-size:12px;">
+  <button onclick="apAutoAssign()" style="padding:4px 12px;background:#2563eb;color:#fff;border:none;border-radius:5px;font-size:12px;cursor:pointer;font-family:inherit;">⚡ 自動割り振り</button>
+  <button onclick="apPushToProgress()" style="padding:4px 12px;background:#16a34a;color:#fff;border:none;border-radius:5px;font-size:12px;cursor:pointer;font-family:inherit;">📊 進捗管理に反映</button>
+  <button onclick="apOpenSettings()" style="padding:4px 10px;background:#444;color:#fff;border:none;border-radius:5px;font-size:12px;cursor:pointer;font-family:inherit;">⚙ 設定</button>
+  <span id="ap-status" style="font-size:11px;color:#aaa;margin-left:4px;"></span>
+</div>
+
+<!-- メインエリア: 左＝未割り当てプール、右＝担当者ボード -->
+<div style="display:flex;flex:1;overflow:hidden;gap:0;">
+
+  <!-- 左パネル: 未割り当てジョブ -->
+  <div style="width:300px;flex-shrink:0;background:#fafaf8;border-right:1px solid #e5e5e5;display:flex;flex-direction:column;overflow:hidden;">
+    <div style="padding:8px 10px;border-bottom:1px solid #e5e5e5;font-size:11px;font-weight:700;color:#555;display:flex;align-items:center;justify-content:space-between;">
+      <span>未割り当て作業</span>
+      <span id="ap-pool-count" style="background:#e5e5e5;padding:1px 7px;border-radius:10px;font-size:10px;">0件</span>
+    </div>
+    <div style="padding:6px 8px;border-bottom:1px solid #f0f0f0;">
+      <input id="ap-pool-filter" type="text" placeholder="品番・品名で絞り込み" oninput="apRenderPool()"
+        style="width:100%;padding:4px 8px;border:1px solid #ddd;border-radius:5px;font-size:11px;box-sizing:border-box;">
+    </div>
+    <div id="ap-pool" style="flex:1;overflow-y:auto;padding:4px;"></div>
+  </div>
+
+  <!-- 右パネル: 担当者別スケジュール -->
+  <div style="flex:1;overflow-y:auto;padding:10px 12px;background:#f5f5f3;">
+    <div id="ap-board" style="display:flex;flex-direction:column;gap:10px;"></div>
+  </div>
+</div>
+
+<!-- 設定モーダル -->
+<div id="ap-settings-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:2000;align-items:flex-start;justify-content:center;padding-top:40px;overflow-y:auto;">
+  <div style="background:#fff;border-radius:12px;width:680px;max-width:95vw;padding:0;overflow:hidden;">
+    <div style="background:#1a1a1a;color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-size:14px;font-weight:700;">⚙ 組立計画 設定</span>
+      <button onclick="apCloseSettings()" style="background:none;border:none;color:#fff;font-size:18px;cursor:pointer;">×</button>
+    </div>
+    <div style="padding:14px 16px;max-height:80vh;overflow-y:auto;">
+
+      <!-- タブ -->
+      <div style="display:flex;gap:0;border-bottom:2px solid #e5e5e5;margin-bottom:14px;">
+        <button class="ap-stab active" onclick="apSwitchSettingsTab('assign')" id="ap-stab-assign" style="padding:6px 14px;border:none;background:none;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid #1a1a1a;margin-bottom:-2px;font-family:inherit;">品番割り当て</button>
+        <button class="ap-stab" onclick="apSwitchSettingsTab('optional')" id="ap-stab-optional" style="padding:6px 14px;border:none;background:none;font-size:12px;color:#888;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;">定型作業</button>
+        <button class="ap-stab" onclick="apSwitchSettingsTab('criteria')" id="ap-stab-criteria" style="padding:6px 14px;border:none;background:none;font-size:12px;color:#888;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;">判定基準</button>
+      </div>
+
+      <!-- 品番割り当てパネル -->
+      <div id="ap-spanel-assign">
+        <div style="font-size:11px;color:#666;margin-bottom:8px;">品番ごとに優先する担当者を登録します。自動割り振り時に優先して割り当てます。</div>
+        <div style="display:flex;gap:6px;margin-bottom:8px;">
+          <input id="ap-assign-search" type="text" placeholder="品番で検索" oninput="apFilterAssignTable()"
+            style="flex:1;padding:5px 8px;border:1px solid #ddd;border-radius:5px;font-size:12px;">
+        </div>
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:12px;" id="ap-assign-table">
+            <thead>
+              <tr style="background:#f5f5f3;">
+                <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">品番</th>
+                <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #ddd;">品名</th>
+                <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">工程</th>
+                <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">担当者</th>
+                <th style="padding:6px 8px;text-align:center;border-bottom:1px solid #ddd;white-space:nowrap;">優先</th>
+              </tr>
+            </thead>
+            <tbody id="ap-assign-tbody"></tbody>
+          </table>
+        </div>
+        <div style="margin-top:10px;text-align:right;">
+          <button onclick="apSaveAssignments()" style="padding:6px 16px;background:#1a1a1a;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;">保存</button>
+        </div>
+      </div>
+
+      <!-- 定型作業パネル -->
+      <div id="ap-spanel-optional" style="display:none;">
+        <div style="font-size:11px;color:#666;margin-bottom:8px;">毎日の定型作業（検査・食堂準備など）を登録します。</div>
+        <div id="ap-optional-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;"></div>
+        <button onclick="apAddOptionalTask()" style="padding:5px 12px;background:#f0f0f0;border:1px solid #ddd;border-radius:5px;font-size:12px;cursor:pointer;font-family:inherit;">+ 定型作業を追加</button>
+        <div style="margin-top:10px;text-align:right;">
+          <button onclick="apSaveOptionalTasks()" style="padding:6px 16px;background:#1a1a1a;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;">保存</button>
+        </div>
+      </div>
+
+      <!-- 判定基準パネル -->
+      <div id="ap-spanel-criteria" style="display:none;">
+        <div style="font-size:11px;color:#666;margin-bottom:10px;">スケジューリングの優先度・判定基準を設定します。</div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <div>
+            <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">優先品番（上位に配置）</label>
+            <div id="ap-priority-parts-list" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;min-height:28px;padding:4px;border:1px solid #e5e5e5;border-radius:5px;background:#fafaf8;"></div>
+            <div style="display:flex;gap:6px;">
+              <input id="ap-priority-part-input" type="text" placeholder="品番を入力" style="flex:1;padding:4px 8px;border:1px solid #ddd;border-radius:5px;font-size:12px;">
+              <button onclick="apAddPriorityPart()" style="padding:4px 10px;background:#f0f0f0;border:1px solid #ddd;border-radius:5px;font-size:12px;cursor:pointer;font-family:inherit;">追加</button>
+            </div>
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">判定指標</label>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              <label style="display:flex;align-items:center;gap:8px;font-size:12px;">
+                <input type="checkbox" id="ap-crit-overdue" style="width:14px;height:14px;"> 納期超過を最優先にする
+              </label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:12px;">
+                <input type="checkbox" id="ap-crit-balance" checked style="width:14px;height:14px;"> 担当者間で工数を均等化する
+              </label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:12px;">
+                <input type="checkbox" id="ap-crit-preferred" checked style="width:14px;height:14px;"> 優先担当者設定を尊重する
+              </label>
+            </div>
+          </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">1日の実稼働時間上限（分）</label>
+            <input id="ap-crit-maxmin" type="number" value="470" min="60" max="600"
+              style="width:100px;padding:4px 8px;border:1px solid #ddd;border-radius:5px;font-size:12px;">
+            <span style="font-size:11px;color:#888;margin-left:6px;">（標準: 470分 = 8:10〜17:00 休憩除く）</span>
+          </div>
+        </div>
+        <div style="margin-top:14px;text-align:right;">
+          <button onclick="apSaveCriteria()" style="padding:6px 16px;background:#1a1a1a;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;">保存</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
 <div class="content" id="tab-dantori">
   <div class="dt-controls">
     <div style="font-size:12px;color:#888;white-space:nowrap;">本日の段取り計画</div>
@@ -2485,9 +2616,10 @@ function switchTab(name){
   document.querySelectorAll('.content').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
-  const tabs = ['factory','progress','quality','dantori','search'];
+  const tabs = ['factory','progress','quality','dantori','asmplan','search'];
   document.querySelectorAll('.tab')[tabs.indexOf(name)].classList.add('active');
-  if(name==='quality')   qcOnTabActivated();
+  if(name==='quality')  qcOnTabActivated();
+  if(name==='asmplan')  apInit();
   // 進捗管理はネイティブ実装
 }
 
@@ -6694,6 +6826,9 @@ var QC_COL_KEYWORDS = {
   shiji:   ['加工指示数','指示数','生産数','shiji','数量','予定数','計画数'],
   kosei:   ['工程','kosei','工程名','作業'],
   納期:    ['作業票納期','工程納期','納期','nouki','納入日','納品日'],
+  bumon:   ['部門','department','部署'],
+  kakoM:   ['加工(M)','加工M','加工時間(M)','加工時間'],
+  kadoH:   ['稼働時間(H)','稼働時間H','稼働時間','kadoh'],
 };
 
 function qcDetectCols(headers){
@@ -6735,7 +6870,7 @@ function qcProcessSheetData(data){
     var hinban = colMap.hinban !== undefined ? qcCellStr(row[colMap.hinban]) : '';
     if(!hinban) continue;  // 品番が空の行はスキップ
     var obj = { hinban: hinban };
-    ['hinmei','seizoNo','junjo','shiji','kosei','納期'].forEach(function(k){
+    ['hinmei','seizoNo','junjo','shiji','kosei','納期','bumon','kakoM','kadoH'].forEach(function(k){
       obj[k] = colMap[k] !== undefined ? qcCellStr(row[colMap[k]]) : '';
     });
     rows.push(obj);
@@ -10469,6 +10604,493 @@ function tick(){
   document.getElementById('dstr').textContent=`${n.getFullYear()}年${n.getMonth()+1}月${n.getDate()}日（${days[n.getDay()]}）`;
 }
 tick();setInterval(tick,1000);setInterval(()=>{renderAlts();renderBoard();},60000);setInterval(updateTroubleColors,30000);
+
+// ============================================================
+// 組立計画タブ (asmplan)
+// ============================================================
+const AP_WORKERS = ['ロボットライン','鈴木','大塚','野口','坂田','近藤'];
+const AP_WS = 8*60+10;   // 490 始業 8:10
+const AP_WE = 17*60;     // 1020 終業 17:00
+const AP_BREAKS = [[600,610],[730,770],[890,900]]; // 休憩
+const AP_WORK_MIN = (AP_WE - AP_WS) - AP_BREAKS.reduce((s,[a,b])=>s+(b-a),0); // 470分
+
+// Firebase パス
+const AP_FB_PATH = 'assembly';
+
+// 状態
+let apAssignMap = {};       // { hinban: { worker, priority } }
+let apOptionalTasks = [];   // [ { id, name, worker, durationMin, enabled, priority } ]
+let apCriteria = { overdue:false, balance:true, preferred:true, maxMin:470, priorityParts:[] };
+let apPlan = {};            // { worker: [ jobObj, ... ] }
+let apLoaded = false;
+
+// 実稼働分計算
+function apWorkIn(s, e) {
+  let total = 0;
+  for (let t = Math.max(AP_WS, s); t < Math.min(AP_WE, e); t++) {
+    if (!AP_BREAKS.some(([a,b]) => t >= a && t < b)) total++;
+  }
+  return total;
+}
+// 実時間 → 実稼働分を加算した終了時刻
+function apAdv(start, mins) {
+  let t = start, r = Math.round(mins);
+  while (r > 0 && t < AP_WE) {
+    if (!AP_BREAKS.some(([a,b]) => t >= a && t < b)) r--;
+    t++;
+  }
+  return t;
+}
+// 休憩ならスキップ
+function apNW(t) {
+  while (t < AP_WE && AP_BREAKS.some(([a,b]) => t >= a && t < b)) t++;
+  return t;
+}
+function apHHMM(v) { const h=Math.floor(v/60),m=v%60; return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; }
+
+// タブ切替時初期化
+function apInit() {
+  if (!apLoaded) {
+    apLoaded = true;
+    // 今日の日付をセット
+    const today = new Date();
+    document.getElementById('ap-date').value = today.toISOString().slice(0,10);
+    // Firebaseからデータ読み込み
+    apLoadFromFirebase().then(() => {
+      apBuildAssignTable();
+      apRenderOptionalList();
+      apRenderCriteria();
+      apRenderPool();
+      apRenderBoard();
+    });
+  } else {
+    apRenderPool();
+    apRenderBoard();
+  }
+}
+
+async function apLoadFromFirebase() {
+  const fbUrl = (config.firebaseUrl || '').replace(/\/+$/,'');
+  if (!fbUrl) return;
+  try {
+    const r = await fetch(`${fbUrl}/${AP_FB_PATH}.json`);
+    if (!r.ok) return;
+    const d = await r.json();
+    if (!d) return;
+    if (d.workerAssign) apAssignMap = d.workerAssign;
+    if (d.optionalTasks) apOptionalTasks = Object.values(d.optionalTasks);
+    if (d.criteria) apCriteria = { ...apCriteria, ...d.criteria };
+  } catch(e) { console.warn('AP Firebase load:', e); }
+}
+
+async function apSaveToFirebase(path, data) {
+  const fbUrl = (config.firebaseUrl || '').replace(/\/+$/,'');
+  if (!fbUrl) return;
+  await fetch(`${fbUrl}/${AP_FB_PATH}/${path}.json`,
+    { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) });
+}
+
+// ── 作業予定データ取得 ──────────────────────────────────────
+function apGetJobs() {
+  if (!QC_SAKUYO || !QC_SAKUYO.length) return [];
+  // 完了済み製造番号セット
+  const doneSet = new Set();
+  (QC_ALL_RECORDS || []).forEach(rec => {
+    if (rec[7] === '完納' || rec[7] === '完了') doneSet.add((rec[13]||'')+'_'+(rec[14]||''));
+  });
+  return QC_SAKUYO.filter(s => {
+    const key = s.seizoNo + '_' + s.junjo;
+    if (doneSet.has(key)) return false;
+    const b = String(s.bumon||'');
+    const k = String(s.kosei||'');
+    // 部門フィールドがある場合はそちらで判定
+    if (b) {
+      if (b.includes('組立')) return true;
+      if (b.includes('プレス') && k.includes('プレスD')) return true;
+      return false;
+    }
+    // 部門フィールドがない旧データは工程名で判定
+    return k.includes('溶接') || k.includes('フート') || k.includes('検査') || k.includes('プレスD');
+  });
+}
+
+// ジョブの稼働分を計算
+function apJobMins(s) {
+  // 稼働時間H → 分（優先）
+  if (s.kadoH && parseFloat(s.kadoH) > 0) return Math.round(parseFloat(s.kadoH) * 60);
+  // 指示数 × 加工(M)
+  if (s.kakoM && parseFloat(s.kakoM) > 0 && s.shiji && parseFloat(s.shiji) > 0)
+    return Math.round(parseFloat(s.shiji) * parseFloat(s.kakoM));
+  return 60; // デフォルト60分
+}
+
+// ジョブの推奨担当者
+function apJobWorker(s) {
+  const a = apAssignMap[s.hinban];
+  if (a && a.worker) return a.worker;
+  // 工程デフォルト
+  const k = String(s.kosei||'');
+  if (k.includes('プレスD')) return 'ロボットライン';
+  return null;
+}
+
+// ── 未割り当てプール描画 ──────────────────────────────────────
+function apRenderPool() {
+  const jobs = apGetJobs();
+  const q = (document.getElementById('ap-pool-filter')?.value||'').toLowerCase();
+  // 既に計画済みのキー
+  const plannedKeys = new Set(Object.values(apPlan).flat().map(j=>j._key));
+  const filtered = jobs.filter(s => {
+    if (plannedKeys.has(s.seizoNo+'_'+s.junjo)) return false;
+    if (q) return s.hinban.toLowerCase().includes(q)||s.hinmei.toLowerCase().includes(q);
+    return true;
+  });
+  document.getElementById('ap-pool-count').textContent = filtered.length+'件';
+  const el = document.getElementById('ap-pool');
+  if (!filtered.length) { el.innerHTML='<div style="padding:16px;text-align:center;color:#aaa;font-size:12px;">未割り当てなし</div>'; return; }
+  // 優先ソート
+  const today = document.getElementById('ap-date')?.value || new Date().toISOString().slice(0,10);
+  filtered.sort((a,b) => {
+    const pa = apAssignMap[a.hinban]?.priority ? -1 : 0;
+    const pb = apAssignMap[b.hinban]?.priority ? -1 : 0;
+    if (pa !== pb) return pa - pb;
+    const da = a['納期']||'99/99', db = b['納期']||'99/99';
+    return da.localeCompare(db);
+  });
+  el.innerHTML = filtered.map(s => {
+    const mins = apJobMins(s);
+    const worker = apJobWorker(s);
+    const isPri = apAssignMap[s.hinban]?.priority;
+    const isOver = apIsOverdue(s['納期'], today);
+    return `<div class="ap-pool-item" style="background:#fff;border:1px solid #e5e5e5;border-radius:6px;padding:7px 9px;margin-bottom:4px;cursor:pointer;${isPri?'border-left:3px solid #2563eb;':''}${isOver?'border-left:3px solid #c0392b;':''}"
+      onclick="apAssignJob('${s.seizoNo}','${s.junjo}')">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:4px;">
+        <span style="font-size:12px;font-weight:700;color:${isOver?'#c0392b':'#1a1a1a'};flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${isPri?'★':''} ${s.hinban}</span>
+        <span style="font-size:10px;color:#888;white-space:nowrap;">${Math.round(mins/60*10)/10}H</span>
+      </div>
+      <div style="font-size:10px;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.hinmei}</div>
+      <div style="display:flex;gap:4px;margin-top:3px;flex-wrap:wrap;">
+        <span style="font-size:9px;padding:1px 5px;background:#f0f0f0;border-radius:3px;">${s.kosei}</span>
+        <span style="font-size:9px;padding:1px 5px;background:#e8f0fe;border-radius:3px;color:#1d4ed8;">${s['納期']||'納期不明'}</span>
+        ${worker?`<span style="font-size:9px;padding:1px 5px;background:#f0fdf4;border-radius:3px;color:#15803d;">${worker}</span>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function apIsOverdue(nouki, today) {
+  if (!nouki || !today) return false;
+  const m = nouki.match(/(\d{1,2})\/(\d{1,2})/);
+  if (!m) return false;
+  const year = new Date(today).getFullYear();
+  const d = new Date(`${year}/${m[1]}/${m[2]}`);
+  return d < new Date(today);
+}
+
+// ── ボード描画 ──────────────────────────────────────────────
+function apRenderBoard() {
+  const el = document.getElementById('ap-board');
+  const today = document.getElementById('ap-date')?.value || '';
+  let html = '';
+  AP_WORKERS.forEach(worker => {
+    const jobs = apPlan[worker] || [];
+    const totalMins = jobs.reduce((s,j)=>s+j.durationMin,0);
+    const pct = Math.round(totalMins / apCriteria.maxMin * 100);
+    const pctColor = pct > 100 ? '#c0392b' : pct > 85 ? '#d68910' : '#27ae60';
+    html += `<div style="background:#fff;border-radius:8px;border:1px solid #ddd;overflow:hidden;">
+      <div style="background:#1a1a1a;color:#fff;padding:6px 12px;display:flex;align-items:center;gap:8px;">
+        <span style="font-size:13px;font-weight:700;">${worker}</span>
+        <span style="font-size:11px;color:#aaa;">${jobs.length}件</span>
+        <span style="margin-left:auto;font-size:11px;font-weight:700;color:${pctColor};">${totalMins}分 / ${apCriteria.maxMin}分 (${pct}%)</span>
+        <button onclick="apAddJobToWorker('${worker}')" style="padding:2px 8px;background:#333;color:#fff;border:none;border-radius:4px;font-size:10px;cursor:pointer;font-family:inherit;">+ 追加</button>
+      </div>`;
+    // プログレスバー
+    html += `<div style="height:4px;background:#f0f0f0;"><div style="height:100%;width:${Math.min(pct,100)}%;background:${pctColor};transition:width 0.3s;"></div></div>`;
+    // タイムライン
+    html += `<div style="padding:6px 10px;">`;
+    if (!jobs.length) {
+      html += `<div style="font-size:11px;color:#bbb;padding:8px 0;">作業なし</div>`;
+    } else {
+      html += `<table style="width:100%;border-collapse:collapse;font-size:11px;">`;
+      jobs.forEach((j,i) => {
+        const isOver = apIsOverdue(j.nouki, today);
+        const rowBg = j.isOptional ? '#fffbf0' : (isOver ? '#fff5f5' : '#fff');
+        html += `<tr style="border-bottom:1px solid #f5f5f5;background:${rowBg};">
+          <td style="padding:5px 6px;width:90px;white-space:nowrap;color:#555;">${j.startTime} 〜 ${j.endTime}</td>
+          <td style="padding:5px 6px;font-weight:700;color:${isOver?'#c0392b':'#1a1a1a'};max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${j.isOptional?'🔲':''} ${j.hinban}</td>
+          <td style="padding:5px 6px;color:#888;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${j.hinmei}</td>
+          <td style="padding:5px 6px;white-space:nowrap;color:#555;">${j.shiji?j.shiji+'個':''}  ${Math.round(j.durationMin)}分</td>
+          <td style="padding:5px 6px;">
+            <button onclick="apRemoveJob('${worker}',${i})" style="padding:1px 6px;background:#fee2e2;color:#c0392b;border:none;border-radius:3px;font-size:10px;cursor:pointer;font-family:inherit;">削除</button>
+          </td>
+        </tr>`;
+      });
+      html += `</table>`;
+    }
+    html += `</div></div>`;
+  });
+  el.innerHTML = html;
+}
+
+// ── 自動割り振り ──────────────────────────────────────────
+function apAutoAssign() {
+  const jobs = apGetJobs();
+  if (!jobs.length) { apSetStatus('作業予定データが読み込まれていません（品質チェック→予定更新で読み込んでください）', '#c0392b'); return; }
+  const today = document.getElementById('ap-date')?.value || new Date().toISOString().slice(0,10);
+  const maxMin = apCriteria.maxMin || 470;
+
+  // ソート: 優先フラグ → 納期超過 → 納期 → 工順
+  const sorted = [...jobs].sort((a,b) => {
+    const pa = apAssignMap[a.hinban]?.priority?0:1;
+    const pb = apAssignMap[b.hinban]?.priority?0:1;
+    if(pa!==pb) return pa-pb;
+    const oa = apIsOverdue(a['納期'],today)?0:1;
+    const ob = apIsOverdue(b['納期'],today)?0:1;
+    if(oa!==ob) return oa-ob;
+    return (a['納期']||'').localeCompare(b['納期']||'');
+  });
+
+  // 担当者ごとの空き時間（分）
+  const workerMins = {};
+  const workerTime = {};  // 現在の終了時刻（絶対分）
+  AP_WORKERS.forEach(w => { workerMins[w] = 0; workerTime[w] = apNW(AP_WS); });
+
+  const plan = {};
+  AP_WORKERS.forEach(w => plan[w] = []);
+
+  // 定型作業を先に配置（enabled のもの）
+  apOptionalTasks.filter(t => t.enabled !== false).forEach(t => {
+    const w = t.worker || AP_WORKERS[1];
+    if (!plan[w]) return;
+    const dur = parseInt(t.durationMin)||30;
+    if (workerMins[w] + dur > maxMin) return;
+    const startT = apNW(workerTime[w]);
+    const endT = apAdv(startT, dur);
+    plan[w].push({ hinban: t.name, hinmei:'定型作業', shiji:'', durationMin:dur,
+      startTime:apHHMM(startT), endTime:apHHMM(endT), nouki:'', isOptional:true, _key:t.id||t.name });
+    workerTime[w] = endT; workerMins[w] += dur;
+  });
+
+  // 通常ジョブを割り振り
+  const placed = new Set();
+  sorted.forEach(s => {
+    const dur = apJobMins(s);
+    const preferredW = apJobWorker(s);
+
+    // 担当者候補を決める
+    let candidates = [];
+    if (preferredW && apCriteria.preferred !== false) {
+      candidates = [preferredW, ...AP_WORKERS.filter(w => w !== preferredW)];
+    } else if (apCriteria.balance !== false) {
+      candidates = [...AP_WORKERS].sort((a,b) => workerMins[a]-workerMins[b]);
+    } else {
+      candidates = [...AP_WORKERS];
+    }
+
+    for (const w of candidates) {
+      if (workerMins[w] + dur > maxMin) continue;
+      const startT = apNW(workerTime[w]);
+      if (startT >= AP_WE) continue;
+      const endT = apAdv(startT, dur);
+      plan[w].push({ hinban:s.hinban, hinmei:s.hinmei, shiji:s.shiji, durationMin:dur,
+        startTime:apHHMM(startT), endTime:apHHMM(endT), nouki:s['納期']||'',
+        seizoNo:s.seizoNo, junjo:s.junjo, _key:s.seizoNo+'_'+s.junjo });
+      workerTime[w] = endT; workerMins[w] += dur;
+      placed.add(s.seizoNo+'_'+s.junjo);
+      break;
+    }
+  });
+
+  apPlan = plan;
+  apRenderBoard();
+  apRenderPool();
+  const unplaced = jobs.length - placed.size;
+  apSetStatus(`割り振り完了 ${placed.size}件配置${unplaced?` / ${unplaced}件未配置（工数超過）`:''}`, '#15803d');
+}
+
+// ── 進捗管理に反映 ────────────────────────────────────────
+async function apPushToProgress() {
+  if (!Object.keys(apPlan).length) { apSetStatus('先に自動割り振りを実行してください', '#c0392b'); return; }
+  const fbUrl = (config.firebaseUrl||'').replace(/\/+$/,'');
+  if (!fbUrl) { apSetStatus('Firebase URLが設定されていません', '#c0392b'); return; }
+  try {
+    const updates = {};
+    AP_WORKERS.forEach(worker => {
+      const jobs = (apPlan[worker]||[]).map((j,i) => ({
+        seq: i+1, part: j.hinban, plan: parseInt(j.shiji)||0,
+        start: j.startTime, end: j.endTime,
+        noSetup: true, hito: 1, actual: 0,
+      }));
+      updates[`lines/${worker}/jobs`] = jobs;
+      updates[`lines/${worker}/plan`] = jobs.reduce((s,j)=>s+(j.plan||0),0);
+      if (!updates[`lines/${worker}/name`]) updates[`lines/${worker}/name`] = worker;
+    });
+    const sdk = window._fbSDK;
+    if (sdk) { await sdk.update(sdk.ref(sdk.db), updates); }
+    else {
+      await fetch(`${fbUrl}.json`, { method:'PATCH',
+        headers:{'Content-Type':'application/json'}, body:JSON.stringify(updates) });
+    }
+    apSetStatus('進捗管理に反映しました', '#15803d');
+  } catch(e) { apSetStatus('反映エラー: '+e.message, '#c0392b'); }
+}
+
+// ── ジョブ操作 ────────────────────────────────────────────
+function apAssignJob(seizoNo, junjo) {
+  const s = (QC_SAKUYO||[]).find(s=>s.seizoNo===seizoNo&&s.junjo===junjo);
+  if (!s) return;
+  const worker = apJobWorker(s) || AP_WORKERS[1];
+  const dur = apJobMins(s);
+  const wt = apNW(apPlan[worker]?.length ? apAdv(AP_WS, (apPlan[worker]||[]).reduce((s,j)=>s+j.durationMin,0)) : AP_WS);
+  const endT = apAdv(Math.max(wt, AP_WS), dur);
+  if (!apPlan[worker]) apPlan[worker] = [];
+  apPlan[worker].push({ hinban:s.hinban, hinmei:s.hinmei, shiji:s.shiji, durationMin:dur,
+    startTime:apHHMM(wt), endTime:apHHMM(endT), nouki:s['納期']||'',
+    seizoNo, junjo, _key:seizoNo+'_'+junjo });
+  apRenderBoard(); apRenderPool();
+}
+
+window.apRemoveJob = function(worker, idx) {
+  if (apPlan[worker]) { apPlan[worker].splice(idx,1); apRenderBoard(); apRenderPool(); }
+};
+
+window.apAddJobToWorker = function(worker) {
+  const hinban = prompt('品番を入力してください:');
+  if (!hinban) return;
+  const s = (QC_SAKUYO||[]).find(s=>s.hinban.trim()===hinban.trim());
+  if (s) { apAssignJob(s.seizoNo, s.junjo); }
+  else { alert('品番が見つかりません: '+hinban); }
+};
+
+// ── 設定モーダル ─────────────────────────────────────────
+window.apOpenSettings = function() {
+  apBuildAssignTable();
+  apRenderOptionalList();
+  apRenderCriteria();
+  document.getElementById('ap-settings-modal').style.display = 'flex';
+};
+window.apCloseSettings = function() { document.getElementById('ap-settings-modal').style.display = 'none'; };
+
+window.apSwitchSettingsTab = function(tab) {
+  ['assign','optional','criteria'].forEach(t => {
+    document.getElementById('ap-spanel-'+t).style.display = t===tab ? 'block' : 'none';
+    const btn = document.getElementById('ap-stab-'+t);
+    if (btn) { btn.style.borderBottomColor = t===tab?'#1a1a1a':'transparent'; btn.style.color = t===tab?'#1a1a1a':'#888'; }
+  });
+};
+
+function apBuildAssignTable() {
+  const jobs = apGetJobs();
+  const seen = new Map();
+  jobs.forEach(s => { if (!seen.has(s.hinban)) seen.set(s.hinban, s); });
+  const tbody = document.getElementById('ap-assign-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = [...seen.values()].map(s => {
+    const a = apAssignMap[s.hinban] || {};
+    const opts = ['（自動）',...AP_WORKERS].map(w=>`<option value="${w}" ${(a.worker||'')===(w==='（自動）'?'':w)?'selected':''}>${w}</option>`).join('');
+    return `<tr style="border-bottom:1px solid #f5f5f5;" data-hinban="${s.hinban}">
+      <td style="padding:5px 6px;white-space:nowrap;font-size:11px;">${s.hinban}</td>
+      <td style="padding:5px 6px;font-size:10px;color:#666;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.hinmei}</td>
+      <td style="padding:5px 6px;font-size:10px;white-space:nowrap;">${s.kosei}</td>
+      <td style="padding:5px 6px;">
+        <select onchange="apUpdateAssign('${s.hinban}','worker',this.value)" style="font-size:11px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;">${opts}</select>
+      </td>
+      <td style="padding:5px 6px;text-align:center;">
+        <input type="checkbox" ${a.priority?'checked':''} onchange="apUpdateAssign('${s.hinban}','priority',this.checked)" style="width:14px;height:14px;cursor:pointer;">
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+window.apFilterAssignTable = function() {
+  const q = (document.getElementById('ap-assign-search')?.value||'').toLowerCase();
+  document.querySelectorAll('#ap-assign-tbody tr').forEach(tr => {
+    tr.style.display = !q || tr.dataset.hinban.toLowerCase().includes(q) ? '' : 'none';
+  });
+};
+
+window.apUpdateAssign = function(hinban, field, value) {
+  if (!apAssignMap[hinban]) apAssignMap[hinban] = {};
+  apAssignMap[hinban][field] = field==='worker' ? (value==='（自動）'?'':value) : value;
+};
+
+window.apSaveAssignments = async function() {
+  await apSaveToFirebase('workerAssign', apAssignMap);
+  apSetStatus('担当者割り当てを保存しました', '#15803d');
+  apCloseSettings();
+};
+
+// 定型作業
+function apRenderOptionalList() {
+  const el = document.getElementById('ap-optional-list');
+  if (!el) return;
+  if (!apOptionalTasks.length) { el.innerHTML='<div style="font-size:11px;color:#aaa;">定型作業なし</div>'; return; }
+  const opts = AP_WORKERS.map(w=>`<option value="${w}">${w}</option>`).join('');
+  el.innerHTML = apOptionalTasks.map((t,i) => `
+    <div style="background:#fafaf8;border:1px solid #e5e5e5;border-radius:6px;padding:8px 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <input type="checkbox" ${t.enabled!==false?'checked':''} onchange="apOptionalTasks[${i}].enabled=this.checked" style="width:14px;height:14px;">
+      <input type="text" value="${t.name}" oninput="apOptionalTasks[${i}].name=this.value" placeholder="作業名" style="flex:1;min-width:80px;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:12px;">
+      <select onchange="apOptionalTasks[${i}].worker=this.value" style="padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:12px;font-family:inherit;">
+        ${AP_WORKERS.map(w=>`<option value="${w}" ${t.worker===w?'selected':''}>${w}</option>`).join('')}
+      </select>
+      <input type="number" value="${t.durationMin||30}" min="1" max="480" oninput="apOptionalTasks[${i}].durationMin=parseInt(this.value)||30"
+        style="width:60px;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:12px;" placeholder="分">
+      <span style="font-size:11px;color:#888;">分</span>
+      <button onclick="apOptionalTasks.splice(${i},1);apRenderOptionalList();" style="padding:2px 7px;background:#fee2e2;color:#c0392b;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;">削除</button>
+    </div>`).join('');
+}
+
+window.apAddOptionalTask = function() {
+  apOptionalTasks.push({ id: 'opt_'+Date.now(), name:'', worker:AP_WORKERS[1], durationMin:30, enabled:true });
+  apRenderOptionalList();
+};
+
+window.apSaveOptionalTasks = async function() {
+  const obj = {};
+  apOptionalTasks.forEach(t => { obj[t.id||('opt_'+Date.now())] = t; });
+  await apSaveToFirebase('optionalTasks', obj);
+  apSetStatus('定型作業を保存しました', '#15803d');
+  apCloseSettings();
+};
+
+// 判定基準
+function apRenderCriteria() {
+  const el = id => document.getElementById(id);
+  if (el('ap-crit-overdue'))   el('ap-crit-overdue').checked   = apCriteria.overdue !== false;
+  if (el('ap-crit-balance'))   el('ap-crit-balance').checked   = apCriteria.balance !== false;
+  if (el('ap-crit-preferred')) el('ap-crit-preferred').checked = apCriteria.preferred !== false;
+  if (el('ap-crit-maxmin'))    el('ap-crit-maxmin').value      = apCriteria.maxMin || 470;
+  // 優先品番タグ表示
+  const pp = document.getElementById('ap-priority-parts-list');
+  if (pp) pp.innerHTML = (apCriteria.priorityParts||[]).map((p,i)=>
+    `<span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:10px;font-size:11px;display:flex;align-items:center;gap:4px;">
+      ${p} <button onclick="apCriteria.priorityParts.splice(${i},1);apRenderCriteria();" style="background:none;border:none;color:#1d4ed8;cursor:pointer;font-size:11px;padding:0;">×</button>
+    </span>`).join('');
+}
+
+window.apAddPriorityPart = function() {
+  const v = document.getElementById('ap-priority-part-input')?.value?.trim();
+  if (!v) return;
+  if (!apCriteria.priorityParts) apCriteria.priorityParts = [];
+  if (!apCriteria.priorityParts.includes(v)) apCriteria.priorityParts.push(v);
+  document.getElementById('ap-priority-part-input').value = '';
+  apRenderCriteria();
+};
+
+window.apSaveCriteria = async function() {
+  apCriteria.overdue   = document.getElementById('ap-crit-overdue')?.checked;
+  apCriteria.balance   = document.getElementById('ap-crit-balance')?.checked;
+  apCriteria.preferred = document.getElementById('ap-crit-preferred')?.checked;
+  apCriteria.maxMin    = parseInt(document.getElementById('ap-crit-maxmin')?.value)||470;
+  await apSaveToFirebase('criteria', apCriteria);
+  apSetStatus('判定基準を保存しました', '#15803d');
+  apCloseSettings();
+};
+
+function apSetStatus(msg, color) {
+  const el = document.getElementById('ap-status');
+  if (el) { el.textContent = msg; el.style.color = color||'#aaa'; }
+}
 </script>
 </body>
 </html>

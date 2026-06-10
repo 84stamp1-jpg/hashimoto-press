@@ -681,8 +681,7 @@ input.nm-img-input{display:none}
     <button class="btn btn-secondary btn-sm" onclick="nmShiftWeek(-1)">◀ 前週</button>
     <button class="btn btn-secondary btn-sm" onclick="nmGoToday()">今日</button>
     <button class="btn btn-secondary btn-sm" onclick="nmShiftWeek(1)">次週 ▶</button>
-    <button class="btn btn-secondary btn-sm" id="nmBtnSortDl" onclick="nmSortByDeadline()" title="各金型の最も近い期限が早い順に並べ替えます">📅 期限順</button>
-    <button class="btn btn-secondary btn-sm" id="nmBtnCompleted" onclick="nmToggleAllCompleted()">👁 完了を非表示</button>
+<button class="btn btn-secondary btn-sm" id="nmBtnCompleted" onclick="nmToggleAllCompleted()">👁 完了を非表示</button>
     <button class="btn btn-primary btn-sm" onclick="window.print()">🖨 印刷</button>
     <span class="nm-status" id="nmStatus">—</span>
     <span id="nmSyncStatus" style="font-size:10px;margin-left:8px;font-weight:600"></span>
@@ -4105,10 +4104,18 @@ function nmBuildTbody(){
     tb.innerHTML='<tr><td colspan="40" style="text-align:center;padding:20px;color:var(--text3)">「キントーン取得」または「金型追加」ボタンで金型を登録してください</td></tr>';
     nmSetStatus('データなし');return;
   }
+  // 期限の近い順に並べてから描画（期限なしは末尾）
+  const sorted=[...nmMolds].sort((a,b)=>{
+    const da=nmGetEarliestDeadline(a),db=nmGetEarliestDeadline(b);
+    if(!da&&!db)return 0;
+    if(!da)return 1;
+    if(!db)return -1;
+    return da.localeCompare(db);
+  });
   const bgA='#EEF4FB', bgB='#E8F4EE';
-  const last=nmMolds.length-1;
+  const last=sorted.length-1;
 
-  nmMolds.forEach((mold,mi)=>{
+  sorted.forEach((mold,mi)=>{
     if(!mold.tasks||!mold.tasks.length)mold.tasks=nmMakeTasks(mold.estProc||'');
     const showTasks=mold.tasks.filter(t=>
       (nmShowCompleted && mold.showCompleted!==false) ? true : !t.doneDate
