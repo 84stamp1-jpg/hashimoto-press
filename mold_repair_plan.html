@@ -656,11 +656,12 @@ input.nm-img-input{display:none}
     </div>
 
     <div class="load-panel" id="loadPanel">
-      <div class="load-panel-hdr" style="cursor:default;margin-bottom:6px">
+      <div class="load-panel-hdr" onclick="toggleLoadPanel()" style="margin-bottom:0">
         <span class="load-panel-title">📊 週次負荷（残工数）</span>
         <span style="font-size:9px;color:var(--text3);margin-left:8px">1人工=8H基準 ／ 未完了依頼のdeadline集計</span>
+        <span id="loadPanelToggle" style="font-size:10px;color:var(--text2);margin-left:auto">▼</span>
       </div>
-      <div id="loadWeeks" style="display:flex;gap:10px"></div>
+      <div id="loadWeeks" style="display:none;gap:10px;margin-top:6px"></div>
     </div>
   </div>
 </div>
@@ -1277,6 +1278,16 @@ function setOvertime(a,h){
   overtimeH[a]=Math.max(0,Math.min(5,h));
   localStorage.setItem('repair_ot_v1',JSON.stringify(overtimeH));
   autoArrange(curDate);saveTasksToFirebase();renderGantt();
+}
+
+let loadPanelOpen=false;
+function toggleLoadPanel(){
+  loadPanelOpen=!loadPanelOpen;
+  const el=document.getElementById('loadWeeks');
+  if(el){el.style.display=loadPanelOpen?'flex':'none';}
+  const tog=document.getElementById('loadPanelToggle');
+  if(tog)tog.textContent=loadPanelOpen?'▲':'▼';
+  if(loadPanelOpen) renderLoadSummary();
 }
 
 // ===== 改修区分マスタ =====
