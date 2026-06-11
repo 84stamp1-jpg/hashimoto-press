@@ -11307,36 +11307,54 @@ window.apRenderLoadChart = function() {
     if (i > numDays * 2 + 14) break; // 無限ループ防止
   }
 
-  // 全ジョブを取得して担当者・納期でグルーピング
+  // 全ジョブを取得して負荷平準化しながらグルーピング
   const jobs = apGetJobs();
   // worker → dateStr → { mins, count, items[] }
   const load = {};
   AP_WORKERS.forEach(w => { load[w] = {}; });
 
+  // 表示日付の文字列セット（土日除外済み）
+  const dateStrs = dates.map(d => d.toISOString().slice(0,10));
+  const maxMin = apCriteria.maxMin || 470;
+
+  // ジョブを納期昇順でソートして平準化配置
+  const jobList = [];
   jobs.forEach(s => {
     const candidates = apJobWorkerCandidates(s);
     const worker = candidates[0] || apJobWorker(s);
     if (!worker || !AP_WORKERS.includes(worker)) return;
     const mins = apJobMins(s);
     if (mins === null) return;
-
-    // 納期を日付に変換
     const nouki = s['納期'] || '';
     const m = nouki.match(/(\d{1,2})\/(\d{1,2})/);
     if (!m) return;
-    const dueDate = new Date(`${year}/${m[1]}/${m[2]}`);
-    // 基準日より前の納期は基準日に割り当て
-    if (dueDate < baseDate) dueDate.setTime(baseDate.getTime());
-    // 土日は翌月曜に繰り上げ
-    while (dueDate.getDay() === 0 || dueDate.getDay() === 6) {
-      dueDate.setDate(dueDate.getDate() + 1);
-    }
-    const dueDateStr = dueDate.toISOString().slice(0,10);
+    const dd = new Date(`${year}/${m[1]}/${m[2]}`);
+    if (dd < baseDate) dd.setTime(baseDate.getTime());
+    while (dd.getDay() === 0 || dd.getDay() === 6) dd.setDate(dd.getDate() + 1);
+    jobList.push({ worker, mins, hinban: s.hinban, shiji: s.shiji, dueDate: dd, dueDateStr: dd.toISOString().slice(0,10) });
+  });
+  jobList.sort((a, b) => a.dueDate - b.dueDate);
 
-    if (!load[worker][dueDateStr]) load[worker][dueDateStr] = { mins: 0, count: 0, items: [] };
-    load[worker][dueDateStr].mins += mins;
-    load[worker][dueDateStr].count += 1;
-    load[worker][dueDateStr].items.push({ hinban: s.hinban, shiji: s.shiji });
+  // 各ジョブを「納期までの最も空いている日」に配置（平準化）
+  jobList.forEach(job => {
+    const { worker, mins, hinban, shiji, dueDate, dueDateStr } = job;
+    // 表示範囲内で納期以前の日付を候補にする
+    const candidates = dateStrs.filter(ds => ds <= dueDateStr && ds >= baseStr);
+    // 今日（基準日）の実績は別途表示するのでスキップ
+    const futureCandidates = candidates.filter(ds => ds !== baseStr);
+    let targetDs = dueDateStr; // デフォルトは納期日
+    if (futureCandidates.length > 0) {
+      // 最も負荷が少ない日に配置
+      let minLoad = Infinity;
+      for (const ds of futureCandidates) {
+        const cur = (load[worker][ds]?.mins || 0);
+        if (cur < minLoad) { minLoad = cur; targetDs = ds; }
+      }
+    }
+    if (!load[worker][targetDs]) load[worker][targetDs] = { mins: 0, count: 0, items: [] };
+    load[worker][targetDs].mins += mins;
+    load[worker][targetDs].count += 1;
+    load[worker][targetDs].items.push({ hinban, shiji });
   });
 
   // 今日の実績（apPlan）も別途表示
