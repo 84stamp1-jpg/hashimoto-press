@@ -10626,7 +10626,7 @@ tick();setInterval(tick,1000);setInterval(()=>{renderAlts();renderBoard();},6000
 // ============================================================
 // 組立計画タブ (asmplan)
 // ============================================================
-const AP_WORKERS = ['ロボットライン','鈴木','大塚','野口','坂田','近藤'];
+const AP_WORKERS = ['永丘','鈴木','大塚','野口','坂田','近藤'];
 const AP_WS = 8*60+10;   // 490 始業 8:10
 const AP_WE = 17*60;     // 1020 終業 17:00
 const AP_BREAKS = [[600,610],[730,770],[890,900]]; // 休憩
@@ -10962,8 +10962,15 @@ async function apPushToProgress() {
 }
 
 // ── ジョブ操作 ────────────────────────────────────────────
+function apGetSakuyo() {
+  let d = window.QC_SAKUYO;
+  if (!d || !d.length) {
+    try { const c = localStorage.getItem('qcSakuyoCache'); if (c) d = JSON.parse(c); } catch(e) {}
+  }
+  return d || [];
+}
 function apAssignJob(seizoNo, junjo) {
-  const s = (window.QC_SAKUYO||[]).find(s=>s.seizoNo===seizoNo&&s.junjo===junjo);
+  const s = apGetSakuyo().find(s=>s.seizoNo===seizoNo&&s.junjo===junjo);
   if (!s) return;
   const worker = apJobWorker(s) || AP_WORKERS[1];
   const dur = apJobMins(s);
@@ -10983,7 +10990,7 @@ window.apRemoveJob = function(worker, idx) {
 window.apAddJobToWorker = function(worker) {
   const hinban = prompt('品番を入力してください:');
   if (!hinban) return;
-  const s = (window.QC_SAKUYO||[]).find(s=>s.hinban.trim()===hinban.trim());
+  const s = apGetSakuyo().find(s=>s.hinban.trim()===hinban.trim());
   if (s) { apAssignJob(s.seizoNo, s.junjo); }
   else { alert('品番が見つかりません: '+hinban); }
 };
