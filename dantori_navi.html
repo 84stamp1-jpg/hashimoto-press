@@ -11165,9 +11165,13 @@ window.apAddJobToWorker = function(worker) {
 
 // ── 設定モーダル ─────────────────────────────────────────
 window.apOpenSettings = function() {
-  apBuildAssignTable();
-  apRenderOptionalList();
-  apRenderCriteria();
+  // 開くたびに最新データをFirebaseから取得
+  apLoadFromFirebase().then(() => {
+    apBuildAssignTable();
+    apRenderOptionalList();
+    apRenderCriteria();
+    apRenderKoteiTable();
+  });
   document.getElementById('ap-settings-modal').style.display = 'flex';
 };
 window.apCloseSettings = function() { document.getElementById('ap-settings-modal').style.display = 'none'; };
@@ -11240,9 +11244,16 @@ window.apUpdateAssign = function(hinban, field, value) {
   apAssignMap[hinban][field] = field==='worker' ? (value==='（自動）'?'':value) : value;
 };
 
-window.apUpdateAssign = function(hinban, field, val) {
-  if (!apAssignMap[hinban]) apAssignMap[hinban] = {};
-  apAssignMap[hinban][field] = val;
+let _apSaveTimer = null;
+window.apUpdateAssign = function(key, field, val) {
+  if (!apAssignMap[key]) apAssignMap[key] = {};
+  apAssignMap[key][field] = val;
+  // 1秒後に自動保存（連続入力をまとめる）
+  clearTimeout(_apSaveTimer);
+  _apSaveTimer = setTimeout(async () => {
+    await apSaveToFirebase('workerAssign', apAssignMap);
+    apSetStatus('品番マスタを自動保存しました', '#15803d');
+  }, 1000);
 };
 
 window.apSaveAssignments = async function() {
