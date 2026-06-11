@@ -1107,6 +1107,47 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
   </div>
 </div>
 
+<!-- 勤怠モーダル -->
+<div id="ap-attend-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:2100;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;width:340px;max-width:95vw;padding:0;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,0.18);">
+    <div style="background:#1a1a1a;color:#fff;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-size:14px;font-weight:700;" id="ap-attend-title">勤怠設定</span>
+      <button onclick="apCloseAttend()" style="background:none;border:none;color:#fff;font-size:18px;cursor:pointer;line-height:1;">×</button>
+    </div>
+    <div style="padding:16px;">
+      <input type="hidden" id="ap-attend-worker">
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+          <input type="radio" name="ap-attend-type" value="normal" checked> 通常出勤
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+          <input type="radio" name="ap-attend-type" value="absent"> 全休
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+          <input type="radio" name="ap-attend-type" value="late">
+          遅刻&nbsp; 出勤
+          <input type="time" id="ap-attend-late" value="09:00" style="padding:3px 6px;border:1px solid #ddd;border-radius:4px;font-size:12px;">
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+          <input type="radio" name="ap-attend-type" value="early">
+          早退&nbsp; 退勤
+          <input type="time" id="ap-attend-early" value="15:00" style="padding:3px 6px;border:1px solid #ddd;border-radius:4px;font-size:12px;">
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+          <input type="radio" name="ap-attend-type" value="unavail">
+          時間帯不可&nbsp;
+          <input type="time" id="ap-attend-us" value="10:00" style="padding:3px 6px;border:1px solid #ddd;border-radius:4px;font-size:12px;">
+          〜
+          <input type="time" id="ap-attend-ue" value="12:00" style="padding:3px 6px;border:1px solid #ddd;border-radius:4px;font-size:12px;">
+        </label>
+      </div>
+      <div style="margin-top:16px;text-align:right;">
+        <button onclick="apSaveAttend()" style="padding:6px 20px;background:#1a1a1a;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer;font-family:inherit;">設定</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- 設定モーダル -->
 <div id="ap-settings-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:2000;align-items:flex-start;justify-content:center;padding-top:40px;overflow-y:auto;">
   <div style="background:#fff;border-radius:12px;width:680px;max-width:95vw;padding:0;overflow:hidden;">
@@ -1131,8 +1172,8 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
           <input id="ap-assign-search" type="text" placeholder="品番で検索" oninput="apFilterAssignTable()"
             style="flex:1;padding:5px 8px;border:1px solid #ddd;border-radius:5px;font-size:12px;">
         </div>
-        <div style="overflow-x:auto;">
-          <table style="width:100%;border-collapse:collapse;font-size:12px;" id="ap-assign-table">
+        <div style="overflow-x:scroll;">
+          <table style="min-width:700px;border-collapse:collapse;font-size:12px;" id="ap-assign-table">
             <thead>
               <tr style="background:#f5f5f3;">
                 <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">品番</th>
@@ -10674,6 +10715,7 @@ let apOptionalTasks = [];   // [ { id, name, worker, durationMin, enabled, prior
 let apCriteria = { overdue:false, balance:true, preferred:true, maxMin:470, priorityParts:[] };
 let apKoteiMaster = {};     // { 工程名: { setupMin, dekaH, mainWorker, subWorker } }
 let apPlan = {};            // { worker: [ jobObj, ... ] }
+let apAttendance = {};      // { worker: { type:'normal'|'absent'|'late'|'early'|'unavail', startMin, endMin } }
 let apLoaded = false;
 
 // 実稼働分計算
@@ -10777,9 +10819,10 @@ function apGetJobs() {
 
 // ジョブの稼働分を計算
 function apJobMins(s) {
-  // ①品番マスタに工数(分)が登録されている場合（最優先）
-  const a = apAssignMap[s.hinban];
-  if (a && a.workMin > 0) {
+  // ①品番×工程キーで工数登録がある場合（最優先）
+  const mapKey = s.hinban + '|' + (s.kosei||'');
+  const a = apAssignMap[mapKey] || apAssignMap[s.hinban] || {};
+  if (a.workMin > 0) {
     return Math.min((a.setupMin || 0) + a.workMin, AP_WORK_MIN);
   }
   // ②指示数 × 加工(M)（溶接等の実績データ）
@@ -10792,11 +10835,10 @@ function apJobMins(s) {
 
 // ジョブの推奨担当者
 function apJobWorker(s) {
-  // 品番マスタの優先1（最優先）
-  const a = apAssignMap[s.hinban];
-  if (a && a.worker1) return a.worker1;
-  // 後方互換: 旧形式の worker フィールド
-  if (a && a.worker) return a.worker;
+  const mapKey = s.hinban + '|' + (s.kosei||'');
+  const a = apAssignMap[mapKey] || apAssignMap[s.hinban] || {};
+  if (a.worker1) return a.worker1;
+  if (a.worker)  return a.worker;
   // プレスDは永丘
   const k = String(s.kosei||'');
   if (k.includes('プレスD') || k.includes('プレス　D')) return '永丘';
@@ -10873,11 +10915,17 @@ function apRenderBoard() {
     const totalMins = jobs.reduce((s,j)=>s+j.durationMin,0);
     const pct = Math.round(totalMins / apCriteria.maxMin * 100);
     const pctColor = pct > 100 ? '#c0392b' : pct > 85 ? '#d68910' : '#27ae60';
+    const att = apAttendance[worker] || { type:'normal' };
+    const attLabel = att.type==='absent' ? '全休' : att.type==='late' ? `遅刻 ${apHHMM(att.startMin||AP_WS)}〜` : att.type==='early' ? `早退 〜${apHHMM(att.endMin||AP_WE)}` : att.type==='unavail' ? `不可 ${apHHMM(att.startMin||AP_WS)}〜${apHHMM(att.endMin||AP_WE)}` : '';
+    const attBadge = attLabel ? `<span style="font-size:10px;padding:1px 6px;border-radius:10px;background:${att.type==='absent'?'#c0392b':'#d68910'};color:#fff;margin-left:4px;">${attLabel}</span>` : '';
+    const effMax = apEffectiveMax(worker);
     html += `<div style="background:#fff;border-radius:8px;border:1px solid #ddd;overflow:hidden;">
-      <div style="background:#1a1a1a;color:#fff;padding:6px 12px;display:flex;align-items:center;gap:8px;">
+      <div style="background:${att.type==='absent'?'#5a2020':'#1a1a1a'};color:#fff;padding:6px 12px;display:flex;align-items:center;gap:8px;">
         <span style="font-size:13px;font-weight:700;">${worker}</span>
+        ${attBadge}
         <span style="font-size:11px;color:#aaa;">${jobs.length}件</span>
-        <span style="margin-left:auto;font-size:11px;font-weight:700;color:${pctColor};">${totalMins}分 / ${apCriteria.maxMin}分 (${pct}%)</span>
+        <span style="margin-left:auto;font-size:11px;font-weight:700;color:${pctColor};">${totalMins}分 / ${effMax}分 (${pct}%)</span>
+        <button onclick="apEditAttendance('${worker}')" style="padding:2px 8px;background:#444;color:#fff;border:none;border-radius:4px;font-size:10px;cursor:pointer;font-family:inherit;">勤怠</button>
         <button onclick="apAddJobToWorker('${worker}')" style="padding:2px 8px;background:#333;color:#fff;border:none;border-radius:4px;font-size:10px;cursor:pointer;font-family:inherit;">+ 追加</button>
       </div>`;
     // プログレスバー
@@ -10926,10 +10974,13 @@ function apAutoAssign() {
     return (a['納期']||'').localeCompare(b['納期']||'');
   });
 
-  // 担当者ごとの空き時間（分）
+  // 担当者ごとの空き時間（勤怠考慮）
   const workerMins = {};
-  const workerTime = {};  // 現在の終了時刻（絶対分）
-  AP_WORKERS.forEach(w => { workerMins[w] = 0; workerTime[w] = apNW(AP_WS); });
+  const workerTime = {};
+  AP_WORKERS.forEach(w => {
+    workerMins[w] = 0;
+    workerTime[w] = apNW(apEffectiveStart(w));
+  });
 
   const plan = {};
   AP_WORKERS.forEach(w => plan[w] = []);
@@ -10938,8 +10989,9 @@ function apAutoAssign() {
   apOptionalTasks.filter(t => t.enabled !== false).forEach(t => {
     const w = t.worker || AP_WORKERS[1];
     if (!plan[w]) return;
+    if (apEffectiveMax(w) === 0) return;
     const dur = parseInt(t.durationMin)||30;
-    if (workerMins[w] + dur > maxMin) return;
+    if (workerMins[w] + dur > apEffectiveMax(w)) return;
     const startT = apNW(workerTime[w]);
     const endT = apAdv(startT, dur);
     plan[w].push({ hinban: t.name, hinmei:'定型作業', shiji:'', durationMin:dur,
@@ -10966,7 +11018,8 @@ function apAutoAssign() {
     }
 
     for (const w of candidates) {
-      if (workerMins[w] + dur > maxMin) continue;
+      if (apEffectiveMax(w) === 0) continue; // 全休
+      if (workerMins[w] + dur > apEffectiveMax(w)) continue;
       const startT = apNW(workerTime[w]);
       if (startT >= AP_WE) continue;
       const endT = apAdv(startT, dur);
@@ -11014,6 +11067,69 @@ async function apPushToProgress() {
 }
 
 // ── ジョブ操作 ────────────────────────────────────────────
+// 勤怠を考慮した実稼働上限(分)
+function apEffectiveMax(worker) {
+  const att = apAttendance[worker] || { type:'normal' };
+  const base = apCriteria.maxMin || AP_WORK_MIN;
+  if (att.type === 'absent') return 0;
+  if (att.type === 'late') {
+    const lateStart = att.startMin || AP_WS;
+    return Math.max(0, base - Math.max(0, lateStart - AP_WS));
+  }
+  if (att.type === 'early') {
+    const earlyEnd = att.endMin || AP_WE;
+    return Math.max(0, base - Math.max(0, AP_WE - earlyEnd));
+  }
+  if (att.type === 'unavail') {
+    const dur = Math.max(0, (att.endMin||AP_WE) - (att.startMin||AP_WS));
+    return Math.max(0, base - dur);
+  }
+  return base;
+}
+
+// 勤怠を考慮した始業時刻(分)
+function apEffectiveStart(worker) {
+  const att = apAttendance[worker] || { type:'normal' };
+  if (att.type === 'late') return Math.max(AP_WS, att.startMin || AP_WS);
+  return AP_WS;
+}
+
+// 勤怠編集モーダルを開く
+window.apEditAttendance = function(worker) {
+  document.getElementById('ap-attend-worker').value = worker;
+  document.getElementById('ap-attend-title').textContent = worker + ' の勤怠設定';
+  const att = apAttendance[worker] || { type:'normal' };
+  document.querySelectorAll('input[name="ap-attend-type"]').forEach(r => { r.checked = r.value === att.type; });
+  document.getElementById('ap-attend-late').value  = att.type==='late'  ? apHHMM(att.startMin||AP_WS)  : '09:00';
+  document.getElementById('ap-attend-early').value = att.type==='early' ? apHHMM(att.endMin||AP_WE)    : '15:00';
+  document.getElementById('ap-attend-us').value    = att.type==='unavail' ? apHHMM(att.startMin||600)  : '10:00';
+  document.getElementById('ap-attend-ue').value    = att.type==='unavail' ? apHHMM(att.endMin||730)    : '12:00';
+  document.getElementById('ap-attend-modal').style.display = 'flex';
+};
+
+window.apCloseAttend = function() {
+  document.getElementById('ap-attend-modal').style.display = 'none';
+};
+
+window.apSaveAttend = function() {
+  const worker = document.getElementById('ap-attend-worker').value;
+  const type = document.querySelector('input[name="ap-attend-type"]:checked')?.value || 'normal';
+  const toMin = t => { const [h,m] = t.split(':').map(Number); return h*60+m; };
+  if (type === 'normal') {
+    delete apAttendance[worker];
+  } else if (type === 'late') {
+    apAttendance[worker] = { type, startMin: toMin(document.getElementById('ap-attend-late').value) };
+  } else if (type === 'early') {
+    apAttendance[worker] = { type, endMin: toMin(document.getElementById('ap-attend-early').value) };
+  } else if (type === 'unavail') {
+    apAttendance[worker] = { type, startMin: toMin(document.getElementById('ap-attend-us').value), endMin: toMin(document.getElementById('ap-attend-ue').value) };
+  } else {
+    apAttendance[worker] = { type };
+  }
+  apCloseAttend();
+  apRenderBoard();
+};
+
 function apGetSakuyo() {
   let d = window.QC_SAKUYO;
   if (!d || !d.length) {
@@ -11068,12 +11184,18 @@ window.apSwitchSettingsTab = function(tab) {
 
 function apBuildAssignTable() {
   const jobs = apGetJobs();
+  // 品番×工程 の組み合わせで重複排除
   const seen = new Map();
-  jobs.forEach(s => { if (!seen.has(s.hinban)) seen.set(s.hinban, s); });
+  jobs.forEach(s => {
+    const key = s.hinban + '|' + (s.kosei||'');
+    if (!seen.has(key)) seen.set(key, s);
+  });
   const tbody = document.getElementById('ap-assign-tbody');
   if (!tbody) return;
   tbody.innerHTML = [...seen.values()].map(s => {
-    const a = apAssignMap[s.hinban] || {};
+    const mapKey = s.hinban + '|' + (s.kosei||'');
+    // 工数は 品番|工程 キーで、担当者は 品番 キーで参照（後方互換）
+    const a = apAssignMap[mapKey] || apAssignMap[s.hinban] || {};
     const wOpts = n => ['（未設定）',...AP_WORKERS].map(w =>
       `<option value="${w==='（未設定）'?'':w}" ${(a['worker'+n]||'')===(w==='（未設定）'?'':w)?'selected':''}>${w}</option>`).join('');
     return `<tr style="border-bottom:1px solid #f5f5f5;" data-hinban="${s.hinban}">
@@ -11082,25 +11204,25 @@ function apBuildAssignTable() {
       <td style="padding:5px 6px;font-size:10px;white-space:nowrap;">${s.kosei}</td>
       <td style="padding:5px 4px;text-align:center;">
         <input type="number" value="${a.setupMin||''}" min="0" max="480" placeholder="0"
-          onchange="apUpdateAssign('${s.hinban}','setupMin',parseInt(this.value)||0)"
+          onchange="apUpdateAssign('${mapKey}','setupMin',parseInt(this.value)||0)"
           style="width:50px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;text-align:center;">
       </td>
       <td style="padding:5px 4px;text-align:center;">
         <input type="number" value="${a.workMin||''}" min="0" max="470" placeholder="自動"
-          onchange="apUpdateAssign('${s.hinban}','workMin',parseInt(this.value)||0)"
+          onchange="apUpdateAssign('${mapKey}','workMin',parseInt(this.value)||0)"
           style="width:50px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;text-align:center;">
       </td>
       <td style="padding:5px 4px;">
-        <select onchange="apUpdateAssign('${s.hinban}','worker1',this.value)" style="font-size:11px;padding:2px 3px;border:1px solid #ddd;border-radius:4px;font-family:inherit;">${wOpts(1)}</select>
+        <select onchange="apUpdateAssign('${mapKey}','worker1',this.value)" style="font-size:11px;padding:2px 3px;border:1px solid #ddd;border-radius:4px;font-family:inherit;">${wOpts(1)}</select>
       </td>
       <td style="padding:5px 4px;">
-        <select onchange="apUpdateAssign('${s.hinban}','worker2',this.value)" style="font-size:11px;padding:2px 3px;border:1px solid #ddd;border-radius:4px;font-family:inherit;">${wOpts(2)}</select>
+        <select onchange="apUpdateAssign('${mapKey}','worker2',this.value)" style="font-size:11px;padding:2px 3px;border:1px solid #ddd;border-radius:4px;font-family:inherit;">${wOpts(2)}</select>
       </td>
       <td style="padding:5px 4px;">
-        <select onchange="apUpdateAssign('${s.hinban}','worker3',this.value)" style="font-size:11px;padding:2px 3px;border:1px solid #ddd;border-radius:4px;font-family:inherit;">${wOpts(3)}</select>
+        <select onchange="apUpdateAssign('${mapKey}','worker3',this.value)" style="font-size:11px;padding:2px 3px;border:1px solid #ddd;border-radius:4px;font-family:inherit;">${wOpts(3)}</select>
       </td>
       <td style="padding:5px 6px;text-align:center;">
-        <input type="checkbox" ${a.priority?'checked':''} onchange="apUpdateAssign('${s.hinban}','priority',this.checked)" style="width:14px;height:14px;cursor:pointer;">
+        <input type="checkbox" ${a.priority?'checked':''} onchange="apUpdateAssign('${mapKey}','priority',this.checked)" style="width:14px;height:14px;cursor:pointer;">
       </td>
     </tr>`;
   }).join('');
@@ -11271,6 +11393,9 @@ window.apRemoveJob         = apRemoveJob;
 window.apRenderOptionalList= apRenderOptionalList;
 window.apRenderCriteria    = apRenderCriteria;
 window.apRenderKoteiTable  = apRenderKoteiTable;
+window.apEditAttendance    = apEditAttendance;
+window.apCloseAttend       = apCloseAttend;
+window.apSaveAttend        = apSaveAttend;
 </script>
 </body>
 </html>
