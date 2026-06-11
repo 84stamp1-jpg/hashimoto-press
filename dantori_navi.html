@@ -1138,8 +1138,12 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
                 <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">品番</th>
                 <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #ddd;">品名</th>
                 <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">工程</th>
-                <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">担当者</th>
-                <th style="padding:6px 8px;text-align:center;border-bottom:1px solid #ddd;white-space:nowrap;">優先</th>
+                <th style="padding:6px 8px;text-align:center;border-bottom:1px solid #ddd;white-space:nowrap;">段取(分)</th>
+                <th style="padding:6px 8px;text-align:center;border-bottom:1px solid #ddd;white-space:nowrap;">工数(分)</th>
+                <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">優先1</th>
+                <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">優先2</th>
+                <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">優先3</th>
+                <th style="padding:6px 8px;text-align:center;border-bottom:1px solid #ddd;white-space:nowrap;">優先品番</th>
               </tr>
             </thead>
             <tbody id="ap-assign-tbody"></tbody>
@@ -10773,34 +10777,37 @@ function apGetJobs() {
 
 // ジョブの稼働分を計算
 function apJobMins(s) {
-  const k = String(s.kosei||'');
-  const m = apKoteiMaster[k];
-  // 工程マスタに出来高(個/H)が登録されている場合: 指示数 ÷ 出来高 × 60分 + 段取り時間
-  if (m && m.dekaH > 0 && s.shiji && parseFloat(s.shiji) > 0) {
-    const setupMin = m.setupMin || 0;
-    const workMin  = Math.round((parseFloat(s.shiji) / m.dekaH) * 60);
-    return Math.min(setupMin + workMin, AP_WORK_MIN);
+  // ①品番マスタに工数(分)が登録されている場合（最優先）
+  const a = apAssignMap[s.hinban];
+  if (a && a.workMin > 0) {
+    return Math.min((a.setupMin || 0) + a.workMin, AP_WORK_MIN);
   }
-  // 稼働時間H → 分（上限AP_WORK_MINでキャップ）
-  if (s.kadoH && parseFloat(s.kadoH) > 0) return Math.min(Math.round(parseFloat(s.kadoH) * 60), AP_WORK_MIN);
-  // 指示数 × 加工(M)
+  // ②指示数 × 加工(M)（溶接等の実績データ）
   if (s.kakoM && parseFloat(s.kakoM) > 0 && s.shiji && parseFloat(s.shiji) > 0)
     return Math.min(Math.round(parseFloat(s.shiji) * parseFloat(s.kakoM)), AP_WORK_MIN);
+  // ③稼働時間H（8H→上限470分にキャップ）
+  if (s.kadoH && parseFloat(s.kadoH) > 0) return Math.min(Math.round(parseFloat(s.kadoH) * 60), AP_WORK_MIN);
   return AP_WORK_MIN; // デフォルト1日
 }
 
 // ジョブの推奨担当者
 function apJobWorker(s) {
-  // 品番割り当てマップ（最優先）
+  // 品番マスタの優先1（最優先）
   const a = apAssignMap[s.hinban];
+  if (a && a.worker1) return a.worker1;
+  // 後方互換: 旧形式の worker フィールド
   if (a && a.worker) return a.worker;
-  // 工程マスタのメイン担当者
-  const k = String(s.kosei||'');
-  const m = apKoteiMaster[k];
-  if (m && m.mainWorker) return m.mainWorker;
   // プレスDは永丘
+  const k = String(s.kosei||'');
   if (k.includes('プレスD') || k.includes('プレス　D')) return '永丘';
   return null;
+}
+
+// 優先順リストを返す（自動割り振りで候補順に使用）
+function apJobWorkerCandidates(s) {
+  const a = apAssignMap[s.hinban];
+  if (!a) return [];
+  return [a.worker1, a.worker2, a.worker3, a.worker].filter(w => w && AP_WORKERS.includes(w));
 }
 
 // ── 未割り当てプール描画 ──────────────────────────────────────
@@ -10946,10 +10953,12 @@ function apAutoAssign() {
     const dur = apJobMins(s);
     const preferredW = apJobWorker(s);
 
-    // 担当者候補を決める
+    // 担当者候補を決める（優先1→2→3→残り）
     let candidates = [];
-    if (preferredW && apCriteria.preferred !== false) {
-      candidates = [preferredW, ...AP_WORKERS.filter(w => w !== preferredW)];
+    const priorityList = apJobWorkerCandidates(s);
+    if (priorityList.length > 0 && apCriteria.preferred !== false) {
+      const rest = AP_WORKERS.filter(w => !priorityList.includes(w));
+      candidates = [...priorityList, ...rest];
     } else if (apCriteria.balance !== false) {
       candidates = [...AP_WORKERS].sort((a,b) => workerMins[a]-workerMins[b]);
     } else {
@@ -11065,13 +11074,30 @@ function apBuildAssignTable() {
   if (!tbody) return;
   tbody.innerHTML = [...seen.values()].map(s => {
     const a = apAssignMap[s.hinban] || {};
-    const opts = ['（自動）',...AP_WORKERS].map(w=>`<option value="${w}" ${(a.worker||'')===(w==='（自動）'?'':w)?'selected':''}>${w}</option>`).join('');
+    const wOpts = n => ['（未設定）',...AP_WORKERS].map(w =>
+      `<option value="${w==='（未設定）'?'':w}" ${(a['worker'+n]||'')===(w==='（未設定）'?'':w)?'selected':''}>${w}</option>`).join('');
     return `<tr style="border-bottom:1px solid #f5f5f5;" data-hinban="${s.hinban}">
       <td style="padding:5px 6px;white-space:nowrap;font-size:11px;">${s.hinban}</td>
-      <td style="padding:5px 6px;font-size:10px;color:#666;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.hinmei}</td>
+      <td style="padding:5px 6px;font-size:10px;color:#666;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.hinmei}</td>
       <td style="padding:5px 6px;font-size:10px;white-space:nowrap;">${s.kosei}</td>
-      <td style="padding:5px 6px;">
-        <select onchange="apUpdateAssign('${s.hinban}','worker',this.value)" style="font-size:11px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-family:inherit;">${opts}</select>
+      <td style="padding:5px 4px;text-align:center;">
+        <input type="number" value="${a.setupMin||''}" min="0" max="480" placeholder="0"
+          onchange="apUpdateAssign('${s.hinban}','setupMin',parseInt(this.value)||0)"
+          style="width:50px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;text-align:center;">
+      </td>
+      <td style="padding:5px 4px;text-align:center;">
+        <input type="number" value="${a.workMin||''}" min="0" max="470" placeholder="自動"
+          onchange="apUpdateAssign('${s.hinban}','workMin',parseInt(this.value)||0)"
+          style="width:50px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;text-align:center;">
+      </td>
+      <td style="padding:5px 4px;">
+        <select onchange="apUpdateAssign('${s.hinban}','worker1',this.value)" style="font-size:11px;padding:2px 3px;border:1px solid #ddd;border-radius:4px;font-family:inherit;">${wOpts(1)}</select>
+      </td>
+      <td style="padding:5px 4px;">
+        <select onchange="apUpdateAssign('${s.hinban}','worker2',this.value)" style="font-size:11px;padding:2px 3px;border:1px solid #ddd;border-radius:4px;font-family:inherit;">${wOpts(2)}</select>
+      </td>
+      <td style="padding:5px 4px;">
+        <select onchange="apUpdateAssign('${s.hinban}','worker3',this.value)" style="font-size:11px;padding:2px 3px;border:1px solid #ddd;border-radius:4px;font-family:inherit;">${wOpts(3)}</select>
       </td>
       <td style="padding:5px 6px;text-align:center;">
         <input type="checkbox" ${a.priority?'checked':''} onchange="apUpdateAssign('${s.hinban}','priority',this.checked)" style="width:14px;height:14px;cursor:pointer;">
@@ -11092,9 +11118,14 @@ window.apUpdateAssign = function(hinban, field, value) {
   apAssignMap[hinban][field] = field==='worker' ? (value==='（自動）'?'':value) : value;
 };
 
+window.apUpdateAssign = function(hinban, field, val) {
+  if (!apAssignMap[hinban]) apAssignMap[hinban] = {};
+  apAssignMap[hinban][field] = val;
+};
+
 window.apSaveAssignments = async function() {
   await apSaveToFirebase('workerAssign', apAssignMap);
-  apSetStatus('担当者割り当てを保存しました', '#15803d');
+  apSetStatus('品番マスタを保存しました', '#15803d');
   apCloseSettings();
 };
 
@@ -11230,6 +11261,7 @@ window.apAddJobToWorker    = apAddJobToWorker;
 window.apOpenSettings      = apOpenSettings;
 window.apCloseSettings     = apCloseSettings;
 window.apSwitchSettingsTab = apSwitchSettingsTab;
+window.apUpdateAssign      = apUpdateAssign;
 window.apSaveAssignments   = apSaveAssignments;
 window.apAddOptionalTask   = apAddOptionalTask;
 window.apSaveOptionalTasks = apSaveOptionalTasks;
