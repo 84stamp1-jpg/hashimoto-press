@@ -1121,6 +1121,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
         <button class="ap-stab active" onclick="apSwitchSettingsTab('assign')" id="ap-stab-assign" style="padding:6px 14px;border:none;background:none;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid #1a1a1a;margin-bottom:-2px;font-family:inherit;">品番割り当て</button>
         <button class="ap-stab" onclick="apSwitchSettingsTab('optional')" id="ap-stab-optional" style="padding:6px 14px;border:none;background:none;font-size:12px;color:#888;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;">定型作業</button>
         <button class="ap-stab" onclick="apSwitchSettingsTab('criteria')" id="ap-stab-criteria" style="padding:6px 14px;border:none;background:none;font-size:12px;color:#888;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;">判定基準</button>
+        <button class="ap-stab" onclick="apSwitchSettingsTab('kotei')" id="ap-stab-kotei" style="padding:6px 14px;border:none;background:none;font-size:12px;color:#888;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;">工程マスタ</button>
       </div>
 
       <!-- 品番割り当てパネル -->
@@ -1194,6 +1195,28 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
         </div>
         <div style="margin-top:14px;text-align:right;">
           <button onclick="apSaveCriteria()" style="padding:6px 16px;background:#1a1a1a;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;">保存</button>
+        </div>
+      </div>
+
+      <!-- 工程マスタパネル -->
+      <div id="ap-spanel-kotei" style="display:none;">
+        <div style="font-size:11px;color:#666;margin-bottom:8px;">工程ごとの段取り時間・出来高・担当者を登録します。自動割り振りの工数計算に使用します。</div>
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:12px;">
+            <thead>
+              <tr style="background:#f5f5f3;">
+                <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">工程名</th>
+                <th style="padding:6px 8px;text-align:center;border-bottom:1px solid #ddd;white-space:nowrap;">段取(分)</th>
+                <th style="padding:6px 8px;text-align:center;border-bottom:1px solid #ddd;white-space:nowrap;">出来高(個/H)</th>
+                <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">メイン担当</th>
+                <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">予備担当</th>
+              </tr>
+            </thead>
+            <tbody id="ap-kotei-tbody"></tbody>
+          </table>
+        </div>
+        <div style="margin-top:10px;text-align:right;">
+          <button onclick="apSaveKotei()" style="padding:6px 16px;background:#1a1a1a;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;">保存</button>
         </div>
       </div>
 
@@ -10635,10 +10658,17 @@ const AP_WORK_MIN = (AP_WE - AP_WS) - AP_BREAKS.reduce((s,[a,b])=>s+(b-a),0); //
 // Firebase パス
 const AP_FB_PATH = 'assembly';
 
+// 工程マスタの初期値（工程名: {setupMin, dekaH, mainWorker, subWorker}）
+const AP_KOTEI_DEFAULT = [
+  '溶接(スポット)','溶接(MAG)','検査','脱脂','組付・ハンドワーク',
+  'フート・油圧','タップ','旋盤(ｴﾝﾄﾞﾁｬﾝﾊﾞｰ用)','バフ','プレスD'
+];
+
 // 状態
 let apAssignMap = {};       // { hinban: { worker, priority } }
 let apOptionalTasks = [];   // [ { id, name, worker, durationMin, enabled, priority } ]
 let apCriteria = { overdue:false, balance:true, preferred:true, maxMin:470, priorityParts:[] };
+let apKoteiMaster = {};     // { 工程名: { setupMin, dekaH, mainWorker, subWorker } }
 let apPlan = {};            // { worker: [ jobObj, ... ] }
 let apLoaded = false;
 
@@ -10698,6 +10728,7 @@ async function apLoadFromFirebase() {
     if (d.workerAssign) apAssignMap = d.workerAssign;
     if (d.optionalTasks) apOptionalTasks = Object.values(d.optionalTasks);
     if (d.criteria) apCriteria = { ...apCriteria, ...d.criteria };
+    if (d.koteiMaster) apKoteiMaster = d.koteiMaster;
   } catch(e) { console.warn('AP Firebase load:', e); }
 }
 
@@ -10742,21 +10773,33 @@ function apGetJobs() {
 
 // ジョブの稼働分を計算
 function apJobMins(s) {
-  // 稼働時間H → 分（優先）
-  if (s.kadoH && parseFloat(s.kadoH) > 0) return Math.round(parseFloat(s.kadoH) * 60);
+  const k = String(s.kosei||'');
+  const m = apKoteiMaster[k];
+  // 工程マスタに出来高(個/H)が登録されている場合: 指示数 ÷ 出来高 × 60分 + 段取り時間
+  if (m && m.dekaH > 0 && s.shiji && parseFloat(s.shiji) > 0) {
+    const setupMin = m.setupMin || 0;
+    const workMin  = Math.round((parseFloat(s.shiji) / m.dekaH) * 60);
+    return Math.min(setupMin + workMin, AP_WORK_MIN);
+  }
+  // 稼働時間H → 分（上限AP_WORK_MINでキャップ）
+  if (s.kadoH && parseFloat(s.kadoH) > 0) return Math.min(Math.round(parseFloat(s.kadoH) * 60), AP_WORK_MIN);
   // 指示数 × 加工(M)
   if (s.kakoM && parseFloat(s.kakoM) > 0 && s.shiji && parseFloat(s.shiji) > 0)
-    return Math.round(parseFloat(s.shiji) * parseFloat(s.kakoM));
-  return 60; // デフォルト60分
+    return Math.min(Math.round(parseFloat(s.shiji) * parseFloat(s.kakoM)), AP_WORK_MIN);
+  return AP_WORK_MIN; // デフォルト1日
 }
 
 // ジョブの推奨担当者
 function apJobWorker(s) {
+  // 品番割り当てマップ（最優先）
   const a = apAssignMap[s.hinban];
   if (a && a.worker) return a.worker;
-  // 工程デフォルト
+  // 工程マスタのメイン担当者
   const k = String(s.kosei||'');
-  if (k.includes('プレスD')) return 'ロボットライン';
+  const m = apKoteiMaster[k];
+  if (m && m.mainWorker) return m.mainWorker;
+  // プレスDは永丘
+  if (k.includes('プレスD') || k.includes('プレス　D')) return '永丘';
   return null;
 }
 
@@ -11005,11 +11048,13 @@ window.apOpenSettings = function() {
 window.apCloseSettings = function() { document.getElementById('ap-settings-modal').style.display = 'none'; };
 
 window.apSwitchSettingsTab = function(tab) {
-  ['assign','optional','criteria'].forEach(t => {
-    document.getElementById('ap-spanel-'+t).style.display = t===tab ? 'block' : 'none';
+  ['assign','optional','criteria','kotei'].forEach(t => {
+    const el = document.getElementById('ap-spanel-'+t);
+    if (el) el.style.display = t===tab ? 'block' : 'none';
     const btn = document.getElementById('ap-stab-'+t);
     if (btn) { btn.style.borderBottomColor = t===tab?'#1a1a1a':'transparent'; btn.style.color = t===tab?'#1a1a1a':'#888'; }
   });
+  if (tab === 'kotei') apRenderKoteiTable();
 };
 
 function apBuildAssignTable() {
@@ -11061,18 +11106,20 @@ function apRenderOptionalList() {
   const opts = AP_WORKERS.map(w=>`<option value="${w}">${w}</option>`).join('');
   el.innerHTML = apOptionalTasks.map((t,i) => `
     <div style="background:#fafaf8;border:1px solid #e5e5e5;border-radius:6px;padding:8px 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-      <input type="checkbox" ${t.enabled!==false?'checked':''} onchange="apOptionalTasks[${i}].enabled=this.checked" style="width:14px;height:14px;">
-      <input type="text" value="${t.name}" oninput="apOptionalTasks[${i}].name=this.value" placeholder="作業名" style="flex:1;min-width:80px;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:12px;">
-      <select onchange="apOptionalTasks[${i}].worker=this.value" style="padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:12px;font-family:inherit;">
+      <input type="checkbox" ${t.enabled!==false?'checked':''} onchange="apSetOptField(${i},'enabled',this.checked)" style="width:14px;height:14px;">
+      <input type="text" value="${t.name}" oninput="apSetOptField(${i},'name',this.value)" placeholder="作業名" style="flex:1;min-width:80px;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:12px;">
+      <select onchange="apSetOptField(${i},'worker',this.value)" style="padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:12px;font-family:inherit;">
         ${AP_WORKERS.map(w=>`<option value="${w}" ${t.worker===w?'selected':''}>${w}</option>`).join('')}
       </select>
-      <input type="number" value="${t.durationMin||30}" min="1" max="480" oninput="apOptionalTasks[${i}].durationMin=parseInt(this.value)||30"
+      <input type="number" value="${t.durationMin||30}" min="1" max="480" oninput="apSetOptField(${i},'durationMin',parseInt(this.value)||30)"
         style="width:60px;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:12px;" placeholder="分">
       <span style="font-size:11px;color:#888;">分</span>
-      <button onclick="apOptionalTasks.splice(${i},1);apRenderOptionalList();" style="padding:2px 7px;background:#fee2e2;color:#c0392b;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;">削除</button>
+      <button onclick="apDelOptTask(${i})" style="padding:2px 7px;background:#fee2e2;color:#c0392b;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;">削除</button>
     </div>`).join('');
 }
 
+window.apSetOptField = function(i, field, val) { if (apOptionalTasks[i]) apOptionalTasks[i][field] = val; };
+window.apDelOptTask  = function(i) { apOptionalTasks.splice(i,1); apRenderOptionalList(); };
 window.apAddOptionalTask = function() {
   apOptionalTasks.push({ id: 'opt_'+Date.now(), name:'', worker:AP_WORKERS[1], durationMin:30, enabled:true });
   apRenderOptionalList();
@@ -11083,6 +11130,54 @@ window.apSaveOptionalTasks = async function() {
   apOptionalTasks.forEach(t => { obj[t.id||('opt_'+Date.now())] = t; });
   await apSaveToFirebase('optionalTasks', obj);
   apSetStatus('定型作業を保存しました', '#15803d');
+  apCloseSettings();
+};
+
+// 工程マスタ
+function apRenderKoteiTable() {
+  const tbody = document.getElementById('ap-kotei-tbody');
+  if (!tbody) return;
+  const workerOpts = (sel, field) => ['（未設定）',...AP_WORKERS].map(w =>
+    `<option value="${w==='（未設定）'?'':w}" ${(sel||'')===(w==='（未設定）'?'':w)?'selected':''}>${w}</option>`).join('');
+  tbody.innerHTML = AP_KOTEI_DEFAULT.map(kosei => {
+    const m = apKoteiMaster[kosei] || {};
+    return `<tr style="border-bottom:1px solid #f5f5f5;" data-kosei="${kosei}">
+      <td style="padding:5px 8px;font-size:12px;white-space:nowrap;">${kosei}</td>
+      <td style="padding:5px 4px;text-align:center;">
+        <input type="number" value="${m.setupMin||0}" min="0" max="480" data-field="setupMin"
+          style="width:56px;padding:3px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;text-align:center;">
+      </td>
+      <td style="padding:5px 4px;text-align:center;">
+        <input type="number" value="${m.dekaH||0}" min="0" step="0.1" data-field="dekaH"
+          style="width:64px;padding:3px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;text-align:center;">
+      </td>
+      <td style="padding:5px 4px;">
+        <select data-field="mainWorker" style="padding:3px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">
+          ${workerOpts(m.mainWorker,'mainWorker')}
+        </select>
+      </td>
+      <td style="padding:5px 4px;">
+        <select data-field="subWorker" style="padding:3px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">
+          ${workerOpts(m.subWorker,'subWorker')}
+        </select>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+window.apSaveKotei = async function() {
+  const tbody = document.getElementById('ap-kotei-tbody');
+  if (!tbody) return;
+  [...tbody.querySelectorAll('tr[data-kosei]')].forEach(tr => {
+    const kosei = tr.dataset.kosei;
+    if (!apKoteiMaster[kosei]) apKoteiMaster[kosei] = {};
+    tr.querySelectorAll('[data-field]').forEach(el => {
+      const f = el.dataset.field;
+      apKoteiMaster[kosei][f] = (f==='setupMin'||f==='dekaH') ? parseFloat(el.value)||0 : el.value;
+    });
+  });
+  await apSaveToFirebase('koteiMaster', apKoteiMaster);
+  apSetStatus('工程マスタを保存しました', '#15803d');
   apCloseSettings();
 };
 
@@ -11143,6 +11238,7 @@ window.apSaveCriteria      = apSaveCriteria;
 window.apRemoveJob         = apRemoveJob;
 window.apRenderOptionalList= apRenderOptionalList;
 window.apRenderCriteria    = apRenderCriteria;
+window.apRenderKoteiTable  = apRenderKoteiTable;
 </script>
 </body>
 </html>
