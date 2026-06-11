@@ -6713,9 +6713,11 @@ function qcGasPost(action, payload, successCb, failCb){
 }
 
 // ----- QC実績マップ構築（組立計画タブで参照） -----
-function qcBuildJobStatusMap(){
+function qcBuildJobStatusMap(externalRecords){
   var map = {};
-  (QC_ALL_RECORDS||[]).forEach(function(rec){
+  var recs = externalRecords || QC_ALL_RECORDS || [];
+  if(externalRecords){ QC_ALL_RECORDS = externalRecords; }
+  recs.forEach(function(rec){
     var key = (rec[13]||'') + '_' + (rec[14]||'');
     if(!map[key]) map[key] = { isKanno: false, ryohin: 0 };
     if(rec[7]==='完納'||rec[7]==='完了') map[key].isKanno = true;
@@ -7455,6 +7457,8 @@ function qcUpdateDateLabel(){
 }
 window.qcChangeDay = function(d){ QC_VIEW_DATE=new Date(QC_VIEW_DATE.getTime()+d*86400000); qcUpdateDateLabel(); qcFilterRecords(); };
 window.qcGoToday = function(){ var t=new Date(); QC_VIEW_DATE=new Date(t.getFullYear(),t.getMonth(),t.getDate()); qcUpdateDateLabel(); qcFilterRecords(); };
+window.qcGasPost = qcGasPost;
+window.qcBuildJobStatusMap = qcBuildJobStatusMap;
 
 function qcLoadRecords(){
   document.getElementById('qc-rec-list').innerHTML='<div class="qc-loading">読み込み中...</div>';
@@ -10828,8 +10832,23 @@ function apInit() {
       apRenderOptionalList();
       apRenderCriteria();
       apRenderBoard();
-      // QCシステムが実績マップを構築済みならそのまま描画、未完了なら完了後に自動で再描画される
-      apRenderPool();
+      if (window.qcJobStatusMap) {
+        // QCタブ初期化済み → そのまま描画
+        apRenderPool();
+      } else if (window.qcGasPost) {
+        // QCタブ未開のためAssemblyタブ側で独自取得
+        document.getElementById('ap-pool').innerHTML = '<div style="padding:12px;text-align:center;color:#aaa;font-size:11px;">実績データ読み込み中...</div>';
+        window.qcGasPost('getRecords', {}, function(res) {
+          if (res && res.ok && window.qcBuildJobStatusMap) {
+            // QCモジュール内でQC_ALL_RECORDSを更新してマップ構築
+            window.qcBuildJobStatusMap(res.records || []);
+          } else {
+            apRenderPool();
+          }
+        }, function() { apRenderPool(); });
+      } else {
+        apRenderPool();
+      }
     });
   } else {
     apRenderPool();
