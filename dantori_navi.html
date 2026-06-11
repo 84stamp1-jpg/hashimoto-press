@@ -10828,23 +10828,8 @@ function apInit() {
       apRenderOptionalList();
       apRenderCriteria();
       apRenderBoard();
-      // QC_ALL_RECORDSが空ならGASから直接取得してから描画
-      if (window.QC_ALL_RECORDS && window.QC_ALL_RECORDS.length > 0) {
-        apRenderPool();
-      } else {
-        document.getElementById('ap-pool').innerHTML = '<div style="padding:12px;text-align:center;color:#aaa;font-size:11px;">実績データ読み込み中...</div>';
-        if (window.qcGasPost) {
-          window.qcGasPost('getRecords', {}, function(res) {
-            if (res && res.ok) {
-              window.QC_ALL_RECORDS = res.records || [];
-              try { localStorage.setItem('qcAllRecordsCache', JSON.stringify(window.QC_ALL_RECORDS)); } catch(e) {}
-            }
-            apRenderPool();
-          }, function() { apRenderPool(); });
-        } else {
-          apRenderPool();
-        }
-      }
+      // QCシステムが実績マップを構築済みならそのまま描画、未完了なら完了後に自動で再描画される
+      apRenderPool();
     });
   } else {
     apRenderPool();
