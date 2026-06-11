@@ -10693,8 +10693,21 @@ async function apSaveToFirebase(path, data) {
 
 // ── 作業予定データ取得 ──────────────────────────────────────
 function apGetJobs() {
-  const QC_SAKUYO = window.QC_SAKUYO;
-  const QC_ALL_RECORDS = window.QC_ALL_RECORDS;
+  // window.QC_SAKUYO が使えない場合はlocalStorageから取得
+  let QC_SAKUYO = window.QC_SAKUYO;
+  if (!QC_SAKUYO || !QC_SAKUYO.length) {
+    try {
+      const cached = localStorage.getItem('qcSakuyoCache');
+      if (cached) QC_SAKUYO = JSON.parse(cached);
+    } catch(e) {}
+  }
+  let QC_ALL_RECORDS = window.QC_ALL_RECORDS;
+  if (!QC_ALL_RECORDS || !QC_ALL_RECORDS.length) {
+    try {
+      const cached2 = localStorage.getItem('qcAllRecordsCache');
+      if (cached2) QC_ALL_RECORDS = JSON.parse(cached2);
+    } catch(e) {}
+  }
   if (!QC_SAKUYO || !QC_SAKUYO.length) return [];
   // 完了済み製造番号セット
   const doneSet = new Set();
