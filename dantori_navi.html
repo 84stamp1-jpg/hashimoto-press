@@ -6712,6 +6712,19 @@ function qcGasPost(action, payload, successCb, failCb){
     .catch(function(e){ if(failCb) failCb(e); else alert('通信エラー: '+e.message); });
 }
 
+// ----- QC実績マップ構築（組立計画タブで参照） -----
+function qcBuildJobStatusMap(){
+  var map = {};
+  (QC_ALL_RECORDS||[]).forEach(function(rec){
+    var key = (rec[13]||'') + '_' + (rec[14]||'');
+    if(!map[key]) map[key] = { isKanno: false, ryohin: 0 };
+    if(rec[7]==='完納'||rec[7]==='完了') map[key].isKanno = true;
+    else map[key].ryohin += (parseInt(rec[5]||0)||0);
+  });
+  window.qcJobStatusMap = map;
+  try{ if(window.apRenderPool) window.apRenderPool(); }catch(e){}
+}
+
 // ----- 状態変数 -----
 var QC_SAKUYO = null, QC_SEL_SAKUYO = null;
 var QC_SAKUYO_FROM_FILE = false; // ファイルアップロードで設定された場合はGASで上書きしない
@@ -6766,7 +6779,7 @@ window.qcOnTabActivated = function(){
     document.getElementById('qc-bulk-pi').addEventListener('change', function(){ qcAddBulkPhoto(this.files[0]); this.value=''; });
     document.getElementById('qc-bulk-pi-retake').addEventListener('change', function(){ qcAddBulkPhoto(this.files[0]); this.value=''; qcCloseViewer(); });
     // 作業予定・記録読み込み
-    qcGasPost('getRecords', {}, function(res){ if(res&&res.ok){ QC_ALL_RECORDS=res.records||[]; try{ localStorage.setItem('qcAllRecordsCache', JSON.stringify(QC_ALL_RECORDS)); }catch(e){} qcUpdatePendingBadge(); setTimeout(function(){ try{ if(window.apRenderPool) window.apRenderPool(); }catch(e){} }, 0); }}, function(){});
+    qcGasPost('getRecords', {}, function(res){ if(res&&res.ok){ QC_ALL_RECORDS=res.records||[]; try{ localStorage.setItem('qcAllRecordsCache', JSON.stringify(QC_ALL_RECORDS)); }catch(e){} qcUpdatePendingBadge(); qcBuildJobStatusMap(); }}, function(){});
     // QC_SAKUYO 読み込み状態を表示するヘルパー
     function _setSakuyoStatus(msg, color){
       var el=document.getElementById('qc-sakuyo-status');
@@ -7445,7 +7458,7 @@ window.qcGoToday = function(){ var t=new Date(); QC_VIEW_DATE=new Date(t.getFull
 
 function qcLoadRecords(){
   document.getElementById('qc-rec-list').innerHTML='<div class="qc-loading">読み込み中...</div>';
-  qcGasPost('getRecords',{}, function(res){ QC_ALL_RECORDS=(res&&res.ok)?(res.records||[]): []; try{ localStorage.setItem('qcAllRecordsCache', JSON.stringify(QC_ALL_RECORDS)); }catch(e){} qcFilterRecords(); qcUpdatePendingBadge(); setTimeout(function(){ try{ if(window.apRenderPool) window.apRenderPool(); }catch(e){} }, 0); }, function(){ document.getElementById('qc-rec-list').innerHTML='<div class="qc-empty">読み込みエラー</div>'; });
+  qcGasPost('getRecords',{}, function(res){ QC_ALL_RECORDS=(res&&res.ok)?(res.records||[]): []; try{ localStorage.setItem('qcAllRecordsCache', JSON.stringify(QC_ALL_RECORDS)); }catch(e){} qcFilterRecords(); qcUpdatePendingBadge(); qcBuildJobStatusMap(); }, function(){ document.getElementById('qc-rec-list').innerHTML='<div class="qc-empty">読み込みエラー</div>'; });
 }
 function qcGetViewDateStr(){ return QC_VIEW_DATE.getFullYear()+'/'+ ('0'+(QC_VIEW_DATE.getMonth()+1)).slice(-2)+'/'+ ('0'+QC_VIEW_DATE.getDate()).slice(-2); }
 function qcFilterRecords(){
@@ -10898,41 +10911,23 @@ function apGetJobs() {
   if (!QC_SAKUYO || !QC_SAKUYO.length) {
     QC_SAKUYO = apFbSakuyo;
   }
-  let QC_ALL_RECORDS = window.QC_ALL_RECORDS;
-  if (!QC_ALL_RECORDS || !QC_ALL_RECORDS.length) {
-    try {
-      const cached2 = localStorage.getItem('qcAllRecordsCache');
-      if (cached2) QC_ALL_RECORDS = JSON.parse(cached2);
-    } catch(e) {}
-  }
   if (!QC_SAKUYO || !QC_SAKUYO.length) return [];
-  const recs = QC_ALL_RECORDS || [];
-  // 完納済み製造番号セット（完納レコードがある → 対象外）
-  const doneSet = new Set();
-  recs.forEach(rec => {
-    if (rec[7] === '完納' || rec[7] === '完了') doneSet.add((rec[13]||'')+'_'+(rec[14]||''));
-  });
-  // 製造番号×工順ごとの良品累計（品質チェックの「分納進捗 累計」と同じ: 完納以外の全レコードを合算）
-  const ryohinMap = {};
-  recs.forEach(rec => {
-    if (rec[7] !== '完納' && rec[7] !== '完了') {
-      const key = (rec[13]||'') + '_' + (rec[14]||'');
-      ryohinMap[key] = (ryohinMap[key] || 0) + (parseInt(rec[5]||0) || 0);
-    }
-  });
+  // QCシステムが構築した実績マップをそのまま参照
+  const statusMap = window.qcJobStatusMap || {};
   const AP_KOSEI = ['溶接','フート','油圧','検査','脱脂','組付','ハンドワーク','タップ','旋盤','バフ','プレス　D','プレスD'];
   return QC_SAKUYO.filter(s => {
     const key = s.seizoNo + '_' + s.junjo;
-    if (doneSet.has(key)) return false;
+    const st = statusMap[key];
+    if (st && st.isKanno) return false;
     const k = String(s.kosei||'');
     return AP_KOSEI.some(kw => k.includes(kw));
   }).map(s => {
     const key = s.seizoNo + '_' + s.junjo;
-    const done = ryohinMap[key] || 0;
+    const st = statusMap[key];
+    const done = st ? st.ryohin : 0;
     const origShiji = parseFloat(s.shiji) || 0;
     const remainShiji = done > 0 ? Math.max(0, origShiji - done) : origShiji;
     const isBunno = done > 0;
-    // 残数で上書きしたコピーを返す（元データは変更しない）
     return { ...s, shiji: String(remainShiji || origShiji), origShiji, doneQty: done, isBunno };
   });
 }
