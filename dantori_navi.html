@@ -1095,6 +1095,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
   <span style="font-size:13px;font-weight:700;">🔧 組立計画</span>
   <input type="date" id="ap-date" style="padding:3px 8px;border:1px solid #555;border-radius:5px;background:#333;color:#fff;font-size:12px;">
   <button onclick="apAutoAssign()" style="padding:4px 12px;background:#2563eb;color:#fff;border:none;border-radius:5px;font-size:12px;cursor:pointer;font-family:inherit;">⚡ 自動割り振り</button>
+  <button onclick="apResetPlan()" style="padding:4px 12px;background:#dc2626;color:#fff;border:none;border-radius:5px;font-size:12px;cursor:pointer;font-family:inherit;">🔄 リセット</button>
   <button onclick="apPushToProgress()" style="padding:4px 12px;background:#16a34a;color:#fff;border:none;border-radius:5px;font-size:12px;cursor:pointer;font-family:inherit;">📊 進捗管理に反映</button>
   <button onclick="apOpenLoadChart()" style="padding:4px 12px;background:#7c3aed;color:#fff;border:none;border-radius:5px;font-size:12px;cursor:pointer;font-family:inherit;">📈 負荷表</button>
   <button onclick="apOpenSettings()" style="padding:4px 10px;background:#444;color:#fff;border:none;border-radius:5px;font-size:12px;cursor:pointer;font-family:inherit;">⚙ 設定</button>
@@ -10887,6 +10888,13 @@ async function apLoadFromFirebase() {
         }
       }
     }
+    // 当日の組立計画を読み込み
+    const planDate = document.getElementById('ap-date')?.value || new Date().toISOString().slice(0,10);
+    const rp = await fetch(`${fbUrl}/${AP_FB_PATH}/plans/${planDate}.json`);
+    if (rp.ok) {
+      const dp = await rp.json();
+      if (dp && typeof dp === 'object') apPlan = dp;
+    }
     // 品質チェックが保存した共有QC_SAKUYOも読み込み（全PC共通の品番リスト）
     const r2 = await fetch(`${fbUrl}/settings/qcSakuyo.json`);
     if (r2.ok) {
@@ -10897,6 +10905,26 @@ async function apLoadFromFirebase() {
     }
   } catch(e) { console.warn('AP Firebase load:', e); }
 }
+
+// 当日のプランをFirebaseに保存
+async function apSavePlan() {
+  const date = document.getElementById('ap-date')?.value || new Date().toISOString().slice(0,10);
+  const fbUrl = (config.firebaseUrl || '').replace(/\/+$/,'');
+  if (!fbUrl) return;
+  try {
+    await fetch(`${fbUrl}/${AP_FB_PATH}/plans/${date}.json`,
+      { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(apPlan) });
+  } catch(e) { console.warn('AP plan save:', e); }
+}
+
+// プランリセット
+window.apResetPlan = function() {
+  if (!confirm('割り振り結果をすべてリセットしますか？\n（定型作業の配置も含めてクリアされます）')) return;
+  apPlan = {};
+  apRenderBoard(); apRenderPool();
+  apSavePlan();
+  apSetStatus('リセットしました', '#888');
+};
 
 async function apSaveToFirebase(path, data) {
   const fbUrl = (config.firebaseUrl || '').replace(/\/+$/,'');
@@ -10983,22 +11011,47 @@ function apNextFreeSlot(worker, durationMin, planRef) {
 }
 
 // 同品番の他worker割り当て時刻も避けた空き開始時刻
-function apNextFreeSlotForHinban(worker, durationMin, hinban, kosei, planRef) {
+// parallelOut: { endTime, durationMin } が返り値として並列jobのendを受け取れる
+function apNextFreeSlotForHinban(worker, durationMin, hinban, kosei, planRef, parallelOut) {
   const ref = planRef || apPlan;
-  // 並列可フラグが立っている品番は他workerのブロックをしない
   const mapKey = hinban + '|' + (kosei||'');
   const assignEntry = apAssignMap[mapKey] || apAssignMap[hinban] || {};
   const isParallel = !!assignEntry.parallel;
+
+  // 並列可の場合: 同品番が他workerに既に配置されていればその時間帯に揃える
+  let parallelStart = null, parallelEnd = null;
+  if (isParallel) {
+    Object.entries(ref).forEach(([w, items]) => {
+      if (w === worker) return;
+      items.forEach(j => {
+        if (j.hinban === hinban && parallelStart === null) {
+          parallelStart = apHHMMtoMin(j.startTime);
+          parallelEnd   = apHHMMtoMin(j.endTime);
+        }
+      });
+    });
+  }
+
   const blocked = [];
   Object.entries(ref).forEach(([w, items]) => {
     items.forEach(j => {
-      // 自分のworkerは常にブロック、他workerは並列可でなく同品番同工程の場合のみブロック
       if (w === worker || (!isParallel && j.hinban === hinban && (j.kosei||'') === (kosei||''))) {
         blocked.push({ s: apHHMMtoMin(j.startTime), e: apHHMMtoMin(j.endTime) });
       }
     });
   });
   blocked.sort((a,b) => a.s - b.s);
+
+  // 並列開始時刻が自分のスケジュールと競合しない場合はそれを使う（endも揃える）
+  if (parallelStart !== null) {
+    const parallelDur = parallelEnd !== null ? parallelEnd - parallelStart : durationMin;
+    const conflict = blocked.some(b => b.s < parallelStart + parallelDur && b.e > parallelStart);
+    if (!conflict && parallelStart >= apEffectiveStart(worker) && parallelStart < apEffectiveEnd(worker)) {
+      if (parallelOut) { parallelOut.endMin = parallelEnd; parallelOut.durationMin = parallelDur; }
+      return parallelStart;
+    }
+  }
+
   let t = apNW(apEffectiveStart(worker));
   for (const blk of blocked) {
     if (t + durationMin <= blk.s) return t;
@@ -11032,8 +11085,8 @@ function apRenderPool() {
     if (q) return s.hinban.toLowerCase().includes(q)||s.hinmei.toLowerCase().includes(q);
     return true;
   });
-  // 定型作業（未計画のもの）
-  const optFiltered = apOptionalTasks.filter(t => !plannedKeys.has(t.id||t.name));
+  // 定型作業は常に全件表示（何度でも別担当者で配置できる）
+  const optFiltered = apOptionalTasks;
   const unassignedCount = filtered.filter(s => !plannedKeys.has(s.seizoNo+'_'+s.junjo)).length;
   document.getElementById('ap-pool-count').textContent = `未割当${unassignedCount} / 全${filtered.length + optFiltered.length}件`;
   const el = document.getElementById('ap-pool');
@@ -11162,7 +11215,7 @@ function apRenderBoard() {
         const isOver = apIsOverdue(j.nouki, today);
         const rowBg = j.isOptional ? '#fffbf0' : (isOver ? '#fff5f5' : '#fff');
         const wid = `${worker}-${i}`;
-        const workerOpts = AP_WORKERS.filter(w=>w!==worker).map(w=>`<option value="${w}">${w}</option>`).join('');
+        const workerOpts = `<option value="${worker}" selected>── 現在（${worker}）</option>` + AP_WORKERS.filter(w=>w!==worker).map(w=>`<option value="${w}">${w}</option>`).join('');
         const setupLabel = j.noSetup ? '段取なし' : '段取あり';
         const setupColor = j.noSetup ? '#888' : '#2563eb';
         html += `<tr style="border-bottom:1px solid #f5f5f5;background:${rowBg};">
@@ -11218,6 +11271,13 @@ function apAutoAssign() {
     return (a['納期']||'').localeCompare(b['納期']||'');
   });
 
+  // 自動割り振り前に手動配置した定型作業を退避
+  const savedOptionals = {};
+  AP_WORKERS.forEach(w => {
+    const opts = (apPlan[w]||[]).filter(j => j.isOptional);
+    if (opts.length) savedOptionals[w] = opts;
+  });
+
   // プランをリセットして再構築
   apPlan = {};
   const workerMins = {};
@@ -11243,21 +11303,36 @@ function apAutoAssign() {
     for (const w of priorityList) {
       if (apEffectiveMax(w) === 0) continue;
       if (workerMins[w] + dur > apEffectiveMax(w)) continue;
-      const startT = apNextFreeSlotForHinban(w, dur, s.hinban, s.kosei||'', plan);
+      const parallelOut = {};
+      const startT = apNextFreeSlotForHinban(w, dur, s.hinban, s.kosei||'', plan, parallelOut);
       if (startT >= apEffectiveEnd(w)) continue;
-      const endT = apAdv(startT, dur);
-      plan[w].push({ hinban:s.hinban, hinmei:s.hinmei, shiji:s.shiji, durationMin:dur,
+      // 並列可の場合は既存jobと同じ時間帯（start/end）に揃える
+      const actualDur = parallelOut.durationMin !== undefined ? parallelOut.durationMin : dur;
+      const endT = parallelOut.endMin !== undefined ? parallelOut.endMin : apAdv(startT, dur);
+      plan[w].push({ hinban:s.hinban, hinmei:s.hinmei, shiji:s.shiji, durationMin:actualDur,
         startTime:apHHMM(startT), endTime:apHHMM(endT), nouki:s['納期']||'',
         seizoNo:s.seizoNo, junjo:s.junjo, kosei:s.kosei||'', _key:s.seizoNo+'_'+s.junjo });
-      workerMins[w] += dur;
+      workerMins[w] += actualDur;
       placed.add(s.seizoNo+'_'+s.junjo);
       break;
     }
   });
 
   apPlan = plan;
+
+  // 退避した定型作業を復元（自動割り振りで消えないように）
+  Object.entries(savedOptionals).forEach(([w, opts]) => {
+    if (!apPlan[w]) apPlan[w] = [];
+    opts.forEach(opt => {
+      if (!apPlan[w].some(j => j.isOptional && j._key === opt._key)) {
+        apPlan[w].push(opt);
+      }
+    });
+  });
+
   apRenderBoard();
   apRenderPool();
+  apSavePlan();
   const unplaced = jobs.length - placed.size - noRegKeys.length;
   let msg = `割り振り完了 ${placed.size}件配置`;
   if (unplaced > 0) msg += ` / ${unplaced}件未配置（工数超過）`;
@@ -11531,11 +11606,11 @@ function apAssignJob(seizoNo, junjo) {
   apPlan[worker].push({ hinban:s.hinban, hinmei:s.hinmei, shiji:s.shiji, durationMin:dur,
     startTime:apHHMM(wt), endTime:apHHMM(endT), nouki:s['納期']||'',
     seizoNo, junjo, _key:seizoNo+'_'+junjo });
-  apRenderBoard(); apRenderPool();
+  apRenderBoard(); apRenderPool(); apSavePlan();
 }
 
 window.apRemoveJob = function(worker, idx) {
-  if (apPlan[worker]) { apPlan[worker].splice(idx,1); apRenderBoard(); apRenderPool(); }
+  if (apPlan[worker]) { apPlan[worker].splice(idx,1); apRenderBoard(); apRenderPool(); apSavePlan(); }
 };
 
 window.apToggleJobEdit = function(worker, idx) {
@@ -11553,7 +11628,7 @@ window.apMoveJob = function(fromWorker, idx) {
   job.startTime = apHHMM(startT);
   job.endTime = apHHMM(apAdv(startT, job.durationMin));
   apPlan[toWorker].push(job);
-  apRenderBoard(); apRenderPool();
+  apRenderBoard(); apRenderPool(); apSavePlan();
 };
 
 window.apUpdateJobTime = function(worker, idx) {
@@ -11580,7 +11655,7 @@ window.apUpdateJobTime = function(worker, idx) {
       if (newQty > 0) job.shiji = String(newQty);
     }
   }
-  apRenderBoard();
+  apRenderBoard(); apSavePlan();
 };
 
 window.apUpdateJobQty = function(worker, idx) {
@@ -11596,7 +11671,7 @@ window.apUpdateJobQty = function(worker, idx) {
   job.shiji = String(qty);
   job.durationMin = newDur;
   job.endTime = apHHMM(apAdv(apHHMMtoMin(job.startTime), newDur));
-  apRenderBoard();
+  apRenderBoard(); apSavePlan();
 };
 
 window.apToggleSetup = function(worker, idx, noSetup) {
@@ -11611,7 +11686,7 @@ window.apToggleSetup = function(worker, idx, noSetup) {
   job.noSetup = noSetup;
   job.durationMin = newDur;
   job.endTime = apHHMM(apAdv(apHHMMtoMin(job.startTime), newDur));
-  apRenderBoard();
+  apRenderBoard(); apSavePlan();
 };
 
 window.apAssignOptJob = function(taskId) {
@@ -11625,7 +11700,7 @@ window.apAssignOptJob = function(taskId) {
   const endT = apAdv(startT, durVal);
   apPlan[worker].push({ hinban:t.name, hinmei:'定型作業', shiji:'', durationMin:durVal,
     startTime:apHHMM(startT), endTime:apHHMM(endT), nouki:'', isOptional:true, _key:t.id||t.name });
-  apRenderBoard(); apRenderPool();
+  apRenderBoard(); apRenderPool(); apSavePlan();
 };
 
 window.apAddJobToWorker = function(worker) {
