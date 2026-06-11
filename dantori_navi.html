@@ -6766,7 +6766,7 @@ window.qcOnTabActivated = function(){
     document.getElementById('qc-bulk-pi').addEventListener('change', function(){ qcAddBulkPhoto(this.files[0]); this.value=''; });
     document.getElementById('qc-bulk-pi-retake').addEventListener('change', function(){ qcAddBulkPhoto(this.files[0]); this.value=''; qcCloseViewer(); });
     // 作業予定・記録読み込み
-    qcGasPost('getRecords', {}, function(res){ if(res&&res.ok){ QC_ALL_RECORDS=res.records||[]; qcUpdatePendingBadge(); }}, function(){});
+    qcGasPost('getRecords', {}, function(res){ if(res&&res.ok){ QC_ALL_RECORDS=res.records||[]; qcUpdatePendingBadge(); setTimeout(function(){ try{ if(window.apRenderPool) window.apRenderPool(); }catch(e){} }, 0); }}, function(){});
     // QC_SAKUYO 読み込み状態を表示するヘルパー
     function _setSakuyoStatus(msg, color){
       var el=document.getElementById('qc-sakuyo-status');
@@ -10896,10 +10896,10 @@ function apGetJobs() {
   recs.forEach(rec => {
     if (rec[7] === '完納' || rec[7] === '完了') doneSet.add((rec[13]||'')+'_'+(rec[14]||''));
   });
-  // 製造番号×工順ごとの良品累計（品質チェックと同じ計算: 分納のみ加算、中間実績は除外）
+  // 製造番号×工順ごとの良品累計（品質チェックの「分納進捗 累計」と同じ: 完納以外の全レコードを合算）
   const ryohinMap = {};
   recs.forEach(rec => {
-    if (rec[7] === '分納') {
+    if (rec[7] !== '完納' && rec[7] !== '完了') {
       const key = (rec[13]||'') + '_' + (rec[14]||'');
       ryohinMap[key] = (ryohinMap[key] || 0) + (parseInt(rec[5]||0) || 0);
     }
