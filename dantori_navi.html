@@ -10763,18 +10763,31 @@ function apInit() {
   }
 }
 
+let apFbSakuyo = null; // Firebaseから取得した共有QC_SAKUYO
+
 async function apLoadFromFirebase() {
   const fbUrl = (config.firebaseUrl || '').replace(/\/+$/,'');
   if (!fbUrl) return;
   try {
+    // 組立計画設定を読み込み
     const r = await fetch(`${fbUrl}/${AP_FB_PATH}.json`);
-    if (!r.ok) return;
-    const d = await r.json();
-    if (!d) return;
-    if (d.workerAssign) apAssignMap = d.workerAssign;
-    if (d.optionalTasks) apOptionalTasks = Object.values(d.optionalTasks);
-    if (d.criteria) apCriteria = { ...apCriteria, ...d.criteria };
-    if (d.koteiMaster) apKoteiMaster = d.koteiMaster;
+    if (r.ok) {
+      const d = await r.json();
+      if (d) {
+        if (d.workerAssign) apAssignMap = d.workerAssign;
+        if (d.optionalTasks) apOptionalTasks = Object.values(d.optionalTasks);
+        if (d.criteria) apCriteria = { ...apCriteria, ...d.criteria };
+        if (d.koteiMaster) apKoteiMaster = d.koteiMaster;
+      }
+    }
+    // 品質チェックが保存した共有QC_SAKUYOも読み込み（全PC共通の品番リスト）
+    const r2 = await fetch(`${fbUrl}/settings/qcSakuyo.json`);
+    if (r2.ok) {
+      const d2 = await r2.json();
+      if (d2 && d2.data && d2.data.length) {
+        apFbSakuyo = d2.data;
+      }
+    }
   } catch(e) { console.warn('AP Firebase load:', e); }
 }
 
@@ -10794,6 +10807,10 @@ function apGetJobs() {
       const cached = localStorage.getItem('qcSakuyoCache');
       if (cached) QC_SAKUYO = JSON.parse(cached);
     } catch(e) {}
+  }
+  // localStorageにもなければFirebase共有データを使用（他PCでインポートしたデータ）
+  if (!QC_SAKUYO || !QC_SAKUYO.length) {
+    QC_SAKUYO = apFbSakuyo;
   }
   let QC_ALL_RECORDS = window.QC_ALL_RECORDS;
   if (!QC_ALL_RECORDS || !QC_ALL_RECORDS.length) {
