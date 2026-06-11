@@ -1180,7 +1180,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
                 <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #ddd;">品名</th>
                 <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">工程</th>
                 <th style="padding:6px 8px;text-align:center;border-bottom:1px solid #ddd;white-space:nowrap;">段取(分)</th>
-                <th style="padding:6px 8px;text-align:center;border-bottom:1px solid #ddd;white-space:nowrap;">工数(分)</th>
+                <th style="padding:6px 8px;text-align:center;border-bottom:1px solid #ddd;white-space:nowrap;">工数<br><span style="font-weight:400;font-size:9px;color:#888;">1個あたり(分)</span></th>
                 <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">優先1</th>
                 <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">優先2</th>
                 <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">優先3</th>
@@ -10840,18 +10840,20 @@ function apGetJobs() {
 
 // ジョブの稼働分を計算
 function apJobMins(s) {
-  // ①品番×工程キーで工数登録がある場合（最優先）
   const mapKey = s.hinban + '|' + (s.kosei||'');
   const a = apAssignMap[mapKey] || apAssignMap[s.hinban] || {};
+  const qty = parseFloat(s.shiji) || 1; // 指示数（生産予定数）
+  // ①品番×工程マスタに1個あたり工数が登録されている場合（最優先）
+  //   合計 = 段取り + (1個あたり分 × 数量)
   if (a.workMin > 0) {
-    return Math.min((a.setupMin || 0) + a.workMin, AP_WORK_MIN);
+    return Math.min((a.setupMin || 0) + a.workMin * qty, AP_WORK_MIN);
   }
-  // ②指示数 × 加工(M)（溶接等の実績データ）
+  // ②指示数 × 加工(M)（実績データ）
   if (s.kakoM && parseFloat(s.kakoM) > 0 && s.shiji && parseFloat(s.shiji) > 0)
-    return Math.min(Math.round(parseFloat(s.shiji) * parseFloat(s.kakoM)), AP_WORK_MIN);
-  // ③稼働時間H（8H→上限470分にキャップ）
+    return Math.min(Math.round(qty * parseFloat(s.kakoM)), AP_WORK_MIN);
+  // ③稼働時間H
   if (s.kadoH && parseFloat(s.kadoH) > 0) return Math.min(Math.round(parseFloat(s.kadoH) * 60), AP_WORK_MIN);
-  return AP_WORK_MIN; // デフォルト1日
+  return AP_WORK_MIN;
 }
 
 // ジョブの推奨担当者
