@@ -1186,7 +1186,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
       <span style="font-size:14px;font-weight:700;">⚙ 組立計画 設定</span>
       <button onclick="apCloseSettings()" style="background:none;border:none;color:#fff;font-size:18px;cursor:pointer;">×</button>
     </div>
-    <div style="padding:14px 16px;max-height:80vh;overflow-y:auto;overflow-x:hidden;">
+    <div style="padding:14px 16px;max-height:80vh;overflow-y:auto;overflow-x:visible;">
 
       <!-- タブ -->
       <div style="display:flex;gap:0;border-bottom:2px solid #e5e5e5;margin-bottom:14px;">
@@ -1216,6 +1216,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
                 <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">優先2</th>
                 <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">優先3</th>
                 <th style="padding:6px 8px;text-align:center;border-bottom:1px solid #ddd;white-space:nowrap;">優先品番</th>
+                <th style="padding:6px 8px;text-align:center;border-bottom:1px solid #ddd;white-space:nowrap;">並列可<br><span style="font-weight:400;font-size:9px;color:#888;">複数同時</span></th>
               </tr>
             </thead>
             <tbody id="ap-assign-tbody"></tbody>
@@ -10922,13 +10923,17 @@ function apNextFreeSlot(worker, durationMin, planRef) {
 }
 
 // 同品番の他worker割り当て時刻も避けた空き開始時刻
-function apNextFreeSlotForHinban(worker, durationMin, hinban, planRef) {
+function apNextFreeSlotForHinban(worker, durationMin, hinban, kosei, planRef) {
   const ref = planRef || apPlan;
-  // このworkerのスロット＋同品番の他workerスロットを合わせてブロック済みリストを作る
+  // 並列可フラグが立っている品番は他workerのブロックをしない
+  const mapKey = hinban + '|' + (kosei||'');
+  const assignEntry = apAssignMap[mapKey] || apAssignMap[hinban] || {};
+  const isParallel = !!assignEntry.parallel;
   const blocked = [];
   Object.entries(ref).forEach(([w, items]) => {
     items.forEach(j => {
-      if (w === worker || j.hinban === hinban) {
+      // 自分のworkerは常にブロック、他workerは並列可でなく同品番同工程の場合のみブロック
+      if (w === worker || (!isParallel && j.hinban === hinban && (j.kosei||'') === (kosei||''))) {
         blocked.push({ s: apHHMMtoMin(j.startTime), e: apHHMMtoMin(j.endTime) });
       }
     });
@@ -11085,7 +11090,7 @@ function apRenderBoard() {
           <td style="padding:4px 6px;width:88px;white-space:nowrap;color:#555;font-size:10px;">${j.startTime}〜${j.endTime}</td>
           <td style="padding:4px 6px;font-weight:700;color:${isOver?'#c0392b':'#1a1a1a'};max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${j.isOptional?'🔲':''} ${j.hinban}</td>
           <td style="padding:4px 6px;color:#888;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${j.hinmei}</td>
-          <td style="padding:4px 6px;white-space:nowrap;color:#555;">${j.shiji?`<span>${j.shiji}個</span>&nbsp;&nbsp;`:''}<span>${Math.round(j.durationMin)}分</span></td>
+          <td style="padding:4px 6px;white-space:nowrap;color:#555;">${isOver?`<span style="font-size:9px;padding:1px 4px;background:#c0392b;color:#fff;border-radius:3px;margin-right:4px;">納期超過</span>`:''}${j.noSetup?`<span style="font-size:9px;padding:1px 4px;border:1px solid #bbb;color:#888;border-radius:3px;margin-right:4px;">段取なし</span>`:`<span style="font-size:9px;padding:1px 4px;border:1px solid #93c5fd;color:#2563eb;border-radius:3px;margin-right:4px;">段取あり</span>`}${j.shiji?`<span>${j.shiji}個</span>&nbsp;&nbsp;`:''}<span>${Math.round(j.durationMin)} 分</span></td>
           <td style="padding:4px 4px;white-space:nowrap;">
             <button onclick="apToggleJobEdit('${worker}',${i})" style="padding:1px 6px;background:#e8f0fe;color:#1d4ed8;border:none;border-radius:3px;font-size:10px;cursor:pointer;font-family:inherit;">編集</button>
             <button onclick="apRemoveJob('${worker}',${i})" style="padding:1px 6px;background:#fee2e2;color:#c0392b;border:none;border-radius:3px;font-size:10px;cursor:pointer;font-family:inherit;">削除</button>
@@ -11154,18 +11159,18 @@ function apAutoAssign() {
     if (priorityList.length === 0) {
       noRegKeys.push(s.hinban + (s.kosei ? ' / '+s.kosei : '')); return;
     }
-    const candidates = priorityList;
-
-    for (const w of candidates) {
-      if (apEffectiveMax(w) === 0) continue; // 全休
+    // 優先担当者の中で最初に空いている1人に配置
+    // 並列可の場合は apNextFreeSlotForHinban 内で他workerのhinbanブロックをしないため
+    // 同品番の異工程が別workerで同時刻に配置される
+    for (const w of priorityList) {
+      if (apEffectiveMax(w) === 0) continue;
       if (workerMins[w] + dur > apEffectiveMax(w)) continue;
-      // 自worker のスロットと 同品番の他workerスロット 両方を避けた空き時間を探す
-      const startT = apNextFreeSlotForHinban(w, dur, s.hinban, plan);
+      const startT = apNextFreeSlotForHinban(w, dur, s.hinban, s.kosei||'', plan);
       if (startT >= apEffectiveEnd(w)) continue;
       const endT = apAdv(startT, dur);
       plan[w].push({ hinban:s.hinban, hinmei:s.hinmei, shiji:s.shiji, durationMin:dur,
         startTime:apHHMM(startT), endTime:apHHMM(endT), nouki:s['納期']||'',
-        seizoNo:s.seizoNo, junjo:s.junjo, _key:s.seizoNo+'_'+s.junjo });
+        seizoNo:s.seizoNo, junjo:s.junjo, kosei:s.kosei||'', _key:s.seizoNo+'_'+s.junjo });
       workerMins[w] += dur;
       placed.add(s.seizoNo+'_'+s.junjo);
       break;
@@ -11272,17 +11277,18 @@ window.apRenderLoadChart = function() {
   const baseDate = new Date(baseStr);
   const year = baseDate.getFullYear();
 
-  // 日付列を生成
+  // 日付列を生成（土日を除く）
   const dates = [];
-  for (let i = 0; i < numDays; i++) {
+  for (let i = 0; dates.length < numDays; i++) {
     const d = new Date(baseDate);
     d.setDate(baseDate.getDate() + i);
-    dates.push(d);
+    if (d.getDay() !== 0 && d.getDay() !== 6) dates.push(d);
+    if (i > numDays * 2 + 14) break; // 無限ループ防止
   }
 
   // 全ジョブを取得して担当者・納期でグルーピング
   const jobs = apGetJobs();
-  // worker → dateStr → { totalMins, items[] }
+  // worker → dateStr → { mins, count, items[] }
   const load = {};
   AP_WORKERS.forEach(w => { load[w] = {}; });
 
@@ -11300,11 +11306,16 @@ window.apRenderLoadChart = function() {
     const dueDate = new Date(`${year}/${m[1]}/${m[2]}`);
     // 基準日より前の納期は基準日に割り当て
     if (dueDate < baseDate) dueDate.setTime(baseDate.getTime());
+    // 土日は翌月曜に繰り上げ
+    while (dueDate.getDay() === 0 || dueDate.getDay() === 6) {
+      dueDate.setDate(dueDate.getDate() + 1);
+    }
     const dueDateStr = dueDate.toISOString().slice(0,10);
 
-    if (!load[worker][dueDateStr]) load[worker][dueDateStr] = { mins: 0, count: 0 };
+    if (!load[worker][dueDateStr]) load[worker][dueDateStr] = { mins: 0, count: 0, items: [] };
     load[worker][dueDateStr].mins += mins;
     load[worker][dueDateStr].count += 1;
+    load[worker][dueDateStr].items.push({ hinban: s.hinban, shiji: s.shiji });
   });
 
   // 今日の実績（apPlan）も別途表示
@@ -11339,12 +11350,18 @@ window.apRenderLoadChart = function() {
     dates.forEach(d => {
       const ds = d.toISOString().slice(0,10);
       const isBase = ds === baseStr;
-      const cell = load[worker][ds] || { mins:0, count:0 };
+      const cell = load[worker][ds] || { mins:0, count:0, items:[] };
       const dispMins = isBase ? planLoad[worker] : cell.mins;
       const count = isBase ? (apPlan[worker]||[]).length : cell.count;
       const pct = Math.round(dispMins / maxMin * 100);
       const barColor = pct > 100 ? '#c0392b' : pct > 85 ? '#d68910' : pct > 50 ? '#2563eb' : '#27ae60';
       const bg = isBase ? '#faf5ff' : '';
+      const cellItems = isBase
+        ? (apPlan[worker]||[]).map(j => ({ hinban: j.hinban, shiji: j.shiji }))
+        : (cell.items || []);
+      const itemsHtml = cellItems.slice(0,5).map(it =>
+        `<div style="font-size:9px;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80px;margin:0 auto;">${it.hinban}${it.shiji?` ×${it.shiji}`:''}</div>`
+      ).join('') + (cellItems.length > 5 ? `<div style="font-size:9px;color:#aaa;">他${cellItems.length-5}件</div>` : '');
       html += `<td style="padding:5px 8px;border:1px solid #ddd;text-align:center;background:${bg};vertical-align:top;">
         ${dispMins > 0 ? `
           <div style="font-size:12px;font-weight:700;color:${barColor};">${dispMins}分</div>
@@ -11352,6 +11369,7 @@ window.apRenderLoadChart = function() {
           <div style="height:4px;background:#e5e7eb;border-radius:2px;margin-top:2px;">
             <div style="height:100%;width:${Math.min(pct,100)}%;background:${barColor};border-radius:2px;"></div>
           </div>
+          <div style="margin-top:3px;text-align:left;">${itemsHtml}</div>
         ` : '<span style="color:#ccc;font-size:10px;">—</span>'}
       </td>`;
     });
@@ -11573,6 +11591,9 @@ function apBuildAssignTable() {
       </td>
       <td style="padding:5px 6px;text-align:center;">
         <input type="checkbox" ${a.priority?'checked':''} onchange="apUpdateAssign('${mapKey}','priority',this.checked)" style="width:14px;height:14px;cursor:pointer;">
+      </td>
+      <td style="padding:5px 6px;text-align:center;">
+        <input type="checkbox" ${a.parallel?'checked':''} onchange="apUpdateAssign('${mapKey}','parallel',this.checked)" style="width:14px;height:14px;cursor:pointer;">
       </td>
     </tr>`;
   }).join('');
