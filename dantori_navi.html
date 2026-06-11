@@ -10838,22 +10838,26 @@ function apGetJobs() {
   });
 }
 
-// ジョブの稼働分を計算
+// ジョブの稼働分を計算（品番マスタ未登録の場合は null を返す）
 function apJobMins(s) {
   const mapKey = s.hinban + '|' + (s.kosei||'');
   const a = apAssignMap[mapKey] || apAssignMap[s.hinban] || {};
-  const qty = parseFloat(s.shiji) || 1; // 指示数（生産予定数）
-  // ①品番×工程マスタに1個あたり工数が登録されている場合（最優先）
-  //   合計 = 段取り + (1個あたり分 × 数量)
-  if (a.workMin > 0) {
-    return Math.min((a.setupMin || 0) + a.workMin * qty, AP_WORK_MIN);
+  if (!(a.workMin > 0)) return null; // 未登録
+  const qty = parseFloat(s.shiji) || 1;
+  return Math.round(Math.min((a.setupMin || 0) + a.workMin * qty, AP_WORK_MIN));
+}
+
+// 担当者の計画済みアイテムを考慮した次の空き開始時刻を返す（planRef省略時はapPlanを使用）
+function apNextFreeSlot(worker, durationMin, planRef) {
+  const items = ((planRef || apPlan)[worker] || []).slice().sort((a,b) => apHHMMtoMin(a.startTime) - apHHMMtoMin(b.startTime));
+  let t = apNW(apEffectiveStart(worker));
+  for (const item of items) {
+    const s = apHHMMtoMin(item.startTime);
+    const e = apHHMMtoMin(item.endTime);
+    if (t + durationMin <= s) return t;
+    if (e > t) t = apNW(e);
   }
-  // ②指示数 × 加工(M)（実績データ）
-  if (s.kakoM && parseFloat(s.kakoM) > 0 && s.shiji && parseFloat(s.shiji) > 0)
-    return Math.min(Math.round(qty * parseFloat(s.kakoM)), AP_WORK_MIN);
-  // ③稼働時間H
-  if (s.kadoH && parseFloat(s.kadoH) > 0) return Math.min(Math.round(parseFloat(s.kadoH) * 60), AP_WORK_MIN);
-  return AP_WORK_MIN;
+  return t;
 }
 
 // ジョブの推奨担当者
@@ -10902,14 +10906,20 @@ function apRenderPool() {
   });
   const jobHtml = filtered.map(s => {
     const mins = apJobMins(s);
+    const noReg = mins === null;
     const worker = apJobWorker(s);
-    const isPri = apAssignMap[s.hinban]?.priority;
+    const isPri = !noReg && (apAssignMap[s.hinban+'|'+(s.kosei||'')]||apAssignMap[s.hinban]||{}).priority;
     const isOver = apIsOverdue(s['納期'], today);
-    return `<div class="ap-pool-item" style="background:#fff;border:1px solid #e5e5e5;border-radius:6px;padding:7px 9px;margin-bottom:4px;cursor:pointer;${isPri?'border-left:3px solid #2563eb;':''}${isOver?'border-left:3px solid #c0392b;':''}"
-      onclick="apAssignJob('${s.seizoNo}','${s.junjo}')">
+    const borderStyle = noReg ? 'border-left:3px solid #f59e0b;' : isPri ? 'border-left:3px solid #2563eb;' : isOver ? 'border-left:3px solid #c0392b;' : '';
+    const bgStyle = noReg ? 'background:#fffbeb;' : 'background:#fff;';
+    const clickHandler = noReg ? `onclick="apSetStatus('【${s.hinban} / ${(s.kosei||'').replace(/'/g,'')}】を設定画面の品番割り当てに登録してください','#b45309')"` : `onclick="apAssignJob('${s.seizoNo}','${s.junjo}')"`;
+    return `<div class="ap-pool-item" style="${bgStyle}border:1px solid #e5e5e5;border-radius:6px;padding:7px 9px;margin-bottom:4px;cursor:pointer;${borderStyle}"
+      ${clickHandler}>
       <div style="display:flex;justify-content:space-between;align-items:center;gap:4px;">
         <span style="font-size:12px;font-weight:700;color:${isOver?'#c0392b':'#1a1a1a'};flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${isPri?'★':''} ${s.hinban}</span>
-        <span style="font-size:10px;color:#888;white-space:nowrap;">${Math.round(mins/60*10)/10}H</span>
+        ${noReg
+          ? `<span style="font-size:9px;padding:1px 5px;background:#f59e0b;color:#fff;border-radius:3px;white-space:nowrap;">工数未登録</span>`
+          : `<span style="font-size:10px;color:#888;white-space:nowrap;">${Math.round(mins/60*10)/10}H</span>`}
       </div>
       <div style="font-size:10px;color:#666;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.hinmei}</div>
       <div style="display:flex;gap:4px;margin-top:3px;flex-wrap:wrap;">
@@ -10924,17 +10934,21 @@ function apRenderPool() {
     <div style="font-size:10px;color:#888;padding:4px 2px 2px;font-weight:600;">定型作業</div>
     ${optFiltered.map(t => {
       const dur = parseInt(t.durationMin)||30;
-      const wOpts = AP_WORKERS.map(w=>`<option value="${w}">${w}</option>`).join('');
+      const tid = t.id||t.name;
+      const wOpts = AP_WORKERS.map(w=>`<option value="${w}"${t.worker===w?' selected':''}>${w}</option>`).join('');
       return `<div style="background:#fafaf8;border:1px solid #e0e0dc;border-radius:6px;padding:7px 9px;margin-bottom:4px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:4px;margin-bottom:4px;">
-          <span style="font-size:12px;font-weight:700;color:#555;">${t.name||'(無題)'}</span>
-          <span style="font-size:10px;color:#888;">${Math.round(dur/60*10)/10}H</span>
-        </div>
-        <div style="display:flex;gap:4px;align-items:center;">
-          <select id="opt-sel-${t.id||t.name}" style="flex:1;padding:3px 5px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">
+        <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:5px;">${t.name||'(無題)'}</div>
+        <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">
+          <label style="font-size:10px;color:#888;white-space:nowrap;">開始</label>
+          <input type="time" id="opt-time-${tid}" value="${t.startTime||''}"
+            style="padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">
+          <label style="font-size:10px;color:#888;white-space:nowrap;">時間(分)</label>
+          <input type="number" id="opt-dur-${tid}" value="${dur}" min="1" max="470"
+            style="width:50px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;text-align:center;font-family:inherit;">
+          <select id="opt-sel-${tid}" style="flex:1;min-width:60px;padding:3px 5px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">
             ${wOpts}
           </select>
-          <button onclick="apAssignOptJob('${t.id||t.name}')" style="padding:3px 10px;background:#1a1a1a;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;">追加</button>
+          <button onclick="apAssignOptJob('${tid}')" style="padding:3px 10px;background:#1a1a1a;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;">追加</button>
         </div>
       </div>`;
     }).join('')}` : '';
@@ -10958,7 +10972,7 @@ function apRenderBoard() {
   let html = '';
   AP_WORKERS.forEach(worker => {
     const jobs = apPlan[worker] || [];
-    const totalMins = jobs.reduce((s,j)=>s+j.durationMin,0);
+    const totalMins = Math.round(jobs.reduce((s,j)=>s+(j.durationMin||0),0));
     const pct = Math.round(totalMins / apCriteria.maxMin * 100);
     const pctColor = pct > 100 ? '#c0392b' : pct > 85 ? '#d68910' : '#27ae60';
     const att = apAttendance[worker] || { type:'normal' };
@@ -11020,21 +11034,32 @@ function apAutoAssign() {
     return (a['納期']||'').localeCompare(b['納期']||'');
   });
 
-  // 担当者ごとの空き時間（勤怠考慮）
+  // プランをリセットして再構築
+  apPlan = {};
   const workerMins = {};
-  const workerTime = {};
-  AP_WORKERS.forEach(w => {
-    workerMins[w] = 0;
-    workerTime[w] = apNW(apEffectiveStart(w));
-  });
+  AP_WORKERS.forEach(w => { workerMins[w] = 0; });
 
   const plan = {};
   AP_WORKERS.forEach(w => plan[w] = []);
 
+  // 定型作業を指定時刻で先に配置
+  apOptionalTasks.forEach(t => {
+    const w = t.worker || AP_WORKERS[1];
+    if (!plan[w] || apEffectiveMax(w) === 0) return;
+    const dur = Math.round(parseInt(t.durationMin) || 30);
+    const startT = t.startTime ? apHHMMtoMin(t.startTime) : apNextFreeSlot(w, dur, plan);
+    const endT = apAdv(startT, dur);
+    plan[w].push({ hinban:t.name, hinmei:'定型作業', shiji:'', durationMin:dur,
+      startTime:apHHMM(startT), endTime:apHHMM(endT), nouki:'', isOptional:true, _key:t.id||t.name });
+    workerMins[w] += dur;
+  });
+
   // 通常ジョブを割り振り
   const placed = new Set();
+  const noRegKeys = [];
   sorted.forEach(s => {
     const dur = apJobMins(s);
+    if (dur === null) { noRegKeys.push(s.hinban + (s.kosei ? ' '+s.kosei : '')); return; } // 未登録スキップ
     const preferredW = apJobWorker(s);
 
     // 担当者候補を決める（優先1→2→3→残り）
@@ -11052,13 +11077,13 @@ function apAutoAssign() {
     for (const w of candidates) {
       if (apEffectiveMax(w) === 0) continue; // 全休
       if (workerMins[w] + dur > apEffectiveMax(w)) continue;
-      const startT = apNW(workerTime[w]);
+      const startT = apNextFreeSlot(w, dur, plan); // 既存スロットを避けて空き時間を探す
       if (startT >= AP_WE) continue;
       const endT = apAdv(startT, dur);
       plan[w].push({ hinban:s.hinban, hinmei:s.hinmei, shiji:s.shiji, durationMin:dur,
         startTime:apHHMM(startT), endTime:apHHMM(endT), nouki:s['納期']||'',
         seizoNo:s.seizoNo, junjo:s.junjo, _key:s.seizoNo+'_'+s.junjo });
-      workerTime[w] = endT; workerMins[w] += dur;
+      workerMins[w] += dur;
       placed.add(s.seizoNo+'_'+s.junjo);
       break;
     }
@@ -11067,8 +11092,11 @@ function apAutoAssign() {
   apPlan = plan;
   apRenderBoard();
   apRenderPool();
-  const unplaced = jobs.length - placed.size;
-  apSetStatus(`割り振り完了 ${placed.size}件配置${unplaced?` / ${unplaced}件未配置（工数超過）`:''}`, '#15803d');
+  const unplaced = jobs.length - placed.size - noRegKeys.length;
+  let msg = `割り振り完了 ${placed.size}件配置`;
+  if (unplaced > 0) msg += ` / ${unplaced}件未配置（工数超過）`;
+  if (noRegKeys.length > 0) msg += ` / 工数未登録 ${noRegKeys.length}件`;
+  apSetStatus(msg, noRegKeys.length > 0 ? '#b45309' : '#15803d');
 }
 
 // ── 進捗管理に反映 ────────────────────────────────────────
@@ -11190,16 +11218,13 @@ window.apRemoveJob = function(worker, idx) {
 window.apAssignOptJob = function(taskId) {
   const t = apOptionalTasks.find(x => (x.id||x.name) === taskId);
   if (!t) return;
-  const sel = document.getElementById('opt-sel-' + taskId);
-  const worker = sel ? sel.value : AP_WORKERS[0];
+  const worker = (document.getElementById('opt-sel-'+taskId)||{}).value || t.worker || AP_WORKERS[0];
+  const durVal = parseInt((document.getElementById('opt-dur-'+taskId)||{}).value) || parseInt(t.durationMin) || 30;
+  const timeVal = (document.getElementById('opt-time-'+taskId)||{}).value || '';
   if (!apPlan[worker]) apPlan[worker] = [];
-  const dur = parseInt(t.durationMin)||30;
-  const wt = apNW(apPlan[worker].reduce((mx, j) => {
-    const e = apHHMMtoMin(j.endTime||''); return e > mx ? e : mx;
-  }, apEffectiveStart(worker)));
-  const startT = wt;
-  const endT = apAdv(startT, dur);
-  apPlan[worker].push({ hinban:t.name, hinmei:'定型作業', shiji:'', durationMin:dur,
+  const startT = timeVal ? apHHMMtoMin(timeVal) : apNextFreeSlot(worker, durVal);
+  const endT = apAdv(startT, durVal);
+  apPlan[worker].push({ hinban:t.name, hinmei:'定型作業', shiji:'', durationMin:durVal,
     startTime:apHHMM(startT), endTime:apHHMM(endT), nouki:'', isOptional:true, _key:t.id||t.name });
   apRenderBoard(); apRenderPool();
 };
@@ -11313,14 +11338,17 @@ function apRenderOptionalList() {
   if (!apOptionalTasks.length) { el.innerHTML='<div style="font-size:11px;color:#aaa;">定型作業なし</div>'; return; }
   const opts = AP_WORKERS.map(w=>`<option value="${w}">${w}</option>`).join('');
   el.innerHTML = apOptionalTasks.map((t,i) => `
-    <div style="background:#fafaf8;border:1px solid #e5e5e5;border-radius:6px;padding:8px 10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-      <input type="checkbox" ${t.enabled!==false?'checked':''} onchange="apSetOptField(${i},'enabled',this.checked)" style="width:14px;height:14px;">
-      <input type="text" value="${t.name}" oninput="apSetOptField(${i},'name',this.value)" placeholder="作業名" style="flex:1;min-width:80px;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:12px;">
+    <div style="background:#fafaf8;border:1px solid #e5e5e5;border-radius:6px;padding:8px 10px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+      <input type="text" value="${t.name||''}" oninput="apSetOptField(${i},'name',this.value)" placeholder="作業名"
+        style="flex:1;min-width:90px;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:12px;">
       <select onchange="apSetOptField(${i},'worker',this.value)" style="padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:12px;font-family:inherit;">
         ${AP_WORKERS.map(w=>`<option value="${w}" ${t.worker===w?'selected':''}>${w}</option>`).join('')}
       </select>
+      <label style="font-size:11px;color:#888;white-space:nowrap;">開始</label>
+      <input type="time" value="${t.startTime||''}" oninput="apSetOptField(${i},'startTime',this.value)"
+        style="padding:3px 5px;border:1px solid #ddd;border-radius:4px;font-size:12px;font-family:inherit;">
       <input type="number" value="${t.durationMin||30}" min="1" max="480" oninput="apSetOptField(${i},'durationMin',parseInt(this.value)||30)"
-        style="width:60px;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:12px;" placeholder="分">
+        style="width:55px;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:12px;" placeholder="分">
       <span style="font-size:11px;color:#888;">分</span>
       <button onclick="apDelOptTask(${i})" style="padding:2px 7px;background:#fee2e2;color:#c0392b;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;">削除</button>
     </div>`).join('');
