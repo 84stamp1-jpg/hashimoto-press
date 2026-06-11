@@ -7706,14 +7706,31 @@ window.qcSaveAlloc = function(){
   var targets=QC_ALLOC_DATA.filter(function(d){ return d.alloc>0; });
   if(!targets.length){ alert('振分数が0の製造番号しかありません'); return; }
   var lastIdx=targets.length-1;
-  var btn=document.getElementById('qc-alloc-save-btn'); btn.disabled=true; btn.textContent='保存中...';
-  var saved=0, errors=[];
-  targets.forEach(function(d,i){
+  var btn=document.getElementById('qc-alloc-save-btn'); btn.disabled=true;
+  var errors=[];
+  // GASは同時リクエストを処理できないため1件ずつ順番に保存する
+  function saveNext(i){
+    if(i>=targets.length){
+      btn.textContent='この内容で保存する';
+      if(errors.length){
+        alert('一部エラー: '+errors.join(', '));
+        btn.disabled=false;
+      } else {
+        alert('✅ '+targets.length+'件の記録を保存しました');
+        QC_BULK_PHOTO=null;
+        qcGasPost('getRecords',{},function(r2){ QC_ALL_RECORDS=(r2&&r2.ok)?(r2.records||[]): []; },function(){});
+        qcShowScreen('list'); qcLoadRecords();
+      }
+      return;
+    }
+    var d=targets[i];
     var isLast=(i===lastIdx);
+    btn.textContent='保存中... ('+( i+1)+'/'+targets.length+'件目)';
     qcGasPost('submitRecord',{data:{date:dateStr,partNo:d.hinban,partName:d.hinmei,operator:op,prod:String(d.alloc),ng:String(isLast?ng:0),hokyu:String(isLast?hokyu:0),sonota:String(isLast?sonota:0),sonotaMemo:isLast?sonotaMemo:'',kanno:d.kubun,zairyo:'なし',memo:'',seizoNo:d.seizoNo,junjo:d.junjo,kosei:d.kosei,shiji:d.shiji,images:isLast&&QC_BULK_PHOTO?[QC_BULK_PHOTO]:[]}},
-    function(res){ saved++; if(!res.ok) errors.push(res.err); if(saved===targets.length){ if(errors.length){ alert('一部エラー: '+errors.join(', ')); } else{ alert('✅ '+targets.length+'件の記録を保存しました'); QC_BULK_PHOTO=null; qcGasPost('getRecords',{},function(r2){ QC_ALL_RECORDS=(r2&&r2.ok)?(r2.records||[]): []; },function(){}); qcShowScreen('list'); qcLoadRecords(); } btn.disabled=false; btn.textContent='この内容で保存する'; } },
-    function(e){ saved++; errors.push(e.message); if(saved===targets.length){ alert('エラー: '+errors.join(', ')); btn.disabled=false; btn.textContent='この内容で保存する'; } });
-  });
+    function(res){ if(!res.ok) errors.push(d.seizoNo+': '+(res.err||'保存失敗')); saveNext(i+1); },
+    function(e){ errors.push(d.seizoNo+': '+e.message); saveNext(i+1); });
+  }
+  saveNext(0);
 };
 
 // ----- カメラ -----
