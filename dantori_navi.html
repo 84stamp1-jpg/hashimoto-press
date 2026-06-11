@@ -10815,24 +10815,23 @@ function apInit() {
       apRenderOptionalList();
       apRenderCriteria();
       apRenderBoard();
-      // QC_ALL_RECORDSが未ロードならキャッシュ待ち→描画、ロード済みなら即描画
-      const tryRenderPool = () => {
-        const recs = window.QC_ALL_RECORDS;
-        if (recs && recs.length > 0) {
-          apRenderPool();
-        } else {
-          // GASの非同期取得完了を最大3秒待つ
-          let waited = 0;
-          const iv = setInterval(() => {
-            waited += 200;
-            if ((window.QC_ALL_RECORDS && window.QC_ALL_RECORDS.length > 0) || waited >= 3000) {
-              clearInterval(iv);
-              apRenderPool();
+      // QC_ALL_RECORDSが空ならGASから直接取得してから描画
+      if (window.QC_ALL_RECORDS && window.QC_ALL_RECORDS.length > 0) {
+        apRenderPool();
+      } else {
+        document.getElementById('ap-pool').innerHTML = '<div style="padding:12px;text-align:center;color:#aaa;font-size:11px;">実績データ読み込み中...</div>';
+        if (window.qcGasPost) {
+          window.qcGasPost('getRecords', {}, function(res) {
+            if (res && res.ok) {
+              window.QC_ALL_RECORDS = res.records || [];
+              try { localStorage.setItem('qcAllRecordsCache', JSON.stringify(window.QC_ALL_RECORDS)); } catch(e) {}
             }
-          }, 200);
+            apRenderPool();
+          }, function() { apRenderPool(); });
+        } else {
+          apRenderPool();
         }
-      };
-      tryRenderPool();
+      }
     });
   } else {
     apRenderPool();
