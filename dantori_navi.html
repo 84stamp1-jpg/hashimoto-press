@@ -10741,6 +10741,7 @@ function apNW(t) {
   return t;
 }
 function apHHMM(v) { const h=Math.floor(v/60),m=v%60; return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; }
+function apHHMMtoMin(s) { const p=s.split(':'); return (parseInt(p[0])||0)*60+(parseInt(p[1])||0); }
 
 // タブ切替時初期化
 function apInit() {
@@ -10793,9 +10794,12 @@ async function apLoadFromFirebase() {
 
 async function apSaveToFirebase(path, data) {
   const fbUrl = (config.firebaseUrl || '').replace(/\/+$/,'');
-  if (!fbUrl) return;
-  await fetch(`${fbUrl}/${AP_FB_PATH}/${path}.json`,
-    { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) });
+  if (!fbUrl) { console.warn('AP: firebaseUrl未設定'); return; }
+  try {
+    const res = await fetch(`${fbUrl}/${AP_FB_PATH}/${path}.json`,
+      { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data) });
+    if (!res.ok) console.error('AP Firebase save error:', res.status, await res.text());
+  } catch(e) { console.error('AP Firebase save failed:', e); }
 }
 
 // ── 作業予定データ取得 ──────────────────────────────────────
@@ -10880,9 +10884,11 @@ function apRenderPool() {
     if (q) return s.hinban.toLowerCase().includes(q)||s.hinmei.toLowerCase().includes(q);
     return true;
   });
-  document.getElementById('ap-pool-count').textContent = filtered.length+'件';
+  // 定型作業（未計画のもの）
+  const optFiltered = apOptionalTasks.filter(t => !plannedKeys.has(t.id||t.name));
+  document.getElementById('ap-pool-count').textContent = (filtered.length + optFiltered.length)+'件';
   const el = document.getElementById('ap-pool');
-  if (!filtered.length) { el.innerHTML='<div style="padding:16px;text-align:center;color:#aaa;font-size:12px;">未割り当てなし</div>'; return; }
+  if (!filtered.length && !optFiltered.length) { el.innerHTML='<div style="padding:16px;text-align:center;color:#aaa;font-size:12px;">未割り当てなし</div>'; return; }
   // 優先ソート
   const today = document.getElementById('ap-date')?.value || new Date().toISOString().slice(0,10);
   filtered.sort((a,b) => {
@@ -10892,7 +10898,7 @@ function apRenderPool() {
     const da = a['納期']||'99/99', db = b['納期']||'99/99';
     return da.localeCompare(db);
   });
-  el.innerHTML = filtered.map(s => {
+  const jobHtml = filtered.map(s => {
     const mins = apJobMins(s);
     const worker = apJobWorker(s);
     const isPri = apAssignMap[s.hinban]?.priority;
@@ -10911,6 +10917,27 @@ function apRenderPool() {
       </div>
     </div>`;
   }).join('');
+
+  const optHtml = optFiltered.length ? `
+    <div style="font-size:10px;color:#888;padding:4px 2px 2px;font-weight:600;">定型作業</div>
+    ${optFiltered.map(t => {
+      const dur = parseInt(t.durationMin)||30;
+      const wOpts = AP_WORKERS.map(w=>`<option value="${w}">${w}</option>`).join('');
+      return `<div style="background:#fafaf8;border:1px solid #e0e0dc;border-radius:6px;padding:7px 9px;margin-bottom:4px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:4px;margin-bottom:4px;">
+          <span style="font-size:12px;font-weight:700;color:#555;">${t.name||'(無題)'}</span>
+          <span style="font-size:10px;color:#888;">${Math.round(dur/60*10)/10}H</span>
+        </div>
+        <div style="display:flex;gap:4px;align-items:center;">
+          <select id="opt-sel-${t.id||t.name}" style="flex:1;padding:3px 5px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">
+            ${wOpts}
+          </select>
+          <button onclick="apAssignOptJob('${t.id||t.name}')" style="padding:3px 10px;background:#1a1a1a;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;">追加</button>
+        </div>
+      </div>`;
+    }).join('')}` : '';
+
+  el.innerHTML = jobHtml + optHtml;
 }
 
 function apIsOverdue(nouki, today) {
@@ -11001,20 +11028,6 @@ function apAutoAssign() {
 
   const plan = {};
   AP_WORKERS.forEach(w => plan[w] = []);
-
-  // 定型作業を先に配置（enabled のもの）
-  apOptionalTasks.filter(t => t.enabled !== false).forEach(t => {
-    const w = t.worker || AP_WORKERS[1];
-    if (!plan[w]) return;
-    if (apEffectiveMax(w) === 0) return;
-    const dur = parseInt(t.durationMin)||30;
-    if (workerMins[w] + dur > apEffectiveMax(w)) return;
-    const startT = apNW(workerTime[w]);
-    const endT = apAdv(startT, dur);
-    plan[w].push({ hinban: t.name, hinmei:'定型作業', shiji:'', durationMin:dur,
-      startTime:apHHMM(startT), endTime:apHHMM(endT), nouki:'', isOptional:true, _key:t.id||t.name });
-    workerTime[w] = endT; workerMins[w] += dur;
-  });
 
   // 通常ジョブを割り振り
   const placed = new Set();
@@ -11172,6 +11185,23 @@ window.apRemoveJob = function(worker, idx) {
   if (apPlan[worker]) { apPlan[worker].splice(idx,1); apRenderBoard(); apRenderPool(); }
 };
 
+window.apAssignOptJob = function(taskId) {
+  const t = apOptionalTasks.find(x => (x.id||x.name) === taskId);
+  if (!t) return;
+  const sel = document.getElementById('opt-sel-' + taskId);
+  const worker = sel ? sel.value : AP_WORKERS[0];
+  if (!apPlan[worker]) apPlan[worker] = [];
+  const dur = parseInt(t.durationMin)||30;
+  const wt = apNW(apPlan[worker].reduce((mx, j) => {
+    const e = apHHMMtoMin(j.endTime||''); return e > mx ? e : mx;
+  }, apEffectiveStart(worker)));
+  const startT = wt;
+  const endT = apAdv(startT, dur);
+  apPlan[worker].push({ hinban:t.name, hinmei:'定型作業', shiji:'', durationMin:dur,
+    startTime:apHHMM(startT), endTime:apHHMM(endT), nouki:'', isOptional:true, _key:t.id||t.name });
+  apRenderBoard(); apRenderPool();
+};
+
 window.apAddJobToWorker = function(worker) {
   const hinban = prompt('品番を入力してください:');
   if (!hinban) return;
@@ -11225,12 +11255,12 @@ function apBuildAssignTable() {
       <td style="padding:5px 6px;font-size:10px;white-space:nowrap;">${s.kosei}</td>
       <td style="padding:5px 4px;text-align:center;">
         <input type="number" value="${a.setupMin||''}" min="0" max="480" step="0.01" placeholder="0"
-          onchange="apUpdateAssign('${mapKey}','setupMin',parseFloat(this.value)||0)"
+          oninput="apUpdateAssign('${mapKey}','setupMin',parseFloat(this.value)||0)"
           style="width:56px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;text-align:center;">
       </td>
       <td style="padding:5px 4px;text-align:center;">
         <input type="number" value="${a.workMin||''}" min="0" max="470" step="0.01" placeholder="自動"
-          onchange="apUpdateAssign('${mapKey}','workMin',parseFloat(this.value)||0)"
+          oninput="apUpdateAssign('${mapKey}','workMin',parseFloat(this.value)||0)"
           style="width:56px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;text-align:center;">
       </td>
       <td style="padding:5px 4px;">
