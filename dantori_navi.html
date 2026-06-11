@@ -1081,6 +1081,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
   <input type="date" id="ap-date" style="padding:3px 8px;border:1px solid #555;border-radius:5px;background:#333;color:#fff;font-size:12px;">
   <button onclick="apAutoAssign()" style="padding:4px 12px;background:#2563eb;color:#fff;border:none;border-radius:5px;font-size:12px;cursor:pointer;font-family:inherit;">⚡ 自動割り振り</button>
   <button onclick="apPushToProgress()" style="padding:4px 12px;background:#16a34a;color:#fff;border:none;border-radius:5px;font-size:12px;cursor:pointer;font-family:inherit;">📊 進捗管理に反映</button>
+  <button onclick="apOpenLoadChart()" style="padding:4px 12px;background:#7c3aed;color:#fff;border:none;border-radius:5px;font-size:12px;cursor:pointer;font-family:inherit;">📈 負荷表</button>
   <button onclick="apOpenSettings()" style="padding:4px 10px;background:#444;color:#fff;border:none;border-radius:5px;font-size:12px;cursor:pointer;font-family:inherit;">⚙ 設定</button>
   <span id="ap-status" style="font-size:11px;color:#aaa;margin-left:4px;"></span>
 </div>
@@ -1104,6 +1105,31 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
   <!-- 右パネル: 担当者別スケジュール -->
   <div style="flex:1;overflow-y:auto;padding:10px 12px;background:#f5f5f3;">
     <div id="ap-board" style="display:flex;flex-direction:column;gap:10px;"></div>
+  </div>
+</div>
+
+<!-- 負荷表モーダル -->
+<div id="ap-load-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:2200;align-items:flex-start;justify-content:center;padding-top:30px;overflow-y:auto;">
+  <div style="background:#fff;border-radius:12px;width:900px;max-width:98vw;padding:0;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+    <div style="background:#7c3aed;color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-radius:12px 12px 0 0;">
+      <span style="font-size:14px;font-weight:700;">📈 作業者別 負荷表</span>
+      <button onclick="apCloseLoadChart()" style="background:none;border:none;color:#fff;font-size:18px;cursor:pointer;padding:0 4px;">✕</button>
+    </div>
+    <div style="padding:14px 16px;">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
+        <label style="font-size:12px;color:#666;">基準日:</label>
+        <input type="date" id="ap-load-basedate" style="padding:3px 8px;border:1px solid #ddd;border-radius:5px;font-size:12px;">
+        <label style="font-size:12px;color:#666;">表示日数:</label>
+        <select id="ap-load-days" style="padding:3px 8px;border:1px solid #ddd;border-radius:5px;font-size:12px;font-family:inherit;">
+          <option value="7">7日間</option>
+          <option value="14">14日間</option>
+          <option value="30">30日間</option>
+        </select>
+        <button onclick="apRenderLoadChart()" style="padding:4px 14px;background:#7c3aed;color:#fff;border:none;border-radius:5px;font-size:12px;cursor:pointer;font-family:inherit;">更新</button>
+        <span style="font-size:11px;color:#888;margin-left:4px;">※ 納期ベースの推定負荷（優先担当者への割り当て想定）</span>
+      </div>
+      <div id="ap-load-table" style="overflow-x:auto;"></div>
+    </div>
   </div>
 </div>
 
@@ -1166,6 +1192,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
       <div style="display:flex;gap:0;border-bottom:2px solid #e5e5e5;margin-bottom:14px;">
         <button class="ap-stab active" onclick="apSwitchSettingsTab('assign')" id="ap-stab-assign" style="padding:6px 14px;border:none;background:none;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid #1a1a1a;margin-bottom:-2px;font-family:inherit;">品番割り当て</button>
         <button class="ap-stab" onclick="apSwitchSettingsTab('optional')" id="ap-stab-optional" style="padding:6px 14px;border:none;background:none;font-size:12px;color:#888;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;">定型作業</button>
+        <button class="ap-stab" onclick="apSwitchSettingsTab('skill')" id="ap-stab-skill" style="padding:6px 14px;border:none;background:none;font-size:12px;color:#888;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;">スキル</button>
         <button class="ap-stab" onclick="apSwitchSettingsTab('criteria')" id="ap-stab-criteria" style="padding:6px 14px;border:none;background:none;font-size:12px;color:#888;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;">判定基準</button>
       </div>
 
@@ -1206,6 +1233,17 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
         <button onclick="apAddOptionalTask()" style="padding:5px 12px;background:#f0f0f0;border:1px solid #ddd;border-radius:5px;font-size:12px;cursor:pointer;font-family:inherit;">+ 定型作業を追加</button>
         <div style="margin-top:10px;text-align:right;">
           <button onclick="apSaveOptionalTasks()" style="padding:6px 16px;background:#1a1a1a;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;">保存</button>
+        </div>
+      </div>
+
+      <!-- スキルパネル -->
+      <div id="ap-spanel-skill" style="display:none;">
+        <div style="font-size:11px;color:#666;margin-bottom:10px;">工程ごとに担当できる作業者にチェックを入れてください。品番割り当て画面の担当者選択がスキルで絞り込まれます。</div>
+        <div style="overflow-x:auto;">
+          <table id="ap-skill-table" style="border-collapse:collapse;font-size:12px;min-width:500px;"></table>
+        </div>
+        <div style="margin-top:12px;text-align:right;">
+          <button onclick="apSaveSkill()" style="padding:6px 16px;background:#1a1a1a;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;">保存</button>
         </div>
       </div>
 
@@ -10716,6 +10754,7 @@ const AP_KOTEI_DEFAULT = [
 // 状態
 let apAssignMap = {};       // { hinban: { worker, priority } }
 let apOptionalTasks = [];   // [ { id, name, worker, durationMin, enabled, priority } ]
+let apWorkerSkills = {};    // { worker: ['溶接','検査', ...] } — 空の場合は全工程OK
 let apCriteria = { overdue:false, balance:true, preferred:true, maxMin:470, priorityParts:[] };
 let apKoteiMaster = {};     // { 工程名: { setupMin, dekaH, mainWorker, subWorker } }
 let apPlan = {};            // { worker: [ jobObj, ... ] }
@@ -10783,6 +10822,7 @@ async function apLoadFromFirebase() {
         if (d.optionalTasks) apOptionalTasks = Object.values(d.optionalTasks);
         if (d.criteria) apCriteria = { ...apCriteria, ...d.criteria };
         if (d.koteiMaster) apKoteiMaster = d.koteiMaster;
+        if (d.workerSkills) apWorkerSkills = d.workerSkills;
       }
     }
     // 品質チェックが保存した共有QC_SAKUYOも読み込み（全PC共通の品番リスト）
@@ -10877,6 +10917,27 @@ function apNextFreeSlot(worker, durationMin, planRef) {
     const e = apHHMMtoMin(item.endTime);
     if (t + durationMin <= s) return t;
     if (e > t) t = apNW(e);
+  }
+  return t;
+}
+
+// 同品番の他worker割り当て時刻も避けた空き開始時刻
+function apNextFreeSlotForHinban(worker, durationMin, hinban, planRef) {
+  const ref = planRef || apPlan;
+  // このworkerのスロット＋同品番の他workerスロットを合わせてブロック済みリストを作る
+  const blocked = [];
+  Object.entries(ref).forEach(([w, items]) => {
+    items.forEach(j => {
+      if (w === worker || j.hinban === hinban) {
+        blocked.push({ s: apHHMMtoMin(j.startTime), e: apHHMMtoMin(j.endTime) });
+      }
+    });
+  });
+  blocked.sort((a,b) => a.s - b.s);
+  let t = apNW(apEffectiveStart(worker));
+  for (const blk of blocked) {
+    if (t + durationMin <= blk.s) return t;
+    if (blk.e > t) t = apNW(blk.e);
   }
   return t;
 }
@@ -11088,24 +11149,18 @@ function apAutoAssign() {
   sorted.forEach(s => {
     const dur = apJobMins(s);
     if (dur === null) { noRegKeys.push(s.hinban + (s.kosei ? ' '+s.kosei : '')); return; } // 未登録スキップ
-    const preferredW = apJobWorker(s);
-
-    // 担当者候補を決める（優先1→2→3→残り）
-    let candidates = [];
+    // 担当者候補（優先1→2→3のみ。未登録ジョブは配置しない）
     const priorityList = apJobWorkerCandidates(s);
-    if (priorityList.length > 0 && apCriteria.preferred !== false) {
-      const rest = AP_WORKERS.filter(w => !priorityList.includes(w));
-      candidates = [...priorityList, ...rest];
-    } else if (apCriteria.balance !== false) {
-      candidates = [...AP_WORKERS].sort((a,b) => workerMins[a]-workerMins[b]);
-    } else {
-      candidates = [...AP_WORKERS];
+    if (priorityList.length === 0) {
+      noRegKeys.push(s.hinban + (s.kosei ? ' / '+s.kosei : '')); return;
     }
+    const candidates = priorityList;
 
     for (const w of candidates) {
       if (apEffectiveMax(w) === 0) continue; // 全休
       if (workerMins[w] + dur > apEffectiveMax(w)) continue;
-      const startT = apNextFreeSlot(w, dur, plan); // 既存スロットを避けて空き時間を探す
+      // 自worker のスロットと 同品番の他workerスロット 両方を避けた空き時間を探す
+      const startT = apNextFreeSlotForHinban(w, dur, s.hinban, plan);
       if (startT >= apEffectiveEnd(w)) continue;
       const endT = apAdv(startT, dur);
       plan[w].push({ hinban:s.hinban, hinmei:s.hinmei, shiji:s.shiji, durationMin:dur,
@@ -11198,6 +11253,130 @@ window.apEditAttendance = function(worker) {
 
 window.apCloseAttend = function() {
   document.getElementById('ap-attend-modal').style.display = 'none';
+};
+
+// ── 負荷表 ──────────────────────────────────────────────────
+window.apOpenLoadChart = function() {
+  const base = document.getElementById('ap-date')?.value || new Date().toISOString().slice(0,10);
+  document.getElementById('ap-load-basedate').value = base;
+  document.getElementById('ap-load-modal').style.display = 'flex';
+  apRenderLoadChart();
+};
+window.apCloseLoadChart = function() {
+  document.getElementById('ap-load-modal').style.display = 'none';
+};
+
+window.apRenderLoadChart = function() {
+  const baseStr = document.getElementById('ap-load-basedate')?.value || new Date().toISOString().slice(0,10);
+  const numDays = parseInt(document.getElementById('ap-load-days')?.value) || 7;
+  const baseDate = new Date(baseStr);
+  const year = baseDate.getFullYear();
+
+  // 日付列を生成
+  const dates = [];
+  for (let i = 0; i < numDays; i++) {
+    const d = new Date(baseDate);
+    d.setDate(baseDate.getDate() + i);
+    dates.push(d);
+  }
+
+  // 全ジョブを取得して担当者・納期でグルーピング
+  const jobs = apGetJobs();
+  // worker → dateStr → { totalMins, items[] }
+  const load = {};
+  AP_WORKERS.forEach(w => { load[w] = {}; });
+
+  jobs.forEach(s => {
+    const candidates = apJobWorkerCandidates(s);
+    const worker = candidates[0] || apJobWorker(s);
+    if (!worker || !AP_WORKERS.includes(worker)) return;
+    const mins = apJobMins(s);
+    if (mins === null) return;
+
+    // 納期を日付に変換
+    const nouki = s['納期'] || '';
+    const m = nouki.match(/(\d{1,2})\/(\d{1,2})/);
+    if (!m) return;
+    const dueDate = new Date(`${year}/${m[1]}/${m[2]}`);
+    // 基準日より前の納期は基準日に割り当て
+    if (dueDate < baseDate) dueDate.setTime(baseDate.getTime());
+    const dueDateStr = dueDate.toISOString().slice(0,10);
+
+    if (!load[worker][dueDateStr]) load[worker][dueDateStr] = { mins: 0, count: 0 };
+    load[worker][dueDateStr].mins += mins;
+    load[worker][dueDateStr].count += 1;
+  });
+
+  // 今日の実績（apPlan）も別途表示
+  const planLoad = {};
+  AP_WORKERS.forEach(w => {
+    planLoad[w] = Math.round((apPlan[w]||[]).reduce((s,j)=>s+(j.durationMin||0),0));
+  });
+
+  const maxMin = apCriteria.maxMin || 470;
+  const DOW = ['日','月','火','水','木','金','土'];
+
+  let html = `<table style="border-collapse:collapse;font-size:11px;width:100%;">
+    <thead>
+      <tr style="background:#f5f0ff;">
+        <th style="padding:7px 10px;border:1px solid #ddd;text-align:left;white-space:nowrap;min-width:60px;">担当者</th>`;
+  dates.forEach(d => {
+    const ds = d.toISOString().slice(0,10);
+    const isBase = ds === baseStr;
+    const dow = DOW[d.getDay()];
+    const isSat = d.getDay()===6, isSun = d.getDay()===0;
+    const bg = isBase ? '#ede9fe' : '';
+    const col = isSun ? '#c0392b' : isSat ? '#2563eb' : '';
+    html += `<th style="padding:6px 8px;border:1px solid #ddd;text-align:center;min-width:72px;background:${bg};${col?'color:'+col:''};white-space:nowrap;">
+      ${(d.getMonth()+1)}/${d.getDate()}(${dow})${isBase?'<br><span style="font-size:9px;background:#7c3aed;color:#fff;border-radius:3px;padding:0 3px;">今日</span>':''}
+    </th>`;
+  });
+  html += `</tr></thead><tbody>`;
+
+  AP_WORKERS.forEach(worker => {
+    html += `<tr>
+      <td style="padding:6px 10px;border:1px solid #ddd;font-weight:700;background:#fafaf8;white-space:nowrap;">${worker}</td>`;
+    dates.forEach(d => {
+      const ds = d.toISOString().slice(0,10);
+      const isBase = ds === baseStr;
+      const cell = load[worker][ds] || { mins:0, count:0 };
+      const dispMins = isBase ? planLoad[worker] : cell.mins;
+      const count = isBase ? (apPlan[worker]||[]).length : cell.count;
+      const pct = Math.round(dispMins / maxMin * 100);
+      const barColor = pct > 100 ? '#c0392b' : pct > 85 ? '#d68910' : pct > 50 ? '#2563eb' : '#27ae60';
+      const bg = isBase ? '#faf5ff' : '';
+      html += `<td style="padding:5px 8px;border:1px solid #ddd;text-align:center;background:${bg};vertical-align:top;">
+        ${dispMins > 0 ? `
+          <div style="font-size:12px;font-weight:700;color:${barColor};">${dispMins}分</div>
+          <div style="font-size:10px;color:#888;">${count}件 / ${pct}%</div>
+          <div style="height:4px;background:#e5e7eb;border-radius:2px;margin-top:2px;">
+            <div style="height:100%;width:${Math.min(pct,100)}%;background:${barColor};border-radius:2px;"></div>
+          </div>
+        ` : '<span style="color:#ccc;font-size:10px;">—</span>'}
+      </td>`;
+    });
+    html += `</tr>`;
+  });
+
+  // 合計行
+  html += `<tr style="background:#f5f0ff;">
+    <td style="padding:6px 10px;border:1px solid #ddd;font-weight:700;">合計</td>`;
+  dates.forEach(d => {
+    const ds = d.toISOString().slice(0,10);
+    const isBase = ds === baseStr;
+    let total = 0, cnt = 0;
+    AP_WORKERS.forEach(w => {
+      if (isBase) { total += planLoad[w]; cnt += (apPlan[w]||[]).length; }
+      else { total += (load[w][ds]?.mins||0); cnt += (load[w][ds]?.count||0); }
+    });
+    const bg = isBase ? '#ede9fe' : '';
+    html += `<td style="padding:6px 8px;border:1px solid #ddd;text-align:center;background:${bg};font-weight:700;font-size:11px;">
+      ${total>0 ? `${total}分<br><span style="font-weight:400;color:#888;">${cnt}件</span>` : '<span style="color:#ccc;">—</span>'}
+    </td>`;
+  });
+  html += `</tr></tbody></table>`;
+
+  document.getElementById('ap-load-table').innerHTML = html;
 };
 
 window.apSaveAttend = function() {
@@ -11334,19 +11513,20 @@ window.apOpenSettings = function() {
     apBuildAssignTable();
     apRenderOptionalList();
     apRenderCriteria();
+    apRenderSkillTable();
   });
   document.getElementById('ap-settings-modal').style.display = 'flex';
 };
 window.apCloseSettings = function() { document.getElementById('ap-settings-modal').style.display = 'none'; };
 
 window.apSwitchSettingsTab = function(tab) {
-  ['assign','optional','criteria','kotei'].forEach(t => {
+  ['assign','optional','skill','criteria','kotei'].forEach(t => {
     const el = document.getElementById('ap-spanel-'+t);
     if (el) el.style.display = t===tab ? 'block' : 'none';
     const btn = document.getElementById('ap-stab-'+t);
-    if (btn) { btn.style.borderBottomColor = t===tab?'#1a1a1a':'transparent'; btn.style.color = t===tab?'#1a1a1a':'#888'; }
+    if (btn) { btn.style.borderBottomColor = t===tab?'#1a1a1a':'transparent'; btn.style.color = t===tab?'#1a1a1a':'#888'; btn.style.fontWeight = t===tab?'600':'400'; }
   });
-  if (tab === 'kotei') apRenderKoteiTable();
+  if (tab === 'skill') apRenderSkillTable();
 };
 
 function apBuildAssignTable() {
@@ -11363,7 +11543,10 @@ function apBuildAssignTable() {
     const mapKey = s.hinban + '|' + (s.kosei||'');
     // 工数は 品番|工程 キーで、担当者は 品番 キーで参照（後方互換）
     const a = apAssignMap[mapKey] || apAssignMap[s.hinban] || {};
-    const wOpts = n => ['（未設定）',...AP_WORKERS].map(w =>
+    // スキル登録がある場合はその工程を担当できる作業者だけ表示
+    const capable = AP_WORKERS.filter(w => apWorkerCanDo(w, s.kosei));
+    const workerList = capable.length > 0 ? capable : AP_WORKERS;
+    const wOpts = n => ['（未設定）',...workerList].map(w =>
       `<option value="${w==='（未設定）'?'':w}" ${(a['worker'+n]||'')===(w==='（未設定）'?'':w)?'selected':''}>${w}</option>`).join('');
     return `<tr style="border-bottom:1px solid #f5f5f5;" data-hinban="${s.hinban}">
       <td style="padding:5px 6px;white-space:nowrap;font-size:11px;">${s.hinban}</td>
@@ -11566,6 +11749,78 @@ window.apRenderCriteria    = apRenderCriteria;
 window.apEditAttendance    = apEditAttendance;
 window.apCloseAttend       = apCloseAttend;
 window.apSaveAttend        = apSaveAttend;
+window.apOpenLoadChart     = apOpenLoadChart;
+window.apCloseLoadChart    = apCloseLoadChart;
+window.apRenderLoadChart   = apRenderLoadChart;
+
+// ── 作業者スキル ────────────────────────────────────────────
+// 工程キーワードと表示名のマスタ
+const AP_SKILL_KOSEI = [
+  '溶接(スポット)', '溶接(MAG)', '検査', '脱脂', '組付・ハンドワーク',
+  'フート・油圧', 'タップ', '旋盤', 'バフ', 'プレス D'
+];
+// kosei文字列がスキル名にマッチするか（部分一致）
+function apSkillMatch(kosei, skillName) {
+  const k = String(kosei||'').replace(/\s/g,'').toLowerCase();
+  const s = skillName.replace(/\s/g,'').replace(/[（()]/g,'(').toLowerCase();
+  // 特殊ケース
+  if (skillName === 'プレス D') return k.includes('プレスd') || k.includes('プレス　d');
+  if (skillName === '溶接(スポット)') return k.includes('溶接') && (k.includes('スポット') || (!k.includes('mag')));
+  if (skillName === '溶接(MAG)') return k.includes('溶接') && k.includes('mag');
+  if (skillName === '組付・ハンドワーク') return k.includes('組付') || k.includes('ハンドワーク');
+  if (skillName === 'フート・油圧') return k.includes('フート') || k.includes('油圧');
+  // それ以外は先頭キーワードで前方一致
+  return k.includes(s.split('(')[0].trim());
+}
+// このworkerがこのkosei工程を担当できるか
+function apWorkerCanDo(worker, kosei) {
+  const skills = apWorkerSkills[worker];
+  if (!skills || skills.length === 0) return true; // スキル未設定なら全工程OK
+  return skills.some(sk => apSkillMatch(kosei, sk));
+}
+
+function apRenderSkillTable() {
+  const tbl = document.getElementById('ap-skill-table');
+  if (!tbl) return;
+  let html = `<thead><tr style="background:#f5f5f3;">
+    <th style="padding:7px 10px;border:1px solid #ddd;text-align:left;min-width:80px;">作業者</th>`;
+  AP_SKILL_KOSEI.forEach(k => {
+    html += `<th style="padding:6px 8px;border:1px solid #ddd;text-align:center;font-size:11px;white-space:nowrap;">${k}</th>`;
+  });
+  html += `</tr></thead><tbody>`;
+  AP_WORKERS.forEach(w => {
+    const skills = apWorkerSkills[w] || [];
+    html += `<tr><td style="padding:6px 10px;border:1px solid #ddd;font-weight:700;background:#fafaf8;white-space:nowrap;">${w}</td>`;
+    AP_SKILL_KOSEI.forEach(k => {
+      const chk = skills.includes(k) ? 'checked' : '';
+      html += `<td style="padding:4px;border:1px solid #ddd;text-align:center;">
+        <input type="checkbox" ${chk} data-worker="${w}" data-skill="${k}"
+          style="width:15px;height:15px;cursor:pointer;" onchange="apToggleSkill('${w}','${k}',this.checked)">
+      </td>`;
+    });
+    html += `</tr>`;
+  });
+  html += `</tbody>`;
+  tbl.innerHTML = html;
+}
+
+window.apToggleSkill = function(worker, skill, checked) {
+  if (!apWorkerSkills[worker]) apWorkerSkills[worker] = [];
+  if (checked) {
+    if (!apWorkerSkills[worker].includes(skill)) apWorkerSkills[worker].push(skill);
+  } else {
+    apWorkerSkills[worker] = apWorkerSkills[worker].filter(s => s !== skill);
+  }
+};
+
+window.apSaveSkill = async function() {
+  await apSaveToFirebase('workerSkills', apWorkerSkills);
+  apSetStatus('スキルを保存しました', '#15803d');
+  apCloseSettings();
+};
+
+window.apRenderSkillTable = apRenderSkillTable;
+window.apSaveSkill = apSaveSkill;
 </script>
 </body>
 </html>
