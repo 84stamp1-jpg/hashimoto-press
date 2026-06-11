@@ -11281,10 +11281,12 @@ function apAutoAssign() {
   // プランをリセットして再構築
   apPlan = {};
   const workerMins = {};
-  AP_WORKERS.forEach(w => { workerMins[w] = 0; });
-
+  // 定型作業を先にplanに設定（スロット計算で時間帯を回避するため）
   const plan = {};
-  AP_WORKERS.forEach(w => plan[w] = []);
+  AP_WORKERS.forEach(w => {
+    plan[w] = savedOptionals[w] ? [...savedOptionals[w]] : [];
+    workerMins[w] = (savedOptionals[w]||[]).reduce((s,j)=>s+(j.durationMin||0), 0);
+  });
 
   // 通常ジョブを割り振り
   const placed = new Set();
@@ -11297,19 +11299,35 @@ function apAutoAssign() {
     if (priorityList.length === 0) {
       noRegKeys.push(s.hinban + (s.kosei ? ' / '+s.kosei : '')); return;
     }
-    // 優先担当者の中で最初に空いている1人に配置
-    // 並列可の場合は apNextFreeSlotForHinban 内で他workerのhinbanブロックをしないため
-    // 同品番の異工程が別workerで同時刻に配置される
+    const assignEntry = apAssignMap[s.hinban+'|'+(s.kosei||'')] || apAssignMap[s.hinban] || {};
+    const isParallel = !!assignEntry.parallel;
     for (const w of priorityList) {
       if (apEffectiveMax(w) === 0) continue;
-      if (workerMins[w] + dur > apEffectiveMax(w)) continue;
+      // 並列可: 同品番が既にこのworkerに配置済みなら別workerで同時並行
+      if (isParallel && plan[w].some(j => !j.isOptional && j.hinban === s.hinban)) continue;
+      // 残時間チェック（定型作業分を差し引いた実稼働上限）
+      const remainMax = apEffectiveMax(w) - workerMins[w];
+      if (remainMax <= 0) continue;
       const parallelOut = {};
       const startT = apNextFreeSlotForHinban(w, dur, s.hinban, s.kosei||'', plan, parallelOut);
       if (startT >= apEffectiveEnd(w)) continue;
-      // 並列可の場合は既存jobと同じ時間帯（start/end）に揃える
-      const actualDur = parallelOut.durationMin !== undefined ? parallelOut.durationMin : dur;
-      const endT = parallelOut.endMin !== undefined ? parallelOut.endMin : apAdv(startT, dur);
-      plan[w].push({ hinban:s.hinban, hinmei:s.hinmei, shiji:s.shiji, durationMin:actualDur,
+      // 並列可の場合は既存jobと同じ時間帯に揃える
+      let actualDur = parallelOut.durationMin !== undefined ? parallelOut.durationMin : dur;
+      let actualQty = parseFloat(s.shiji) || 1;
+      const endT_full = parallelOut.endMin !== undefined ? parallelOut.endMin : apAdv(startT, dur);
+      // 残時間より長い場合、数量を削って収める（並列jobは除く）
+      if (parallelOut.durationMin === undefined && actualDur > remainMax) {
+        const a = apGetAssign(s);
+        if (a && a.workMin > 0) {
+          const setupM = a.setupMin || 0;
+          const netRemain = remainMax - setupM;
+          if (netRemain < a.workMin) continue; // 1個も入らない
+          actualQty = Math.floor(netRemain / a.workMin);
+          actualDur = Math.round(setupM + a.workMin * actualQty);
+        } else { continue; }
+      }
+      const endT = parallelOut.endMin !== undefined ? parallelOut.endMin : apAdv(startT, actualDur);
+      plan[w].push({ hinban:s.hinban, hinmei:s.hinmei, shiji:String(actualQty), durationMin:actualDur,
         startTime:apHHMM(startT), endTime:apHHMM(endT), nouki:s['納期']||'',
         seizoNo:s.seizoNo, junjo:s.junjo, kosei:s.kosei||'', _key:s.seizoNo+'_'+s.junjo });
       workerMins[w] += actualDur;
@@ -11469,12 +11487,10 @@ window.apRenderLoadChart = function() {
   // 各ジョブを「納期までの最も空いている日」に配置（平準化）
   jobList.forEach(job => {
     const { worker, mins, hinban, shiji, dueDate, dueDateStr } = job;
-    // 表示範囲内で納期以前の日付を候補にする
+    // 表示範囲内で納期以前の日付を候補にする（今日も含める）
     const candidates = dateStrs.filter(ds => ds <= dueDateStr && ds >= baseStr);
-    // 今日（基準日）の実績は別途表示するのでスキップ
-    const futureCandidates = candidates.filter(ds => ds !== baseStr);
     let targetDs = dueDateStr; // デフォルトは納期日
-    if (futureCandidates.length > 0) {
+    if (candidates.length > 0) {
       // 最も負荷が少ない日に配置
       let minLoad = Infinity;
       for (const ds of futureCandidates) {
@@ -11521,13 +11537,15 @@ window.apRenderLoadChart = function() {
       const ds = d.toISOString().slice(0,10);
       const isBase = ds === baseStr;
       const cell = load[worker][ds] || { mins:0, count:0, items:[] };
-      const dispMins = isBase ? planLoad[worker] : cell.mins;
-      const count = isBase ? (apPlan[worker]||[]).length : cell.count;
+      // 今日: apPlanに計画があればそちら、なければ推定負荷を表示
+      const hasPlan = isBase && planLoad[worker] > 0;
+      const dispMins = isBase ? (hasPlan ? planLoad[worker] : cell.mins) : cell.mins;
+      const count = isBase ? (hasPlan ? (apPlan[worker]||[]).length : cell.count) : cell.count;
       const pct = Math.round(dispMins / maxMin * 100);
       const barColor = pct > 100 ? '#c0392b' : pct > 85 ? '#d68910' : pct > 50 ? '#2563eb' : '#27ae60';
       const bg = isBase ? '#faf5ff' : '';
       const cellItems = isBase
-        ? (apPlan[worker]||[]).map(j => ({ hinban: j.hinban, shiji: j.shiji }))
+        ? (hasPlan ? (apPlan[worker]||[]).map(j => ({ hinban: j.hinban, shiji: j.shiji })) : (cell.items||[]))
         : (cell.items || []);
       const itemsHtml = cellItems.slice(0,5).map(it =>
         `<div style="font-size:9px;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80px;margin:0 auto;">${it.hinban}${it.shiji?` ×${it.shiji}`:''}</div>`
@@ -11554,8 +11572,11 @@ window.apRenderLoadChart = function() {
     const isBase = ds === baseStr;
     let total = 0, cnt = 0;
     AP_WORKERS.forEach(w => {
-      if (isBase) { total += planLoad[w]; cnt += (apPlan[w]||[]).length; }
-      else { total += (load[w][ds]?.mins||0); cnt += (load[w][ds]?.count||0); }
+      if (isBase) {
+        const hasPlanW = planLoad[w] > 0;
+        total += hasPlanW ? planLoad[w] : (load[w][ds]?.mins||0);
+        cnt   += hasPlanW ? (apPlan[w]||[]).length : (load[w][ds]?.count||0);
+      } else { total += (load[w][ds]?.mins||0); cnt += (load[w][ds]?.count||0); }
     });
     const bg = isBase ? '#ede9fe' : '';
     html += `<td style="padding:6px 8px;border:1px solid #ddd;text-align:center;background:${bg};font-weight:700;font-size:11px;">
