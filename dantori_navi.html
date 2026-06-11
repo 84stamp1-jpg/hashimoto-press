@@ -6,6 +6,21 @@
 <title>H-Hub｜橋本工業</title>
 <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
+/* ===== スクロールバー常時表示 ===== */
+#ap-spanel-assign div[style*="overflow-x:scroll"],
+#ap-spanel-skill div[style*="overflow-x:scroll"] {
+  scrollbar-width: thin;
+  scrollbar-color: #aaa #f0f0f0;
+}
+#ap-spanel-assign div[style*="overflow-x:scroll"]::-webkit-scrollbar,
+#ap-spanel-skill div[style*="overflow-x:scroll"]::-webkit-scrollbar { width:8px; height:8px; }
+#ap-spanel-assign div[style*="overflow-x:scroll"]::-webkit-scrollbar-track,
+#ap-spanel-skill div[style*="overflow-x:scroll"]::-webkit-scrollbar-track { background:#f0f0f0; }
+#ap-spanel-assign div[style*="overflow-x:scroll"]::-webkit-scrollbar-thumb,
+#ap-spanel-skill div[style*="overflow-x:scroll"]::-webkit-scrollbar-thumb { background:#aaa; border-radius:4px; }
+#ap-spanel-assign div[style*="overflow-x:scroll"]::-webkit-scrollbar-corner,
+#ap-spanel-skill div[style*="overflow-x:scroll"]::-webkit-scrollbar-corner { background:#f0f0f0; }
+
 /* ===== RESET & BASE ===== */
 *{box-sizing:border-box;margin:0;padding:0;}
 /* kintoneのiframe内でのレイアウト崩れ防止 */
@@ -1186,7 +1201,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
       <span style="font-size:14px;font-weight:700;">⚙ 組立計画 設定</span>
       <button onclick="apCloseSettings()" style="background:none;border:none;color:#fff;font-size:18px;cursor:pointer;">×</button>
     </div>
-    <div style="padding:14px 16px;max-height:80vh;overflow-y:auto;overflow-x:visible;">
+    <div style="padding:14px 16px;">
 
       <!-- タブ -->
       <div style="display:flex;gap:0;border-bottom:2px solid #e5e5e5;margin-bottom:14px;">
@@ -1203,8 +1218,8 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
           <input id="ap-assign-search" type="text" placeholder="品番で検索" oninput="apFilterAssignTable()"
             style="flex:1;padding:5px 8px;border:1px solid #ddd;border-radius:5px;font-size:12px;">
         </div>
-        <div style="overflow-x:scroll;">
-          <table style="min-width:700px;border-collapse:collapse;font-size:12px;" id="ap-assign-table">
+        <div style="overflow-x:scroll;overflow-y:auto;max-height:calc(80vh - 200px);border:1px solid #e5e5e5;border-radius:4px;">
+          <table style="min-width:780px;border-collapse:collapse;font-size:12px;" id="ap-assign-table">
             <thead>
               <tr style="background:#f5f5f3;">
                 <th style="padding:6px 8px;text-align:left;border-bottom:1px solid #ddd;white-space:nowrap;">品番</th>
@@ -1240,7 +1255,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
       <!-- スキルパネル -->
       <div id="ap-spanel-skill" style="display:none;">
         <div style="font-size:11px;color:#666;margin-bottom:10px;">工程ごとに担当できる作業者にチェックを入れてください。品番割り当て画面の担当者選択がスキルで絞り込まれます。</div>
-        <div style="overflow-x:auto;">
+        <div style="overflow-x:scroll;overflow-y:auto;max-height:calc(80vh - 200px);border:1px solid #e5e5e5;border-radius:4px;">
           <table id="ap-skill-table" style="border-collapse:collapse;font-size:12px;min-width:500px;"></table>
         </div>
         <div style="margin-top:12px;text-align:right;">
@@ -10823,7 +10838,13 @@ async function apLoadFromFirebase() {
         if (d.optionalTasks) apOptionalTasks = Object.values(d.optionalTasks);
         if (d.criteria) apCriteria = { ...apCriteria, ...d.criteria };
         if (d.koteiMaster) apKoteiMaster = d.koteiMaster;
-        if (d.workerSkills) apWorkerSkills = d.workerSkills;
+        if (d.workerSkills) {
+          // Firebaseは配列をオブジェクトに変換する場合があるので配列に戻す
+          apWorkerSkills = {};
+          Object.entries(d.workerSkills).forEach(([w, v]) => {
+            apWorkerSkills[w] = Array.isArray(v) ? v : Object.values(v || {});
+          });
+        }
       }
     }
     // 品質チェックが保存した共有QC_SAKUYOも読み込み（全PC共通の品番リスト）
