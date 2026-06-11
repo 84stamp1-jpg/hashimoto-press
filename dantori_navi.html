@@ -6766,7 +6766,7 @@ window.qcOnTabActivated = function(){
     document.getElementById('qc-bulk-pi').addEventListener('change', function(){ qcAddBulkPhoto(this.files[0]); this.value=''; });
     document.getElementById('qc-bulk-pi-retake').addEventListener('change', function(){ qcAddBulkPhoto(this.files[0]); this.value=''; qcCloseViewer(); });
     // 作業予定・記録読み込み
-    qcGasPost('getRecords', {}, function(res){ if(res&&res.ok){ QC_ALL_RECORDS=res.records||[]; qcUpdatePendingBadge(); setTimeout(function(){ try{ if(window.apRenderPool) window.apRenderPool(); }catch(e){} }, 0); }}, function(){});
+    qcGasPost('getRecords', {}, function(res){ if(res&&res.ok){ QC_ALL_RECORDS=res.records||[]; try{ localStorage.setItem('qcAllRecordsCache', JSON.stringify(QC_ALL_RECORDS)); }catch(e){} qcUpdatePendingBadge(); setTimeout(function(){ try{ if(window.apRenderPool) window.apRenderPool(); }catch(e){} }, 0); }}, function(){});
     // QC_SAKUYO 読み込み状態を表示するヘルパー
     function _setSakuyoStatus(msg, color){
       var el=document.getElementById('qc-sakuyo-status');
@@ -7445,7 +7445,7 @@ window.qcGoToday = function(){ var t=new Date(); QC_VIEW_DATE=new Date(t.getFull
 
 function qcLoadRecords(){
   document.getElementById('qc-rec-list').innerHTML='<div class="qc-loading">読み込み中...</div>';
-  qcGasPost('getRecords',{}, function(res){ QC_ALL_RECORDS=(res&&res.ok)?(res.records||[]): []; qcFilterRecords(); qcUpdatePendingBadge(); }, function(){ document.getElementById('qc-rec-list').innerHTML='<div class="qc-empty">読み込みエラー</div>'; });
+  qcGasPost('getRecords',{}, function(res){ QC_ALL_RECORDS=(res&&res.ok)?(res.records||[]): []; try{ localStorage.setItem('qcAllRecordsCache', JSON.stringify(QC_ALL_RECORDS)); }catch(e){} qcFilterRecords(); qcUpdatePendingBadge(); setTimeout(function(){ try{ if(window.apRenderPool) window.apRenderPool(); }catch(e){} }, 0); }, function(){ document.getElementById('qc-rec-list').innerHTML='<div class="qc-empty">読み込みエラー</div>'; });
 }
 function qcGetViewDateStr(){ return QC_VIEW_DATE.getFullYear()+'/'+ ('0'+(QC_VIEW_DATE.getMonth()+1)).slice(-2)+'/'+ ('0'+QC_VIEW_DATE.getDate()).slice(-2); }
 function qcFilterRecords(){
@@ -10814,8 +10814,25 @@ function apInit() {
       apBuildAssignTable();
       apRenderOptionalList();
       apRenderCriteria();
-      apRenderPool();
       apRenderBoard();
+      // QC_ALL_RECORDSが未ロードならキャッシュ待ち→描画、ロード済みなら即描画
+      const tryRenderPool = () => {
+        const recs = window.QC_ALL_RECORDS;
+        if (recs && recs.length > 0) {
+          apRenderPool();
+        } else {
+          // GASの非同期取得完了を最大3秒待つ
+          let waited = 0;
+          const iv = setInterval(() => {
+            waited += 200;
+            if ((window.QC_ALL_RECORDS && window.QC_ALL_RECORDS.length > 0) || waited >= 3000) {
+              clearInterval(iv);
+              apRenderPool();
+            }
+          }, 200);
+        }
+      };
+      tryRenderPool();
     });
   } else {
     apRenderPool();
