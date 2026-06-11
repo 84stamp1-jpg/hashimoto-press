@@ -6046,9 +6046,14 @@ async function autoAssignRoles(){
     }
   });
   // 作業者wの優先ラインがcurrentLineと異なり、かつprodRange[s〜e]で稼働中かどうか
+  // ※優先ラインが既に処理済み（processedLines）の場合、その結果は busyMap に反映済みなので
+  //   ここでは弾かない（不要な流出防止で空き作業者が未割当になるのを防ぐ）
+  const processedLines = new Set();
   function _isPriorityLineConflict(w, currentLineId, s, e){
     const priLine = WORKER_PRIORITY_LINE[w];
     if(!priLine || priLine === currentLineId) return false;
+    // 優先ラインが既に処理済み → busyMapに反映済みなのでここでは弾かない
+    if(processedLines.has(priLine)) return false;
     return (_lineProdRanges[priLine] || []).some(r => r.s < e && r.e > s);
   }
 
@@ -6352,6 +6357,8 @@ async function autoAssignRoles(){
     }
 
     entry.roles = roles;
+    // このラインの処理完了を記録（以降のラインで _isPriorityLineConflict が不要にならないよう）
+    processedLines.add(entry.lineId);
   });
 
   // ── 余り時間 計算 ────────────────────────────
