@@ -11188,6 +11188,9 @@ const _ndv = s => { const m=(s||'').match(/(\d+)\/(\d+)/); return m?parseInt(m[1
 // ── ボード描画 ──────────────────────────────────────────────
 function apRenderBoard() {
   const el = document.getElementById('ap-board');
+  // 展開中の行IDを保存して再描画後に復元
+  const openIds = new Set();
+  el.querySelectorAll('tr[id]').forEach(r => { if (r.style.display !== 'none') openIds.add(r.id); });
   const today = document.getElementById('ap-date')?.value || '';
   let html = '';
   AP_WORKERS.forEach(worker => {
@@ -11330,6 +11333,11 @@ function apRenderBoard() {
     html += `</div></div>`;
   });
   el.innerHTML = html;
+  // 展開状態を復元
+  openIds.forEach(id => {
+    const r = document.getElementById(id);
+    if (r) r.style.display = 'table-row';
+  });
 }
 
 // ── 自動割り振り ──────────────────────────────────────────
