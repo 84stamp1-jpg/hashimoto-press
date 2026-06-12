@@ -1296,6 +1296,11 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
               style="width:100px;padding:4px 8px;border:1px solid #ddd;border-radius:5px;font-size:12px;">
             <span style="font-size:11px;color:#888;margin-left:6px;">（標準: 470分 = 8:10〜17:00 休憩除く）</span>
           </div>
+          <div>
+            <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px;">担当者 → 進捗管理ラインID マッピング</label>
+            <div style="font-size:11px;color:#888;margin-bottom:6px;">担当者名と進捗管理のラインIDが異なる場合に設定します。例：永丘 → ロボットライン</div>
+            <div id="ap-worker-line-map" style="display:flex;flex-direction:column;gap:4px;"></div>
+          </div>
         </div>
         <div style="margin-top:14px;text-align:right;">
           <button onclick="apSaveCriteria()" style="padding:6px 16px;background:#1a1a1a;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;">保存</button>
@@ -10797,6 +10802,7 @@ let apAssignMap = {};       // { hinban: { worker, priority } }
 let apOptionalTasks = [];   // [ { id, name, worker, durationMin, enabled, priority } ]
 let apWorkerSkills = {};    // { worker: ['溶接','検査', ...] } — 空の場合は全工程OK
 let apCriteria = { overdue:false, balance:true, preferred:true, maxMin:470, priorityParts:[] };
+let apWorkerLineMap = {}; // { 担当者名: 進捗管理のlineId } 例: { '永丘': 'ロボットライン' }
 let apKoteiMaster = {};     // { 工程名: { setupMin, dekaH, mainWorker, subWorker } }
 let apPlan = {};            // { worker: [ jobObj, ... ] }
 let apAttendance = {};      // { worker: { type:'normal'|'absent'|'late'|'early'|'unavail', startMin, endMin } }
@@ -10878,6 +10884,7 @@ async function apLoadFromFirebase() {
         if (d.workerAssign) apAssignMap = d.workerAssign;
         if (d.optionalTasks) apOptionalTasks = Object.values(d.optionalTasks);
         if (d.criteria) apCriteria = { ...apCriteria, ...d.criteria };
+        if (d.workerLineMap) apWorkerLineMap = d.workerLineMap;
         if (d.koteiMaster) apKoteiMaster = d.koteiMaster;
         if (d.workerSkills) {
           // Firebaseは配列をオブジェクトに変換する場合があるので配列に戻す
@@ -11745,18 +11752,20 @@ async function apPushToProgress() {
         }
         return base;
       });
-      updates[`lines/${worker}/jobs`]      = jobs;
-      updates[`lines/${worker}/plan`]      = jobs.reduce((s,j)=>s+(j.plan||0),0);
-      updates[`lines/${worker}/name`]      = worker;
+      // 担当者名 → 進捗管理lineId（マッピングがなければ担当者名そのまま）
+      const lineId = apWorkerLineMap[worker] || worker;
+      updates[`lines/${lineId}/jobs`]      = jobs;
+      updates[`lines/${lineId}/plan`]      = jobs.reduce((s,j)=>s+(j.plan||0),0);
+      updates[`lines/${lineId}/name`]      = lineId;
       if (!mergeMode) {
         // 完全上書き: トップレベルの実績・状態もリセット
-        updates[`lines/${worker}/actual`]      = 0;
-        updates[`lines/${worker}/status`]      = 'waiting';
-        updates[`lines/${worker}/workStart`]   = '';
-        updates[`lines/${worker}/workEnd`]     = '';
-        updates[`lines/${worker}/updatedAt`]   = 0;
-        updates[`lines/${worker}/prevUpdatedAt`]  = 0;
-        updates[`lines/${worker}/prev2UpdatedAt`] = 0;
+        updates[`lines/${lineId}/actual`]      = 0;
+        updates[`lines/${lineId}/status`]      = 'waiting';
+        updates[`lines/${lineId}/workStart`]   = '';
+        updates[`lines/${lineId}/workEnd`]     = '';
+        updates[`lines/${lineId}/updatedAt`]   = 0;
+        updates[`lines/${lineId}/prevUpdatedAt`]  = 0;
+        updates[`lines/${lineId}/prev2UpdatedAt`] = 0;
       }
     });
     const sdk = window._fbSDK;
@@ -12490,6 +12499,17 @@ function apRenderCriteria() {
   if (el('ap-crit-balance'))   el('ap-crit-balance').checked   = apCriteria.balance !== false;
   if (el('ap-crit-preferred')) el('ap-crit-preferred').checked = apCriteria.preferred !== false;
   if (el('ap-crit-maxmin'))    el('ap-crit-maxmin').value      = apCriteria.maxMin || 470;
+  // 担当者→lineIdマッピング表示
+  const wlm = document.getElementById('ap-worker-line-map');
+  if (wlm) {
+    wlm.innerHTML = AP_WORKERS.map(w => `
+      <div style="display:flex;align-items:center;gap:6px;font-size:12px;">
+        <span style="width:60px;font-weight:600;">${w}</span>
+        <span style="color:#aaa;font-size:11px;">→</span>
+        <input id="ap-wlm-${w}" type="text" value="${apWorkerLineMap[w]||''}" placeholder="${w}（変更なし）"
+          style="flex:1;padding:3px 7px;border:1px solid #ddd;border-radius:4px;font-size:12px;font-family:inherit;">
+      </div>`).join('');
+  }
   // 優先品番タグ表示
   const pp = document.getElementById('ap-priority-parts-list');
   if (pp) pp.innerHTML = (apCriteria.priorityParts||[]).map((p,i)=>
@@ -12512,7 +12532,15 @@ window.apSaveCriteria = async function() {
   apCriteria.balance   = document.getElementById('ap-crit-balance')?.checked;
   apCriteria.preferred = document.getElementById('ap-crit-preferred')?.checked;
   apCriteria.maxMin    = parseInt(document.getElementById('ap-crit-maxmin')?.value)||470;
+  // 担当者→lineIdマッピングを収集（空欄は削除）
+  const newMap = {};
+  AP_WORKERS.forEach(w => {
+    const v = document.getElementById(`ap-wlm-${w}`)?.value?.trim();
+    if (v && v !== w) newMap[w] = v;
+  });
+  apWorkerLineMap = newMap;
   await apSaveToFirebase('criteria', apCriteria);
+  await apSaveToFirebase('workerLineMap', apWorkerLineMap);
   apSetStatus('判定基準を保存しました', '#15803d');
   apCloseSettings();
 };
