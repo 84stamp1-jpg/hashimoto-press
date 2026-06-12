@@ -11956,16 +11956,19 @@ window.apApplyJob = function(fromWorker, idx) {
   const startVal = document.getElementById(`ap-jstart-${fromWorker}-${idx}`)?.value;
   const endVal   = document.getElementById(`ap-jend-${fromWorker}-${idx}`)?.value;
 
-  let overflowJob = null; // 指示数超過時の次製造番号ジョブ
+  let overflowJob = null;
+  const oldEndTime = job.endTime; // 連続作業チェーン用に保存
 
   if (startVal) {
     const startMin = apHHMMtoMin(startVal);
+    // 終了時間が空欄または変更なし → 開始時間のみ変更（数量・duration維持）
+    const endChanged = endVal && endVal !== job.endTime;
 
-    if (!endVal) {
-      // 終了時間が空欄 → 元のdurationMinで終了時間を自動計算（数量変更なし）
+    if (!endChanged) {
       job.startTime = startVal;
       job.endTime   = apHHMM(apAdv(startMin, job.durationMin));
     } else {
+      // 終了時間を明示変更 → 数量を再計算
       const endMin = apHHMMtoMin(endVal);
       if (endMin > startMin) {
         const newDurMin = apWorkIn(startMin, endMin);
@@ -11980,24 +11983,24 @@ window.apApplyJob = function(fromWorker, idx) {
             const setupMin  = job.noSetup ? 0 : (a.setupMin || 0);
             const netMin    = newDurMin - setupMin;
             const calcQty   = Math.floor(Math.max(0, netMin) / a.workMin);
-            const origShiji = parseFloat(s?.shiji) || 0;
+            // sakuyoから指示数取得。なければjob自身のshijiを上限とする
+            const origShiji = s ? (parseFloat(s.shiji) || 0) : (parseFloat(job.shiji) || 0);
 
             if (origShiji > 0 && calcQty > origShiji) {
-              // 指示数を超える → このjobはorigShijiまでに収める
+              // 指示数超過 → このjobをorigShijiまでに収め、残りを次の製造番号へ
               job.shiji = String(origShiji);
               const capDur = Math.round(setupMin + a.workMin * origShiji);
               job.durationMin = capDur;
               job.endTime     = apHHMM(apAdv(startMin, capDur));
 
-              // 次の製造番号を探す（同品番・同工程で未計画のもの）
               const plannedKeys = new Set(Object.values(apPlan).flat().map(j2 => j2._key));
               const nextS = apGetSakuyo().find(x =>
-                x.hinban === s.hinban && (x.kosei||'') === (s.kosei||'') &&
-                x.seizoNo !== s.seizoNo &&
+                x.hinban === (s?.hinban || job.hinban) && (x.kosei||'') === (s?.kosei || job.kosei||'') &&
+                x.seizoNo !== job.seizoNo &&
                 !plannedKeys.has(x.seizoNo + '_' + x.junjo)
               );
               if (nextS) {
-                const nextQty  = Math.min(calcQty - origShiji, parseFloat(nextS.shiji) || 0);
+                const nextQty = Math.min(calcQty - origShiji, parseFloat(nextS.shiji) || 0);
                 if (nextQty > 0) {
                   const nextStart = apHHMMtoMin(job.endTime);
                   const nextDur   = Math.round((a.setupMin||0) + a.workMin * nextQty);
@@ -12026,10 +12029,22 @@ window.apApplyJob = function(fromWorker, idx) {
     apPlan[toWorker].push(job);
   }
 
-  // 次製造番号ジョブを配置先担当者に追加
+  // 次製造番号ジョブ追加
   if (overflowJob) {
     if (!apPlan[toWorker]) apPlan[toWorker] = [];
     apPlan[toWorker].push(overflowJob);
+  }
+
+  // 連続作業チェーン: 旧終了時間に開始している同品番・同工程の次ジョブを連動更新
+  if (oldEndTime !== job.endTime) {
+    (apPlan[toWorker] || []).forEach(j2 => {
+      if (j2 !== job && j2.hinban === job.hinban && (j2.kosei||'') === (job.kosei||'')
+          && j2.startTime === oldEndTime) {
+        const newStart2 = apHHMMtoMin(job.endTime);
+        j2.startTime = job.endTime;
+        j2.endTime   = apHHMM(apAdv(newStart2, j2.durationMin));
+      }
+    });
   }
 
   apRenderBoard(); apRenderPool(); apSavePlan();
