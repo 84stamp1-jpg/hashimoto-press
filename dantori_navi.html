@@ -11745,9 +11745,19 @@ async function apPushToProgress() {
         }
         return base;
       });
-      updates[`lines/${worker}/jobs`] = jobs;
-      updates[`lines/${worker}/plan`] = jobs.reduce((s,j)=>s+(j.plan||0),0);
-      if (!updates[`lines/${worker}/name`]) updates[`lines/${worker}/name`] = worker;
+      updates[`lines/${worker}/jobs`]      = jobs;
+      updates[`lines/${worker}/plan`]      = jobs.reduce((s,j)=>s+(j.plan||0),0);
+      updates[`lines/${worker}/name`]      = worker;
+      if (!mergeMode) {
+        // 完全上書き: トップレベルの実績・状態もリセット
+        updates[`lines/${worker}/actual`]      = 0;
+        updates[`lines/${worker}/status`]      = 'waiting';
+        updates[`lines/${worker}/workStart`]   = '';
+        updates[`lines/${worker}/workEnd`]     = '';
+        updates[`lines/${worker}/updatedAt`]   = 0;
+        updates[`lines/${worker}/prevUpdatedAt`]  = 0;
+        updates[`lines/${worker}/prev2UpdatedAt`] = 0;
+      }
     });
     const sdk = window._fbSDK;
     if (sdk) { await sdk.update(sdk.ref(sdk.db), updates); }
