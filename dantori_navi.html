@@ -11294,6 +11294,16 @@ function apRenderBoard() {
           </tr>
           <tr id="${grpId}" style="display:none;background:#f8faff;border-bottom:1px solid #dde8ff;">
             <td colspan="5" style="padding:6px 10px;">
+              <div style="background:#eef4ff;border:1px solid #93c5fd;border-radius:6px;padding:7px 10px;margin-bottom:8px;">
+                <div style="font-size:10px;font-weight:700;color:#1d4ed8;margin-bottom:5px;">▶ グループ全体の時間を変更（製造番号ごとに指示数で自動割り振り）</div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                  <span style="font-size:11px;color:#555;">開始:</span>
+                  <input id="ap-grp-start-${grpId}" type="time" value="${startTime}" style="padding:2px 5px;border:1px solid #93c5fd;border-radius:4px;font-size:11px;font-family:inherit;">
+                  <span style="font-size:11px;color:#555;">〜終了:</span>
+                  <input id="ap-grp-end-${grpId}" type="time" value="${endTime}" style="padding:2px 5px;border:1px solid #93c5fd;border-radius:4px;font-size:11px;font-family:inherit;">
+                  <button onclick="apApplyGroup('${worker}','${grpId}','${hinban}')" style="padding:2px 10px;background:#1d4ed8;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;">一括適用</button>
+                </div>
+              </div>
               ${items.map(({j,origIdx})=>{
                 const workerOpts=`<option value="${worker}" selected>── 現在（${worker}）</option>`+AP_WORKERS.filter(w=>w!==worker).map(w=>`<option value="${w}">${w}</option>`).join('');
                 const setupLabel=j.noSetup?'段取なし':'段取あり';
@@ -12052,6 +12062,68 @@ window.apApplyJob = function(fromWorker, idx) {
 
 window.apUpdateJobTime = function(worker, idx) {
   apApplyJob(worker, idx);
+};
+
+// グループ全体の時間を変更して製造番号ごとに指示数で順番に割り振り
+window.apApplyGroup = function(worker, grpId, hinban) {
+  const startVal = document.getElementById(`ap-grp-start-${grpId}`)?.value;
+  const endVal   = document.getElementById(`ap-grp-end-${grpId}`)?.value;
+  if (!startVal || !endVal) return;
+  const startMin = apHHMMtoMin(startVal);
+  const endMin   = apHHMMtoMin(endVal);
+  if (endMin <= startMin) { apSetStatus('終了時間は開始時間より後にしてください', '#c0392b'); return; }
+
+  // 同品番・同worker・非定型ジョブを開始時刻順で取得
+  const groupJobs = (apPlan[worker] || [])
+    .filter(j => j.hinban === hinban && !j.isOptional)
+    .sort((a,b) => apHHMMtoMin(a.startTime) - apHHMMtoMin(b.startTime));
+  if (!groupJobs.length) return;
+
+  // 工数情報を最初のジョブから取得
+  const s0 = apGetSakuyo().find(x => x.seizoNo === groupJobs[0].seizoNo && x.junjo === groupJobs[0].junjo);
+  const a  = s0 ? apGetAssign(s0) : null;
+
+  let curMin = startMin;
+  const toRemove = new Set();
+
+  groupJobs.forEach(j => {
+    if (curMin >= endMin) { toRemove.add(j._key); return; }
+
+    if (!a || a.workMin <= 0) {
+      // 工数未登録 → 残り時間をそのまま割り当て
+      const dur = apWorkIn(curMin, endMin);
+      j.startTime = apHHMM(curMin);
+      j.endTime   = apHHMM(apAdv(curMin, dur));
+      j.durationMin = dur;
+      curMin = apHHMMtoMin(j.endTime);
+      return;
+    }
+
+    const setupMin = j.noSetup ? 0 : (a.setupMin || 0);
+    // 残り稼働時間
+    const avail = apWorkIn(curMin, endMin);
+    const net   = avail - setupMin;
+    if (net < a.workMin) { toRemove.add(j._key); return; }
+
+    // このseizøNoの指示数上限（sakuyoから取得。なければjob.shiji）
+    const sj = apGetSakuyo().find(x => x.seizoNo === j.seizoNo && x.junjo === j.junjo);
+    const maxQty = parseFloat(sj?.shiji) || parseFloat(j.shiji) || 0;
+    const calcQty = Math.floor(net / a.workMin);
+    const qty = maxQty > 0 ? Math.min(calcQty, maxQty) : calcQty;
+    if (qty <= 0) { toRemove.add(j._key); return; }
+
+    const dur = Math.round(setupMin + a.workMin * qty);
+    j.startTime   = apHHMM(curMin);
+    j.endTime     = apHHMM(apAdv(curMin, dur));
+    j.durationMin = dur;
+    j.shiji       = String(qty);
+    curMin = apHHMMtoMin(j.endTime);
+  });
+
+  // 時間が足りなくなったジョブを削除
+  if (toRemove.size) apPlan[worker] = apPlan[worker].filter(j => !toRemove.has(j._key));
+
+  apRenderBoard(); apRenderPool(); apSavePlan();
 };
 
 window.apUpdateJobQty = function(worker, idx) {
