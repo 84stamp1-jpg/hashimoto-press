@@ -11955,29 +11955,83 @@ window.apApplyJob = function(fromWorker, idx) {
   const toWorker = document.getElementById(`ap-jmove-${fromWorker}-${idx}`)?.value || fromWorker;
   const startVal = document.getElementById(`ap-jstart-${fromWorker}-${idx}`)?.value;
   const endVal   = document.getElementById(`ap-jend-${fromWorker}-${idx}`)?.value;
-  if (startVal && endVal) {
+
+  let overflowJob = null; // 指示数超過時の次製造番号ジョブ
+
+  if (startVal) {
     const startMin = apHHMMtoMin(startVal);
-    const endMin   = apHHMMtoMin(endVal);
-    if (endMin > startMin) {
-      job.startTime   = startVal;
-      job.endTime     = endVal;
-      job.durationMin = apWorkIn(startMin, endMin); // 実稼働分（休憩除く）
-      if (!job.isOptional && job.seizoNo) {
-        const s = apGetSakuyo().find(x => x.seizoNo === job.seizoNo && x.junjo === job.junjo);
-        const a = s ? apGetAssign(s) : null;
-        if (a && a.workMin > 0) {
-          const netMin = job.durationMin - (job.noSetup ? 0 : (a.setupMin || 0));
-          const newQty = Math.floor(Math.max(0, netMin) / a.workMin);
-          if (newQty > 0) job.shiji = String(newQty);
+
+    if (!endVal) {
+      // 終了時間が空欄 → 元のdurationMinで終了時間を自動計算（数量変更なし）
+      job.startTime = startVal;
+      job.endTime   = apHHMM(apAdv(startMin, job.durationMin));
+    } else {
+      const endMin = apHHMMtoMin(endVal);
+      if (endMin > startMin) {
+        const newDurMin = apWorkIn(startMin, endMin);
+        job.startTime   = startVal;
+        job.endTime     = endVal;
+        job.durationMin = newDurMin;
+
+        if (!job.isOptional && job.seizoNo) {
+          const s = apGetSakuyo().find(x => x.seizoNo === job.seizoNo && x.junjo === job.junjo);
+          const a = s ? apGetAssign(s) : null;
+          if (a && a.workMin > 0) {
+            const setupMin  = job.noSetup ? 0 : (a.setupMin || 0);
+            const netMin    = newDurMin - setupMin;
+            const calcQty   = Math.floor(Math.max(0, netMin) / a.workMin);
+            const origShiji = parseFloat(s?.shiji) || 0;
+
+            if (origShiji > 0 && calcQty > origShiji) {
+              // 指示数を超える → このjobはorigShijiまでに収める
+              job.shiji = String(origShiji);
+              const capDur = Math.round(setupMin + a.workMin * origShiji);
+              job.durationMin = capDur;
+              job.endTime     = apHHMM(apAdv(startMin, capDur));
+
+              // 次の製造番号を探す（同品番・同工程で未計画のもの）
+              const plannedKeys = new Set(Object.values(apPlan).flat().map(j2 => j2._key));
+              const nextS = apGetSakuyo().find(x =>
+                x.hinban === s.hinban && (x.kosei||'') === (s.kosei||'') &&
+                x.seizoNo !== s.seizoNo &&
+                !plannedKeys.has(x.seizoNo + '_' + x.junjo)
+              );
+              if (nextS) {
+                const nextQty  = Math.min(calcQty - origShiji, parseFloat(nextS.shiji) || 0);
+                if (nextQty > 0) {
+                  const nextStart = apHHMMtoMin(job.endTime);
+                  const nextDur   = Math.round((a.setupMin||0) + a.workMin * nextQty);
+                  overflowJob = {
+                    hinban: nextS.hinban, hinmei: nextS.hinmei||'', kosei: nextS.kosei||'',
+                    shiji: String(nextQty), durationMin: nextDur,
+                    startTime: apHHMM(nextStart), endTime: apHHMM(apAdv(nextStart, nextDur)),
+                    nouki: nextS['納期']||'', seizoNo: nextS.seizoNo, junjo: nextS.junjo,
+                    _key: nextS.seizoNo+'_'+nextS.junjo, noSetup: false
+                  };
+                }
+              }
+            } else if (calcQty > 0) {
+              job.shiji = String(calcQty);
+            }
+          }
         }
       }
     }
   }
+
+  // 担当者移動
   if (toWorker !== fromWorker) {
     apPlan[fromWorker].splice(idx, 1);
     if (!apPlan[toWorker]) apPlan[toWorker] = [];
     apPlan[toWorker].push(job);
   }
+
+  // 次製造番号ジョブを配置先担当者に追加
+  if (overflowJob) {
+    if (!apPlan[toWorker]) apPlan[toWorker] = [];
+    apPlan[toWorker].push(overflowJob);
+  }
+
   apRenderBoard(); apRenderPool(); apSavePlan();
 };
 
