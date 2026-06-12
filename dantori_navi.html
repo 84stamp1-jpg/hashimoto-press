@@ -12165,12 +12165,6 @@ window.apApplyGroup = function(worker, grpId, hinban) {
     .filter(j => j.hinban === hinban && !j.isOptional)
     .sort((a,b) => apHHMMtoMin(a.startTime) - apHHMMtoMin(b.startTime));
 
-  // 工数情報（最初のジョブのseizøNoから取得）
-  const s0 = plannedJobs.length
-    ? apGetSakuyo().find(x => x.seizoNo === plannedJobs[0].seizoNo && x.junjo === plannedJobs[0].junjo)
-    : null;
-  const a = s0 ? apGetAssign(s0) : null;
-
   // 計画済みseizøNoのセット（重複追加防止）
   const plannedKeys = new Set((apPlan[worker]||[]).map(j => j._key));
 
@@ -12180,6 +12174,12 @@ window.apApplyGroup = function(worker, grpId, hinban) {
     .filter(x => x.hinban === hinban && (x.kosei||'') === kosei0 && !plannedKeys.has(x.seizoNo+'_'+x.junjo))
     .sort((a,b) => _ndv(a['納期']) - _ndv(b['納期']));
 
+  // 工数情報（最初のジョブのseizøNoから取得）
+  const s0 = plannedJobs.length
+    ? apGetSakuyo().find(x => x.seizoNo === plannedJobs[0].seizoNo && x.junjo === plannedJobs[0].junjo)
+    : (unplanned.length ? unplanned[0] : null);
+  const aRef = s0 ? apGetAssign(s0) : null;
+
   // 計画済みを先に、次に未計画を処理
   let curMin = startMin;
   const toRemove = new Set();
@@ -12187,6 +12187,11 @@ window.apApplyGroup = function(worker, grpId, hinban) {
 
   const processJob = (j, isNew) => {
     if (curMin >= endMin) { if (!isNew) toRemove.add(j._key); return; }
+
+    // 工数情報はジョブ自身のseizøNoから取得（フォールバックでaRef使用）
+    const sj = apGetSakuyo().find(x => x.seizoNo === j.seizoNo && x.junjo === j.junjo)
+               || (isNew ? j : null);
+    const a = (sj ? apGetAssign(sj) : null) || aRef;
 
     if (!a || a.workMin <= 0) {
       const dur = apWorkIn(curMin, endMin);
@@ -12201,8 +12206,13 @@ window.apApplyGroup = function(worker, grpId, hinban) {
     const net   = avail - setupMin;
     if (net < a.workMin) { if (!isNew) toRemove.add(j._key); return; }
 
-    const sj = apGetSakuyo().find(x => x.seizoNo === j.seizoNo && x.junjo === j.junjo);
-    const maxQty = parseFloat(sj?.shiji) || parseFloat(j.shiji) || 0;
+    // 上限: 計画済み → j.shiji（auto-assignが設定した残数）
+    //       未計画   → sj.shiji（sakuyoの残数）
+    // sj.shiji が origShiji（全量）を返す場合に備え、isBunnoの残数を優先
+    const sjShiji = sj ? (sj.isBunno ? parseFloat(sj.shiji) : parseFloat(sj.shiji)) : 0;
+    const maxQty = isNew
+      ? (sjShiji || 0)
+      : (parseFloat(j.shiji) || sjShiji || 0);
     const calcQty = Math.floor(net / a.workMin);
     const qty = maxQty > 0 ? Math.min(calcQty, maxQty) : calcQty;
     if (qty <= 0) { if (!isNew) toRemove.add(j._key); return; }
@@ -12296,11 +12306,125 @@ window.apAssignOptJob = function(taskId) {
 };
 
 window.apAddJobToWorker = function(worker) {
-  const hinban = prompt('品番を入力してください:');
-  if (!hinban) return;
-  const s = apGetSakuyo().find(s=>s.hinban.trim()===hinban.trim());
-  if (s) { apAssignJob(s.seizoNo, s.junjo); }
-  else { alert('品番が見つかりません: '+hinban); }
+  // 既存モーダルを閉じる
+  const prev = document.getElementById('_ap_add_modal');
+  if (prev) prev.remove();
+
+  const wOpts = AP_WORKERS.map(w => `<option value="${w}"${w===worker?' selected':''}>${w}</option>`).join('');
+  const today = document.getElementById('ap-date')?.value || '';
+
+  // 定型作業HTML
+  const optHtml = apOptionalTasks.length
+    ? apOptionalTasks.map(t => {
+        const tid = (t.id||t.name).replace(/[^a-zA-Z0-9]/g,'_');
+        return `<div style="background:#fafaf8;border:1px solid #e5e5e5;border-radius:6px;padding:7px 9px;margin-bottom:5px;">
+          <div style="font-size:12px;font-weight:700;color:#555;margin-bottom:5px;">${t.name||'(無題)'}</div>
+          <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;">
+            <select id="_aaw_sel_${tid}" style="padding:2px 5px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">${wOpts}</select>
+            <label style="font-size:10px;color:#888;">開始</label>
+            <input type="time" id="_aaw_ts_${tid}" value="${t.startTime||''}" style="padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">
+            <label style="font-size:10px;color:#888;">終了</label>
+            <input type="time" id="_aaw_te_${tid}" value="${t.endTime||''}" style="padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">
+            <input type="number" id="_aaw_dur_${tid}" value="${t.durationMin||30}" min="1" max="470"
+              style="width:46px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;text-align:center;font-family:inherit;">
+            <span style="font-size:10px;color:#888;">分</span>
+            <button onclick="apAddJobFromModal('opt','${t.id||t.name}','${tid}')"
+              style="padding:2px 9px;background:#7c3aed;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;">追加</button>
+          </div>
+        </div>`;
+      }).join('')
+    : '<div style="font-size:11px;color:#aaa;padding:6px;">定型作業が登録されていません（設定から追加）</div>';
+
+  const modal = document.createElement('div');
+  modal.id = '_ap_add_modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:3000;display:flex;align-items:flex-start;justify-content:center;padding-top:60px;';
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:10px;width:480px;max-width:96vw;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.25);">
+      <div style="background:#1a1a1a;color:#fff;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;border-radius:10px 10px 0 0;position:sticky;top:0;z-index:1;">
+        <span style="font-size:13px;font-weight:700;">+ 作業を追加（${worker}）</span>
+        <button onclick="document.getElementById('_ap_add_modal').remove()" style="background:none;border:none;color:#fff;font-size:18px;cursor:pointer;">×</button>
+      </div>
+      <div style="padding:12px 14px;">
+
+        <!-- 定型作業 -->
+        <div style="font-size:11px;font-weight:700;color:#7c3aed;margin-bottom:7px;">🔲 定型作業</div>
+        ${optHtml}
+
+        <!-- 品番検索 -->
+        <div style="font-size:11px;font-weight:700;color:#1d4ed8;margin:12px 0 7px;">🔍 品番から追加</div>
+        <input id="_aaw_search" type="text" placeholder="品番または品名で絞り込み" oninput="apAddModalSearch()"
+          style="width:100%;padding:6px 9px;border:1px solid #ddd;border-radius:5px;font-size:12px;box-sizing:border-box;margin-bottom:6px;">
+        <div id="_aaw_results" style="max-height:260px;overflow-y:auto;"></div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+  // 品番リスト初期描画
+  window._apAddModalWorker = worker;
+  apAddModalSearch();
+  document.getElementById('_aaw_search')?.focus();
+}; // ← close apAddJobToWorker
+
+window.apAddModalSearch = function() {
+  const q = (document.getElementById('_aaw_search')?.value||'').toLowerCase();
+  const worker = window._apAddModalWorker || AP_WORKERS[0];
+  const plannedKeys = new Set(Object.values(apPlan).flat().map(j=>j._key));
+  const today = document.getElementById('ap-date')?.value||'';
+  const jobs = apGetJobs().filter(s => {
+    if (plannedKeys.has(s.seizoNo+'_'+s.junjo)) return false;
+    if (!q) return true;
+    return s.hinban.toLowerCase().includes(q) || s.hinmei.toLowerCase().includes(q);
+  });
+  const el = document.getElementById('_aaw_results');
+  if (!el) return;
+  if (!jobs.length) { el.innerHTML='<div style="font-size:11px;color:#aaa;padding:6px;">該当なし</div>'; return; }
+  el.innerHTML = jobs.slice(0,30).map(s => {
+    const isOver = apIsOverdue(s['納期'], today);
+    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 7px;border:1px solid #eee;border-radius:5px;margin-bottom:3px;background:#fff;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:11px;font-weight:700;color:${isOver?'#c0392b':'#1a1a1a'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.hinban}</div>
+        <div style="font-size:10px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.hinmei}</div>
+        <div style="font-size:10px;color:#aaa;">${s.seizoNo||''} / ${s['納期']||''}${isOver?' 納期超過':''}</div>
+      </div>
+      <button onclick="apAddJobFromModal('job','${s.seizoNo}','${s.junjo}','${worker}')"
+        style="padding:3px 10px;background:#1d4ed8;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;flex-shrink:0;font-family:inherit;">追加</button>
+    </div>`;
+  }).join('');
+};
+
+window.apAddJobFromModal = function(type, id, id2, worker) {
+  const modal = document.getElementById('_ap_add_modal');
+  const w = window._apAddModalWorker || worker || AP_WORKERS[0];
+  if (type === 'opt') {
+    // 定型作業: id=taskId(original), id2=sanitized tid
+    const tid = id2;
+    const selWorker = document.getElementById(`_aaw_sel_${tid}`)?.value || w;
+    const tsVal = document.getElementById(`_aaw_ts_${tid}`)?.value || '';
+    const teVal = document.getElementById(`_aaw_te_${tid}`)?.value || '';
+    const durVal = parseInt(document.getElementById(`_aaw_dur_${tid}`)?.value)||30;
+    // apAssignOptJob と同じロジックを直接実行
+    const t = apOptionalTasks.find(t2 => (t2.id||t2.name) === id);
+    if (!t) return;
+    let startT, endT, actualDur;
+    if (tsVal && teVal) {
+      startT = apHHMMtoMin(tsVal); endT = apHHMMtoMin(teVal);
+      actualDur = apWorkIn(startT, endT);
+    } else if (tsVal) {
+      startT = apHHMMtoMin(tsVal); endT = apAdv(startT, durVal); actualDur = durVal;
+    } else {
+      startT = apNextFreeSlot(selWorker, durVal); endT = apAdv(startT, durVal); actualDur = durVal;
+    }
+    if (!apPlan[selWorker]) apPlan[selWorker] = [];
+    apPlan[selWorker].push({ hinban:t.name, hinmei:'定型作業', shiji:'', durationMin:actualDur,
+      startTime:apHHMM(startT), endTime:apHHMM(endT), nouki:'', isOptional:true, _key:(t.id||t.name)+'_'+Date.now() });
+    if (modal) modal.remove();
+    apRenderBoard(); apRenderPool(); apSavePlan();
+  } else {
+    // 通常ジョブ: id=seizoNo, id2=junjo
+    if (modal) modal.remove();
+    apAssignJob(id, id2);
+  }
 };
 
 // ── 設定モーダル ─────────────────────────────────────────
