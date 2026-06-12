@@ -11180,6 +11180,8 @@ function apIsOverdue(nouki, today) {
   return d < new Date(today);
 }
 
+const _ndv = s => { const m=(s||'').match(/(\d+)\/(\d+)/); return m?parseInt(m[1])*100+parseInt(m[2]):9999; };
+
 // ── ボード描画 ──────────────────────────────────────────────
 function apRenderBoard() {
   const el = document.getElementById('ap-board');
@@ -11200,8 +11202,16 @@ function apRenderBoard() {
     const regJobs = jobs.map((j,i)=>({j,origIdx:apPlan[worker].indexOf(j)})).filter(x=>!x.j.isOptional);
     const timeGroups = {};
     regJobs.forEach(({j,origIdx})=>{
-      const key=`${j.hinban}||${j.startTime}||${j.endTime}`;
-      if(!timeGroups[key]) timeGroups[key]={startTime:j.startTime,endTime:j.endTime,hinban:j.hinban,hinmei:j.hinmei,nouki:j.nouki,items:[]};
+      const key=j.hinban;
+      if(!timeGroups[key]){
+        timeGroups[key]={startTime:j.startTime,endTime:j.endTime,hinban:j.hinban,hinmei:j.hinmei,nouki:j.nouki,items:[]};
+      } else {
+        // 最早開始・最遅終了に更新
+        if(apHHMMtoMin(j.startTime)<apHHMMtoMin(timeGroups[key].startTime)) timeGroups[key].startTime=j.startTime;
+        if(apHHMMtoMin(j.endTime)>apHHMMtoMin(timeGroups[key].endTime)) timeGroups[key].endTime=j.endTime;
+        // 納期は最早のものを代表値に
+        if(_ndv(j.nouki)<_ndv(timeGroups[key].nouki)) timeGroups[key].nouki=j.nouki;
+      }
       timeGroups[key].items.push({j,origIdx});
     });
     const dispCount = Object.keys(timeGroups).length + optJobs.length;
@@ -11258,7 +11268,7 @@ function apRenderBoard() {
         const seizoNos=[...new Set(items.map(({j})=>j.seizoNo).filter(Boolean))];
         const kosei=[...new Set(items.map(({j})=>j.kosei).filter(Boolean))].join('、');
         const isOver=apIsOverdue(nouki,today);
-        const grpId=`${worker}-tg-${hinban.replace(/[^a-zA-Z0-9]/g,'_')}-${startTime.replace(':','')}-${endTime.replace(':','')}`;
+        const grpId=`${worker}-tg-${hinban.replace(/[^a-zA-Z0-9]/g,'_')}`;
         html += `<tr style="border-bottom:1px solid #f5f5f5;background:${isOver?'#fff5f5':'#fff'};">
           <td style="padding:4px 6px;white-space:nowrap;color:#555;font-size:10px;">${startTime}〜${endTime} <span style="color:#7c3aed;font-weight:700;">${dispDur}分</span></td>
           <td style="padding:4px 6px;max-width:160px;">
@@ -11322,8 +11332,6 @@ function apAutoAssign() {
   const today = document.getElementById('ap-date')?.value || new Date().toISOString().slice(0,10);
   const maxMin = apCriteria.maxMin || 470;
 
-  // 納期を数値に変換（"6/5"→605, "6/17"→617）← 文字列比較だと"6/17"<"6/5"になる誤り
-  const _ndv = s => { const m=(s||'').match(/(\d+)\/(\d+)/); return m?parseInt(m[1])*100+parseInt(m[2]):9999; };
   // ソート: 納期超過 → 優先フラグ → 納期昇順（近い順）
   const sorted = [...jobs].sort((a,b) => {
     const oa = apIsOverdue(a['納期'],today)?0:1;
