@@ -11230,6 +11230,7 @@ function apRenderBoard() {
         <span style="font-size:11px;color:#aaa;">${dispCount}件</span>
         <span style="margin-left:auto;font-size:11px;font-weight:700;color:${pctColor};">${totalMins}分 / ${effMax}分 (${pct}%)</span>
         <button onclick="apEditAttendance('${worker}')" style="padding:2px 8px;background:#444;color:#fff;border:none;border-radius:4px;font-size:10px;cursor:pointer;font-family:inherit;">勤怠</button>
+        <button onclick="apCompactWorker('${worker}')" title="開始時刻順に並べ直して重複・空白を詰めます" style="padding:2px 8px;background:#0f766e;color:#fff;border:none;border-radius:4px;font-size:10px;cursor:pointer;font-family:inherit;">整列</button>
         <button onclick="apAddJobToWorker('${worker}')" style="padding:2px 8px;background:#333;color:#fff;border:none;border-radius:4px;font-size:10px;cursor:pointer;font-family:inherit;">+ 追加</button>
       </div>`;
     html += `<div style="height:4px;background:#f0f0f0;"><div style="height:100%;width:${Math.min(pct,100)}%;background:${pctColor};transition:width 0.3s;"></div></div>`;
@@ -12246,6 +12247,31 @@ window.apApplyGroup = function(worker, grpId, hinban) {
   apRenderBoard(); apRenderPool(); apSavePlan();
 };
 
+// 整列: 開始時刻順に並べ直し、重複・空白を詰める
+// 定型作業（isOptional）で startTime が設定されているものは時刻を固定して前後を調整
+window.apCompactWorker = function(worker) {
+  const jobs = (apPlan[worker] || []).slice()
+    .sort((a,b) => apHHMMtoMin(a.startTime) - apHHMMtoMin(b.startTime));
+  if (jobs.length === 0) return;
+
+  let curMin = apHHMMtoMin(jobs[0].startTime); // 最初のジョブの開始時刻から
+
+  jobs.forEach(j => {
+    // 定型作業で開始時刻が明示設定されている場合はその時刻を尊重（後ろにある場合のみ）
+    if (j.isOptional && j.startTime) {
+      const fixedStart = apHHMMtoMin(j.startTime);
+      curMin = Math.max(curMin, fixedStart);
+    }
+    j.startTime = apHHMM(curMin);
+    j.endTime   = apHHMM(apAdv(curMin, j.durationMin));
+    curMin = apHHMMtoMin(j.endTime);
+  });
+
+  apPlan[worker] = jobs;
+  apRenderBoard(); apRenderPool(); apSavePlan();
+  apSetStatus(`${worker} の計画を整列しました`, '#0f766e');
+};
+
 window.apUpdateJobQty = function(worker, idx) {
   const job = apPlan[worker]?.[idx];
   if (!job || !job.seizoNo) return;
@@ -12325,9 +12351,6 @@ window.apAddJobToWorker = function(worker) {
             <input type="time" id="_aaw_ts_${tid}" value="${t.startTime||''}" style="padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">
             <label style="font-size:10px;color:#888;">終了</label>
             <input type="time" id="_aaw_te_${tid}" value="${t.endTime||''}" style="padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">
-            <input type="number" id="_aaw_dur_${tid}" value="${t.durationMin||30}" min="1" max="470"
-              style="width:46px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;text-align:center;font-family:inherit;">
-            <span style="font-size:10px;color:#888;">分</span>
             <button onclick="apAddJobFromModal('opt','${t.id||t.name}','${tid}')"
               style="padding:2px 9px;background:#7c3aed;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;">追加</button>
           </div>
