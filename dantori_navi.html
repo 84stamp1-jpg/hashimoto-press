@@ -11186,7 +11186,7 @@ function apRenderBoard() {
   const today = document.getElementById('ap-date')?.value || '';
   let html = '';
   AP_WORKERS.forEach(worker => {
-    const jobs = apPlan[worker] || [];
+    const jobs = (apPlan[worker] || []).slice().sort((a,b)=>apHHMMtoMin(a.startTime)-apHHMMtoMin(b.startTime));
     const totalMins = Math.round(jobs.reduce((s,j)=>s+(j.durationMin||0),0));
     const pct = Math.round(totalMins / apCriteria.maxMin * 100);
     const pctColor = pct > 100 ? '#c0392b' : pct > 85 ? '#d68910' : '#27ae60';
@@ -11194,12 +11194,17 @@ function apRenderBoard() {
     const attLabel = att.type==='absent' ? '全休' : att.type==='late' ? `遅刻 ${apHHMM(att.startMin||AP_WS)}〜` : att.type==='early' ? `早退 〜${apHHMM(att.endMin||AP_WE)}` : att.type==='unavail' ? `不可 ${apHHMM(att.startMin||AP_WS)}〜${apHHMM(att.endMin||AP_WE)}` : att.type==='overtime' ? `残業 〜${apHHMM(att.endMin||1140)}` : '';
     const attBadge = attLabel ? `<span style="font-size:10px;padding:1px 6px;border-radius:10px;background:${att.type==='absent'?'#c0392b':'#d68910'};color:#fff;margin-left:4px;">${attLabel}</span>` : '';
     const effMax = apEffectiveMax(worker);
-    // 件数は品番グループ数 + 定型作業数
-    const optJobs = jobs.map((j,i)=>({j,i})).filter(x=>x.j.isOptional);
-    const regJobs = jobs.map((j,i)=>({j,i})).filter(x=>!x.j.isOptional);
-    const hinbanGroups = {};
-    regJobs.forEach(({j,i})=>{ if(!hinbanGroups[j.hinban]) hinbanGroups[j.hinban]=[]; hinbanGroups[j.hinban].push({j,i}); });
-    const dispCount = Object.keys(hinbanGroups).length + optJobs.length;
+    // 定型 / 通常 を分離
+    // 通常ジョブは「品番 + 開始時刻 + 終了時刻」でグループ化（並列jobを1行にまとめる）
+    const optJobs = jobs.map((j,i)=>({j,origIdx:apPlan[worker].indexOf(j)})).filter(x=>x.j.isOptional);
+    const regJobs = jobs.map((j,i)=>({j,origIdx:apPlan[worker].indexOf(j)})).filter(x=>!x.j.isOptional);
+    const timeGroups = {};
+    regJobs.forEach(({j,origIdx})=>{
+      const key=`${j.hinban}||${j.startTime}||${j.endTime}`;
+      if(!timeGroups[key]) timeGroups[key]={startTime:j.startTime,endTime:j.endTime,hinban:j.hinban,hinmei:j.hinmei,nouki:j.nouki,items:[]};
+      timeGroups[key].items.push({j,origIdx});
+    });
+    const dispCount = Object.keys(timeGroups).length + optJobs.length;
     html += `<div style="background:#fff;border-radius:8px;border:1px solid #ddd;overflow:hidden;">
       <div style="background:${att.type==='absent'?'#5a2020':'#1a1a1a'};color:#fff;padding:6px 12px;display:flex;align-items:center;gap:8px;">
         <span style="font-size:13px;font-weight:700;">${worker}</span>
@@ -11216,85 +11221,87 @@ function apRenderBoard() {
     } else {
       html += `<table style="width:100%;border-collapse:collapse;font-size:11px;">`;
 
-      // ── 定型作業（段取り表示なし、個別行）
-      optJobs.forEach(({j,i}) => {
-        const wid = `${worker}-${i}`;
-        const workerOpts = `<option value="${worker}" selected>── 現在（${worker}）</option>`+AP_WORKERS.filter(w=>w!==worker).map(w=>`<option value="${w}">${w}</option>`).join('');
+      // ── 定型作業（個別行・段取り表示なし）
+      optJobs.forEach(({j,origIdx}) => {
+        const wid=`${worker}-opt-${origIdx}`;
+        const workerOpts=`<option value="${worker}" selected>── 現在（${worker}）</option>`+AP_WORKERS.filter(w=>w!==worker).map(w=>`<option value="${w}">${w}</option>`).join('');
         html += `<tr style="border-bottom:1px solid #f5f5f5;background:#fffbf0;">
-          <td style="padding:4px 6px;white-space:nowrap;color:#555;font-size:10px;">${j.startTime}〜${j.endTime}&nbsp;&nbsp;<span style="color:#7c3aed;font-weight:700;">${Math.round(j.durationMin)}分</span></td>
-          <td style="padding:4px 6px;" colspan="2"><span style="font-weight:700;color:#555;">🔲 ${j.hinban}</span>&nbsp;<span style="font-size:10px;color:#aaa;">定型作業</span></td>
+          <td style="padding:4px 6px;white-space:nowrap;color:#555;font-size:10px;">${j.startTime}〜${j.endTime} <span style="color:#7c3aed;font-weight:700;">${Math.round(j.durationMin)}分</span></td>
+          <td colspan="2" style="padding:4px 6px;"><span style="font-weight:700;color:#555;">🔲 ${j.hinban}</span> <span style="font-size:10px;color:#aaa;">定型作業</span></td>
           <td style="padding:4px 4px;white-space:nowrap;">
-            <button onclick="apToggleJobEdit('${worker}',${i})" style="padding:1px 6px;background:#e8f0fe;color:#1d4ed8;border:none;border-radius:3px;font-size:10px;cursor:pointer;font-family:inherit;">編集</button>
-            <button onclick="apRemoveJob('${worker}',${i})" style="padding:1px 6px;background:#fee2e2;color:#c0392b;border:none;border-radius:3px;font-size:10px;cursor:pointer;font-family:inherit;">削除</button>
+            <button onclick="var r=document.getElementById('${wid}');r.style.display=r.style.display==='none'?'table-row':'none'" style="padding:1px 6px;background:#e8f0fe;color:#1d4ed8;border:none;border-radius:3px;font-size:10px;cursor:pointer;font-family:inherit;">編集・削除</button>
           </td>
         </tr>
-        <tr id="ap-jedit-${wid}" style="display:none;background:#f8faff;border-bottom:1px solid #dde8ff;">
-          <td colspan="4" style="padding:6px 10px;">
-            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;font-size:11px;">
-              <span style="color:#888;font-weight:600;">移動先:</span>
-              <select id="ap-jmove-${wid}" style="padding:2px 6px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">${workerOpts}</select>
-              <button onclick="apMoveJob('${worker}',${i})" style="padding:2px 8px;background:#1a1a1a;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;">移動</button>
-              <span style="color:#888;margin-left:4px;font-weight:600;">開始:</span>
-              <input id="ap-jstart-${wid}" type="time" value="${j.startTime}" style="padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">
+        <tr id="${wid}" style="display:none;background:#f8faff;border-bottom:1px solid #dde8ff;">
+          <td colspan="4" style="padding:6px 10px;font-size:11px;">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px;">
+              <span style="color:#888;">移動先:</span>
+              <select id="ap-jmove-${worker}-${origIdx}" style="padding:2px 6px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">${workerOpts}</select>
+              <button onclick="apMoveJob('${worker}',${origIdx})" style="padding:2px 8px;background:#1a1a1a;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;">移動</button>
+              <span style="color:#888;">開始:</span>
+              <input id="ap-jstart-${worker}-${origIdx}" type="time" value="${j.startTime}" style="padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">
               <span style="color:#888;">〜</span>
-              <input id="ap-jend-${wid}" type="time" value="${j.endTime}" style="padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">
-              <button onclick="apUpdateJobTime('${worker}',${i})" style="padding:2px 8px;background:#444;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;">適用</button>
+              <input id="ap-jend-${worker}-${origIdx}" type="time" value="${j.endTime}" style="padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">
+              <button onclick="apUpdateJobTime('${worker}',${origIdx})" style="padding:2px 8px;background:#444;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;">適用</button>
             </div>
+            <button onclick="apRemoveJob('${worker}',${origIdx})" style="padding:2px 10px;background:#fee2e2;color:#c0392b;border:1px solid #fca5a5;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;">🗑 削除</button>
           </td>
         </tr>`;
       });
 
-      // ── 通常ジョブ（品番グループ化して表示）
-      Object.entries(hinbanGroups).forEach(([hinban, items]) => {
-        const startMin = Math.min(...items.map(({j})=>apHHMMtoMin(j.startTime)));
-        const endMin   = Math.max(...items.map(({j})=>apHHMMtoMin(j.endTime)));
-        const totalQty = items.reduce((s,{j})=>s+(parseFloat(j.shiji)||0), 0);
-        const seizoNos = [...new Set(items.map(({j})=>j.seizoNo).filter(Boolean))];
-        const hinmei   = items[0].j.hinmei;
-        const nouki    = items[0].j.nouki;
-        const isOver   = apIsOverdue(nouki, today);
-        const dispDur  = endMin - startMin;
-        const grpId    = `${worker}-grp-${hinban.replace(/[^a-zA-Z0-9]/g,'_')}`;
+      // ── 通常ジョブ（品番＋同時間帯でグループ化）
+      Object.values(timeGroups).sort((a,b)=>a.startTime.localeCompare(b.startTime)).forEach(group => {
+        const {startTime,endTime,hinban,hinmei,nouki,items}=group;
+        const sMin=apHHMMtoMin(startTime), eMin=apHHMMtoMin(endTime);
+        const dispDur=eMin-sMin;
+        const totalQty=items.reduce((s,{j})=>s+(parseFloat(j.shiji)||0),0);
+        const seizoNos=[...new Set(items.map(({j})=>j.seizoNo).filter(Boolean))];
+        const kosei=[...new Set(items.map(({j})=>j.kosei).filter(Boolean))].join('、');
+        const isOver=apIsOverdue(nouki,today);
+        const grpId=`${worker}-tg-${hinban.replace(/[^a-zA-Z0-9]/g,'_')}-${startTime.replace(':','')}-${endTime.replace(':','')}`;
         html += `<tr style="border-bottom:1px solid #f5f5f5;background:${isOver?'#fff5f5':'#fff'};">
-          <td style="padding:4px 6px;white-space:nowrap;color:#555;font-size:10px;">${apHHMM(startMin)}〜${apHHMM(endMin)}&nbsp;&nbsp;<span style="color:#7c3aed;font-weight:700;">${dispDur}分</span></td>
-          <td style="padding:4px 6px;max-width:180px;">
+          <td style="padding:4px 6px;white-space:nowrap;color:#555;font-size:10px;">${startTime}〜${endTime} <span style="color:#7c3aed;font-weight:700;">${dispDur}分</span></td>
+          <td style="padding:4px 6px;max-width:160px;">
             <div style="font-weight:700;color:${isOver?'#c0392b':'#1a1a1a'};font-size:11px;">${hinban}</div>
             <div style="font-size:9px;color:#888;word-break:break-all;">${seizoNos.join('、')}</div>
           </td>
-          <td style="padding:4px 6px;color:#888;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${hinmei}</td>
-          <td style="padding:4px 6px;white-space:nowrap;color:#555;">
-            ${isOver?`<span style="font-size:9px;padding:1px 4px;background:#c0392b;color:#fff;border-radius:3px;margin-right:4px;">納期超過</span>`:''}
+          <td style="padding:4px 6px;color:#888;max-width:130px;">
+            <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${hinmei}</div>
+            ${kosei?`<div style="font-size:9px;color:#2563eb;">${kosei}</div>`:''}
+          </td>
+          <td style="padding:4px 6px;white-space:nowrap;">
+            ${isOver?`<span style="font-size:9px;padding:1px 4px;background:#c0392b;color:#fff;border-radius:3px;">納期超過</span> `:''}
             ${totalQty>0?`<span style="font-weight:600;">${Math.round(totalQty)}個</span>`:''}
           </td>
           <td style="padding:4px 4px;white-space:nowrap;">
-            <button onclick="document.getElementById('${grpId}').style.display=document.getElementById('${grpId}').style.display==='none'?'':'none'" style="padding:1px 6px;background:#e8f0fe;color:#1d4ed8;border:none;border-radius:3px;font-size:10px;cursor:pointer;font-family:inherit;">編集</button>
-            ${items.map(({i})=>`<button onclick="apRemoveJob('${worker}',${i})" style="padding:1px 6px;background:#fee2e2;color:#c0392b;border:none;border-radius:3px;font-size:10px;cursor:pointer;font-family:inherit;margin-left:2px;">削除</button>`).join('')}
+            <button onclick="var r=document.getElementById('${grpId}');r.style.display=r.style.display==='none'?'table-row':'none'" style="padding:1px 6px;background:#e8f0fe;color:#1d4ed8;border:none;border-radius:3px;font-size:10px;cursor:pointer;font-family:inherit;">編集・削除</button>
           </td>
         </tr>
         <tr id="${grpId}" style="display:none;background:#f8faff;border-bottom:1px solid #dde8ff;">
           <td colspan="5" style="padding:6px 10px;">
-            ${items.map(({j,i})=>{
-              const wid=`${worker}-${i}`;
+            ${items.map(({j,origIdx})=>{
               const workerOpts=`<option value="${worker}" selected>── 現在（${worker}）</option>`+AP_WORKERS.filter(w=>w!==worker).map(w=>`<option value="${w}">${w}</option>`).join('');
               const setupLabel=j.noSetup?'段取なし':'段取あり';
               const setupColor=j.noSetup?'#888':'#2563eb';
-              return `<div style="border:1px solid #e0e8ff;border-radius:5px;padding:5px 8px;margin-bottom:4px;font-size:11px;">
-                <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:4px;">
-                  <span style="color:#555;font-size:10px;">${j.startTime}〜${j.endTime}</span>
-                  <span style="font-size:10px;color:#555;">${j.seizoNo||''}${j.junjo?' 工順'+j.junjo:''}</span>
-                  <button onclick="apToggleSetup('${worker}',${i},${!j.noSetup})" style="font-size:9px;padding:1px 6px;border:1px solid ${j.noSetup?'#bbb':'#93c5fd'};color:${setupColor};background:#fff;border-radius:3px;cursor:pointer;font-family:inherit;">${setupLabel}</button>
-                  ${j.shiji?`<span>${j.shiji}個</span>`:''}
+              return `<div style="border:1px solid #dde8ff;border-radius:5px;padding:6px 8px;margin-bottom:4px;font-size:11px;">
+                <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:5px;">
+                  <span style="color:#555;font-size:10px;font-weight:600;">${j.startTime}〜${j.endTime} (${j.durationMin}分)</span>
+                  <span style="font-size:10px;color:#666;">${j.seizoNo||''}${j.junjo?' 工順'+j.junjo:''}</span>
+                  ${j.kosei?`<span style="font-size:10px;color:#2563eb;">[${j.kosei}]</span>`:''}
+                  <button onclick="apToggleSetup('${worker}',${origIdx},${!j.noSetup})" style="font-size:9px;padding:1px 6px;border:1px solid ${j.noSetup?'#bbb':'#93c5fd'};color:${setupColor};background:#fff;border-radius:3px;cursor:pointer;font-family:inherit;">${setupLabel}</button>
+                  ${j.shiji?`<span style="font-weight:600;">${j.shiji}個</span>`:''}
                 </div>
-                <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:5px;">
                   <span style="color:#888;">移動先:</span>
-                  <select id="ap-jmove-${wid}" style="padding:2px 6px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">${workerOpts}</select>
-                  <button onclick="apMoveJob('${worker}',${i})" style="padding:2px 8px;background:#1a1a1a;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;">移動</button>
+                  <select id="ap-jmove-${worker}-${origIdx}" style="padding:2px 6px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">${workerOpts}</select>
+                  <button onclick="apMoveJob('${worker}',${origIdx})" style="padding:2px 8px;background:#1a1a1a;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;">移動</button>
                   <span style="color:#888;">開始:</span>
-                  <input id="ap-jstart-${wid}" type="time" value="${j.startTime}" style="padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">
+                  <input id="ap-jstart-${worker}-${origIdx}" type="time" value="${j.startTime}" style="padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">
                   <span style="color:#888;">〜</span>
-                  <input id="ap-jend-${wid}" type="time" value="${j.endTime}" style="padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">
-                  <button onclick="apUpdateJobTime('${worker}',${i})" style="padding:2px 8px;background:#444;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;">適用</button>
+                  <input id="ap-jend-${worker}-${origIdx}" type="time" value="${j.endTime}" style="padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">
+                  <button onclick="apUpdateJobTime('${worker}',${origIdx})" style="padding:2px 8px;background:#444;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;">適用</button>
                 </div>
+                <button onclick="apRemoveJob('${worker}',${origIdx})" style="padding:2px 10px;background:#fee2e2;color:#c0392b;border:1px solid #fca5a5;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;">🗑 削除</button>
               </div>`;
             }).join('')}
           </td>
@@ -11315,15 +11322,17 @@ function apAutoAssign() {
   const today = document.getElementById('ap-date')?.value || new Date().toISOString().slice(0,10);
   const maxMin = apCriteria.maxMin || 470;
 
-  // ソート: 優先フラグ → 納期超過 → 納期 → 工順
+  // 納期を数値に変換（"6/5"→605, "6/17"→617）← 文字列比較だと"6/17"<"6/5"になる誤り
+  const _ndv = s => { const m=(s||'').match(/(\d+)\/(\d+)/); return m?parseInt(m[1])*100+parseInt(m[2]):9999; };
+  // ソート: 納期超過 → 優先フラグ → 納期昇順（近い順）
   const sorted = [...jobs].sort((a,b) => {
-    const pa = apAssignMap[a.hinban]?.priority?0:1;
-    const pb = apAssignMap[b.hinban]?.priority?0:1;
-    if(pa!==pb) return pa-pb;
     const oa = apIsOverdue(a['納期'],today)?0:1;
     const ob = apIsOverdue(b['納期'],today)?0:1;
     if(oa!==ob) return oa-ob;
-    return (a['納期']||'').localeCompare(b['納期']||'');
+    const pa = apAssignMap[a.hinban]?.priority?0:1;
+    const pb = apAssignMap[b.hinban]?.priority?0:1;
+    if(pa!==pb) return pa-pb;
+    return _ndv(a['納期']) - _ndv(b['納期']);
   });
 
   // 自動割り振り前に手動配置した定型作業を退避
@@ -11366,7 +11375,11 @@ function apAutoAssign() {
     group.forEach(s => {
       const dur = apJobMins(s);
       if (dur === null) { noRegKeys.push(s.hinban+(s.kosei?' '+s.kosei:'')); return; }
-      const w = priorityList.find(w => !usedWorkers.has(w) && apEffectiveMax(w) > 0);
+      // 稼働上限に余裕のある担当者を優先（余裕ゼロは最後の手段）
+      const w = priorityList.find(w =>
+        !usedWorkers.has(w) && apEffectiveMax(w) > 0 &&
+        workerMins[w] + dur <= apEffectiveMax(w)
+      ) || priorityList.find(w => !usedWorkers.has(w) && apEffectiveMax(w) > 0);
       if (w) { usedWorkers.add(w); assignments.push({ s, w, dur }); }
     });
     if (!assignments.length) return;
@@ -11393,22 +11406,25 @@ function apAutoAssign() {
     }
     if (commonStart >= AP_WE) return;
     const commonEnd = apAdv(commonStart, maxDur);
+    // 稼働分（休憩を除いた実時間）
+    const commonWorkMins = apWorkIn(commonStart, commonEnd);
 
     assignments.forEach(({ s, w }) => {
-      const jobDur = commonEnd - commonStart;
       // 数量を実際に入る台数に調整
       let actualQty = parseFloat(s.shiji) || 1;
+      let actualWorkMins = commonWorkMins;
       const a = apGetAssign(s);
       if (a && a.workMin > 0) {
-        const net = jobDur - (a.setupMin||0);
+        const net = commonWorkMins - (a.setupMin||0);
         if (net < a.workMin) return; // 1個も入らない
         actualQty = Math.min(actualQty, Math.floor(net / a.workMin));
+        actualWorkMins = Math.round((a.setupMin||0) + a.workMin * actualQty);
       }
       plan[w].push({ hinban:s.hinban, hinmei:s.hinmei, shiji:String(actualQty),
-        durationMin:jobDur, startTime:apHHMM(commonStart), endTime:apHHMM(commonEnd),
+        durationMin:actualWorkMins, startTime:apHHMM(commonStart), endTime:apHHMM(commonEnd),
         nouki:s['納期']||'', seizoNo:s.seizoNo, junjo:s.junjo, kosei:s.kosei||'',
         _key:s.seizoNo+'_'+s.junjo });
-      workerMins[w] += jobDur;
+      workerMins[w] += actualWorkMins;
       placed.add(s.seizoNo+'_'+s.junjo);
       parallelPlaced.add(s.seizoNo+'_'+s.junjo);
     });
@@ -11429,14 +11445,15 @@ function apAutoAssign() {
       if (remainMax <= 0) continue;
       const startT = apNextFreeSlotForHinban(w, dur, s.hinban, s.kosei||'', plan);
       if (startT >= apEffectiveEnd(w)) continue;
-      // スロット開始から実際に入る時間を計算して数量調整
+      // 有効上限 = min(スロット残稼働時間, 残バジェット) で数量調整
       const availFromSlot = apWorkIn(startT, apEffectiveEnd(w));
+      const effectiveCap = Math.min(availFromSlot, remainMax);
       let actualDur = dur, actualQty = parseFloat(s.shiji) || 1;
-      if (actualDur > availFromSlot) {
+      if (actualDur > effectiveCap) {
         const a = apGetAssign(s);
         if (a && a.workMin > 0) {
-          const net = availFromSlot - (a.setupMin||0);
-          if (net < a.workMin) continue;
+          const net = effectiveCap - (a.setupMin||0);
+          if (net < a.workMin) continue; // 1個も入らない
           actualQty = Math.floor(net / a.workMin);
           actualDur = Math.round((a.setupMin||0) + a.workMin * actualQty);
         } else { continue; }
