@@ -11381,31 +11381,51 @@ function apAutoAssign() {
   const parallelPlaced = new Set();
 
   // ── 並列ジョブ プレパス ──────────────────────────────────
-  // 同じ製造番号の複数工順を一括で「共通スロット」に配置（全担当者が同じ時間帯に作業）
-  const parallelGroups = {}; // seizoNo → [job, ...]
+  // 品番単位で「並列品番セット」を構築（どれか1工程がparallel=trueならその品番全工程を並列扱い）
+  const parallelHinbanSet = new Set();
   sorted.forEach(s => {
     const entry = apAssignMap[s.hinban+'|'+(s.kosei||'')] || apAssignMap[s.hinban] || {};
-    if (entry.parallel) {
+    if (entry.parallel) parallelHinbanSet.add(s.hinban);
+  });
+
+  // 並列品番の全工程を製造番号ごとにグループ化
+  const parallelGroups = {}; // seizoNo → [job, ...]
+  sorted.forEach(s => {
+    if (parallelHinbanSet.has(s.hinban)) {
       if (!parallelGroups[s.seizoNo]) parallelGroups[s.seizoNo] = [];
       parallelGroups[s.seizoNo].push(s);
     }
   });
 
+  // 品番ごとに「何工順あるべきか」を計算（全seizoNos中の最大工順数を期待値とする）
+  const parallelHinbanExpectedKosei = {}; // hinban → Set of kosei
+  sorted.forEach(s => {
+    if (!parallelHinbanSet.has(s.hinban)) return;
+    if (!parallelHinbanExpectedKosei[s.hinban]) parallelHinbanExpectedKosei[s.hinban] = new Set();
+    parallelHinbanExpectedKosei[s.hinban].add(s.kosei||'');
+  });
+
   Object.values(parallelGroups).forEach(group => {
-    const priorityList = apJobWorkerCandidates(group[0]);
+    const hinban = group[0].hinban;
+    const expectedKosei = parallelHinbanExpectedKosei[hinban] || new Set();
+    // 全工程が揃っているか確認（欠けているseizoNoはスキップ）
+    const groupKosei = new Set(group.map(s => s.kosei||''));
+    if (groupKosei.size < expectedKosei.size) return;
+
     const usedWorkers = new Set();
     const assignments = [];
+    // 各工程が自分の優先担当者リストを使って担当者を選ぶ
     group.forEach(s => {
       const dur = apJobMins(s);
       if (dur === null) { noRegKeys.push(s.hinban+(s.kosei?' '+s.kosei:'')); return; }
-      // 稼働上限に余裕のある担当者を優先（余裕ゼロは最後の手段）
-      const w = priorityList.find(w =>
+      const sList = apJobWorkerCandidates(s); // 工程ごとの優先担当者リスト
+      const w = sList.find(w =>
         !usedWorkers.has(w) && apEffectiveMax(w) > 0 &&
         workerMins[w] + dur <= apEffectiveMax(w)
-      ) || priorityList.find(w => !usedWorkers.has(w) && apEffectiveMax(w) > 0);
+      ) || sList.find(w => !usedWorkers.has(w) && apEffectiveMax(w) > 0);
       if (w) { usedWorkers.add(w); assignments.push({ s, w, dur }); }
     });
-    // 全工順に担当者が揃わない場合は同時作業不可 → グループ全体をスキップ
+    // 全工程に担当者が揃わない場合は同時作業不可 → グループ全体をスキップ
     if (assignments.length < group.length) return;
 
     const maxDur = Math.max(...assignments.map(x => x.dur));
@@ -11492,9 +11512,8 @@ function apAutoAssign() {
 
   sorted.forEach(s => {
     if (parallelPlaced.has(s.seizoNo+'_'+s.junjo)) return;
-    // 並列可のジョブはプレパスで配置できなかった場合は単独配置しない（同時作業が必須）
-    const _sEntry = apAssignMap[s.hinban+'|'+(s.kosei||'')] || apAssignMap[s.hinban] || {};
-    if (_sEntry.parallel) return;
+    // 並列品番のジョブはプレパスで配置できなかった場合は単独配置しない（同時作業が必須）
+    if (parallelHinbanSet.has(s.hinban)) return;
     if (apJobMins(s) === null) { noRegKeys.push(s.hinban + (s.kosei ? ' '+s.kosei : '')); return; }
     const priorityList = apJobWorkerCandidates(s);
     if (priorityList.length === 0) { noRegKeys.push(s.hinban + (s.kosei ? ' / '+s.kosei : '')); return; }
@@ -11522,6 +11541,7 @@ function apAutoAssign() {
   const unplacedJobs = sorted.filter(s =>
     !parallelPlaced.has(s.seizoNo+'_'+s.junjo) &&
     !placed.has(s.seizoNo+'_'+s.junjo) &&
+    !parallelHinbanSet.has(s.hinban) && // 並列品番は単独配置しない
     apJobMins(s) !== null &&
     apJobWorkerCandidates(s).length > 0
   );
