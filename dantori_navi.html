@@ -11094,15 +11094,10 @@ function apRenderPool() {
   // 優先ソート
   const today = document.getElementById('ap-date')?.value || new Date().toISOString().slice(0,10);
   filtered.sort((a,b) => {
-    // 優先品番 → 分納中（実績あり）→ 納期順
-    const pa = apAssignMap[a.hinban]?.priority ? 0 : 1;
-    const pb = apAssignMap[b.hinban]?.priority ? 0 : 1;
-    if (pa !== pb) return pa - pb;
-    const ba = a.isBunno ? 0 : 1;
-    const bb = b.isBunno ? 0 : 1;
-    if (ba !== bb) return ba - bb;
-    const da = a['納期']||'99/99', db = b['納期']||'99/99';
-    return da.localeCompare(db);
+    // 納期早い順 → 品番昇順
+    const da = _ndv(a['納期']), db = _ndv(b['納期']);
+    if (da !== db) return da - db;
+    return (a.hinban||'').localeCompare(b.hinban||'', 'ja');
   });
   const jobHtml = filtered.map(s => {
     const mins = apJobMins(s);
@@ -12172,6 +12167,9 @@ function apRenderOptionalList() {
       </select>
       <label style="font-size:11px;color:#888;white-space:nowrap;">開始</label>
       <input type="time" value="${t.startTime||''}" oninput="apSetOptField(${i},'startTime',this.value)"
+        style="padding:3px 5px;border:1px solid #ddd;border-radius:4px;font-size:12px;font-family:inherit;">
+      <label style="font-size:11px;color:#888;white-space:nowrap;">終了</label>
+      <input type="time" value="${t.endTime||''}" oninput="apSetOptField(${i},'endTime',this.value)"
         style="padding:3px 5px;border:1px solid #ddd;border-radius:4px;font-size:12px;font-family:inherit;">
       <input type="number" value="${t.durationMin||30}" min="1" max="480" oninput="apSetOptField(${i},'durationMin',parseInt(this.value)||30)"
         style="width:55px;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:12px;" placeholder="分">
