@@ -11405,7 +11405,8 @@ function apAutoAssign() {
       ) || priorityList.find(w => !usedWorkers.has(w) && apEffectiveMax(w) > 0);
       if (w) { usedWorkers.add(w); assignments.push({ s, w, dur }); }
     });
-    if (!assignments.length) return;
+    // 全工順に担当者が揃わない場合は同時作業不可 → グループ全体をスキップ
+    if (assignments.length < group.length) return;
 
     const maxDur = Math.max(...assignments.map(x => x.dur));
     const workers = assignments.map(x => x.w);
@@ -11491,6 +11492,9 @@ function apAutoAssign() {
 
   sorted.forEach(s => {
     if (parallelPlaced.has(s.seizoNo+'_'+s.junjo)) return;
+    // 並列可のジョブはプレパスで配置できなかった場合は単独配置しない（同時作業が必須）
+    const _sEntry = apAssignMap[s.hinban+'|'+(s.kosei||'')] || apAssignMap[s.hinban] || {};
+    if (_sEntry.parallel) return;
     if (apJobMins(s) === null) { noRegKeys.push(s.hinban + (s.kosei ? ' '+s.kosei : '')); return; }
     const priorityList = apJobWorkerCandidates(s);
     if (priorityList.length === 0) { noRegKeys.push(s.hinban + (s.kosei ? ' / '+s.kosei : '')); return; }
@@ -11621,11 +11625,33 @@ async function apPushToProgress() {
   try {
     const updates = {};
     AP_WORKERS.forEach(worker => {
-      const jobs = (apPlan[worker]||[]).map((j,i) => ({
-        seq: i+1, part: j.hinban, plan: parseInt(j.shiji)||0,
-        start: j.startTime, end: j.endTime,
-        noSetup: true, hito: 1, actual: 0,
-      }));
+      let seq = 0;
+      const jobs = (apPlan[worker]||[]).filter(j => !j.isOptional).map(j => {
+        // 工数登録から標準段取り時間を取得
+        const srcJob = apGetSakuyo().find(s => s.seizoNo === j.seizoNo && s.junjo === j.junjo);
+        const assign = srcJob ? apGetAssign(srcJob) : null;
+        const stdSetupMin = j.noSetup ? 0 : (assign?.setupMin || 0);
+        // 段取り終了（生産開始）時刻 = 開始 + 段取り分数
+        const startMin  = apHHMMtoMin(j.startTime);
+        const prodStartMin = stdSetupMin > 0 ? apAdv(startMin, stdSetupMin) : startMin;
+        seq++;
+        return {
+          seq,
+          part:     j.hinban,
+          hinmei:   j.hinmei || '',
+          kosei:    j.kosei  || '',
+          seizoNo:  j.seizoNo || '',
+          plan:     parseInt(j.shiji) || 0,
+          start:    j.startTime,          // 作業全体の開始（段取り含む）
+          end:      j.endTime,            // 作業全体の終了
+          prodStart: apHHMM(prodStartMin), // 生産開始（段取り後）
+          prodEnd:   j.endTime,
+          stdSetupMin,                    // 標準段取り時間（分）
+          setupActualMin: stdSetupMin,    // 進捗管理ボードの「段取Xmin」表示に使用
+          noSetup:  j.noSetup || false,
+          hito: 1, actual: 0,
+        };
+      });
       updates[`lines/${worker}/jobs`] = jobs;
       updates[`lines/${worker}/plan`] = jobs.reduce((s,j)=>s+(j.plan||0),0);
       if (!updates[`lines/${worker}/name`]) updates[`lines/${worker}/name`] = worker;
