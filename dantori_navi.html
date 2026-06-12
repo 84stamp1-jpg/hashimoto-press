@@ -11157,7 +11157,10 @@ function apRenderPool() {
           <label style="font-size:10px;color:#888;white-space:nowrap;">開始</label>
           <input type="time" id="opt-time-${tid}" value="${t.startTime||''}"
             style="padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">
-          <label style="font-size:10px;color:#888;white-space:nowrap;">時間(分)</label>
+          <label style="font-size:10px;color:#888;white-space:nowrap;">終了</label>
+          <input type="time" id="opt-end-${tid}" value="${t.endTime||''}"
+            style="padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">
+          <label style="font-size:10px;color:#888;white-space:nowrap;">分</label>
           <input type="number" id="opt-dur-${tid}" value="${dur}" min="1" max="470"
             style="width:50px;padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;text-align:center;font-family:inherit;">
           <select id="opt-sel-${tid}" style="flex:1;min-width:60px;padding:3px 5px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">
@@ -11231,89 +11234,95 @@ function apRenderBoard() {
     } else {
       html += `<table style="width:100%;border-collapse:collapse;font-size:11px;">`;
 
-      // ── 定型作業（個別行・段取り表示なし）
-      optJobs.forEach(({j,origIdx}) => {
-        const wid=`${worker}-opt-${origIdx}`;
-        const workerOpts=`<option value="${worker}" selected>── 現在（${worker}）</option>`+AP_WORKERS.filter(w=>w!==worker).map(w=>`<option value="${w}">${w}</option>`).join('');
-        html += `<tr style="border-bottom:1px solid #f5f5f5;background:#fffbf0;">
-          <td style="padding:4px 6px;white-space:nowrap;color:#555;font-size:10px;">${j.startTime}〜${j.endTime} <span style="color:#7c3aed;font-weight:700;">${Math.round(j.durationMin)}分</span></td>
-          <td colspan="2" style="padding:4px 6px;"><span style="font-weight:700;color:#555;">🔲 ${j.hinban}</span> <span style="font-size:10px;color:#aaa;">定型作業</span></td>
-          <td style="padding:4px 4px;white-space:nowrap;">
-            <button onclick="var r=document.getElementById('${wid}');r.style.display=r.style.display==='none'?'table-row':'none'" style="padding:1px 6px;background:#e8f0fe;color:#1d4ed8;border:none;border-radius:3px;font-size:10px;cursor:pointer;font-family:inherit;">編集・削除</button>
-          </td>
-        </tr>
-        <tr id="${wid}" style="display:none;background:#f8faff;border-bottom:1px solid #dde8ff;">
-          <td colspan="4" style="padding:6px 10px;font-size:11px;">
-            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px;">
-              <span style="color:#888;">担当者:</span>
-              <select id="ap-jmove-${worker}-${origIdx}" style="padding:2px 6px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">${workerOpts}</select>
-              <span style="color:#888;">開始:</span>
-              <input id="ap-jstart-${worker}-${origIdx}" type="time" value="${j.startTime}" style="padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">
-              <span style="color:#888;">〜終了:</span>
-              <input id="ap-jend-${worker}-${origIdx}" type="time" value="${j.endTime}" style="padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">
-              <button onclick="apApplyJob('${worker}',${origIdx})" style="padding:2px 8px;background:#15803d;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;">適用</button>
-            </div>
-            <button onclick="apRemoveJob('${worker}',${origIdx})" style="padding:2px 10px;background:#fee2e2;color:#c0392b;border:1px solid #fca5a5;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;">🗑 削除</button>
-          </td>
-        </tr>`;
-      });
+      // ── 定型・通常をまとめて開始時刻順に描画 ──
+      // opt → { type:'opt', startMin, j, origIdx }
+      // grp → { type:'grp', startMin, group }
+      const rowItems = [];
+      optJobs.forEach(({j,origIdx}) => rowItems.push({ type:'opt', startMin:apHHMMtoMin(j.startTime), j, origIdx }));
+      Object.values(timeGroups).forEach(group => rowItems.push({ type:'grp', startMin:apHHMMtoMin(group.startTime), group }));
+      rowItems.sort((a,b) => a.startMin - b.startMin);
 
-      // ── 通常ジョブ（品番＋同時間帯でグループ化）
-      Object.values(timeGroups).sort((a,b)=>a.startTime.localeCompare(b.startTime)).forEach(group => {
-        const {startTime,endTime,hinban,hinmei,nouki,items}=group;
-        const sMin=apHHMMtoMin(startTime), eMin=apHHMMtoMin(endTime);
-        const dispDur=eMin-sMin;
-        const totalQty=items.reduce((s,{j})=>s+(parseFloat(j.shiji)||0),0);
-        const seizoNos=[...new Set(items.map(({j})=>j.seizoNo).filter(Boolean))];
-        const kosei=[...new Set(items.map(({j})=>j.kosei).filter(Boolean))].join('、');
-        const isOver=apIsOverdue(nouki,today);
-        const grpId=`${worker}-tg-${hinban.replace(/[^a-zA-Z0-9]/g,'_')}`;
-        html += `<tr style="border-bottom:1px solid #f5f5f5;background:${isOver?'#fff5f5':'#fff'};">
-          <td style="padding:4px 6px;white-space:nowrap;color:#555;font-size:10px;">${startTime}〜${endTime} <span style="color:#7c3aed;font-weight:700;">${dispDur}分</span></td>
-          <td style="padding:4px 6px;max-width:160px;">
-            <div style="font-weight:700;color:${isOver?'#c0392b':'#1a1a1a'};font-size:11px;">${hinban}</div>
-            <div style="font-size:9px;color:#888;word-break:break-all;">${seizoNos.join('、')}</div>
-          </td>
-          <td style="padding:4px 6px;color:#888;max-width:130px;">
-            <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${hinmei}</div>
-            ${kosei?`<div style="font-size:9px;color:#2563eb;">${kosei}</div>`:''}
-          </td>
-          <td style="padding:4px 6px;white-space:nowrap;">
-            ${isOver?`<span style="font-size:9px;padding:1px 4px;background:#c0392b;color:#fff;border-radius:3px;">納期超過</span> `:''}
-            ${totalQty>0?`<span style="font-weight:600;">${Math.round(totalQty)}個</span>`:''}
-          </td>
-          <td style="padding:4px 4px;white-space:nowrap;">
-            <button onclick="var r=document.getElementById('${grpId}');r.style.display=r.style.display==='none'?'table-row':'none'" style="padding:1px 6px;background:#e8f0fe;color:#1d4ed8;border:none;border-radius:3px;font-size:10px;cursor:pointer;font-family:inherit;">編集・削除</button>
-          </td>
-        </tr>
-        <tr id="${grpId}" style="display:none;background:#f8faff;border-bottom:1px solid #dde8ff;">
-          <td colspan="5" style="padding:6px 10px;">
-            ${items.map(({j,origIdx})=>{
-              const workerOpts=`<option value="${worker}" selected>── 現在（${worker}）</option>`+AP_WORKERS.filter(w=>w!==worker).map(w=>`<option value="${w}">${w}</option>`).join('');
-              const setupLabel=j.noSetup?'段取なし':'段取あり';
-              const setupColor=j.noSetup?'#888':'#2563eb';
-              return `<div style="border:1px solid #dde8ff;border-radius:5px;padding:6px 8px;margin-bottom:4px;font-size:11px;">
-                <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:5px;">
-                  <span style="color:#555;font-size:10px;font-weight:600;">${j.startTime}〜${j.endTime} (${j.durationMin}分)</span>
-                  <span style="font-size:10px;color:#666;">${j.seizoNo||''}${j.junjo?' 工順'+j.junjo:''}</span>
-                  ${j.kosei?`<span style="font-size:10px;color:#2563eb;">[${j.kosei}]</span>`:''}
-                  <button onclick="apToggleSetup('${worker}',${origIdx},${!j.noSetup})" style="font-size:9px;padding:1px 6px;border:1px solid ${j.noSetup?'#bbb':'#93c5fd'};color:${setupColor};background:#fff;border-radius:3px;cursor:pointer;font-family:inherit;">${setupLabel}</button>
-                  ${j.shiji?`<span style="font-weight:600;">${j.shiji}個</span>`:''}
-                </div>
-                <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:5px;">
-                  <span style="color:#888;">担当者:</span>
-                  <select id="ap-jmove-${worker}-${origIdx}" style="padding:2px 6px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">${workerOpts}</select>
-                  <span style="color:#888;">開始:</span>
-                  <input id="ap-jstart-${worker}-${origIdx}" type="time" value="${j.startTime}" style="padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">
-                  <span style="color:#888;">〜終了:</span>
-                  <input id="ap-jend-${worker}-${origIdx}" type="time" value="${j.endTime}" style="padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">
-                  <button onclick="apApplyJob('${worker}',${origIdx})" style="padding:2px 8px;background:#15803d;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;">適用</button>
-                </div>
-                <button onclick="apRemoveJob('${worker}',${origIdx})" style="padding:2px 10px;background:#fee2e2;color:#c0392b;border:1px solid #fca5a5;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;">🗑 削除</button>
-              </div>`;
-            }).join('')}
-          </td>
-        </tr>`;
+      rowItems.forEach(item => {
+        if (item.type === 'opt') {
+          const {j, origIdx} = item;
+          const wid=`${worker}-opt-${origIdx}`;
+          const workerOpts=`<option value="${worker}" selected>── 現在（${worker}）</option>`+AP_WORKERS.filter(w=>w!==worker).map(w=>`<option value="${w}">${w}</option>`).join('');
+          html += `<tr style="border-bottom:1px solid #f5f5f5;background:#fffbf0;">
+            <td style="padding:4px 6px;white-space:nowrap;color:#555;font-size:10px;">${j.startTime}〜${j.endTime} <span style="color:#7c3aed;font-weight:700;">${Math.round(j.durationMin)}分</span></td>
+            <td colspan="2" style="padding:4px 6px;"><span style="font-weight:700;color:#555;">🔲 ${j.hinban}</span> <span style="font-size:10px;color:#aaa;">定型作業</span></td>
+            <td style="padding:4px 4px;white-space:nowrap;">
+              <button onclick="var r=document.getElementById('${wid}');r.style.display=r.style.display==='none'?'table-row':'none'" style="padding:1px 6px;background:#e8f0fe;color:#1d4ed8;border:none;border-radius:3px;font-size:10px;cursor:pointer;font-family:inherit;">編集・削除</button>
+            </td>
+          </tr>
+          <tr id="${wid}" style="display:none;background:#f8faff;border-bottom:1px solid #dde8ff;">
+            <td colspan="4" style="padding:6px 10px;font-size:11px;">
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px;">
+                <span style="color:#888;">担当者:</span>
+                <select id="ap-jmove-${worker}-${origIdx}" style="padding:2px 6px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">${workerOpts}</select>
+                <span style="color:#888;">開始:</span>
+                <input id="ap-jstart-${worker}-${origIdx}" type="time" value="${j.startTime}" style="padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">
+                <span style="color:#888;">〜終了:</span>
+                <input id="ap-jend-${worker}-${origIdx}" type="time" value="${j.endTime}" style="padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">
+                <button onclick="apApplyJob('${worker}',${origIdx})" style="padding:2px 8px;background:#15803d;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;">適用</button>
+              </div>
+              <button onclick="apRemoveJob('${worker}',${origIdx})" style="padding:2px 10px;background:#fee2e2;color:#c0392b;border:1px solid #fca5a5;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;">🗑 削除</button>
+            </td>
+          </tr>`;
+        } else {
+          const {startTime,endTime,hinban,hinmei,nouki,items}=item.group;
+          const totalQty=items.reduce((s,{j})=>s+(parseFloat(j.shiji)||0),0);
+          const totalDur=items.reduce((s,{j})=>s+(j.durationMin||0),0);
+          const seizoNos=[...new Set(items.map(({j})=>j.seizoNo).filter(Boolean))];
+          const kosei=[...new Set(items.map(({j})=>j.kosei).filter(Boolean))].join('、');
+          const isOver=apIsOverdue(nouki,today);
+          const grpId=`${worker}-tg-${hinban.replace(/[^a-zA-Z0-9]/g,'_')}`;
+          html += `<tr style="border-bottom:1px solid #f5f5f5;background:${isOver?'#fff5f5':'#fff'};">
+            <td style="padding:4px 6px;white-space:nowrap;color:#555;font-size:10px;">${startTime}〜${endTime} <span style="color:#7c3aed;font-weight:700;">${totalDur}分</span></td>
+            <td style="padding:4px 6px;max-width:160px;">
+              <div style="font-weight:700;color:${isOver?'#c0392b':'#1a1a1a'};font-size:11px;">${hinban}</div>
+              <div style="font-size:9px;color:#888;word-break:break-all;">${seizoNos.join('、')}</div>
+            </td>
+            <td style="padding:4px 6px;color:#888;max-width:130px;">
+              <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${hinmei}</div>
+              ${kosei?`<div style="font-size:9px;color:#2563eb;">${kosei}</div>`:''}
+            </td>
+            <td style="padding:4px 6px;white-space:nowrap;">
+              ${isOver?`<span style="font-size:9px;padding:1px 4px;background:#c0392b;color:#fff;border-radius:3px;">納期超過</span> `:''}
+              ${totalQty>0?`<span style="font-weight:600;">${Math.round(totalQty)}個</span>`:''}
+            </td>
+            <td style="padding:4px 4px;white-space:nowrap;">
+              <button onclick="var r=document.getElementById('${grpId}');r.style.display=r.style.display==='none'?'table-row':'none'" style="padding:1px 6px;background:#e8f0fe;color:#1d4ed8;border:none;border-radius:3px;font-size:10px;cursor:pointer;font-family:inherit;">編集・削除</button>
+            </td>
+          </tr>
+          <tr id="${grpId}" style="display:none;background:#f8faff;border-bottom:1px solid #dde8ff;">
+            <td colspan="5" style="padding:6px 10px;">
+              ${items.map(({j,origIdx})=>{
+                const workerOpts=`<option value="${worker}" selected>── 現在（${worker}）</option>`+AP_WORKERS.filter(w=>w!==worker).map(w=>`<option value="${w}">${w}</option>`).join('');
+                const setupLabel=j.noSetup?'段取なし':'段取あり';
+                const setupColor=j.noSetup?'#888':'#2563eb';
+                return `<div style="border:1px solid #dde8ff;border-radius:5px;padding:6px 8px;margin-bottom:4px;font-size:11px;">
+                  <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:5px;">
+                    <span style="color:#555;font-size:10px;font-weight:600;">${j.startTime}〜${j.endTime} (${j.durationMin}分)</span>
+                    <span style="font-size:10px;color:#666;">${j.seizoNo||''}${j.junjo?' 工順'+j.junjo:''}</span>
+                    ${j.kosei?`<span style="font-size:10px;color:#2563eb;">[${j.kosei}]</span>`:''}
+                    <button onclick="apToggleSetup('${worker}',${origIdx},${!j.noSetup})" style="font-size:9px;padding:1px 6px;border:1px solid ${j.noSetup?'#bbb':'#93c5fd'};color:${setupColor};background:#fff;border-radius:3px;cursor:pointer;font-family:inherit;">${setupLabel}</button>
+                    ${j.shiji?`<span style="font-weight:600;">${j.shiji}個</span>`:''}
+                  </div>
+                  <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:5px;">
+                    <span style="color:#888;">担当者:</span>
+                    <select id="ap-jmove-${worker}-${origIdx}" style="padding:2px 6px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">${workerOpts}</select>
+                    <span style="color:#888;">開始:</span>
+                    <input id="ap-jstart-${worker}-${origIdx}" type="time" value="${j.startTime}" style="padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">
+                    <span style="color:#888;">〜終了:</span>
+                    <input id="ap-jend-${worker}-${origIdx}" type="time" value="${j.endTime}" style="padding:2px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;font-family:inherit;">
+                    <button onclick="apApplyJob('${worker}',${origIdx})" style="padding:2px 8px;background:#15803d;color:#fff;border:none;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;">適用</button>
+                  </div>
+                  <button onclick="apRemoveJob('${worker}',${origIdx})" style="padding:2px 10px;background:#fee2e2;color:#c0392b;border:1px solid #fca5a5;border-radius:4px;font-size:11px;cursor:pointer;font-family:inherit;">🗑 削除</button>
+                </div>`;
+              }).join('')}
+            </td>
+          </tr>`;
+        }
       });
 
       html += `</table>`;
@@ -11961,13 +11970,27 @@ window.apToggleSetup = function(worker, idx, noSetup) {
 window.apAssignOptJob = function(taskId) {
   const t = apOptionalTasks.find(x => (x.id||x.name) === taskId);
   if (!t) return;
-  const worker = (document.getElementById('opt-sel-'+taskId)||{}).value || t.worker || AP_WORKERS[0];
-  const durVal = parseInt((document.getElementById('opt-dur-'+taskId)||{}).value) || parseInt(t.durationMin) || 30;
+  const worker  = (document.getElementById('opt-sel-'+taskId)||{}).value || t.worker || AP_WORKERS[0];
   const timeVal = (document.getElementById('opt-time-'+taskId)||{}).value || '';
+  const endVal  = (document.getElementById('opt-end-'+taskId)||{}).value || '';
+  const durVal  = parseInt((document.getElementById('opt-dur-'+taskId)||{}).value) || parseInt(t.durationMin) || 30;
   if (!apPlan[worker]) apPlan[worker] = [];
-  const startT = timeVal ? apHHMMtoMin(timeVal) : apNextFreeSlot(worker, durVal);
-  const endT = apAdv(startT, durVal);
-  apPlan[worker].push({ hinban:t.name, hinmei:'定型作業', shiji:'', durationMin:durVal,
+  let startT, endT, actualDur;
+  if (timeVal && endVal) {
+    // 開始・終了両方指定 → 実稼働分を計算（休憩除く）
+    startT = apHHMMtoMin(timeVal);
+    endT   = apHHMMtoMin(endVal);
+    actualDur = apWorkIn(startT, endT);
+  } else if (timeVal) {
+    startT    = apHHMMtoMin(timeVal);
+    endT      = apAdv(startT, durVal);
+    actualDur = durVal;
+  } else {
+    startT    = apNextFreeSlot(worker, durVal);
+    endT      = apAdv(startT, durVal);
+    actualDur = durVal;
+  }
+  apPlan[worker].push({ hinban:t.name, hinmei:'定型作業', shiji:'', durationMin:actualDur,
     startTime:apHHMM(startT), endTime:apHHMM(endT), nouki:'', isOptional:true, _key:t.id||t.name });
   apRenderBoard(); apRenderPool(); apSavePlan();
 };
