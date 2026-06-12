@@ -12073,55 +12073,78 @@ window.apApplyGroup = function(worker, grpId, hinban) {
   const endMin   = apHHMMtoMin(endVal);
   if (endMin <= startMin) { apSetStatus('終了時間は開始時間より後にしてください', '#c0392b'); return; }
 
-  // 同品番・同worker・非定型ジョブを開始時刻順で取得
-  const groupJobs = (apPlan[worker] || [])
+  // 同品番の計画済みジョブを開始時刻順で取得
+  const plannedJobs = (apPlan[worker] || [])
     .filter(j => j.hinban === hinban && !j.isOptional)
     .sort((a,b) => apHHMMtoMin(a.startTime) - apHHMMtoMin(b.startTime));
-  if (!groupJobs.length) return;
 
-  // 工数情報を最初のジョブから取得
-  const s0 = apGetSakuyo().find(x => x.seizoNo === groupJobs[0].seizoNo && x.junjo === groupJobs[0].junjo);
-  const a  = s0 ? apGetAssign(s0) : null;
+  // 工数情報（最初のジョブのseizøNoから取得）
+  const s0 = plannedJobs.length
+    ? apGetSakuyo().find(x => x.seizoNo === plannedJobs[0].seizoNo && x.junjo === plannedJobs[0].junjo)
+    : null;
+  const a = s0 ? apGetAssign(s0) : null;
 
+  // 計画済みseizøNoのセット（重複追加防止）
+  const plannedKeys = new Set((apPlan[worker]||[]).map(j => j._key));
+
+  // 配置対象: 計画済み + 同品番・同工程の未計画seizøNoを納期順で連結
+  const kosei0 = plannedJobs[0]?.kosei || '';
+  const unplanned = apGetSakuyo()
+    .filter(x => x.hinban === hinban && (x.kosei||'') === kosei0 && !plannedKeys.has(x.seizoNo+'_'+x.junjo))
+    .sort((a,b) => _ndv(a['納期']) - _ndv(b['納期']));
+
+  // 計画済みを先に、次に未計画を処理
   let curMin = startMin;
   const toRemove = new Set();
+  const toAdd = [];
 
-  groupJobs.forEach(j => {
-    if (curMin >= endMin) { toRemove.add(j._key); return; }
+  const processJob = (j, isNew) => {
+    if (curMin >= endMin) { if (!isNew) toRemove.add(j._key); return; }
 
     if (!a || a.workMin <= 0) {
-      // 工数未登録 → 残り時間をそのまま割り当て
       const dur = apWorkIn(curMin, endMin);
-      j.startTime = apHHMM(curMin);
-      j.endTime   = apHHMM(apAdv(curMin, dur));
-      j.durationMin = dur;
+      j.startTime = apHHMM(curMin); j.endTime = apHHMM(apAdv(curMin, dur)); j.durationMin = dur;
       curMin = apHHMMtoMin(j.endTime);
+      if (isNew) toAdd.push(j);
       return;
     }
 
     const setupMin = j.noSetup ? 0 : (a.setupMin || 0);
-    // 残り稼働時間
     const avail = apWorkIn(curMin, endMin);
     const net   = avail - setupMin;
-    if (net < a.workMin) { toRemove.add(j._key); return; }
+    if (net < a.workMin) { if (!isNew) toRemove.add(j._key); return; }
 
-    // このseizøNoの指示数上限（sakuyoから取得。なければjob.shiji）
     const sj = apGetSakuyo().find(x => x.seizoNo === j.seizoNo && x.junjo === j.junjo);
     const maxQty = parseFloat(sj?.shiji) || parseFloat(j.shiji) || 0;
     const calcQty = Math.floor(net / a.workMin);
     const qty = maxQty > 0 ? Math.min(calcQty, maxQty) : calcQty;
-    if (qty <= 0) { toRemove.add(j._key); return; }
+    if (qty <= 0) { if (!isNew) toRemove.add(j._key); return; }
 
     const dur = Math.round(setupMin + a.workMin * qty);
-    j.startTime   = apHHMM(curMin);
-    j.endTime     = apHHMM(apAdv(curMin, dur));
-    j.durationMin = dur;
-    j.shiji       = String(qty);
+    j.startTime = apHHMM(curMin); j.endTime = apHHMM(apAdv(curMin, dur));
+    j.durationMin = dur; j.shiji = String(qty);
     curMin = apHHMMtoMin(j.endTime);
+    if (isNew) toAdd.push(j);
+  };
+
+  plannedJobs.forEach(j => processJob(j, false));
+
+  // 残り時間があれば未計画の製造番号を追加
+  unplanned.forEach(s => {
+    if (curMin >= endMin) return;
+    const newJob = {
+      hinban: s.hinban, hinmei: s.hinmei||'', kosei: s.kosei||'',
+      shiji: s.shiji, durationMin: 0,
+      startTime: apHHMM(curMin), endTime: apHHMM(curMin),
+      nouki: s['納期']||'', seizoNo: s.seizoNo, junjo: s.junjo,
+      _key: s.seizoNo+'_'+s.junjo, noSetup: false
+    };
+    processJob(newJob, true);
   });
 
-  // 時間が足りなくなったジョブを削除
+  // 削除・追加を反映
   if (toRemove.size) apPlan[worker] = apPlan[worker].filter(j => !toRemove.has(j._key));
+  toAdd.forEach(j => { if (!apPlan[worker]) apPlan[worker]=[]; apPlan[worker].push(j); });
 
   apRenderBoard(); apRenderPool(); apSavePlan();
 };
