@@ -11647,35 +11647,103 @@ async function apPushToProgress() {
   if (!Object.keys(apPlan).length) { apSetStatus('先に自動割り振りを実行してください', '#c0392b'); return; }
   const fbUrl = (config.firebaseUrl||'').replace(/\/+$/,'');
   if (!fbUrl) { apSetStatus('Firebase URLが設定されていません', '#c0392b'); return; }
+
+  // 既存の進捗データを確認
+  let existingData = {};
+  try {
+    const sdk = window._fbSDK;
+    if (sdk) {
+      const snap = await sdk.get(sdk.ref(sdk.db, 'lines'));
+      existingData = snap.exists() ? snap.val() : {};
+    } else {
+      const res = await fetch(`${fbUrl}/lines.json`);
+      existingData = (await res.json()) || {};
+    }
+  } catch(e) { existingData = {}; }
+
+  // 既存の実績データがあるか確認
+  const hasActual = Object.values(existingData).some(line =>
+    Array.isArray(line?.jobs) && line.jobs.some(j => (j.actual||0) > 0 || j.actualStart)
+  );
+
+  // 更新モードを選択（実績があれば選択ダイアログ、なければそのまま上書き）
+  let mergeMode = false;
+  if (hasActual) {
+    const choice = await new Promise(resolve => {
+      const modal = document.createElement('div');
+      modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:center;justify-content:center;';
+      modal.innerHTML = `
+        <div style="background:#fff;border-radius:10px;padding:22px 26px;max-width:400px;width:92%;box-shadow:0 8px 32px rgba(0,0,0,0.3);">
+          <div style="font-size:14px;font-weight:700;margin-bottom:8px;">進捗管理に反映</div>
+          <div style="font-size:12px;color:#555;margin-bottom:16px;line-height:1.6;">
+            進捗管理にすでに実績データがあります。<br>
+            どちらのモードで反映しますか？
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:18px;">
+            <button id="_ap_merge" style="padding:10px 14px;background:#1d4ed8;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;text-align:left;font-family:inherit;">
+              📋 計画のみ更新（実績を保持）<br>
+              <span style="font-weight:400;font-size:11px;opacity:0.85;">計画数・作業時間を更新。既存の実績（actual等）はそのまま維持します。修正時に使用。</span>
+            </button>
+            <button id="_ap_overwrite" style="padding:10px 14px;background:#dc2626;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;text-align:left;font-family:inherit;">
+              🔄 完全上書き（実績もリセット）<br>
+              <span style="font-weight:400;font-size:11px;opacity:0.85;">当日の計画を最初から入れ直します。既存の実績データはすべて消えます。</span>
+            </button>
+            <button id="_ap_cancel" style="padding:8px 14px;background:#f0f0f0;color:#555;border:none;border-radius:7px;font-size:12px;cursor:pointer;font-family:inherit;">キャンセル</button>
+          </div>
+        </div>`;
+      document.body.appendChild(modal);
+      modal.querySelector('#_ap_merge').onclick    = () => { document.body.removeChild(modal); resolve('merge'); };
+      modal.querySelector('#_ap_overwrite').onclick = () => { document.body.removeChild(modal); resolve('overwrite'); };
+      modal.querySelector('#_ap_cancel').onclick   = () => { document.body.removeChild(modal); resolve('cancel'); };
+    });
+    if (choice === 'cancel') return;
+    mergeMode = (choice === 'merge');
+  }
+
   try {
     const updates = {};
     AP_WORKERS.forEach(worker => {
       let seq = 0;
+      const existJobs = existingData[worker]?.jobs || [];
+      // seizoNo+junjo → 既存実績マップ
+      const existMap = {};
+      existJobs.forEach(j => { if (j.seizoNo) existMap[j.seizoNo+'_'+(j.junjo||'')] = j; });
+
       const jobs = (apPlan[worker]||[]).filter(j => !j.isOptional).map(j => {
-        // 工数登録から標準段取り時間を取得
         const srcJob = apGetSakuyo().find(s => s.seizoNo === j.seizoNo && s.junjo === j.junjo);
         const assign = srcJob ? apGetAssign(srcJob) : null;
         const stdSetupMin = j.noSetup ? 0 : (assign?.setupMin || 0);
-        // 段取り終了（生産開始）時刻 = 開始 + 段取り分数
-        const startMin  = apHHMMtoMin(j.startTime);
+        const startMin    = apHHMMtoMin(j.startTime);
         const prodStartMin = stdSetupMin > 0 ? apAdv(startMin, stdSetupMin) : startMin;
         seq++;
-        return {
+        const base = {
           seq,
-          part:     j.hinban,
-          hinmei:   j.hinmei || '',
-          kosei:    j.kosei  || '',
-          seizoNo:  j.seizoNo || '',
-          plan:     parseInt(j.shiji) || 0,
-          start:    j.startTime,          // 作業全体の開始（段取り含む）
-          end:      j.endTime,            // 作業全体の終了
-          prodStart: apHHMM(prodStartMin), // 生産開始（段取り後）
-          prodEnd:   j.endTime,
-          stdSetupMin,                    // 標準段取り時間（分）
-          setupActualMin: stdSetupMin,    // 進捗管理ボードの「段取Xmin」表示に使用
-          noSetup:  j.noSetup || false,
-          hito: 1, actual: 0,
+          part:          j.hinban,
+          hinmei:        j.hinmei || '',
+          kosei:         j.kosei  || '',
+          seizoNo:       j.seizoNo || '',
+          plan:          parseInt(j.shiji) || 0,
+          start:         j.startTime,
+          end:           j.endTime,
+          prodStart:     apHHMM(prodStartMin),
+          prodEnd:       j.endTime,
+          stdSetupMin,
+          setupActualMin: stdSetupMin,
+          noSetup:       j.noSetup || false,
+          hito: 1,
         };
+        if (mergeMode) {
+          // 計画のみ更新：既存の実績フィールドを引き継ぐ
+          const prev = existMap[j.seizoNo+'_'+(j.junjo||'')];
+          base.actual         = prev?.actual         ?? 0;
+          base.actualStart    = prev?.actualStart    ?? null;
+          base.actualEnd      = prev?.actualEnd      ?? null;
+          base.status         = prev?.status         ?? null;
+          base.setupActualMin = prev?.setupActualMin ?? stdSetupMin;
+        } else {
+          base.actual = 0;
+        }
+        return base;
       });
       updates[`lines/${worker}/jobs`] = jobs;
       updates[`lines/${worker}/plan`] = jobs.reduce((s,j)=>s+(j.plan||0),0);
@@ -11687,7 +11755,7 @@ async function apPushToProgress() {
       await fetch(`${fbUrl}.json`, { method:'PATCH',
         headers:{'Content-Type':'application/json'}, body:JSON.stringify(updates) });
     }
-    apSetStatus('進捗管理に反映しました', '#15803d');
+    apSetStatus(mergeMode ? '進捗管理に反映しました（実績を保持）' : '進捗管理に反映しました（完全上書き）', '#15803d');
   } catch(e) { apSetStatus('反映エラー: '+e.message, '#c0392b'); }
 }
 
