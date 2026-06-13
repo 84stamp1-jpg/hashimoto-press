@@ -12247,29 +12247,141 @@ window.apApplyGroup = function(worker, grpId, hinban) {
   apRenderBoard(); apRenderPool(); apSavePlan();
 };
 
-// 整列: 開始時刻順に並べ直し、重複・空白を詰める
-// 定型作業（isOptional）で startTime が設定されているものは時刻を固定して前後を調整
+// 整列: 定型作業を固定ブロックとして扱い、生産ジョブを隙間に詰める
+// 並行品番（worker2/worker3設定あり）の時刻が変わった場合、他担当者にも連動
 window.apCompactWorker = function(worker) {
-  const jobs = (apPlan[worker] || []).slice()
-    .sort((a,b) => apHHMMtoMin(a.startTime) - apHHMMtoMin(b.startTime));
-  if (jobs.length === 0) return;
+  const allJobs = (apPlan[worker] || []).slice();
+  if (allJobs.length === 0) return;
 
-  let curMin = apHHMMtoMin(jobs[0].startTime); // 最初のジョブの開始時刻から
+  // 定型作業（固定ブロック）と生産ジョブに分離
+  const optJobs  = allJobs.filter(j =>  j.isOptional)
+    .sort((a,b) => apHHMMtoMin(a.startTime||'08:00') - apHHMMtoMin(b.startTime||'08:00'));
+  const prodJobs = allJobs.filter(j => !j.isOptional)
+    .sort((a,b) => {
+      const da = _ndv(a.nouki||''), db = _ndv(b.nouki||'');
+      if (da !== db) return da - db;
+      return (a.hinban||'').localeCompare(b.hinban||'', 'ja');
+    });
 
-  jobs.forEach(j => {
-    // 定型作業で開始時刻が明示設定されている場合はその時刻を尊重（後ろにある場合のみ）
-    if (j.isOptional && j.startTime) {
-      const fixedStart = apHHMMtoMin(j.startTime);
-      curMin = Math.max(curMin, fixedStart);
+  // 定型作業の占有ブロック（壁時計分）
+  const blocked = optJobs
+    .filter(j => j.startTime && j.endTime)
+    .map(j => ({ start: apHHMMtoMin(j.startTime), end: apHHMMtoMin(j.endTime) }))
+    .sort((a,b) => a.start - b.start);
+
+  // 現在地がブロック内なら終了時刻まで飛ばす
+  const skipBlocks = (cur) => {
+    let c = cur, changed = true;
+    while (changed) {
+      changed = false;
+      for (const b of blocked) {
+        if (c >= b.start && c < b.end) { c = b.end; changed = true; break; }
+      }
+    }
+    return c;
+  };
+
+  // 次のブロック開始まで（またはAP_WEまで）の実働分
+  const workToNextBlock = (cur) => {
+    const next = blocked.find(b => b.start > cur);
+    return next ? apWorkIn(cur, next.start) : apWorkIn(cur, AP_WE);
+  };
+
+  // 変更前の開始時刻を記憶（並行連動判定用）
+  const oldStart = {};
+  prodJobs.forEach(j => { oldStart[j._key||j.hinban+'|'+(j.kosei||'')] = j.startTime; });
+
+  // 生産ジョブを空き枠に順番に配置
+  let curMin = skipBlocks(AP_WS);
+  prodJobs.forEach(j => {
+    curMin = skipBlocks(curMin);
+    // ジョブが次のブロックまでに収まるか確認。収まらなければブロック後へ
+    const maxTry = blocked.length + 2;
+    for (let t = 0; t < maxTry; t++) {
+      const avail = workToNextBlock(curMin);
+      if (avail >= j.durationMin) break;
+      const nextBlock = blocked.find(b => b.start > curMin);
+      if (!nextBlock) break; // もうブロックなし（残業扱い）
+      curMin = skipBlocks(nextBlock.end);
     }
     j.startTime = apHHMM(curMin);
     j.endTime   = apHHMM(apAdv(curMin, j.durationMin));
     curMin = apHHMMtoMin(j.endTime);
   });
 
-  apPlan[worker] = jobs;
+  apPlan[worker] = [...optJobs, ...prodJobs];
+
+  // 並行品番（worker2/worker3設定）が時刻変更されたら他担当者にも反映
+  const parallelUpdates = [];
+  prodJobs.forEach(j => {
+    const jKey = j._key || j.hinban+'|'+(j.kosei||'');
+    if (j.startTime === oldStart[jKey]) return; // 変化なし
+    const mapKey1 = j.hinban + '|' + (j.kosei||'');
+    const mapKey2 = j.hinban + '|';
+    const cfg = apAssignMap[mapKey1] || apAssignMap[mapKey2] ||
+      Object.values(apAssignMap).find(v => v && (v.worker1===worker||v.worker2===worker||v.worker3===worker));
+    if (!cfg || !cfg.parallel) return;
+    [cfg.worker1, cfg.worker2, cfg.worker3].forEach(pw => {
+      if (!pw || pw === worker || !apPlan[pw]) return;
+      const match = apPlan[pw].find(pj =>
+        pj.hinban === j.hinban && (pj.kosei||'') === (j.kosei||''));
+      if (!match) return;
+      match.startTime  = j.startTime;
+      match.endTime    = j.endTime;
+      match.durationMin = j.durationMin;
+      parallelUpdates.push(`${pw}の${j.hinban}→${j.startTime}〜${j.endTime}`);
+    });
+  });
+
   apRenderBoard(); apRenderPool(); apSavePlan();
-  apSetStatus(`${worker} の計画を整列しました`, '#0f766e');
+
+  // 定時超過チェック → モーダル
+  const overJobs = [...optJobs, ...prodJobs].filter(j => apHHMMtoMin(j.endTime) > AP_WE);
+  if (overJobs.length > 0) {
+    const listHTML = overJobs.map(j =>
+      `<li style="padding:3px 0;font-size:12px;">${j.isOptional?'【定型】':''}${j.hinban}${j.kosei?`(${j.kosei})`:''} &nbsp;${j.startTime}〜${j.endTime}（${j.durationMin}分）${j.shiji?' '+j.shiji+'個':''}</li>`
+    ).join('');
+    const parallelMsg = parallelUpdates.length
+      ? `<div style="font-size:11px;color:#0f766e;margin-bottom:12px;padding:6px 8px;background:#ecfdf5;border-radius:4px;">並行連動: ${parallelUpdates.join(' / ')}</div>` : '';
+    const modalHtml = `
+<div id="ap-overflow-modal" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:10px;padding:20px 24px;max-width:500px;width:90%;box-shadow:0 4px 24px rgba(0,0,0,.3);">
+    <div style="font-weight:700;font-size:14px;color:#92400e;margin-bottom:10px;">⚠ 定時(17:00)を超えるジョブがあります</div>
+    ${parallelMsg}
+    <ul style="margin:0 0 14px 16px;padding:0;color:#333;">${listHTML}</ul>
+    <div style="font-size:12px;color:#555;margin-bottom:16px;">超過分をどうしますか？</div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;">
+      <button onclick="apOverflowKeep('${worker}')" style="padding:7px 16px;background:#6b7280;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;">残業にする（そのまま）</button>
+      <button onclick="apOverflowReturn('${worker}')" style="padding:7px 16px;background:#dc2626;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;font-family:inherit;">超過分を未割り当てに戻す</button>
+    </div>
+  </div>
+</div>`;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+  } else {
+    let msg = `${worker} の計画を整列しました`;
+    if (parallelUpdates.length) msg += ` / 並行連動: ${parallelUpdates.join(' / ')}`;
+    apSetStatus(msg, '#0f766e');
+  }
+};
+
+window.apOverflowKeep = function(worker) {
+  document.getElementById('ap-overflow-modal')?.remove();
+  apSetStatus(`${worker} の整列完了（残業あり）`, '#b45309');
+};
+
+window.apOverflowReturn = function(worker) {
+  document.getElementById('ap-overflow-modal')?.remove();
+  // 定時を超えるジョブ（定型作業以外）を計画から除外→未割り当てプールへ
+  const removed = [];
+  apPlan[worker] = (apPlan[worker] || []).filter(j => {
+    if (!j.isOptional && apHHMMtoMin(j.endTime) > AP_WE) {
+      removed.push(j.hinban + (j.kosei ? `(${j.kosei})` : ''));
+      return false;
+    }
+    return true;
+  });
+  apRenderBoard(); apRenderPool(); apSavePlan();
+  apSetStatus(`${worker}: ${removed.join('、')} を未割り当てに戻しました`, '#0f766e');
 };
 
 window.apUpdateJobQty = function(worker, idx) {
