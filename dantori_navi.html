@@ -12342,45 +12342,84 @@ window.apCompactWorker = function(worker) {
 
   apPlan[worker] = [...optJobs, ...prodJobs];
 
-  // ── 並行品番の全担当者を同時刻に連動 ──
+  // ── 並行品番: hinbanごとに1回だけ処理し全担当者を同時刻から順番配置 ──
   const parallelUpdates = [];
+  const parallelSynced = new Set();
+
   prodJobs.forEach(j => {
     const jKey = j._key || j.hinban+'|'+(j.kosei||'');
     if (j.startTime === oldStartMap[jKey]) return; // 変化なし
     if (!parallelHinbanSet.has(j.hinban)) return;  // 並行品番でない
+    if (parallelSynced.has(j.hinban)) return;       // このhinbanは処理済み
+    parallelSynced.add(j.hinban);
 
-    // 全担当者のplanを検索し、同品番ジョブの時刻を揃える
+    const wFirstStartMin = apHHMMtoMin(j.startTime); // W上でのこのhinban最初の開始
+
+    // 各担当者の「このhinbanを始められる最早時刻」を計算
+    // = (非hinban生産ジョブの最終終了) か (その後の最初の定型ブロック開始) の大きい方
+    const getEarliest = (pw) => {
+      let base = AP_WS;
+      (apPlan[pw]||[]).forEach(pj => {
+        if (!pj.isOptional && pj.hinban !== j.hinban)
+          base = Math.max(base, apHHMMtoMin(pj.endTime||'08:00'));
+      });
+      // 定型ブロックがbaseの後に始まる場合はそのstartを最早とする
+      // （定型ブロック＝その担当者の専属作業時間帯と見なす）
+      const pwBlocks = (apPlan[pw]||[])
+        .filter(pj => pj.isOptional && pj.startTime && pj.endTime)
+        .map(pj => ({start: apHHMMtoMin(pj.startTime), end: apHHMMtoMin(pj.endTime)}))
+        .sort((a,b) => a.start - b.start);
+      const ded = pwBlocks.find(b => b.start >= base);
+      return ded ? Math.max(base, ded.start) : base;
+    };
+
+    // syncStart = max(W新開始, 他全担当者の最早時刻)
+    let syncStartMin = wFirstStartMin;
     AP_WORKERS.forEach(pw => {
       if (pw === worker) return;
-      (apPlan[pw]||[]).forEach(pj => {
-        if (pj.hinban !== j.hinban || pj.isOptional) return;
-        const pOld = pj.startTime;
-        pj.startTime  = j.startTime;
-        // 大塚など工数が異なる工程はdurationMinを再計算
+      if (!(apPlan[pw]||[]).some(pj => pj.hinban === j.hinban && !pj.isOptional)) return;
+      syncStartMin = Math.max(syncStartMin, getEarliest(pw));
+    });
+
+    // 全担当者（W含む）のhinbanジョブを syncStartMin から順番に配置
+    AP_WORKERS.forEach(pw => {
+      const pwJobs = (apPlan[pw]||[])
+        .filter(pj => pj.hinban === j.hinban && !pj.isOptional)
+        .sort((a,b) => apHHMMtoMin(a.startTime) - apHHMMtoMin(b.startTime));
+      if (!pwJobs.length) return;
+
+      let pwCur = syncStartMin;
+      // 並行ジョブは定型ブロック内に入るためskipBlocks不要（定型と同一作業想定）
+
+      pwJobs.forEach(pj => {
+        const oldS = pj.startTime;
+        pj.startTime = apHHMM(pwCur);
         const pa = apGetAssign(pj);
         if (pa && pa.workMin > 0) {
           const psm = pj.noSetup ? 0 : (pa.setupMin||0);
-          // 他担当者側の blocked を考慮せず単純にAP_WEまでで数量算出
-          const pavail = apWorkIn(apHHMMtoMin(j.startTime), AP_WE);
-          const pnet   = pavail - psm;
-          const pOrigQty = parseFloat(pj.shiji)||0;
-          const pCalc  = Math.floor(Math.max(0, pnet) / pa.workMin);
-          const pQty   = pOrigQty > 0
-            ? (pOrigQty - pCalc <= 5 && pCalc <= pOrigQty ? pOrigQty : Math.min(pCalc, pOrigQty))
+          const pavail = apWorkIn(pwCur, AP_WE);
+          const pnet = pavail - psm;
+          const pOQ = parseFloat(pj.shiji)||0;
+          const pCalc = Math.floor(Math.max(0, pnet) / pa.workMin);
+          const pQty = pOQ > 0
+            ? (pOQ - pCalc <= 5 && pCalc <= pOQ ? pOQ : Math.min(pCalc, pOQ))
             : pCalc;
           if (pQty > 0) { pj.shiji = String(pQty); pj.durationMin = Math.round(psm + pa.workMin * pQty); }
         }
-        pj.endTime = apHHMM(apAdv(apHHMMtoMin(pj.startTime), pj.durationMin));
-        if (pOld !== pj.startTime) parallelUpdates.push(`${pw}の${pj.hinban}(${pj.kosei||''})→${pj.startTime}〜${pj.endTime}`);
+        pj.endTime = apHHMM(apAdv(pwCur, pj.durationMin));
+        pwCur = apHHMMtoMin(pj.endTime);
+        if (oldS !== pj.startTime)
+          parallelUpdates.push(`${pw}の${pj.hinban}(${pj.kosei||''})→${pj.startTime}〜${pj.endTime}`);
       });
     });
   });
 
   apRenderBoard(); apRenderPool(); apSavePlan();
 
-  // 定時超過チェック → モーダル
+  // 定時超過チェック（17:00スタートのジョブも含む） → モーダル
   const allJobsNow = (apPlan[worker]||[]);
-  const overJobs = allJobsNow.filter(j => apHHMMtoMin(j.endTime) > AP_WE);
+  const overJobs = allJobsNow.filter(j =>
+    apHHMMtoMin(j.startTime) >= AP_WE || apHHMMtoMin(j.endTime) > AP_WE);
   if (overJobs.length > 0) {
     document.getElementById('ap-overflow-modal')?.remove();
     const listHTML = overJobs.map(j =>
@@ -12849,7 +12888,14 @@ window.apSaveCriteria = async function() {
 
 function apSetStatus(msg, color) {
   const el = document.getElementById('ap-status');
-  if (el) { el.textContent = msg; el.style.color = color||'#aaa'; }
+  if (!el) return;
+  el.textContent = msg;
+  // ヘッダーは暗背景なので色を明るめに変換
+  const bright = {
+    '#0f766e': '#5eead4', '#15803d': '#86efac', '#b45309': '#fcd34d',
+    '#c0392b': '#fca5a5', '#1d4ed8': '#93c5fd', '#888': '#d1d5db'
+  };
+  el.style.color = bright[color] || color || '#d1d5db';
 }
 
 // module スコープからグローバルに公開（onclick / switchTab から呼ばれるため）
