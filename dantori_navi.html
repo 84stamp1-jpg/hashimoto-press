@@ -12342,75 +12342,93 @@ window.apCompactWorker = function(worker) {
 
   apPlan[worker] = [...optJobs, ...prodJobs];
 
-  // ── 並行品番: hinbanごとに1回だけ処理し全担当者を同時刻から順番配置 ──
+  // ── 並行品番の正しい配置ロジック ──────────────────────────────────
+  // 構造: 同一seizøNoに対して 検査担当（野口/鈴木）+ フート担当（大塚）が同時稼働
+  // 順序: W(野口)のseizøNo → 他の検査担当者(鈴木)のseizøNo → 大塚は通して付き合う
+  // ルール: 同一kosei(検査)は同時に複数人が同じseizøNoにはつかない
+  //         → Wの検査が終わってから次の検査担当者（鈴木）のseizøNoへ
   const parallelUpdates = [];
   const parallelSynced = new Set();
 
   prodJobs.forEach(j => {
     const jKey = j._key || j.hinban+'|'+(j.kosei||'');
-    if (j.startTime === oldStartMap[jKey]) return; // 変化なし
-    if (!parallelHinbanSet.has(j.hinban)) return;  // 並行品番でない
-    if (parallelSynced.has(j.hinban)) return;       // このhinbanは処理済み
+    if (j.startTime === oldStartMap[jKey]) return;
+    if (!parallelHinbanSet.has(j.hinban)) return;
+    if (parallelSynced.has(j.hinban)) return;
     parallelSynced.add(j.hinban);
 
-    const wFirstStartMin = apHHMMtoMin(j.startTime); // W上でのこのhinban最初の開始
+    const primaryKosei = j.kosei || '';
 
-    // 各担当者の「このhinbanを始められる最早時刻」を計算
-    // = (非hinban生産ジョブの最終終了) か (その後の最初の定型ブロック開始) の大きい方
-    const getEarliest = (pw) => {
-      let base = AP_WS;
-      (apPlan[pw]||[]).forEach(pj => {
-        if (!pj.isOptional && pj.hinban !== j.hinban)
-          base = Math.max(base, apHHMMtoMin(pj.endTime||'08:00'));
-      });
-      // 定型ブロックがbaseの後に始まる場合はそのstartを最早とする
-      // （定型ブロック＝その担当者の専属作業時間帯と見なす）
-      const pwBlocks = (apPlan[pw]||[])
-        .filter(pj => pj.isOptional && pj.startTime && pj.endTime)
-        .map(pj => ({start: apHHMMtoMin(pj.startTime), end: apHHMMtoMin(pj.endTime)}))
-        .sort((a,b) => a.start - b.start);
-      const ded = pwBlocks.find(b => b.start >= base);
-      return ded ? Math.max(base, ded.start) : base;
-    };
-
-    // syncStart = max(W新開始, 他全担当者の最早時刻)
-    let syncStartMin = wFirstStartMin;
+    // このhinbanに関わる全ジョブを収集
+    const allHJobs = [];
     AP_WORKERS.forEach(pw => {
-      if (pw === worker) return;
-      if (!(apPlan[pw]||[]).some(pj => pj.hinban === j.hinban && !pj.isOptional)) return;
-      syncStartMin = Math.max(syncStartMin, getEarliest(pw));
+      (apPlan[pw]||[]).filter(pj => pj.hinban === j.hinban && !pj.isOptional)
+        .forEach(pj => allHJobs.push({
+          pw, pj,
+          isShadow: (pj.kosei||'') !== primaryKosei // 異工程（フート等）= shadow
+        }));
     });
 
-    // 全担当者（W含む）のhinbanジョブを syncStartMin から順番に配置
-    AP_WORKERS.forEach(pw => {
-      const pwJobs = (apPlan[pw]||[])
-        .filter(pj => pj.hinban === j.hinban && !pj.isOptional)
-        .sort((a,b) => apHHMMtoMin(a.startTime) - apHHMMtoMin(b.startTime));
-      if (!pwJobs.length) return;
+    // Primary(検査)ジョブ: W のを先頭、次に他の担当者（鈴木等）を追加
+    const wPrimary    = allHJobs.filter(x => !x.isShadow && x.pw === worker)
+      .sort((a,b) => apHHMMtoMin(a.pj.startTime) - apHHMMtoMin(b.pj.startTime));
+    const otherPrimary = allHJobs.filter(x => !x.isShadow && x.pw !== worker)
+      .sort((a,b) => apHHMMtoMin(a.pj.startTime) - apHHMMtoMin(b.pj.startTime));
+    const orderedPrimary = [...wPrimary, ...otherPrimary];
 
-      let pwCur = syncStartMin;
-      // 並行ジョブは定型ブロック内に入るためskipBlocks不要（定型と同一作業想定）
+    // Shadow(フート等)ジョブをseizøNoでインデックス化
+    const shadowBySeizo = {};
+    allHJobs.filter(x => x.isShadow)
+      .forEach(x => { if (!shadowBySeizo[x.pj.seizoNo]) shadowBySeizo[x.pj.seizoNo] = x; });
 
-      pwJobs.forEach(pj => {
-        const oldS = pj.startTime;
-        pj.startTime = apHHMM(pwCur);
-        const pa = apGetAssign(pj);
-        if (pa && pa.workMin > 0) {
-          const psm = pj.noSetup ? 0 : (pa.setupMin||0);
-          const pavail = apWorkIn(pwCur, AP_WE);
-          const pnet = pavail - psm;
-          const pOQ = parseFloat(pj.shiji)||0;
-          const pCalc = Math.floor(Math.max(0, pnet) / pa.workMin);
-          const pQty = pOQ > 0
-            ? (pOQ - pCalc <= 5 && pCalc <= pOQ ? pOQ : Math.min(pCalc, pOQ))
-            : pCalc;
-          if (pQty > 0) { pj.shiji = String(pQty); pj.durationMin = Math.round(psm + pa.workMin * pQty); }
+    // W の第一ジョブ開始時刻を起点として処理
+    let syncCur = apHHMMtoMin(j.startTime);
+
+    orderedPrimary.forEach(item => {
+      const pj = item.pj;
+      const pa = apGetAssign(pj);
+      const oldS = pj.startTime;
+
+      pj.startTime = apHHMM(syncCur);
+
+      // 利用可能時間で数量を再計算
+      if (pa && pa.workMin > 0) {
+        const psm    = pj.noSetup ? 0 : (pa.setupMin||0);
+        const pavail = apWorkIn(syncCur, AP_WE);
+        const pnet   = pavail - psm;
+        const pOQ    = parseFloat(pj.shiji)||0;
+        const pCalc  = Math.floor(Math.max(0, pnet) / pa.workMin);
+        const pQty   = pOQ > 0
+          ? (pOQ - pCalc <= 5 && pCalc <= pOQ ? pOQ : Math.min(pCalc, pOQ))
+          : pCalc;
+        if (pQty > 0) { pj.shiji = String(pQty); pj.durationMin = Math.round(psm + pa.workMin * pQty); }
+      }
+
+      pj.endTime = apHHMM(apAdv(syncCur, pj.durationMin));
+      syncCur    = apHHMMtoMin(pj.endTime); // 次のseizøNoはこの後から
+
+      if (oldS !== pj.startTime)
+        parallelUpdates.push(`${item.pw}の${pj.hinban}(${pj.kosei||''})→${pj.startTime}〜${pj.endTime}`);
+
+      // Shadow(フート/大塚等): 同じseizøNoを同じ時間帯に設定
+      const shadow = shadowBySeizo[pj.seizoNo];
+      if (shadow) {
+        const sj    = shadow.pj;
+        const sa    = apGetAssign(sj);
+        const oldSS = sj.startTime;
+        sj.startTime = pj.startTime;
+        const pQty2 = parseFloat(pj.shiji)||0;
+        if (sa && sa.workMin > 0 && pQty2 > 0) {
+          const ssm = sj.noSetup ? 0 : (sa.setupMin||0);
+          sj.shiji      = String(pQty2); // 同じ個数（同一ユニットを並行処理）
+          sj.durationMin = Math.round(ssm + sa.workMin * pQty2);
+        } else {
+          sj.durationMin = pj.durationMin;
         }
-        pj.endTime = apHHMM(apAdv(pwCur, pj.durationMin));
-        pwCur = apHHMMtoMin(pj.endTime);
-        if (oldS !== pj.startTime)
-          parallelUpdates.push(`${pw}の${pj.hinban}(${pj.kosei||''})→${pj.startTime}〜${pj.endTime}`);
-      });
+        sj.endTime = apHHMM(apAdv(apHHMMtoMin(sj.startTime), sj.durationMin));
+        if (oldSS !== sj.startTime)
+          parallelUpdates.push(`${shadow.pw}の${sj.hinban}(${sj.kosei||''})→${sj.startTime}〜${sj.endTime}`);
+      }
     });
   });
 
@@ -12456,10 +12474,11 @@ window.apOverflowKeep = function(worker) {
 
 window.apOverflowReturn = function(worker) {
   document.getElementById('ap-overflow-modal')?.remove();
-  // 定時を超えるジョブ（定型作業以外）を計画から除外→未割り当てプールへ
+  // startTime >= 17:00 または endTime > 17:00 のジョブを未割り当てに戻す
   const removed = [];
   apPlan[worker] = (apPlan[worker] || []).filter(j => {
-    if (!j.isOptional && apHHMMtoMin(j.endTime) > AP_WE) {
+    if (!j.isOptional &&
+        (apHHMMtoMin(j.startTime) >= AP_WE || apHHMMtoMin(j.endTime) > AP_WE)) {
       removed.push(j.hinban + (j.kosei ? `(${j.kosei})` : ''));
       return false;
     }
