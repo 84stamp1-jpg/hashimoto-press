@@ -12297,22 +12297,54 @@ window.apCompactWorker = function(worker) {
     if (entry?.parallel) parallelHinbanSet.add(key.split('|')[0]);
   });
 
-  // 生産ジョブを空き枠に順番に配置し、数量を再計算
-  let curMin = skipBlocks(AP_WS);
-  prodJobs.forEach(j => {
-    curMin = skipBlocks(curMin);
+  // primary / shadow の判定
+  const isPrimaryJob    = (j) => !!(apAssignMap?.[j.hinban+'|'+(j.kosei||'')]?.parallel);
+  const isShadowParallel = (j) => parallelHinbanSet.has(j.hinban) && !isPrimaryJob(j);
+
+  // Shadow並行ジョブ（大塚のフート等）は fixed block 扱い → 第一パスで動かさない
+  const shadowParallelJobs = prodJobs.filter(j => isShadowParallel(j));
+  const movableProdJobs    = prodJobs.filter(j => !isShadowParallel(j));
+
+  // 定型 + shadow並行ジョブ の占有ブロックを合算
+  const allBlocked = [
+    ...blocked,
+    ...shadowParallelJobs
+      .filter(j => j.startTime && j.endTime)
+      .map(j => ({ start: apHHMMtoMin(j.startTime), end: apHHMMtoMin(j.endTime) }))
+  ].sort((a,b) => a.start - b.start);
+
+  // skipBlocks / workToNextBlock を allBlocked ベースに再定義
+  const skipAllBlocks = (cur) => {
+    let c = cur, changed = true;
+    while (changed) {
+      changed = false;
+      for (const b of allBlocked) {
+        if (c >= b.start && c < b.end) { c = b.end; changed = true; break; }
+      }
+    }
+    return c;
+  };
+  const workToNextAllBlock = (cur) => {
+    const next = allBlocked.find(b => b.start > cur);
+    return next ? apWorkIn(cur, next.start) : apWorkIn(cur, AP_WE);
+  };
+
+  // 生産ジョブを空き枠に順番に配置し、数量を再計算（shadow並行ジョブは除外）
+  let curMin = skipAllBlocks(AP_WS);
+  movableProdJobs.forEach(j => {
+    curMin = skipAllBlocks(curMin);
 
     // ジョブが次のブロックまでに収まるか確認。収まらなければブロック後へ
-    const maxTry = blocked.length + 2;
+    const maxTry = allBlocked.length + 2;
     for (let t = 0; t < maxTry; t++) {
-      const avail = workToNextBlock(curMin);
+      const avail = workToNextAllBlock(curMin);
       // 工数マスタで最低1個分でも収まるか確認
       const a = apGetAssign(j);
       const minNeed = a ? ((j.noSetup ? 0 : (a.setupMin||0)) + (a.workMin||0)) : (j.durationMin||1);
       if (avail >= minNeed) break;
-      const nextBlock = blocked.find(b => b.start > curMin);
+      const nextBlock = allBlocked.find(b => b.start > curMin);
       if (!nextBlock) break;
-      curMin = skipBlocks(nextBlock.end);
+      curMin = skipAllBlocks(nextBlock.end);
     }
 
     j.startTime = apHHMM(curMin);
@@ -12322,7 +12354,7 @@ window.apCompactWorker = function(worker) {
     if (a && a.workMin > 0) {
       const setupM  = j.noSetup ? 0 : (a.setupMin||0);
       // 次のブロック or AP_WE まで利用できる実働分
-      const availMins = workToNextBlock(curMin);
+      const availMins = workToNextAllBlock(curMin);
       const net = availMins - setupM;
       const origQty = parseFloat(j.shiji) || 0;
       const calcQty = Math.floor(Math.max(0, net) / a.workMin);
@@ -12340,17 +12372,18 @@ window.apCompactWorker = function(worker) {
     curMin = apHHMMtoMin(j.endTime);
   });
 
-  apPlan[worker] = [...optJobs, ...prodJobs];
+  // shadow並行ジョブはそのまま残す（movableProdJobs + shadowParallelJobs = prodJobs）
+  apPlan[worker] = [...optJobs, ...movableProdJobs, ...shadowParallelJobs];
 
   // ── 並行品番の正しい配置ロジック ──────────────────────────────────
-  // 構造: 同一seizøNoに対して 検査担当（野口/鈴木）+ フート担当（大塚）が同時稼働
+  // 構造: 同一seizoNoに対して 検査担当（野口/鈴木）+ フート担当（大塚）が同時稼働
   // 順序: W(野口)のseizøNo → 他の検査担当者(鈴木)のseizøNo → 大塚は通して付き合う
   // ルール: 同一kosei(検査)は同時に複数人が同じseizøNoにはつかない
-  //         → Wの検査が終わってから次の検査担当者（鈴木）のseizøNoへ
   const parallelUpdates = [];
   const parallelSynced = new Set();
 
-  prodJobs.forEach(j => {
+  movableProdJobs.forEach(j => {
+    if (!isPrimaryJob(j)) return; // primaryジョブのみが並行syncを起点にする
     const jKey = j._key || j.hinban+'|'+(j.kosei||'');
     if (j.startTime === oldStartMap[jKey]) return;
     if (!parallelHinbanSet.has(j.hinban)) return;
@@ -12386,6 +12419,18 @@ window.apCompactWorker = function(worker) {
 
     orderedPrimary.forEach(item => {
       const pj = item.pj;
+
+      // syncCur が既に定時以降 → このジョブとshadowを計画から除いて未割り当てへ
+      if (syncCur >= AP_WE) {
+        apPlan[item.pw] = (apPlan[item.pw]||[]).filter(x => x !== pj);
+        const shadow = shadowBySeizo[pj.seizoNo];
+        if (shadow && apPlan[shadow.pw]) {
+          apPlan[shadow.pw] = apPlan[shadow.pw].filter(x => x !== shadow.pj);
+        }
+        parallelUpdates.push(`${item.pw}の${pj.hinban}(${pj.kosei||''})→未割当`);
+        return;
+      }
+
       const pa = apGetAssign(pj);
       const oldS = pj.startTime;
 
