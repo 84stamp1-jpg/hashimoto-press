@@ -11011,7 +11011,8 @@ function apNextFreeSlot(worker, durationMin, planRef) {
   for (const item of items) {
     const s = apHHMMtoMin(item.startTime);
     const e = apHHMMtoMin(item.endTime);
-    if (t + durationMin <= s) return t;
+    // 実働分で「tからdurationMin分後がsより前か」を正しく判定
+    if (apAdv(t, durationMin) <= s) return t;
     if (e > t) t = apNW(e);
   }
   return t;
