@@ -12015,8 +12015,8 @@ function apAssignJob(seizoNo, junjo) {
   if (!s) return;
   const worker = apJobWorker(s) || AP_WORKERS[1];
   const dur = apJobMins(s);
-  const wt = apNW(apPlan[worker]?.length ? apAdv(AP_WS, (apPlan[worker]||[]).reduce((s,j)=>s+j.durationMin,0)) : AP_WS);
-  const endT = apAdv(Math.max(wt, AP_WS), dur);
+  const wt = apNextFreeSlot(worker, dur);
+  const endT = apAdv(wt, dur);
   if (!apPlan[worker]) apPlan[worker] = [];
   apPlan[worker].push({ hinban:s.hinban, hinmei:s.hinmei, shiji:s.shiji, durationMin:dur,
     startTime:apHHMM(wt), endTime:apHHMM(endT), nouki:s['納期']||'',
@@ -12347,6 +12347,7 @@ window.apCompactWorker = function(worker) {
       curMin = skipAllBlocks(nextBlock.end);
     }
 
+    curMin = apNW(curMin); // 休憩時間に落ちた場合はスキップ
     j.startTime = apHHMM(curMin);
 
     // ── 数量を利用可能時間で再計算 ──
@@ -12371,6 +12372,17 @@ window.apCompactWorker = function(worker) {
     j.endTime = apHHMM(apAdv(curMin, j.durationMin));
     curMin = apHHMMtoMin(j.endTime);
   });
+
+  // 最終生産ジョブが定時15分以内に終わる場合は17:00まで延ばす（スロット確保）
+  const lastMovable = movableProdJobs.length > 0 ? movableProdJobs[movableProdJobs.length - 1] : null;
+  if (lastMovable) {
+    const lastEndMin = apHHMMtoMin(lastMovable.endTime);
+    const remainWork = apWorkIn(lastEndMin, AP_WE);
+    if (remainWork > 0 && remainWork <= 15) {
+      lastMovable.endTime   = apHHMM(AP_WE);
+      lastMovable.durationMin = apWorkIn(apHHMMtoMin(lastMovable.startTime), AP_WE);
+    }
+  }
 
   // shadow並行ジョブはそのまま残す（movableProdJobs + shadowParallelJobs = prodJobs）
   apPlan[worker] = [...optJobs, ...movableProdJobs, ...shadowParallelJobs];
@@ -12414,8 +12426,8 @@ window.apCompactWorker = function(worker) {
     allHJobs.filter(x => x.isShadow)
       .forEach(x => { if (!shadowBySeizo[x.pj.seizoNo]) shadowBySeizo[x.pj.seizoNo] = x; });
 
-    // W の第一ジョブ開始時刻を起点として処理
-    let syncCur = apHHMMtoMin(j.startTime);
+    // W の第一ジョブ開始時刻を起点として処理（休憩時間ならスキップ）
+    let syncCur = apNW(apHHMMtoMin(j.startTime));
 
     orderedPrimary.forEach(item => {
       const pj = item.pj;
@@ -12450,7 +12462,7 @@ window.apCompactWorker = function(worker) {
       }
 
       pj.endTime = apHHMM(apAdv(syncCur, pj.durationMin));
-      syncCur    = apHHMMtoMin(pj.endTime); // 次のseizøNoはこの後から
+      syncCur    = apNW(apHHMMtoMin(pj.endTime)); // 次のseizøNoはこの後から（休憩スキップ）
 
       if (oldS !== pj.startTime)
         parallelUpdates.push(`${item.pw}の${pj.hinban}(${pj.kosei||''})→${pj.startTime}〜${pj.endTime}`);
