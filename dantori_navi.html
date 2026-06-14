@@ -6343,9 +6343,8 @@ async function autoAssignRoles(){
         .filter(w => !isUnavailableAt(w, ps, e))
         .slice(0, effectiveWrkCount);
 
-      // 不足分を補完
-      // ① 優先ラインに今日の仕事がない人（真の空き）を優先して投入
-      // ② それでも足りなければ優先ラインに仕事はあるが未処理競合がない人
+      // Pass 1: 優先ラインに仕事がない人（真の空き）のみ補完
+      // 優先ラインに仕事がある人（ジェン・アリ等）はPass 2で全ライン確定後に補充する
       const wrkNeed = effectiveWrkCount - workerAvail.length;
       if(wrkNeed > 0){
         const baseFilter = w =>
@@ -6353,50 +6352,90 @@ async function autoAssignRoles(){
           !workerHasRole(w, 'noLine') &&
           !isBusy(w, ps, e) &&
           !isUnavailableAt(w, ps, e);
-        // ①: 優先ラインに仕事がない（= 今日そのラインの段取り計画なし）→ 競合チェック不要
+        // 優先ラインに仕事がない人のみ → 競合チェック不要
         const freeWorkers = allPressWorkers.filter(w =>
           baseFilter(w) && (!WORKER_PRIORITY_LINE[w] || !activeLineSet.has(WORKER_PRIORITY_LINE[w]))
-        );
-        // ②: 優先ラインに仕事があるが競合しない人（従来のロジック）
-        const reservedWorkers = allPressWorkers.filter(w =>
-          baseFilter(w) && WORKER_PRIORITY_LINE[w] && activeLineSet.has(WORKER_PRIORITY_LINE[w]) &&
-          !_isPriorityLineConflict(w, entry.lineId, ps, e) && !freeWorkers.includes(w)
-        );
-        const additional = [...freeWorkers, ...reservedWorkers]
-          .sort((a, b) => {
-            const aLine = WORKER_PRIORITY_LINE[a];
-            const bLine = WORKER_PRIORITY_LINE[b];
-            const score = w => {
-              if(w === entry.lineId) return 0;
-              const grp = dantoriGroupCfg.find(g => g.ids && g.ids.includes(entry.lineId));
-              if(grp && grp.ids.includes(w)) return 1;
-              if(!w || !activeLineSet.has(w)) return 2; // 優先ラインに仕事なし
-              return 3; // 他グループでも空き
-            };
-            return score(aLine) - score(bLine);
-          })
-          .slice(0, wrkNeed);
-        workerAvail.push(...additional);
+        ).sort((a, b) => {
+          const score = w => {
+            const priLine = WORKER_PRIORITY_LINE[w];
+            if(priLine === entry.lineId) return 0;
+            const grp = dantoriGroupCfg.find(g => g.ids && g.ids.includes(entry.lineId));
+            if(grp && priLine && grp.ids.includes(priLine)) return 1;
+            if(!priLine || !activeLineSet.has(priLine)) return 2;
+            return 3;
+          };
+          return score(a) - score(b);
+        }).slice(0, wrkNeed);
+        workerAvail.push(...freeWorkers);
       }
 
       if(workerAvail.length){
         roles.作業者 = workerAvail.join('、');
-        // 全作業者を prodStart〜prodEnd でbusy登録
         workerAvail.forEach(w => markBusy(w, ps, e, `作業 ${linePart}`));
-        if(workerAvail.length < effectiveWrkCount){
-          shortages.push({ role:'作業者', linePart,
-            timeStr: entry.prodStart||timeStr,
-            detail:`人数不足 ${workerAvail.length}人割当 / ${effectiveWrkCount}人必要（追加候補なし）` });
-        }
-      } else {
-        shortages.push({ role:'作業者', linePart,
-          timeStr: entry.prodStart||timeStr, detail:'候補者なし' });
+        // 不足の場合でも shortage はPass 2後に確定するので、ここでは仮登録しない
       }
+      // 作業者0人の場合もPass 2で補充するのでここでは shortage を積まない
     }
 
     entry.roles = roles;
-    // このラインの処理完了を記録（以降のラインで _isPriorityLineConflict が不要にならないよう）
     processedLines.add(entry.lineId);
+  });
+
+  // ────── Pass 2: 全ライン専任確定後、空き人材で不足分を補充 ──────────────
+  // Pass 1 で全ライン専任が busyMap に確定済みなので、isBusy のみで判定できる
+  // → _isPriorityLineConflict 不要（B1が確定後ならジェン・アリの午前Cラインも通る）
+  sorted.forEach(entry => {
+    if(entry.status === 'done' || entry.status === 'in_progress') return;
+    if(entry.noWorker) return;
+    const ps2 = toMin(entry.prodStart);
+    const e2  = toMin(entry.prodEnd || entry.prodStart);
+    if(!ps2 || !e2 || ps2 >= e2) return;
+
+    const effectiveWrkCount2 = (entry.workerCount||0) > 0
+      ? entry.workerCount
+      : (PRESS_LINE_MASTER[entry.lineId]?.workers?.length || 1);
+
+    const alreadyAssigned = (entry.roles?.作業者||'').split(/[,、]/).map(w=>w.trim()).filter(Boolean);
+    const wrkNeed2 = effectiveWrkCount2 - alreadyAssigned.length;
+
+    const lineDisp2 = getLineDisplayName(entry.lineId);
+    const linePart2 = `${lineDisp2}（${entry.partNo||'品番不明'}）`;
+    const timeStr2  = entry.prodStart||entry.setupStart||'';
+
+    if(wrkNeed2 > 0){
+      // isBusy のみで判定（全ライン専任確定済み）
+      const additional2 = allPressWorkers.filter(w =>
+        !alreadyAssigned.includes(w) &&
+        !workerHasRole(w, 'noLine') &&
+        !isBusy(w, ps2, e2) &&
+        !isUnavailableAt(w, ps2, e2)
+      ).sort((a, b) => {
+        const score = w => {
+          const priLine = WORKER_PRIORITY_LINE[w];
+          if(priLine === entry.lineId) return 0;
+          const grp = dantoriGroupCfg.find(g => g.ids && g.ids.includes(entry.lineId));
+          if(grp && priLine && grp.ids.includes(priLine)) return 1;
+          if(!priLine || !activeLineSet.has(priLine)) return 2;
+          return 3;
+        };
+        return score(a) - score(b);
+      }).slice(0, wrkNeed2);
+
+      if(additional2.length){
+        const newList = [...alreadyAssigned, ...additional2];
+        entry.roles.作業者 = newList.join('、');
+        additional2.forEach(w => markBusy(w, ps2, e2, `作業 ${linePart2}`));
+        if(newList.length < effectiveWrkCount2){
+          shortages.push({ role:'作業者', linePart: linePart2, timeStr: timeStr2,
+            detail:`人数不足 ${newList.length}人割当 / ${effectiveWrkCount2}人必要（追加候補なし）` });
+        }
+      } else if(!alreadyAssigned.length){
+        shortages.push({ role:'作業者', linePart: linePart2, timeStr: timeStr2, detail:'候補者なし' });
+      } else {
+        shortages.push({ role:'作業者', linePart: linePart2, timeStr: timeStr2,
+          detail:`人数不足 ${alreadyAssigned.length}人割当 / ${effectiveWrkCount2}人必要（追加候補なし）` });
+      }
+    }
   });
 
   // ── 余り時間 計算 ────────────────────────────
