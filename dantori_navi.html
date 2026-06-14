@@ -6337,27 +6337,34 @@ async function autoAssignRoles(){
         .slice(0, effectiveWrkCount);
 
       // 不足分を補完
-      // busyMapに登録済みでなければ優先ライン問わず柔軟に割り振り（空き人材の横断応援）
+      // ① 優先ラインに今日の仕事がない人（真の空き）を優先して投入
+      // ② それでも足りなければ優先ラインに仕事はあるが未処理競合がない人
       const wrkNeed = effectiveWrkCount - workerAvail.length;
       if(wrkNeed > 0){
-        const additional = allPressWorkers
-          .filter(w =>
-            !workerAvail.includes(w) &&
-            !workerHasRole(w, 'noLine') &&
-            !isBusy(w, ps, e) &&
-            !isUnavailableAt(w, ps, e)
-            // _isPriorityLineConflict を外す: 実際にbusyでなければどのラインにも配置可
-          )
+        const baseFilter = w =>
+          !workerAvail.includes(w) &&
+          !workerHasRole(w, 'noLine') &&
+          !isBusy(w, ps, e) &&
+          !isUnavailableAt(w, ps, e);
+        // ①: 優先ラインに仕事がない（= 今日そのラインの段取り計画なし）→ 競合チェック不要
+        const freeWorkers = allPressWorkers.filter(w =>
+          baseFilter(w) && (!WORKER_PRIORITY_LINE[w] || !activeLineSet.has(WORKER_PRIORITY_LINE[w]))
+        );
+        // ②: 優先ラインに仕事があるが競合しない人（従来のロジック）
+        const reservedWorkers = allPressWorkers.filter(w =>
+          baseFilter(w) && WORKER_PRIORITY_LINE[w] && activeLineSet.has(WORKER_PRIORITY_LINE[w]) &&
+          !_isPriorityLineConflict(w, entry.lineId, ps, e) && !freeWorkers.includes(w)
+        );
+        const additional = [...freeWorkers, ...reservedWorkers]
           .sort((a, b) => {
-            // 同ライン優先 → 同グループ優先 → 優先ラインに仕事なし → 他グループ → フローティング
             const aLine = WORKER_PRIORITY_LINE[a];
             const bLine = WORKER_PRIORITY_LINE[b];
             const score = w => {
               if(w === entry.lineId) return 0;
               const grp = dantoriGroupCfg.find(g => g.ids && g.ids.includes(entry.lineId));
               if(grp && grp.ids.includes(w)) return 1;
-              if(w && !activeLineSet.has(w)) return 2; // 優先ラインに仕事がない人を優先
-              return w ? 3 : 4; // 優先ラインあり他グループ → フローティング
+              if(!w || !activeLineSet.has(w)) return 2; // 優先ラインに仕事なし
+              return 3; // 他グループでも空き
             };
             return score(aLine) - score(bLine);
           })
