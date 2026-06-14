@@ -6091,6 +6091,12 @@ async function autoAssignRoles(){
       const freeLines = getSameGroupNoWork(lineId);
       const grp = cands.filter(w => freeLines.includes(WORKER_PRIORITY_LINE[w]) && canWork(w));
       if(grp.length) return grp[0];
+      // ②bis グループ外でも優先ラインに仕事がない人（ライン横断応援）
+      const crossFree = cands.filter(w => {
+        const priLine = WORKER_PRIORITY_LINE[w];
+        return priLine && !activeLineSet.has(priLine) && !freeLines.includes(priLine) && canWork(w);
+      });
+      if(crossFree.length) return crossFree[0];
       // ③ 優先ライン未設定（フローティング）
       const floating = cands.filter(w => !WORKER_PRIORITY_LINE[w] && canWork(w));
       if(floating.length) return floating[0];
@@ -6142,6 +6148,16 @@ async function autoAssignRoles(){
       result.push(...grp);
       if(result.length >= maxCount) return result.slice(0, maxCount);
 
+      // ②bis グループ外でも優先ラインに仕事がない人（ライン横断応援）
+      const crossFree = allPressWorkers
+        .filter(w => {
+          const priLine = WORKER_PRIORITY_LINE[w];
+          return priLine && !sameGroupIds.includes(priLine) && !activeLineSet.has(priLine) &&
+            isAvail(w) && !result.includes(w) && !_isPriorityLineConflict(w, lineId, s, e);
+        });
+      result.push(...crossFree);
+      if(result.length >= maxCount) return result.slice(0, maxCount);
+
       // ③ フローティング（優先ライン未設定）: 作業者割り当て時のみ使用
       if(allowFloating){
         const floating = allPressWorkers.filter(w => !WORKER_PRIORITY_LINE[w] && isAvail(w) && !result.includes(w));
@@ -6169,7 +6185,8 @@ async function autoAssignRoles(){
         !workerHasRole(w,'noLine') &&
         (!WORKER_PRIORITY_LINE[w] ||
           WORKER_PRIORITY_LINE[w] === lineId ||
-          freeLines.includes(WORKER_PRIORITY_LINE[w]))
+          freeLines.includes(WORKER_PRIORITY_LINE[w]) ||
+          !activeLineSet.has(WORKER_PRIORITY_LINE[w])) // 優先ラインに仕事がない人も候補に
       );
       if(all.length) return all;
     }
