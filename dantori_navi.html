@@ -6337,7 +6337,7 @@ async function autoAssignRoles(){
         .slice(0, effectiveWrkCount);
 
       // 不足分を補完
-      // 優先ラインが現ラインと異なりかつ優先ラインに同時間帯の予定がある作業者は除外
+      // busyMapに登録済みでなければ優先ライン問わず柔軟に割り振り（空き人材の横断応援）
       const wrkNeed = effectiveWrkCount - workerAvail.length;
       if(wrkNeed > 0){
         const additional = allPressWorkers
@@ -6345,18 +6345,19 @@ async function autoAssignRoles(){
             !workerAvail.includes(w) &&
             !workerHasRole(w, 'noLine') &&
             !isBusy(w, ps, e) &&
-            !isUnavailableAt(w, ps, e) &&
-            !_isPriorityLineConflict(w, entry.lineId, ps, e)
+            !isUnavailableAt(w, ps, e)
+            // _isPriorityLineConflict を外す: 実際にbusyでなければどのラインにも配置可
           )
           .sort((a, b) => {
-            // 同ライン優先 → 同グループ優先 → その他
+            // 同ライン優先 → 同グループ優先 → 優先ラインに仕事なし → 他グループ → フローティング
             const aLine = WORKER_PRIORITY_LINE[a];
             const bLine = WORKER_PRIORITY_LINE[b];
             const score = w => {
               if(w === entry.lineId) return 0;
               const grp = dantoriGroupCfg.find(g => g.ids && g.ids.includes(entry.lineId));
               if(grp && grp.ids.includes(w)) return 1;
-              return w ? 2 : 3; // 優先ラインあり他グループ → フローティング
+              if(w && !activeLineSet.has(w)) return 2; // 優先ラインに仕事がない人を優先
+              return w ? 3 : 4; // 優先ラインあり他グループ → フローティング
             };
             return score(aLine) - score(bLine);
           })
