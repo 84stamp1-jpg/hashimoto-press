@@ -6042,9 +6042,10 @@ async function autoAssignRoles(){
 
   // ── 各ラインの生産時間帯マップ（優先ライン流出防止に使用） ──
   // lineId → [{s, e}] の配列。「優先ラインに同時間帯の予定がある人は他ラインに使わない」判定用
+  // setupStart を含む全作業時間帯を登録（prodStartが未定義でも確保できるよう）
   const _lineProdRanges = {};
   sorted.forEach(ent => {
-    const pS = toMin(ent.prodStart);
+    const pS = toMin(ent.setupStart || ent.prodStart); // setup開始も含める
     const pE = toMin(ent.prodEnd || ent.prodStart);
     if(pS !== null){
       if(!_lineProdRanges[ent.lineId]) _lineProdRanges[ent.lineId] = [];
@@ -6060,7 +6061,12 @@ async function autoAssignRoles(){
     if(!priLine || priLine === currentLineId) return false;
     // 優先ラインが既に処理済み → busyMapに反映済みなのでここでは弾かない
     if(processedLines.has(priLine)) return false;
-    return (_lineProdRanges[priLine] || []).some(r => r.s < e && r.e > s);
+    // 優先ラインに今日の仕事がある場合：
+    // prod範囲が定義されていれば時間重複チェック、未定義ならアクティブなだけで競合とみなす
+    if(!activeLineSet.has(priLine)) return false; // 今日仕事なし → 競合なし
+    const ranges = _lineProdRanges[priLine] || [];
+    if(ranges.length === 0) return true; // prod範囲不明でもアクティブなら確保
+    return ranges.some(r => r.s < e && r.e > s);
   }
 
   // 同グループで仕事がないラインを取得（lineIdに近い順でソート）
