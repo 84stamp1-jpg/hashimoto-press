@@ -6337,13 +6337,18 @@ async function autoAssignRoles(){
       ? wrkCount
       : (PRESS_LINE_MASTER[entry.lineId]?.workers?.length || 1);
     if(!entry.noWorker && effectiveWrkCount > 0 && ps && e && ps < e){
-      // ベース: 金型取付した人を優先（ただし生産時間帯ps〜eで出勤可能な人のみ）
-      // 例：午後休の人は取付（午前のみ）はOKだが、生産担当（午後まで）は不可
-      const workerAvail = mountAvail
-        .filter(w => !isUnavailableAt(w, ps, e))
-        .slice(0, effectiveWrkCount);
+      // ベース①: 既存割当済み（_cleanWorkers で残った作業者）を引き継ぐ
+      const existingWorkers = roles.作業者
+        ? roles.作業者.split(/[,、]/).map(w=>w.trim()).filter(Boolean)
+        : [];
+      // ベース②: 金型取付した人を追加（ただし生産時間帯ps〜eで出勤可能な人のみ）
+      const workerAvail = [...existingWorkers];
+      for(const w of mountAvail){
+        if(!isUnavailableAt(w, ps, e) && !workerAvail.includes(w)) workerAvail.push(w);
+        if(workerAvail.length >= effectiveWrkCount) break;
+      }
 
-      // Pass 1: 優先ラインに仕事がない人（真の空き）のみ補完
+      // Pass 1: 専任担当（priority=このライン）+ 優先ラインに仕事がない人のみ補完
       // 優先ラインに仕事がある人（ジェン・アリ等）はPass 2で全ライン確定後に補充する
       const wrkNeed = effectiveWrkCount - workerAvail.length;
       if(wrkNeed > 0){
@@ -6352,29 +6357,34 @@ async function autoAssignRoles(){
           !workerHasRole(w, 'noLine') &&
           !isBusy(w, ps, e) &&
           !isUnavailableAt(w, ps, e);
-        // 優先ラインに仕事がない人のみ → 競合チェック不要
+        // 専任担当（優先ライン=このライン）を最優先
+        const prioWorkers = allPressWorkers.filter(w =>
+          baseFilter(w) && WORKER_PRIORITY_LINE[w] === entry.lineId
+        );
+        // 優先ラインに仕事がない人（真の空き）
         const freeWorkers = allPressWorkers.filter(w =>
-          baseFilter(w) && (!WORKER_PRIORITY_LINE[w] || !activeLineSet.has(WORKER_PRIORITY_LINE[w]))
-        ).sort((a, b) => {
-          const score = w => {
-            const priLine = WORKER_PRIORITY_LINE[w];
-            if(priLine === entry.lineId) return 0;
-            const grp = dantoriGroupCfg.find(g => g.ids && g.ids.includes(entry.lineId));
-            if(grp && priLine && grp.ids.includes(priLine)) return 1;
-            if(!priLine || !activeLineSet.has(priLine)) return 2;
-            return 3;
-          };
-          return score(a) - score(b);
-        }).slice(0, wrkNeed);
-        workerAvail.push(...freeWorkers);
+          baseFilter(w) && !prioWorkers.includes(w) &&
+          (!WORKER_PRIORITY_LINE[w] || !activeLineSet.has(WORKER_PRIORITY_LINE[w]))
+        );
+        const scoreW = w => {
+          const priLine = WORKER_PRIORITY_LINE[w];
+          if(priLine === entry.lineId) return 0;
+          const grp = dantoriGroupCfg.find(g => g.ids && g.ids.includes(entry.lineId));
+          if(grp && priLine && grp.ids.includes(priLine)) return 1;
+          if(!priLine || !activeLineSet.has(priLine)) return 2;
+          return 3;
+        };
+        const pass1Add = [...prioWorkers, ...freeWorkers]
+          .sort((a, b) => scoreW(a) - scoreW(b))
+          .slice(0, wrkNeed);
+        workerAvail.push(...pass1Add);
       }
 
-      if(workerAvail.length){
-        roles.作業者 = workerAvail.join('、');
-        workerAvail.forEach(w => markBusy(w, ps, e, `作業 ${linePart}`));
-        // 不足の場合でも shortage はPass 2後に確定するので、ここでは仮登録しない
-      }
-      // 作業者0人の場合もPass 2で補充するのでここでは shortage を積まない
+      // 確定した作業者を roles に書き込み、全員を busyMap に登録
+      // （既存作業者も含めて markBusy することで Pass 2 の競合判定を正確にする）
+      roles.作業者 = workerAvail.join('、');
+      workerAvail.forEach(w => markBusy(w, ps, e, `作業 ${linePart}`));
+      // 不足の場合でも shortage はPass 2後に確定するので、ここでは仮登録しない
     }
 
     entry.roles = roles;
@@ -6387,8 +6397,9 @@ async function autoAssignRoles(){
   sorted.forEach(entry => {
     if(entry.status === 'done' || entry.status === 'in_progress') return;
     if(entry.noWorker) return;
-    const ps2 = toMin(entry.prodStart);
-    const e2  = toMin(entry.prodEnd || entry.prodStart);
+    // prodStart が未設定の場合は setupStart を代替使用
+    const ps2 = toMin(entry.prodStart) || toMin(entry.setupStart);
+    const e2  = toMin(entry.prodEnd) || toMin(entry.prodStart) || toMin(entry.setupStart);
     if(!ps2 || !e2 || ps2 >= e2) return;
 
     const effectiveWrkCount2 = (entry.workerCount||0) > 0
