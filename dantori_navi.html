@@ -6337,9 +6337,11 @@ async function autoAssignRoles(){
       ? wrkCount
       : (PRESS_LINE_MASTER[entry.lineId]?.workers?.length || 1);
     if(!entry.noWorker && effectiveWrkCount > 0 && ps && e && ps < e){
-      // ベース①: 既存割当済み（_cleanWorkers で残った作業者）を引き継ぐ
+      // ベース①: 既存割当済みのうち、優先ライン一致の人だけを引き継ぐ
+      // 優先ラインが別のライン（例: B1→Bライン）の場合は引き継がず再評価する
       const existingWorkers = roles.作業者
         ? roles.作業者.split(/[,、]/).map(w=>w.trim()).filter(Boolean)
+            .filter(w => WORKER_PRIORITY_LINE[w] === entry.lineId || !WORKER_PRIORITY_LINE[w])
         : [];
       // ベース②: 金型取付した人を追加（ただし生産時間帯ps〜eで出勤可能な人のみ）
       const workerAvail = [...existingWorkers];
