@@ -7247,11 +7247,12 @@ function qcOnSakuyoInput(){
   document.getElementById('qc-bunno-info').style.display='none';
   if(!QC_SAKUYO||q.length<1){ sug.style.display='none'; return; }
   var doneSeizoSet={};
-  QC_ALL_RECORDS.forEach(function(rec){ if(rec[7]==='完納'){ doneSeizoSet[(rec[13]||'')+'_'+(rec[14]||'')]=true; }});
+  QC_ALL_RECORDS.forEach(function(rec){ if(rec[7]==='完納'||rec[7]==='完了'){ doneSeizoSet[(rec[13]||'')+'_'+String(rec[14]||'')]=true; }});
+  // seizoNo側も正規化して照合（念のためtrimして比較）
   var r=[], seenHinban={};
   for(var i=0;i<QC_SAKUYO.length;i++){
     var s=QC_SAKUYO[i];
-    if(doneSeizoSet[s.seizoNo+'_'+s.junjo]) continue;
+    if(doneSeizoSet[s.seizoNo+'_'+String(s.junjo||'')]) continue;
     if(s.hinban.toLowerCase().indexOf(q)>=0||s.hinmei.toLowerCase().indexOf(q)>=0||s.seizoNo.toLowerCase().indexOf(q)>=0){
       var isSeizoSearch = s.seizoNo.toLowerCase().indexOf(q)>=0 && s.hinban.toLowerCase().indexOf(q)<0 && s.hinmei.toLowerCase().indexOf(q)<0;
       if(!isSeizoSearch) seenHinban[s.hinban]=(seenHinban[s.hinban]||0)+1;
@@ -7868,8 +7869,8 @@ window.qcShowAllocList = function(){
   if(!document.getElementById('qc-bulk-op').value){ alert('作業者を選択してください'); return; }
   if(!QC_SAKUYO){ alert('作業予定データが読み込まれていません'); return; }
   var doneSeizoSet={};
-  QC_ALL_RECORDS.forEach(function(r){ if(r[7]==='完納') doneSeizoSet[(r[13]||'')+'_'+(r[14]||'')]=true; });
-  var list=QC_SAKUYO.filter(function(s){ if(s.hinban!==QC_BULK_HINBAN) return false; if(QC_BULK_JUNJO&&String(s.junjo)!==String(QC_BULK_JUNJO)) return false; return !doneSeizoSet[s.seizoNo+'_'+s.junjo]; });
+  QC_ALL_RECORDS.forEach(function(r){ if(r[7]==='完納'||r[7]==='完了') doneSeizoSet[(r[13]||'')+'_'+String(r[14]||'')]=true; });
+  var list=QC_SAKUYO.filter(function(s){ if(s.hinban!==QC_BULK_HINBAN) return false; if(QC_BULK_JUNJO&&String(s.junjo)!==String(QC_BULK_JUNJO)) return false; return !doneSeizoSet[s.seizoNo+'_'+String(s.junjo||'')]; });
   function _noukiVal(s){ var p=(s||'99/99').split('/'); return (parseInt(p[0])||99)*100+(parseInt(p[1])||99); }
   list.sort(function(a,b){ return _noukiVal(a['納期'])-_noukiVal(b['納期']); });
   if(!list.length){ alert('未完納の製造番号が見つかりません'); return; }
