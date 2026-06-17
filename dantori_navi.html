@@ -7713,7 +7713,17 @@ function qcMakeGroupCard(g){
   var recs=g.recs;
   var allRecs=QC_ALL_RECORDS.filter(function(r){ return r[13]===g.seizoNo; });
   var junjoMap={}, junjoOrder=[];
-  allRecs.forEach(function(r){ var j=String(r[14]||'?'); if(!junjoMap[j]){ junjoMap[j]=[]; junjoOrder.push(j); } junjoMap[j].push(r); });
+  allRecs.forEach(function(r){
+    var rawJ=r[14];
+    var j=(rawJ!==null&&rawJ!==undefined&&rawJ!==''&&rawJ!==0&&rawJ!=='0')?String(rawJ):null;
+    if(!j){
+      // 工順が未設定の場合はQC_SAKUYOから最初の工順を探してマージ
+      j='1';
+      if(QC_SAKUYO){ var sm=QC_SAKUYO.find(function(s){ return s.seizoNo===g.seizoNo&&s.junjo; }); if(sm) j=String(sm.junjo); }
+    }
+    if(!junjoMap[j]){ junjoMap[j]=[]; junjoOrder.push(j); }
+    junjoMap[j].push(r);
+  });
   junjoOrder.sort(function(a,b){ return parseInt(a)-parseInt(b); });
   var junjoTotals={};
   junjoOrder.forEach(function(j){
