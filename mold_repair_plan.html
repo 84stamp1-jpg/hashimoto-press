@@ -1654,11 +1654,19 @@ function loadManualReqs(){
 }
 
 // ===== 任意作業パネル描画（ガント下・横並びカード）=====
+let _showDoneManuals=false;
+function toggleDoneManuals(){_showDoneManuals=!_showDoneManuals;renderManualList();}
+function _isManualDone(r){
+  const tasks=Object.values(tasksByDate).flat().filter(t=>t.reqId===r.id);
+  return tasks.length>0&&tasks.every(t=>t.actual?.status==='done'||(t.actual?.start&&t.actual?.end));
+}
 function renderManualList(){
   const assigneeNames={matsumoto_t:'松本利',matsunaga:'松永',matsumura:'村松',matsumoto_m:'松本み',endo:'遠藤',oishi:'大石',nema:'根間',matsumoto:'松本',nakamura:'中村'};
-  const manuals=requests.filter(r=>r.source==='manual');
+  const allManuals=requests.filter(r=>r.source==='manual');
+  const manuals=allManuals.filter(r=>!_isManualDone(r));
+  const doneManuals=allManuals.filter(r=>_isManualDone(r));
   const conts=requests.filter(r=>r.source==='continuation');
-  const all=[...manuals,...conts];
+  const all=[...allManuals,...conts];
   const rPanel=document.getElementById('manualRightPanel');
   const rList=document.getElementById('manualRightList');
   const rBdg=document.getElementById('bdgManualR');
@@ -1711,17 +1719,34 @@ function renderManualList(){
   }
 
   let html='';
-  if(manuals.length){
+  if(manuals.length||doneManuals.length){
     html+=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
       <span style="font-size:10px;font-weight:700;color:#166534;background:#dcfce7;border:1px solid #86efac;border-radius:4px;padding:1px 8px">＋ 任意作業</span>
       <span style="font-size:10px;color:var(--text3)">${manuals.length}件</span>
-    </div>
-    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:${conts.length?'10px':'0'}">
-      ${manuals.map(makeCard).join('')}
+      ${doneManuals.length?`<button onclick="toggleDoneManuals()"
+        style="font-size:10px;padding:1px 8px;border:1px solid #d1d5db;border-radius:4px;background:${_showDoneManuals?'#f3f4f6':'#fff'};color:var(--text2);cursor:pointer;font-family:inherit;margin-left:4px">
+        ✓ 完了済み ${doneManuals.length}件 ${_showDoneManuals?'▲':'▼'}</button>`:''}
     </div>`;
+    if(manuals.length){
+      html+=`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:${conts.length||(_showDoneManuals&&doneManuals.length)?'10px':'0'}">
+        ${manuals.map(makeCard).join('')}
+      </div>`;
+    }
+    if(_showDoneManuals&&doneManuals.length){
+      html+=`<div style="border-top:1px dashed #d1d5db;padding-top:8px;margin-top:${manuals.length?'0':'0'}">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:6px">✓ 完了済み（記録保持中）</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;opacity:.65">
+          ${doneManuals.map(r=>{
+            const c=makeCard(r);
+            // 完了済みカードはグレーアウト
+            return c.replace('border-radius:7px','border-radius:7px;filter:grayscale(.4)');
+          }).join('')}
+        </div>
+      </div>`;
+    }
   }
   if(conts.length){
-    html+=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px${manuals.length?';border-top:1px dashed var(--border);padding-top:9px':''}">
+    html+=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px${(manuals.length||doneManuals.length)?';border-top:1px dashed var(--border);padding-top:9px':''}">
       <span style="font-size:10px;font-weight:700;color:#92400e;background:#fff8e1;border:1px solid #f59e0b;border-radius:4px;padding:1px 8px">⏭ 持越し続き</span>
       <span style="font-size:10px;color:var(--text3)">${conts.length}件</span>
     </div>
