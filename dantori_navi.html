@@ -2397,6 +2397,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
             <th style="padding:7px 5px;border-bottom:2px solid #e2e8f0;white-space:nowrap;">初品<br><span style="font-weight:normal;color:#666;font-size:10px;">出し</span></th>
             <th style="padding:7px 5px;border-bottom:2px solid #e2e8f0;white-space:nowrap;">ライン<br><span style="font-weight:normal;color:#666;font-size:10px;">外</span></th>
             <th style="padding:7px 8px;border-bottom:2px solid #e2e8f0;white-space:nowrap;min-width:110px;">優先ライン</th>
+            <th style="padding:7px 5px;border-bottom:2px solid #e2e8f0;white-space:nowrap;min-width:46px;">順位<br><span style="font-weight:normal;color:#666;font-size:10px;">（同ライン）</span></th>
             <th style="padding:7px 6px;border-bottom:2px solid #e2e8f0;white-space:nowrap;min-width:80px;">出勤<br><span style="font-weight:normal;color:#666;font-size:10px;">午前／午後</span></th>
             <th style="padding:7px 5px;border-bottom:2px solid #e2e8f0;white-space:nowrap;min-width:52px;">他<br><span style="font-weight:normal;color:#7c3aed;font-size:10px;">作業</span></th>
             <th style="padding:7px 5px;border-bottom:2px solid #e2e8f0;white-space:nowrap;">残業<br><span style="font-weight:normal;color:#f59e0b;font-size:10px;">可</span></th>
@@ -4281,6 +4282,8 @@ let WORKER_ROLE_MASTER = {};
 let PRESS_WORKER_LIST = null;
 // Firebase settings/workerPriorityLine — 作業者ごとの優先ライン {フルネーム: lineId}
 let WORKER_PRIORITY_LINE = {};
+// Firebase settings/workerPriorityOrder — 同一ライン内での配置優先順位 {フルネーム: number(1=最優先)}
+let WORKER_PRIORITY_ORDER = {};
 // Firebase settings/workerAttendance — 当日出勤状況 {フルネーム: {am:bool, pm:bool, otherWork:bool}}
 // am/pm 両方true=終日出勤, amのみ=午前のみ, pmのみ=午後のみ, 両方false=欠勤
 // otherWork=true: 出勤しているがプレス配置外（他の作業・別業務）
@@ -4382,6 +4385,12 @@ function _workerRoleAppendRow(tbody, name){
       </select>
     </td>
     <td style="padding:5px 4px;text-align:center;">
+      <input type="number" class="wrm-order" min="1" max="99"
+        value="${WORKER_PRIORITY_ORDER[name]||''}"
+        style="width:44px;padding:3px 4px;border:1px solid #ddd;border-radius:4px;font-size:11px;text-align:center;"
+        placeholder="―">
+    </td>
+    <td style="padding:5px 4px;text-align:center;">
       <div style="display:flex;flex-direction:column;gap:2px;align-items:center;">
         <label style="font-size:10px;display:flex;align-items:center;gap:2px;cursor:pointer;white-space:nowrap;">
           <input type="checkbox" class="wrm-att-am" ${chkAm}
@@ -4441,11 +4450,12 @@ function workerRoleDeleteRow(btn){
 
 async function saveWorkerRoleMaster(){
   const rows = document.querySelectorAll('#workerRoleTbody .wrm-row');
-  const newList     = [];
-  const newRoles    = {};
-  const newPriLine  = {};
-  const newAtt      = {};
-  const newOvertime = {};
+  const newList      = [];
+  const newRoles     = {};
+  const newPriLine   = {};
+  const newPriOrder  = {};
+  const newAtt       = {};
+  const newOvertime  = {};
 
   rows.forEach(function(tr){
     const nameEl = tr.querySelector('.wrm-name');
@@ -4460,6 +4470,10 @@ async function saveWorkerRoleMaster(){
     // priority line
     const lineEl = tr.querySelector('.wrm-line');
     if(lineEl && lineEl.value) newPriLine[name] = lineEl.value;
+    // priority order within line
+    const orderEl = tr.querySelector('.wrm-order');
+    const orderVal = parseInt(orderEl?.value);
+    if(!isNaN(orderVal) && orderVal > 0) newPriOrder[name] = orderVal;
     // attendance
     const amEl = tr.querySelector('.wrm-att-am');
     const pmEl = tr.querySelector('.wrm-att-pm');
@@ -4488,20 +4502,22 @@ async function saveWorkerRoleMaster(){
     const sdk = window._fbSDK;
     if(sdk && sdk.db && sdk.ref && sdk.update) {
       await sdk.update(sdk.ref(sdk.db, 'settings'), {
-        workerRoles:        newRoles,
-        pressWorkerList:    newList,
-        workerPriorityLine: newPriLine,
-        workerAttendance:   newAtt,
-        workerOvertime:     newOvertime,
-        roleTimeMins:       newRoleTime,
+        workerRoles:         newRoles,
+        pressWorkerList:     newList,
+        workerPriorityLine:  newPriLine,
+        workerPriorityOrder: newPriOrder,
+        workerAttendance:    newAtt,
+        workerOvertime:      newOvertime,
+        roleTimeMins:        newRoleTime,
       });
     } else {
       // フォールバック: REST fetch（SDK未初期化時）
       const fbUrl = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/, '');
       const saves = [
-        fetch(`${fbUrl}/settings/workerRoles.json`,        { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newRoles)    }),
-        fetch(`${fbUrl}/settings/pressWorkerList.json`,    { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newList)     }),
-        fetch(`${fbUrl}/settings/workerPriorityLine.json`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newPriLine)  }),
+        fetch(`${fbUrl}/settings/workerRoles.json`,         { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newRoles)     }),
+        fetch(`${fbUrl}/settings/pressWorkerList.json`,     { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newList)      }),
+        fetch(`${fbUrl}/settings/workerPriorityLine.json`,  { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newPriLine)   }),
+        fetch(`${fbUrl}/settings/workerPriorityOrder.json`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newPriOrder)  }),
         fetch(`${fbUrl}/settings/workerAttendance.json`,   { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newAtt)      }),
         fetch(`${fbUrl}/settings/roleTimeMins.json`,       { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newRoleTime) }),
       ];
@@ -4509,10 +4525,11 @@ async function saveWorkerRoleMaster(){
       results.forEach(function(r){ if(!r.ok) throw new Error('HTTP ' + r.status); });
     }
     // メモリ更新
-    WORKER_ROLE_MASTER   = newRoles;
-    PRESS_WORKER_LIST    = newList;
-    WORKER_PRIORITY_LINE = newPriLine;
-    WORKER_ATTENDANCE    = newAtt;
+    WORKER_ROLE_MASTER    = newRoles;
+    PRESS_WORKER_LIST     = newList;
+    WORKER_PRIORITY_LINE  = newPriLine;
+    WORKER_PRIORITY_ORDER = newPriOrder;
+    WORKER_ATTENDANCE     = newAtt;
     WORKER_OVERTIME      = newOvertime;
     ROLE_TIME_MINS       = newRoleTime;
     updateStaffDatalist();
@@ -4568,6 +4585,9 @@ async function loadDantoriSettings(){
     }
     if(s.workerPriorityLine && typeof s.workerPriorityLine === 'object'){
       WORKER_PRIORITY_LINE = s.workerPriorityLine;
+    }
+    if(s.workerPriorityOrder && typeof s.workerPriorityOrder === 'object'){
+      WORKER_PRIORITY_ORDER = s.workerPriorityOrder;
     }
     if(s.workerAttendance && typeof s.workerAttendance === 'object'){
       WORKER_ATTENDANCE = s.workerAttendance;
@@ -5559,6 +5579,79 @@ function renderWorkerRoster(allEntries){
   return html;
 }
 
+// ===== kp4：作業者入れ替えモード =====
+let _rtSwapMode     = false;
+let _rtSwapSelected = null; // 選択中の作業者名
+
+function rtToggleSwapMode(){
+  _rtSwapMode     = !_rtSwapMode;
+  _rtSwapSelected = null;
+  // ガント再描画
+  const list = document.getElementById('kanban-list');
+  if(list){
+    const allEntries = dantoriSchedule.filter(d => d && d.lineId);
+    list.innerHTML   = renderPressTimeline(allEntries);
+  }
+}
+
+function rtSwapClick(name){
+  if(!_rtSwapMode) return;
+  if(_rtSwapSelected === null){
+    // 1人目を選択
+    _rtSwapSelected = name;
+    // 選択行をハイライト（クラスで）
+    document.querySelectorAll('.rt-name').forEach(el => {
+      el.classList.toggle('rt-swap-sel', el.dataset.name === name);
+    });
+  } else if(_rtSwapSelected === name){
+    // 同じ人をクリック → 選択解除
+    _rtSwapSelected = null;
+    document.querySelectorAll('.rt-name').forEach(el => el.classList.remove('rt-swap-sel'));
+  } else {
+    // 2人目を選択 → 入れ替え実行
+    const nameA = _rtSwapSelected, nameB = name;
+    _rtSwapSelected = null;
+    _rtSwapMode     = false;
+    execWorkerSwap(nameA, nameB);
+  }
+}
+
+async function execWorkerSwap(nameA, nameB){
+  if(!nameA || !nameB || nameA === nameB) return;
+  const replaceInStr = (str, a, b) => {
+    if(!str) return str;
+    // カンマ・読点区切りで分割して個別置換（部分一致しないよう）
+    return str.split(/[,、]/).map(w => {
+      const t = w.trim();
+      if(t === a) return b;
+      if(t === b) return a;
+      return t;
+    }).join('、');
+  };
+  dantoriSchedule.forEach(entry => {
+    if(!entry.roles) return;
+    const r = entry.roles;
+    if(r.品質確認 === nameA) r.品質確認 = nameB;
+    else if(r.品質確認 === nameB) r.品質確認 = nameA;
+    if(r.初品出し  === nameA) r.初品出し  = nameB;
+    else if(r.初品出し  === nameB) r.初品出し  = nameA;
+    r.金型取付 = replaceInStr(r.金型取付, nameA, nameB);
+    r.作業者   = replaceInStr(r.作業者,   nameA, nameB);
+    // 交代データの作業者も入れ替え
+    (entry.shiftChanges||[]).forEach(c => {
+      if(c.inWorker === nameA) c.inWorker = nameB;
+      else if(c.inWorker === nameB) c.inWorker = nameA;
+      if(c.workers) c.workers = replaceInStr(c.workers, nameA, nameB);
+    });
+  });
+  // Firebaseに保存して再描画
+  try {
+    await saveDantoriToFirebase();
+    await loadDantoriSchedule();
+  } catch(e) { console.warn('swap save error', e); }
+  renderKanban();
+}
+
 // ===== kp4：プレス計画タイムライン（Ganttチャート） =====
 function renderPressTimeline(allEntries){
   const now     = new Date();
@@ -5691,14 +5784,24 @@ function renderPressTimeline(allEntries){
       unavailOverlay = `<div style="position:absolute;left:${px0}px;top:0;width:${pw0}px;height:100%;background:${STRIPE_GRAY};pointer-events:none;"></div>`
         + `<div style="position:absolute;left:${px0+2}px;top:8px;font-size:9px;color:#b45309;font-weight:700;background:rgba(254,243,199,0.85);padding:1px 4px;border-radius:2px;pointer-events:none;">午後休</div>`;
     }
+    const swapNameStyle = _rtSwapMode
+      ? 'cursor:pointer;user-select:none;' + (_rtSwapSelected === name ? 'background:#ede9fe;color:#7c3aed;font-weight:700;outline:2px solid #7c3aed;' : 'hover-bg:#f5f3ff;')
+      : '';
+    const swapClick = _rtSwapMode ? `onclick="rtSwapClick('${name.replace(/'/g,"\\'")}'"` : '';
     rowsHtml += `<div class="rt-row" style="${rowOpacity}">
-      <div class="rt-name" title="${name}">${name}${attTag}</div>
+      <div class="rt-name" title="${_rtSwapMode ? 'クリックして選択' : name}" data-name="${name}" style="${swapNameStyle}" ${swapClick}>${name}${attTag}${_rtSwapMode ? '<span style="font-size:9px;color:#7c3aed;margin-left:2px;">⇄</span>' : ''}</div>
       <div class="rt-track" style="width:${RT_W}px;">${blk}${unavailOverlay}</div>
     </div>`;
   });
 
+  const swapBtnStyle = _rtSwapMode
+    ? 'background:#7c3aed;color:#fff;border-color:#7c3aed;'
+    : 'background:#fff;color:#475569;border-color:#cbd5e1;';
   return `<div style="overflow:hidden;">
-  <div class="rt-title">📍 作業者 ライン配置表 ── ${timeStr} 現在　<span style="font-size:10px;color:#aaa;">※ 下の「🤖 自動割り振り」で役割を自動設定できます</span></div>
+  <div class="rt-title" style="display:flex;align-items:center;justify-content:space-between;">
+    <span>📍 作業者 ライン配置表 ── ${timeStr} 現在　<span style="font-size:10px;color:#aaa;">※ 下の「🤖 自動割り振り」で役割を自動設定できます</span></span>
+    <button onclick="rtToggleSwapMode()" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid;border-radius:5px;cursor:pointer;white-space:nowrap;${swapBtnStyle}">${_rtSwapMode ? '✕ 入れ替えモード終了' : '🔀 入れ替えモード'}</button>
+  </div>
   <div class="rt-outer">
     <div class="rt-hdr">
       <div class="rt-hdr-name">担当者</div>
@@ -6091,8 +6194,9 @@ async function autoAssignRoles(){
     const canWork = w => !isUnavailableAt(w, s, e) && (!isBusy(w, s, e) || allowBusy.includes(w));
     if(hasRoleData){
       const cands = allPressWorkers.filter(w => workerHasRole(w, role));
-      // ① 優先ライン一致
-      const prio = cands.filter(w => WORKER_PRIORITY_LINE[w] === lineId && canWork(w));
+      // ① 優先ライン一致（同ライン内はWORKER_PRIORITY_ORDERの順）
+      const prio = cands.filter(w => WORKER_PRIORITY_LINE[w] === lineId && canWork(w))
+        .sort((a,b) => (WORKER_PRIORITY_ORDER[a]||999) - (WORKER_PRIORITY_ORDER[b]||999));
       if(prio.length) return prio[0];
       // ② 同グループで仕事なし（グループ応援）
       const freeLines = getSameGroupNoWork(lineId);
@@ -6138,8 +6242,9 @@ async function autoAssignRoles(){
         .filter(id => id !== lineId);
       const result = [];
 
-      // ① 優先ライン一致
-      result.push(...allPressWorkers.filter(w => WORKER_PRIORITY_LINE[w] === lineId && isAvail(w)));
+      // ① 優先ライン一致（同ライン内はWORKER_PRIORITY_ORDERの順）
+      result.push(...allPressWorkers.filter(w => WORKER_PRIORITY_LINE[w] === lineId && isAvail(w))
+        .sort((a,b) => (WORKER_PRIORITY_ORDER[a]||999) - (WORKER_PRIORITY_ORDER[b]||999)));
       if(result.length >= maxCount) return result.slice(0, maxCount);
 
       // ② 同グループで実際に空いている人（ラインに計画があっても本人がbusyでなければOK）
@@ -6359,10 +6464,10 @@ async function autoAssignRoles(){
           !workerHasRole(w, 'noLine') &&
           !isBusy(w, ps, e) &&
           !isUnavailableAt(w, ps, e);
-        // 専任担当（優先ライン=このライン）を最優先
+        // 専任担当（優先ライン=このライン）を最優先、同ライン内は順位順
         const prioWorkers = allPressWorkers.filter(w =>
           baseFilter(w) && WORKER_PRIORITY_LINE[w] === entry.lineId
-        );
+        ).sort((a,b) => (WORKER_PRIORITY_ORDER[a]||999) - (WORKER_PRIORITY_ORDER[b]||999));
         // 優先ラインに仕事がない人（真の空き）
         const freeWorkers = allPressWorkers.filter(w =>
           baseFilter(w) && !prioWorkers.includes(w) &&
@@ -6654,17 +6759,22 @@ function closeAutoAssignModal(){
   document.getElementById('autoAssignModal').style.display = 'none';
 }
 
-async function execAutoAssignSave(){
+// dantoriSchedule全体をFirebaseに保存する共通処理
+async function saveDantoriToFirebase(){
   const fbUrl   = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
   const dateStr = getDantoriDatePath();
+  const newData = {};
+  dantoriSchedule.forEach(e => {
+    const {_id, ...rest} = e;
+    if(_id) newData[_id] = rest;
+  });
+  await fetch(`${fbUrl}/dantori/${dateStr}.json`,
+    {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newData)});
+}
+
+async function execAutoAssignSave(){
   try {
-    const newData = {};
-    dantoriSchedule.forEach(e => {
-      const {_id, ...rest} = e;
-      if(_id) newData[_id] = rest;
-    });
-    await fetch(`${fbUrl}/dantori/${dateStr}.json`,
-      {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newData)});
+    await saveDantoriToFirebase();
     closeAutoAssignModal();
     await loadDantoriSchedule();
     renderKanban();
