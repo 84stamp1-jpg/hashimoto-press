@@ -964,6 +964,7 @@ input.nm-img-input{display:none}
       <button class="btn btn-secondary btn-sm" onclick="closeActModal()">閉じる</button>
       <button class="btn btn-sm" id="btnRevertComplete" onclick="revertComplete()" style="display:none;background:#f3f4f6;border:1px solid #9ca3af;color:#374151;font-weight:700" title="完了を取り消して作業中に戻します">↩ 完了取消</button>
       <button class="btn btn-sm" id="btnRevertCarry" onclick="revertCarry()" style="display:none;background:#fef3c7;border:1px solid #f59e0b;color:#92400e;font-weight:700" title="持越しを取り消して作業中に戻します">↩ 持越取消</button>
+      <button class="btn btn-sm" id="btnAddCont" onclick="recreateContTask(actTaskId)" style="display:none;background:#fff3e0;border:1px solid #fb923c;color:#c2410c;font-weight:700" title="この持越済タスクの続き依頼を作成します">⏭ 続き登録</button>
       <button class="btn btn-sm" id="btnComplete" onclick="completeTask()"
         style="background:#dcfce7;border:1px solid #86efac;color:#166534;font-weight:700"
         title="終了時刻を確定して完了にします">✓ 完了</button>
@@ -3047,24 +3048,30 @@ function openActModal(idOrEl){
   const btnCmp=document.getElementById('btnComplete');
   const btnRev=document.getElementById('btnRevertComplete');
   const btnRevC=document.getElementById('btnRevertCarry');
+  const btnAddCont=document.getElementById('btnAddCont');
+  // 続き依頼が既に存在するか確認
+  const _hasCont=requests.some(r=>r.source==='continuation'&&r.originalTaskId===id);
   if(isCarriedTask){
-    // 持越済：持越取消のみ
+    // 持越済：持越取消 ＋ 続き依頼がなければ「続き登録」
     if(btnCO) btnCO.style.display='none';
     if(btnCmp) btnCmp.style.display='none';
     if(btnRev) btnRev.style.display='none';
     if(btnRevC) btnRevC.style.display='';
+    if(btnAddCont) btnAddCont.style.display=_hasCont?'none':'';
   } else if(isDone){
     // 完了済：完了取消のみ
     if(btnCO) btnCO.style.display='none';
     if(btnCmp) btnCmp.style.display='none';
     if(btnRev) btnRev.style.display='';
     if(btnRevC) btnRevC.style.display='none';
+    if(btnAddCont) btnAddCont.style.display='none';
   } else {
     // 作業中・未着手：通常
     if(btnCO) btnCO.style.display='';
     if(btnCmp) btnCmp.style.display='';
     if(btnRev) btnRev.style.display='none';
     if(btnRevC) btnRevC.style.display='none';
+    if(btnAddCont) btnAddCont.style.display='none';
   }
   // 作業履歴セクション
   renderActHistory(id);
