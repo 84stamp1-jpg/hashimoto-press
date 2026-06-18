@@ -1706,7 +1706,8 @@ function renderManualList(){
     return`<div style="background:${cardBg};border:1.5px solid ${cardBorder};
       border-radius:7px;padding:8px 11px;min-width:180px;max-width:220px;cursor:pointer;
       box-shadow:${isSel?'0 0 0 3px var(--accent-bg)':''}"
-      onclick="selManual('${r.id}')">
+      onclick="selManual('${r.id}');${isCont&&assignedDate?`openActModalForReq('${r.id}')`:''}"
+      title="${isCont&&assignedDate?'クリックで実績入力モーダルを開く':''}">
       <div style="font-size:12px;font-weight:700;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
         ${r.hinban}${r.hinmei?' / '+r.hinmei:''}
       </div>
@@ -1779,6 +1780,17 @@ function renderManualList(){
 }
 let _selManualId=null;
 function selManual(id){_selManualId=_selManualId===id?null:id;selReqId=id;renderManualList();}
+function openActModalForReq(reqId){
+  for(const [ds,tasks] of Object.entries(tasksByDate)){
+    const t=tasks.find(t=>t.reqId===reqId);
+    if(t){
+      const saved=curDate;curDate=ds;
+      openActModal(t.id);
+      if(curDate!==saved){curDate=saved;buildDateNav();}
+      return;
+    }
+  }
+}
 
 // ===== 依頼カード描画 =====
 function renderRequestList(){
