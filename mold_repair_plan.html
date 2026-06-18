@@ -659,6 +659,10 @@ input.nm-img-input{display:none}
       <div class="load-panel-hdr" onclick="toggleLoadPanel()" style="margin-bottom:0">
         <span class="load-panel-title">📊 週次負荷（残工数）</span>
         <span style="font-size:9px;color:var(--text3);margin-left:8px">1人工=8H基準 ／ 未完了依頼のdeadline集計</span>
+        <label onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:4px;font-size:9px;color:var(--text2);margin-left:12px;cursor:pointer">
+          <input type="checkbox" id="loadIncludeManual" checked onchange="renderLoadSummary()">
+          手動依頼を含む
+        </label>
         <span id="loadPanelToggle" style="font-size:10px;color:var(--text2);margin-left:auto">▼</span>
       </div>
       <div id="loadWeeks" style="display:none;gap:10px;margin-top:6px"></div>
@@ -2855,8 +2859,13 @@ function renderLoadSummary(){
   const el=document.getElementById('loadWeeks');
   if(!el)return;
 
-  // 未完了依頼（done以外 かつ 続きタスクを除外 → 元依頼の残工数で既にカバー）
-  const pending=requests.filter(r=>r.status!=='done'&&r.source!=='continuation');
+  // 未完了依頼（実際のタスク完了状態で判定 かつ 続きタスクを除外）
+  const includeManual=document.getElementById('loadIncludeManual')?.checked!==false;
+  const pending=requests.filter(r=>{
+    if(r.source==='continuation') return false; // 続きタスクは元依頼でカバー
+    if(!includeManual&&r.source==='manual') return false; // 手動依頼を除外する場合
+    return !_isManualDone(r); // 実際のタスク完了状態で判定
+  });
 
   const html=[0,1].map(offset=>{
     const {mon,fri,days}=_weekRange(offset);
