@@ -1601,6 +1601,10 @@ function carryOverTask(taskId){
   const remainingH=calcRemainH;
   const confirmedWorkedH=totalWorkedH;
 
+  // 元の依頼情報・既存続き依頼を先に取得
+  const origReq=requests.find(r=>r.id===foundTask.reqId);
+  const existCont=requests.find(r=>r.source==='continuation'&&r.originalTaskId===foundTask.id);
+
   // タスクを「持越済」状態にする
   foundTask.actual.status='carried';
   foundTask.actual._prevWorkedH=prevWorkedH; // 持越取消時の復元用
@@ -1608,11 +1612,7 @@ function carryOverTask(taskId){
   foundTask.actual.totalWorkedH=confirmedWorkedH;
   foundTask.actual.carriedDate=todayStr();
 
-  // 元の依頼情報を取得
-  const origReq=requests.find(r=>r.id===foundTask.reqId);
-
   // 残り工数 > 0 なら「続き」依頼を追加（既存があれば更新）
-  const existCont=requests.find(r=>r.source==='continuation'&&r.originalTaskId===foundTask.id);
   if(remainingH>0){
     if(existCont){
       existCont.hours=remainingH;
