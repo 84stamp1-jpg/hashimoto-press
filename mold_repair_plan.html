@@ -1625,7 +1625,7 @@ function carryOverTask(taskId){
         hinmei:(origReq?.hinmei||'')+' [続き]',
         process:origReq?.process||'',
         client:origReq?.client||'',
-        kubunInputs:[{name:'残り作業',units:remainingH,key:'custom'}],
+        kubunInputs:origReq?.kubunInputs?.length?origReq.kubunInputs.map(k=>({...k})):[{name:'残り作業',units:remainingH,key:'custom'}],
         moldType:'none',trialSteps:0,trialH:0,
         hours:remainingH,
         deadline:origReq?.deadline||'',
@@ -1708,11 +1708,16 @@ function renderManualList(){
     const cardBorder=isSel?'var(--accent)':isCont?'#f59e0b':'#86efac';
     const cardBg=isCont?'#fffde7':'#f0fdf4';
     const assigneeName=assigneeNames[r.assignee]||r.assignee||'';
-    // 工程名・改修区分（continuationは元依頼から取得）
+    // 工程名・改修区分（continuationは元依頼→元タスクの順で探す）
     const _cOrigReq=isCont?requests.find(x=>x.id===r.originalReqId):null;
     const _cSrc=_cOrigReq||r;
     const _cProc=_cSrc?.process||'';
-    const _cKubun=(_cSrc?.kubunInputs||[]).map(k=>k.name).filter(n=>n&&n!=='残り作業');
+    let _cKubun=(_cSrc?.kubunInputs||[]).map(k=>k.name).filter(n=>n&&n!=='残り作業');
+    if(!_cKubun.length&&isCont){
+      // 元タスクのkubunを参照（既存データ対応フォールバック）
+      const _origTask=Object.values(tasksByDate).flat().find(t=>t.id===r.originalTaskId);
+      if(_origTask?.kubun?.length) _cKubun=_origTask.kubun.filter(n=>n&&n!=='残り作業');
+    }
     const _cSubLine=[_cProc,..._cKubun].filter(Boolean).join('・');
     return`<div style="background:${cardBg};border:1.5px solid ${cardBorder};
       border-radius:7px;padding:8px 11px;min-width:180px;max-width:220px;cursor:pointer;
@@ -2432,13 +2437,20 @@ function renderGantt(){
 
       // --- 計画バー ---
       const rx=mx(t.startMin),rw=Math.max(4,mx(repEnd)-mx(t.startMin));
-      // continuation タスクは元依頼のkubunInputsを使う
+      // continuation タスクは元依頼のkubunInputsを使う（多段フォールバック）
       const _tReq=requests.find(r=>r.id===t.reqId);
       const _origReq=_tReq?.source==='continuation'?requests.find(r=>r.id===_tReq.originalReqId):null;
       const _kubunSrc=_origReq||_tReq;
-      const _kubunNames=(_kubunSrc?.kubunInputs||[]).map(k=>k.name).filter(n=>n&&n!=='残り作業');
-      const _dispKubun=_kubunNames.length?_kubunNames:(t.kubun||[]).filter(n=>n&&n!=='残り作業');
-      const _procName=(_kubunSrc?.process||'');
+      let _kubunNames=(_kubunSrc?.kubunInputs||[]).map(k=>k.name).filter(n=>n&&n!=='残り作業');
+      // フォールバック①: t.kubun（タスク作成時にkubunInputsからコピー）
+      if(!_kubunNames.length) _kubunNames=(t.kubun||[]).filter(n=>n&&n!=='残り作業');
+      // フォールバック②: continuation の場合、元タスクのkubunを参照
+      if(!_kubunNames.length&&_tReq?.source==='continuation'&&_tReq.originalTaskId){
+        const _origTask=Object.values(tasksByDate).flat().find(ot=>ot.id===_tReq.originalTaskId);
+        if(_origTask?.kubun?.length) _kubunNames=_origTask.kubun.filter(n=>n&&n!=='残り作業');
+      }
+      const _dispKubun=_kubunNames;
+      const _procName=(_kubunSrc?.process||_tReq?.process||'');
       const _timeStr=`${fmtMin(t.startMin)}〜${fmtMin(repEnd)}${isDoneEarly?'✓':''}`;
       const _subLine=[_procName,..._dispKubun].filter(Boolean).join('・');
       const res=[`<div class="gblock ${bc}${blockClass}"
@@ -3027,9 +3039,9 @@ function openActModal(idOrEl){
   const btnRev=document.getElementById('btnRevertComplete');
   const btnRevC=document.getElementById('btnRevertCarry');
   if(isCarriedTask){
-    // 持越済：持越取消のみ
+    // 持越済：持越取消＋完了（残り0Hや直接完了したい場合のため）
     if(btnCO) btnCO.style.display='none';
-    if(btnCmp) btnCmp.style.display='none';
+    if(btnCmp) btnCmp.style.display='';   // 完了ボタンも表示
     if(btnRev) btnRev.style.display='none';
     if(btnRevC) btnRevC.style.display='';
   } else if(isDone){
@@ -3373,7 +3385,7 @@ function recreateContTask(taskId){
     hinban:'🔄 '+(origReq?.hinban||foundTask.name),
     hinmei:(origReq?.hinmei||'')+' [続き]',
     process:origReq?.process||'',client:origReq?.client||'',
-    kubunInputs:[{name:'残り作業',units:remainH,key:'custom'}],
+    kubunInputs:origReq?.kubunInputs?.length?origReq.kubunInputs.map(k=>({...k})):[{name:'残り作業',units:remainH,key:'custom'}],
     moldType:'none',trialSteps:0,trialH:0,hours:remainH,
     deadline:origReq?.deadline||'',assigned:false,assignee:null,
     source:'continuation',
