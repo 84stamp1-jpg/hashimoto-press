@@ -331,7 +331,17 @@ html, body {
 /* 優先ライン上書きモード */
 .rt-ovr-mode .rt-name{flex-direction:column;align-items:flex-start;justify-content:center;white-space:normal;gap:2px;min-height:50px;}
 .rt-ovr-mode .rt-track{min-height:50px;}
-.rt-ovr-sel{font-size:9px;width:96px;border:1px solid #c084fc;border-radius:3px;padding:1px 2px;color:#7c3aed;background:#faf5ff;cursor:pointer;font-weight:400;}
+.rt-ovr-trigger{font-size:9px;padding:2px 6px;border:1px solid #c084fc;border-radius:3px;color:#7c3aed;background:#faf5ff;cursor:pointer;white-space:nowrap;user-select:none;}
+.rt-ovr-trigger:hover{background:#ede9fe;}
+.rt-ovr-trigger.sel{background:#7c3aed;color:#fff;border-color:#7c3aed;}
+/* 優先ライン選択ポップアップ */
+#rt-ovr-popup{position:fixed;z-index:10000;background:#fff;border:1px solid #c084fc;border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,0.15);padding:10px 12px;min-width:180px;display:none;}
+#rt-ovr-popup .rt-ovr-ph{font-size:10px;font-weight:700;color:#7c3aed;margin-bottom:8px;border-bottom:1px solid #ede9fe;padding-bottom:5px;}
+.rt-ovr-line-btn{display:block;width:100%;text-align:left;padding:5px 8px;font-size:11px;border:none;border-radius:5px;cursor:pointer;background:transparent;font-family:inherit;margin-bottom:2px;}
+.rt-ovr-line-btn:hover{background:#f5f3ff;}
+.rt-ovr-line-btn.sel{background:#7c3aed;color:#fff;}
+.rt-ovr-line-btn.master{color:#6b7280;font-style:italic;}
+.rt-ovr-line-btn.free{color:#16a34a;}
 .rt-ovr-badge{font-size:8px;padding:1px 4px;border-radius:3px;background:#ede9fe;color:#7c3aed;font-weight:700;margin-left:2px;}
 /* エントリ担当者編集ポップアップ */
 #rt-entry-popup{position:fixed;z-index:9999;background:#fff;border:1px solid #c7d2fe;border-radius:10px;box-shadow:0 4px 24px rgba(0,0,0,0.18);padding:12px 14px;min-width:320px;max-width:400px;display:none;}
@@ -2255,6 +2265,11 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
   </div>
 </div>
 
+<!-- ===== 配置表 優先ライン選択ポップアップ ===== -->
+<div id="rt-ovr-popup">
+  <div class="rt-ovr-ph" id="rt-ovr-ph"></div>
+  <div id="rt-ovr-btns"></div>
+</div>
 <!-- ===== 配置表 バー担当者編集ポップアップ ===== -->
 <div id="rt-entry-popup"><div id="rt-ep-inner"></div></div>
 
@@ -5683,9 +5698,12 @@ async function execWorkerSwap(nameA, nameB){
 
 // ===== kp4：優先ライン上書きモード =====
 let _rtOverrideMode = false;
+let _rtOvrTarget = null; // ポップアップ対象の作業者名
+
 function rtToggleOverrideMode(){
   _rtOverrideMode = !_rtOverrideMode;
   _rtSwapMode = false; _rtSwapSelected = null;
+  rtCloseOvrPopup();
   const list = document.getElementById('kanban-list');
   if(list){ const ae = dantoriSchedule.filter(d=>d&&d.lineId); list.innerHTML = renderPressTimeline(ae); }
 }
@@ -5697,15 +5715,50 @@ async function saveWorkerPriorityOverride(){
       {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(WORKER_PRIORITY_OVERRIDE)});
   }catch(e){ console.warn('override save error',e); }
 }
-window.setWorkerOverrideLine = async function(name, lineId){
+function rtCloseOvrPopup(){
+  const p = document.getElementById('rt-ovr-popup');
+  if(p) p.style.display = 'none';
+  _rtOvrTarget = null;
+}
+window.rtOpenOvrPopup = function(name, event){
+  event.stopPropagation();
+  _rtOvrTarget = name;
+  const popup = document.getElementById('rt-ovr-popup');
+  if(!popup) return;
+  document.getElementById('rt-ovr-ph').textContent = name + ' の優先ライン（今日だけ）';
+  const current = name in WORKER_PRIORITY_OVERRIDE ? WORKER_PRIORITY_OVERRIDE[name] : '__master__';
+  const masterLine = WORKER_PRIORITY_LINE[name] || '未設定';
+  const allLineIds = Object.keys(PRESS_LINE_MASTER);
+  let html = `<button class="rt-ovr-line-btn master${current==='__master__'?' sel':''}" onclick="rtSelectOvrLine('${name.replace(/'/g,"\\'")}','__master__')">↩ マスタ通り（${masterLine}）</button>`;
+  allLineIds.forEach(lid => {
+    const esc = lid.replace(/'/g,"\\'");
+    html += `<button class="rt-ovr-line-btn${current===lid?' sel':''}" onclick="rtSelectOvrLine('${name.replace(/'/g,"\\'")}','${esc}')">${lid}</button>`;
+  });
+  html += `<button class="rt-ovr-line-btn free${current===''?' sel':''}" onclick="rtSelectOvrLine('${name.replace(/'/g,"\\'")}','')">◎ どこでも可</button>`;
+  document.getElementById('rt-ovr-btns').innerHTML = html;
+  popup.style.display = 'block';
+  const rect = event.currentTarget.getBoundingClientRect();
+  const pW = popup.offsetWidth || 190;
+  let left = rect.left + window.scrollX;
+  if(left + pW > window.innerWidth - 8) left = window.innerWidth - pW - 8;
+  popup.style.top  = (rect.bottom + window.scrollY + 4) + 'px';
+  popup.style.left = Math.max(4, left) + 'px';
+};
+window.rtSelectOvrLine = async function(name, lineId){
   if(lineId === '__master__'){ delete WORKER_PRIORITY_OVERRIDE[name]; }
   else { WORKER_PRIORITY_OVERRIDE[name] = lineId; }
+  rtCloseOvrPopup();
   await saveWorkerPriorityOverride();
   if(kanbanPage === 'kp4'){
     const list = document.getElementById('kanban-list');
     if(list){ const ae = dantoriSchedule.filter(d=>d&&d.lineId); list.innerHTML = renderPressTimeline(ae); }
   }
 };
+// 外クリックで優先ラインポップアップを閉じる
+document.addEventListener('click', function(e){
+  const p = document.getElementById('rt-ovr-popup');
+  if(p && p.style.display !== 'none' && !p.contains(e.target)) rtCloseOvrPopup();
+});
 
 // ===== kp4：バー単位 担当者編集ポップアップ =====
 let _rtEditEntryId = null;
@@ -5944,12 +5997,10 @@ function renderPressTimeline(allEntries){
     const masterLine = WORKER_PRIORITY_LINE[name] || '';
     let ovrHtml = '';
     if(_rtOverrideMode){
-      const allLineIds = Object.keys(PRESS_LINE_MASTER);
       const esc = name.replace(/'/g,"\\'");
-      const opts = `<option value="__master__">${masterLine ? 'マスタ('+masterLine+')' : 'マスタ(未設定)'}</option>`
-        + allLineIds.map(lid => `<option value="${lid}" ${(ovrLine===lid)?'selected':''}>${lid}</option>`).join('')
-        + `<option value="" ${(ovrLine==='')?'selected':''}>どこでも可</option>`;
-      ovrHtml = `<select class="rt-ovr-sel" onchange="setWorkerOverrideLine('${esc}',this.value)" title="今日だけの優先ライン">${opts}</select>`;
+      const curLabel = ovrLine === null ? (masterLine||'未設定') : ovrLine === '' ? 'どこでも可' : ovrLine;
+      const isChanged = ovrLine !== null;
+      ovrHtml = `<span class="rt-ovr-trigger${isChanged?' sel':''}" onclick="rtOpenOvrPopup('${esc}',event)" title="今日だけの優先ラインを変更">📌 ${curLabel} ▾</span>`;
     } else if(ovrLine !== null){
       // 上書きが設定されている場合はバッジ表示
       const ovrLabel = ovrLine === '' ? '制限なし' : ovrLine;
@@ -11298,6 +11349,11 @@ async function apLoadFromFirebase() {
       const d2 = await r2.json();
       if (d2 && d2.data && d2.data.length) {
         apFbSakuyo = d2.data;
+        // 他PC（品質チェックタブ未使用）ではwindow.QC_SAKUYOが古いキャッシュのままのため
+        // Firebase共有データで上書きする（QCタブが既に新鮮なデータを持つ場合は据え置き）
+        if (!window.QC_SAKUYO || !window.QC_SAKUYO.length) {
+          window.QC_SAKUYO = apFbSakuyo;
+        }
       }
     }
   } catch(e) { console.warn('AP Firebase load:', e); }
