@@ -1676,9 +1676,13 @@ function loadManualReqs(){
 let _showDoneManuals=false;
 function toggleDoneManuals(){_showDoneManuals=!_showDoneManuals;renderManualList();}
 function _isManualDone(r){
-  // 実績終了時刻が記録されているタスクが1件でもあれば完了とみなす
+  // status='done' または（終了時刻あり かつ 持越し済みでない）で完了とみなす
   const tasks=Object.values(tasksByDate).flat().filter(t=>t.reqId===r.id);
-  return tasks.some(t=>!!(t.actual?.end));
+  return tasks.some(t=>{
+    if(t.actual?.status==='done') return true;
+    if(t.actual?.status==='carried') return false; // 持越し済みはまだ続きがある
+    return !!(t.actual?.end);
+  });
 }
 function renderManualList(){
   const assigneeNames={matsumoto_t:'松本利',matsunaga:'松永',matsumura:'村松',matsumoto_m:'松本み',endo:'遠藤',oishi:'大石',nema:'根間',matsumoto:'松本',nakamura:'中村'};
@@ -1706,8 +1710,8 @@ function renderManualList(){
     return`<div style="background:${cardBg};border:1.5px solid ${cardBorder};
       border-radius:7px;padding:8px 11px;min-width:180px;max-width:220px;cursor:pointer;
       box-shadow:${isSel?'0 0 0 3px var(--accent-bg)':''}"
-      onclick="selManual('${r.id}');${isCont?`openActModalForReq('${r.id}')`:''}"
-      title="${isCont?'クリックで実績入力モーダルを開く':''}">
+      onclick="selManual('${r.id}');${(isCont||assignedDate)?`openActModalForReq('${r.id}')`:''}"
+      title="${(isCont||assignedDate)?'クリックで実績入力モーダルを開く':''}">
       <div style="font-size:12px;font-weight:700;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
         ${r.hinban}${r.hinmei?' / '+r.hinmei:''}
       </div>
@@ -1790,6 +1794,20 @@ function openActModalForReq(reqId){
       return;
     }
   }
+  // tasksByDateにない場合 → 元依頼のタスクを探す
+  const r=requests.find(r=>r.id===reqId);
+  if(r&&r.source==='continuation'&&r.originalReqId){
+    for(const [ds,tasks] of Object.entries(tasksByDate)){
+      const t=tasks.find(t=>t.reqId===r.originalReqId);
+      if(t){
+        const saved=curDate;curDate=ds;
+        openActModal(t.id);
+        if(curDate!==saved){curDate=saved;buildDateNav();}
+        return;
+      }
+    }
+  }
+  alert('この作業の実績データが見つかりません。\n（14日以上前のデータは保持されません）');
 }
 
 // ===== 依頼カード描画 =====
@@ -2406,12 +2424,18 @@ function renderGantt(){
 
       // --- 計画バー ---
       const rx=mx(t.startMin),rw=Math.max(4,mx(repEnd)-mx(t.startMin));
+      // continuation タスクは元依頼のkubunInputsを使う
+      const _tReq=requests.find(r=>r.id===t.reqId);
+      const _origReq=_tReq?.source==='continuation'?requests.find(r=>r.id===_tReq.originalReqId):null;
+      const _kubunSrc=_origReq||_tReq;
+      const _kubunNames=(_kubunSrc?.kubunInputs||[]).map(k=>k.name).filter(n=>n&&n!=='残り作業');
+      const _dispKubun=_kubunNames.length?_kubunNames:(t.kubun||[]).filter(n=>n&&n!=='残り作業');
       const res=[`<div class="gblock ${bc}${blockClass}"
         style="left:${rx}px;width:${rw}px;top:${planTop}px;height:${PLAN_H}px${blockStyle};cursor:grab;user-select:none"
         onmousedown="ganttBlockMouseDown(event,'${t.id}','${a}')"
         title="${t.name} (ドラッグで時間帯を移動)">
         <div class="blabel" style="font-size:11px">${t.name}</div>
-        ${t.kubun&&t.kubun.length?`<div style="font-size:8px;color:inherit;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2">${t.kubun.join('・')}</div>`:''}
+        ${_dispKubun.length?`<div style="font-size:8px;color:inherit;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2">${_dispKubun.join('・')}</div>`:''}
         <div class="btime" style="font-size:9px">${fmtMin(t.startMin)}〜${fmtMin(repEnd)}${isDoneEarly?'✓':''}</div>
       </div>`];
 
