@@ -1729,13 +1729,13 @@ function renderManualList(){
       if(_origTask?.kubun?.length) _cKubun=_origTask.kubun.filter(n=>n&&n!=='残り作業');
     }
     const _cSubLine=[_cProc,..._cKubun].filter(Boolean).join('・');
-    // 標準時間・累計実績（continuationは元タスクからtotalWorkedHを取得）
+    // 標準時間・累計実績（continuationは元タスクからtotalWorkedHと計画工数を取得）
     let _planH=null,_workedH=null;
     if(isCont&&r.originalTaskId){
       const _origT=Object.values(tasksByDate).flat().find(t=>t.id===r.originalTaskId);
       if(_origT){
         _workedH=_origT.actual.totalWorkedH||calcWorkedH([_origT]);
-        _planH=(_cOrigReq||_cSrc)?.hours||null;
+        _planH=_origT.hours; // タスク割付時点の計画工数（kintoneの再計算値ではなく）
       }
     }
     const _overH=(_planH!=null&&_workedH!=null)?Math.max(0,Math.round((_workedH-_planH)*10)/10):0;
@@ -1748,8 +1748,10 @@ function renderManualList(){
         ${r.hinban}${r.hinmei?' / '+r.hinmei:''}
       </div>
       ${_cSubLine?`<div style="font-size:10px;color:#0369a1;font-weight:600;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_cSubLine}</div>`:''}
-      <div style="font-size:10px;margin-bottom:${(_planH!=null)?'2px':'5px'};${r.hours<=0&&isCont?'color:#dc2626;font-weight:700':'color:var(--text2)'}">
-        ${r.hours>0?`⏱ 残り${r.hours}H`:'⚠ 計画超過・作業継続中'}${r.deadline?' ／ 期限:'+r.deadline:''}
+      <div style="font-size:10px;margin-bottom:${(_planH!=null)?'2px':'5px'};${_overH>0&&isCont?'color:#dc2626;font-weight:700':'color:var(--text2)'}">
+        ${isCont
+          ? (r.hours>0 ? `⏱ 続き見込み ${r.hours}H` : '⚠ 計画超過・作業継続中')
+          : `⏱ ${r.hours}H`}${r.deadline?' ／ 期限:'+r.deadline:''}
       </div>
       ${_planH!=null?`<div style="margin-bottom:5px">
         <div style="display:flex;align-items:center;gap:4px;margin-bottom:2px">
@@ -2595,6 +2597,17 @@ function renderGantt(){
         }
         const isCarried=ds2==='carried';
         const hasStart=!!t.actual.start,hasEnd=!!t.actual.end&&!isCarried,isPaused2=!!t.actual.pausedAt&&!isCarried;
+        // 工程名・改修区分
+        const _dReq=requests.find(r=>r.id===t.reqId);
+        const _dOrigReq=_dReq?.source==='continuation'?requests.find(r=>r.id===_dReq.originalReqId):null;
+        const _dSrc=_dOrigReq||_dReq;
+        const _dProc=_dSrc?.process||'';
+        let _dKubun=(_dSrc?.kubunInputs||[]).map(k=>k.name).filter(n=>n&&n!=='残り作業'&&n!=='作業');
+        if(!_dKubun.length&&_dReq?.source==='continuation'&&_dReq.originalTaskId){
+          const _dOrigTask=Object.values(tasksByDate).flat().find(ot=>ot.id===_dReq.originalTaskId);
+          if(_dOrigTask?.kubun?.length) _dKubun=_dOrigTask.kubun.filter(n=>n&&n!=='残り作業'&&n!=='作業');
+        }
+        const _dSubLine=[_dProc,..._dKubun].filter(Boolean).join('・');
         // 持越済：実績時刻から動的に当日実働を再計算（保存値が誤っていても正しく表示）
         const _todayWorkedH=isCarried?calcWorkedH([t]):0;
         const _prevH=isCarried?(t.actual._prevWorkedH||0):0;
@@ -2655,6 +2668,7 @@ function renderGantt(){
               <span style="color:${statusColor};font-size:10px">${statusIcon}</span>
               <span class="dname" style="font-size:10px">${t.name}</span>${overflowBadge}
             </div>
+            ${_dSubLine?`<div style="font-size:9px;color:var(--text2);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_dSubLine}</div>`:''}
             <div class="dmeta">${planStr} / ${t.hours}H</div>
             ${yjHtml}
             <div style="display:flex;gap:4px;margin-top:4px;align-items:center;flex-wrap:wrap" onclick="event.stopPropagation()">
