@@ -840,16 +840,29 @@ input.nm-img-input{display:none}
     <div class="yj-section">
       <div class="yj-sec-title">📊 予定 vs 実績</div>
       <div class="yj-times">
-        <div class="yj-time-block" style="cursor:pointer" title="クリックして予定開始時刻を変更" onclick="togglePlanStartEdit()">
+        <div class="yj-time-block" style="cursor:pointer" title="クリックして予定開始時刻を変更" onclick="togglePlanEdit('start')">
           <div class="yj-time-label">予定 開始 ✏️</div>
           <div class="yj-time-val" id="planStart">—</div>
-          <input type="time" step="600" id="planStartInput"
-            style="display:none;margin-top:3px;font-size:13px;border:1px solid #93c5fd;border-radius:4px;padding:2px 4px;width:90px"
-            onchange="applyPlanStart(this.value)" onblur="togglePlanStartEdit(true)"/>
+          <div id="planStartEdit" style="display:none;margin-top:3px;display:none;gap:3px;align-items:center">
+            <input type="time" step="300" id="planStartInput"
+              style="font-size:12px;border:1px solid #93c5fd;border-radius:4px;padding:2px 4px;width:84px"/>
+            <button onclick="event.stopPropagation();applyPlanEdit('start')"
+              style="font-size:11px;padding:2px 6px;border:1px solid #93c5fd;border-radius:4px;background:#eff6ff;color:#1d4ed8;cursor:pointer;font-family:inherit">✓</button>
+            <button onclick="event.stopPropagation();togglePlanEdit('start',true)"
+              style="font-size:11px;padding:2px 6px;border:1px solid #d1d5db;border-radius:4px;background:#f9fafb;color:#6b7280;cursor:pointer;font-family:inherit">✕</button>
+          </div>
         </div>
-        <div class="yj-time-block">
-          <div class="yj-time-label">予定 終了</div>
+        <div class="yj-time-block" style="cursor:pointer" title="クリックして予定終了時刻を変更" onclick="togglePlanEdit('end')">
+          <div class="yj-time-label">予定 終了 ✏️</div>
           <div class="yj-time-val" id="planEnd">—</div>
+          <div id="planEndEdit" style="display:none;margin-top:3px;gap:3px;align-items:center">
+            <input type="time" step="300" id="planEndInput"
+              style="font-size:12px;border:1px solid #93c5fd;border-radius:4px;padding:2px 4px;width:84px"/>
+            <button onclick="event.stopPropagation();applyPlanEdit('end')"
+              style="font-size:11px;padding:2px 6px;border:1px solid #93c5fd;border-radius:4px;background:#eff6ff;color:#1d4ed8;cursor:pointer;font-family:inherit">✓</button>
+            <button onclick="event.stopPropagation();togglePlanEdit('end',true)"
+              style="font-size:11px;padding:2px 6px;border:1px solid #d1d5db;border-radius:4px;background:#f9fafb;color:#6b7280;cursor:pointer;font-family:inherit">✕</button>
+          </div>
         </div>
         <div class="yj-time-block">
           <div class="yj-time-label">実績 開始</div>
@@ -1672,8 +1685,9 @@ function renderManualList(){
   const allManuals=requests.filter(r=>r.source==='manual');
   const manuals=allManuals.filter(r=>!_isManualDone(r));
   const doneManuals=allManuals.filter(r=>_isManualDone(r));
-  const conts=requests.filter(r=>r.source==='continuation');
-  const all=[...allManuals,...conts];
+  const allConts=requests.filter(r=>r.source==='continuation');
+  const conts=allConts.filter(r=>!_isManualDone(r));       // 完了済み続きは非表示
+  const all=[...allManuals,...allConts];
   const rPanel=document.getElementById('manualRightPanel');
   const rList=document.getElementById('manualRightList');
   const rBdg=document.getElementById('bdgManualR');
@@ -3460,40 +3474,62 @@ function renderActHistory(taskId){
 }
 
 // 予定開始時刻インライン編集
-function togglePlanStartEdit(forceClose){
-  const val=document.getElementById('planStart');
-  const inp=document.getElementById('planStartInput');
-  if(!val||!inp)return;
-  if(forceClose||inp.style.display!=='none'){
-    inp.style.display='none';val.style.display='';
+// 予定開始・終了のインライン編集（✓/✕ボタン方式、blurで閉じない）
+function togglePlanEdit(which, forceClose){
+  const editDiv=document.getElementById('planStartEdit'+(which==='end'?''.replace('Start','End'):''));
+  // IDを正しく取得
+  const divId=which==='start'?'planStartEdit':'planEndEdit';
+  const valId=which==='start'?'planStart':'planEnd';
+  const inpId=which==='start'?'planStartInput':'planEndInput';
+  const div=document.getElementById(divId);
+  const val=document.getElementById(valId);
+  const inp=document.getElementById(inpId);
+  if(!div||!val||!inp)return;
+  const isOpen=div.style.display==='flex';
+  if(forceClose||isOpen){
+    div.style.display='none';
     return;
   }
+  // 他方が開いていれば閉じる
+  const otherId=which==='start'?'planEndEdit':'planStartEdit';
+  const other=document.getElementById(otherId);
+  if(other)other.style.display='none';
   // 現在値をinputに反映
   const cur=val.textContent.trim();
   inp.value=(cur&&cur!=='—')?cur:'08:10';
-  val.style.display='none';
-  inp.style.display='';
+  div.style.display='flex';
   inp.focus();
 }
-function applyPlanStart(timeVal){
+function applyPlanEdit(which){
+  const inpId=which==='start'?'planStartInput':'planEndInput';
+  const timeVal=document.getElementById(inpId)?.value;
   if(!actTaskId||!timeVal)return;
-  // 全日付から対象タスクを探す
   let foundTask=null;
-  for(const [ds,tasks] of Object.entries(tasksByDate)){
+  for(const tasks of Object.values(tasksByDate)){
     const t=tasks.find(x=>x.id===actTaskId);
     if(t){foundTask=t;break;}
   }
   if(!foundTask)return;
   const[h,m]=timeVal.split(':').map(Number);
-  foundTask.startMin=h*60+m;
-  // request側も同期
-  const req=requests.find(r=>r.id===foundTask.reqId);
-  if(req) req.startMin=foundTask.startMin;
-  // planStart表示を更新
-  const planEndMin=addWork(foundTask.startMin,Math.round(foundTask.hours*60));
-  document.getElementById('planStart').textContent=fmtMin(foundTask.startMin);
+  const newMin=h*60+m;
+  if(which==='start'){
+    foundTask.startMin=newMin;
+    const req=requests.find(r=>r.id===foundTask.reqId);
+    if(req)req.startMin=newMin;
+  } else {
+    // 終了時刻変更 → hoursを再計算（終了 - 開始）
+    if(foundTask.startMin!=null){
+      const diffH=Math.max(0.5,Math.round((newMin-foundTask.startMin)/60*2)/2);
+      foundTask.hours=diffH;
+      const req=requests.find(r=>r.id===foundTask.reqId);
+      if(req)req.hours=diffH;
+    }
+  }
+  // 表示更新
+  const planEndMin=foundTask.startMin!=null?addWork(foundTask.startMin,Math.round(foundTask.hours*60)):null;
+  document.getElementById('planStart').textContent=foundTask.startMin!=null?fmtMin(foundTask.startMin):'—';
   document.getElementById('planEnd').textContent=planEndMin!=null?fmtMin(planEndMin):'—';
-  togglePlanStartEdit(true);
+  togglePlanEdit(which,true);
   saveTasksToFirebase();
   renderGantt();renderDetail();
 }
