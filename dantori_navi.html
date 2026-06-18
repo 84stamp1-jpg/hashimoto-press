@@ -334,12 +334,17 @@ html, body {
 .rt-ovr-sel{font-size:9px;width:96px;border:1px solid #c084fc;border-radius:3px;padding:1px 2px;color:#7c3aed;background:#faf5ff;cursor:pointer;font-weight:400;}
 .rt-ovr-badge{font-size:8px;padding:1px 4px;border-radius:3px;background:#ede9fe;color:#7c3aed;font-weight:700;margin-left:2px;}
 /* エントリ担当者編集ポップアップ */
-#rt-entry-popup{position:fixed;z-index:9999;background:#fff;border:1px solid #c7d2fe;border-radius:10px;box-shadow:0 4px 24px rgba(0,0,0,0.18);padding:14px 16px;min-width:300px;max-width:360px;display:none;}
-#rt-entry-popup .rt-ep-hdr{font-size:11px;font-weight:700;color:#1e40af;margin-bottom:10px;border-bottom:1px solid #e0e7ff;padding-bottom:6px;}
-#rt-entry-popup .rt-ep-row{display:flex;align-items:center;gap:6px;margin-bottom:5px;}
-#rt-entry-popup .rt-ep-label{font-size:10px;color:#6b7280;width:60px;flex-shrink:0;}
-#rt-entry-popup input.rt-ep-input{flex:1;font-size:11px;border:1px solid #d1d5db;border-radius:4px;padding:3px 6px;font-family:inherit;}
-#rt-entry-popup .rt-ep-btns{display:flex;gap:6px;margin-top:10px;justify-content:flex-end;}
+#rt-entry-popup{position:fixed;z-index:9999;background:#fff;border:1px solid #c7d2fe;border-radius:10px;box-shadow:0 4px 24px rgba(0,0,0,0.18);padding:12px 14px;min-width:320px;max-width:400px;display:none;}
+.rt-ep-hdr{font-size:11px;font-weight:700;color:#1e40af;margin-bottom:8px;border-bottom:1px solid #e0e7ff;padding-bottom:6px;}
+.rt-ep-role-row{margin-bottom:7px;}
+.rt-ep-label{font-size:10px;font-weight:700;color:#374151;margin-bottom:3px;}
+.rt-ep-chips{display:flex;flex-wrap:wrap;gap:3px;max-height:68px;overflow-y:auto;padding:1px;}
+.rt-ep-chip{padding:3px 8px;font-size:10px;border-radius:10px;border:1px solid #d1d5db;cursor:pointer;background:#f9fafb;user-select:none;line-height:1.4;}
+.rt-ep-chip:hover{background:#e0e7ff;border-color:#818cf8;}
+.rt-ep-chip.ep-sel{background:#1d4ed8;color:#fff;border-color:#1d4ed8;}
+.rt-ep-chip.ep-none{background:#f9fafb;color:#9ca3af;font-style:italic;}
+.rt-ep-chip.ep-none.ep-sel{background:#fef2f2;color:#dc2626;border-color:#fca5a5;font-style:normal;}
+.rt-ep-btns{display:flex;gap:6px;margin-top:10px;justify-content:flex-end;border-top:1px solid #f3f4f6;padding-top:8px;}
 .rt-block{cursor:pointer;}
 .rt-block:hover{filter:brightness(1.1);}
 .rt-block{position:absolute;top:5px;height:24px;border-radius:3px;display:flex;align-items:center;padding:0 4px;font-size:9px;font-weight:700;color:rgba(255,255,255,.95);overflow:hidden;white-space:nowrap;cursor:default;min-width:4px;box-shadow:0 1px 3px rgba(0,0,0,.2);}
@@ -2251,17 +2256,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 </div>
 
 <!-- ===== 配置表 バー担当者編集ポップアップ ===== -->
-<div id="rt-entry-popup">
-  <div class="rt-ep-hdr"></div>
-  <div class="rt-ep-row"><span class="rt-ep-label">金型取付</span><input id="rt-ep-mount"   class="rt-ep-input" placeholder="担当者（読点区切り）"></div>
-  <div class="rt-ep-row"><span class="rt-ep-label">品質確認</span><input id="rt-ep-quality" class="rt-ep-input" placeholder="担当者"></div>
-  <div class="rt-ep-row"><span class="rt-ep-label">初品出し</span><input id="rt-ep-ippin"   class="rt-ep-input" placeholder="担当者"></div>
-  <div class="rt-ep-row"><span class="rt-ep-label">作業者</span><input id="rt-ep-worker"  class="rt-ep-input" placeholder="担当者（読点区切り）"></div>
-  <div class="rt-ep-btns">
-    <button onclick="rtCloseEntryEdit()" style="padding:4px 12px;font-size:11px;border:1px solid #d1d5db;border-radius:5px;cursor:pointer;background:#f9fafb;">閉じる</button>
-    <button onclick="rtSaveEntryEdit()"  style="padding:4px 12px;font-size:11px;border:none;border-radius:5px;cursor:pointer;background:#1d4ed8;color:#fff;font-weight:600;">保存</button>
-  </div>
-</div>
+<div id="rt-entry-popup"><div id="rt-ep-inner"></div></div>
 
 <!-- ===== 段取り計画入力モーダル ===== -->
 <div class="modal-overlay" id="dantoriModal" style="display:none;" onclick="closeDantoriIfBg(event)">
@@ -5714,23 +5709,69 @@ window.setWorkerOverrideLine = async function(name, lineId){
 
 // ===== kp4：バー単位 担当者編集ポップアップ =====
 let _rtEditEntryId = null;
+let _rtEditRoles   = {};  // { roleKey: string[] }
+
+const _RT_ROLES = [
+  { key:'金型取付', multi:true,  label:'金型取付' },
+  { key:'品質確認', multi:false, label:'品質確認' },
+  { key:'初品出し',  multi:false, label:'初品出し' },
+  { key:'作業者',   multi:true,  label:'作業者'   },
+];
+
+function _rtBuildPopupHtml(entry){
+  const workers = getPressWorkerList();
+  const lineDisp = getLineDisplayName(entry.lineId);
+  let html = `<div class="rt-ep-hdr">✏ ${lineDisp} ／ ${entry.partNo||''} ${entry.prodStart||''}〜${entry.prodEnd||''}</div>`;
+  _RT_ROLES.forEach(({key, multi, label}) => {
+    const sel = _rtEditRoles[key] || [];
+    const isNone = sel.length === 0;
+    html += `<div class="rt-ep-role-row"><div class="rt-ep-label">${label}${multi?' <span style="color:#9ca3af;font-weight:400;">（複数可）</span>':''}</div><div class="rt-ep-chips">`;
+    html += `<span class="rt-ep-chip ep-none${isNone?' ep-sel':''}" onclick="rtToggleWorker('${key}',null,${multi})">なし</span>`;
+    workers.forEach(name => {
+      const isSel = sel.includes(name);
+      const esc = name.replace(/'/g,"\\'");
+      html += `<span class="rt-ep-chip${isSel?' ep-sel':''}" onclick="rtToggleWorker('${key}','${esc}',${multi})">${name}</span>`;
+    });
+    html += `</div></div>`;
+  });
+  html += `<div class="rt-ep-btns">
+    <button onclick="rtCloseEntryEdit()" style="padding:4px 14px;font-size:11px;border:1px solid #d1d5db;border-radius:5px;cursor:pointer;background:#f9fafb;">閉じる</button>
+    <button onclick="rtSaveEntryEdit()"  style="padding:4px 14px;font-size:11px;border:none;border-radius:5px;cursor:pointer;background:#1d4ed8;color:#fff;font-weight:600;">保存</button>
+  </div>`;
+  return html;
+}
+
+window.rtToggleWorker = function(roleKey, name, multi){
+  const sel = _rtEditRoles[roleKey] || [];
+  if(name === null){
+    _rtEditRoles[roleKey] = [];
+  } else if(!multi){
+    _rtEditRoles[roleKey] = sel.includes(name) ? [] : [name];
+  } else {
+    _rtEditRoles[roleKey] = sel.includes(name) ? sel.filter(w=>w!==name) : [...sel, name];
+  }
+  const entry = dantoriSchedule.find(e=>e._id===_rtEditEntryId);
+  if(entry) document.getElementById('rt-ep-inner').innerHTML = _rtBuildPopupHtml(entry);
+};
+
 window.rtOpenEntryEdit = function(entryId, event){
   const entry = dantoriSchedule.find(e=>e._id===entryId);
   if(!entry) return;
   event.stopPropagation();
   _rtEditEntryId = entryId;
+  const r = entry.roles || {};
+  _rtEditRoles = {
+    '金型取付': (r.金型取付||'').split(/[,、]/).map(w=>w.trim()).filter(Boolean),
+    '品質確認': (r.品質確認||'').split(/[,、]/).map(w=>w.trim()).filter(Boolean),
+    '初品出し':  (r.初品出し ||'').split(/[,、]/).map(w=>w.trim()).filter(Boolean),
+    '作業者':   (r.作業者  ||'').split(/[,、]/).map(w=>w.trim()).filter(Boolean),
+  };
   const popup = document.getElementById('rt-entry-popup');
   if(!popup) return;
-  const lineDisp = getLineDisplayName(entry.lineId);
-  popup.querySelector('.rt-ep-hdr').textContent =
-    `${lineDisp} ／ ${entry.partNo||''} ${entry.prodStart||''}〜${entry.prodEnd||''}`;
-  popup.querySelector('#rt-ep-mount').value   = entry.roles?.金型取付 || '';
-  popup.querySelector('#rt-ep-quality').value = entry.roles?.品質確認 || '';
-  popup.querySelector('#rt-ep-ippin').value   = entry.roles?.初品出し  || '';
-  popup.querySelector('#rt-ep-worker').value  = entry.roles?.作業者   || '';
+  document.getElementById('rt-ep-inner').innerHTML = _rtBuildPopupHtml(entry);
   popup.style.display = 'block';
   const rect = event.target.getBoundingClientRect();
-  const pW = popup.offsetWidth || 320;
+  const pW = popup.offsetWidth || 340;
   let left = rect.left + window.scrollX;
   if(left + pW > window.innerWidth - 8) left = window.innerWidth - pW - 8;
   popup.style.top  = (rect.bottom + window.scrollY + 4) + 'px';
@@ -5739,17 +5780,17 @@ window.rtOpenEntryEdit = function(entryId, event){
 window.rtCloseEntryEdit = function(){
   const p = document.getElementById('rt-entry-popup');
   if(p) p.style.display = 'none';
-  _rtEditEntryId = null;
+  _rtEditEntryId = null; _rtEditRoles = {};
 };
 window.rtSaveEntryEdit = async function(){
   if(!_rtEditEntryId) return;
   const entry = dantoriSchedule.find(e=>e._id===_rtEditEntryId);
   if(!entry){ rtCloseEntryEdit(); return; }
   if(!entry.roles) entry.roles = {};
-  entry.roles.金型取付 = document.getElementById('rt-ep-mount').value.trim();
-  entry.roles.品質確認 = document.getElementById('rt-ep-quality').value.trim();
-  entry.roles.初品出し  = document.getElementById('rt-ep-ippin').value.trim();
-  entry.roles.作業者   = document.getElementById('rt-ep-worker').value.trim();
+  entry.roles.金型取付 = _rtEditRoles['金型取付'].join('、');
+  entry.roles.品質確認 = _rtEditRoles['品質確認'][0] || '';
+  entry.roles.初品出し  = _rtEditRoles['初品出し'][0]  || '';
+  entry.roles.作業者   = _rtEditRoles['作業者'].join('、');
   rtCloseEntryEdit();
   await saveDantoriToFirebase();
   await loadDantoriSchedule();
