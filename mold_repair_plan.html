@@ -1598,8 +1598,17 @@ function carryOverTask(taskId){
   detail+=`停止時間に誤りがある場合は「キャンセル」して\nモーダルの一時停止ログで修正してください。\n\nこの内容で持越しますか？`;
 
   if(!confirm(detail))return;
-  const remainingH=calcRemainH;
+  let remainingH=calcRemainH;
   const confirmedWorkedH=totalWorkedH;
+
+  // 計画超過（残り0H）の場合は続きの見込み工数を必ず入力
+  if(remainingH<=0){
+    const inp=prompt(`計画工数を超過しています（累計${confirmedWorkedH}H / 計画${foundTask.hours}H）。\n\n続きの見込み工数を入力してください（例: 2）。\n※ 作業が完了した場合は「キャンセル」→「完了」ボタンを押してください。`,'1');
+    if(inp===null) return; // キャンセル＝持越し中断
+    const extra=parseFloat(inp);
+    if(!extra||extra<=0){alert('見込み工数が入力されませんでした。持越しを中断します。\n作業が完了した場合は「完了」ボタンを押してください。');return;}
+    remainingH=extra;
+  }
 
   // 元の依頼情報・既存続き依頼を先に取得
   const origReq=requests.find(r=>r.id===foundTask.reqId);
@@ -3039,9 +3048,9 @@ function openActModal(idOrEl){
   const btnRev=document.getElementById('btnRevertComplete');
   const btnRevC=document.getElementById('btnRevertCarry');
   if(isCarriedTask){
-    // 持越済：持越取消＋完了（残り0Hや直接完了したい場合のため）
+    // 持越済：持越取消のみ
     if(btnCO) btnCO.style.display='none';
-    if(btnCmp) btnCmp.style.display='';   // 完了ボタンも表示
+    if(btnCmp) btnCmp.style.display='none';
     if(btnRev) btnRev.style.display='none';
     if(btnRevC) btnRevC.style.display='';
   } else if(isDone){
