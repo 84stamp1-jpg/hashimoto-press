@@ -323,11 +323,25 @@ html, body {
 .rt-section-row{display:flex;align-items:center;background:#ebebea;border-top:2px solid #d5d5d3;height:22px;}
 .rt-section-name-cell{flex-shrink:0;width:110px;border-right:1px solid #ccc;}
 .rt-section-label{flex:1;padding:0 8px;font-size:10px;font-weight:700;color:#888;letter-spacing:.06em;}
-.rt-row{display:flex;align-items:center;border-bottom:1px solid #efefef;height:34px;}
+.rt-row{display:flex;align-items:center;border-bottom:1px solid #efefef;min-height:34px;}
 .rt-row:hover{background:rgba(29,78,216,.04);}
-.rt-name{flex-shrink:0;width:110px;padding:0 7px;font-size:11px;font-weight:600;color:#1a1a1a;border-right:1px solid #e8e8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;height:100%;display:flex;align-items:center;position:sticky;left:0;z-index:5;background:white;}
+.rt-name{flex-shrink:0;width:110px;padding:4px 7px;font-size:11px;font-weight:600;color:#1a1a1a;border-right:1px solid #e8e8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:34px;display:flex;align-items:center;position:sticky;left:0;z-index:5;background:white;}
 .rt-row:hover .rt-name{background:#f5f9ff;}
-.rt-track{position:relative;flex-shrink:0;height:34px;overflow:visible;}
+.rt-track{position:relative;flex-shrink:0;min-height:34px;overflow:visible;}
+/* 優先ライン上書きモード */
+.rt-ovr-mode .rt-name{flex-direction:column;align-items:flex-start;justify-content:center;white-space:normal;gap:2px;min-height:50px;}
+.rt-ovr-mode .rt-track{min-height:50px;}
+.rt-ovr-sel{font-size:9px;width:96px;border:1px solid #c084fc;border-radius:3px;padding:1px 2px;color:#7c3aed;background:#faf5ff;cursor:pointer;font-weight:400;}
+.rt-ovr-badge{font-size:8px;padding:1px 4px;border-radius:3px;background:#ede9fe;color:#7c3aed;font-weight:700;margin-left:2px;}
+/* エントリ担当者編集ポップアップ */
+#rt-entry-popup{position:fixed;z-index:9999;background:#fff;border:1px solid #c7d2fe;border-radius:10px;box-shadow:0 4px 24px rgba(0,0,0,0.18);padding:14px 16px;min-width:300px;max-width:360px;display:none;}
+#rt-entry-popup .rt-ep-hdr{font-size:11px;font-weight:700;color:#1e40af;margin-bottom:10px;border-bottom:1px solid #e0e7ff;padding-bottom:6px;}
+#rt-entry-popup .rt-ep-row{display:flex;align-items:center;gap:6px;margin-bottom:5px;}
+#rt-entry-popup .rt-ep-label{font-size:10px;color:#6b7280;width:60px;flex-shrink:0;}
+#rt-entry-popup input.rt-ep-input{flex:1;font-size:11px;border:1px solid #d1d5db;border-radius:4px;padding:3px 6px;font-family:inherit;}
+#rt-entry-popup .rt-ep-btns{display:flex;gap:6px;margin-top:10px;justify-content:flex-end;}
+.rt-block{cursor:pointer;}
+.rt-block:hover{filter:brightness(1.1);}
 .rt-block{position:absolute;top:5px;height:24px;border-radius:3px;display:flex;align-items:center;padding:0 4px;font-size:9px;font-weight:700;color:rgba(255,255,255,.95);overflow:hidden;white-space:nowrap;cursor:default;min-width:4px;box-shadow:0 1px 3px rgba(0,0,0,.2);}
 .rt-block.rt-setup{background-color:#fef9c3!important;color:#92400e!important;border:1px solid #fcd34d!important;box-shadow:0 1px 2px rgba(0,0,0,.1)!important;background-image:repeating-linear-gradient(135deg,rgba(0,0,0,.06) 0,rgba(0,0,0,.06) 3px,transparent 3px,transparent 7px)!important;}
 .rt-overlay{position:absolute;top:0;left:110px;bottom:0;pointer-events:none;overflow:hidden;}
@@ -2233,6 +2247,19 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
       </div>
       <button onclick="changeAdminPin()" style="padding:7px 16px;border:1px solid #1a1a1a;border-radius:6px;font-size:12px;cursor:pointer;background:#1a1a1a;color:#fff;">PINを変更する</button>
     </div>
+  </div>
+</div>
+
+<!-- ===== 配置表 バー担当者編集ポップアップ ===== -->
+<div id="rt-entry-popup">
+  <div class="rt-ep-hdr"></div>
+  <div class="rt-ep-row"><span class="rt-ep-label">金型取付</span><input id="rt-ep-mount"   class="rt-ep-input" placeholder="担当者（読点区切り）"></div>
+  <div class="rt-ep-row"><span class="rt-ep-label">品質確認</span><input id="rt-ep-quality" class="rt-ep-input" placeholder="担当者"></div>
+  <div class="rt-ep-row"><span class="rt-ep-label">初品出し</span><input id="rt-ep-ippin"   class="rt-ep-input" placeholder="担当者"></div>
+  <div class="rt-ep-row"><span class="rt-ep-label">作業者</span><input id="rt-ep-worker"  class="rt-ep-input" placeholder="担当者（読点区切り）"></div>
+  <div class="rt-ep-btns">
+    <button onclick="rtCloseEntryEdit()" style="padding:4px 12px;font-size:11px;border:1px solid #d1d5db;border-radius:5px;cursor:pointer;background:#f9fafb;">閉じる</button>
+    <button onclick="rtSaveEntryEdit()"  style="padding:4px 12px;font-size:11px;border:none;border-radius:5px;cursor:pointer;background:#1d4ed8;color:#fff;font-weight:600;">保存</button>
   </div>
 </div>
 
@@ -4292,6 +4319,8 @@ let WORKER_ATTENDANCE = {};
 // 17:00以降のエントリへの自動割り振り対象かどうかを制御
 const OVERTIME_START_MIN = 17 * 60; // 17:00 = 1020分
 let WORKER_OVERTIME = {};
+// 当日のみ有効な優先ライン上書き {フルネーム: lineId|''} 空文字=どこでも可（マスタを無視）
+let WORKER_PRIORITY_OVERRIDE = {};
 // Firebase settings/roleTimeMins — 品質確認・初品出しの標準作業時間（分）
 let ROLE_TIME_MINS = { quality: 5, ippin: 10 };
 
@@ -4789,6 +4818,11 @@ async function loadDantoriSchedule(){
     const data = await res.json();
     if(!data){ dantoriSchedule=[]; renderDantori(); updatePersonPanel(); return; }
     dantoriSchedule = Object.entries(data).map(([id,v])=>({...v, _id:id}));
+    // 当日の優先ライン上書きを読み込む
+    try{
+      const rOvr = await fetch(`${fbUrl}/dantori/${dateStr}Override.json`);
+      if(rOvr.ok){ const ovr = await rOvr.json(); WORKER_PRIORITY_OVERRIDE = ovr || {}; }
+    }catch(_){}
     renderDantori();
     updatePersonPanel();
   } catch(e){ console.warn('dantori load error:',e); }
@@ -5652,6 +5686,81 @@ async function execWorkerSwap(nameA, nameB){
   renderKanban();
 }
 
+// ===== kp4：優先ライン上書きモード =====
+let _rtOverrideMode = false;
+function rtToggleOverrideMode(){
+  _rtOverrideMode = !_rtOverrideMode;
+  _rtSwapMode = false; _rtSwapSelected = null;
+  const list = document.getElementById('kanban-list');
+  if(list){ const ae = dantoriSchedule.filter(d=>d&&d.lineId); list.innerHTML = renderPressTimeline(ae); }
+}
+async function saveWorkerPriorityOverride(){
+  const fbUrl = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
+  const dateStr = getDantoriDatePath();
+  try{
+    await fetch(`${fbUrl}/dantori/${dateStr}Override.json`,
+      {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(WORKER_PRIORITY_OVERRIDE)});
+  }catch(e){ console.warn('override save error',e); }
+}
+window.setWorkerOverrideLine = async function(name, lineId){
+  if(lineId === '__master__'){ delete WORKER_PRIORITY_OVERRIDE[name]; }
+  else { WORKER_PRIORITY_OVERRIDE[name] = lineId; }
+  await saveWorkerPriorityOverride();
+  if(kanbanPage === 'kp4'){
+    const list = document.getElementById('kanban-list');
+    if(list){ const ae = dantoriSchedule.filter(d=>d&&d.lineId); list.innerHTML = renderPressTimeline(ae); }
+  }
+};
+
+// ===== kp4：バー単位 担当者編集ポップアップ =====
+let _rtEditEntryId = null;
+window.rtOpenEntryEdit = function(entryId, event){
+  const entry = dantoriSchedule.find(e=>e._id===entryId);
+  if(!entry) return;
+  event.stopPropagation();
+  _rtEditEntryId = entryId;
+  const popup = document.getElementById('rt-entry-popup');
+  if(!popup) return;
+  const lineDisp = getLineDisplayName(entry.lineId);
+  popup.querySelector('.rt-ep-hdr').textContent =
+    `${lineDisp} ／ ${entry.partNo||''} ${entry.prodStart||''}〜${entry.prodEnd||''}`;
+  popup.querySelector('#rt-ep-mount').value   = entry.roles?.金型取付 || '';
+  popup.querySelector('#rt-ep-quality').value = entry.roles?.品質確認 || '';
+  popup.querySelector('#rt-ep-ippin').value   = entry.roles?.初品出し  || '';
+  popup.querySelector('#rt-ep-worker').value  = entry.roles?.作業者   || '';
+  popup.style.display = 'block';
+  const rect = event.target.getBoundingClientRect();
+  const pW = popup.offsetWidth || 320;
+  let left = rect.left + window.scrollX;
+  if(left + pW > window.innerWidth - 8) left = window.innerWidth - pW - 8;
+  popup.style.top  = (rect.bottom + window.scrollY + 4) + 'px';
+  popup.style.left = Math.max(4, left) + 'px';
+};
+window.rtCloseEntryEdit = function(){
+  const p = document.getElementById('rt-entry-popup');
+  if(p) p.style.display = 'none';
+  _rtEditEntryId = null;
+};
+window.rtSaveEntryEdit = async function(){
+  if(!_rtEditEntryId) return;
+  const entry = dantoriSchedule.find(e=>e._id===_rtEditEntryId);
+  if(!entry){ rtCloseEntryEdit(); return; }
+  if(!entry.roles) entry.roles = {};
+  entry.roles.金型取付 = document.getElementById('rt-ep-mount').value.trim();
+  entry.roles.品質確認 = document.getElementById('rt-ep-quality').value.trim();
+  entry.roles.初品出し  = document.getElementById('rt-ep-ippin').value.trim();
+  entry.roles.作業者   = document.getElementById('rt-ep-worker').value.trim();
+  rtCloseEntryEdit();
+  await saveDantoriToFirebase();
+  await loadDantoriSchedule();
+  renderKanban();
+};
+// 外クリックでポップアップを閉じる
+document.addEventListener('click', function(e){
+  const p = document.getElementById('rt-entry-popup');
+  if(p && p.style.display !== 'none' && !p.contains(e.target)) rtCloseEntryEdit();
+});
+
 // ===== kp4：プレス計画タイムライン（Ganttチャート） =====
 function renderPressTimeline(allEntries){
   const now     = new Date();
@@ -5749,7 +5858,8 @@ function renderPressTimeline(allEntries){
           const pw = wr.end !== null ? Math.max(rt_toX(wr.end) - px, 8) : 90 * RT_PPM;
           // 交代入場者（ジョブ開始より後から始まる）はスタイルを変える
           const isShifted = (psMin !== null && wr.start !== null && wr.start !== psMin);
-          blk += `<div class="rt-block" style="left:${px}px;width:${pw}px;background:${color};opacity:${isShifted?'0.65':'0.8'};${isShifted?'border-top:2px solid #6366f1;':''}" title="${tip}">${prodBarInner}</div>`;
+          const eid = (d._id||'').replace(/'/g,"\\'");
+          blk += `<div class="rt-block" style="left:${px}px;width:${pw}px;background:${color};opacity:${isShifted?'0.65':'0.8'};${isShifted?'border-top:2px solid #6366f1;':''}" title="${tip}" onclick="rtOpenEntryEdit('${eid}',event)">${prodBarInner}</div>`;
         });
       }
     });
@@ -5785,11 +5895,33 @@ function renderPressTimeline(allEntries){
         + `<div style="position:absolute;left:${px0+2}px;top:8px;font-size:9px;color:#b45309;font-weight:700;background:rgba(254,243,199,0.85);padding:1px 4px;border-radius:2px;pointer-events:none;">午後休</div>`;
     }
     const swapNameStyle = _rtSwapMode
-      ? 'cursor:pointer;user-select:none;' + (_rtSwapSelected === name ? 'background:#ede9fe;color:#7c3aed;font-weight:700;outline:2px solid #7c3aed;' : 'hover-bg:#f5f3ff;')
+      ? 'cursor:pointer;user-select:none;' + (_rtSwapSelected === name ? 'background:#ede9fe;color:#7c3aed;font-weight:700;outline:2px solid #7c3aed;' : '')
       : '';
     const swapClick = _rtSwapMode ? `onclick="rtSwapClick('${name.replace(/'/g,"\\'")}')"`  : '';
+    // 優先ライン上書きドロップダウン
+    const ovrLine = name in WORKER_PRIORITY_OVERRIDE ? WORKER_PRIORITY_OVERRIDE[name] : null;
+    const masterLine = WORKER_PRIORITY_LINE[name] || '';
+    let ovrHtml = '';
+    if(_rtOverrideMode){
+      const allLineIds = Object.keys(PRESS_LINE_MASTER);
+      const esc = name.replace(/'/g,"\\'");
+      const opts = `<option value="__master__">${masterLine ? 'マスタ('+masterLine+')' : 'マスタ(未設定)'}</option>`
+        + allLineIds.map(lid => `<option value="${lid}" ${(ovrLine===lid)?'selected':''}>${lid}</option>`).join('')
+        + `<option value="" ${(ovrLine==='')?'selected':''}>どこでも可</option>`;
+      ovrHtml = `<select class="rt-ovr-sel" onchange="setWorkerOverrideLine('${esc}',this.value)" title="今日だけの優先ライン">${opts}</select>`;
+    } else if(ovrLine !== null){
+      // 上書きが設定されている場合はバッジ表示
+      const ovrLabel = ovrLine === '' ? '制限なし' : ovrLine;
+      ovrHtml = `<span class="rt-ovr-badge">📌${ovrLabel}</span>`;
+    }
+    const nameCell = _rtOverrideMode
+      ? `<div class="rt-name" data-name="${name}" style="${swapNameStyle}" ${swapClick}>
+           <div style="display:flex;align-items:center;white-space:nowrap;">${name}${attTag}${_rtSwapMode?'<span style="font-size:9px;color:#7c3aed;margin-left:2px;">⇄</span>':''}</div>
+           ${ovrHtml}
+         </div>`
+      : `<div class="rt-name" title="${_rtSwapMode ? 'クリックして選択' : name}" data-name="${name}" style="${swapNameStyle}" ${swapClick}>${name}${attTag}${ovrHtml}${_rtSwapMode ? '<span style="font-size:9px;color:#7c3aed;margin-left:2px;">⇄</span>' : ''}</div>`;
     rowsHtml += `<div class="rt-row" style="${rowOpacity}">
-      <div class="rt-name" title="${_rtSwapMode ? 'クリックして選択' : name}" data-name="${name}" style="${swapNameStyle}" ${swapClick}>${name}${attTag}${_rtSwapMode ? '<span style="font-size:9px;color:#7c3aed;margin-left:2px;">⇄</span>' : ''}</div>
+      ${nameCell}
       <div class="rt-track" style="width:${RT_W}px;">${blk}${unavailOverlay}</div>
     </div>`;
   });
@@ -5797,10 +5929,17 @@ function renderPressTimeline(allEntries){
   const swapBtnStyle = _rtSwapMode
     ? 'background:#7c3aed;color:#fff;border-color:#7c3aed;'
     : 'background:#fff;color:#475569;border-color:#cbd5e1;';
-  return `<div style="overflow:hidden;">
-  <div class="rt-title" style="display:flex;align-items:center;justify-content:space-between;">
+  const ovrBtnStyle = _rtOverrideMode
+    ? 'background:#0891b2;color:#fff;border-color:#0891b2;'
+    : 'background:#fff;color:#475569;border-color:#cbd5e1;';
+  const ovrCount = Object.keys(WORKER_PRIORITY_OVERRIDE).length;
+  return `<div style="overflow:hidden;" class="${_rtOverrideMode ? 'rt-ovr-mode' : ''}">
+  <div class="rt-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px;">
     <span>📍 作業者 ライン配置表 ── ${timeStr} 現在　<span style="font-size:10px;color:#aaa;">※ 下の「🤖 自動割り振り」で役割を自動設定できます</span></span>
-    <button onclick="rtToggleSwapMode()" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid;border-radius:5px;cursor:pointer;white-space:nowrap;${swapBtnStyle}">${_rtSwapMode ? '✕ 入れ替えモード終了' : '🔀 入れ替えモード'}</button>
+    <div style="display:flex;gap:6px;flex-shrink:0;">
+      <button onclick="rtToggleOverrideMode()" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid;border-radius:5px;cursor:pointer;white-space:nowrap;${ovrBtnStyle}">${_rtOverrideMode ? '✕ 優先ライン変更終了' : `📌 今日の優先ライン${ovrCount?'('+ovrCount+'件)':''}`}</button>
+      <button onclick="rtToggleSwapMode()" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid;border-radius:5px;cursor:pointer;white-space:nowrap;${swapBtnStyle}">${_rtSwapMode ? '✕ 入れ替えモード終了' : '🔀 入れ替えモード'}</button>
+    </div>
   </div>
   <div class="rt-outer">
     <div class="rt-hdr">
@@ -6129,11 +6268,16 @@ async function autoAssignRoles(){
   const hasRoleData = Object.keys(WORKER_ROLE_MASTER).length > 0;
   const allPressWorkers = getPressWorkerList();
 
+  // 本日の優先ライン上書きをマスタに統合（このスコープのみ有効）
+  // WORKER_PRIORITY_OVERRIDE が設定されている作業者はそちらを優先
+  // 空文字 '' は「優先ラインなし（どこでも可）」を意味する
+  const _effPrioLine = w => (w in WORKER_PRIORITY_OVERRIDE) ? WORKER_PRIORITY_OVERRIDE[w] : (WORKER_PRIORITY_LINE[w] || '');
+
   // ── 時刻順ソート（先にソートしてactiveLineSetを確定） ──
   // 同時刻の場合: 専任担当が少ないライン（A2・B1等）を先に処理し、担当者を確定させる
   // → その後Bライン・Cライン等の大人数ラインを処理する際、確定済みの人はbusyMapで守られ
   //   空き人材（ジェン・アリ等）がCライン等に正しく補充される
-  const _prioCount = entry => allPressWorkers.filter(w => WORKER_PRIORITY_LINE[w] === entry.lineId).length;
+  const _prioCount = entry => allPressWorkers.filter(w => _effPrioLine(w) === entry.lineId).length;
   const sorted = [...targets].sort((a, b) => {
     const aTime = toMin(a.setupStart||a.prodStart)||9999;
     const bTime = toMin(b.setupStart||b.prodStart)||9999;
@@ -6161,7 +6305,7 @@ async function autoAssignRoles(){
   //   ここでは弾かない（不要な流出防止で空き作業者が未割当になるのを防ぐ）
   const processedLines = new Set();
   function _isPriorityLineConflict(w, currentLineId, s, e){
-    const priLine = WORKER_PRIORITY_LINE[w];
+    const priLine = _effPrioLine(w);
     if(!priLine || priLine === currentLineId) return false;
     // 優先ラインが既に処理済み → busyMapに反映済みなのでここでは弾かない
     if(processedLines.has(priLine)) return false;
@@ -6195,21 +6339,21 @@ async function autoAssignRoles(){
     if(hasRoleData){
       const cands = allPressWorkers.filter(w => workerHasRole(w, role));
       // ① 優先ライン一致（同ライン内はWORKER_PRIORITY_ORDERの順）
-      const prio = cands.filter(w => WORKER_PRIORITY_LINE[w] === lineId && canWork(w))
+      const prio = cands.filter(w => _effPrioLine(w) === lineId && canWork(w))
         .sort((a,b) => (WORKER_PRIORITY_ORDER[a]||999) - (WORKER_PRIORITY_ORDER[b]||999));
       if(prio.length) return prio[0];
       // ② 同グループで仕事なし（グループ応援）
       const freeLines = getSameGroupNoWork(lineId);
-      const grp = cands.filter(w => freeLines.includes(WORKER_PRIORITY_LINE[w]) && canWork(w));
+      const grp = cands.filter(w => freeLines.includes(_effPrioLine(w)) && canWork(w));
       if(grp.length) return grp[0];
       // ②bis グループ外でも優先ラインに仕事がない人（ライン横断応援）
       const crossFree = cands.filter(w => {
-        const priLine = WORKER_PRIORITY_LINE[w];
+        const priLine = _effPrioLine(w);
         return priLine && !activeLineSet.has(priLine) && !freeLines.includes(priLine) && canWork(w);
       });
       if(crossFree.length) return crossFree[0];
       // ③ 優先ライン未設定（フローティング）
-      const floating = cands.filter(w => !WORKER_PRIORITY_LINE[w] && canWork(w));
+      const floating = cands.filter(w => !_effPrioLine(w) && canWork(w));
       if(floating.length) return floating[0];
     }
     // フォールバック: PRESS_LINE_MASTER
@@ -6243,18 +6387,18 @@ async function autoAssignRoles(){
       const result = [];
 
       // ① 優先ライン一致（同ライン内はWORKER_PRIORITY_ORDERの順）
-      result.push(...allPressWorkers.filter(w => WORKER_PRIORITY_LINE[w] === lineId && isAvail(w))
+      result.push(...allPressWorkers.filter(w => _effPrioLine(w) === lineId && isAvail(w))
         .sort((a,b) => (WORKER_PRIORITY_ORDER[a]||999) - (WORKER_PRIORITY_ORDER[b]||999)));
       if(result.length >= maxCount) return result.slice(0, maxCount);
 
       // ② 同グループで実際に空いている人（ラインに計画があっても本人がbusyでなければOK）
       // ただし優先ラインに同時間帯の予定がある作業者は除外（優先ライン流出防止）
       const grp = allPressWorkers
-        .filter(w => sameGroupIds.includes(WORKER_PRIORITY_LINE[w]) && isAvail(w) && !result.includes(w) &&
+        .filter(w => sameGroupIds.includes(_effPrioLine(w)) && isAvail(w) && !result.includes(w) &&
           !_isPriorityLineConflict(w, lineId, s, e))
         .sort((a, b) => {
-          const ia = sameGroupIds.indexOf(WORKER_PRIORITY_LINE[a]);
-          const ib = sameGroupIds.indexOf(WORKER_PRIORITY_LINE[b]);
+          const ia = sameGroupIds.indexOf(_effPrioLine(a));
+          const ib = sameGroupIds.indexOf(_effPrioLine(b));
           return ia - ib;
         });
       result.push(...grp);
@@ -6263,7 +6407,7 @@ async function autoAssignRoles(){
       // ②bis グループ外でも優先ラインに仕事がない人（ライン横断応援）
       const crossFree = allPressWorkers
         .filter(w => {
-          const priLine = WORKER_PRIORITY_LINE[w];
+          const priLine = _effPrioLine(w);
           return priLine && !sameGroupIds.includes(priLine) && !activeLineSet.has(priLine) &&
             isAvail(w) && !result.includes(w) && !_isPriorityLineConflict(w, lineId, s, e);
         });
@@ -6272,7 +6416,7 @@ async function autoAssignRoles(){
 
       // ③ フローティング（優先ライン未設定）: 作業者割り当て時のみ使用
       if(allowFloating){
-        const floating = allPressWorkers.filter(w => !WORKER_PRIORITY_LINE[w] && isAvail(w) && !result.includes(w));
+        const floating = allPressWorkers.filter(w => !_effPrioLine(w) && isAvail(w) && !result.includes(w));
         result.push(...floating);
       }
       if(result.length) return result.slice(0, maxCount);
@@ -6295,10 +6439,10 @@ async function autoAssignRoles(){
       const freeLines = getSameGroupNoWork(lineId);
       const all = allPressWorkers.filter(w =>
         !workerHasRole(w,'noLine') &&
-        (!WORKER_PRIORITY_LINE[w] ||
-          WORKER_PRIORITY_LINE[w] === lineId ||
-          freeLines.includes(WORKER_PRIORITY_LINE[w]) ||
-          !activeLineSet.has(WORKER_PRIORITY_LINE[w])) // 優先ラインに仕事がない人も候補に
+        (!_effPrioLine(w) ||
+          _effPrioLine(w) === lineId ||
+          freeLines.includes(_effPrioLine(w)) ||
+          !activeLineSet.has(_effPrioLine(w))) // 優先ラインに仕事がない人も候補に
       );
       if(all.length) return all;
     }
@@ -6366,8 +6510,8 @@ async function autoAssignRoles(){
       } else {
         const qualAll = hasRoleData
           ? allPressWorkers.filter(w => workerHasRole(w,'quality') &&
-              (!WORKER_PRIORITY_LINE[w] || WORKER_PRIORITY_LINE[w] === entry.lineId ||
-               getSameGroupNoWork(entry.lineId).includes(WORKER_PRIORITY_LINE[w])))
+              (!_effPrioLine(w) || _effPrioLine(w) === entry.lineId ||
+               getSameGroupNoWork(entry.lineId).includes(_effPrioLine(w))))
           : (PRESS_LINE_MASTER[entry.lineId] ? [resolveWorkerName(PRESS_LINE_MASTER[entry.lineId].quality)] : []);
         const qualConflict = qualAll.filter(w => isBusy(w, s, e)).map(w => {
           const slot = busySlotOf(w, s, e);
@@ -6387,8 +6531,8 @@ async function autoAssignRoles(){
       } else {
         const ippinAll = hasRoleData
           ? allPressWorkers.filter(w => workerHasRole(w,'ippin') &&
-              (!WORKER_PRIORITY_LINE[w] || WORKER_PRIORITY_LINE[w] === entry.lineId ||
-               getSameGroupNoWork(entry.lineId).includes(WORKER_PRIORITY_LINE[w])))
+              (!_effPrioLine(w) || _effPrioLine(w) === entry.lineId ||
+               getSameGroupNoWork(entry.lineId).includes(_effPrioLine(w))))
           : (PRESS_LINE_MASTER[entry.lineId] ? [resolveWorkerName(PRESS_LINE_MASTER[entry.lineId].ippin)] : []);
         const ippinConflict = ippinAll.filter(w => isBusy(w, s, e)).map(w => {
           const slot = busySlotOf(w, s, e);
@@ -6424,7 +6568,7 @@ async function autoAssignRoles(){
         const absentOnes = mountAll.filter(w => isUnavailableAt(w, s, e) && !thisEntryAssigned.includes(w))
           .map(w => `${w}（出勤なし）`);
         const noLineOnes = (hasRoleData ? allPressWorkers : []).filter(w =>
-          workerHasRole(w,'noLine') && (WORKER_PRIORITY_LINE[w] === entry.lineId || !WORKER_PRIORITY_LINE[w])
+          workerHasRole(w,'noLine') && (_effPrioLine(w) === entry.lineId || !_effPrioLine(w))
         );
         const detail = [
           busyOnes.length   ? `重複中: ${busyOnes.join('、')}` : '',
@@ -6446,7 +6590,7 @@ async function autoAssignRoles(){
       // 優先ラインが別のライン（例: B1→Bライン）の場合は引き継がず再評価する
       const existingWorkers = roles.作業者
         ? roles.作業者.split(/[,、]/).map(w=>w.trim()).filter(Boolean)
-            .filter(w => WORKER_PRIORITY_LINE[w] === entry.lineId || !WORKER_PRIORITY_LINE[w])
+            .filter(w => _effPrioLine(w) === entry.lineId || !_effPrioLine(w))
         : [];
       // ベース②: 金型取付した人を追加（ただし生産時間帯ps〜eで出勤可能な人のみ）
       const workerAvail = [...existingWorkers];
@@ -6466,15 +6610,15 @@ async function autoAssignRoles(){
           !isUnavailableAt(w, ps, e);
         // 専任担当（優先ライン=このライン）を最優先、同ライン内は順位順
         const prioWorkers = allPressWorkers.filter(w =>
-          baseFilter(w) && WORKER_PRIORITY_LINE[w] === entry.lineId
+          baseFilter(w) && _effPrioLine(w) === entry.lineId
         ).sort((a,b) => (WORKER_PRIORITY_ORDER[a]||999) - (WORKER_PRIORITY_ORDER[b]||999));
         // 優先ラインに仕事がない人（真の空き）
         const freeWorkers = allPressWorkers.filter(w =>
           baseFilter(w) && !prioWorkers.includes(w) &&
-          (!WORKER_PRIORITY_LINE[w] || !activeLineSet.has(WORKER_PRIORITY_LINE[w]))
+          (!_effPrioLine(w) || !activeLineSet.has(_effPrioLine(w)))
         );
         const scoreW = w => {
-          const priLine = WORKER_PRIORITY_LINE[w];
+          const priLine = _effPrioLine(w);
           if(priLine === entry.lineId) return 0;
           const grp = dantoriGroupCfg.find(g => g.ids && g.ids.includes(entry.lineId));
           if(grp && priLine && grp.ids.includes(priLine)) return 1;
@@ -6529,7 +6673,7 @@ async function autoAssignRoles(){
         !isUnavailableAt(w, ps2, e2)
       ).sort((a, b) => {
         const score = w => {
-          const priLine = WORKER_PRIORITY_LINE[w];
+          const priLine = _effPrioLine(w);
           if(priLine === entry.lineId) return 0;
           const grp = dantoriGroupCfg.find(g => g.ids && g.ids.includes(entry.lineId));
           if(grp && priLine && grp.ids.includes(priLine)) return 1;
