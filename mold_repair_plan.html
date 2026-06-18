@@ -1729,6 +1729,16 @@ function renderManualList(){
       if(_origTask?.kubun?.length) _cKubun=_origTask.kubun.filter(n=>n&&n!=='残り作業');
     }
     const _cSubLine=[_cProc,..._cKubun].filter(Boolean).join('・');
+    // 標準時間・累計実績（continuationは元タスクからtotalWorkedHを取得）
+    let _planH=null,_workedH=null;
+    if(isCont&&r.originalTaskId){
+      const _origT=Object.values(tasksByDate).flat().find(t=>t.id===r.originalTaskId);
+      if(_origT){
+        _workedH=_origT.actual.totalWorkedH||calcWorkedH([_origT]);
+        _planH=(_cOrigReq||_cSrc)?.hours||null;
+      }
+    }
+    const _overH=(_planH!=null&&_workedH!=null)?Math.max(0,Math.round((_workedH-_planH)*10)/10):0;
     return`<div style="background:${cardBg};border:1.5px solid ${cardBorder};
       border-radius:7px;padding:8px 11px;min-width:180px;max-width:220px;cursor:pointer;
       box-shadow:${isSel?'0 0 0 3px var(--accent-bg)':''}"
@@ -1738,9 +1748,18 @@ function renderManualList(){
         ${r.hinban}${r.hinmei?' / '+r.hinmei:''}
       </div>
       ${_cSubLine?`<div style="font-size:10px;color:#0369a1;font-weight:600;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_cSubLine}</div>`:''}
-      <div style="font-size:10px;color:var(--text2);margin-bottom:5px">
-        ⏱ ${r.hours}H${r.deadline?' ／ 期限:'+r.deadline:''}
+      <div style="font-size:10px;color:var(--text2);margin-bottom:${(_planH!=null)?'2px':'5px'}">
+        ⏱ 残り${r.hours}H${r.deadline?' ／ 期限:'+r.deadline:''}
       </div>
+      ${_planH!=null?`<div style="margin-bottom:5px">
+        <div style="display:flex;align-items:center;gap:4px;margin-bottom:2px">
+          <span style="font-size:9px;color:var(--text2)">計画${_planH}H</span>
+          <div style="flex:1;height:4px;background:#e5e7eb;border-radius:2px;overflow:hidden">
+            <div style="height:100%;width:${Math.min(100,Math.round((_workedH||0)/_planH*100))}%;background:${_overH>0?'#ef4444':'#22c55e'};border-radius:2px"></div>
+          </div>
+          <span style="font-size:9px;font-weight:700;color:${_overH>0?'#dc2626':'var(--text2)'}">累計${_workedH}H${_overH>0?' <span style="color:#dc2626">超過+'+_overH+'H</span>':''}</span>
+        </div>
+      </div>`:''}
       ${assignedDate
         ?`<div style="font-size:10px;font-weight:700;color:var(--ok)">✓ ${assigneeName} ／ ${assignedDate}</div>
            <div style="display:flex;gap:3px;margin-top:4px;flex-wrap:wrap">
@@ -2395,7 +2414,7 @@ function renderGantt(){
   // 仕切り線（計画2段 と 実績1段 の境界）
   // 計画行: top:4px h:30px (row0) / top:36px h:30px (row1)  → 68px まで
   // 実績行: top:70px h:44px
-  const PLAN_H=30, PLAN_R0=4, PLAN_R1=36, ACT_TOP=70, ACT_H=44, TRACK_H=116;
+  const PLAN_H=38, PLAN_R0=2, PLAN_R1=42, ACT_TOP=82, ACT_H=44, TRACK_H=128;
   const divLine=`<div style='position:absolute;left:0;right:0;top:68px;height:1px;background:var(--border);pointer-events:none;z-index:1'></div>`;
   const gridWithDiv=grid+divLine;
 
