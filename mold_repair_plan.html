@@ -835,6 +835,7 @@ input.nm-img-input{display:none}
 <div class="moverlay" id="actModal">
   <div class="mdlg">
     <div class="mtitle" id="actTitle">実績記録 / 予実確認</div>
+    <div id="actKubunBadges" style="display:none;flex-wrap:wrap;gap:4px;margin:-4px 0 8px 0;padding:0 4px"></div>
 
     <!-- 予実サマリー -->
     <div class="yj-section">
@@ -2430,13 +2431,16 @@ function renderGantt(){
       const _kubunSrc=_origReq||_tReq;
       const _kubunNames=(_kubunSrc?.kubunInputs||[]).map(k=>k.name).filter(n=>n&&n!=='残り作業');
       const _dispKubun=_kubunNames.length?_kubunNames:(t.kubun||[]).filter(n=>n&&n!=='残り作業');
+      const _timeStr=`${fmtMin(t.startMin)}〜${fmtMin(repEnd)}${isDoneEarly?'✓':''}`;
       const res=[`<div class="gblock ${bc}${blockClass}"
-        style="left:${rx}px;width:${rw}px;top:${planTop}px;height:${PLAN_H}px${blockStyle};cursor:grab;user-select:none"
+        style="left:${rx}px;width:${rw}px;top:${planTop}px;height:${PLAN_H}px${blockStyle};cursor:grab;user-select:none;display:flex;flex-direction:column;justify-content:center;padding:2px 4px;box-sizing:border-box"
         onmousedown="ganttBlockMouseDown(event,'${t.id}','${a}')"
-        title="${t.name} (ドラッグで時間帯を移動)">
-        <div class="blabel" style="font-size:11px">${t.name}</div>
-        ${_dispKubun.length?`<div style="font-size:8px;color:inherit;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2">${_dispKubun.join('・')}</div>`:''}
-        <div class="btime" style="font-size:9px">${fmtMin(t.startMin)}〜${fmtMin(repEnd)}${isDoneEarly?'✓':''}</div>
+        title="${t.name} / ${_dispKubun.join('・')||'改修区分なし'} / ${_timeStr}">
+        <div style="display:flex;align-items:center;gap:2px;min-width:0">
+          <div class="blabel" style="font-size:11px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.name}</div>
+          <div class="btime" style="font-size:9px;white-space:nowrap;flex-shrink:0;opacity:.9">${_timeStr}</div>
+        </div>
+        ${_dispKubun.length?`<div style="font-size:8px;color:inherit;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2;margin-top:1px">${_dispKubun.join('・')}</div>`:''}
       </div>`];
 
       // 早期完了の空き時間（緑斜線）
@@ -2961,6 +2965,20 @@ function openActModal(idOrEl){
   actTaskId=id;
 
   document.getElementById('actTitle').textContent=t.name;
+  // 改修区分バッジ（continuation の場合は元依頼のkubunInputsを使う）
+  const _aReq=requests.find(r=>r.id===t.reqId);
+  const _aOrigReq=_aReq?.source==='continuation'?requests.find(r=>r.id===_aReq.originalReqId):null;
+  const _aKubunSrc=_aOrigReq||_aReq;
+  const _aKubuns=(_aKubunSrc?.kubunInputs||[]).map(k=>k.name).filter(n=>n&&n!=='残り作業');
+  const _aKubunEl=document.getElementById('actKubunBadges');
+  if(_aKubunEl){
+    if(_aKubuns.length){
+      _aKubunEl.style.display='flex';
+      _aKubunEl.innerHTML=_aKubuns.map(n=>`<span style="font-size:10px;background:#e0f2fe;color:#0369a1;border:1px solid #7dd3fc;border-radius:4px;padding:1px 8px;font-weight:600">${n}</span>`).join('');
+    } else {
+      _aKubunEl.style.display='none';_aKubunEl.innerHTML='';
+    }
+  }
   const planEndMin=t.startMin!=null?addWork(t.startMin,Math.round(t.hours*60)):null;
   document.getElementById('planStart').textContent=t.startMin!=null?fmtMin(t.startMin):'—';
   document.getElementById('planEnd').textContent=planEndMin!=null?fmtMin(planEndMin):'—';
