@@ -3390,9 +3390,17 @@ function recreateContTask(taskId){
   const todayH=calcWorkedH([foundTask]);
   const prevH=foundTask.actual._prevWorkedH||0;
   const totalH=Math.round((prevH+todayH)*10)/10;
-  const remainH=Math.max(0,Math.round((foundTask.hours-totalH)*10)/10);
-  if(remainH<=0){alert('残り工数が0Hのため続きタスクを作成できません。');return;}
-  if(!confirm(`続きタスクを作成します。\n  当日実働: ${todayH}H\n  累計: ${totalH}H\n  残り工数: ${remainH}H\n\nよろしいですか？`))return;
+  let remainH=Math.max(0,Math.round((foundTask.hours-totalH)*10)/10);
+  if(remainH<=0){
+    // 超過の場合は続きの見込み工数を入力してもらう
+    const inp=prompt(`計画工数を超過しています（累計${totalH}H / 計画${foundTask.hours}H）。\n続きの見込み工数を入力してください（例: 2）。`,'1');
+    if(!inp)return;
+    const extra=parseFloat(inp);
+    if(!extra||extra<=0){alert('見込み工数が入力されませんでした。');return;}
+    remainH=extra;
+  } else {
+    if(!confirm(`続きタスクを作成します。\n  当日実働: ${todayH}H\n  累計: ${totalH}H\n  残り工数: ${remainH}H\n\nよろしいですか？`))return;
+  }
   // totalWorkedH を修正保存
   foundTask.actual.totalWorkedH=totalH;
   const origReq=requests.find(r=>r.id===foundTask.reqId);
