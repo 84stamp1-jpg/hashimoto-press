@@ -344,7 +344,9 @@ html, body {
 .rt-ovr-line-btn.free{color:#16a34a;}
 .rt-ovr-badge{font-size:8px;padding:1px 4px;border-radius:3px;background:#ede9fe;color:#7c3aed;font-weight:700;margin-left:2px;}
 /* エントリ担当者編集ポップアップ */
-#rt-entry-popup{position:fixed;z-index:9999;background:#fff;border:1px solid #c7d2fe;border-radius:10px;box-shadow:0 4px 24px rgba(0,0,0,0.18);padding:12px 14px;min-width:320px;max-width:400px;display:none;}
+#rt-entry-popup{position:fixed;z-index:9999;background:#fff;border:1px solid #c7d2fe;border-radius:10px;box-shadow:0 4px 24px rgba(0,0,0,0.18);min-width:320px;max-width:400px;max-height:80vh;display:none;flex-direction:column;}
+#rt-ep-scroll{flex:1;overflow-y:auto;padding:12px 14px 4px;}
+#rt-ep-footer{padding:8px 14px 10px;border-top:1px solid #f3f4f6;display:flex;gap:6px;justify-content:flex-end;background:#fff;border-radius:0 0 10px 10px;}
 .rt-ep-hdr{font-size:11px;font-weight:700;color:#1e40af;margin-bottom:8px;border-bottom:1px solid #e0e7ff;padding-bottom:6px;}
 .rt-ep-role-row{margin-bottom:7px;}
 .rt-ep-label{font-size:10px;font-weight:700;color:#374151;margin-bottom:3px;}
@@ -2271,7 +2273,13 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
   <div id="rt-ovr-btns"></div>
 </div>
 <!-- ===== 配置表 バー担当者編集ポップアップ ===== -->
-<div id="rt-entry-popup"><div id="rt-ep-inner"></div></div>
+<div id="rt-entry-popup">
+  <div id="rt-ep-scroll"><div id="rt-ep-inner"></div></div>
+  <div id="rt-ep-footer">
+    <button onclick="rtCloseEntryEdit()" style="padding:4px 14px;font-size:11px;border:1px solid #d1d5db;border-radius:5px;cursor:pointer;background:#f9fafb;">閉じる</button>
+    <button onclick="rtSaveEntryEdit()"  style="padding:4px 14px;font-size:11px;border:none;border-radius:5px;cursor:pointer;background:#1d4ed8;color:#fff;font-weight:600;">保存</button>
+  </div>
+</div>
 
 <!-- ===== 段取り計画入力モーダル ===== -->
 <div class="modal-overlay" id="dantoriModal" style="display:none;" onclick="closeDantoriIfBg(event)">
@@ -5787,10 +5795,6 @@ function _rtBuildPopupHtml(entry){
     });
     html += `</div></div>`;
   });
-  html += `<div class="rt-ep-btns">
-    <button onclick="rtCloseEntryEdit()" style="padding:4px 14px;font-size:11px;border:1px solid #d1d5db;border-radius:5px;cursor:pointer;background:#f9fafb;">閉じる</button>
-    <button onclick="rtSaveEntryEdit()"  style="padding:4px 14px;font-size:11px;border:none;border-radius:5px;cursor:pointer;background:#1d4ed8;color:#fff;font-weight:600;">保存</button>
-  </div>`;
   return html;
 }
 
@@ -5822,12 +5826,16 @@ window.rtOpenEntryEdit = function(entryId, event){
   const popup = document.getElementById('rt-entry-popup');
   if(!popup) return;
   document.getElementById('rt-ep-inner').innerHTML = _rtBuildPopupHtml(entry);
-  popup.style.display = 'block';
+  popup.style.display = 'flex';
   const rect = event.target.getBoundingClientRect();
   const pW = popup.offsetWidth || 340;
+  const pH = popup.offsetHeight || 360;
   let left = rect.left + window.scrollX;
   if(left + pW > window.innerWidth - 8) left = window.innerWidth - pW - 8;
-  popup.style.top  = (rect.bottom + window.scrollY + 4) + 'px';
+  // 下にはみ出す場合はバーの上に表示
+  let top = rect.bottom + window.scrollY + 4;
+  if(rect.bottom + pH + 8 > window.innerHeight) top = Math.max(window.scrollY + 4, rect.top + window.scrollY - pH - 4);
+  popup.style.top  = top + 'px';
   popup.style.left = Math.max(4, left) + 'px';
 };
 window.rtCloseEntryEdit = function(){
@@ -7407,7 +7415,7 @@ var QC_COL_KEYWORDS = {
   hinban:  ['品番','hinban','品番コード','品目コード'],
   hinmei:  ['品名','hinmei','製品名','品目名','品目'],
   seizoNo: ['製造番号','製番','seizono','製造no'],
-  junjo:   ['工順','工程順序','順序','順番','junjo','工程順'],
+  junjo:   ['工順','工程順序','順序','順番','junjo','工程順','工順番号','工程no','工順no','工程番号','作業順','手順番号'],
   shiji:   ['加工指示数','指示数','生産数','shiji','数量','予定数','計画数'],
   kosei:   ['工程','kosei','工程名','作業'],
   納期:    ['作業票納期','工程納期','納期','nouki','納入日','納品日'],
@@ -7478,8 +7486,12 @@ function qcProcessSheetData(data){
   });
   var unmapped = Object.keys(QC_COL_KEYWORDS).filter(function(k){ return colMap[k]===undefined; })
     .map(function(k){ return {hinban:'品番',hinmei:'品名',seizoNo:'製造番号',junjo:'順序',shiji:'指示数',kosei:'工程',納期:'納期'}[k]||k; });
+  var junjoWarn = colMap.junjo === undefined
+    ? '<br><span style="color:#b45309;font-weight:bold;">⚠ 工順列が見つかりません。Excelの「工順」列の見出し名を確認してください（検出できる名前: 工順・工順番号・工程順序・順番 など）。工順なしで取り込まれます。</span>'
+    : '';
   colmapEl.innerHTML = '<b>🔗 列マッピング：</b> ' + mapLines.join(' ／ ')
-    + (unmapped.length ? '<br><span style="color:#E24B4A;">⚠ 未検出: ' + unmapped.join(', ') + '</span>' : '');
+    + (unmapped.length ? '<br><span style="color:#E24B4A;">⚠ 未検出: ' + unmapped.join(', ') + '</span>' : '')
+    + junjoWarn;
 
   // プレビューテーブル
   var keys = ['hinban','hinmei','seizoNo','junjo','shiji','kosei','納期'];
@@ -7622,7 +7634,7 @@ function qcOnSakuyoInput(){
     hb.textContent=first.hinban+(items.length>1?' ▼ '+items.length+'件':'');
     function makeBadges(item){
       var dt=document.createElement('div'); dt.className='qc-sk-detail';
-      [{l:item.hinmei},{l:'製造番号: '+item.seizoNo,c:'qc-sk-badge'},{l:'工順'+item.junjo,c:'qc-sk-badge'},{l:item.kosei,c:'qc-sk-badge'},{l:'指示数: '+item.shiji+'個',c:'qc-sk-badge'},{l:item['納期']?'納期: '+item['納期']:'',c:'qc-sk-badge'}]
+      [{l:item.hinmei},{l:'製造番号: '+item.seizoNo,c:'qc-sk-badge'},{l:item.junjo?'工順'+item.junjo:'',c:'qc-sk-badge'},{l:item.kosei,c:'qc-sk-badge'},{l:'指示数: '+item.shiji+'個',c:'qc-sk-badge'},{l:item['納期']?'納期: '+item['納期']:'',c:'qc-sk-badge'}]
       .filter(function(b){return b.l;}).forEach(function(b){
         var sp=document.createElement('span'); if(b.c) sp.className=b.c; sp.textContent=b.l; dt.appendChild(sp);
       });
@@ -11349,11 +11361,9 @@ async function apLoadFromFirebase() {
       const d2 = await r2.json();
       if (d2 && d2.data && d2.data.length) {
         apFbSakuyo = d2.data;
-        // 他PC（品質チェックタブ未使用）ではwindow.QC_SAKUYOが古いキャッシュのままのため
-        // Firebase共有データで上書きする（QCタブが既に新鮮なデータを持つ場合は据え置き）
-        if (!window.QC_SAKUYO || !window.QC_SAKUYO.length) {
-          window.QC_SAKUYO = apFbSakuyo;
-        }
+        // 組立計画タブ用に常にFirebaseの最新共有データをQC_SAKUYOに反映する
+        // （全PC共通の最新アップロードデータを使用するため）
+        window.QC_SAKUYO = apFbSakuyo;
       }
     }
   } catch(e) { console.warn('AP Firebase load:', e); }
@@ -11406,7 +11416,11 @@ function apGetJobs() {
   if (!QC_SAKUYO || !QC_SAKUYO.length) return [];
   // QCシステムが構築した実績マップをそのまま参照
   const statusMap = window.qcJobStatusMap || {};
-  const AP_KOSEI = ['溶接','フート','油圧','検査','脱脂','組付','ハンドワーク','タップ','旋盤','バフ','プレス　D','プレスD'];
+  const AP_KOSEI = ['溶接','フート','油圧','検査','脱脂','組付','組立','ハンドワーク','タップ','旋盤','バフ','プレス　D','プレスD','仕上','洗浄','塗装','品検','めっき','焼入','組み付','組み立','加工'];
+  // 診断: 工程データが見つからない場合コンソールに出力
+  const allKosei = [...new Set(QC_SAKUYO.map(s=>s.kosei||'').filter(Boolean))];
+  const matched = QC_SAKUYO.filter(s => AP_KOSEI.some(kw => String(s.kosei||'').includes(kw)));
+  if (!matched.length && allKosei.length) console.warn('[組立計画] 工程フィルタに一致なし。データの工程値:', allKosei.slice(0,20));
   return QC_SAKUYO.filter(s => {
     const key = s.seizoNo + '_' + s.junjo;
     const st = statusMap[key];
@@ -11544,7 +11558,14 @@ function apRenderPool() {
   const unassignedCount = filtered.filter(s => !plannedKeys.has(s.seizoNo+'_'+s.junjo)).length;
   document.getElementById('ap-pool-count').textContent = `未割当${unassignedCount} / 全${filtered.length + optFiltered.length}件`;
   const el = document.getElementById('ap-pool');
-  if (!filtered.length && !optFiltered.length) { el.innerHTML='<div style="padding:16px;text-align:center;color:#aaa;font-size:12px;">未割り当てなし</div>'; return; }
+  if (!filtered.length && !optFiltered.length) {
+    const src = window.QC_SAKUYO;
+    const diagMsg = src && src.length
+      ? `工程データ${src.length}件読込済み。工程値: 【${[...new Set(src.map(s=>s.kosei||'(空)').filter(Boolean))].slice(0,8).join('、')}】<br>上記が組立計画対象の工程名と一致していません。品質チェックタブで最新Excelを再取り込みしてください。`
+      : '生産予定データなし。品質チェックタブからExcelを取り込んでください。';
+    el.innerHTML=`<div style="padding:16px;text-align:center;color:#b45309;font-size:11px;line-height:1.8;">${diagMsg}</div>`;
+    return;
+  }
   // 優先ソート
   const today = document.getElementById('ap-date')?.value || new Date().toISOString().slice(0,10);
   filtered.sort((a,b) => {
