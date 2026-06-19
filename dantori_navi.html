@@ -7979,7 +7979,10 @@ function qcMakeGroupCard(g){
     var kannoRecs=jrecs.filter(function(r){ return r[7]==='完納'; });
     var ryohin=0,chukan=0,ng=0,hokyu=0,sonota=0,shiji=0,kosei='';
     jrecs.forEach(function(r){ if(r[7]!=='中間実績') ryohin+=parseInt(r[5]||0)||0; else chukan+=parseInt(r[5]||0)||0; ng+=parseInt(r[6]||0)||0; hokyu+=parseInt(r[17]||0)||0; sonota+=parseInt(r[18]||0)||0; });
-    if(QC_SAKUYO) QC_SAKUYO.forEach(function(s){ if(s.seizoNo===g.seizoNo&&String(s.junjo)===j){ shiji=parseInt(s.shiji)||0; kosei=s.kosei||''; }});
+    // レコード自身に保存された値を先に使用（QC_SAKUYOから消えても表示できる）
+    shiji=parseInt(jrecs[0][16]||0)||0; kosei=jrecs[0][15]||'';
+    // QC_SAKUYOの一致レコードがあれば上書き（junjo一致優先、空junjoも許容）
+    if(QC_SAKUYO) QC_SAKUYO.forEach(function(s){ if(s.seizoNo===g.seizoNo&&(String(s.junjo)===j||!s.junjo)){ if(parseInt(s.shiji)) shiji=parseInt(s.shiji); if(s.kosei) kosei=s.kosei; }});
     var hasKanno=kannoRecs.length>0;
     var allDone=hasKanno&&kannoRecs.every(function(r){ return (r[12]||'未')==='済'; });
     var sortedJ=jrecs.slice().sort(function(a,b){ return String(b[0]).localeCompare(String(a[0])); });
