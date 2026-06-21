@@ -1691,7 +1691,15 @@ function loadManualReqs(){
 let _showDoneManuals=false;
 function toggleDoneManuals(){_showDoneManuals=!_showDoneManuals;renderManualList();}
 function _isManualDone(r){
-  // status='done' または（終了時刻あり かつ 持越し済みでない）で完了とみなす
+  // 続き依頼の場合：自分のタスクが持越済で、かつそのタスクから新しい続き依頼が作られていれば「引継済=完了」
+  if(r.source==='continuation'){
+    const myTask=Object.values(tasksByDate).flat().find(t=>t.reqId===r.id);
+    if(myTask?.actual?.status==='carried'){
+      const superseded=requests.some(c=>c.source==='continuation'&&c.originalTaskId===myTask.id);
+      if(superseded) return true; // 新しい続き依頼に引き継がれた → 非表示
+    }
+  }
+  // 通常判定：done または（終了時刻あり かつ 持越し済みでない）で完了とみなす
   const tasks=Object.values(tasksByDate).flat().filter(t=>t.reqId===r.id);
   return tasks.some(t=>{
     if(t.actual?.status==='done') return true;
