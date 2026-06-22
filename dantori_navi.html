@@ -11304,6 +11304,22 @@ function apNW(t) {
 function apHHMM(v) { const h=Math.floor(v/60),m=v%60; return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`; }
 function apHHMMtoMin(s) { const p=s.split(':'); return (parseInt(p[0])||0)*60+(parseInt(p[1])||0); }
 
+// QC実績を取得してプールを再描画（完納状態を最新に保つ）
+function apFetchQcAndRenderPool() {
+  if (window.qcGasPost && window.qcBuildJobStatusMap) {
+    window.qcGasPost('getRecords', {}, function(res) {
+      if (res && res.ok) {
+        window.qcBuildJobStatusMap(res.records || []);
+        // qcBuildJobStatusMap の末尾で window.apRenderPool() が呼ばれる
+      } else {
+        apRenderPool();
+      }
+    }, function() { apRenderPool(); });
+  } else {
+    apRenderPool();
+  }
+}
+
 // タブ切替時初期化
 function apInit() {
   if (!apLoaded) {
@@ -11317,27 +11333,14 @@ function apInit() {
       apRenderOptionalList();
       apRenderCriteria();
       apRenderBoard();
-      if (window.qcJobStatusMap) {
-        // QCタブ初期化済み → そのまま描画
-        apRenderPool();
-      } else if (window.qcGasPost) {
-        // QCタブ未開のためAssemblyタブ側で独自取得
-        document.getElementById('ap-pool').innerHTML = '<div style="padding:12px;text-align:center;color:#aaa;font-size:11px;">実績データ読み込み中...</div>';
-        window.qcGasPost('getRecords', {}, function(res) {
-          if (res && res.ok && window.qcBuildJobStatusMap) {
-            // QCモジュール内でQC_ALL_RECORDSを更新してマップ構築
-            window.qcBuildJobStatusMap(res.records || []);
-          } else {
-            apRenderPool();
-          }
-        }, function() { apRenderPool(); });
-      } else {
-        apRenderPool();
-      }
+      // 毎回必ず最新のQC実績を取得して完納状態を正確に反映する
+      apFetchQcAndRenderPool();
     });
   } else {
-    apRenderPool();
+    apRenderPool(); // 既存データで即時描画
     apRenderBoard();
+    // バックグラウンドで最新QC実績を再取得（完納追加があれば自動で消える）
+    apFetchQcAndRenderPool();
   }
 }
 
