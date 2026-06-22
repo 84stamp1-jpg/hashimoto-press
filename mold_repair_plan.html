@@ -1916,6 +1916,17 @@ function renderRequestList(){
       ?`<span class="badge ${r.assignee==='matsumoto'?'':'badge-warn'}" style="margin-left:auto;font-size:9px">${r.assignee==='matsumoto'?'松本':'松永'}${statusIcon?' | '+statusIcon:''}</span>`
       :'';
 
+    // 計画・累計実績・差の計算
+    const _allT=Object.values(tasksByDate).flat();
+    const _directT=_allT.filter(t=>t.reqId===r.id);
+    const _contReqs=requests.filter(c=>c.source==='continuation'&&c.originalReqId===r.id);
+    const _contT=_contReqs.flatMap(c=>_allT.filter(t=>t.reqId===c.id));
+    const _sumH=ts=>ts.reduce((s,t)=>s+(t.actual._prevWorkedH||0)+calcWorkedH([t]),0);
+    const _totalActH=Math.round((_sumH(_directT)+_sumH(_contT))*10)/10;
+    const _planH=r.hours;
+    const _diffH=Math.round((_totalActH-_planH)*10)/10;
+    const _hasActual=_totalActH>0;
+
     // 工数行
     const kRows=(r.kubunInputs||[]).map((ki,idx)=>{
       const uh=unitH(ki,r.moldType);
@@ -1959,6 +1970,12 @@ function renderRequestList(){
             ${r.createdDate?'<div style="font-size:9px;color:var(--text3)">依頼日: '+r.createdDate+'</div>':''}
           </div>
         </div>
+        ${_hasActual?`<div style="display:flex;align-items:center;gap:6px;padding:4px 0 2px 19px;border-top:1px dashed var(--border);margin-top:4px;flex-wrap:wrap">
+          <span style="font-size:10px;color:var(--text2)">計画 <b>${_planH}H</b></span>
+          <span style="font-size:9px;color:var(--text3)">→</span>
+          <span style="font-size:10px;color:var(--text2)">累計実績 <b>${_totalActH}H</b></span>
+          <span style="font-size:10px;font-weight:700;color:${_diffH>0?'var(--danger)':_diffH<0?'var(--ok)':'var(--text2)'}">${_diffH>0?'▲+'+_diffH+'H超':_diffH<0?'▽'+_diffH+'H早':'±0'}</span>
+        </div>`:''}
       </div>
       <div class="card-det" onclick="event.stopPropagation()">
         <div class="det-sec">工数積算</div>
