@@ -1044,7 +1044,7 @@ function initFirebase(){
     let fbInitialized=false;
     fbRef.on('value', snap=>{
       const data = snap.val() || {}; // nullの場合は空オブジェクト
-      const cutoff=fmt(addDays(new Date(),-3));
+      const cutoff=fmt(addDays(new Date(),-14));
       let changed=false;
 
       // ① Firebaseにあるデータを反映
@@ -1068,7 +1068,7 @@ function initFirebase(){
       try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(tasksByDate)); }catch(e){}
       if(changed){
         if(requests.length) syncAssignedState();
-        requestAnimationFrame(()=>{ renderGantt(); renderDetail(); });
+        requestAnimationFrame(()=>{ renderGantt(); renderDetail(); renderRequestList&&renderRequestList(); });
       }
       fbInitialized=true;
     });
