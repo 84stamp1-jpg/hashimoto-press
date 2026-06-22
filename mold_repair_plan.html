@@ -2436,7 +2436,7 @@ function renderGantt(){
   // 仕切り線（計画2段 と 実績1段 の境界）
   // 計画行: top:4px h:30px (row0) / top:36px h:30px (row1)  → 68px まで
   // 実績行: top:70px h:44px
-  const PLAN_H=38, PLAN_R0=2, PLAN_R1=42, ACT_TOP=82, ACT_H=44, TRACK_H=128;
+  const PLAN_H=38, PLAN_R0=2, PLAN_R1=42, ACT_TOP=82, ACT_H=56, TRACK_H=142;
   const divLine=`<div style='position:absolute;left:0;right:0;top:68px;height:1px;background:var(--border);pointer-events:none;z-index:1'></div>`;
   const gridWithDiv=grid+divLine;
 
@@ -2563,6 +2563,7 @@ function renderGantt(){
         actBarDiv.title=t.name+(isCarriedTask?' [持越済]':' 実績: '+t.actual.start+'〜'+(t.actual.end||'進行中')+' ('+diffTxt+')');
         const actTotalH=ae2!==null?Math.round((ae2-as)/60*10)/10:null;
         actBarDiv.innerHTML=`<span style="font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;width:100%;line-height:1.3">${isCarriedTask?'⏭ ':''}${t.name}</span>`
+          +(_subLine?`<span style="font-size:8px;color:inherit;opacity:.8;white-space:nowrap;overflow:hidden;width:100%;line-height:1.2">${_subLine}</span>`:'')
           +`<span style="font-size:10px;color:var(--text2);line-height:1.3">${t.actual.start}〜${t.actual.end||'...'}</span>`
           +`<span style="font-size:10px;color:${diffColor};font-weight:700;line-height:1.3">${diffTxt}${!isCarriedTask&&actTotalH!==null?' ('+actTotalH+'H)':''}</span>`;
         actBarDiv.onclick=function(){openActModal(this.dataset.tid);};
