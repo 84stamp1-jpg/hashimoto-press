@@ -12510,7 +12510,13 @@ function apGetSakuyo() {
   if (!d || !d.length) {
     try { const c = localStorage.getItem('qcSakuyoCache'); if (c) d = JSON.parse(c); } catch(e) {}
   }
-  return d || [];
+  if (!d || !d.length) return [];
+  // 完納済みを除外（品質チェックと完納状態を統一）
+  const statusMap = window.qcJobStatusMap || {};
+  return d.filter(s => {
+    const st = statusMap[s.seizoNo+'_'+(s.junjo||'')] || statusMap[s.seizoNo+'_'];
+    return !(st && st.isKanno);
+  });
 }
 function apAssignJob(seizoNo, junjo) {
   const s = apGetSakuyo().find(s=>s.seizoNo===seizoNo&&s.junjo===junjo);
@@ -12688,7 +12694,11 @@ window.apApplyGroup = function(worker, grpId, hinban) {
   const toRemove = new Set();
   const toAdd = [];
 
+  const statusMap = window.qcJobStatusMap || {};
   const processJob = (j, isNew) => {
+    // 完納済みのジョブは計画から除外する
+    const st = statusMap[(j.seizoNo||'')+'_'+(j.junjo||'')] || statusMap[(j.seizoNo||'')+'_'];
+    if (st && st.isKanno) { if (!isNew) toRemove.add(j._key); return; }
     if (curMin >= endMin) { if (!isNew) toRemove.add(j._key); return; }
 
     // 工数情報はジョブ自身のseizøNoから取得（フォールバックでaRef使用）
