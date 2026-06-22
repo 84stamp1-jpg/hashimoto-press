@@ -11857,6 +11857,18 @@ function apRenderBoard() {
 
 // ── 自動割り振り ──────────────────────────────────────────
 function apAutoAssign() {
+  // 完納状態を品質チェックと同期してから割り振りを実行
+  if (window.qcGasPost && window.qcBuildJobStatusMap) {
+    apSetStatus('完納状態を確認中...', '#2563eb');
+    window.qcGasPost('getRecords', {}, function(res) {
+      if (res && res.ok) window.qcBuildJobStatusMap(res.records || []);
+      apAutoAssignCore();
+    }, function() { apAutoAssignCore(); });
+    return;
+  }
+  apAutoAssignCore();
+}
+function apAutoAssignCore() {
   const jobs = apGetJobs();
   if (!jobs.length) { apSetStatus('作業予定データが読み込まれていません（品質チェック→予定更新で読み込んでください）', '#c0392b'); return; }
   const today = document.getElementById('ap-date')?.value || new Date().toISOString().slice(0,10);
