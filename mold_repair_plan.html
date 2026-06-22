@@ -1691,6 +1691,8 @@ function loadManualReqs(){
 let _showDoneManuals=false;
 function toggleDoneManuals(){_showDoneManuals=!_showDoneManuals;renderManualList();}
 function _isManualDone(r){
+  // 直接完了マーク
+  if(r.manualDone) return true;
   // 続き依頼の場合：自分のタスクが持越済で、かつそのタスクから新しい続き依頼が作られていれば「引継済=完了」
   if(r.source==='continuation'){
     const myTask=Object.values(tasksByDate).flat().find(t=>t.reqId===r.id);
@@ -1793,9 +1795,14 @@ function renderManualList(){
               <button onclick="event.stopPropagation();deleteManualReq('${r.id}')"
                 style="font-size:10px;padding:3px 5px;border:1px solid #fca5a5;border-radius:4px;background:#fee2e2;color:#dc2626;cursor:pointer;font-family:inherit">🗑</button>
             </div>
-            <button onclick="event.stopPropagation();openInsertModal('${r.id}')"
-              style="width:100%;font-size:10px;font-weight:700;padding:3px 4px;border:1px solid #f59e0b;border-radius:4px;background:#fff8e1;color:#92400e;cursor:pointer;font-family:inherit"
-              title="時刻を指定して挿入し、後続タスクを後ろにずらす">⚡ 時刻指定で割付（後続をずらす）</button>
+            <div style="display:flex;gap:3px">
+              <button onclick="event.stopPropagation();openInsertModal('${r.id}')"
+                style="flex:1;font-size:10px;font-weight:700;padding:3px 4px;border:1px solid #f59e0b;border-radius:4px;background:#fff8e1;color:#92400e;cursor:pointer;font-family:inherit"
+                title="時刻を指定して挿入し、後続タスクを後ろにずらす">⚡ 時刻指定で割付（後続をずらす）</button>
+              <button onclick="event.stopPropagation();markManualDone('${r.id}')"
+                style="font-size:10px;font-weight:700;padding:3px 8px;border:1px solid #86efac;border-radius:4px;background:#dcfce7;color:#166534;cursor:pointer;font-family:inherit"
+                title="割付なしで完了にする">✓ 完了</button>
+            </div>
           </div>`}
     </div>`;
   }
@@ -1820,8 +1827,9 @@ function renderManualList(){
         <div style="display:flex;flex-wrap:wrap;gap:8px;opacity:.65">
           ${doneManuals.map(r=>{
             const c=makeCard(r);
-            // 完了済みカードはグレーアウト
-            return c.replace('border-radius:7px','border-radius:7px;filter:grayscale(.4)');
+            // 完了済みカードはグレーアウト＋完了取消ボタン追加
+            return c.replace('border-radius:7px','border-radius:7px;filter:grayscale(.4)')
+              .replace('</div>','<button onclick="event.stopPropagation();unmarkManualDone(\''+r.id+'\')" style="width:100%;margin-top:4px;font-size:9px;padding:2px 4px;border:1px solid #d1d5db;border-radius:3px;background:#f3f4f6;color:var(--text2);cursor:pointer;font-family:inherit">↩ 完了取消</button></div>');
           }).join('')}
         </div>
       </div>`;
@@ -3884,6 +3892,21 @@ function importLocalStorage(){
   input.click();
 }
 
+function markManualDone(id){
+  const r=requests.find(x=>x.id===id);
+  if(!r)return;
+  if(!confirm(`「${r.hinban}${r.hinmei?' / '+r.hinmei:''}」を完了にしますか？\n（完了済み欄に移動します）`))return;
+  r.manualDone=true;
+  saveManualReqs();
+  renderManualList();renderLoadSummary();
+}
+function unmarkManualDone(id){
+  const r=requests.find(x=>x.id===id);
+  if(!r)return;
+  r.manualDone=false;
+  saveManualReqs();
+  renderManualList();renderLoadSummary();
+}
 function deleteManualReq(id){
   const r=requests.find(x=>x.id===id);
   if(!r||(r.source!=='manual'&&r.source!=='continuation'))return;
