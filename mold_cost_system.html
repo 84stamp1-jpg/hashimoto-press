@@ -622,7 +622,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.15-19</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.15-21</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -2547,13 +2547,15 @@ function renderMaterials() {
   const sSel = document.getElementById('matSupplierFilter');
   if (sSel) { const c=sSel.value; sSel.innerHTML='<option value="">全手配先</option>'+matSups.map(s=>`<option value="${s}"${s===c?' selected':''}>${s}</option>`).join(''); }
   if (supFil) entries = entries.filter(([,r]) => r.supplier === supFil);
-  // 発注確定日の降順（confirmedAt優先、なければmonth）→ 同日内は管理NO（partNo）の昇順
-  entries.sort(([,a], [,b]) => {
+  // 日付なし（再注文直後等）→ 最上段、その後は確定日降順、同日はキー降順（新しい順）
+  entries.sort(([ka,a], [kb,b]) => {
     const da = a.confirmedAt || a.month || '', db = b.confirmedAt || b.month || '';
+    if (!da && !db) return kb > ka ? 1 : kb < ka ? -1 : 0;
+    if (!da) return -1;
+    if (!db) return 1;
     if (db > da) return 1;
     if (db < da) return -1;
-    const pa = a.partNo || a.moldNo || '', pb = b.partNo || b.moldNo || '';
-    return pa.localeCompare(pb, 'ja', { numeric: true });
+    return kb > ka ? 1 : kb < ka ? -1 : 0;
   });
   const total = entries.reduce((s,[,r])=>s+(r.amount||0),0);
   document.getElementById('matCount').textContent = entries.length + '件 / ¥' + fmt(total);
@@ -2565,7 +2567,7 @@ function renderMaterials() {
       <thead><tr>
         <th style="width:120px"></th>
         <th>仕入日</th><th>入荷予定日</th><th>管理NO.</th><th>品番 / 品名</th>
-        <th>材質</th><th style="text-align:center">X(長)</th><th style="text-align:center">Y(幅)</th><th style="text-align:center">Z(厚)</th><th style="text-align:center">仕上</th><th>重量(kg)</th><th>仕入金額</th><th>手配先</th>
+        <th>材質</th><th style="text-align:center">X(長)</th><th style="text-align:center">Y(幅)</th><th style="text-align:center">Z(厚)</th><th style="text-align:center">仕上</th><th>重量(kg)</th><th>仕入金額</th><th>手配先</th><th>備考</th>
       </tr></thead>
       <tbody>${entries.map(([k,r])=>`
         <tr style="height:52px">
@@ -2603,6 +2605,7 @@ function renderMaterials() {
           </td>
           <td class="mono" style="font-size:15px">¥${fmt(r.amount)}</td>
           <td style="font-size:10px;word-break:break-all;min-width:70px;max-width:100px;color:var(--text2)">${r.supplier||''}</td>
+          <td style="font-size:11px;color:var(--text2);min-width:80px;max-width:150px;word-break:break-all">${r.note||''}</td>
         </tr>`).join('')}
       </tbody>
     </table>`;
@@ -3926,8 +3929,8 @@ function generateQuotePrint() {
       const sZ = String(r.sizeZ||'').replace(/\.00$/,'');
       return '<tr style="height:48px;max-height:48px">' +
         '<td style="text-align:center;' + B + 'padding:4px 2px;width:30px">' + (i+1) + '</td>' +
-        '<td style="text-align:center;' + B + 'padding:4px 2px;font-family:monospace;font-size:20pt;font-weight:400;white-space:nowrap;width:100px">' + (r.itemMatNo||r.moldNo||'') + '</td>' +
-        '<td style="' + B + 'padding:4px 3px;font-size:14pt;width:150px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">' + (r.name||'') + '</td>' +
+        '<td style="text-align:center;' + B + 'padding:4px 2px;font-family:monospace;font-size:20pt;font-weight:400;white-space:nowrap;width:140px">' + (r.itemMatNo||r.moldNo||'') + '</td>' +
+        '<td style="' + B + 'padding:4px 3px;font-size:14pt;width:140px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">' + (r.name||'') + '</td>' +
         '<td style="text-align:center;' + B + 'padding:5px 2px;width:30px">' + (r.qty||1) + '</td>' +
         '<td style="' + B + 'padding:4px 2px;font-size:16pt;width:85px;word-break:break-all">' + (r.material||'') + '</td>' +
         '<td style="' + B + 'padding:0;text-align:center;vertical-align:bottom;width:70px">' + xMark + '<div style="padding:3px 2px;font-size:20pt;font-weight:400">' + sX + '</div></td>' +
@@ -3957,7 +3960,7 @@ function generateQuotePrint() {
         '<thead>' +
           '<tr style="background:#d0d0d0">' +
             '<th style="' + B + 'padding:4px 2px;text-align:center;width:30px">No.</th>' +
-            '<th style="' + B + 'padding:4px 2px;text-align:center;width:100px">管理NO.</th>' +
+            '<th style="' + B + 'padding:4px 2px;text-align:center;width:140px">管理NO.</th>' +
             '<th style="' + B + 'padding:4px 3px;width:140px">名　　称</th>' +
             '<th style="' + B + 'padding:4px 2px;text-align:center;width:30px">数量</th>' +
             '<th style="' + B + 'padding:4px 2px;text-align:center;width:85px">材質</th>' +
