@@ -622,7 +622,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.15-18</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.15-19</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -2573,6 +2573,7 @@ function renderMaterials() {
             <input type="checkbox" class="mat-check" data-key="${k}" onchange="matCheckChanged()" style="margin-right:3px">
             <button class="copy-btn" onclick="copyMatRow(this)" data-partno="${(r.partNo||r.moldNo||'').replace(/"/g,'&quot;')}" data-material="${(r.material||'').replace(/"/g,'&quot;')}" data-sx="${String(r.sizeX||'').replace(/\.00$/, '')}" data-sy="${String(r.sizeY||'').replace(/\.00$/, '')}" data-sz="${String(r.sizeZ||'').replace(/\.00$/, '')}" data-finish="${(r.finish||'').replace(/"/g,'&quot;')}" data-qty="${r.qty||1}" data-weight="${r.weight||''}">📋</button>
             <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px;margin-right:2px" onclick="editMaterial('${k}')">編集</button>
+            <button class="btn btn-secondary btn-sm" style="padding:2px 6px;font-size:10px;margin-right:2px;background:#f0fdf4;color:#16a34a;border:1px solid #86efac" onclick="duplicateMaterial('${k}')">🔁 再注文</button>
             <button class="btn btn-danger btn-sm" style="padding:2px 5px;font-size:10px" onclick="matDeleteOne('${k}')">×</button>
             ${(r.quoteReqKey||r.quoteKey) ? '<button class="btn btn-secondary btn-sm" style="padding:2px 5px;font-size:9px;background:#dbeafe;color:#1d4ed8;border:1px solid #93c5fd" onclick="restoreToOrderPage(\'' + (r.quoteReqKey||r.quoteKey) + '\',\'' + (r.orderedSupId||'') + '\',\'' + k + '\')">📋 注文書</button>' : ''}
           </td>
@@ -6747,6 +6748,40 @@ function editMaterial(key) {
   if (!hid) { hid = document.createElement('input'); hid.type='hidden'; hid.id='matf_editKey'; document.getElementById('matModal').appendChild(hid); }
   hid.value = key;
   // 金型情報表示
+  if (r.moldNo) showMoldInfo('matf', r.moldNo);
+  document.getElementById('matModal').classList.add('open');
+}
+
+function duplicateMaterial(key) {
+  const r = DB.materials?.[key];
+  if (!r) { toast('データが見つかりません', 'error'); return; }
+  initMoldComboField('matf_moldNo','matf_partNo','matf_partNoDisp');
+  const set = (id, v) => { const el = document.getElementById(id); if(el) el.value = v||''; };
+  // 日付はクリア（新規注文）
+  set('matf_month',       '');
+  set('matf_arrivalDate', '');
+  // 材料情報はコピー
+  set('matf_moldNo',   r.moldNo);
+  set('matf_partNo',   r.partNo);
+  set('matf_name',     r.name);
+  set('matf_material', r.material);
+  set('matf_qty',      r.qty||1);
+  set('matf_size',     r.size);
+  set('matf_sizeX',    r.sizeX);
+  set('matf_sizeY',    r.sizeY);
+  set('matf_sizeZ',    r.sizeZ);
+  set('matf_finish',   r.finish);
+  const _fXel=document.getElementById('matf_fX'); if(_fXel)_fXel.checked=r.fX||false;
+  const _fYel=document.getElementById('matf_fY'); if(_fYel)_fYel.checked=r.fY||false;
+  const _fZel=document.getElementById('matf_fZ'); if(_fZel)_fZel.checked=r.fZ||false;
+  set('matf_weight',   r.weight);
+  set('matf_amount',   r.amount);
+  set('matf_supplier', r.supplier);
+  set('matf_note',     r.note);
+  // 編集キーをクリア → 新規レコードとして保存
+  let hid = document.getElementById('matf_editKey');
+  if (!hid) { hid = document.createElement('input'); hid.type='hidden'; hid.id='matf_editKey'; document.getElementById('matModal').appendChild(hid); }
+  hid.value = '';
   if (r.moldNo) showMoldInfo('matf', r.moldNo);
   document.getElementById('matModal').classList.add('open');
 }
