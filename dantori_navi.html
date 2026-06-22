@@ -12719,13 +12719,17 @@ window.apApplyGroup = function(worker, grpId, hinban) {
     const net   = avail - setupMin;
     if (net < a.workMin) { if (!isNew) toRemove.add(j._key); return; }
 
-    // 上限: 計画済み → j.shiji（auto-assignが設定した残数）
-    //       未計画   → sj.shiji（sakuyoの残数）
-    // sj.shiji が origShiji（全量）を返す場合に備え、isBunnoの残数を優先
-    const sjShiji = sj ? (sj.isBunno ? parseFloat(sj.shiji) : parseFloat(sj.shiji)) : 0;
-    const maxQty = isNew
-      ? (sjShiji || 0)
-      : (parseFloat(j.shiji) || sjShiji || 0);
+    // 上限: 良品数を差し引いた残数（apGetJobsと同じ計算）を使用
+    // apGetSakuyoはQC_SAKUYOの生データを返すためsjShijiは全量になる場合がある
+    // → statusMapから良品数を取得して残数を再計算する
+    const origShiji = sj ? (parseFloat(sj.shiji) || 0) : 0;
+    const sjKey = (j.seizoNo||'')+'_'+(j.junjo||'');
+    const sjKeyBase = (j.seizoNo||'')+'_';
+    const sjSt = statusMap[sjKey] || statusMap[sjKeyBase];
+    const sjDone = sjSt ? (sjSt.ryohin || 0) : 0;
+    const remainShiji = sjDone > 0 ? Math.max(0, origShiji - sjDone) : origShiji;
+    const sjShiji = remainShiji || origShiji;
+    const maxQty = sjShiji > 0 ? sjShiji : (isNew ? 0 : (parseFloat(j.shiji) || 0));
     const calcQty = Math.floor(net / a.workMin);
     const qty = maxQty > 0 ? Math.min(calcQty, maxQty) : calcQty;
     if (qty <= 0) { if (!isNew) toRemove.add(j._key); return; }
