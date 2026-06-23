@@ -6064,9 +6064,11 @@ async function importFromProductionPlan(){
   const entries = [];
   let idx = 0;
 
-  Object.keys(linesData).sort().forEach(lineId => {
-    const line = linesData[lineId];
+  Object.keys(linesData).sort().forEach(rawLineId => {
+    const line = linesData[rawLineId];
     if(!line || !Array.isArray(line.jobs)) return;
+    // FirebaseキーをCanonical lineId（段取り指示・カンバン表示名）に正規化
+    const lineId = LINE_LABEL[rawLineId] || rawLineId;
 
     // history=trueやpart/start/end未入力は除外
     const jobs = line.jobs.filter(j => j && j.part && j.start && j.end && !j.history);
@@ -6164,9 +6166,11 @@ async function importFromProductionPlan(){
 function _buildDantoriEntriesFromLines(lines){
   const entries = [];
   let idx = 0;
-  Object.keys(lines).sort().forEach(lineId => {
-    const line = lines[lineId];
+  Object.keys(lines).sort().forEach(rawLineId => {
+    const line = lines[rawLineId];
     if(!line || !Array.isArray(line.jobs)) return;
+    // FirebaseキーをCanonical lineId（段取り指示・カンバン表示名）に正規化
+    const lineId = LINE_LABEL[rawLineId] || rawLineId;
     const jobs = line.jobs.filter(j => j && j.part && j.start && j.end && !j.history);
     jobs.forEach((j, ji) => {
       const isNoSetup = !!(j.noSetup || (j.kata === 0 && j.ninzu === 0));
