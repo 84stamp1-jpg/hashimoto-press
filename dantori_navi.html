@@ -4840,6 +4840,9 @@ async function loadDantoriSchedule(){
       // FirebaseキーやlineIdがCP3_2等の内部名の場合Canonical名に正規化
       lineId: (v && v.lineId && LINE_LABEL[v.lineId]) ? LINE_LABEL[v.lineId] : (v && v.lineId),
     }));
+    // デバッグ: lineIdの一覧をコンソール出力
+    const lineIds = [...new Set(dantoriSchedule.map(d=>d.lineId))];
+    console.log('[段取り] loadDantoriSchedule: lineIds=', lineIds, '件数=', dantoriSchedule.length);
     // 当日の優先ライン上書きを読み込む
     try{
       const rOvr = await fetch(`${fbUrl}/dantori/${dateStr}Override.json`);
@@ -5278,12 +5281,21 @@ function renderKanbanPersonCard(d, targetName){
   </div>`;
 }
 
+// lineId → Firebase内部キーを含む全エイリアスのリスト
+const KANBAN_LINE_ALIASES = {
+  'Bライン':      ['Bライン','BP2'],
+  'Cライン①':    ['Cライン①','CP3'],
+  'Cライン②':    ['Cライン②','CP3_2'],
+  'ロボットライン':['ロボットライン','robot'],
+};
 function renderKanbanCol(colDef, allEntries){
   if(colDef.lineId){
     // ライン別カラム
     const lineId   = colDef.lineId;
     const hdrLabel = colDef.label || getLineDisplayName(lineId);
-    const entries  = allEntries.filter(e=>e.lineId===lineId)
+    // Firebase保存キー(CP3_2等)と表示名(Cライン②)の両方を許容
+    const validIds = KANBAN_LINE_ALIASES[lineId] || [lineId];
+    const entries  = allEntries.filter(e=>validIds.includes(e.lineId))
                                .sort((a,b)=>(a.sortKey||'').localeCompare(b.sortKey||''));
     // ライン状態に応じてヘッダー色
     const ld = linesData[lineId];
