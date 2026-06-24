@@ -4840,9 +4840,15 @@ async function loadDantoriSchedule(){
       // FirebaseキーやlineIdがCP3_2等の内部名の場合Canonical名に正規化
       lineId: (v && v.lineId && LINE_LABEL[v.lineId]) ? LINE_LABEL[v.lineId] : (v && v.lineId),
     }));
-    // デバッグ: lineIdの一覧をコンソール出力
+    // デバッグ: lineIdの一覧と正規化キーをコンソール出力
     const lineIds = [...new Set(dantoriSchedule.map(d=>d.lineId))];
     console.log('[段取り] loadDantoriSchedule: lineIds=', lineIds, '件数=', dantoriSchedule.length);
+    // Cライン②系のlineIdの文字コードを出力（グリフ差異の確認用）
+    lineIds.filter(id=>id&&String(id).indexOf('Cライン')===0).forEach(id=>{
+      console.log('  [Cライン判定]', JSON.stringify(id),
+        '→canon=', canonLineKey(id),
+        'codes=', [...String(id)].map(c=>c.charCodeAt(0)).join(','));
+    });
     // 当日の優先ライン上書きを読み込む
     try{
       const rOvr = await fetch(`${fbUrl}/dantori/${dateStr}Override.json`);
@@ -5288,14 +5294,26 @@ const KANBAN_LINE_ALIASES = {
   'Cライン②':    ['Cライン②','CP3_2'],
   'ロボットライン':['ロボットライン','robot'],
 };
+// lineIdを正規化キーに変換（グリフ差異を吸収）
+// ・LINE_LABELで内部キー(CP3_2)→表示名(Cライン②)に寄せる
+// ・丸数字①②③・全角数字を半角数字へ正規化し、見た目が同じで文字コードが
+//   違う「②」同士でも一致するようにする（Firebase保存元の差異対策）
+function canonLineKey(id){
+  if(id==null) return '';
+  let s = String(LINE_LABEL[id] || id).trim();
+  s = s.replace(/[①-⑳]/g, ch => String(ch.charCodeAt(0)-0x2460+1)); // ①→1
+  s = s.replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0)-0xFF10+0x30)); // 全角→半角
+  s = s.replace(/\s+/g,'');
+  return s;
+}
 function renderKanbanCol(colDef, allEntries){
   if(colDef.lineId){
     // ライン別カラム
     const lineId   = colDef.lineId;
     const hdrLabel = colDef.label || getLineDisplayName(lineId);
-    // Firebase保存キー(CP3_2等)と表示名(Cライン②)の両方を許容
-    const validIds = KANBAN_LINE_ALIASES[lineId] || [lineId];
-    const entries  = allEntries.filter(e=>validIds.includes(e.lineId))
+    // Firebase保存キー(CP3_2等)・表示名・グリフ違いの「②」全てを許容
+    const colKeys  = (KANBAN_LINE_ALIASES[lineId] || [lineId]).map(canonLineKey);
+    const entries  = allEntries.filter(e=>colKeys.includes(canonLineKey(e.lineId)))
                                .sort((a,b)=>(a.sortKey||'').localeCompare(b.sortKey||''));
     // ライン状態に応じてヘッダー色
     const ld = linesData[lineId];
