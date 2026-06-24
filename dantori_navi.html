@@ -4837,18 +4837,9 @@ async function loadDantoriSchedule(){
     if(!data){ dantoriSchedule=[]; renderDantori(); updatePersonPanel(); return; }
     dantoriSchedule = Object.entries(data).map(([id,v])=>({
       ...v, _id:id,
-      // FirebaseキーやlineIdがCP3_2等の内部名の場合Canonical名に正規化
-      lineId: (v && v.lineId && LINE_LABEL[v.lineId]) ? LINE_LABEL[v.lineId] : (v && v.lineId),
+      // lineIdを正規の表示名に解決（CP3_2・"Cライン ②"(スペース付)・全角差異を吸収）
+      lineId: resolveLineId(v && v.lineId),
     }));
-    // デバッグ: lineIdの一覧と正規化キーをコンソール出力
-    const lineIds = [...new Set(dantoriSchedule.map(d=>d.lineId))];
-    console.log('[段取り] loadDantoriSchedule: lineIds=', lineIds, '件数=', dantoriSchedule.length);
-    // Cライン②系のlineIdの文字コードを出力（グリフ差異の確認用）
-    lineIds.filter(id=>id&&String(id).indexOf('Cライン')===0).forEach(id=>{
-      console.log('  [Cライン判定]', JSON.stringify(id),
-        '→canon=', canonLineKey(id),
-        'codes=', [...String(id)].map(c=>c.charCodeAt(0)).join(','));
-    });
     // 当日の優先ライン上書きを読み込む
     try{
       const rOvr = await fetch(`${fbUrl}/dantori/${dateStr}Override.json`);
@@ -5305,6 +5296,17 @@ function canonLineKey(id){
   s = s.replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0)-0xFF10+0x30)); // 全角→半角
   s = s.replace(/\s+/g,'');
   return s;
+}
+// 既知ライン名の正規化キー→正規表示名 の逆引きマップ
+const _CANON_LINE_NAMES = ['A1','A2','B1','B2','Bライン','Cライン①','Cライン②','ロボットライン'];
+const _CANON_LINE_MAP = {};
+_CANON_LINE_NAMES.forEach(n => { _CANON_LINE_MAP[canonLineKey(n)] = n; });
+// 任意のlineId表現（CP3_2 / "Cライン ②"(スペース付) / 全角等）を
+// 正規の表示名（Cライン②）へ解決する。未知のものはそのまま返す。
+function resolveLineId(rawId){
+  if(rawId == null) return rawId;
+  if(LINE_LABEL[rawId]) return LINE_LABEL[rawId];       // CP3_2→Cライン②等
+  return _CANON_LINE_MAP[canonLineKey(rawId)] || rawId; // スペース/グリフ差異を吸収
 }
 function renderKanbanCol(colDef, allEntries){
   if(colDef.lineId){
