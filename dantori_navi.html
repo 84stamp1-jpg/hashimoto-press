@@ -6060,10 +6060,21 @@ function renderPressTimeline(allEntries){
 
 // ===== 生産計画から段取り計画を取り込む =====
 async function importFromProductionPlan(){
-  // Firebase SDK リアルタイムデータを優先（REST APIポーリングより最新）
-  const srcLines = (window._pmLinesRealtime && Object.keys(window._pmLinesRealtime).length)
-    ? window._pmLinesRealtime : linesData;
-  if(!Object.keys(srcLines).length){
+  const fbUrl = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
+
+  // Firebase REST APIから直接最新のlinesデータを取得
+  let srcLines = null;
+  try {
+    const res = await fetch(`${fbUrl}/lines.json`);
+    if(res.ok) srcLines = await res.json();
+  } catch(e) { /* fallthrough */ }
+
+  // REST取得失敗時はSDKキャッシュ→ポーリングキャッシュの順でフォールバック
+  if(!srcLines || !Object.keys(srcLines).length){
+    srcLines = (window._pmLinesRealtime && Object.keys(window._pmLinesRealtime).length)
+      ? window._pmLinesRealtime : linesData;
+  }
+  if(!srcLines || !Object.keys(srcLines).length){
     alert('Firebaseへ未接続です。\n画面下部の接続状態を確認してから再試行してください。');
     return;
   }
@@ -6073,7 +6084,6 @@ async function importFromProductionPlan(){
 
   Object.keys(srcLines).sort().forEach(rawLineId => {
     const line = srcLines[rawLineId];
-    if(!line || !Array.isArray(line.jobs)) return;
     // FirebaseキーをCanonical lineId（段取り指示・カンバン表示名）に正規化
     const lineId = LINE_LABEL[rawLineId] || rawLineId;
 
