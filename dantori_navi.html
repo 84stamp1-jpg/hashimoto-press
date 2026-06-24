@@ -5308,6 +5308,32 @@ function resolveLineId(rawId){
   if(LINE_LABEL[rawId]) return LINE_LABEL[rawId];       // CP3_2→Cライン②等
   return _CANON_LINE_MAP[canonLineKey(rawId)] || rawId; // スペース/グリフ差異を吸収
 }
+// lines.jsonに同一ラインへ解決される重複キー（例: "CP3"(旧) と "Cライン①"(現))が
+// 存在する場合、updatedAtが新しい方（=進捗管理ボードが実際に書いている現行キー）
+// だけを採用する。これにより古い内部キーの残骸が段取りに混入するのを防ぐ。
+// 戻り値: 採用する生キーの配列。
+function _dedupeLineKeys(lines){
+  const byCanon = {};
+  Object.keys(lines).forEach(rk => {
+    if(!lines[rk]) return;
+    const canon = resolveLineId(rk);
+    (byCanon[canon] = byCanon[canon] || []).push(rk);
+  });
+  const chosen = [];
+  Object.entries(byCanon).forEach(([canon, keys]) => {
+    if(keys.length === 1){ chosen.push(keys[0]); return; }
+    // 複数キー → updatedAt新しい順、同値なら正規表示名に完全一致するキーを優先
+    keys.sort((a,b) => {
+      const au = (lines[a] && lines[a].updatedAt) || 0;
+      const bu = (lines[b] && lines[b].updatedAt) || 0;
+      if(au !== bu) return bu - au;
+      return ((b===canon?1:0) - (a===canon?1:0));
+    });
+    console.log(`[同期] 重複ライン解決: ${JSON.stringify(canon)} 候補=${JSON.stringify(keys)} → 採用=${JSON.stringify(keys[0])}`);
+    chosen.push(keys[0]);
+  });
+  return chosen;
+}
 function renderKanbanCol(colDef, allEntries){
   if(colDef.lineId){
     // ライン別カラム
@@ -6111,19 +6137,11 @@ async function importFromProductionPlan(){
     return;
   }
 
-  // 診断: lines.jobnの全生キーと解決後lineId・品番一覧を出力
-  console.log('[同期診断] lines.jsonの生キー:', Object.keys(srcLines));
-  Object.keys(srcLines).forEach(rk => {
-    const ln = srcLines[rk];
-    const jr = Array.isArray(ln?.jobs) ? ln.jobs : (ln?.jobs && typeof ln.jobs==='object' ? Object.values(ln.jobs) : []);
-    const parts = jr.filter(j=>j&&j.part&&!j.history).map(j=>j.part);
-    console.log(`  生キー=${JSON.stringify(rk)} → resolve=${JSON.stringify(resolveLineId(rk))} 品番=[${parts.join(', ')}]`);
-  });
-
   const entries = [];
   let idx = 0;
 
-  Object.keys(srcLines).sort().forEach(rawLineId => {
+  // 重複ラインキー（旧"CP3"と現"Cライン①"等）を排除して現行キーのみ処理
+  _dedupeLineKeys(srcLines).sort().forEach(rawLineId => {
     const line = srcLines[rawLineId];
     // FirebaseキーをCanonical lineId（CP3_2・スペース付き・全角差異を吸収）に正規化
     const lineId = resolveLineId(rawLineId);
@@ -6207,14 +6225,7 @@ async function importFromProductionPlan(){
     // 既存データ取得（roles・stdSetupMin保持のため）
     const res2 = await fetch(`${fbUrl}/dantori/${dateStr}.json`);
     const existing = res2.ok ? (await res2.json() || {}) : {};
-    // 診断: 既存段取りデータの内訳（manual/fromPlan別の品番）を出力
-    console.log('[同期診断] 既存段取りデータ:');
-    Object.entries(existing).forEach(([id,v])=>{
-      if(!v) return;
-      console.log(`  ${id}: lineId=${JSON.stringify(v.lineId)} 品番=${v.partNo} ${v.isManual?'[手動]':v.fromPlan?'[計画]':'[?]'}`);
-    });
     const newData = _mergePlanEntries(entries, existing, dateStr);
-    console.log('[同期診断] マージ後の品番:', Object.values(newData).map(v=>v&&v.partNo).filter(Boolean));
 
     const putRes = await fetch(`${fbUrl}/dantori/${dateStr}.json`,
       {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newData)});
@@ -6233,7 +6244,8 @@ async function importFromProductionPlan(){
 function _buildDantoriEntriesFromLines(lines){
   const entries = [];
   let idx = 0;
-  Object.keys(lines).sort().forEach(rawLineId => {
+  // 重複ラインキー（旧"CP3"と現"Cライン①"等）を排除して現行キーのみ処理
+  _dedupeLineKeys(lines).sort().forEach(rawLineId => {
     const line = lines[rawLineId];
     if(!line) return;
     // FirebaseキーをCanonical lineId（CP3_2・スペース付き・全角差異を吸収）に正規化
