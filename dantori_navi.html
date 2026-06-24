@@ -6111,13 +6111,22 @@ async function importFromProductionPlan(){
     return;
   }
 
+  // 診断: lines.jobnの全生キーと解決後lineId・品番一覧を出力
+  console.log('[同期診断] lines.jsonの生キー:', Object.keys(srcLines));
+  Object.keys(srcLines).forEach(rk => {
+    const ln = srcLines[rk];
+    const jr = Array.isArray(ln?.jobs) ? ln.jobs : (ln?.jobs && typeof ln.jobs==='object' ? Object.values(ln.jobs) : []);
+    const parts = jr.filter(j=>j&&j.part&&!j.history).map(j=>j.part);
+    console.log(`  生キー=${JSON.stringify(rk)} → resolve=${JSON.stringify(resolveLineId(rk))} 品番=[${parts.join(', ')}]`);
+  });
+
   const entries = [];
   let idx = 0;
 
   Object.keys(srcLines).sort().forEach(rawLineId => {
     const line = srcLines[rawLineId];
-    // FirebaseキーをCanonical lineId（段取り指示・カンバン表示名）に正規化
-    const lineId = LINE_LABEL[rawLineId] || rawLineId;
+    // FirebaseキーをCanonical lineId（CP3_2・スペース付き・全角差異を吸収）に正規化
+    const lineId = resolveLineId(rawLineId);
 
     // Firebase REST APIは配列をオブジェクト{0:{...},1:{...}}で返す場合があるため両対応
     const jobsRaw = Array.isArray(line.jobs) ? line.jobs : (line.jobs && typeof line.jobs==='object' ? Object.values(line.jobs) : null);
@@ -6198,7 +6207,14 @@ async function importFromProductionPlan(){
     // 既存データ取得（roles・stdSetupMin保持のため）
     const res2 = await fetch(`${fbUrl}/dantori/${dateStr}.json`);
     const existing = res2.ok ? (await res2.json() || {}) : {};
+    // 診断: 既存段取りデータの内訳（manual/fromPlan別の品番）を出力
+    console.log('[同期診断] 既存段取りデータ:');
+    Object.entries(existing).forEach(([id,v])=>{
+      if(!v) return;
+      console.log(`  ${id}: lineId=${JSON.stringify(v.lineId)} 品番=${v.partNo} ${v.isManual?'[手動]':v.fromPlan?'[計画]':'[?]'}`);
+    });
     const newData = _mergePlanEntries(entries, existing, dateStr);
+    console.log('[同期診断] マージ後の品番:', Object.values(newData).map(v=>v&&v.partNo).filter(Boolean));
 
     const putRes = await fetch(`${fbUrl}/dantori/${dateStr}.json`,
       {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newData)});
@@ -6220,8 +6236,8 @@ function _buildDantoriEntriesFromLines(lines){
   Object.keys(lines).sort().forEach(rawLineId => {
     const line = lines[rawLineId];
     if(!line) return;
-    // FirebaseキーをCanonical lineId（段取り指示・カンバン表示名）に正規化
-    const lineId = LINE_LABEL[rawLineId] || rawLineId;
+    // FirebaseキーをCanonical lineId（CP3_2・スペース付き・全角差異を吸収）に正規化
+    const lineId = resolveLineId(rawLineId);
     // Firebase REST APIは配列をオブジェクト{0:{...},1:{...}}で返す場合があるため両対応
     const jobsRaw = Array.isArray(line.jobs) ? line.jobs : (line.jobs && typeof line.jobs==='object' ? Object.values(line.jobs) : null);
     if(!jobsRaw) return;
