@@ -5322,12 +5322,16 @@ function _dedupeLineKeys(lines){
   const chosen = [];
   Object.entries(byCanon).forEach(([canon, keys]) => {
     if(keys.length === 1){ chosen.push(keys[0]); return; }
-    // 複数キー → updatedAt新しい順、同値なら正規表示名に完全一致するキーを優先
+    // 複数キー → 正規表示名に完全一致するキー(進捗管理ボードが読む現行キー)を最優先。
+    // 同条件ならupdatedAtが新しい順。
+    // ※updatedAtを最優先にすると旧内部キー(CP3等)が後から更新された場合に
+    //   古いデータを誤採用するため、表示名一致を最優先にする。
     keys.sort((a,b) => {
+      const ax = (a===canon?1:0), bx = (b===canon?1:0);
+      if(ax !== bx) return bx - ax;
       const au = (lines[a] && lines[a].updatedAt) || 0;
       const bu = (lines[b] && lines[b].updatedAt) || 0;
-      if(au !== bu) return bu - au;
-      return ((b===canon?1:0) - (a===canon?1:0));
+      return bu - au;
     });
     console.log(`[同期] 重複ライン解決: ${JSON.stringify(canon)} 候補=${JSON.stringify(keys)} → 採用=${JSON.stringify(keys[0])}`);
     chosen.push(keys[0]);
