@@ -9334,6 +9334,12 @@ function renderBoard(){
           if(jWS) setupParts2.push('開始 '+jWS);
           if(jWE) setupParts2.push('終了 '+jWE);
           const setupRow2=setupParts2.join('  ');
+          // 備考（実績入力で品番ごとに保存したnote）
+          const noteEsc=(j.note||'').replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+          const noteRow=noteEsc
+            ? '<span></span>'+
+              '<span style="grid-column:2/-1;font-size:10px;color:#b45309;background:#fff8e1;border-left:3px solid #f9a825;border-radius:0 4px 4px 0;padding:2px 6px;margin-top:2px;white-space:normal;word-break:break-all;">📝 '+noteEsc+'</span>'
+            : '';
           sched+='<div class="sr'+(cur?' cur':'')+'">'+
             '<span class="sn">'+(j.seq!=null?j.seq:jIdx+1)+'</span>'+
             '<span class="sp">'+(cur?'▶ ':'')+j.part+'</span>'+
@@ -9347,6 +9353,7 @@ function renderBoard(){
               '<span></span>'+'<span></span>'+
               '<span style="font-size:9px;line-height:1.8;display:flex;flex-wrap:wrap;gap:0 2px;min-width:0;">'+snapDisp+'</span>'
             :'')+
+            noteRow+
           '</div>';
       });
       sched+='</div>';
@@ -9846,7 +9853,8 @@ function restoreJobFields(lineId, partVal, startVal, seqVal){
   const weVal=isActivePart?(l.workEnd||''):(job&&job.actualEnd||'');
   document.getElementById('iActual').value=actVal;
   document.getElementById('iRevised').value=(job&&job.revisedPlan>0)?job.revisedPlan:'';
-  document.getElementById('iNote').value=isActivePart?(l.note||''):'';
+  // 備考は品番(job)単位で保持。jobにあれば優先、なければ稼働中ラインのnoteをfallback
+  document.getElementById('iNote').value=(job&&job.note)||(isActivePart?(l.note||''):'');
   document.getElementById('iSS').value=ssVal;
   document.getElementById('iSE').value=seVal;
   document.getElementById('iWS').value=wsVal;
@@ -10048,6 +10056,7 @@ window.doSub=function(){
         revisedPlan:(!isNaN(revised)&&revised>0)?revised:(j.revisedPlan||null),
         noSetup:!!(document.getElementById('iNoSetup')?.checked),
         setupActualMin:setupMin!==null?setupMin:(j.setupActualMin||0),
+        note:note,  // 備考を品番(job)単位で保存
         paceInfo,
         snapHistory,
         status:newStatus
