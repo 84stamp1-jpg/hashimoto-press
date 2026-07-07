@@ -622,7 +622,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.15-23</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.15-24</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -1798,6 +1798,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
         <div class="form-group">
           <label class="form-label">仕上</label>
           <select class="form-select" id="cim_finish">
+            <option value="">なし</option>
             <option value="6F">6F</option>
             <option value="4F">4F</option>
             <option value="4F（2面）">4F（2面）</option>
@@ -5130,7 +5131,7 @@ function onFinishCheckChange() {
   const fZ = document.getElementById('qf_fZ').checked;
   const count = [fX, fY, fZ].filter(Boolean).length;
   let val;
-  if (count === 0) val = '6F';  // チェックなし＝全面（デフォルト）
+  if (count === 0) val = '';   // チェックなし＝仕上なし
   if (count === 1) val = '2F';
   if (count === 2) val = '4F';
   if (count === 3) val = '6F';
@@ -7387,7 +7388,7 @@ async function printOrder(reqKey, supId, indices) {
     const sZ = String(item.sizeZ||'').replace(/\.00$/,'');
     const fX=item.fX||false, fY=item.fY||false, fZ=item.fZ||false;
     const fcount=(fX?1:0)+(fY?1:0)+(fZ?1:0);
-    const fLabel=item.finish||(fcount===3?'6F':fcount===2?'4F':fcount===1?'2F':'黒皮');
+    const fLabel=item.finish||(fcount===3?'6F':fcount===2?'4F':fcount===1?'2F':'');
     const B='border:1px solid #999;';
     // ▽マーク（数値の上）
     const dimCell = (val, hasF) => {
@@ -7688,7 +7689,7 @@ function openCompareItemEdit(reqKey, itemIdx) {
   set('cim_sizeY',    item.sizeY);
   set('cim_sizeZ',    item.sizeZ);
   const finSel = document.getElementById('cim_finish');
-  if (finSel) finSel.value = item.finish || '6F';
+  if (finSel) finSel.value = item.finish || '';
   set('cim_note', item.noteExtra || item.note || '');
   document.getElementById('compareItemModal').classList.add('open');
 }
