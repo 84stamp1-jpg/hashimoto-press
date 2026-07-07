@@ -2551,7 +2551,9 @@ const FIXED_CONFIG = {
   appId:       '7',
   token:       '',  // APIトークンはHTMLに埋め込まない(公開リポジトリ)。設定画面から端末ごとに入力→localStorage保存
   firebaseUrl: 'https://hashimoto-press-default-rtdb.asia-southeast1.firebasedatabase.app',
-  gasUrl:      'https://script.google.com/macros/s/AKfycbxfOZT1_gW25RZRyOF8RPV8tJXbPcqLKK2hm9TXZ5n6cSv2povL3kbAwWWueV9MbTY5/exec',
+  // 2026-07-07: 旧gasUrl(AKfycbxfOZT1...)は品質チェックUIを返すデプロイでJSONP非対応のため、
+  // kintoneレコードJSONPプロキシ(旧proxyUrlと同一)に変更
+  gasUrl:      'https://script.google.com/macros/s/AKfycbyqF12RGTVluOgQrGuwCpPMeuLIHOJVSKhF0L-rpyYTQQBr3NeVOiQs5CJww5bwa1ld/exec',
   proxyUrl:    'https://script.google.com/macros/s/AKfycbyqF12RGTVluOgQrGuwCpPMeuLIHOJVSKhF0L-rpyYTQQBr3NeVOiQs5CJww5bwa1ld/exec',
   qualityGasUrl: 'https://script.google.com/macros/s/AKfycbw3zssfr-pWlRcgMT4fhQ40HoOUeJHz7-_yYIcA0b4hxh2BXdWAPe96D2kXPizLzsqI/exec',
 };
@@ -3298,11 +3300,13 @@ function openDoc(docName, fileKey, partNo){
 
 // ===== 品質チェックシート連携 =====
 function openQualitySheet(partNo){
-  if(config.gasUrl){
-    const url = `${config.gasUrl}?partNo=${encodeURIComponent(partNo)}`;
+  // 品質チェックシートUIは専用のqualityGasUrlで開く(gasUrlはkintoneレコードのJSONPプロキシ)
+  const qUrl = config.qualityGasUrl || FIXED_CONFIG.qualityGasUrl;
+  if(qUrl){
+    const url = `${qUrl}?partNo=${encodeURIComponent(partNo)}`;
     window.open(url, '_blank');
   } else {
-    alert(`品質チェックシートシステムを開きます（品番：${partNo}）\n設定画面からGAS URLを入力してください`);
+    alert(`品質チェックシートシステムを開きます（品番：${partNo}）\n設定画面から品質チェックGAS URLを入力してください`);
   }
 }
 
@@ -7173,6 +7177,11 @@ function postToSlack(){
   // GAS URLの検証
   const gasUrl = saved.gasUrl || '';
   if(!gasUrl || gasUrl.length < 50 || !gasUrl.startsWith('https://script.google.com')){
+    saved.gasUrl = DEFAULT_CONFIG.gasUrl;
+    needSave = true;
+  }
+  // 移行(2026-07-07): 旧gasUrl(品質チェックUIのデプロイ)が保存されている端末はJSONPプロキシに差し替え
+  if(saved.gasUrl && saved.gasUrl.includes('AKfycbxfOZT1')){
     saved.gasUrl = DEFAULT_CONFIG.gasUrl;
     needSave = true;
   }
