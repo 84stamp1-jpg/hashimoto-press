@@ -847,8 +847,9 @@ function renderBoard(){
               const totalDelayMin=Math.round(totalShortage*planCTD);
               // 遅れ内訳の計算
               const breakdownParts=[];
-              // ① 段取超過分
-              const _curJ=jobs.find(jj=>jj.status==='running')||jobs[0];
+              // ① 段取超過分（jobsはL915で宣言されるためここでは使えない。このラインのjobsから取得）
+              const _jobsD=(l.jobs||[]).filter(jj=>jj.plan>0);
+              const _curJ=_jobsD.find(jj=>jj.status==='running')||_jobsD[0];
               const stdSetupForLine=calcSetupTime(id,_curJ?.kata,_curJ?.ninzu)||0;
               const wsM_d=timeToMin(l.workStart||'');
               if(wsM_d&&stdSetupForLine>0){
