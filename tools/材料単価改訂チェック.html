@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>材料単価改訂チェック｜橋本工業</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+:root{
+  --bg:#f0f2f7;--sur:#fff;--sur2:#f5f7fb;--bdr:#dde1ec;
+  --ac:#2563eb;--ac2:#7c3aed;--ok:#16a34a;--wn:#d97706;
+  --ng:#dc2626;--tx:#1e2235;--tx2:#4b5580;--tx3:#9099bb;--hd:#1e2235;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--tx);font-size:13px}
+header{background:var(--hd);padding:14px 28px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.logo{width:34px;height:34px;background:linear-gradient(135deg,#3b82f6,#7c3aed);border-radius:7px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-weight:500;font-size:13px;color:#fff;flex-shrink:0}
+header h1{font-size:14px;font-weight:500;color:#fff;letter-spacing:.04em}
+header small{font-size:11px;color:#8893bb;margin-left:2px}
+.hs{margin-left:auto;display:flex;gap:20px;font-size:11px;color:#8893bb}
+.hs b{color:#e2e8f0;font-weight:500;font-family:'IBM Plex Mono',monospace}
+.main{padding:20px 28px;max-width:1400px}
+.panel{background:var(--sur);border:1px solid var(--bdr);border-radius:10px;padding:20px 24px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.ptl{font-size:11px;font-weight:700;color:var(--tx3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:14px}
+
+/* 案内文サマリー */
+.notice-box{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px 18px;margin-bottom:16px}
+.notice-box h3{font-size:12px;font-weight:700;color:#1e40af;margin-bottom:10px}
+.notice-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px}
+.notice-item{background:#fff;border:1px solid #bfdbfe;border-radius:6px;padding:8px 12px;font-size:11px}
+.notice-item .mat{font-weight:700;color:#1e40af;font-family:'IBM Plex Mono',monospace}
+.notice-item .chg{color:var(--ng);font-weight:700;font-family:'IBM Plex Mono',monospace}
+.notice-item .chg.pos{color:var(--ok)}
+
+/* カード */
+.cards{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px}
+.card{background:var(--sur);border:1px solid var(--bdr);border-radius:9px;padding:12px 16px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.cl{font-size:10px;color:var(--tx3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:4px;font-weight:600}
+.cv{font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:500;line-height:1}
+.cok{color:var(--ok)}.cwn{color:var(--wn)}.cng{color:var(--ng)}.cbl{color:var(--ac)}.cgr{color:#6b7280}
+
+/* フィルター */
+.fb-bar{display:flex;gap:7px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.fb{padding:5px 13px;border-radius:16px;border:1px solid var(--bdr);background:var(--sur);color:var(--tx2);font-size:11px;cursor:pointer;transition:all .15s;font-family:'Noto Sans JP',sans-serif;font-weight:500}
+.fb:hover{border-color:var(--ac);color:var(--ac)}
+.fa{background:var(--ac);border-color:var(--ac);color:#fff}
+.fok{background:var(--ok);border-color:var(--ok);color:#fff}
+.fng{background:var(--ng);border-color:var(--ng);color:#fff}
+.fwn{background:var(--wn);border-color:var(--wn);color:#fff}
+.fgr{background:#6b7280;border-color:#6b7280;color:#fff}
+.srch{margin-left:auto;background:var(--sur);border:1px solid var(--bdr);border-radius:16px;padding:5px 14px;color:var(--tx);font-size:11px;outline:none;width:220px;font-family:'Noto Sans JP',sans-serif}
+.srch:focus{border-color:var(--ac)}
+
+/* テーブル */
+.tw{background:var(--sur);border:1px solid var(--bdr);border-radius:9px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+table{width:100%;border-collapse:collapse}
+thead tr{background:var(--sur2);border-bottom:2px solid var(--bdr)}
+th{padding:9px 12px;text-align:left;font-size:10px;font-weight:700;color:var(--tx3);letter-spacing:.1em;text-transform:uppercase;white-space:nowrap}
+th.r{text-align:right}
+tbody tr{border-bottom:1px solid var(--bdr);transition:background .1s}
+tbody tr:hover{background:#f8f9ff}
+tbody tr.ok-row{background:#f0fdf4}
+tbody tr.ng-row{background:#fff5f5}
+tbody tr.warn-row{background:#fffbeb}
+tbody tr.skip-row{background:#f9fafb}
+tbody tr:last-child{border-bottom:none}
+td{padding:8px 12px;font-size:12px;vertical-align:middle}
+td.r{text-align:right;font-family:'IBM Plex Mono',monospace;font-size:12px}
+td.mn{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--tx2)}
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:4px;font-size:10px;font-family:'IBM Plex Mono',monospace;font-weight:600;white-space:nowrap}
+.b-ok{background:#dcfce7;color:var(--ok)}
+.b-ng{background:#fee2e2;color:var(--ng)}
+.b-wn{background:#fef3c7;color:var(--wn)}
+.b-sk{background:#f3f4f6;color:#6b7280}
+.b-up{background:#ede9fe;color:var(--ac2)}
+.arrow{color:var(--tx3);margin:0 4px}
+.new-val{color:var(--ac);font-weight:700}
+.obar{display:flex;gap:8px;margin-top:14px;justify-content:flex-end}
+.btn{padding:8px 18px;border-radius:6px;border:none;font-family:'Noto Sans JP',sans-serif;font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.bp{background:var(--ac);color:#fff}.bp:hover{background:#1d4ed8}
+.bs{background:var(--sur2);color:var(--tx2);border:1px solid var(--bdr)}.bs:hover{border-color:var(--ac);color:var(--ac)}
+@media(max-width:900px){.cards{grid-template-columns:repeat(3,1fr)}.main{padding:14px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">HK</div>
+  <div><h1>材料単価改訂チェックツール</h1><small>橋本工業株式会社 ／ ユタカ技研向け 2026年5月改訂分</small></div>
+  <div class="hs" id="hs">
+    <span>対象 <b id="h-total">0</b> 件</span>
+    <span>更新可 <b id="h-update" style="color:#86efac">0</b> 件</span>
+    <span>要確認 <b id="h-warn" style="color:#fcd34d">0</b> 件</span>
+  </div>
+</header>
+<div class="main">
+
+  <!-- 案内文サマリー -->
+  <div class="notice-box">
+    <h3>📋 今回の改訂内容（案内文より）</h3>
+    <div class="notice-grid">
+      <div class="notice-item">
+        <div class="mat">スクラップ単価（鋼板 普通鋼・特殊鋼）</div>
+        <div>¥35.90/kg → <span class="chg">¥38.10/kg</span>（<span class="chg">+2.2円</span>）</div>
+      </div>
+      <div class="notice-item">
+        <div class="mat">スクラップ単価（アルミメッキ・ガルバリウム）</div>
+        <div>¥35.90/kg → <span class="chg">¥38.10/kg</span>（<span class="chg">+2.2円</span>）</div>
+      </div>
+      <div class="notice-item">
+        <div class="mat">スクラップ単価（Cr系ステンレス HFS4xx）</div>
+        <div>¥53.00/kg → <span class="chg pos">¥52.50/kg</span>（<span class="chg pos">-0.5円</span>）</div>
+      </div>
+      <div class="notice-item">
+        <div class="mat">スクラップ単価（Ni系ステンレス SUS3xx）</div>
+        <div>¥100.50/kg → <span class="chg">¥105.50/kg</span>（<span class="chg">+5.0円</span>）</div>
+      </div>
+      <div class="notice-item">
+        <div class="mat">支給単価（HFS436L +22.5円/kg）</div>
+        <div>例: t0.8 ¥449.70 → <span class="chg">¥472.20</span></div>
+      </div>
+      <div class="notice-item">
+        <div class="mat">支給単価（HFS409L +5.5円/kg）</div>
+        <div>例: t1.0 ¥318.70 → <span class="chg">¥324.20</span></div>
+      </div>
+    </div>
+    <div style="font-size:11px;color:#1e40af;margin-top:10px">
+      ※ 実施時期：支給単価 2026年4月度検収分／部品価格反映 2026年5月度搬入分
+    </div>
+  </div>
+
+  <!-- 結果カード -->
+  <div class="cards" id="cards" style="display:none">
+    <div class="card"><div class="cl">対象材料種</div><div class="cv cbl" id="c-total">0</div></div>
+    <div class="card"><div class="cl">✅ 条件一致・更新可</div><div class="cv cok" id="c-ok">0</div></div>
+    <div class="card"><div class="cl">⚠ 現行単価不一致</div><div class="cv cwn" id="c-warn">0</div></div>
+    <div class="card"><div class="cl">❌ 差額不一致</div><div class="cv cng" id="c-ng">0</div></div>
+    <div class="card"><div class="cl">— 変更なし</div><div class="cv cgr" id="c-skip">0</div></div>
+  </div>
+
+  <div class="panel">
+    <div class="ptl">材料マスタ 単価照合結果</div>
+
+    <div class="fb-bar">
+      <button class="fb fa" data-f="all"    onclick="setF(this,'all')">すべて</button>
+      <button class="fb"    data-f="ok"     onclick="setF(this,'ok')">✅ 更新可</button>
+      <button class="fb"    data-f="warn"   onclick="setF(this,'warn')">⚠ 現行不一致</button>
+      <button class="fb"    data-f="ng"     onclick="setF(this,'ng')">❌ 差額不一致</button>
+      <button class="fb"    data-f="skip"   onclick="setF(this,'skip')">— 変更なし</button>
+      <input class="srch" id="sq" placeholder="材質コードで検索..." oninput="render()">
+    </div>
+
+    <div class="tw">
+      <table>
+        <thead><tr>
+          <th>材質コード（Excel）</th>
+          <th class="r">Excel現在値<br>支給単価</th>
+          <th class="r">PDF現行<br>支給単価</th>
+          <th class="r">PDF次回<br>支給単価</th>
+          <th class="r">差額<br>（案内文）</th>
+          <th class="r">Excel現在値<br>スクラップ</th>
+          <th class="r">PDF現行<br>スクラップ</th>
+          <th class="r">PDF次回<br>スクラップ</th>
+          <th class="r">差額<br>（案内文）</th>
+          <th>判定</th>
+          <th>更新後の値</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="obar">
+      <button class="btn bs" onclick="expCSV()">📥 CSV 出力</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== データ =====
+const MAT_MASTER = [{"row":17,"code":"SA1E80 t0.4","unit_price":217.2,"scrap_price":33.8},{"row":18,"code":"SA1E80 t0.4-ST","unit_price":221.2,"scrap_price":33.8},{"row":19,"code":"SA1E80 t0.5","unit_price":null,"scrap_price":null},{"row":20,"code":"SA1E80 t0.6","unit_price":214.2,"scrap_price":33.8},{"row":21,"code":"SA1E80 t0.6-ST","unit_price":218.2,"scrap_price":33.8},{"row":22,"code":"SA1E80 t0.8","unit_price":212.2,"scrap_price":33.8},{"row":23,"code":"SA1E80 t0.8-SC","unit_price":212.7,"scrap_price":33.8},{"row":24,"code":"SA1D(E)80 t2.0","unit_price":240.2,"scrap_price":44.9},{"row":25,"code":"SA1D80 t0.4","unit_price":209.2,"scrap_price":33.8},{"row":26,"code":"SA1D80 t0.5","unit_price":207.2,"scrap_price":33.8},{"row":27,"code":"SA1D80 t0.6","unit_price":206.2,"scrap_price":33.8},{"row":28,"code":"SA1D80 t0.7","unit_price":204.2,"scrap_price":33.8},{"row":29,"code":"SA1D80 t1.0","unit_price":204.2,"scrap_price":33.8},{"row":30,"code":"SA1D80 t2.0","unit_price":205.2,"scrap_price":33.8},{"row":31,"code":"SA1E40 t0.4","unit_price":171.7,"scrap_price":35.8},{"row":32,"code":"SA1E40 t0.8","unit_price":166.7,"scrap_price":35.8},{"row":33,"code":"ALCD-CL60/60 t0.4-ST","unit_price":221.2,"scrap_price":33.8},{"row":34,"code":"ALCD-CL60/60 t0.8-ST","unit_price":216.2,"scrap_price":33.8},{"row":35,"code":"NGLDD AZ150 t0.4","unit_price":205.8,"scrap_price":33.8},{"row":36,"code":"NGLDD AZ150 t0.8","unit_price":199.8,"scrap_price":33.8},{"row":38,"code":"HFS304-S t0.4","unit_price":null,"scrap_price":null},{"row":39,"code":"HFS304-S t0.6","unit_price":null,"scrap_price":null},{"row":40,"code":"SUS304-S t0.4","unit_price":706.7,"scrap_price":97.2},{"row":41,"code":"SUS304-S t0.4-ST","unit_price":731.7,"scrap_price":97.2},{"row":42,"code":"SUS304-S t0.6","unit_price":686.7,"scrap_price":97.2},{"row":43,"code":"SUS304-S t0.8","unit_price":666.7,"scrap_price":97.2},{"row":44,"code":"SUS304-S t0.8-ST","unit_price":691.7,"scrap_price":97.2},{"row":45,"code":"SUS304-S t2.0-ST","unit_price":641.7,"scrap_price":97.2},{"row":46,"code":"SUS304-S t0.8 [SMC]","unit_price":592.4,"scrap_price":100.5},{"row":47,"code":"HFS409L t1.5","unit_price":283.7,"scrap_price":55.0},{"row":48,"code":"HFS409L-S t1.0","unit_price":318.7,"scrap_price":55.0},{"row":49,"code":"HFS409L-S t1.5","unit_price":318.7,"scrap_price":55.0},{"row":50,"code":"HFS409L-S t1.5-ST","unit_price":343.7,"scrap_price":55.0},{"row":51,"code":"HFS409L-S t2.0","unit_price":318.7,"scrap_price":55.0},{"row":52,"code":"HFS409L-S t2.0-ST","unit_price":343.7,"scrap_price":55.0},{"row":53,"code":"HFS409L-T t0.8","unit_price":null,"scrap_price":null},{"row":54,"code":"HFS409L-TS t0.8","unit_price":222.0,"scrap_price":43.0},{"row":55,"code":"HFS409L-TS t1.5","unit_price":null,"scrap_price":null},{"row":56,"code":"HFS409L-TS t2.0","unit_price":null,"scrap_price":null},{"row":57,"code":"SUS409L-TS t0.8","unit_price":286.5,"scrap_price":57.7},{"row":58,"code":"SUS409L-T t0.8","unit_price":327.1,"scrap_price":56.0},{"row":59,"code":"SUS409L-TS t1.5","unit_price":212.5,"scrap_price":37.3},{"row":60,"code":"SUS409L-TS t2.0","unit_price":327.1,"scrap_price":56.3},{"row":61,"code":"SUS409L-T t2.5","unit_price":292.1,"scrap_price":56.0},{"row":62,"code":"JFE TF1","unit_price":null,"scrap_price":null},{"row":63,"code":"NSCC FHZ","unit_price":null,"scrap_price":null},{"row":64,"code":"HFS429M t1.5-ST","unit_price":428.7,"scrap_price":55.0},{"row":65,"code":"HFS429M-S t1.5","unit_price":438.7,"scrap_price":55.0},{"row":66,"code":"HFS429M-S t1.5-ST","unit_price":335.5,"scrap_price":31.3},{"row":67,"code":"HFS429M-S t2.0","unit_price":438.7,"scrap_price":55.0},{"row":68,"code":"HFS429M-S t2.0-ST","unit_price":463.7,"scrap_price":55.0},{"row":69,"code":"HFS429M-S t2.5","unit_price":438.7,"scrap_price":55.0},{"row":70,"code":"HFS429M-S t2.5-ST","unit_price":463.7,"scrap_price":55.0},{"row":71,"code":"SUS429M-S t1.5","unit_price":409.5,"scrap_price":43.0},{"row":72,"code":"SUS429M-S t1.5-ST","unit_price":429.5,"scrap_price":43.0},{"row":73,"code":"SUS429M-S t2.5-ST","unit_price":302.0,"scrap_price":37.3},{"row":74,"code":"HFS436L t0.4","unit_price":454.7,"scrap_price":55.0},{"row":75,"code":"HFS436L t0.6","unit_price":460.1,"scrap_price":55.0},{"row":76,"code":"HFS436L t0.8","unit_price":434.7,"scrap_price":55.0},{"row":77,"code":"HFS436L t0.8-ST","unit_price":459.7,"scrap_price":55.0},{"row":78,"code":"HFS436L t1.0","unit_price":414.7,"scrap_price":55.0},{"row":79,"code":"HFS436L t1.0-ST","unit_price":439.7,"scrap_price":55.0},{"row":80,"code":"HFS436L t1.0-ST-MC","unit_price":447.9,"scrap_price":57.0},{"row":81,"code":"HFS436L t1.2","unit_price":430.1,"scrap_price":55.0},{"row":82,"code":"HFS436L t1.5","unit_price":414.7,"scrap_price":55.0},{"row":83,"code":"HFS436L t1.5-ST","unit_price":439.7,"scrap_price":55.0},{"row":84,"code":"HFS436L-S t0.5-ST","unit_price":509.7,"scrap_price":55.0},{"row":85,"code":"HFS436L-S t0.8","unit_price":469.7,"scrap_price":55.0},{"row":86,"code":"HFS436L-S t0.8-ST","unit_price":494.7,"scrap_price":55.0},{"row":87,"code":"HFS436L-S t1.0","unit_price":449.7,"scrap_price":55.0},{"row":88,"code":"HFS436L-S t1.0-ST","unit_price":474.7,"scrap_price":55.0},{"row":89,"code":"HFS436L-S t1.2","unit_price":463.2,"scrap_price":56.3},{"row":90,"code":"HFS436L-S t1.2-ST","unit_price":474.7,"scrap_price":55.0},{"row":91,"code":"HFS436L-S t1.2-ST-MC","unit_price":null,"scrap_price":null},{"row":92,"code":"HFS436L-S t1.5","unit_price":449.7,"scrap_price":55.0},{"row":93,"code":"HFS436L-S t1.5-ST","unit_price":474.7,"scrap_price":55.0},{"row":94,"code":"HFS436L-S t2.0","unit_price":449.7,"scrap_price":55.0},{"row":95,"code":"HFS436L-S t2.0-ST","unit_price":474.7,"scrap_price":55.0},{"row":96,"code":"HFS436L-S t2.5","unit_price":449.7,"scrap_price":55.0},{"row":97,"code":"HSS430CU","unit_price":null,"scrap_price":null},{"row":98,"code":"HSS430CU t1.5","unit_price":388.7,"scrap_price":55.0},{"row":99,"code":"HSS430CU-S t1.5","unit_price":423.7,"scrap_price":55.0},{"row":100,"code":"HSS430CU-S t2.0-ST","unit_price":443.7,"scrap_price":55.0},{"row":101,"code":"HSS430CU t2.5","unit_price":388.7,"scrap_price":55.0},{"row":102,"code":"HSS430CU t2.5-ST","unit_price":408.7,"scrap_price":55.0},{"row":103,"code":"APFH60 t2.3","unit_price":117.9,"scrap_price":43.6},{"row":104,"code":"JSH270C t3.2","unit_price":129.0,"scrap_price":36.8},{"row":105,"code":"JSH270C t3.2-ST","unit_price":null,"scrap_price":null},{"row":108,"code":"HSS441　(Sコート不可)","unit_price":null,"scrap_price":null},{"row":109,"code":"(POSCO材あり)","unit_price":null,"scrap_price":null}];
+const KAITE_DATA = [{"page":1,"x":62,"part_no":"18182-RW0","mat":"SA1D80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":1,"x":79,"part_no":"18182-RW0","mat":"SA1D80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":1,"x":96,"part_no":"18182-RAD","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":1,"x":114,"part_no":"18182-RAD","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":1,"x":131,"part_no":"18224-SZX","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":449.7,"unit_next":472.2},{"page":1,"x":148,"part_no":"18183-RL0","mat":"SA1E-CL80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":1,"x":166,"part_no":"18183-RL0","mat":"SA1E-CL80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":1,"x":183,"part_no":"18183-RL0","mat":"SA1E-CL80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":1,"x":200,"part_no":"18184-RL0","mat":"SA1E-CL80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":1,"x":217,"part_no":"18184-RL0","mat":"SA1E-CL80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":1,"x":235,"part_no":"18184-RL0","mat":"SA1E-CL80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":1,"x":252,"part_no":"18194-RD2","mat":"HFS409L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":318.7,"unit_next":324.2},{"page":1,"x":269,"part_no":"18195-RD2","mat":"HFS409L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":318.7,"unit_next":324.2},{"page":1,"x":286,"part_no":"18307-T0T","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":449.7,"unit_next":472.2},{"page":1,"x":304,"part_no":"18307-T0T","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":449.7,"unit_next":472.2},{"page":1,"x":321,"part_no":"18308-T5B","mat":"HFS436L","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":414.7,"unit_next":437.2},{"page":1,"x":338,"part_no":"18308-T5B","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":469.7,"unit_next":492.2},{"page":1,"x":356,"part_no":"18181-5R0","mat":"SA1D-CL80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":1,"x":373,"part_no":"18181-5R0","mat":"SA1D-CL80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":1,"x":390,"part_no":"18181-5R0","mat":"SA1D-CL80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":1,"x":407,"part_no":"18181-5R0","mat":"SA1D-CL80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":1,"x":425,"part_no":"18308-T5A","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":449.7,"unit_next":472.2},{"page":1,"x":442,"part_no":"18219-5R0","mat":"HFS436L","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":434.7,"unit_next":457.2},{"page":1,"x":459,"part_no":"18161-5R0","mat":"HFS429M-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":438.7,"unit_next":444.2},{"page":1,"x":477,"part_no":"18161-5R0","mat":"HFS429M-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":438.7,"unit_next":444.2},{"page":1,"x":494,"part_no":"18308-T6A","mat":"HFS436L","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":434.7,"unit_next":457.2},{"page":1,"x":511,"part_no":"18308-T6A","mat":"HFS409L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":318.7,"unit_next":324.2},{"page":1,"x":528,"part_no":"18308-T6A","mat":"HFS409L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":318.7,"unit_next":324.2},{"page":1,"x":546,"part_no":"18220-T6A","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":469.7,"unit_next":492.2},{"page":2,"x":62,"part_no":"18220-T6A","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":469.7,"unit_next":492.2},{"page":2,"x":79,"part_no":"18307-T6B","mat":"HFS436L","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":439.7,"unit_next":462.2},{"page":2,"x":96,"part_no":"18307-T6B","mat":"HFS436L","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":439.7,"unit_next":462.2},{"page":2,"x":114,"part_no":"18307-T6B","mat":"HFS436L","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":439.7,"unit_next":462.2},{"page":2,"x":131,"part_no":"18308-T6B","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":474.7,"unit_next":497.2},{"page":2,"x":148,"part_no":"18308-T6B","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":474.7,"unit_next":497.2},{"page":2,"x":166,"part_no":"18308-T6B","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":474.7,"unit_next":497.2},{"page":2,"x":183,"part_no":"18308-T6B","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":474.7,"unit_next":497.2},{"page":2,"x":200,"part_no":"18220-T5A","mat":"HFS409L","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":283.7,"unit_next":289.2},{"page":2,"x":217,"part_no":"18308-T6B","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":509.7,"unit_next":532.2},{"page":2,"x":235,"part_no":"18307-T7B","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":449.7,"unit_next":472.2},{"page":2,"x":252,"part_no":"18210-T7W","mat":"HFS429M-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":438.7,"unit_next":444.2},{"page":2,"x":269,"part_no":"18183-R5Z","mat":"SA1E-CL80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":2,"x":286,"part_no":"18183-R5Z","mat":"SA1E-CL80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":2,"x":304,"part_no":"18183-R5Z","mat":"SA1E-CL80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":2,"x":321,"part_no":"18183-R5Z","mat":"SA1E-CL80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":2,"x":338,"part_no":"18183-R5Z","mat":"SA1E-CL80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":2,"x":356,"part_no":"18183-R5Z","mat":"SA1E-CL80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":2,"x":373,"part_no":"18224-TAA","mat":"HFS436L","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":454.7,"unit_next":477.2},{"page":2,"x":390,"part_no":"18308-TAA","mat":"HFS436L","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":434.7,"unit_next":457.2},{"page":2,"x":407,"part_no":"18307-TAB","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":474.7,"unit_next":497.2},{"page":2,"x":425,"part_no":"18308-TAB","mat":"HFS436L","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":434.7,"unit_next":457.2},{"page":2,"x":442,"part_no":"18308-TAB","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":474.7,"unit_next":497.2},{"page":2,"x":459,"part_no":"18220-T7A","mat":"HFS436L","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":434.7,"unit_next":457.2},{"page":2,"x":477,"part_no":"18220-T7A","mat":"HFS436L","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":434.7,"unit_next":457.2},{"page":2,"x":494,"part_no":"18307-T7B","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":449.7,"unit_next":472.2},{"page":2,"x":511,"part_no":"18219-5R0","mat":"HFS436L","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":434.7,"unit_next":457.2},{"page":2,"x":528,"part_no":"18161-59B","mat":"HSS430CU","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":388.7,"unit_next":396.2},{"page":2,"x":546,"part_no":"18161-59B","mat":"HSS430CU","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":388.7,"unit_next":396.2},{"page":3,"x":62,"part_no":"18224-T6C","mat":"SUS304-S","scrap_cur":100.5,"scrap_next":105.5,"unit_cur":666.7,"unit_next":672.2},{"page":3,"x":79,"part_no":"18191-58G","mat":"HFS429M-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":463.7,"unit_next":469.2},{"page":3,"x":96,"part_no":"18191-58G","mat":"HFS429M-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":463.7,"unit_next":469.2},{"page":3,"x":114,"part_no":"18192-58G","mat":"HFS429M-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":463.7,"unit_next":469.2},{"page":3,"x":131,"part_no":"18193-58G","mat":"HFS409L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":343.7,"unit_next":349.2},{"page":3,"x":148,"part_no":"18291-58G","mat":"HFS429M-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":463.7,"unit_next":469.2},{"page":3,"x":166,"part_no":"18291-58G","mat":"HFS429M-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":463.7,"unit_next":469.2},{"page":3,"x":183,"part_no":"18292-58G","mat":"HFS429M-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":463.7,"unit_next":469.2},{"page":3,"x":200,"part_no":"18293-58G","mat":"HFS409L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":343.7,"unit_next":349.2},{"page":3,"x":217,"part_no":"18261-5WS","mat":"HFS429M-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":438.7,"unit_next":444.2},{"page":3,"x":235,"part_no":"18261-5WS","mat":"HFS429M-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":438.7,"unit_next":444.2},{"page":3,"x":252,"part_no":"18121-5MS","mat":"SA1E-CL80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":3,"x":269,"part_no":"18121-5MS","mat":"SA1E-CL80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":3,"x":286,"part_no":"18121-5MS","mat":"SA1E-CL80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":3,"x":304,"part_no":"18121-5MS","mat":"SA1E-CL80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":3,"x":321,"part_no":"18121-5MS","mat":"SA1E-CL80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":3,"x":338,"part_no":"18121-5MS","mat":"SA1E-CL80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":3,"x":356,"part_no":"18161-5WJA-A000-","mat":"HFS429M-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":438.7,"unit_next":444.2},{"page":3,"x":373,"part_no":"18161-5WJ","mat":"HFS429M-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":438.7,"unit_next":444.2},{"page":3,"x":390,"part_no":"18161-5WJ","mat":"HFS429M-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":438.7,"unit_next":444.2},{"page":3,"x":407,"part_no":"18902-5K8","mat":"JSH270C-P","scrap_cur":38.9,"scrap_next":41.1,"unit_cur":null,"unit_next":null},{"page":3,"x":425,"part_no":"18161-5BX","mat":"HFS429M-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":438.7,"unit_next":444.2},{"page":3,"x":442,"part_no":"18162-5BX","mat":"HFS429M-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":438.7,"unit_next":444.2},{"page":3,"x":459,"part_no":"18307-T7A","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":449.7,"unit_next":472.2},{"page":3,"x":477,"part_no":"18307-THZW-G610-M1-C100","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":449.7,"unit_next":472.2},{"page":3,"x":494,"part_no":"18224-TRT","mat":"HFS436L","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":494.7,"unit_next":517.2},{"page":3,"x":511,"part_no":"18224-TRT","mat":"HFS436L","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":439.7,"unit_next":462.2},{"page":3,"x":528,"part_no":"18224-TRT","mat":"HFS436L","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":439.7,"unit_next":462.2},{"page":3,"x":546,"part_no":"18166-59B","mat":"HSS430CU","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":408.7,"unit_next":416.2},{"page":4,"x":62,"part_no":"18167-59B","mat":"HSS430CU-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":443.7,"unit_next":451.2},{"page":4,"x":79,"part_no":"18168-59B","mat":"HSS430CU-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":443.7,"unit_next":451.2},{"page":4,"x":96,"part_no":"18162-5TZ","mat":"HFS429M-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":438.7,"unit_next":444.2},{"page":4,"x":114,"part_no":"18162-5TZ","mat":"HFS429M-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":438.7,"unit_next":444.2},{"page":4,"x":131,"part_no":"18112-5TZ","mat":"HFS429M-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":438.7,"unit_next":444.2},{"page":4,"x":148,"part_no":"18192-6S","mat":"HSS430CU-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":423.7,"unit_next":431.2},{"page":4,"x":166,"part_no":"18192-6S","mat":"HSS430CU-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":423.7,"unit_next":431.2},{"page":4,"x":183,"part_no":"18191-6S","mat":"HSS430CU","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":388.7,"unit_next":396.2},{"page":4,"x":200,"part_no":"18191-6S","mat":"HSS430CU","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":388.7,"unit_next":396.2},{"page":4,"x":217,"part_no":"18160-6MA","mat":"HFS429M-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":412.4,"unit_next":417.9},{"page":4,"x":235,"part_no":"18160-6MA","mat":"HFS429M-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":405.5,"unit_next":411.0},{"page":4,"x":252,"part_no":"18160-6MA","mat":"HFS429M-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":412.4,"unit_next":417.9},{"page":4,"x":269,"part_no":"18160-6MA","mat":"HFS429M-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":405.5,"unit_next":411.0},{"page":4,"x":286,"part_no":"18307-3T1","mat":"HFS436L","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":532.4,"unit_next":537.9},{"page":4,"x":304,"part_no":"18120-6Y0","mat":"SA1E-CL80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":4,"x":321,"part_no":"18120-6Y0","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":4,"x":338,"part_no":"18120-6Y0","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":4,"x":356,"part_no":"18192-61B","mat":"HSS430CU","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":388.7,"unit_next":396.2},{"page":4,"x":373,"part_no":"18192-61B","mat":"HSS430CU","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":388.7,"unit_next":396.2},{"page":4,"x":390,"part_no":"18120-PTF","mat":"SUS304-S","scrap_cur":100.5,"scrap_next":105.5,"unit_cur":706.7,"unit_next":712.2},{"page":4,"x":407,"part_no":"18120-PTF","mat":"SUS304-S","scrap_cur":100.5,"scrap_next":105.5,"unit_cur":686.7,"unit_next":692.2},{"page":4,"x":425,"part_no":"18181-RW0","mat":"SA1D80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":4,"x":442,"part_no":"18181-RW0","mat":"SA1D80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":4,"x":459,"part_no":"18120-R9H","mat":"AZ150","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":4,"x":477,"part_no":"18120-R9H","mat":"AZ150","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":4,"x":494,"part_no":"18219-5R0","mat":"HFS436L","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":434.7,"unit_next":457.2},{"page":4,"x":511,"part_no":"18220-T7D","mat":"HFS436L","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":459.7,"unit_next":482.2},{"page":4,"x":528,"part_no":"18220-T7A","mat":"HFS436L","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":434.7,"unit_next":457.2},{"page":4,"x":546,"part_no":"18220-T7A","mat":"HFS436L","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":434.7,"unit_next":457.2},{"page":5,"x":62,"part_no":"18220-T7D","mat":"HFS436L","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":434.7,"unit_next":457.2},{"page":5,"x":79,"part_no":"18220-T7D","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":449.7,"unit_next":472.2},{"page":5,"x":96,"part_no":"18220-T7D","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":449.7,"unit_next":472.2},{"page":5,"x":114,"part_no":"18120-5YT","mat":"NGLDD","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":5,"x":131,"part_no":"18120-5YT","mat":"NGLDD","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":5,"x":148,"part_no":"18307-TTC","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":469.7,"unit_next":492.2},{"page":5,"x":166,"part_no":"18307-TTC","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":469.7,"unit_next":492.2},{"page":5,"x":183,"part_no":"18307-TTC","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":469.7,"unit_next":492.2},{"page":5,"x":200,"part_no":"18307-TTC","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":469.7,"unit_next":492.2},{"page":5,"x":217,"part_no":"18307-TTC","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":449.7,"unit_next":472.2},{"page":5,"x":235,"part_no":"18307-TTC","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":449.7,"unit_next":472.2},{"page":5,"x":252,"part_no":"14250-67R0-0010-Y1-4100","mat":"SUS304-S","scrap_cur":100.5,"scrap_next":105.5,"unit_cur":null,"unit_next":null},{"page":5,"x":269,"part_no":"18161-5R0","mat":"HFS429M-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":438.7,"unit_next":444.2},{"page":5,"x":286,"part_no":"18161-5R0","mat":"HFS429M-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":438.7,"unit_next":444.2},{"page":5,"x":304,"part_no":"18181-5R0","mat":"SA1D-CL80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":5,"x":321,"part_no":"18181-5R0","mat":"SA1D-CL80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":5,"x":338,"part_no":"18219-5R0","mat":"HFS436L","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":434.7,"unit_next":457.2},{"page":5,"x":356,"part_no":"18120-6Y0","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":5,"x":373,"part_no":"18120-6Y0","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":5,"x":390,"part_no":"18120-6Y0","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":5,"x":407,"part_no":"18220-TZD","mat":"HFS436L","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":414.7,"unit_next":437.2},{"page":5,"x":425,"part_no":"18220-TZE","mat":"HFS436L","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":414.7,"unit_next":437.2},{"page":5,"x":442,"part_no":"18307-T84","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":469.7,"unit_next":492.2},{"page":5,"x":459,"part_no":"18307-T84","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":469.7,"unit_next":492.2},{"page":5,"x":477,"part_no":"18220-3N0","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":469.7,"unit_next":492.2},{"page":5,"x":494,"part_no":"18307-TZB","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":474.7,"unit_next":497.2},{"page":5,"x":511,"part_no":"18220-T7D","mat":"HFS436L","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":434.7,"unit_next":457.2},{"page":5,"x":528,"part_no":"18220-T7D","mat":"HFS436L","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":434.7,"unit_next":457.2},{"page":5,"x":546,"part_no":"18160-6SG","mat":"HFS409L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":318.7,"unit_next":324.2},{"page":6,"x":62,"part_no":"18160-6SG","mat":"HFS409L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":318.7,"unit_next":324.2},{"page":6,"x":79,"part_no":"18181-RBB","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":6,"x":96,"part_no":"18181-RBB","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":6,"x":114,"part_no":"18182-RBB","mat":"SA1D-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":6,"x":131,"part_no":"18182-RBB","mat":"SA1D-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":6,"x":148,"part_no":"18120-RGB","mat":"NGLDD-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":6,"x":166,"part_no":"18120-RGB","mat":"NGLDD-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":6,"x":183,"part_no":"18181-RAD","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":6,"x":200,"part_no":"18181-RAD","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":6,"x":217,"part_no":"18120-5R0","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":6,"x":235,"part_no":"18120-5R0","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":6,"x":252,"part_no":"18120-5R0","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":6,"x":269,"part_no":"18120-5R0","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":6,"x":286,"part_no":"18120-5R1","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":6,"x":304,"part_no":"18120-5R1","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":6,"x":321,"part_no":"18120-5R1","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":6,"x":338,"part_no":"18120-5R1","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":6,"x":356,"part_no":"18120-5R1","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":6,"x":373,"part_no":"18120-5R1","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":6,"x":390,"part_no":"18120-5R1","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":6,"x":407,"part_no":"18120-5R1","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":6,"x":425,"part_no":"18120-5R1","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":6,"x":442,"part_no":"18120-5R1","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":6,"x":459,"part_no":"18120-5R1","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":6,"x":477,"part_no":"18120-5R1","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":6,"x":494,"part_no":"18120-5R1","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":6,"x":511,"part_no":"18120-5R1","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":6,"x":528,"part_no":"18120-5R1","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":6,"x":546,"part_no":"18120-5JA","mat":"NGLDD-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":7,"x":62,"part_no":"18120-5JA","mat":"NGLDD-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":7,"x":79,"part_no":"18120-5JA","mat":"NGLDD-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":7,"x":96,"part_no":"18120-5JA","mat":"NGLDD-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":7,"x":114,"part_no":"18800-5JA","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":469.7,"unit_next":492.2},{"page":7,"x":131,"part_no":"18800-5JA","mat":"HFS436L","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":439.7,"unit_next":462.2},{"page":7,"x":148,"part_no":"18120-5Y3","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":7,"x":166,"part_no":"18120-5Y3","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":7,"x":183,"part_no":"18120-5Y3","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":7,"x":200,"part_no":"18120-5Y3","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":7,"x":217,"part_no":"18120-5Y3","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":7,"x":235,"part_no":"18120-5Y3","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":7,"x":252,"part_no":"18401-5K1","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":449.7,"unit_next":472.2},{"page":7,"x":269,"part_no":"18400-5K1","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":449.7,"unit_next":472.2},{"page":7,"x":286,"part_no":"18181-58G","mat":"","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":7,"x":304,"part_no":"18181-58G","mat":"","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":7,"x":321,"part_no":"18120-58G","mat":"SUS304","scrap_cur":100.5,"scrap_next":105.5,"unit_cur":731.7,"unit_next":737.2},{"page":7,"x":338,"part_no":"18120-58G","mat":"SUS304-S","scrap_cur":100.5,"scrap_next":105.5,"unit_cur":691.7,"unit_next":697.2},{"page":7,"x":356,"part_no":"18121-58G","mat":"SUS304","scrap_cur":100.5,"scrap_next":105.5,"unit_cur":731.7,"unit_next":737.2},{"page":7,"x":373,"part_no":"18121-58G","mat":"SUS304-S","scrap_cur":100.5,"scrap_next":105.5,"unit_cur":691.7,"unit_next":697.2},{"page":7,"x":390,"part_no":"1J550-5WP","mat":"SUS304-S","scrap_cur":100.5,"scrap_next":105.5,"unit_cur":641.7,"unit_next":647.2},{"page":7,"x":407,"part_no":"18400-6C1","mat":"HFS436L-S","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":449.7,"unit_next":472.2},{"page":7,"x":425,"part_no":"18121-5MS","mat":"SA1E-CL80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":7,"x":442,"part_no":"18121-5MS","mat":"SA1E-CL80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":7,"x":459,"part_no":"18121-5MS","mat":"SA1E-CL80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":7,"x":477,"part_no":"18902-6A0","mat":"SA1D80-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":7,"x":494,"part_no":"18902-6A0","mat":"ALCD-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":7,"x":511,"part_no":"18902-6A0","mat":"ALCD-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":7,"x":528,"part_no":"18182-6S","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":7,"x":546,"part_no":"18182-6S","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":8,"x":62,"part_no":"18181-6S","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":8,"x":79,"part_no":"18181-6S","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":8,"x":96,"part_no":"18181-6S","mat":"SA1E-CL80","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":8,"x":114,"part_no":"18901-6S","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":8,"x":131,"part_no":"18901-6S","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":8,"x":148,"part_no":"18902-6A0","mat":"SA1D80-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":8,"x":166,"part_no":"18902-6A0","mat":"ALCD-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":8,"x":183,"part_no":"18902-6A0","mat":"ALCD-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":8,"x":200,"part_no":"18182-61B","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":8,"x":217,"part_no":"18182-61B","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":8,"x":235,"part_no":"18181-61B","mat":"SA1D-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":8,"x":252,"part_no":"18181-61B","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":8,"x":269,"part_no":"18181-61B","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":8,"x":286,"part_no":"18120-6MA","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":8,"x":304,"part_no":"18120-6MA","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":8,"x":321,"part_no":"18120-6MA","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":8,"x":338,"part_no":"18120-6MA","mat":"SA1E-CL","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null},{"page":8,"x":356,"part_no":"11250-85U0-0010-4010","mat":"SUS436L","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":null,"unit_next":null},{"page":8,"x":373,"part_no":"11250-85U0-0010-4010","mat":"SUS436L","scrap_cur":53.0,"scrap_next":52.5,"unit_cur":null,"unit_next":null},{"page":8,"x":390,"part_no":"14120-80U50-000","mat":"","scrap_cur":35.9,"scrap_next":38.1,"unit_cur":null,"unit_next":null}];
+
+// 案内文の差額（手動入力）
+const NOTICE_DIFFS = {
+  scrap: {
+    // スクラップ単価の差額（案内文より）
+    '普通鋼':       { cur: 35.90, next: 38.10, diff: 2.2 },
+    'アルミメッキ':  { cur: 35.90, next: 38.10, diff: 2.2 },
+    'Cr系SUS':      { cur: 53.00, next: 52.50, diff: -0.5 },
+    'Ni系SUS':      { cur: 100.50, next: 105.50, diff: 5.0 },
+  }
+};
+
+// 材質正規化
+function normMat(s) {
+  return s.toUpperCase().replace(/[-\s]/g,'').replace('CL80','80').replace('CL','');
+}
+
+// 改定表データを材質コードでグループ化（ユニーク化）
+function buildKaiteMap() {
+  const map = {};
+  for (const r of KAITE_DATA) {
+    if (!r.mat) continue;
+    const k = r.mat;
+    if (!map[k]) map[k] = { mat: k, scrap_cur: null, scrap_next: null, unit_cur: null, unit_next: null };
+    if (r.scrap_cur  != null) map[k].scrap_cur  = r.scrap_cur;
+    if (r.scrap_next != null) map[k].scrap_next = r.scrap_next;
+    if (r.unit_cur   != null) map[k].unit_cur   = r.unit_cur;
+    if (r.unit_next  != null) map[k].unit_next  = r.unit_next;
+  }
+  return map;
+}
+
+// マスタコードに対応するPDF改定データを検索
+function findKaite(excelCode, kaiteMap) {
+  const ne = normMat(excelCode);
+  let best = null;
+  for (const [k, v] of Object.entries(kaiteMap)) {
+    const nk = normMat(k);
+    if (ne.startsWith(nk) || nk.startsWith(ne.substring(0, Math.min(ne.length, 6)))) {
+      // より長くマッチするものを優先
+      if (!best || normMat(best.mat).length > nk.length) best = v;
+      if (!best || nk.length > normMat(best.mat).length) best = v;
+    }
+  }
+  return best;
+}
+
+// メイン処理
+let allRows = [], curF = 'all';
+
+function init() {
+  const kaiteMap = buildKaiteMap();
+  const rows = [];
+  let nOk=0, nWarn=0, nNg=0, nSkip=0;
+
+  for (const m of MAT_MASTER) {
+    if (!m.unit_price && !m.scrap_price) continue;
+
+    const kaite = findKaite(m.code, kaiteMap);
+    if (!kaite) { 
+      // PDF改定表にない → 変更なし
+      rows.push({ ...m, kaite: null, status: 'skip', reason: 'PDF未記載' });
+      nSkip++;
+      continue;
+    }
+
+    // --- 判定ロジック ---
+    // 支給単価の照合
+    let unitStatus = 'skip', unitReason = '';
+    let unitNewVal = null;
+    if (kaite.unit_cur != null && kaite.unit_next != null) {
+      const pdfDiff = Math.round((kaite.unit_next - kaite.unit_cur) * 100) / 100;
+      if (m.unit_price == null) {
+        unitStatus = 'skip'; unitReason = 'Excel単価なし';
+      } else if (Math.abs(m.unit_price - kaite.unit_cur) > 0.05) {
+        unitStatus = 'warn'; unitReason = `現行不一致(Excel:${m.unit_price} PDF現行:${kaite.unit_cur})`;
+      } else {
+        // 現行一致 → 差額確認
+        // 案内文の差額と突き合わせは材質ごとに複雑なので、PDF同士の差額をそのまま適用
+        unitStatus = 'ok';
+        unitNewVal = kaite.unit_next;
+      }
+    } else if (kaite.unit_cur == null && kaite.unit_next == null) {
+      unitStatus = 'skip'; unitReason = '支給単価変更なし';
+    }
+
+    // スクラップ単価の照合
+    let scrapStatus = 'skip', scrapReason = '';
+    let scrapNewVal = null;
+    if (kaite.scrap_cur != null && kaite.scrap_next != null) {
+      const pdfDiff = Math.round((kaite.scrap_next - kaite.scrap_cur) * 100) / 100;
+      if (m.scrap_price == null) {
+        scrapStatus = 'skip'; scrapReason = 'Excel単価なし';
+      } else if (Math.abs(m.scrap_price - kaite.scrap_cur) > 0.05) {
+        scrapStatus = 'warn'; scrapReason = `現行不一致(Excel:${m.scrap_price} PDF現行:${kaite.scrap_cur})`;
+      } else {
+        scrapStatus = 'ok';
+        scrapNewVal = kaite.scrap_next;
+      }
+    }
+
+    // 総合判定
+    let status = 'skip';
+    if (unitStatus === 'warn' || scrapStatus === 'warn') status = 'warn';
+    else if (unitStatus === 'ok' || scrapStatus === 'ok') status = 'ok';
+    else status = 'skip';
+
+    if (status === 'ok') nOk++;
+    else if (status === 'warn') nWarn++;
+    else if (status === 'ng') nNg++;
+    else nSkip++;
+
+    rows.push({
+      ...m, kaite,
+      unitStatus, unitNewVal,
+      scrapStatus, scrapNewVal,
+      status
+    });
+  }
+
+  allRows = rows;
+
+  // カード更新
+  document.getElementById('c-total').textContent = nOk + nWarn + nNg + nSkip;
+  document.getElementById('c-ok').textContent = nOk;
+  document.getElementById('c-warn').textContent = nWarn;
+  document.getElementById('c-ng').textContent = nNg;
+  document.getElementById('c-skip').textContent = nSkip;
+  document.getElementById('h-total').textContent = nOk + nWarn + nNg + nSkip;
+  document.getElementById('h-update').textContent = nOk;
+  document.getElementById('h-warn').textContent = nWarn + nNg;
+  document.getElementById('cards').style.display = 'grid';
+
+  render();
+}
+
+function render() {
+  const q = document.getElementById('sq').value.toLowerCase();
+  const rows = allRows.filter(r => {
+    if (curF !== 'all' && r.status !== curF) return false;
+    return !q || r.code.toLowerCase().includes(q);
+  });
+
+  const tb = document.getElementById('tbody');
+  if (!rows.length) {
+    tb.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--tx3)">該当なし</td></tr>';
+    return;
+  }
+
+  tb.innerHTML = rows.map(r => {
+    const k = r.kaite;
+    const f2 = v => v != null ? v.toFixed(2) : '—';
+
+    // 支給単価
+    const uc = f2(r.unit_price);
+    const upc = f2(k?.unit_cur);
+    const upn = f2(k?.unit_next);
+    const udiff = (k?.unit_cur != null && k?.unit_next != null) 
+      ? ((k.unit_next - k.unit_cur) >= 0 ? '+' : '') + (k.unit_next - k.unit_cur).toFixed(2)
+      : '—';
+    const uNew = r.unitNewVal != null
+      ? `<span class="new-val">${r.unitNewVal.toFixed(2)}</span>`
+      : (r.unitStatus === 'warn' ? '<span style="color:var(--wn)">要確認</span>' : '—');
+
+    // スクラップ単価
+    const sc = f2(r.scrap_price);
+    const spc = f2(k?.scrap_cur);
+    const spn = f2(k?.scrap_next);
+    const sdiff = (k?.scrap_cur != null && k?.scrap_next != null)
+      ? ((k.scrap_next - k.scrap_cur) >= 0 ? '+' : '') + (k.scrap_next - k.scrap_cur).toFixed(2)
+      : '—';
+    const sNew = r.scrapNewVal != null
+      ? `<span class="new-val">${r.scrapNewVal.toFixed(2)}</span>`
+      : (r.scrapStatus === 'warn' ? '<span style="color:var(--wn)">要確認</span>' : '—');
+
+    // バッジ
+    const badge = r.status === 'ok'   ? '<span class="badge b-ok">✅ 更新可</span>'
+                : r.status === 'warn' ? '<span class="badge b-wn">⚠ 要確認</span>'
+                : r.status === 'ng'   ? '<span class="badge b-ng">❌ 差額不一致</span>'
+                :                       '<span class="badge b-sk">— 変更なし</span>';
+
+    const rowCls = r.status === 'ok' ? 'ok-row' : r.status === 'warn' ? 'warn-row' : r.status === 'ng' ? 'ng-row' : 'skip-row';
+
+    const updateStr = r.status !== 'skip'
+      ? `支給:${uNew} / スクラップ:${sNew}`
+      : '—';
+
+    return `<tr class="${rowCls}">
+      <td class="mn">${r.code}</td>
+      <td class="r">${uc}</td>
+      <td class="r">${upc}</td>
+      <td class="r">${upn}</td>
+      <td class="r" style="font-weight:600">${udiff}</td>
+      <td class="r">${sc}</td>
+      <td class="r">${spc}</td>
+      <td class="r">${spn}</td>
+      <td class="r" style="font-weight:600">${sdiff}</td>
+      <td>${badge}</td>
+      <td style="font-size:11px;font-family:'IBM Plex Mono',monospace">${updateStr}</td>
+    </tr>`;
+  }).join('');
+}
+
+function setF(btn, f) {
+  curF = f;
+  document.querySelectorAll('.fb').forEach(b => b.className = 'fb');
+  btn.classList.add(f==='all'?'fa':f==='ok'?'fok':f==='warn'?'fwn':f==='ng'?'fng':'fgr');
+  render();
+}
+
+function expCSV() {
+  const rows = [['材質コード','Excel支給単価','PDF現行支給','PDF次回支給','支給差額','Excel Scrap','PDF現行Scrap','PDF次回Scrap','Scrap差額','判定','更新後支給','更新後Scrap']];
+  for (const r of allRows) {
+    const k = r.kaite;
+    rows.push([
+      r.code,
+      r.unit_price ?? '', k?.unit_cur ?? '', k?.unit_next ?? '',
+      k?.unit_cur != null && k?.unit_next != null ? (k.unit_next - k.unit_cur).toFixed(2) : '',
+      r.scrap_price ?? '', k?.scrap_cur ?? '', k?.scrap_next ?? '',
+      k?.scrap_cur != null && k?.scrap_next != null ? (k.scrap_next - k.scrap_cur).toFixed(2) : '',
+      r.status === 'ok' ? '更新可' : r.status === 'warn' ? '要確認' : r.status === 'ng' ? '差額不一致' : '変更なし',
+      r.unitNewVal ?? '', r.scrapNewVal ?? ''
+    ]);
+  }
+  const bom = '\uFEFF';
+  const csv = bom + rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
+  a.download = `材料単価改訂チェック_${new Date().toLocaleDateString('ja-JP').replace(/\//g,'')}.csv`;
+  a.click();
+}
+
+// 起動
+init();
+</script>
+</body>
+</html>

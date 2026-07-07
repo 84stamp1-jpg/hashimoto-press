@@ -1,0 +1,163 @@
+'==============================================================
+' 橋本工業　基準遵守手当システム　マクロ集
+'==============================================================
+
+Sub UpdateFeedbackCards()
+    '【毎月実行】個人別明細→④フィードバックカードに転記
+    Dim wsD As Worksheet, ws4 As Worksheet, ws3 As Worksheet
+    On Error GoTo ErrHandler
+    Set wsD = ThisWorkbook.Sheets("個人別明細")
+    Set ws4 = ThisWorkbook.Sheets("④個人フィードバックカード")
+    Set ws3 = ThisWorkbook.Sheets("③月次減点記録")
+    
+    Dim lastRow As Long
+    lastRow = wsD.Cells(wsD.Rows.Count, 1).End(xlUp).Row
+    If lastRow < 2 Then MsgBox "個人別明細にデータがありません。": Exit Sub
+    
+    ' ④シート全体をスキャンしてカード位置を取得
+    ' 従業員番号（200〜700の数値）がある行・列を検索
+    Dim empRows(50) As Long
+    Dim empCols(50) As Long
+    Dim empNos(50) As Variant
+    Dim cardCount As Integer
+    cardCount = 0
+    
+    Dim r As Long, c As Long
+    Dim maxRow As Long
+    maxRow = ws4.Cells(ws4.Rows.Count, 1).End(xlUp).Row + 50
+    
+    For r = 1 To maxRow
+        For c = 1 To 32
+            Dim v As Variant
+            v = ws4.Cells(r, c).Value
+            If IsNumeric(v) And v <> "" Then
+                If v >= 100 And v <= 700 Then
+                    ' 隣のセルが「氏名」ラベルかチェック（従業員番号ラベルの隣）
+                    If ws4.Cells(r, c - 1).Value = "No." Then
+                        empNos(cardCount) = v
+                        empRows(cardCount) = r - 1  ' カード開始行（タイトル行）
+                        empCols(cardCount) = c - 1  ' カード開始列
+                        cardCount = cardCount + 1
+                        If cardCount > 50 Then GoTo ScanDone
+                    End If
+                End If
+            End If
+        Next c
+    Next r
+ScanDone:
+    
+    If cardCount = 0 Then
+        MsgBox "カードが見つかりません。" & Chr(13) & "④シートの「No.」ラベルを確認してください。"
+        Exit Sub
+    End If
+    
+    ' 明細エリアをクリア（sr+4〜sr+11の8行）
+    Dim idx As Integer
+    For idx = 0 To cardCount - 1
+        Dim sr As Long, sc As Long
+        sr = empRows(idx): sc = empCols(idx)
+        Dim di As Integer
+        For di = 0 To 7
+            Dim dc As Integer
+            For dc = 0 To 7
+                ws4.Cells(sr + 4 + di, sc + dc).Value = ""
+            Next dc
+        Next di
+        ' 集計行クリア（sr+12）
+        ws4.Cells(sr + 12, sc + 1).Value = ""
+        ws4.Cells(sr + 12, sc + 4).Value = ""
+        ws4.Cells(sr + 12, sc + 7).Value = ""
+    Next idx
+    
+    ' 個人別明細→カードに転記
+    Dim detailCnt(50) As Integer
+    Dim i As Long
+    For i = 2 To lastRow
+        Dim empNo As Variant
+        empNo = wsD.Cells(i, 1).Value
+        If empNo = "" Then GoTo NextRow
+        
+        For idx = 0 To cardCount - 1
+            If empNos(idx) = empNo Then
+                If detailCnt(idx) < 8 Then
+                    Dim dr As Long
+                    dr = empRows(idx) + 4 + detailCnt(idx)
+                    sc = empCols(idx)
+                    ws4.Cells(dr, sc).Value = wsD.Cells(i, 7).Value
+                    ws4.Cells(dr, sc + 1).Value = wsD.Cells(i, 4).Value & _
+                        " / " & wsD.Cells(i, 6).Value
+                    ws4.Cells(dr, sc + 3).Value = wsD.Cells(i, 8).Value
+                    ws4.Cells(dr, sc + 4).Value = wsD.Cells(i, 9).Value
+                    ws4.Cells(dr, sc + 5).Value = wsD.Cells(i, 5).Value
+                    detailCnt(idx) = detailCnt(idx) + 1
+                End If
+                Exit For
+            End If
+        Next idx
+NextRow:
+    Next i
+    
+    ' ③個人別集計→合計減点・残pt・手当額を転記
+    For idx = 0 To cardCount - 1
+        sr = empRows(idx): sc = empCols(idx)
+        empNo = empNos(idx)
+        Dim r3 As Long
+        For r3 = 57 To 90
+            If ws3.Cells(r3, 1).Value = empNo Then
+                ws4.Cells(sr + 12, sc + 1).Value = ws3.Cells(r3, 9).Value
+                ws4.Cells(sr + 12, sc + 4).Value = ws3.Cells(r3, 10).Value
+                ws4.Cells(sr + 12, sc + 7).Value = ws3.Cells(r3, 11).Value
+                Exit For
+            End If
+        Next r3
+    Next idx
+    
+    MsgBox "フィードバックカード更新完了！（" & cardCount & "名分）", vbInformation
+    Exit Sub
+ErrHandler:
+    MsgBox "エラー: " & Err.Description & Chr(13) & "行: " & Erl, vbExclamation
+End Sub
+
+Sub NextMonthPrep()
+    '【翌月準備】③シートをコピーして新月用シートを作成
+    Dim wsNew As Worksheet
+    Dim newName As String
+    newName = InputBox("新シート名を入力してください", "次月準備", "③月次減点記録_")
+    If newName = "" Then Exit Sub
+    ThisWorkbook.Sheets("③月次減点記録").Copy After:=ThisWorkbook.Sheets("③月次減点記録")
+    Set wsNew = ActiveSheet
+    wsNew.Name = newName
+    wsNew.Range("B5:N54").ClearContents
+    wsNew.Range("F57:K88").ClearContents
+    wsNew.Range("C2").ClearContents
+    wsNew.Range("I2").ClearContents
+    MsgBox "「" & newName & "」を作成しました。", vbInformation
+End Sub
+
+Sub ConfirmMonth()
+    '【月次確定】⑤月次履歴DBに現月データを転記
+    Dim ws3 As Worksheet, ws5 As Worksheet
+    Set ws3 = ThisWorkbook.Sheets("③月次減点記録")
+    Set ws5 = ThisWorkbook.Sheets("⑤月次履歴DB")
+    Dim monthNum As Integer
+    monthNum = CInt(InputBox("何月目として転記？（1〜6）", "月次確定", "1"))
+    If monthNum < 1 Or monthNum > 6 Then MsgBox "1〜6を入力してください。": Exit Sub
+    Dim targetCol As Integer
+    targetCol = 5 + (monthNum - 1) * 3
+    Dim i As Integer, r5 As Integer
+    For i = 0 To 31
+        Dim empNo As Variant
+        empNo = ws3.Cells(57 + i, 1).Value
+        If empNo = "" Then GoTo Continue
+        For r5 = 4 To 35
+            If ws5.Cells(r5, 1).Value = empNo Then
+                ws5.Cells(r5, targetCol).Value = ws3.Cells(57 + i, 9).Value
+                ws5.Cells(r5, targetCol + 1).Value = ws3.Cells(57 + i, 10).Value
+                ws5.Cells(r5, targetCol + 2).Value = ws3.Cells(57 + i, 11).Value
+                Exit For
+            End If
+        Next r5
+Continue:
+    Next i
+    MsgBox monthNum & "月目を⑤月次履歴DBに転記しました。", vbInformation
+End Sub

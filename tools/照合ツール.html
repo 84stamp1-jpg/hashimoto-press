@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>調達基準表 照合ツール｜橋本工業</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+:root{
+  --bg:#f0f2f7;--surface:#fff;--surface2:#f5f7fb;--border:#dde1ec;
+  --accent:#2563eb;--accent2:#7c3aed;--ok:#16a34a;--warn:#d97706;
+  --ng:#dc2626;--text:#1e2235;--text2:#4b5580;--text3:#9099bb;--header:#1e2235;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text);font-size:13px}
+header{background:var(--header);padding:14px 28px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.logo{width:34px;height:34px;background:linear-gradient(135deg,#3b82f6,#7c3aed);border-radius:7px;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-weight:500;font-size:13px;color:#fff;flex-shrink:0}
+header h1{font-size:14px;font-weight:500;color:#fff;letter-spacing:.04em}
+header small{font-size:11px;color:#8893bb;margin-left:2px}
+.hstats{margin-left:auto;display:flex;gap:24px;font-size:11px;color:#8893bb}
+.hstats b{color:#e2e8f0;font-weight:500;font-family:'IBM Plex Mono',monospace}
+.main{padding:20px 28px;max-width:1400px}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px 24px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.ptitle{font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:14px}
+.drop{border:1.5px dashed var(--border);border-radius:8px;padding:28px;text-align:center;cursor:pointer;transition:all .2s;background:var(--surface2);position:relative}
+.drop:hover,.drop.over{border-color:var(--accent);background:#eff6ff}
+.drop.loaded{border-color:var(--ok);background:#f0fdf4}
+.drop input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.drop .ico{font-size:28px;margin-bottom:8px;display:block}
+.drop p{color:var(--text2);font-size:13px;margin-bottom:3px}
+.drop .hint{font-size:11px;color:var(--text3);font-family:'IBM Plex Mono',monospace}
+.ctrl{display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;margin-top:16px}
+.field{display:flex;flex-direction:column;gap:5px}
+.field label{font-size:11px;color:var(--text2);letter-spacing:.05em;text-transform:uppercase;font-weight:500}
+.field select,.field input{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:7px 11px;color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:12px;outline:none;transition:border-color .2s}
+.field select:focus,.field input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+.btn{padding:8px 18px;border-radius:6px;border:none;font-family:'Noto Sans JP',sans-serif;font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.bp{background:var(--accent);color:#fff}.bp:hover{background:#1d4ed8;transform:translateY(-1px)}.bp:disabled{background:#93c5fd;cursor:not-allowed;transform:none}
+.bs{background:var(--surface2);color:var(--text2);border:1px solid var(--border)}.bs:hover{border-color:var(--accent);color:var(--accent)}
+.pbar{height:3px;background:var(--border);border-radius:2px;margin-top:10px;display:none;overflow:hidden}
+.pfill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:2px;transition:width .3s;width:0%}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:14px 18px;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+.clbl{font-size:10px;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px;font-weight:600}
+.cval{font-family:'IBM Plex Mono',monospace;font-size:28px;font-weight:500;line-height:1}
+.c-ok{color:var(--ok)}.c-w{color:var(--warn)}.c-ng{color:var(--ng)}.c-bl{color:var(--accent)}
+.fbar{display:flex;gap:7px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.fb{padding:5px 13px;border-radius:16px;border:1px solid var(--border);background:var(--surface);color:var(--text2);font-size:11px;cursor:pointer;transition:all .15s;font-family:'Noto Sans JP',sans-serif;font-weight:500}
+.fb:hover{border-color:var(--accent);color:var(--accent)}
+.f-all{background:var(--accent);border-color:var(--accent);color:#fff}
+.f-ng{background:var(--ng);border-color:var(--ng);color:#fff}
+.f-ok{background:var(--ok);border-color:var(--ok);color:#fff}
+.f-ms{background:var(--warn);border-color:var(--warn);color:#fff}
+.f-pdf{background:var(--accent2);border-color:var(--accent2);color:#fff}
+.srch{margin-left:auto;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:5px 14px;color:var(--text);font-size:11px;outline:none;width:220px;transition:border-color .2s;font-family:'Noto Sans JP',sans-serif}
+.srch:focus{border-color:var(--accent)}
+.tw{background:var(--surface);border:1px solid var(--border);border-radius:9px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.05)}
+table{width:100%;border-collapse:collapse}
+thead tr{background:var(--surface2);border-bottom:2px solid var(--border)}
+th{padding:9px 12px;text-align:left;font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.1em;text-transform:uppercase;white-space:nowrap}
+th.r{text-align:right}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
+tbody tr:hover{background:#f8f9ff}
+tbody tr.pm{background:#faf5ff}
+tbody tr:last-child{border-bottom:none}
+td{padding:8px 12px;font-size:12px;vertical-align:middle}
+td.r{text-align:right;font-family:'IBM Plex Mono',monospace;font-size:12px}
+td.mn{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text2)}
+.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:4px;font-size:10px;font-family:'IBM Plex Mono',monospace;font-weight:600}
+.bok{background:#dcfce7;color:var(--ok)}.bng{background:#fee2e2;color:var(--ng)}.bms{background:#ede9fe;color:var(--accent2)}
+.dp{color:var(--ng);font-weight:500}.dn{color:var(--accent2);font-weight:500}.dz{color:var(--ok)}
+.note{font-size:10px;color:var(--text3);font-style:italic}
+#status{font-size:12px;color:var(--text2);padding:8px 0 0;min-height:20px}
+.obar{display:flex;gap:8px;margin-top:14px;justify-content:flex-end}
+@media(max-width:900px){.cards{grid-template-columns:repeat(2,1fr)}.main{padding:14px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">HK</div>
+  <div><h1>調達基準表 照合ツール</h1><small>橋本工業株式会社 ／ ユタカ技研向け</small></div>
+  <div class="hstats" id="hstats" style="display:none">
+    <div>照合 <b id="hm">0</b> 件</div>
+    <div>差異 <b id="hd">0</b> 件</div>
+    <div><b id="ht">-</b></div>
+  </div>
+</header>
+<div class="main">
+  <div class="panel">
+    <div class="ptitle">① 調達基準表 PDF をアップロード</div>
+    <div class="drop" id="drop">
+      <input type="file" accept=".pdf" id="fi">
+      <span class="ico" id="ico">📄</span>
+      <p id="ft">クリックまたはドラッグ＆ドロップ</p>
+      <p class="hint" id="fh">部品単価通知書 兼 調達基準表 PDF</p>
+    </div>
+    <div class="pbar" id="pbar"><div class="pfill" id="pf"></div></div>
+    <div class="ctrl">
+      <div class="field"><label>照合対象</label>
+        <select id="pt"><option value="no_mold">型レス単価</option><option value="with_mold">型込み単価</option></select>
+      </div>
+      <div class="field"><label>許容差異（円）</label>
+        <input type="number" id="tol" value="0.5" step="0.1" min="0" style="width:90px">
+      </div>
+      <button class="btn bp" id="run" disabled>▶ 照合実行</button>
+      <button class="btn bs" id="rst">リセット</button>
+    </div>
+    <div id="status"></div>
+  </div>
+
+  <div id="result" style="display:none">
+    <div class="cards" id="cards"></div>
+    <div class="fbar">
+      <button class="fb f-all" data-f="all"     onclick="setF(this,'all')">すべて</button>
+      <button class="fb"       data-f="ng"      onclick="setF(this,'ng')">⚠ 差異あり</button>
+      <button class="fb"       data-f="ok"      onclick="setF(this,'ok')">✓ 一致</button>
+      <button class="fb"       data-f="missing" onclick="setF(this,'missing')">PDF未記載</button>
+      <button class="fb"       data-f="pdf_only" onclick="setF(this,'pdf_only')">📄 今回PDF品番のみ</button>
+      <input class="srch" id="sq" placeholder="品番・部品名で検索..." oninput="render()">
+    </div>
+    <div class="tw">
+      <table>
+        <thead><tr>
+          <th>調達NO</th><th>品番</th><th>部品名</th><th>客先管理NO</th>
+          <th class="r">適用年月日</th>
+          <th class="r">PDF 加工単価</th><th class="r">Excel 計算値</th>
+          <th class="r">差異</th><th class="r">差異率</th><th>判定</th>
+        </tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="obar"><button class="btn bs" onclick="expCSV()">📥 CSV 出力</button></div>
+  </div>
+</div>
+
+<script>
+const ED = [{"no":1,"part_no":"18100-P7A-G512-050","part_name":"ﾘﾔｰｼﾞｮｲﾝﾄｹｰｽ （QCﾀｲｻｸﾋﾝ）","excel_with_mold":335.12,"excel_no_mold":335.12,"appl_date":"2021/08/01","mgmt_nos":["892358011"]},{"no":2,"part_no":"18100-P7A -G512-040","part_name":"ﾌﾛﾝﾄｼﾞｮｲﾝﾄｹｰｽ （QCﾀｲｻｸﾋﾝ）","excel_with_mold":336.94,"excel_no_mold":336.94,"appl_date":"2021/08/01","mgmt_nos":["892357013"]},{"no":3,"part_no":"18181-PZA -A00","part_name":"COVER FR","excel_with_mold":195.15,"excel_no_mold":195.15,"appl_date":"2025/05/01","mgmt_nos":["902565000","900308017"]},{"no":4,"part_no":"18182-PZA -A00","part_name":"COVER RR","excel_with_mold":173.65,"excel_no_mold":173.65,"appl_date":"2025/05/01","mgmt_nos":["902566009","900309006"]},{"no":6,"part_no":"18113-PZA -A001-H1","part_name":"ｶﾊﾞｰｽﾃｰCOMP","excel_with_mold":19.24,"excel_no_mold":19.24,"appl_date":"2025/08/01","mgmt_nos":["902567007"]},{"no":7,"part_no":"18181-RGB-000","part_name":"COVER A,CONVERTER","excel_with_mold":166.37,"excel_no_mold":166.37,"appl_date":"2025/05/01","mgmt_nos":["902075006","900377010"]},{"no":8,"part_no":"18182-RGB-000","part_name":"COVER B,CONVERTER","excel_with_mold":139.97,"excel_no_mold":139.97,"appl_date":"2025/05/01","mgmt_nos":["902076004","900378009"]},{"no":11,"part_no":"18120-PTF -9000","part_name":"EXHﾏﾆﾎｰﾙﾄﾞ ｱｯﾊﾟｰｶﾊﾞｰ COMP(2YV)","excel_with_mold":792.76,"excel_no_mold":250.51,"appl_date":"2025/11/01","mgmt_nos":["901693007","901085008"]},{"no":12,"part_no":"18155-PNE-J000-H1","part_name":"LWRｹｰｽ（R)","excel_with_mold":430.1,"excel_no_mold":430.1,"appl_date":"2022/11/01","mgmt_nos":["105155014"]},{"no":12,"part_no":"18181-RW0 -A000","part_name":"ｱｯﾊﾟｰｶﾊﾞｰCOMP","excel_with_mold":218.31,"excel_no_mold":171.69,"appl_date":"2025/11/01","mgmt_nos":["903802007","901323007","901744005"]},{"no":13,"part_no":"18154-PNE -J000-H1","part_name":"UPｹｰｽ（R)","excel_with_mold":428.6,"excel_no_mold":428.6,"appl_date":"2022/11/01","mgmt_nos":["105156012"]},{"no":13,"part_no":"18182-RW0 -A000-01","part_name":"COVER,COMP LWR","excel_with_mold":173.37,"excel_no_mold":135.89,"appl_date":"2022/11/01","mgmt_nos":["903803014","901320020"]},{"no":18,"part_no":"18160-RBB -N000-C10","part_name":"FR ｺｰﾝ SUB COMP（R)","excel_with_mold":543.08,"excel_no_mold":543.08,"appl_date":"2022/11/01","mgmt_nos":["105871001"]},{"no":19,"part_no":"18160-RBB -N000-C20","part_name":"RR ｺｰﾝ SUB COMP （R)","excel_with_mold":1099.2,"excel_no_mold":1099.2,"appl_date":"2024/08/01","mgmt_nos":["105873008"]},{"no":20,"part_no":"18160-RBC-0000-C10","part_name":"FR ﾌﾗﾝｼﾞ SUB COMP （R)","excel_with_mold":934.43,"excel_no_mold":934.43,"appl_date":"2022/11/01","mgmt_nos":["105876002"]},{"no":21,"part_no":"18160-RBC -0000-C20","part_name":"RR ｺｰﾝ SUB COMP （R)","excel_with_mold":996.85,"excel_no_mold":996.85,"appl_date":"2024/08/01","mgmt_nos":["105877000"]},{"no":22,"part_no":"18162-RBD -E000Z02","part_name":"RR ｺｰﾝ ﾌﾗﾝｼﾞ COMP（R)","excel_with_mold":1061.61,"excel_no_mold":1061.61,"appl_date":"2025/05/01","mgmt_nos":["105949001"]},{"no":24,"part_no":"18161-RBD -E000P01","part_name":"UP ｺｰﾝ (ｲｻﾞﾜ)（R)","excel_with_mold":175.46,"excel_no_mold":175.46,"appl_date":"2024/05/01","mgmt_nos":["105948003"]},{"no":25,"part_no":"18161-RBD -E000P02","part_name":"LWR ｺｰﾝ (ｲｻﾞﾜ)（R)","excel_with_mold":175.46,"excel_no_mold":175.46,"appl_date":"2024/05/01","mgmt_nos":["105976009"]},{"no":26,"part_no":"18191-RBD -E000P01","part_name":"ｺｰﾝ A (ｲｻﾞﾜ)（R)","excel_with_mold":174.19,"excel_no_mold":174.19,"appl_date":"2025/05/01","mgmt_nos":["105953000"]},{"no":27,"part_no":"18190-RBD -E010-050","part_name":"ｶﾊﾞｰｽﾃｰ A (ｲｻﾞﾜ)（R)","excel_with_mold":20.49,"excel_no_mold":20.49,"appl_date":"2025/05/01","mgmt_nos":["105954008"]},{"no":28,"part_no":"18191-RBD -E000P02","part_name":"ｺｰﾝ B (ｲｻﾞﾜ)（R)","excel_with_mold":174.79,"excel_no_mold":174.79,"appl_date":"2025/05/01","mgmt_nos":["105970000"]},{"no":34,"part_no":"18182-RAD -L11","part_name":"COVER COMP, UPR","excel_with_mold":284.88,"excel_no_mold":284.88,"appl_date":"2025/11/01","mgmt_nos":["109842000"]},{"no":35,"part_no":"18161-RH2 -E000H1-A","part_name":"CONE A FR <UGR>","excel_with_mold":265.52,"excel_no_mold":265.52,"appl_date":"2025/11/01","mgmt_nos":["109731008"]},{"no":35,"part_no":"18308-TM9 -0030-H1-450","part_name":"ﾊﾟｯﾁ","excel_with_mold":25.81,"excel_no_mold":13.29,"appl_date":"2024/08/01","mgmt_nos":["893470003"]},{"no":36,"part_no":"18161-RH2 -E000-H1-B","part_name":"CONE B FR <UGR>","excel_with_mold":265.52,"excel_no_mold":265.52,"appl_date":"2025/08/01","mgmt_nos":["109708003"]},{"no":37,"part_no":"18120-R9H -0001","part_name":"COVER COMP,T/C","excel_with_mold":536.1,"excel_no_mold":263.1,"appl_date":"2025/11/01","mgmt_nos":["901308012","901308003","901758005"]},{"no":37,"part_no":"18162-RH2 -E000-H1-A","part_name":"CONE A RR <UGR>","excel_with_mold":273.68,"excel_no_mold":273.68,"appl_date":"2021/05/01","mgmt_nos":["109715006"]},{"no":38,"part_no":"18162-RH2 -E000-H1-B","part_name":"CONE B RR <UGR>","excel_with_mold":273.68,"excel_no_mold":273.68,"appl_date":"2021/05/01","mgmt_nos":["109707005"]},{"no":38,"part_no":"18220-T5A -J010-M1-4600","part_name":"GUARD A,EXH","excel_with_mold":58.43,"excel_no_mold":34.73,"appl_date":"2025/11/01","mgmt_nos":["893582003"]},{"no":39,"part_no":"18220-T5E -0030-4700","part_name":"GUARD B,EXH","excel_with_mold":53.5,"excel_no_mold":32.51,"appl_date":"2022/11/01","mgmt_nos":["893614005"]},{"no":40,"part_no":"18219-5R0 -0030-4000","part_name":"COVER,EXH","excel_with_mold":43.29,"excel_no_mold":31.55,"appl_date":"2025/11/01","mgmt_nos":["904978009","904685002"]},{"no":41,"part_no":"18220-T7D -9010-M1-4400","part_name":"COVER B,EXH　　　【岩澤工業】","excel_with_mold":87.31,"excel_no_mold":51.79,"appl_date":"2025/11/01","mgmt_nos":["893759001"]},{"no":42,"part_no":"18109-RRC -3000-010","part_name":"FR ﾁｬﾝﾊﾞｰ L（R)","excel_with_mold":441.02,"excel_no_mold":441.02,"appl_date":"2025/11/01","mgmt_nos":["329653009"]},{"no":42,"part_no":"18220-T7A -9010-M1-4400","part_name":"COVER B,EXH","excel_with_mold":61.81,"excel_no_mold":38.14,"appl_date":"2025/11/01","mgmt_nos":["893789003"]},{"no":43,"part_no":"18109-RRC -3000-020","part_name":"RR ﾁｬﾝﾊﾞｰ L（R)","excel_with_mold":435.76,"excel_no_mold":435.76,"appl_date":"2025/11/01","mgmt_nos":["329652000"]},{"no":43,"part_no":"18220-T7A -9010-M1-4500","part_name":"COVER C,EXH","excel_with_mold":69.52,"excel_no_mold":51.4,"appl_date":"2025/11/01","mgmt_nos":["893790007"]},{"no":44,"part_no":"18114-RRC -3000","part_name":"ﾌﾟﾚｰﾄ（R)","excel_with_mold":17.59,"excel_no_mold":17.59,"appl_date":"2025/11/01","mgmt_nos":["329654007"]},{"no":44,"part_no":"18220-T7D -9010-M1-4300","part_name":"COVER A,EXH","excel_with_mold":70.04,"excel_no_mold":43.83,"appl_date":"2025/11/01","mgmt_nos":["893840007"]},{"no":45,"part_no":"18122-RRC -3000","part_name":"RR PIPE ｶﾊﾞｰ<5239>","excel_with_mold":44.61,"excel_no_mold":44.61,"appl_date":"2025/08/01","mgmt_nos":["329692000"]},{"no":45,"part_no":"18220-T7D -9010-M1-4500","part_name":"COVER C,EXH","excel_with_mold":76.01,"excel_no_mold":51.5,"appl_date":"2024/08/01","mgmt_nos":["893760005","890739000"]},{"no":45,"part_no":"MR305195-P01","part_name":"ﾄﾞﾗｲﾌﾞﾌﾟﾚｰﾄ ﾌﾟﾚｽ 〈ｱｺﾔ〉","excel_with_mold":193.24,"excel_no_mold":193.24,"appl_date":"2021/08/01","mgmt_nos":["402123001"]},{"no":46,"part_no":"18220-T7D -9010-M1-4600","part_name":"COVER E,EXH","excel_with_mold":139.61,"excel_no_mold":107.19,"appl_date":"2025/11/01","mgmt_nos":["893761003"]},{"no":47,"part_no":"18220-T7D -9010-M1-4200","part_name":"BRKT C,EXH MTG","excel_with_mold":23.9,"excel_no_mold":23.9,"appl_date":"2025/11/01","mgmt_nos":["893758003"]},{"no":48,"part_no":"18155-PNE -J000-H1","part_name":"LWRｹｰｽ（R)","excel_with_mold":404.2,"excel_no_mold":404.2,"appl_date":"2021/05/01","mgmt_nos":["904916009"]},{"no":49,"part_no":"18154-PNE -J000-H1","part_name":"UPｹｰｽ（R)","excel_with_mold":404.2,"excel_no_mold":404.2,"appl_date":"2021/05/01","mgmt_nos":["904917007"]},{"no":49,"part_no":"18224-SZX -0330-H1-430","part_name":"BRKT A (3220M)","excel_with_mold":48.2,"excel_no_mold":48.2,"appl_date":"2025/11/01","mgmt_nos":["328005005"]},{"no":50,"part_no":"18160-RBB-N000-C10","part_name":"FR ｺｰﾝ SUB COMP（R)","excel_with_mold":523.86,"excel_no_mold":523.86,"appl_date":"2021/05/01","mgmt_nos":["904924000"]},{"no":50,"part_no":"18183-RL0-G101","part_name":"COVER COMP A DPF CONV","excel_with_mold":854.12,"excel_no_mold":380.93,"appl_date":"2025/11/01","mgmt_nos":["390001000","350361005","108793002"]},{"no":51,"part_no":"18160-RBB -N000-C20","part_name":"RR ｺｰﾝ SUB COMP （R)","excel_with_mold":1059.17,"excel_no_mold":1059.17,"appl_date":"2021/05/01","mgmt_nos":["904926006"]},{"no":51,"part_no":"18184-RL0-G101","part_name":"COVER COMP B DPF CONV","excel_with_mold":835.58,"excel_no_mold":429.28,"appl_date":"2025/11/01","mgmt_nos":["311329009","108798003"]},{"no":52,"part_no":"18160-RBC -000-C10","part_name":"FR ﾌﾗﾝｼﾞ SUB COMP （R)","excel_with_mold":886.91,"excel_no_mold":886.91,"appl_date":"2021/05/01","mgmt_nos":["904931002"]},{"no":52,"part_no":"18194-RD2 -3000","part_name":"STAY COMP A COVER <UGR>","excel_with_mold":17.22,"excel_no_mold":17.22,"appl_date":"2025/11/01","mgmt_nos":["108051002"]},{"no":53,"part_no":"18160-RBC -0000-C20","part_name":"RR ｺｰﾝ SUB COMP （R)","excel_with_mold":961.01,"excel_no_mold":961.01,"appl_date":"2021/05/01","mgmt_nos":["904934007"]},{"no":53,"part_no":"18195-RD2 -3000","part_name":"STAY COMP B COVER","excel_with_mold":15.55,"excel_no_mold":15.55,"appl_date":"2025/11/01","mgmt_nos":["108052000"]},{"no":54,"part_no":"18307-T0T-H010-400","part_name":"BRKT,EXH  YST","excel_with_mold":17.81,"excel_no_mold":17.81,"appl_date":"2025/11/01","mgmt_nos":["311987004"]},{"no":55,"part_no":"18307-T0T-H010-400","part_name":"BRKT,EXH  YM1","excel_with_mold":17.81,"excel_no_mold":17.81,"appl_date":"2025/11/01","mgmt_nos":["301553000"]},{"no":57,"part_no":"18181-5K0 -A000-2D0","part_name":"COVER CONVERtER","excel_with_mold":354.22,"excel_no_mold":225.82,"appl_date":"2025/11/01","mgmt_nos":["108500000"]},{"no":59,"part_no":"18308-T5B -9010-Y1-4500","part_name":"PAtCH","excel_with_mold":36.85,"excel_no_mold":25.88,"appl_date":"2025/11/01","mgmt_nos":["325957009"]},{"no":60,"part_no":"18120-5YT -0001","part_name":"COVER COMP T/C     A-16-14408","excel_with_mold":424.21,"excel_no_mold":313.9,"appl_date":"2025/11/01","mgmt_nos":["901661009","901627018","901627009"]},{"no":60,"part_no":"18308-T5B -9010-Y1-4400","part_name":"CAP","excel_with_mold":23.27,"excel_no_mold":16.82,"appl_date":"2025/11/01","mgmt_nos":["325958007"]},{"no":61,"part_no":"18307-TTC -0030-4000","part_name":"COVER A,EXH","excel_with_mold":185.57,"excel_no_mold":119.01,"appl_date":"2020/11/01","mgmt_nos":["894200000"]},{"no":61,"part_no":"18307-TTC -0030-4000","part_name":"COVER A,EXH","excel_with_mold":182.42,"excel_no_mold":115.86,"appl_date":"2025/11/01","mgmt_nos":["894200000"]},{"no":62,"part_no":"18181-5R0 -J600","part_name":"COVER,COMP LWR","excel_with_mold":238.62,"excel_no_mold":147.97,"appl_date":"2025/11/01","mgmt_nos":["108066000","311168007"]},{"no":62,"part_no":"18307-TTC -0030-4100","part_name":"COVER B,EXH","excel_with_mold":189.44,"excel_no_mold":109.59,"appl_date":"2020/11/01","mgmt_nos":["894203000"]},{"no":62,"part_no":"18307-TTC -0030-4110","part_name":"COVER B,EXH","excel_with_mold":185.97,"excel_no_mold":106.12,"appl_date":"2025/11/01","mgmt_nos":["894203000"]},{"no":63,"part_no":"18307-TTC -0030-4200","part_name":"COVER C,EXH","excel_with_mold":206.8,"excel_no_mold":139.52,"appl_date":"2020/11/01","mgmt_nos":["894204008"]},{"no":63,"part_no":"18307-TTC -0030-4210","part_name":"COVER C,EXH","excel_with_mold":204.13,"excel_no_mold":136.85,"appl_date":"2025/11/01","mgmt_nos":["894204008"]},{"no":63,"part_no":"18308-T5A -0030-H1-4400","part_name":"PAtCH","excel_with_mold":21.7,"excel_no_mold":17.94,"appl_date":"2025/11/01","mgmt_nos":["325331007"]},{"no":64,"part_no":"18219-5R0 -J610-4000","part_name":"COVER,EXH","excel_with_mold":61.46,"excel_no_mold":31.31,"appl_date":"2025/11/01","mgmt_nos":["108075000"]},{"no":64,"part_no":"18307-TTC -0030-4300","part_name":"COVER D,EXH","excel_with_mold":108.83,"excel_no_mold":107.0,"appl_date":"2020/11/01","mgmt_nos":["894205006"]},{"no":64,"part_no":"18307-TTC -0030-4310","part_name":"COVER D,EXH","excel_with_mold":105.37,"excel_no_mold":103.54,"appl_date":"2025/11/01","mgmt_nos":["894205006"]},{"no":65,"part_no":"18161-5R0 -J600-H1-0110","part_name":"CASE A","excel_with_mold":120.59,"excel_no_mold":89.75,"appl_date":"2025/11/01","mgmt_nos":["108081004"]},{"no":65,"part_no":"18307-TTC -0030-4400","part_name":"COVER E,EXH","excel_with_mold":231.98,"excel_no_mold":172.5,"appl_date":"2020/11/01","mgmt_nos":["894206004"]},{"no":65,"part_no":"18307-TTC -0030-4410","part_name":"COVER E,EXH","excel_with_mold":229.05,"excel_no_mold":169.57,"appl_date":"2025/11/01","mgmt_nos":["894206004"]},{"no":66,"part_no":"18161-5R0 -J600-H1-0210","part_name":"CASE B","excel_with_mold":120.51,"excel_no_mold":89.67,"appl_date":"2025/11/01","mgmt_nos":["108082002"]},{"no":66,"part_no":"18307-TTC -0030-4700","part_name":"BRKT, EXH","excel_with_mold":55.17,"excel_no_mold":39.94,"appl_date":"2025/11/01","mgmt_nos":["894306000"]},{"no":67,"part_no":"14250-67R0-0010-Y1-4100","part_name":"END CHBR　　　SUZUKI","excel_with_mold":169.93,"excel_no_mold":152.61,"appl_date":"2018/02/01","mgmt_nos":["894278001"]},{"no":67,"part_no":"14250-67R0-0010-Y1-4100","part_name":"END CHBR　　　SUZUKI","excel_with_mold":128.45,"excel_no_mold":128.45,"appl_date":"2026/03/01","mgmt_nos":["894278001"]},{"no":67,"part_no":"18308-T6A -J010-500","part_name":"CAP","excel_with_mold":22.34,"excel_no_mold":18.06,"appl_date":"2025/11/01","mgmt_nos":["328319004"]},{"no":68,"part_no":"18161-5R0 -J600-H1-0110","part_name":"CASE A","excel_with_mold":89.75,"excel_no_mold":89.75,"appl_date":"2025/11/01","mgmt_nos":["905239009"]},{"no":68,"part_no":"18308-T6A -J010-Y1-C10","part_name":"HALF COMP","excel_with_mold":406.91,"excel_no_mold":331.1,"appl_date":"2025/11/01","mgmt_nos":["328209010"]},{"no":69,"part_no":"18161-5R0 -J600-H1-0210","part_name":"CASE B","excel_with_mold":89.67,"excel_no_mold":89.67,"appl_date":"2025/11/01","mgmt_nos":["905240002"]},{"no":69,"part_no":"18308-T6A -J510-***","part_name":"HALF COMP","excel_with_mold":362.26,"excel_no_mold":341.62,"appl_date":"2025/11/01","mgmt_nos":["328347000"]},{"no":70,"part_no":"18181-5R0 -J600-2D00","part_name":"COVER,COMP LWR","excel_with_mold":139.13,"excel_no_mold":139.13,"appl_date":"2025/11/01","mgmt_nos":["905234008"]},{"no":70,"part_no":"18220-T6A -J010-M1-420D","part_name":"COVER A","excel_with_mold":95.05,"excel_no_mold":49.66,"appl_date":"2025/11/01","mgmt_nos":["328310010","311797009"]},{"no":71,"part_no":"18219-5R0 -J610-4000","part_name":"COVER,EXH","excel_with_mold":61.46,"excel_no_mold":31.31,"appl_date":"2025/11/01","mgmt_nos":["905238000"]},{"no":71,"part_no":"18307-T6B -J010-M1-4300","part_name":"STPR PLATE,EXH","excel_with_mold":27.76,"excel_no_mold":12.06,"appl_date":"2025/11/01","mgmt_nos":["328112013","311533000"]},{"no":72,"part_no":"18220-T5E -0030-4700","part_name":"GUARD B,EXH","excel_with_mold":32.51,"excel_no_mold":32.51,"appl_date":"2022/11/01","mgmt_nos":["894343005"]},{"no":72,"part_no":"18308-T6B -J01041","part_name":"PLATE FR,EXH","excel_with_mold":1104.59,"excel_no_mold":398.06,"appl_date":"2025/11/01","mgmt_nos":["328106019"]},{"no":73,"part_no":"18120-6Y0 -0000","part_name":"COVER, CONVERTER","excel_with_mold":271.99,"excel_no_mold":241.39,"appl_date":"2025/11/01","mgmt_nos":["901716000"]},{"no":73,"part_no":"18308-T6B -J01044","part_name":"SEPARATOR A,EXH","excel_with_mold":914.92,"excel_no_mold":291.72,"appl_date":"2025/11/01","mgmt_nos":["328073019"]},{"no":74,"part_no":"18210-3SA -0030-70","part_name":"MT BKT A COMP (UGS)","excel_with_mold":62.93,"excel_no_mold":62.93,"appl_date":"2021/08/01","mgmt_nos":["324643004"]},{"no":74,"part_no":"18220-TZD -0030-4600","part_name":"GUARD  A, EXH　　　【岩澤工業】","excel_with_mold":44.15,"excel_no_mold":44.15,"appl_date":"2025/11/01","mgmt_nos":["894455005"]},{"no":74,"part_no":"18308-T6B-J010-450","part_name":"SEPARATOR B,EXH","excel_with_mold":466.46,"excel_no_mold":291.34,"appl_date":"2025/11/01","mgmt_nos":["328074017"]},{"no":75,"part_no":"18220-TZE -9010-M1-4710","part_name":"GUARD  B, EXH　　　【岩澤工業】","excel_with_mold":40.9,"excel_no_mold":40.9,"appl_date":"2025/11/01","mgmt_nos":[]},{"no":75,"part_no":"18308-T6B-J01042","part_name":"PLATE RR,EXH","excel_with_mold":1156.85,"excel_no_mold":456.36,"appl_date":"2025/11/01","mgmt_nos":["328107017"]},{"no":76,"part_no":"18220-T5A -J010-M1-4600","part_name":"GUARD A,EXH","excel_with_mold":35.98,"excel_no_mold":35.98,"appl_date":"2025/11/01","mgmt_nos":["325367008"]},{"no":76,"part_no":"18307-T84 -0030-4200","part_name":"COVER C, EXH","excel_with_mold":407.38,"excel_no_mold":183.4,"appl_date":"2020/11/01","mgmt_nos":["894501002"]},{"no":76,"part_no":"18307-T84 -0030-4200","part_name":"COVER C, EXH","excel_with_mold":400.13,"excel_no_mold":176.15,"appl_date":"2025/11/01","mgmt_nos":["894501002"]},{"no":77,"part_no":"18307-T84 -0030-4300","part_name":"COVER D,EXH","excel_with_mold":365.24,"excel_no_mold":151.44,"appl_date":"2020/11/01","mgmt_nos":["894502000"]},{"no":77,"part_no":"18307-T84 -0030-4300","part_name":"COVER D,EXH","excel_with_mold":357.35,"excel_no_mold":143.55,"appl_date":"2025/11/01","mgmt_nos":["894502000"]},{"no":77,"part_no":"18308-T6B-J010-Y1-C21","part_name":"PLATE RR,COMP","excel_with_mold":1824.99,"excel_no_mold":1390.2,"appl_date":"2025/11/01","mgmt_nos":["328247012"]},{"no":78,"part_no":"18220-3N0 -9010-450C","part_name":"COVER C,EXH","excel_with_mold":52.55,"excel_no_mold":39.37,"appl_date":"2025/11/01","mgmt_nos":["894517009"]},{"no":78,"part_no":"18307-T7B -J020-400","part_name":"PIPE TAIL BRKT","excel_with_mold":400.66,"excel_no_mold":400.66,"appl_date":"2024/08/01","mgmt_nos":["328368011"]},{"no":79,"part_no":"18307-T7B -J010-M1-C110","part_name":"PIPE TAIL COMP","excel_with_mold":405.29,"excel_no_mold":400.66,"appl_date":"2025/11/01","mgmt_nos":["328378000"]},{"no":79,"part_no":"18307-TZB -S010-M1-C300","part_name":"PIPE TAIL COMP","excel_with_mold":323.17,"excel_no_mold":300.69,"appl_date":"2025/11/01","mgmt_nos":["327295008","894661002"]},{"no":80,"part_no":"18220-T5E -0030-4700","part_name":"GUARD B,EXH","excel_with_mold":54.75,"excel_no_mold":33.76,"appl_date":"2025/11/01","mgmt_nos":["325370008"]},{"no":80,"part_no":"18220-T7D -9010-M1-4520","part_name":"COVER C,EXH","excel_with_mold":42.66,"excel_no_mold":42.66,"appl_date":"2025/11/01","mgmt_nos":["893760023","890739010"]},{"no":81,"part_no":"18160-6SG -J000-2300","part_name":"STAY D, CONVERTER COVER","excel_with_mold":10.37,"excel_no_mold":10.37,"appl_date":"2025/11/01","mgmt_nos":["905542008"]},{"no":82,"part_no":"18160-6SG -J000-2100","part_name":"STAY A, CONVERTER COVER","excel_with_mold":24.06,"excel_no_mold":10.37,"appl_date":"2025/11/01","mgmt_nos":["905541000"]},{"no":83,"part_no":"18210-T7W -A820-M1-4000","part_name":"BRKT ,EXH","excel_with_mold":153.35,"excel_no_mold":153.35,"appl_date":"2025/11/01","mgmt_nos":["311335003"]},{"no":84,"part_no":"18183-R5Z -G000-2D00","part_name":"COVER COMP DPF CONV","excel_with_mold":396.6,"excel_no_mold":225.82,"appl_date":"2025/11/01","mgmt_nos":["350471009","311298014"]},{"no":85,"part_no":"18224-TAA -0130-H1-4000","part_name":"SHELL","excel_with_mold":329.66,"excel_no_mold":324.78,"appl_date":"2025/11/01","mgmt_nos":["328413001"]},{"no":86,"part_no":"18308-TAA -0030-4000","part_name":"SHELL  バリ方向指定(外側)","excel_with_mold":906.05,"excel_no_mold":900.1,"appl_date":"2025/11/01","mgmt_nos":["328443003"]},{"no":87,"part_no":"18307-TAB -0030-4100","part_name":"BRKT B","excel_with_mold":219.9,"excel_no_mold":155.19,"appl_date":"2025/11/01","mgmt_nos":["328482004"]},{"no":88,"part_no":"18308-TAB -0030-4000","part_name":"SHELL","excel_with_mold":2303.35,"excel_no_mold":2282.92,"appl_date":"2025/11/01","mgmt_nos":["328459000"]},{"no":89,"part_no":"18308-TAB -0030- -4500","part_name":"SEPARATOR","excel_with_mold":339.64,"excel_no_mold":257.9,"appl_date":"2025/11/01","mgmt_nos":["328452002"]},{"no":90,"part_no":"18220-T7A -9010-M1-4400","part_name":"COVER B,EXH","excel_with_mold":38.99,"excel_no_mold":38.99,"appl_date":"2025/11/01","mgmt_nos":["311385000","107477006"]},{"no":91,"part_no":"18220-T7A -9010-M1-4500","part_name":"COVER C,EXH","excel_with_mold":51.05,"excel_no_mold":51.05,"appl_date":"2025/11/01","mgmt_nos":["311395007","107480006"]},{"no":92,"part_no":"18307-T7B -J010-M1-4000","part_name":"BRKT TAIL,EXH","excel_with_mold":30.27,"excel_no_mold":30.27,"appl_date":"2025/11/01","mgmt_nos":["311404000"]},{"no":93,"part_no":"18219-5R0 -0030-4000","part_name":"COVER,EXH","excel_with_mold":43.29,"excel_no_mold":31.55,"appl_date":"2025/11/01","mgmt_nos":["107187004"]},{"no":94,"part_no":"18161-59B -3001-2100","part_name":"CONE A FR","excel_with_mold":332.45,"excel_no_mold":311.97,"appl_date":"2021/02/01","mgmt_nos":["107107006"]},{"no":94,"part_no":"18161-59B -3001-2100","part_name":"CONE A FR","excel_with_mold":314.54,"excel_no_mold":294.06,"appl_date":"2025/11/01","mgmt_nos":["107107006"]},{"no":95,"part_no":"18161-59B- 3001-2200","part_name":"CONE B FR","excel_with_mold":335.53,"excel_no_mold":315.05,"appl_date":"2021/02/01","mgmt_nos":["107108004"]},{"no":95,"part_no":"18161-59B- 3001-2200","part_name":"CONE B FR","excel_with_mold":317.64,"excel_no_mold":297.16,"appl_date":"2025/11/01","mgmt_nos":["107108004"]},{"no":96,"part_no":"18224-T6C -J010-Y1-4100","part_name":"END CHAMBER","excel_with_mold":182.29,"excel_no_mold":146.63,"appl_date":"2025/11/01","mgmt_nos":["328543000"]},{"no":97,"part_no":"18307-T7A -J110-M1-C200","part_name":"SLNCR COMP EXH","excel_with_mold":375.87,"excel_no_mold":345.13,"appl_date":"2024/08/01","mgmt_nos":["327106013"]},{"no":98,"part_no":"18191-58G -A010-H1-2000","part_name":"FR CONE A,FR CONVERTER R","excel_with_mold":2143.74,"excel_no_mold":658.7,"appl_date":"2025/11/01","mgmt_nos":["107249017"]},{"no":99,"part_no":"18191-58G -A000-H1-2100","part_name":"FR CONE B,FR CONVERTER R","excel_with_mold":824.74,"excel_no_mold":660.57,"appl_date":"2025/11/01","mgmt_nos":["107239010"]},{"no":100,"part_no":"18192-58G -A000-H1","part_name":"RR CONE,FR CONVERTER R","excel_with_mold":945.07,"excel_no_mold":506.74,"appl_date":"2025/11/01","mgmt_nos":["311360013"]},{"no":101,"part_no":"18193-58G -A000-H1","part_name":"FR CONE,RR CONVERTER R","excel_with_mold":1589.64,"excel_no_mold":892.97,"appl_date":"2025/11/01","mgmt_nos":["107256010"]},{"no":102,"part_no":"18291-58G -A000-H1-2000","part_name":"FR CONE A,FR CONVERTER L","excel_with_mold":822.87,"excel_no_mold":658.7,"appl_date":"2025/11/01","mgmt_nos":["107283017"]},{"no":103,"part_no":"18291-58G -A000-H1-2100","part_name":"FR CONE B,FR CONVERTER L","excel_with_mold":824.74,"excel_no_mold":660.57,"appl_date":"2025/11/01","mgmt_nos":["107240013"]},{"no":104,"part_no":"18292-58G -A000-H1","part_name":"RR CONE,FR CONVERTER L","excel_with_mold":945.07,"excel_no_mold":506.74,"appl_date":"2025/11/01","mgmt_nos":["311376010"]},{"no":105,"part_no":"18293-58G -A000-H1","part_name":"FR CONE,RR CONVERTER L","excel_with_mold":1589.64,"excel_no_mold":892.97,"appl_date":"2025/11/01","mgmt_nos":["107236015"]},{"no":106,"part_no":"18261-5WS -A000-21","part_name":"FR CASE A,RR PRIM","excel_with_mold":1121.99,"excel_no_mold":452.55,"appl_date":"2025/11/01","mgmt_nos":["107255011"]},{"no":107,"part_no":"18261-5WS -A000-22","part_name":"FR CASE B,RR PRIM","excel_with_mold":996.94,"excel_no_mold":435.26,"appl_date":"2025/11/01","mgmt_nos":["107278010"]},{"no":108,"part_no":"18220-TRT-J010-M1-4400","part_name":"CAP,EXH END","excel_with_mold":1402.72,"excel_no_mold":799.51,"appl_date":"2017/09/01","mgmt_nos":["325507016"]},{"no":109,"part_no":"18220-TRT-J010-M1-4000","part_name":"STAY,A EXH","excel_with_mold":1522.71,"excel_no_mold":899.38,"appl_date":"2017/09/01","mgmt_nos":["325482017"]},{"no":110,"part_no":"18220-TRT-J020-M1-4100","part_name":"STAY,B EXH","excel_with_mold":984.46,"excel_no_mold":548.8,"appl_date":"2017/09/01","mgmt_nos":[]},{"no":111,"part_no":"18220-TRT-J020-M1-4200","part_name":"STAY,C EXH","excel_with_mold":1655.09,"excel_no_mold":850.8,"appl_date":"2017/09/01","mgmt_nos":["325489023","325489014"]},{"no":112,"part_no":"18220-TRT-J020-M1-4300","part_name":"STAY,D EXH","excel_with_mold":1170.0,"excel_no_mold":734.34,"appl_date":"2017/09/01","mgmt_nos":["325501026","325501017"]},{"no":113,"part_no":"18224-TRT-J010-Y1-4100","part_name":"END CHBR","excel_with_mold":1582.52,"excel_no_mold":892.17,"appl_date":"2025/02/01","mgmt_nos":["325454011"]},{"no":114,"part_no":"18224-TRT-J010-Y1-4200","part_name":"PATCH A","excel_with_mold":521.81,"excel_no_mold":344.19,"appl_date":"2025/02/01","mgmt_nos":["325469010"]},{"no":115,"part_no":"18224-TRT-J010-Y1-4300","part_name":"PATCH B","excel_with_mold":753.23,"excel_no_mold":377.9,"appl_date":"2025/02/01","mgmt_nos":["325472010"]},{"no":116,"part_no":"18308-TGG-A510-Y1-4300","part_name":"SEPARATOR","excel_with_mold":395.66,"excel_no_mold":224.49,"appl_date":"2020/11/01","mgmt_nos":["311487011"]},{"no":116,"part_no":"18308-TGG-A510-Y1-4300","part_name":"SEPARATOR","excel_with_mold":387.15,"excel_no_mold":215.98,"appl_date":"2024/08/01","mgmt_nos":["311487011"]},{"no":117,"part_no":"18309-TGG-A510-Y1-4300","part_name":"SEPARATOR","excel_with_mold":285.84,"excel_no_mold":224.49,"appl_date":"2020/11/01","mgmt_nos":["311488010"]},{"no":117,"part_no":"18309-TGG-A510-Y1-4300","part_name":"SEPARATOR","excel_with_mold":277.33,"excel_no_mold":215.98,"appl_date":"2024/08/01","mgmt_nos":["311488010"]},{"no":118,"part_no":"18121-5MS -0000","part_name":"COVER COMP CONVERTER","excel_with_mold":507.39,"excel_no_mold":388.31,"appl_date":"2025/11/01","mgmt_nos":["107430019"]},{"no":119,"part_no":"18307-TGG -A510-M1-4900","part_name":"STPR  PLATE  EXH　　　【岩澤工業】","excel_with_mold":14.05,"excel_no_mold":12.72,"appl_date":"2024/08/01","mgmt_nos":["327118008","311691003"]},{"no":120,"part_no":"18307-TGH -A010-M1-4400","part_name":"BRKT A EXH　　　【岩澤工業】","excel_with_mold":178.75,"excel_no_mold":97.22,"appl_date":"2024/08/01","mgmt_nos":["311514012"]},{"no":121,"part_no":"18307-TGH -A010-M1-4500","part_name":"BRKT B EXH　　　【岩澤工業】","excel_with_mold":141.7,"excel_no_mold":108.79,"appl_date":"2024/08/01","mgmt_nos":["311517017"]},{"no":122,"part_no":"18307-TGH -A010-M1-4200","part_name":"HALF UPR EXH","excel_with_mold":732.86,"excel_no_mold":446.05,"appl_date":"2024/08/01","mgmt_nos":["327121008"]},{"no":123,"part_no":"18307-TGH -A010-M1-4300","part_name":"HALF LWR EXH","excel_with_mold":662.89,"excel_no_mold":447.04,"appl_date":"2024/08/01","mgmt_nos":["327135008"]},{"no":124,"part_no":"18161-5WJ -A000-2100","part_name":"CONE L","excel_with_mold":160.17,"excel_no_mold":157.21,"appl_date":"2025/11/01","mgmt_nos":["107436018","107436009"]},{"no":125,"part_no":"18161-5WJ -A000-2000","part_name":"CONE R","excel_with_mold":247.92,"excel_no_mold":156.66,"appl_date":"2025/11/01","mgmt_nos":["107460010","107460001"]},{"no":126,"part_no":"18181-5WJ -A000","part_name":"COVER COMP LWR","excel_with_mold":265.79,"excel_no_mold":182.35,"appl_date":"2025/08/01","mgmt_nos":["107401006","101080008"]},{"no":127,"part_no":"18220-T7D -9010-M1-4200","part_name":"BRKT C,EXH MTG","excel_with_mold":23.59,"excel_no_mold":23.59,"appl_date":"2025/11/01","mgmt_nos":["107511000"]},{"no":128,"part_no":"18220-T7D -9010-M1-4300","part_name":"COVER A,EXH","excel_with_mold":70.03,"excel_no_mold":43.82,"appl_date":"2025/02/01","mgmt_nos":["107506003"]},{"no":129,"part_no":"18220-T7D -9010-M1-4400","part_name":"COVER B,EXH　　　【岩澤工業】","excel_with_mold":51.74,"excel_no_mold":51.74,"appl_date":"2025/02/01","mgmt_nos":["107502000"]},{"no":130,"part_no":"18220-T7D -9010-M1-4500","part_name":"COVER C,EXH","excel_with_mold":77.67,"excel_no_mold":53.16,"appl_date":"2025/02/01","mgmt_nos":["107503009"]},{"no":131,"part_no":"18220-T7D -9010-M1-4600","part_name":"COVER E,EXH","excel_with_mold":108.89,"excel_no_mold":108.89,"appl_date":"2025/02/01","mgmt_nos":["107508000"]},{"no":132,"part_no":"18902-5K8 -0002-C300","part_name":"STAY COMP A, SURFACE T/M","excel_with_mold":119.0,"excel_no_mold":116.13,"appl_date":"2025/11/01","mgmt_nos":["107446006"]},{"no":133,"part_no":"18308-TGN -E010-Y1-2200","part_name":"PIPE C INN","excel_with_mold":140.17,"excel_no_mold":108.88,"appl_date":"2024/08/01","mgmt_nos":["311509007"]},{"no":134,"part_no":"18161-5BX -G000-H1-2D00","part_name":"CONE FR","excel_with_mold":302.28,"excel_no_mold":232.3,"appl_date":"2025/11/01","mgmt_nos":["107539000"]},{"no":135,"part_no":"18162-5BX -G000-H1-2D00","part_name":"CONE  RR","excel_with_mold":328.69,"excel_no_mold":256.18,"appl_date":"2025/11/01","mgmt_nos":["107548009"]},{"no":136,"part_no":"18307-T7A -G510-M1-C100","part_name":"PIPE TAIL COMP,","excel_with_mold":491.79,"excel_no_mold":484.1,"appl_date":"2025/11/01","mgmt_nos":["327161007"]},{"no":137,"part_no":"18307-THZW-G610-M1-C100","part_name":"PIPE TAIL COMP,","excel_with_mold":337.09,"excel_no_mold":314.65,"appl_date":"2025/11/01","mgmt_nos":["327295008"]},{"no":138,"part_no":"18224-TRT-J010-Y1-4100","part_name":"END CHBR","excel_with_mold":816.47,"excel_no_mold":644.67,"appl_date":"2025/11/01","mgmt_nos":["325454020"]},{"no":139,"part_no":"18224-TRT-J010-Y1-4200","part_name":"PATCH A","excel_with_mold":211.16,"excel_no_mold":137.53,"appl_date":"2025/11/01","mgmt_nos":["325469029"]},{"no":140,"part_no":"18224-TRT-J010-Y1-4300","part_name":"PATCH B","excel_with_mold":213.3,"excel_no_mold":213.3,"appl_date":"2025/11/01","mgmt_nos":["325472010","325472029"]},{"no":141,"part_no":"18166-59B -T600-H1","part_name":"RR CONE A, CONVERTER","excel_with_mold":2349.52,"excel_no_mold":1064.52,"appl_date":"2025/11/01","mgmt_nos":["107724004"]},{"no":142,"part_no":"18167-59B -T600-H1-2D00","part_name":"RR CONE B, CONVERTER","excel_with_mold":2236.26,"excel_no_mold":1466.26,"appl_date":"2025/11/01","mgmt_nos":["107722008"]},{"no":143,"part_no":"18168-59B -T600-H1-2D00","part_name":"RR CONE C, CONVERTER","excel_with_mold":2410.93,"excel_no_mold":1580.93,"appl_date":"2025/11/01","mgmt_nos":["107723006"]},{"no":144,"part_no":"18162-5TZ -G000-2010","part_name":"CONE  A, RR","excel_with_mold":742.21,"excel_no_mold":212.12,"appl_date":"2020/11/01","mgmt_nos":["107785006"]},{"no":144,"part_no":"18162-5TZ -G000-2010","part_name":"CONE  A, RR","excel_with_mold":732.55,"excel_no_mold":202.46,"appl_date":"2025/11/01","mgmt_nos":["107785006"]},{"no":145,"part_no":"18162-5TZ -G000-2110","part_name":"CONE  B, RR","excel_with_mold":296.9,"excel_no_mold":220.92,"appl_date":"2020/11/01","mgmt_nos":["107786004"]},{"no":145,"part_no":"18162-5TZ -G000-2110","part_name":"CONE  B, RR","excel_with_mold":286.87,"excel_no_mold":210.89,"appl_date":"2025/11/01","mgmt_nos":["107786004"]},{"no":146,"part_no":"18112-5TZ -G000-H1","part_name":"CONE  FR, EXH","excel_with_mold":884.81,"excel_no_mold":425.46,"appl_date":"2020/11/01","mgmt_nos":["107791000"]},{"no":146,"part_no":"18112-5TZ -G000-H1","part_name":"CONE  FR, EXH","excel_with_mold":861.37,"excel_no_mold":402.02,"appl_date":"2025/11/01","mgmt_nos":["107791000"]},{"no":147,"part_no":"18307-TGG -A510-M1-4500","part_name":"BRKT F, EXH","excel_with_mold":108.52,"excel_no_mold":108.52,"appl_date":"2024/08/01","mgmt_nos":["107786004"]},{"no":149,"part_no":"18308-TM9 -0030-H1-450","part_name":"ﾊﾟｯﾁ","excel_with_mold":25.81,"excel_no_mold":13.29,"appl_date":"2025/11/01","mgmt_nos":["327479009"]},{"no":150,"part_no":"18192-6S9 -A020-H1-0110","part_name":"CONE A","excel_with_mold":914.84,"excel_no_mold":220.85,"appl_date":"2025/11/01","mgmt_nos":["107859003"]},{"no":151,"part_no":"18192-6S9 -A020-H1-0200","part_name":"CONE B","excel_with_mold":213.44,"excel_no_mold":204.18,"appl_date":"2025/11/01","mgmt_nos":["107853004"]},{"no":152,"part_no":"18191-6S9 -A000-20-0000","part_name":"FR CONE A CONVERTER","excel_with_mold":421.81,"excel_no_mold":341.88,"appl_date":"2021/11/01","mgmt_nos":["107758009"]},{"no":152,"part_no":"18191-6S9 -A0000-2020","part_name":"FR CONE A CONVERTER","excel_with_mold":471.62,"excel_no_mold":337.94,"appl_date":"2025/11/01","mgmt_nos":["107758018","107758009"]},{"no":153,"part_no":"18191-6S9 -A000-21-0000","part_name":"FR CONE B CONVERTER","excel_with_mold":435.26,"excel_no_mold":262.16,"appl_date":"2025/11/01","mgmt_nos":["107759007"]},{"no":154,"part_no":"18192-61B -A000- -2000","part_name":"CONE A","excel_with_mold":363.91,"excel_no_mold":169.97,"appl_date":"2025/02/01","mgmt_nos":["107863001"]},{"no":155,"part_no":"18192-61B -A000- -2100","part_name":"CONE B","excel_with_mold":175.19,"excel_no_mold":169.86,"appl_date":"2025/02/01","mgmt_nos":["187864000"]},{"no":156,"part_no":"18160-6MA -J000-C300","part_name":"STAY COMP A, COVER","excel_with_mold":36.74,"excel_no_mold":24.98,"appl_date":"2025/11/01","mgmt_nos":["107946008"]},{"no":157,"part_no":"18160-6MA -J000-C40D","part_name":"STAY COMP B, COVER","excel_with_mold":33.29,"excel_no_mold":22.8,"appl_date":"2025/11/01","mgmt_nos":["107939014"]},{"no":158,"part_no":"18160-6MA -J000-C600","part_name":"STAY COMP D, COVER","excel_with_mold":33.78,"excel_no_mold":23.29,"appl_date":"2025/11/01","mgmt_nos":["107947006"]},{"no":159,"part_no":"18160-6MA -J000-C700","part_name":"STAY COMP E, COVER","excel_with_mold":34.77,"excel_no_mold":24.28,"appl_date":"2025/11/01","mgmt_nos":["107948004"]},{"no":160,"part_no":"18307-3T1 -0030-4000","part_name":"GUARD, EXH","excel_with_mold":151.3,"excel_no_mold":52.53,"appl_date":"2025/11/01","mgmt_nos":["327623006"]},{"no":161,"part_no":"18160-6MA -J000-C400","part_name":"STAY COMP B, COVER","excel_with_mold":34.38,"excel_no_mold":23.89,"appl_date":"2025/05/01","mgmt_nos":["107939005"]},{"no":162,"part_no":"18120-6Y0 -0000","part_name":"COVER, CONVERTER","excel_with_mold":238.49,"excel_no_mold":241.39,"appl_date":"2025/11/01","mgmt_nos":["101200002"]},{"no":163,"part_no":"18192-61B -A000- -2000","part_name":"CONE A","excel_with_mold":386.67,"excel_no_mold":192.73,"appl_date":"2025/11/01","mgmt_nos":["106889000"]},{"no":164,"part_no":"18181-RBB -N000P01","part_name":"LWR ｶﾊﾞｰ ﾌﾟﾚｽ 〈ｲﾋﾞﾃﾞﾝ〉","excel_with_mold":167.06,"excel_no_mold":167.06,"appl_date":"2025/11/01","mgmt_nos":["105901007"]},{"no":164,"part_no":"18192-61B -A000- -2100","part_name":"CONE B","excel_with_mold":197.95,"excel_no_mold":192.62,"appl_date":"2025/11/01","mgmt_nos":["106890003"]},{"no":165,"part_no":"18182-RBB -N000P01","part_name":"UP ｶﾊﾞｰ","excel_with_mold":195.08,"excel_no_mold":195.08,"appl_date":"2025/11/01","mgmt_nos":["105902005"]},{"no":173,"part_no":"18120-RGB -0002","part_name":"ﾀｰﾎﾞﾁｬｰｼﾞｬｰｶﾊﾞｰ COMP '04PD","excel_with_mold":230.23,"excel_no_mold":230.23,"appl_date":"2025/11/01","mgmt_nos":["990189020","250240002"]},{"no":180,"part_no":"18960-RBD -E001","part_name":"EXH ｼﾞｮｲﾝﾄｶﾊﾞｰ '04EH","excel_with_mold":91.23,"excel_no_mold":91.23,"appl_date":"2021/05/01","mgmt_nos":["990668001","990140019"]},{"no":181,"part_no":"18120-RBD -E00","part_name":"ｴｷﾏﾆｶﾊﾞｰ COMP ’04EH 〈HB〉","excel_with_mold":240.57,"excel_no_mold":240.57,"appl_date":"2021/05/01","mgmt_nos":["250235006","250079005"]},{"no":188,"part_no":"ME516098-P01","part_name":"ﾄﾞﾗｲﾌﾞﾌﾟﾚｰﾄ ﾌﾟﾚｽ（ｱﾅﾅｼ)","excel_with_mold":282.72,"excel_no_mold":282.72,"appl_date":"2021/08/01","mgmt_nos":["402000006"]},{"no":189,"part_no":"18181-RAD -L11","part_name":"COVER COMP, LWR","excel_with_mold":229.09,"excel_no_mold":229.09,"appl_date":"2025/11/01","mgmt_nos":["310880005","310775002","105830022"]},{"no":194,"part_no":"18120-5R0 -0100","part_name":"COVER, CONVERTER","excel_with_mold":232.31,"excel_no_mold":212.94,"appl_date":"2025/11/01","mgmt_nos":["250342005","250282044"]},{"no":197,"part_no":"18120-5R1 -0100/0101/102","part_name":"COVER, CONVERTER<> HM","excel_with_mold":288.83,"excel_no_mold":258.74,"appl_date":"2025/11/01","mgmt_nos":["250360003","311301009","311241001","250283042"]},{"no":198,"part_no":"18120-5R1 -0100/0102-C200","part_name":"COVER, CONVERTER<> HM","excel_with_mold":269.78,"excel_no_mold":239.69,"appl_date":"2025/11/01","mgmt_nos":["106492013","106492004"]},{"no":199,"part_no":"18120-5JA -0000","part_name":"COVER COMP T/C","excel_with_mold":655.82,"excel_no_mold":284.25,"appl_date":"2025/11/01","mgmt_nos":["101192008","100396008"]},{"no":200,"part_no":"18800-5JA -0000","part_name":"GUIDE,COMP A COOLING","excel_with_mold":1556.95,"excel_no_mold":1144.39,"appl_date":"2025/11/01","mgmt_nos":["101191000","100395000"]},{"no":201,"part_no":"18902-59B -0002","part_name":"COVER COMP,T/C","excel_with_mold":387.17,"excel_no_mold":324.17,"appl_date":"2024/05/01","mgmt_nos":["101180004","100423018","100423009"]},{"no":202,"part_no":"18120-5Y3 -J000","part_name":"COVER COMP CHAMBER","excel_with_mold":197.95,"excel_no_mold":144.18,"appl_date":"2018/08/01","mgmt_nos":["992484001","311618000","311588007","250324007"]},{"no":202,"part_no":"18120-5Y3 -J000","part_name":"COVER COMP CHAMBER","excel_with_mold":205.72,"excel_no_mold":151.95,"appl_date":"2025/11/01","mgmt_nos":["311618000","311588007","992484001","250324007"]},{"no":203,"part_no":"18902-5K8 -0002","part_name":"COVER COMP,T/C","excel_with_mold":578.19,"excel_no_mold":451.19,"appl_date":"2024/02/01","mgmt_nos":["100425005"]},{"no":204,"part_no":"18401-5K1 -A010-Y1-2600","part_name":"CAP RR,EXH　　　【岩澤工業】","excel_with_mold":194.12,"excel_no_mold":121.32,"appl_date":"2025/11/01","mgmt_nos":["106559009"]},{"no":205,"part_no":"18400-5K1 -A010-M1-CL00","part_name":"STAY B COMP,LINK COVER","excel_with_mold":88.96,"excel_no_mold":56.83,"appl_date":"2025/11/01","mgmt_nos":["106534003"]},{"no":206,"part_no":"18181-58G -A000A01","part_name":"COVER,COMP RR CONVERTER","excel_with_mold":475.3,"excel_no_mold":274.05,"appl_date":"2025/11/01","mgmt_nos":["325415001"]},{"no":207,"part_no":"18120-58G -A000","part_name":"COVER COMP A FR,CONVERTER","excel_with_mold":1399.12,"excel_no_mold":900.78,"appl_date":"2025/11/01","mgmt_nos":["311388004"]},{"no":208,"part_no":"18121-58G -A000","part_name":"COVER B FR,CONVERTER","excel_with_mold":1398.45,"excel_no_mold":900.11,"appl_date":"2025/11/01","mgmt_nos":["311389002"]},{"no":209,"part_no":"18181-5R0 -J600","part_name":"COVER,COMP LWR","excel_with_mold":229.78,"excel_no_mold":139.13,"appl_date":"2025/08/01","mgmt_nos":["106596003"]},{"no":210,"part_no":"1J550-5WP -A000-2210","part_name":"STAY,FRM","excel_with_mold":390.08,"excel_no_mold":130.86,"appl_date":"2025/11/01","mgmt_nos":["972073010","972073001"]},{"no":211,"part_no":"18400-6C1 -A010-M1-CL00","part_name":"STAY B COMP,LINK CVR","excel_with_mold":74.29,"excel_no_mold":73.23,"appl_date":"2025/11/01","mgmt_nos":["302130000"]},{"no":212,"part_no":"18902-5K8 -0002-C400","part_name":"COVER COMP,T/C","excel_with_mold":297.17,"excel_no_mold":297.17,"appl_date":"2024/05/01","mgmt_nos":["102516003"]},{"no":213,"part_no":"18121-5MS -0000","part_name":"COVER COMP CONVERTER","excel_with_mold":404.28,"excel_no_mold":404.28,"appl_date":"2025/11/01","mgmt_nos":[]},{"no":214,"part_no":"18902-6A0 -P000-2D00","part_name":"COVER  COMP, T/C","excel_with_mold":544.26,"excel_no_mold":344.36,"appl_date":"2025/11/01","mgmt_nos":["102543000"]},{"no":215,"part_no":"18182-6S9 -A000-C100","part_name":"COVER COMP, UPR","excel_with_mold":907.19,"excel_no_mold":367.37,"appl_date":"2025/11/01","mgmt_nos":["311683002"]},{"no":216,"part_no":"18181-6S9 -A000-C100","part_name":"COVER COMP, LWR","excel_with_mold":1830.63,"excel_no_mold":605.23,"appl_date":"2025/11/01","mgmt_nos":["311682004"]},{"no":217,"part_no":"18901-6S9 -A000","part_name":"COVER COMP, E-WG ACT","excel_with_mold":170.78,"excel_no_mold":113.96,"appl_date":"2021/02/01","mgmt_nos":["311685009"]},{"no":217,"part_no":"18901-6S9 -A000-2D00","part_name":"COVER COMP, E-WG ACT","excel_with_mold":220.78,"excel_no_mold":125.75,"appl_date":"2025/11/01","mgmt_nos":["311685018","311685009"]},{"no":218,"part_no":"18902-6A0 -P000","part_name":"COVER  COMP, T/C","excel_with_mold":559.85,"excel_no_mold":359.95,"appl_date":"2025/11/01","mgmt_nos":["101152009"]},{"no":219,"part_no":"18182-61B -A000-C100","part_name":"COVER COMP, UPR","excel_with_mold":538.78,"excel_no_mold":309.91,"appl_date":"2025/11/01","mgmt_nos":["311707003"]},{"no":220,"part_no":"18181-61B -A000-C100","part_name":"COVER COMP, LWR","excel_with_mold":1201.29,"excel_no_mold":597.58,"appl_date":"2025/11/01","mgmt_nos":["311706005"]},{"no":221,"part_no":"18120-6MA -J000","part_name":"COVER COMP, CHAMBER 〈HM〉","excel_with_mold":236.24,"excel_no_mold":187.43,"appl_date":"2025/11/01","mgmt_nos":["250334004"]},{"no":222,"part_no":"18120-6MA -J000","part_name":"COVER COMP, CHAMBER 〈KYOEI〉","excel_with_mold":176.84,"excel_no_mold":176.84,"appl_date":"2025/11/01","mgmt_nos":["252044003"]},{"no":224,"part_no":"11250-85U0-0010-4010","part_name":"COVER, CYLINDER  BLOCK  EXH.","excel_with_mold":597.85,"excel_no_mold":482.21,"appl_date":"2025/11/01","mgmt_nos":["102799009"]}];
+
+let pdfFile=null, allRows=[], curF='all', pdfKeys=new Set();
+
+const drop=document.getElementById('drop');
+document.getElementById('fi').addEventListener('change',e=>{if(e.target.files[0])loadF(e.target.files[0])});
+drop.addEventListener('dragover',e=>{e.preventDefault();drop.classList.add('over')});
+drop.addEventListener('dragleave',()=>drop.classList.remove('over'));
+drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('over');if(e.dataTransfer.files[0])loadF(e.dataTransfer.files[0])});
+
+function loadF(f){
+  pdfFile=f;
+  document.getElementById('ico').textContent='✅';
+  document.getElementById('ft').textContent=f.name;
+  document.getElementById('fh').textContent=(f.size/1024).toFixed(0)+' KB';
+  drop.classList.add('loaded');
+  document.getElementById('run').disabled=false;
+  setSt('PDF読み込み完了。「照合実行」を押してください。');
+}
+
+async function parsePDF(file){
+  const buf=await file.arrayBuffer();
+  if(!window.pdfjsLib){
+    await new Promise((res,rej)=>{
+      const s=document.createElement('script');
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      s.onload=()=>{pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';res();};
+      s.onerror=rej; document.head.appendChild(s);
+    });
+  }
+  const pdf=await pdfjsLib.getDocument({data:new Uint8Array(buf)}).promise;
+  const results=[];
+  for(let p=1;p<=pdf.numPages;p++){
+    document.getElementById('pf').style.width=(p/pdf.numPages*80+10)+'%';
+    const page=await pdf.getPage(p);
+    const vp=page.getViewport({scale:1.0});
+    const tc=await page.getTextContent();
+    const spans=[];
+    for(const item of tc.items){
+      const t=item.str.trim();
+      if(!t) continue;
+      spans.push({x:Math.round(item.transform[4]), y:Math.round(vp.height-item.transform[5]), text:t});
+    }
+    for(const sp of spans){
+      if(sp.x>=130&&sp.x<=330&&sp.y>=95&&sp.y<=175&&/^1[0-9A-Z]{3,4}-[A-Z0-9]{2}/.test(sp.text)){
+        let price=null;
+        for(const s2 of spans){
+          if(Math.abs(s2.y-sp.y)<=6&&s2.x>=660&&s2.x<=800){
+            const v=parseFloat(s2.text.replace(/,/g,''));
+            if(!isNaN(v)&&v>5){price=v;break;}
+          }
+        }
+        if(price!==null) results.push({part_no:sp.text.trim(),price});
+      }
+    }
+  }
+  return results;
+}
+
+// 品番マッチング：完全一致 → 前方一致（短い方が長い方の前方に含まれる）
+function norm(s){return String(s).replace(/[\s\u3000]+/g,'').toUpperCase();}
+
+function matchPartNo(pdfKey, excelKey){
+  if(pdfKey===excelKey) return 'exact';
+  // 末尾の数字部分が省略/違う場合を吸収（例: -000 vs -0002, -0102 vs -0100/0101/102）
+  // どちらかが他方の前方一致
+  const shorter = pdfKey.length < excelKey.length ? pdfKey : excelKey;
+  const longer  = pdfKey.length < excelKey.length ? excelKey : pdfKey;
+  if(longer.startsWith(shorter)) return 'prefix';
+  // ハイフン区切りで主要部分一致（最初の2セグメント）
+  const seg = s => s.split('-').slice(0,3).join('-');
+  if(seg(pdfKey)===seg(excelKey)) return 'seg';
+  return null;
+}
+
+document.getElementById('run').addEventListener('click',async()=>{
+  if(!pdfFile)return;
+  const btn=document.getElementById('run');
+  btn.disabled=true;btn.textContent='⏳ 処理中...';
+  document.getElementById('pbar').style.display='block';
+  document.getElementById('pf').style.width='5%';
+  try{
+    setSt('PDFを解析中...');
+    const pdfList=await parsePDF(pdfFile);
+    setSt(`PDF解析完了：${pdfList.length}件検出。照合中...`);
+    buildResults(pdfList,document.getElementById('pt').value,parseFloat(document.getElementById('tol').value)||0);
+    document.getElementById('pf').style.width='100%';
+    setTimeout(()=>{document.getElementById('pbar').style.display='none';},400);
+    document.getElementById('hstats').style.display='flex';
+    document.getElementById('ht').textContent=new Date().toLocaleTimeString('ja-JP');
+  }catch(e){setSt('❌ エラー: '+e.message);console.error(e);}
+  btn.disabled=false;btn.innerHTML='▶ 照合実行';
+});
+
+function buildResults(pdfList,ptype,tol){
+  // PDFマップ（正規化キー）
+  const pdfMap={};
+  pdfKeys=new Set();
+  for(const item of pdfList){
+    const k=norm(item.part_no);
+    pdfKeys.add(k);
+    if(!pdfMap[k]) pdfMap[k]=[];
+    pdfMap[k].push(item);
+  }
+
+  const rows=[];
+  let nOk=0,nNg=0,nMs=0,nMt=0;
+
+  for(const item of ED){
+    const ep=ptype==='with_mold'?item.excel_with_mold:item.excel_no_mold;
+    if(!ep) continue;
+    const ek=norm(item.part_no);
+
+    // 1. 完全一致
+    let found=pdfMap[ek];
+    let matchType='exact';
+
+    // 2. 前方一致・セグメント一致
+    if(!found){
+      for(const pk of pdfKeys){
+        const mt=matchPartNo(pk,ek);
+        if(mt){found=pdfMap[pk];matchType=mt;break;}
+      }
+    }
+
+    let pdfPrice=null,diff=null,dr=null,status='missing';
+    if(found&&found.length>0){
+      const best=found.reduce((a,b)=>Math.abs(a.price-ep)<Math.abs(b.price-ep)?a:b);
+      pdfPrice=best.price;
+      diff=parseFloat((pdfPrice-ep).toFixed(2));
+      dr=ep?parseFloat((diff/ep*100).toFixed(2)):null;
+      nMt++;
+      if(Math.abs(diff)<=tol){status='ok';nOk++;}else{status='ng';nNg++;}
+    }else{nMs++;}
+
+    rows.push({
+      no:item.no,part_no:item.part_no,part_name:item.part_name,
+      mgmt_nos:item.mgmt_nos||[],appl_date:item.appl_date||'',
+      pdf_price:pdfPrice,excel_price:ep,diff,diff_rate:dr,status,
+      in_pdf:found!=null,match_type:matchType
+    });
+  }
+
+  allRows=rows;
+  document.getElementById('hm').textContent=nMt;
+  document.getElementById('hd').textContent=nNg;
+  document.getElementById('cards').innerHTML=`
+    <div class="card"><div class="clbl">PDF照合件数</div><div class="cval c-bl">${nMt}</div></div>
+    <div class="card"><div class="clbl">✓ 一致</div><div class="cval c-ok">${nOk}</div></div>
+    <div class="card"><div class="clbl">⚠ 差異あり</div><div class="cval c-ng">${nNg}</div></div>
+    <div class="card"><div class="clbl">PDF未記載</div><div class="cval c-w">${nMs}</div></div>`;
+  document.getElementById('result').style.display='block';
+  curF='all';
+  document.querySelectorAll('.fb').forEach(b=>b.className='fb');
+  document.querySelector('[data-f="all"]').classList.add('f-all');
+  render();
+  setSt(`照合完了：${nMt}件照合 ／ 差異あり ${nNg}件 ／ PDF未記載 ${nMs}件`);
+}
+
+function render(){
+  const q=document.getElementById('sq').value.toLowerCase();
+  const rows=allRows.filter(r=>{
+    if(curF==='pdf_only') return r.in_pdf;
+    if(curF!=='all'&&r.status!==curF) return false;
+    return !q||(r.part_no+' '+r.part_name).toLowerCase().includes(q);
+  });
+  const tb=document.getElementById('tbody');
+  if(!rows.length){tb.innerHTML='<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text3)">該当なし</td></tr>';return;}
+  tb.innerHTML=rows.map(r=>{
+    const pv=r.pdf_price!=null?r.pdf_price.toFixed(2):'—';
+    const ev=r.excel_price.toFixed(2);
+    let dh='—',rh='—';
+    if(r.diff!=null){
+      const c=r.diff>0?'dp':r.diff<0?'dn':'dz';
+      const sg=r.diff>0?'+':'';
+      dh=`<span class="${c}">${sg}${r.diff.toFixed(2)}</span>`;
+      if(r.diff_rate!=null)rh=`<span class="${c}">${r.diff_rate>0?'+':''}${r.diff_rate.toFixed(1)}%</span>`;
+    }
+    const badge=r.status==='ok'?'<span class="badge bok">✓ 一致</span>'
+               :r.status==='ng'?'<span class="badge bng">⚠ 差異</span>'
+               :'<span class="badge bms">未記載</span>';
+    const note=r.match_type&&r.match_type!=='exact'?`<br><span class="note">(前方一致)</span>`:'';
+    const mgmt=r.mgmt_nos.length?r.mgmt_nos.join('<br>'):'—';
+    return `<tr class="${r.in_pdf?'pm':''}">
+      <td class="mn">${r.no}</td>
+      <td class="mn">${r.part_no}${note}</td>
+      <td style="max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.part_name}">${r.part_name}</td>
+      <td class="mn" style="font-size:10px;line-height:1.7">${mgmt}</td>
+      <td class="r mn" style="font-size:11px">${r.appl_date}</td>
+      <td class="r">${pv}</td><td class="r">${ev}</td>
+      <td class="r">${dh}</td><td class="r">${rh}</td><td>${badge}</td>
+    </tr>`;
+  }).join('');
+}
+
+function setF(btn,f){
+  curF=f;
+  document.querySelectorAll('.fb').forEach(b=>b.className='fb');
+  btn.classList.add(f==='all'?'f-all':f==='ng'?'f-ng':f==='ok'?'f-ok':f==='pdf_only'?'f-pdf':'f-ms');
+  render();
+}
+
+function expCSV(){
+  const lbl=document.getElementById('pt').value==='with_mold'?'型込み':'型レス';
+  const rows=[['調達NO','品番','部品名','客先管理NO','適用年月日','PDF加工単価',`Excel計算値(${lbl})`,'差異','差異率','判定']];
+  for(const r of allRows) rows.push([r.no,r.part_no,r.part_name,r.mgmt_nos.join(' '),r.appl_date,
+    r.pdf_price!=null?r.pdf_price.toFixed(2):'',r.excel_price.toFixed(2),
+    r.diff!=null?r.diff.toFixed(2):'',r.diff_rate!=null?r.diff_rate.toFixed(1)+'%':'',
+    r.status==='ok'?'一致':r.status==='ng'?'差異あり':'PDF未記載']);
+  const bom='\uFEFF',csv=bom+rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download=`照合結果_${new Date().toLocaleDateString('ja-JP').replace(/\//g,'')}.csv`;
+  a.click();
+}
+
+document.getElementById('rst').addEventListener('click',()=>{
+  pdfFile=null;document.getElementById('fi').value='';
+  drop.classList.remove('loaded');
+  document.getElementById('ico').textContent='📄';
+  document.getElementById('ft').textContent='クリックまたはドラッグ＆ドロップ';
+  document.getElementById('fh').textContent='部品単価通知書 兼 調達基準表 PDF';
+  document.getElementById('run').disabled=true;
+  document.getElementById('result').style.display='none';
+  document.getElementById('hstats').style.display='none';
+  document.getElementById('pbar').style.display='none';
+  allRows=[];pdfKeys=new Set();setSt('');
+});
+
+function setSt(m){document.getElementById('status').textContent=m;}
+</script>
+</body>
+</html>

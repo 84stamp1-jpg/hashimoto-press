@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+      margin: 0; padding: 16px; background: #f4f6f8; color: #222;
+    }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    .sub { color: #777; font-size: 13px; margin-bottom: 16px; }
+
+    .cards { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+    .card {
+      flex: 1; min-width: 120px; background: #fff; border-radius: 10px;
+      padding: 14px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    }
+    .card .num { font-size: 28px; font-weight: bold; }
+    .card .lbl { font-size: 12px; color: #777; margin-top: 4px; }
+    .card.inbox .num { color: #2563eb; }
+    .card.koho .num { color: #16a34a; }
+    .card.kakunin .num { color: #d97706; }
+
+    .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
+    button {
+      font-size: 15px; padding: 12px 18px; border: none; border-radius: 8px;
+      cursor: pointer; font-weight: bold;
+    }
+    .btn-primary { background: #2563eb; color: #fff; }
+    .btn-second { background: #e5e7eb; color: #333; }
+    button:disabled { opacity: .5; cursor: default; }
+
+    .section-title { font-size: 16px; font-weight: bold; margin: 8px 0 12px; }
+    .msg { padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; display: none; }
+    .msg.show { display: block; }
+    .msg.ok { background: #dcfce7; color: #166534; }
+    .msg.err { background: #fee2e2; color: #991b1b; }
+    .msg.info { background: #dbeafe; color: #1e40af; }
+
+    .item {
+      background: #fff; border-radius: 10px; padding: 14px; margin-bottom: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    }
+    .item .reason { color: #d97706; font-size: 12px; margin-bottom: 10px; font-weight: bold; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+    .grid label { font-size: 11px; color: #888; display: block; margin-bottom: 2px; }
+    .grid input, .grid select {
+      width: 100%; padding: 7px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px;
+    }
+    .full { grid-column: 1 / -1; }
+    .item-foot { margin-top: 12px; text-align: right; }
+    .empty { color: #888; text-align: center; padding: 30px; }
+    .spinner { display:none; margin-left:8px; font-size:13px; color:#777; }
+    a.sheetlink { font-size: 13px; color:#2563eb; }
+  </style>
+</head>
+<body>
+  <h1>総務経理 レシート処理</h1>
+  <div class="sub">レシートを投入箱に入れて「①OCR実行」→「②自動振り分け」の順に押してください。</div>
+
+  <div class="cards">
+    <div class="card inbox"><div class="num" id="cInbox">-</div><div class="lbl">投入箱（未処理の画像）</div></div>
+    <div class="card koho"><div class="num" id="cKoho">-</div><div class="lbl">仕訳候補</div></div>
+    <div class="card kakunin"><div class="num" id="cKakunin">-</div><div class="lbl">要確認</div></div>
+  </div>
+
+  <div class="actions">
+    <button class="btn-primary" id="btnOcr" onclick="doOcr()">① OCR実行</button>
+    <button class="btn-primary" id="btnCat" onclick="doCat()">② 自動振り分け</button>
+    <button class="btn-second" onclick="refresh()">🔄 再読み込み</button>
+    <span class="spinner" id="spin">処理中…（数十秒かかる場合があります）</span>
+  </div>
+
+  <div class="msg" id="msg"></div>
+
+  <div class="section-title">要確認リスト <span id="kakuninCount"></span></div>
+  <div id="kakuninArea"><div class="empty">読み込み中…</div></div>
+
+  <div style="margin-top:20px">
+    <a class="sheetlink" id="sheetLink" href="#" target="_blank">📊 スプレッドシートを開く（詳細確認用）</a>
+  </div>
+
+<script>
+  let kamokuList = [];
+
+  function setBusy(b) {
+    document.getElementById('btnOcr').disabled = b;
+    document.getElementById('btnCat').disabled = b;
+    document.getElementById('spin').style.display = b ? 'inline' : 'none';
+  }
+  function showMsg(text, type) {
+    const m = document.getElementById('msg');
+    m.textContent = text;
+    m.className = 'msg show ' + type;
+  }
+
+  function refresh() {
+    google.script.run.withSuccessHandler(function(d){
+      document.getElementById('cInbox').textContent = d.inbox;
+      document.getElementById('cKoho').textContent = d.koho;
+      document.getElementById('cKakunin').textContent = d.kakunin;
+      document.getElementById('sheetLink').href = d.sheetUrl;
+    }).getDashboard();
+    loadKakunin();
+  }
+
+  function doOcr() {
+    setBusy(true); showMsg('OCR実行中…', 'info');
+    google.script.run
+      .withSuccessHandler(function(msg){ setBusy(false); showMsg(msg, 'ok'); refresh(); })
+      .withFailureHandler(function(e){ setBusy(false); showMsg('エラー: ' + e.message, 'err'); })
+      .webRunOcr();
+  }
+
+  function doCat() {
+    setBusy(true); showMsg('振り分け中…', 'info');
+    google.script.run
+      .withSuccessHandler(function(msg){ setBusy(false); showMsg(msg, 'ok'); refresh(); })
+      .withFailureHandler(function(e){ setBusy(false); showMsg('エラー: ' + e.message, 'err'); })
+      .webCategorize();
+  }
+
+  function loadKakunin() {
+    google.script.run.withSuccessHandler(renderKakunin).getKakuninList();
+  }
+
+  function renderKakunin(list) {
+    const area = document.getElementById('kakuninArea');
+    document.getElementById('kakuninCount').textContent = list.length ? '（' + list.length + '件）' : '';
+    if (!list.length) {
+      area.innerHTML = '<div class="empty">要確認の項目はありません 🎉</div>';
+      return;
+    }
+    area.innerHTML = '';
+    list.forEach(function(it, i){
+      const div = document.createElement('div');
+      div.className = 'item';
+      div.innerHTML =
+        '<div class="reason">⚠ ' + (it.reason || '') + '</div>' +
+        '<div class="grid">' +
+          '<div><label>日付</label><input id="d'+i+'" value="'+ esc(it.date) +'"></div>' +
+          '<div><label>金額</label><input id="a'+i+'" value="'+ esc(it.amount) +'"></div>' +
+          '<div class="full"><label>店名</label><input id="s'+i+'" value="'+ esc(it.store) +'"></div>' +
+          '<div><label>借方科目</label>' + kamokuSelect('k'+i, it.kari) + '</div>' +
+          '<div><label>貸方科目</label><input id="ks'+i+'" value="'+ esc(it.kashi) +'"></div>' +
+          '<div class="full"><label>摘要</label><input id="t'+i+'" value="'+ esc(it.tekiyo) +'"></div>' +
+        '</div>' +
+        '<div class="item-foot">' +
+          '<button class="btn-second" onclick="deleteItem('+i+')">🗑 削除</button> ' +
+          '<button class="btn-primary" onclick="confirmItem('+i+')">確定して仕訳候補へ</button>' +
+        '</div>';
+      area.appendChild(div);
+      div._data = it;
+    });
+    window._kakunin = list;
+  }
+
+  function kamokuSelect(id, val) {
+    let opts = '<option value="">（選択）</option>';
+    let found = false;
+    kamokuList.forEach(function(k){
+      const sel = (k === val) ? ' selected' : '';
+      if (k === val) found = true;
+      opts += '<option value="'+esc(k)+'"'+sel+'>'+esc(k)+'</option>';
+    });
+    if (val && !found) opts += '<option value="'+esc(val)+'" selected>'+esc(val)+'</option>';
+    return '<select id="'+id+'">'+opts+'</select>';
+  }
+
+  function confirmItem(i) {
+    const it = window._kakunin[i];
+    const payload = {
+      row: it.row,
+      fileId: it.fileId,
+      date: val('d'+i),
+      amount: val('a'+i),
+      store: val('s'+i),
+      kari: val('k'+i),
+      kashi: val('ks'+i),
+      tekiyo: val('t'+i)
+    };
+    if (!payload.kari) { showMsg('借方科目を選んでください。', 'err'); return; }
+    showMsg('確定中…', 'info');
+    google.script.run
+      .withSuccessHandler(function(){ showMsg('確定しました。', 'ok'); refresh(); })
+      .withFailureHandler(function(e){ showMsg('エラー: ' + e.message, 'err'); })
+      .confirmKakunin(payload);
+  }
+
+  function deleteItem(i) {
+    const it = window._kakunin[i];
+    if (!confirm('この項目を削除します。よろしいですか？')) return;
+    showMsg('削除中…', 'info');
+    google.script.run
+      .withSuccessHandler(function(){ showMsg('削除しました。', 'ok'); refresh(); })
+      .withFailureHandler(function(e){ showMsg('エラー: ' + e.message, 'err'); })
+      .deleteKakunin(it);
+  }
+
+  function val(id){ return document.getElementById(id).value; }
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  // 起動時
+  google.script.run.withSuccessHandler(function(list){ kamokuList = list; refresh(); }).getKamokuList();
+</script>
+</body>
+</html>

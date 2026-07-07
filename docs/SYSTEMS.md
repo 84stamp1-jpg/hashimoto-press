@@ -44,13 +44,16 @@
 ### 3. 材料単価改訂システム(material_price_update.html)
 - **目的**: 材料単価の改訂管理(ユタカ材料・スクラップ単価改定などに使用)
 - **構成**: GitHub Pages(シングルファイルHTML)
+- **関連ツール**: `tools/材料単価改訂チェック.html`(旧版チェックツール)、
+  `tools/照合ツール.html`(調達基準表 照合ツール)
 
 ### 4. 品質チェックシート記録システム(hinshitsu_check.html)
 - **目的**: 品質チェック記録のデジタル化
 - **構成**: GitHub Pages + GAS + Google Sheets
   (作業予定一覧スプレッドシートID: 1eBz1ryWajBQzMugr_5vBoUK41fGmKznnEBP8kSpL7vA)
 - **実装済み**: EXIF対応写真回転、部品番号グループ表示、累計進捗バー
-- **コード**: GAS側は v9.gs まで進化
+- **コード**: GAS側は v9.gs まで進化。GAS側コードとアップロードbatを
+  `品質チェックシート/` に収録(2026-07-07)
 
 ### 5. 金型製作原価管理システム(mold_cost_system.html)
 - **目的**: 金型の見積依頼→見積比較→注文書作成のワークフロー管理
@@ -95,20 +98,36 @@
 - **目的**: 減点式の手当計算(残ポイント×100円)。kintone + GAS + Sheets + Excel + Slack統合
 - **状態**: 試行運用中(Rev.1.2)。残タスク: Slack一括通知ボタン、
   kintone JSカスタマイズのGASデプロイURL更新、App75連携、社労士確認
-- **注記**: 本リポジトリには未収録(kintone/GAS側で運用)
+- **コード**: kintoneカスタマイズJS(App74/75/77)・GAS本体・VBAマクロ・システムサマリーを
+  `基準遵守/` に収録(2026-07-07)。GAS内のSlack Webhook URLは公開リポジトリのため
+  除去済み(実URLはGASスクリプトプロパティで管理)。月次処理Excel(個人データ含む)は未収録
+
+### 13. 生産計画自動生成(production_plan/)
+- **目的**: 作業予定一覧・製品マスタ(Excel)から生産計画Excelを自動生成しSlack通知
+- **構成**: Pythonスクリプト(`production_plan/generate_plan.py`)+ 実行bat/cronスクリプト。
+  詳細は `production_plan/CLAUDE.md` 参照
+- **注記**: 入出力のExcelデータ(業務データ)はリポジトリ未収録(input/output はローカル運用)
+
+### 14. 総務・経理AIシステム(総務経理AIシステム/)
+- **目的**: レシートOCR→勘定科目仕分け→弥生会計CSV出力の自動化
+- **構成**: GAS(Drive/Sheets/Vision API)+ WebアプリUI。
+  コード一式を `総務経理AIシステム/` に収録(01_setup〜04_webapp.gs、index.html)
+- **状態**: Phase 1 完了間近(2026-06-25時点)
 
 ## 構築中
 
-### 13. プレス機ショットカウンターIoT
+### 15. プレス機ショットカウンターIoT
 - **構成**: ESP32 + PC817Cフォトカプラ → Firebase。約20台のプレス機対象
 - **状態**: 現場WiFi環境でのFirebase接続テスト未完了。CT自動計算・チョコ停検知は今後
 
-### 14. カメラ監視システム(新規)
+### 16. カメラ監視システム(新規)
 - **仕様書**: `docs/camera_system_spec.md`
 - **状態**: 要件定義完了、Phase 1(カメラ選定・設置検証)から着手予定
 
 ## テンプレート・資産
 
-- 月次会レポート: `/home/claude/monthly_report_template.py`(チャット環境側に保存)
+- 月次会レポート: `templates/monthly_report_template.py`(2026-07-07リポジトリに収録。
+  チャット環境側 `/home/claude/monthly_report_template.py` と同内容)
+- 手順メモ: `docs/notes/`(ビーコン手順・金型製作原価管理手順書・達成率・段取りナビ)
 - 会社ロゴ: HASHIMOTO KOGYOアーチ型マーク(暗色背景では filter:invert(1))
 - 工場レイアウトSVG: v11(viewBox="0 0 824 446")— 段取りナビから流用可
