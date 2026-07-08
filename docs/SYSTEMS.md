@@ -130,8 +130,12 @@
 - **状態**: 現場WiFi環境でのFirebase接続テスト未完了。CT自動計算・チョコ停検知は今後
 
 ### 16. カメラ監視システム(新規)
-- **仕様書**: `docs/camera_system_spec.md`
-- **状態**: 要件定義完了、Phase 1(カメラ選定・設置検証)から着手予定
+- **仕様書**: `docs/camera_system_spec.md` / 導入手順: `docs/camera_setup_guide.md`
+- **状態**: Phase 2 の `camera_grid.html` を実装済み(2026-07-08、v2026.07.08-1)。
+  グリッド表示(2×2/3×3)・拡大・設定画面(localStorage)・Firebase `/trouble/` 監視(Phase 3受け口)を実装。
+  カメラは購入済み(Tapoアプリで運用中)。残作業: 中継サーバーPCへのgo2rtc導入、
+  カメラの固定IP/RTSPアカウント設定、付録Aのカメラ台帳記入
+- **関連ファイル**: `camera_grid.html`、`go2rtc.yaml.example`(実yamlはコミット禁止)
 
 ## テンプレート・資産
 

@@ -97,3 +97,7 @@ CLAUDE.md と docs/ARCHITECTURE.md の統一ルールに従うこと。
 ## 付録B: 変更履歴
 
 - 2026-07-04: 初版作成(チャット側での要件整理を文書化)
+- 2026-07-08: Phase 2 の camera_grid.html(v2026.07.08-1)を実装。
+  go2rtc.yaml.example と導入手順書(docs/camera_setup_guide.md)を追加。
+  カメラは購入済み(Tapoアプリのみで運用中)のため、Phase 1 の残作業は
+  固定IP割当・RTSPアカウント作成・付録A記入

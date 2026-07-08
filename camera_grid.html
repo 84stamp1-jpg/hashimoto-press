@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<!--
+  camera_grid.html — 工場カメラ一覧表示(HHub)
+  v2026.07.08-1
+  仕様書: docs/camera_system_spec.md (Phase 2)
+  構成: Tapoカメラ(RTSP) → 中継サーバーPC(go2rtc) → 本ページ(iframe/WebRTC)
+  トラブル発報: Firebase /trouble/<エリアID> を監視して該当カメラ枠を赤点滅
+-->
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工場カメラ一覧｜橋本工業</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI','Hiragino Sans','Meiryo',sans-serif;}
+  body{background:#f5f6f8;color:#1f2937;}
+  header{background:#1e293b;color:#fff;padding:8px 16px;display:flex;align-items:center;gap:12px;}
+  .logo-main{font-weight:800;font-size:16px;letter-spacing:0.06em;}
+  .logo-sub{font-size:10px;color:#94a3b8;letter-spacing:0.05em;}
+  .ver{font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em;}
+  header .spacer{flex:1;}
+  .hbtn{background:#334155;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer;}
+  .hbtn:hover{background:#475569;}
+  .hbtn.active{background:#2563eb;}
+  #troubleBanner{display:none;background:#dc2626;color:#fff;padding:10px 16px;font-weight:700;font-size:14px;
+    align-items:center;gap:12px;animation:blinkBg 1s step-end infinite;}
+  #troubleBanner.show{display:flex;}
+  @keyframes blinkBg{50%{background:#991b1b;}}
+  #troubleBanner button{background:#fff;color:#dc2626;border:none;border-radius:6px;padding:6px 14px;
+    font-weight:700;font-size:12px;cursor:pointer;}
+  #warnBar{display:none;background:#fef3c7;color:#92400e;border-bottom:1px solid #fcd34d;
+    padding:8px 16px;font-size:12px;line-height:1.6;}
+  main{padding:12px;}
+  #grid{display:grid;gap:10px;}
+  #grid.g2{grid-template-columns:repeat(2,1fr);}
+  #grid.g3{grid-template-columns:repeat(3,1fr);}
+  @media(max-width:700px){#grid.g2,#grid.g3{grid-template-columns:1fr;}}
+  .cell{background:#fff;border:2px solid #e5e7eb;border-radius:10px;overflow:hidden;position:relative;
+    box-shadow:0 1px 3px rgba(0,0,0,0.06);}
+  .cell.alert{border-color:#dc2626;animation:blinkBorder 1s step-end infinite;}
+  @keyframes blinkBorder{50%{border-color:#fca5a5;box-shadow:0 0 0 3px rgba(220,38,38,0.35);}}
+  .cell-head{display:flex;align-items:center;gap:8px;padding:6px 10px;background:#f8fafc;
+    border-bottom:1px solid #e5e7eb;}
+  .cam-name{font-weight:700;font-size:13px;}
+  .cam-area{font-size:10px;color:#64748b;background:#e2e8f0;border-radius:4px;padding:1px 6px;}
+  .cam-alert-tag{display:none;font-size:10px;color:#fff;background:#dc2626;border-radius:4px;
+    padding:1px 6px;font-weight:700;}
+  .cell.alert .cam-alert-tag{display:inline;}
+  .cell-head .zoom{margin-left:auto;background:none;border:1px solid #cbd5e1;border-radius:5px;
+    font-size:11px;padding:2px 8px;cursor:pointer;color:#475569;}
+  .video-wrap{position:relative;aspect-ratio:16/9;background:#0f172a;}
+  .video-wrap iframe{position:absolute;inset:0;width:100%;height:100%;border:none;}
+  .placeholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;color:#64748b;font-size:12px;gap:6px;text-align:center;padding:10px;}
+  .placeholder .cam-ico{font-size:28px;}
+  /* 拡大モーダル */
+  #zoomModal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:50;
+    flex-direction:column;}
+  #zoomModal.show{display:flex;}
+  #zoomHead{display:flex;align-items:center;color:#fff;padding:10px 16px;gap:10px;}
+  #zoomHead .close{margin-left:auto;background:#fff;color:#111;border:none;border-radius:6px;
+    padding:6px 14px;font-weight:700;cursor:pointer;}
+  #zoomBody{flex:1;position:relative;margin:0 16px 16px;}
+  #zoomBody iframe{position:absolute;inset:0;width:100%;height:100%;border:none;background:#000;}
+  /* 設定モーダル */
+  #cfgModal{display:none;position:fixed;inset:0;background:rgba(15,23,42,0.5);z-index:60;
+    align-items:flex-start;justify-content:center;overflow:auto;padding:30px 10px;}
+  #cfgModal.show{display:flex;}
+  .cfg-box{background:#fff;border-radius:12px;max-width:640px;width:100%;padding:20px;}
+  .cfg-box h2{font-size:16px;margin-bottom:14px;}
+  .cfg-box label{display:block;font-size:12px;font-weight:700;color:#374151;margin:12px 0 4px;}
+  .cfg-box input{width:100%;border:1px solid #cbd5e1;border-radius:6px;padding:8px 10px;font-size:13px;}
+  .cfg-note{font-size:11px;color:#6b7280;margin-top:3px;line-height:1.5;}
+  table.cams{width:100%;border-collapse:collapse;margin-top:6px;font-size:12px;}
+  table.cams th{background:#f1f5f9;text-align:left;padding:6px 8px;font-size:11px;color:#475569;}
+  table.cams td{padding:4px 6px;border-bottom:1px solid #f1f5f9;}
+  table.cams input{padding:6px 8px;font-size:12px;}
+  table.cams .del{background:#fee2e2;color:#b91c1c;border:none;border-radius:5px;
+    padding:5px 9px;cursor:pointer;font-size:11px;}
+  .cfg-actions{display:flex;gap:10px;margin-top:18px;}
+  .btn-primary{background:#2563eb;color:#fff;border:none;border-radius:7px;padding:9px 18px;
+    font-weight:700;font-size:13px;cursor:pointer;}
+  .btn-sub{background:#e5e7eb;color:#374151;border:none;border-radius:7px;padding:9px 14px;
+    font-size:13px;cursor:pointer;}
+  .fb-status{font-size:10px;color:#94a3b8;}
+  .fb-status.on{color:#4ade80;}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="logo-main">HASHIMOTO KOGYO</div>
+    <div class="logo-sub">工場カメラ一覧 <span class="ver">v2026.07.08-1</span></div>
+  </div>
+  <div class="spacer"></div>
+  <span id="fbStatus" class="fb-status">● Firebase未接続</span>
+  <button class="hbtn" id="btn2x2" onclick="setLayout('g2')">2×2</button>
+  <button class="hbtn" id="btn3x3" onclick="setLayout('g3')">3×3</button>
+  <button class="hbtn" onclick="openCfg()">⚙ 設定</button>
+</header>
+
+<div id="troubleBanner">
+  <span id="troubleMsg">⚠ トラブル発生</span>
+  <span class="spacer" style="flex:1"></span>
+  <button onclick="resolveTrouble()">対応完了</button>
+</div>
+
+<div id="warnBar"></div>
+
+<main><div id="grid" class="g2"></div></main>
+
+<!-- 拡大表示 -->
+<div id="zoomModal">
+  <div id="zoomHead">
+    <strong id="zoomTitle"></strong>
+    <button class="close" onclick="closeZoom()">閉じる ✕</button>
+  </div>
+  <div id="zoomBody"></div>
+</div>
+
+<!-- 設定 -->
+<div id="cfgModal">
+  <div class="cfg-box">
+    <h2>⚙ カメラ一覧 設定</h2>
+    <label>中継サーバー(go2rtc)のURL</label>
+    <input id="cfg-server" placeholder="例: http://192.168.1.50:1984">
+    <div class="cfg-note">
+      go2rtcを起動しているPCのIPアドレスとポート(既定1984)。
+      設定手順は docs/camera_setup_guide.md 参照。
+    </div>
+    <label>カメラ一覧</label>
+    <table class="cams">
+      <thead><tr><th>ストリーム名(go2rtcのキー)</th><th>表示名</th><th>エリアID(トラブル連携)</th><th></th></tr></thead>
+      <tbody id="camRows"></tbody>
+    </table>
+    <button class="btn-sub" style="margin-top:8px" onclick="addCamRow()">＋ カメラを追加</button>
+    <div class="cfg-note">
+      ストリーム名は go2rtc.yaml の streams: に登録したキー(例: cam1)。
+      エリアIDはトラブルボタン(Phase 3)の発報先(例: c-line)。未定なら空欄でOK。
+    </div>
+    <div class="cfg-actions">
+      <button class="btn-primary" onclick="saveCfg()">保存</button>
+      <button class="btn-sub" onclick="closeCfg()">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getDatabase, ref, onValue, update } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+
+// ===== 設定(localStorage) =====
+const CFG_KEY = 'hk_camgrid_config';
+let config = { serverUrl:'', layout:'g2', cams:[] };
+try { config = Object.assign(config, JSON.parse(localStorage.getItem(CFG_KEY) || '{}')); } catch(e){}
+
+// ===== グリッド描画 =====
+function render(){
+  const grid = document.getElementById('grid');
+  grid.className = config.layout;
+  document.getElementById('btn2x2').classList.toggle('active', config.layout==='g2');
+  document.getElementById('btn3x3').classList.toggle('active', config.layout==='g3');
+  grid.innerHTML = '';
+  const cams = config.cams.length ? config.cams : [{src:'',name:'カメラ未設定',area:''}];
+  cams.forEach((cam, i) => {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    cell.dataset.area = cam.area || '';
+    const streamUrl = camStreamUrl(cam);
+    cell.innerHTML = `
+      <div class="cell-head">
+        <span class="cam-name">${esc(cam.name)||'(名称未設定)'}</span>
+        ${cam.area?`<span class="cam-area">${esc(cam.area)}</span>`:''}
+        <span class="cam-alert-tag">⚠ トラブル</span>
+        ${streamUrl?`<button class="zoom" data-i="${i}">⤢ 拡大</button>`:''}
+      </div>
+      <div class="video-wrap">
+        ${streamUrl
+          ? `<iframe src="${streamUrl}" allow="autoplay" loading="lazy"></iframe>`
+          : `<div class="placeholder"><div class="cam-ico">📷</div>
+               <div>${config.serverUrl?'ストリーム名を設定してください':'右上の⚙設定から中継サーバーURLとカメラを登録してください'}</div></div>`}
+      </div>`;
+    grid.appendChild(cell);
+  });
+  grid.querySelectorAll('.zoom').forEach(b => b.onclick = () => openZoom(+b.dataset.i));
+  checkMixedContent();
+}
+function camStreamUrl(cam){
+  if(!config.serverUrl || !cam.src) return '';
+  return config.serverUrl.replace(/\/+$/,'') + '/stream.html?src=' + encodeURIComponent(cam.src);
+}
+function esc(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+window.setLayout = (l) => { config.layout = l; localStorage.setItem(CFG_KEY, JSON.stringify(config)); render(); };
+
+// ===== 混在コンテンツ警告(HTTPSページ内のHTTP iframe対策) =====
+function checkMixedContent(){
+  const bar = document.getElementById('warnBar');
+  if(location.protocol === 'https:' && config.serverUrl.startsWith('http://')){
+    bar.style.display = 'block';
+    bar.innerHTML = '⚠ このページはHTTPSで開かれているため、HTTPの中継サーバー映像はブラウザにブロックされます。'
+      + '対処: (a)go2rtcに自己署名証明書を設定してhttpsで配信 (b)このHTMLを社内サーバーやローカルから開く。'
+      + '詳細は docs/camera_setup_guide.md 参照。';
+  } else { bar.style.display = 'none'; }
+}
+
+// ===== 拡大表示 =====
+function openZoom(i){
+  const cam = config.cams[i]; if(!cam) return;
+  document.getElementById('zoomTitle').textContent = cam.name || cam.src;
+  document.getElementById('zoomBody').innerHTML = `<iframe src="${camStreamUrl(cam)}" allow="autoplay"></iframe>`;
+  document.getElementById('zoomModal').classList.add('show');
+}
+window.closeZoom = () => {
+  document.getElementById('zoomModal').classList.remove('show');
+  document.getElementById('zoomBody').innerHTML = '';
+};
+
+// ===== 設定画面 =====
+window.openCfg = () => {
+  document.getElementById('cfg-server').value = config.serverUrl || '';
+  const tbody = document.getElementById('camRows');
+  tbody.innerHTML = '';
+  (config.cams.length ? config.cams : [{src:'',name:'',area:''}]).forEach(addCamRowWith);
+  document.getElementById('cfgModal').classList.add('show');
+};
+window.closeCfg = () => document.getElementById('cfgModal').classList.remove('show');
+function addCamRowWith(cam){
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input class="c-src" value="${esc(cam.src)}" placeholder="cam1"></td>
+    <td><input class="c-name" value="${esc(cam.name)}" placeholder="プレスAライン"></td>
+    <td><input class="c-area" value="${esc(cam.area)}" placeholder="a-line"></td>
+    <td><button class="del" onclick="this.closest('tr').remove()">削除</button></td>`;
+  document.getElementById('camRows').appendChild(tr);
+}
+window.addCamRow = () => addCamRowWith({src:'',name:'',area:''});
+window.saveCfg = () => {
+  config.serverUrl = document.getElementById('cfg-server').value.trim();
+  config.cams = [...document.querySelectorAll('#camRows tr')].map(tr => ({
+    src:  tr.querySelector('.c-src').value.trim(),
+    name: tr.querySelector('.c-name').value.trim(),
+    area: tr.querySelector('.c-area').value.trim().toLowerCase(),
+  })).filter(c => c.src || c.name);
+  localStorage.setItem(CFG_KEY, JSON.stringify(config));
+  closeCfg();
+  render();
+};
+
+// ===== Firebase トラブル監視(/trouble/<エリアID>) =====
+const firebaseConfig = {
+  apiKey: 'AIzaSyCvh4rDrk6ljWhNBJc-Kt_YFpvEevLxb6o',
+  databaseURL: 'https://hashimoto-press-default-rtdb.asia-southeast1.firebasedatabase.app',
+};
+let activeTroubles = {};  // {areaId: {status,ts,area}}
+try {
+  const app = initializeApp(firebaseConfig);
+  const db  = getDatabase(app);
+  onValue(ref(db, 'trouble'), snap => {
+    document.getElementById('fbStatus').textContent = '● Firebase接続中';
+    document.getElementById('fbStatus').classList.add('on');
+    activeTroubles = {};
+    const v = snap.val() || {};
+    Object.keys(v).forEach(id => { if(v[id] && v[id].status === 'active') activeTroubles[id] = v[id]; });
+    applyTroubles();
+  }, err => { console.warn('Firebase trouble listener error:', err.message); });
+  window._camDb = db;
+} catch(e){ console.warn('Firebase init error:', e.message); }
+
+function applyTroubles(){
+  const ids = Object.keys(activeTroubles);
+  document.querySelectorAll('.cell').forEach(cell => {
+    cell.classList.toggle('alert', !!(cell.dataset.area && activeTroubles[cell.dataset.area]));
+  });
+  const banner = document.getElementById('troubleBanner');
+  if(ids.length){
+    const names = ids.map(id => activeTroubles[id].area || id).join('、');
+    document.getElementById('troubleMsg').textContent = `⚠ ${names} エリア トラブル発生`;
+    banner.classList.add('show');
+  } else { banner.classList.remove('show'); }
+}
+window.resolveTrouble = async () => {
+  if(!window._camDb) return;
+  if(!confirm('すべてのトラブルを「対応完了」にしますか？')) return;
+  const { ref: r, update: u } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js');
+  for(const id of Object.keys(activeTroubles)){
+    await u(r(window._camDb, 'trouble/' + id), { status:'resolved', resolvedAt: Date.now() });
+  }
+};
+
+render();
+</script>
+</body>
+</html>
