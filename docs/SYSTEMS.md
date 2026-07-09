@@ -133,8 +133,10 @@
 - **仕様書**: `docs/camera_system_spec.md` / 導入手順: `docs/camera_setup_guide.md`
 - **状態**: Phase 2 の `camera_grid.html` を実装済み(2026-07-08、v2026.07.08-1)。
   グリッド表示(2×2/3×3)・拡大・設定画面(localStorage)・Firebase `/trouble/` 監視(Phase 3受け口)を実装。
-  カメラは購入済み(Tapoアプリで運用中)。残作業: 中継サーバーPCへのgo2rtc導入、
-  カメラの固定IP/RTSPアカウント設定、付録Aのカメラ台帳記入
+  HHubポータル(dantori_navi.html)のタブバーに「📹 カメラ」リンクを追加済み(2026-07-09)。
+  中継サーバー(go2rtc v1.9.14)は事務所の常時稼働PC(192.168.30.9)に導入・自動起動設定済み。
+  **残課題**: カメラ(Tapo C210×7台)がゲストWiFi接続で事務所LANからTCP遮断のため到達不可
+  (詳細は camera_system_spec.md 付録A参照)。社内WiFi有無・ネットワーク業者を確認中
 - **関連ファイル**: `camera_grid.html`、`go2rtc.yaml.example`(実yamlはコミット禁止)
 
 ## テンプレート・資産
