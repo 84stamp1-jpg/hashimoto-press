@@ -496,7 +496,7 @@ input.nm-img-input{display:none}
 <body>
 
 <header>
-  <div class="logo">⚙ <span>金型</span>管理システム</div>
+  <div class="logo">⚙ <span>金型</span>管理システム<span style="font-size:9px;color:#9aa3b2;font-weight:400;margin-left:6px">v2026.07.13-2</span></div>
   <div class="main-tab-bar">
     <button class="main-tab-btn active" id="mainTabRepair" onclick="switchMainTab('repair')">🔧 改修計画表</button>
     <button class="main-tab-btn" id="mainTabNew" onclick="switchMainTab('newmold')">🏗️ 新規製作 日程表</button>
@@ -783,6 +783,19 @@ input.nm-img-input{display:none}
     <div class="nm-modal-footer">
       <button class="btn btn-secondary btn-sm" onclick="nmCloseHist()">閉じる</button>
       <button class="btn btn-primary btn-sm" onclick="nmAddHistNote()">メモを記録</button>
+    </div>
+  </div>
+</div>
+
+<!-- 見積工程・進捗モーダル（新規製作用） -->
+<div class="nm-modal-ov" id="nmProcModal">
+  <div class="nm-modal" style="width:560px;max-width:94vw;max-height:88vh;overflow-y:auto">
+    <h3 id="nmProcTitle">工程進捗</h3>
+    <div class="nm-meta" id="nmProcMeta" style="margin-bottom:10px"></div>
+    <div id="nmProcBody"></div>
+    <div class="nm-modal-footer">
+      <button class="btn btn-secondary btn-sm" onclick="nmCloseProcModal()">キャンセル</button>
+      <button class="btn btn-primary btn-sm" onclick="nmSaveProcModal()">保存</button>
     </div>
   </div>
 </div>
@@ -4219,7 +4232,7 @@ function nmParseProc(str){
   let lines=str.split(/[\n・、]+/);
   // 改行なしで番号連結の場合は番号前で分割（例: "1.BL2.PC"→["1.BL","2.PC"]）
   if(lines.length===1) lines=str.split(/(?=\d+[\.\)])/);
-  return lines.map(s=>s.replace(/^\d+[\.\)]\s*/,'').trim()).filter(Boolean);
+  return lines.map(s=>s.trim().replace(/^\d+[\.\)]\s*/,'').trim()).filter(Boolean);
 }
 function nmMakeTasks(estProc){
   const procs=nmParseProc(estProc);
@@ -4581,9 +4594,12 @@ function nmBuildTbody(){
       <input class="nm-edit-field" value="${nmEsc(mold.client||'')}" placeholder="客先"
         style="font-size:11px;color:#555;width:100%;font-weight:600;display:block"
         onblur="nmSaveMoldField('${mold.id}','client',this.value)">
-      <button onclick="nmEditEstProc('${mold.id}')" title="見積工程を編集"
-        style="font-size:10px;padding:1px 4px;border:1px solid #93c5fd;border-radius:3px;
-               background:#EBF0FF;color:#3b6ef8;cursor:pointer;white-space:nowrap;margin-top:2px">🔧工程</button>`;
+      <div style="display:flex;align-items:center;gap:4px;margin-top:2px;flex-wrap:wrap">
+        <button onclick="nmOpenProcModal('${mold.id}')" title="見積工程・進捗を編集"
+          style="font-size:10px;padding:1px 4px;border:1px solid #93c5fd;border-radius:3px;
+                 background:#EBF0FF;color:#3b6ef8;cursor:pointer;white-space:nowrap">🔧工程</button>
+        ${nmProcBadge(mold)}
+      </div>`;
     htr.appendChild(tdClient);
 
     // Col5+Col6 (担当+締切列 colspan=2): イベント・日程メモ
@@ -4919,14 +4935,140 @@ function nmSaveMoldField(moldId,field,value){
   const m=nmMolds.find(m=>m.id===moldId);if(!m)return;
   m[field]=value.trim();nmSave();
 }
-function nmEditEstProc(moldId){
-  const m=nmMolds.find(m=>m.id===moldId);if(!m)return;
-  const cur=m.estProc||'';
-  const nv=prompt(`【${m.partNo||m.moldNo}】見積工程を編集\n（改行区切りで入力 例:\n1.BL\n2.PC\n3.BE-1）`,cur);
-  if(nv===null)return; // キャンセル
-  m.estProc=nv.trim();
-  nmSave();nmBuildTbody();
+// ===== 見積工程・進捗（工程ごとの段階チェック＋金型全体の進度） =====
+const NM_PROC_STAGES=[
+  {key:'design',label:'設計'},
+  {key:'machining',label:'加工'},
+  {key:'assembly',label:'組付'},
+  {key:'finishing',label:'玉成'},
+  {key:'complete',label:'完成'}
+];
+let nmProcTarget=null, nmProcData=[];
+
+// estProc文字列から工程名リストを取得
+function nmProcNames(m){return nmParseProc(m.estProc||'');}
+
+// 現在のestProcと保存済みprocStepsを突き合わせ、済/未フラグを保った工程リストを返す（副作用なし）
+function nmStepsView(m){
+  const names=nmProcNames(m);
+  const ex=m.procSteps||[];
+  if(!names.length)return ex.map(s=>({...s}));
+  const byName={};
+  ex.forEach(s=>{if(!(s.name in byName))byName[s.name]=s;});
+  return names.map(n=>{
+    const o=byName[n]||{};
+    return {name:n,design:!!o.design,machining:!!o.machining,assembly:!!o.assembly,finishing:!!o.finishing,complete:!!o.complete};
+  });
 }
+
+// 段階ごとの済工程数・現在段階を集計
+function nmProcStats(steps){
+  const total=steps.length;
+  const counts={};NM_PROC_STAGES.forEach(s=>counts[s.key]=0);
+  steps.forEach(st=>NM_PROC_STAGES.forEach(s=>{if(st[s.key])counts[s.key]++;}));
+  let current=null;
+  for(const s of NM_PROC_STAGES){if(total===0||counts[s.key]<total){current=s.key;break;}}
+  const allDone=total>0&&NM_PROC_STAGES.every(s=>counts[s.key]===total);
+  return {total,counts,current,allDone};
+}
+
+// 一覧表の🔧工程ボタン横に出す進捗バッジ
+function nmProcBadge(m){
+  const steps=nmStepsView(m);
+  if(!steps.length)return '';
+  const st=nmProcStats(steps);
+  if(st.allDone)return '<span style="font-size:10px;padding:1px 6px;border-radius:10px;background:#dcfce7;color:#16a34a;font-weight:700;white-space:nowrap">✓完成</span>';
+  const cur=NM_PROC_STAGES.find(s=>s.key===st.current)||NM_PROC_STAGES[NM_PROC_STAGES.length-1];
+  return `<span style="font-size:10px;padding:1px 6px;border-radius:10px;background:${'#ebf0ff'};color:#3b6ef8;font-weight:700;white-space:nowrap">${cur.label} ${st.counts[cur.key]}/${st.total}</span>`;
+}
+
+function nmOpenProcModal(moldId){
+  const m=nmMolds.find(x=>x.id===moldId);if(!m)return;
+  nmProcTarget=moldId;
+  nmProcData=nmStepsView(m);
+  if(!nmProcData.length)nmProcData=[{name:'',design:false,machining:false,assembly:false,finishing:false,complete:false}];
+  document.getElementById('nmProcTitle').textContent=(m.partNo||m.moldNo||'金型')+'　工程進捗';
+  document.getElementById('nmProcMeta').textContent=[m.partName,m.client].filter(Boolean).join(' ／ ');
+  nmRenderProcModal();
+  document.getElementById('nmProcModal').classList.add('open');
+}
+
+function nmRenderProcModal(){
+  const steps=nmProcData;
+  const stHead=NM_PROC_STAGES.map(s=>`<th style="width:52px;font-size:11px;color:var(--text2);font-weight:600;padding:5px 0">${s.label}</th>`).join('');
+  const rows=steps.map((st,i)=>{
+    const cells=NM_PROC_STAGES.map(s=>{
+      const on=!!st[s.key];
+      return `<td style="text-align:center;padding:4px 2px">
+        <span onclick="nmProcToggle(${i},'${s.key}')" title="クリックで 済／未 切替"
+          style="display:inline-flex;width:23px;height:23px;border-radius:50%;cursor:pointer;align-items:center;justify-content:center;font-size:13px;font-weight:700;${on?'background:#22c55e;color:#fff;':'border:1.5px solid var(--border2);color:transparent;'}">✓</span></td>`;
+    }).join('');
+    return `<tr>
+      <td style="color:var(--text2);text-align:center;font-size:11px;width:24px">${i+1}</td>
+      <td style="padding:3px 4px"><input value="${nmEsc(st.name)}" placeholder="工程名"
+        onchange="nmProcRename(${i},this.value)"
+        style="width:100%;min-width:56px;font-size:12px;font-weight:600;color:var(--text);border:1px solid var(--border);border-radius:3px;padding:3px 4px;background:#fff;outline:none;font-family:inherit"></td>
+      ${cells}
+      <td style="text-align:center;width:24px"><span onclick="nmProcDel(${i})" title="工程を削除" style="cursor:pointer;color:#fca5a5;font-size:13px">✕</span></td>
+    </tr>`;
+  }).join('');
+  const tableHtml=`
+    <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:5px">📋 工程ごとの進捗（各段階をクリックで 済／未 切替）</div>
+    <div style="border:1px solid var(--border);border-radius:6px;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:var(--panel2)">
+          <th style="width:24px;font-size:11px;color:var(--text2);padding:5px 0">#</th>
+          <th style="text-align:left;font-size:11px;color:var(--text2);padding:5px 6px">工程</th>
+          ${stHead}
+          <th style="width:24px"></th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="padding:5px 8px;border-top:1px solid var(--border);background:var(--panel2)">
+        <span onclick="nmProcAdd()" style="cursor:pointer;font-size:11px;color:#3b6ef8;font-weight:600">＋ 工程を追加</span>
+      </div>
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-top:5px">
+      <span style="display:inline-flex;width:14px;height:14px;border-radius:50%;background:#22c55e;color:#fff;align-items:center;justify-content:center;font-size:9px;vertical-align:middle">✓</span> 済
+      <span style="display:inline-block;width:12px;height:12px;border-radius:50%;border:1.5px solid var(--border2);vertical-align:middle"></span> 未</div>`;
+  const stats=nmProcStats(steps);
+  const connector='<div style="flex:0 0 10px;height:2px;margin-top:15px;background:var(--border2)"></div>';
+  const nodes=NM_PROC_STAGES.map((s,idx)=>{
+    const c=stats.counts[s.key], total=stats.total;
+    const done=total>0&&c===total;
+    const isCur=stats.current===s.key;
+    const circle=done?'background:#22c55e;color:#fff;border:2px solid #22c55e'
+      :isCur?'background:#ebf0ff;color:#3b6ef8;border:2px solid #3b6ef8'
+      :'background:#fff;color:#9aa3b2;border:1.5px solid var(--border2)';
+    return `<div style="flex:1;text-align:center">
+      <div style="width:30px;height:30px;margin:0 auto;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;${circle}">${done?'✓':idx+1}</div>
+      <div style="font-size:11px;margin-top:4px;color:var(--text)">${s.label}</div>
+      <div style="font-size:12px;font-weight:700;margin-top:1px;color:${done?'#16a34a':isCur?'#3b6ef8':'var(--text2)'}">${c}/${total}</div>
+    </div>`;
+  });
+  const stepperHtml=`
+    <div style="font-size:11px;font-weight:700;color:var(--text2);margin:16px 0 8px">📈 金型全体の進度（数字＝その段階を終えた工程数／全${stats.total}工程）</div>
+    <div style="display:flex;align-items:flex-start">${nodes.join(connector)}</div>`;
+  document.getElementById('nmProcBody').innerHTML=tableHtml+stepperHtml;
+}
+
+function nmProcToggle(i,key){if(!nmProcData[i])return;nmProcData[i][key]=!nmProcData[i][key];nmRenderProcModal();}
+function nmProcRename(i,v){if(!nmProcData[i])return;nmProcData[i].name=(v||'').trim();nmRenderProcModal();}
+function nmProcDel(i){nmProcData.splice(i,1);nmRenderProcModal();}
+function nmProcAdd(){nmProcData.push({name:'',design:false,machining:false,assembly:false,finishing:false,complete:false});nmRenderProcModal();}
+
+function nmSaveProcModal(){
+  const m=nmMolds.find(x=>x.id===nmProcTarget);
+  if(!m){nmCloseProcModal();return;}
+  const steps=nmProcData
+    .map(s=>({name:(s.name||'').trim(),design:!!s.design,machining:!!s.machining,assembly:!!s.assembly,finishing:!!s.finishing,complete:!!s.complete}))
+    .filter(s=>s.name);
+  m.procSteps=steps;
+  m.estProc=steps.map(s=>s.name).join('\n');
+  delete m.complete;
+  nmSave();nmBuildTbody();nmCloseProcModal();
+}
+function nmCloseProcModal(){document.getElementById('nmProcModal').classList.remove('open');nmProcTarget=null;}
 
 // タスク完了日
 function nmSetTaskDone(moldId,taskId,val){
