@@ -2051,6 +2051,12 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
       </div>
       <button class="bp" onclick="saveTroubleThresh()">保存する</button>
       <div class="msg" id="thrmsg"></div>
+
+      <div class="ftitle" style="margin-top:16px;">トラブルSlack通知（GAS中継URL）</div>
+      <div style="font-size:11px;color:#888;margin-bottom:8px;">トラブル記録時にSlackへGAS経由で通知します。Slack Webhook URL自体はGAS側に保管し、ここにはGASのデプロイURL（.../exec）を入れます。空欄なら通知しません。</div>
+      <input type="text" id="thr-slack" placeholder="https://script.google.com/macros/s/.../exec" style="width:100%;padding:7px 9px;border:1px solid #ddd;border-radius:6px;font-size:12px;margin-bottom:8px;">
+      <button class="bp" onclick="saveTroubleSlackUrl()">Slack通知URLを保存</button>
+      <div class="msg" id="slackmsg"></div>
     </div>
   </div>
 </div>
@@ -3740,6 +3746,16 @@ const LINE_LABEL = {
   CP3_2:'Cライン②',   'Cライン②':'Cライン②',
   robot:'ロボットライン','ロボットライン':'ロボットライン',
 };
+
+// ===== トラブル → カメラ点滅(camera_grid の /trouble)・Slack通知 の連携 =====
+// ラインID → camera_grid の「エリアID」。camera_grid側の各カメラのエリアIDと一致させること。
+const LINE_CAM_AREA = {
+  A1:'a-line', A2:'a-line',
+  B1:'b-line', B2:'b-line', BP2:'b-line', 'Bライン':'b-line',
+  CP3:'c-line', 'Cライン①':'c-line', CP3_2:'c-line', 'Cライン②':'c-line',
+};
+const CAM_AREA_LABEL = { 'a-line':'プレスA', 'b-line':'プレスB', 'c-line':'プレスC' };
+let troubleSlackUrl = ''; // Firebase settings/troubleSlackUrl（Slack中継GASのURL）
 
 const STATUS_COLORS = {
   setup:   {bg:'#1a1a1a', text:'white',   sub:'#9ca3af', label:'段取り中'},
@@ -8907,8 +8923,10 @@ onValue(ref(db,'settings'),s=>{
   if(v.lineNames&&typeof v.lineNames==='object') lineNamesMap={...v.lineNames};
   if(v.lineNoAlert&&typeof v.lineNoAlert==='object') lineNoAlertMap={...v.lineNoAlert};
   if(v.troubleThresh&&typeof v.troubleThresh==='object') troubleThresh={...troubleThresh,...v.troubleThresh};
+  if(typeof v.troubleSlackUrl==='string') troubleSlackUrl=v.troubleSlackUrl;
   // しきい値UIに反映
   ['y','r','b'].forEach(k=>{const el=document.getElementById('thr-'+k);if(el&&troubleThresh[k]) el.value=troubleThresh[k];});
+  {const el=document.getElementById('thr-slack');if(el&&document.activeElement!==el) el.value=troubleSlackUrl||'';}
   Object.keys(lineNamesMap).forEach(id=>{if(lineNamesMap[id])lines[id]={...(lines[id]||{status:'waiting',plan:0,actual:0,updatedAt:0,jobs:[]}),name:lineNamesMap[id]};});
   updateLineSelects();
   renderGroupTabs();
@@ -9733,6 +9751,9 @@ window.addTrouble=function(){
   }
   update(ref(db,'lines/'+_troubleLineId),{troubles:newTroubles});
   if(lines[_troubleLineId]) lines[_troubleLineId].troubles=newTroubles;
+  // カメラ点滅の同期＋（新規の進行中トラブルのみ）Slack通知
+  syncCamTrouble(LINE_CAM_AREA[_troubleLineId]);
+  if(!isEdit && !end) troubleSlackNotify(_troubleLineId, type, note);
   document.getElementById('tEnd').value='';
   document.getElementById('tNote').value='';
   document.getElementById('tMsg').style.color='#27ae60';
@@ -9772,6 +9793,7 @@ window.endTrouble=function(idx){
   troubles[idx]={...troubles[idx],end:String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0')};
   update(ref(db,'lines/'+_troubleLineId),{troubles});
   if(lines[_troubleLineId]) lines[_troubleLineId].troubles=troubles;
+  syncCamTrouble(LINE_CAM_AREA[_troubleLineId]); // 終了→他に進行中が無ければカメラ点滅解除
   _renderTroubleList();
 };
 window.deleteTrouble=function(idx){
@@ -9779,8 +9801,34 @@ window.deleteTrouble=function(idx){
   const troubles=_getTroubles(_troubleLineId).filter((_,i)=>i!==idx);
   update(ref(db,'lines/'+_troubleLineId),{troubles:troubles.length?troubles:null});
   if(lines[_troubleLineId]) lines[_troubleLineId].troubles=troubles.length?troubles:undefined;
+  syncCamTrouble(LINE_CAM_AREA[_troubleLineId]);
   _renderTroubleList();
 };
+// ===== トラブル→カメラ点滅・Slack通知 の実処理 =====
+function _lineHasOngoing(lineId){ return ((lines[lineId]?.troubles)||[]).some(t=>t&&t.start&&!t.end); }
+// エリアに属するどれかのラインが進行中トラブルなら camera_grid の /trouble を active に、無ければ解除
+function syncCamTrouble(area){
+  if(!area) return;
+  const anyOngoing = Object.keys(LINE_CAM_AREA).filter(id=>LINE_CAM_AREA[id]===area).some(id=>_lineHasOngoing(id));
+  if(anyOngoing) update(ref(db,'trouble/'+area),{status:'active',ts:Date.now(),area:CAM_AREA_LABEL[area]||area});
+  else set(ref(db,'trouble/'+area),null);
+}
+// 新規の進行中トラブル発生時にSlackへ通知（GAS中継URLがあれば）
+function troubleSlackNotify(lineId,type,note){
+  if(!troubleSlackUrl) return;
+  const name=LINE_LABEL[lineId]||lineId;
+  const time=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
+  const text='⚠ トラブル発生【'+name+'】'+time+'\n種類: '+type+(note?'\n内容: '+note:'');
+  try{ fetch(troubleSlackUrl,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({text,line:name,type,note:note||'',time})}); }
+  catch(e){ console.warn('Slack通知エラー',e); }
+}
+window.saveTroubleSlackUrl=function(){
+  const url=document.getElementById('thr-slack').value.trim();
+  troubleSlackUrl=url;
+  update(ref(db,'settings'),{troubleSlackUrl:url});
+  const m=document.getElementById('slackmsg'); if(m){m.textContent='保存しました ✓'; setTimeout(()=>{if(m)m.textContent='';},2000);}
+};
+
 window.saveTroubleThresh=function(){
   const y=parseInt(document.getElementById('thr-y').value)||10;
   const r=parseInt(document.getElementById('thr-r').value)||20;
