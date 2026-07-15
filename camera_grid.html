@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   camera_grid.html — 工場カメラ一覧表示(HHub)
-  v2026.07.08-1
+  v2026.07.15-1
   仕様書: docs/camera_system_spec.md (Phase 2)
   構成: Tapoカメラ(RTSP) → 中継サーバーPC(go2rtc) → 本ページ(iframe/WebRTC)
   トラブル発報: Firebase /trouble/<エリアID> を監視して該当カメラ枠を赤点滅
@@ -84,6 +84,14 @@
     font-size:13px;cursor:pointer;}
   .fb-status{font-size:10px;color:#94a3b8;}
   .fb-status.on{color:#4ade80;}
+  /* 部署タブ */
+  #deptTabs{display:none;gap:6px;padding:10px 12px 0;flex-wrap:wrap;}
+  #deptTabs.show{display:flex;}
+  .dtab{background:#e2e8f0;color:#334155;border:none;border-radius:16px;padding:5px 15px;
+    font-size:12px;font-weight:700;cursor:pointer;}
+  .dtab:hover{background:#cbd5e1;}
+  .dtab.active{background:#2563eb;color:#fff;}
+  .grid-empty{grid-column:1/-1;text-align:center;color:#64748b;font-size:13px;padding:40px 10px;}
 </style>
 </head>
 <body>
@@ -91,7 +99,7 @@
 <header>
   <div>
     <div class="logo-main">HASHIMOTO KOGYO</div>
-    <div class="logo-sub">工場カメラ一覧 <span class="ver">v2026.07.08-1</span></div>
+    <div class="logo-sub">工場カメラ一覧 <span class="ver">v2026.07.15-1</span></div>
   </div>
   <div class="spacer"></div>
   <span id="fbStatus" class="fb-status">● Firebase未接続</span>
@@ -107,6 +115,8 @@
 </div>
 
 <div id="warnBar"></div>
+
+<div id="deptTabs"></div>
 
 <main><div id="grid" class="g2"></div></main>
 
@@ -131,12 +141,13 @@
     </div>
     <label>カメラ一覧</label>
     <table class="cams">
-      <thead><tr><th>ストリーム名(go2rtcのキー)</th><th>表示名</th><th>エリアID(トラブル連携)</th><th></th></tr></thead>
+      <thead><tr><th>ストリーム名(go2rtcのキー)</th><th>表示名</th><th>部署(タブ)</th><th>エリアID(トラブル連携)</th><th></th></tr></thead>
       <tbody id="camRows"></tbody>
     </table>
     <button class="btn-sub" style="margin-top:8px" onclick="addCamRow()">＋ カメラを追加</button>
     <div class="cfg-note">
       ストリーム名は go2rtc.yaml の streams: に登録したキー(例: cam1)。
+      部署は上部のタブ名になります(例: プレス / 技術)。同じ名前でまとまります。空欄なら「その他」扱い。
       エリアIDはトラブルボタン(Phase 3)の発報先(例: c-line)。未定なら空欄でOK。
     </div>
     <div class="cfg-actions">
@@ -152,18 +163,35 @@ import { getDatabase, ref, onValue, update } from 'https://www.gstatic.com/fireb
 
 // ===== 設定(localStorage) =====
 const CFG_KEY = 'hk_camgrid_config';
-let config = { serverUrl:'', layout:'g2', cams:[] };
+let config = { serverUrl:'', layout:'g2', cams:[], activeDept:'all' };
 try { config = Object.assign(config, JSON.parse(localStorage.getItem(CFG_KEY) || '{}')); } catch(e){}
+let activeDept = config.activeDept || 'all';
+// ?cams=cam2,cam6 で特定カメラだけ表示（H-Hubレイアウトのカメラマークから遷移）
+const focusCams = (new URLSearchParams(location.search).get('cams')||'').split(',').map(s=>s.trim()).filter(Boolean);
 
 // ===== グリッド描画 =====
 function render(){
+  renderDeptTabs();
   const grid = document.getElementById('grid');
   grid.className = config.layout;
   document.getElementById('btn2x2').classList.toggle('active', config.layout==='g2');
   document.getElementById('btn3x3').classList.toggle('active', config.layout==='g3');
   grid.innerHTML = '';
-  const cams = config.cams.length ? config.cams : [{src:'',name:'カメラ未設定',area:''}];
-  cams.forEach((cam, i) => {
+  const base = config.cams.length ? config.cams : [{src:'',name:'カメラ未設定',area:''}];
+  // config.cams の元インデックスを保持しつつフィルタ（拡大表示のindex整合のため）
+  let cams = base.map((cam, i) => ({cam, i}));
+  if(focusCams.length){
+    // ?cams= 指定のキーだけを、その順番で表示
+    cams = focusCams.map(key => { const idx = config.cams.findIndex(c => c.src === key); return idx>=0 ? {cam:config.cams[idx], i:idx} : null; }).filter(Boolean);
+  } else if(activeDept !== 'all'){
+    cams = cams.filter(o => (o.cam.dept||'').trim() === activeDept);
+  }
+  if(!cams.length){
+    grid.innerHTML = '<div class="grid-empty">このタブに表示するカメラがありません。⚙設定で部署を割り当ててください。</div>';
+    checkMixedContent();
+    return;
+  }
+  cams.forEach(({cam, i}) => {
     const cell = document.createElement('div');
     cell.className = 'cell';
     cell.dataset.area = cam.area || '';
@@ -191,6 +219,33 @@ function camStreamUrl(cam){
   return config.serverUrl.replace(/\/+$/,'') + '/stream.html?src=' + encodeURIComponent(cam.src);
 }
 function esc(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// ===== 部署タブ =====
+function renderDeptTabs(){
+  const bar = document.getElementById('deptTabs');
+  if(focusCams.length){  // 特定カメラ表示中は部署タブの代わりに「全カメラへ戻る」を出す
+    bar.className = 'show';
+    bar.innerHTML = '<a href="camera_grid.html" class="dtab" style="text-decoration:none">← 全カメラ表示</a>';
+    return;
+  }
+  const depts = [];
+  config.cams.forEach(c => { const d=(c.dept||'').trim(); if(d && !depts.includes(d)) depts.push(d); });
+  // 選択中の部署が消えていたら「すべて」に戻す
+  if(activeDept !== 'all' && !depts.includes(activeDept)) activeDept = 'all';
+  if(!depts.length){ bar.className=''; bar.innerHTML=''; return; }
+  bar.className = 'show';
+  const tabs = ['all', ...depts];
+  bar.innerHTML = tabs.map(d =>
+    `<button class="dtab ${activeDept===d?'active':''}" data-d="${esc(d)}">${d==='all'?'すべて':esc(d)}</button>`
+  ).join('');
+  bar.querySelectorAll('.dtab').forEach(b => b.onclick = () => setDept(b.dataset.d));
+}
+function setDept(d){
+  activeDept = d;
+  config.activeDept = d;
+  localStorage.setItem(CFG_KEY, JSON.stringify(config));
+  render();
+}
 
 window.setLayout = (l) => { config.layout = l; localStorage.setItem(CFG_KEY, JSON.stringify(config)); render(); };
 
@@ -231,16 +286,18 @@ function addCamRowWith(cam){
   tr.innerHTML = `
     <td><input class="c-src" value="${esc(cam.src)}" placeholder="cam1"></td>
     <td><input class="c-name" value="${esc(cam.name)}" placeholder="プレスAライン"></td>
+    <td><input class="c-dept" value="${esc(cam.dept)}" placeholder="プレス"></td>
     <td><input class="c-area" value="${esc(cam.area)}" placeholder="a-line"></td>
     <td><button class="del" onclick="this.closest('tr').remove()">削除</button></td>`;
   document.getElementById('camRows').appendChild(tr);
 }
-window.addCamRow = () => addCamRowWith({src:'',name:'',area:''});
+window.addCamRow = () => addCamRowWith({src:'',name:'',dept:'',area:''});
 window.saveCfg = () => {
   config.serverUrl = document.getElementById('cfg-server').value.trim();
   config.cams = [...document.querySelectorAll('#camRows tr')].map(tr => ({
     src:  tr.querySelector('.c-src').value.trim(),
     name: tr.querySelector('.c-name').value.trim(),
+    dept: tr.querySelector('.c-dept').value.trim(),
     area: tr.querySelector('.c-area').value.trim().toLowerCase(),
   })).filter(c => c.src || c.name);
   localStorage.setItem(CFG_KEY, JSON.stringify(config));

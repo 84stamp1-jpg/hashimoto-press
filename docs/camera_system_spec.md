@@ -92,20 +92,50 @@ CLAUDE.md と docs/ARCHITECTURE.md の統一ルールに従うこと。
 RTSP URL形式: `rtsp://<RTSPユーザー>:<パスワード>@<IP>:554/stream1`(高画質) / `/stream2`(低画質)
 ※C210はアプリからのWiFi接続先変更不可(変更には初期化→再セットアップが必要)
 
-| No | 機種 | 設置場所 | IPアドレス | RTSPパス | 備考 |
-|----|------|---------|-----------|----------|------|
-| 1〜7 | Tapo C210 | (記入待ち) | (ネットワーク移行後に記入) | /stream1 | 3台はカメラアカウント設定済み(2026-07-08) |
+ネットワーク方針: **社内WiFiへ移行**（2026-07-14〜）。IPは 192.168.30.x 帯。
 
-### ネットワーク課題(2026-07-08判明・未解決)
+| No | go2rtcキー | 機種 | 設置場所 | 社内WiFi移行 | カメラアカウント | go2rtc表示 | 備考 |
+|----|-----------|------|---------|:-----------:|:---------------:|:---------:|------|
+| 1 | cam1 | Tapo C210 | 技術部 MILLAC | ✓ | ✓ | ✓ | 2026-07-14 表示OK |
+| 2 | cam2 | Tapo C210 | プレス Aライン | ✓ | ✓ | ✓ | 2026-07-14 表示OK |
+| 3 | cam3 | Tapo C210 | プレス Cライン | ✓ | ✓ | ✓ | 2026-07-14 表示OK |
+| 4 | cam4 | Tapo C210 | 技術 MX55 | ✓ | ✓ | ✓ | 2026-07-15 表示OK |
+| 5 | cam5 | Tapo C210 | 技術 ワイヤー | ✓ | ✓ | ✓ | 2026-07-15 表示OK |
+| 6 | cam6 | Tapo C210 | プレス Bライン | ✓ | ✓ | ✓ | 2026-07-15 表示OK |
+| － | (予備) | Tapo C210 | (未設置) | ― | ― | ― | 残り1台は予備・未設置 |
 
-- カメラ7台はゲストWiFi「hashimoto-kogyo-free」(10.223.247.x)に接続されている
-- 事務所LAN(192.168.30.x)→ゲストWiFiは**TCP遮断**(pingのみ通る)のため、
-  事務所LAN側の中継サーバーからカメラに到達できない
-- ルーターはYAMAHA製(192.168.30.254)。TP-Link製AP×3(192.168.30.31/.208/.212、管理画面非公開)
-- 解決策の候補: (1)社内用WiFiへカメラを移行(要リセット) (2)ルーターにLAN→カメラのTCP許可を追加
-  (3)中継サーバーをカメラと同一WiFi側に設置
+現在の稼働: **6台**（技術=MILLAC/MX55/ワイヤー、プレス=Aライン/Bライン/Cライン）。camera_grid の部署タブ 技術/プレス に対応。
 
-※台数・設置場所が確定したら本表を更新すること
+※固定IP(192.168.30.x)・RTSPユーザー/パスワードは**公開リポジトリに載せず**、中継サーバーの go2rtc.yaml のみに保持する。
+　RTSP URL形式: `rtsp://<ユーザー>:<パスワード>@<IP>:554/stream1`（山カッコは目印。実値では付けない）。
+
+### ネットワーク課題(2026-07-08判明 → 2026-07-14解決)
+
+- 当初: カメラはゲストWiFi「hashimoto-kogyo-free」(10.223.247.x)接続。事務所LAN(192.168.30.x)→
+  ゲストWiFiは**TCP遮断**(pingのみ)で、事務所LAN側の中継サーバーから到達できなかった
+- **採用した解決策: (1)社内WiFiへカメラを移行**。カメラを 192.168.30.x 帯に載せ替え、
+  事務所LANの中継PC(go2rtc, 192.168.30.9)から直接RTSP到達できるようにした
+- 中継PC: BLEスキャナーPC兼用(192.168.30.9)。go2rtc v1.9.14 を C:\Users\Owner\Desktop\go2rtc_win64\ で稼働
+
+### つまずきメモ(2026-07-14・再発防止)
+- go2rtc.yaml の RTSP URL に `<...>`(パスワードの目印カッコ)を残すと `net/url: invalid userinfo`。カッコは外す
+- ポート554が `connectex: actively refused` = そのカメラのRTSPアカウント未作成。Tapoアプリで作成すれば開く
+- go2rtc設定は Web UI の config タブで直接編集→Saveが確実(メモ帳の .txt 拡張子事故を回避)
+- go2rtcを非表示(vbs)で起動していると Web UI の「Save & Restart」で**本体が再起動されず設定が反映されない**。
+  対策: 設定変更後は `restart_go2rtc.bat`(kill→hidden再起動)を実行。config反映漏れの切り分けは
+  `http://localhost:1984/api/streams` で読み込み中ストリームを確認する
+- go2rtc.yaml の `api:`/`listen:` はインデントを崩すと "api"/"listen" が幽霊ストリーム化する。
+  既定APIポートは :1984 なので、迷ったら api ブロックごと省略してよい(streams: と cam 行のみ)
+- **config行の行頭を全角スペース（　）にすると go2rtc がその行を無視**する（日本語入力ON時に多発）。
+  行頭は必ず半角スペース2つ。症状は「その1台だけ stream not found / 一覧に出ない」。
+
+### camera_grid ↔ H-Hubレイアウト連携（2026-07-15）
+- `camera_grid.html` は `?cams=cam2,cam6` で特定カメラだけ表示（部署タブは「← 全カメラ表示」に変わる）。
+- `dantori_navi.html` の工場レイアウトSVG末尾 `<g id="cameraMarks">` に📷マークを配置。
+  クリックで別タブに上記URLを開く。対応: プレスA=cam2 / プレスB=cam6 / プレスC=cam3 / 技術=cam1,cam4,cam5。
+  **配信元IP(192.168.30.9:8080)を変えたら cameraMarks 内の4リンクを更新すること。**
+
+※残り4台(cam4〜7)の設置場所が決まったら本表を更新すること
 
 ## 付録B: 変更履歴
 
@@ -114,3 +144,16 @@ RTSP URL形式: `rtsp://<RTSPユーザー>:<パスワード>@<IP>:554/stream1`(�
   go2rtc.yaml.example と導入手順書(docs/camera_setup_guide.md)を追加。
   カメラは購入済み(Tapoアプリのみで運用中)のため、Phase 1 の残作業は
   固定IP割当・RTSPアカウント作成・付録A記入
+- 2026-07-14: 社内WiFiへ移行しネットワーク課題を解決。go2rtc(中継PC 192.168.30.9)で
+  3台配信確認(cam1=技術MILLAC / cam2=プレスAライン / cam3=プレスCライン)。
+  go2rtc.yaml.example を7台分に、付録Aを7行の記入枠に更新。残タスク: 残り4台展開・
+  IP固定(DHCP予約)・go2rtc自動起動・HTTPS化・camera_grid本番表示。
+- 2026-07-14: **camera_grid.html v2026.07.14-1** — 部署タブ機能を追加。カメラごとに
+  `dept`(部署)を設定でき、上部にタブ(すべて/プレス/技術…)が出て部署別に絞り込み表示。
+  選択中タブは localStorage(`hk_camgrid_config.activeDept`)に保存。cams[i] に `dept` 追加。
+  中継PCでの配信は Desktop\camera_view\ にコピーを置き python http.server 8080 で社内LAN配信
+  (閲覧URL http://192.168.30.9:8080/camera_grid.html)。**リポジトリの camera_grid.html を編集したら
+  camera_view へコピーし直すこと**。自動起動スクリプトは Desktop\go2rtc_win64\ に
+  start_go2rtc_hidden.vbs / start_camera_page_server.vbs / install_autostart.bat / restart_go2rtc.bat(英字のみ)。
+- 2026-07-15: cam6(プレスBライン)追加で**6台稼働**。camera_grid v2026.07.15-1 で `?cams=` 対応。
+  dantori_navi.html の工場レイアウトに📷カメラマークを追加(クリックで該当カメラを別タブ表示)。
