@@ -9900,16 +9900,26 @@ window.loadTroubleHist=async function(){
   const lineName=document.getElementById('thLine').value;
   let all={};
   try{ const snap=await get(ref(db,'troubleHistory')); all=snap.val()||{}; }catch(e){ console.warn('履歴取得エラー',e); }
-  const rows=[];
-  Object.keys(all).forEach(lid=>{
-    const entries=all[lid]||{};
-    Object.keys(entries).forEach(id=>{
-      const e=entries[id]||{}; const d=e.date||_thDstr(id);
-      if(from&&d<from) return;
-      if(to&&d>to) return;
-      if(lineName&&(e.lineName||'')!==lineName) return;
-      rows.push({lineId:lid,id,date:d,lineName:e.lineName||LINE_LABEL[lid]||lid,type:e.type||'',start:e.start||'',end:e.end||null,note:e.note||''});
+  // 履歴 ＋ 現在の使い捨てライン(lines)のトラブルを統合。未保存の既存分も表示し、履歴にも保存する。
+  const combined={};
+  Object.keys(all).forEach(lid=>{ Object.keys(all[lid]||{}).forEach(id=>{ const e=all[lid][id]||{};
+    combined[lid+'|'+id]={lineId:lid,id,date:e.date||_thDstr(id),lineName:e.lineName||LINE_LABEL[lid]||lid,type:e.type||'',start:e.start||'',end:e.end||null,note:e.note||''}; }); });
+  Object.keys(lines||{}).forEach(lid=>{
+    ((((lines[lid]||{}).troubles))||[]).forEach(t=>{
+      if(!t||!t.id) return;
+      const k=lid+'|'+t.id;
+      if(!combined[k]){
+        combined[k]={lineId:lid,id:t.id,date:_thDstr(t.id),lineName:LINE_LABEL[lid]||lid,type:t.type||'',start:t.start||'',end:t.end||null,note:t.note||null};
+        _persistTroubleHist(lid,t); // 未保存の既存トラブルを履歴に取り込む（次回リセット後も残す）
+      }
     });
+  });
+  const rows=[];
+  Object.values(combined).forEach(r=>{
+    if(from&&r.date<from) return;
+    if(to&&r.date>to) return;
+    if(lineName&&(r.lineName||'')!==lineName) return;
+    rows.push(r);
   });
   rows.sort((a,b)=>(b.date+(b.start||'')).localeCompare(a.date+(a.start||'')));
   _thData=rows;
