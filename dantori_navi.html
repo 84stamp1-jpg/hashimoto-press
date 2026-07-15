@@ -2127,7 +2127,12 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
         <input type="date" id="thTo" onchange="loadTroubleHist()" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px;"></div>
       <button class="bp" onclick="loadTroubleHist()">表示</button>
     </div>
-    <div id="thList" style="max-height:52vh;overflow:auto;"></div>
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">
+      <button class="bd" id="thTabList" onclick="thSetMode('list')">一覧</button>
+      <button class="bd" id="thTabAgg" onclick="thSetMode('agg')">📊 月次集計</button>
+      <button class="bp" style="margin-left:auto;" onclick="exportTroubleCsv()">⬇ CSV出力</button>
+    </div>
+    <div id="thList" style="max-height:48vh;overflow:auto;"></div>
     <div style="border-top:1px solid #eee;padding-top:10px;margin-top:10px;display:flex;justify-content:space-between;align-items:center;">
       <span id="thCount" style="font-size:11px;color:#888;"></span>
       <button class="bd" onclick="deleteTroubleHistRange()">表示中の期間をすべて削除</button>
@@ -9829,12 +9834,11 @@ window.endTrouble=function(idx){
 };
 window.deleteTrouble=function(idx){
   if(!_troubleLineId) return;
-  const _rem=_getTroubles(_troubleLineId)[idx];
   const troubles=_getTroubles(_troubleLineId).filter((_,i)=>i!==idx);
   update(ref(db,'lines/'+_troubleLineId),{troubles:troubles.length?troubles:null});
   if(lines[_troubleLineId]) lines[_troubleLineId].troubles=troubles.length?troubles:undefined;
   syncCamTrouble(LINE_CAM_AREA[_troubleLineId]);
-  if(_rem&&_rem.id) _removeTroubleHist(_troubleLineId,_rem.id); // 履歴からも削除（当日の入力ミス訂正）
+  // ※履歴(/troubleHistory)は消さない。当日の一覧から消えても履歴は残す（履歴削除は履歴画面から）。
   _renderTroubleList();
 };
 // ===== トラブル→カメラ点滅・Slack通知 の実処理 =====
@@ -9875,7 +9879,8 @@ function _persistTroubleHist(lineId,t){
 }
 function _removeTroubleHist(lineId,id){ if(lineId&&id) set(ref(db,'troubleHistory/'+lineId+'/'+id),null); }
 
-let _thData=[]; // 表示中の履歴（範囲削除用）
+let _thData=[]; // 表示中の履歴（範囲削除・CSV・集計用）
+let _thMode='list'; // 'list' | 'agg'（月次集計）
 window.openTroubleHistForLine=function(){ openTroubleHist(LINE_LABEL[_troubleLineId]||''); };
 window.openTroubleHist=function(preLineName){
   const sel=document.getElementById('thLine');
@@ -9914,6 +9919,9 @@ function _thRenderRows(){
   const rows=_thData;
   const list=document.getElementById('thList');
   document.getElementById('thCount').textContent=rows.length+'件';
+  document.getElementById('thTabList').style.fontWeight=_thMode==='list'?'700':'400';
+  document.getElementById('thTabAgg').style.fontWeight=_thMode==='agg'?'700':'400';
+  if(_thMode==='agg'){ _thRenderAgg(rows); return; }
   if(!rows.length){ list.innerHTML='<div style="color:#bbb;font-size:12px;padding:10px 0;">該当する履歴はありません</div>'; return; }
   const byLine={}; rows.forEach(r=>{(byLine[r.lineName]=byLine[r.lineName]||[]).push(r);});
   list.innerHTML=Object.keys(byLine).map(ln=>{
@@ -9940,6 +9948,50 @@ window.deleteTroubleHistRange=function(){
   if(!confirm('表示中の '+_thData.length+' 件を削除しますか？（元に戻せません）')) return;
   _thData.forEach(r=>_removeTroubleHist(r.lineId,r.id));
   _thData=[]; _thRenderRows();
+};
+window.thSetMode=function(m){ _thMode=m; _thRenderRows(); };
+// 月次集計: 月×ラインで 件数・合計停止(分)
+function _thAggregate(rows){
+  const agg={};
+  rows.forEach(r=>{
+    const month=(r.date||'').slice(0,7);
+    const key=month+'|'+r.lineName;
+    if(!agg[key]) agg[key]={month, line:r.lineName, count:0, minutes:0, ongoing:0};
+    agg[key].count++;
+    if(r.start&&r.end) agg[key].minutes+=_thDurMin(r.start,r.end);
+    else agg[key].ongoing++;
+  });
+  return Object.values(agg).sort((a,b)=>(b.month+'|'+a.line).localeCompare(a.month+'|'+b.line));
+}
+function _thRenderAgg(rows){
+  const list=document.getElementById('thList');
+  const agg=_thAggregate(rows);
+  if(!agg.length){ list.innerHTML='<div style="color:#bbb;font-size:12px;padding:10px 0;">該当する履歴はありません</div>'; return; }
+  list.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:12px;">'
+    +'<thead><tr style="background:#f1f5f9;">'
+    +'<th style="text-align:left;padding:6px 8px;">月</th><th style="text-align:left;padding:6px 8px;">ライン</th>'
+    +'<th style="text-align:right;padding:6px 8px;">件数</th><th style="text-align:right;padding:6px 8px;">合計停止(分)</th></tr></thead><tbody>'
+    +agg.map(a=>'<tr style="border-bottom:1px solid #f2f2f2;">'
+      +'<td style="padding:5px 8px;">'+a.month+'</td>'
+      +'<td style="padding:5px 8px;">'+_thEsc(a.line)+'</td>'
+      +'<td style="text-align:right;padding:5px 8px;">'+a.count+'</td>'
+      +'<td style="text-align:right;padding:5px 8px;">'+a.minutes+(a.ongoing?'<span style="color:#c0392b;font-size:10px;">(継続中'+a.ongoing+')</span>':'')+'</td></tr>').join('')
+    +'</tbody></table>';
+}
+function _csvCell(v){ v=String(v==null?'':v); return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }
+window.exportTroubleCsv=function(){
+  if(!_thData.length){ alert('出力する履歴がありません'); return; }
+  const head=['日付','ライン','種類','開始','終了','停止分','メモ'];
+  const body=_thData.map(r=>{
+    const dur=(r.start&&r.end)?_thDurMin(r.start,r.end):'';
+    return [r.date,r.lineName,r.type,r.start,r.end||'',dur,r.note||''].map(_csvCell).join(',');
+  });
+  const csv='﻿'+[head.join(',')].concat(body).join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download='トラブル履歴_'+(document.getElementById('thFrom').value||'')+'_'+(document.getElementById('thTo').value||'')+'.csv';
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 };
 
 window.saveTroubleThresh=function(){
