@@ -1,0 +1,34 @@
+/**
+ * トラブルSlack通知 中継GAS（doPost）
+ * dantori_navi.html の進捗管理でトラブルを記録すると、settings/troubleSlackUrl に設定した
+ * このWebアプリURLへ POST され、ここから Slack へ通知する。
+ *
+ * ■ セットアップ
+ * 1) Slack で対象チャンネル（例: #生産準備）の Incoming Webhook を作成し URL を控える
+ * 2) GAS プロジェクトを新規作成し、このコードを貼り付け
+ * 3) 「プロジェクトの設定 → スクリプト プロパティ」に
+ *      キー: SLACK_WEBHOOK_URL   値: 手順1のWebhook URL
+ *    を登録（★URLはコードに直書きしない＝公開リポジトリに載せない）
+ * 4) デプロイ → 新しいデプロイ → 種類「ウェブアプリ」
+ *      実行するユーザー: 自分 / アクセスできるユーザー: 全員
+ *    → /exec のURLを控える
+ * 5) H-Hub の設定「トラブルSlack通知（GAS中継URL）」に /exec URL を貼り付けて保存
+ */
+function doPost(e) {
+  try {
+    var body = JSON.parse(e.postData.contents);
+    var text = body.text || ('⚠ トラブル発生: ' + (body.line || ''));
+    var url = PropertiesService.getScriptProperties().getProperty('SLACK_WEBHOOK_URL');
+    if (url) {
+      UrlFetchApp.fetch(url, {
+        method: 'post',
+        contentType: 'application/json',
+        payload: JSON.stringify({ text: text }),
+        muteHttpExceptions: true
+      });
+    }
+    return ContentService.createTextOutput('ok');
+  } catch (err) {
+    return ContentService.createTextOutput('err: ' + err);
+  }
+}

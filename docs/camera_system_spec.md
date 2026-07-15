@@ -129,6 +129,18 @@ RTSP URL形式: `rtsp://<RTSPユーザー>:<パスワード>@<IP>:554/stream1`(�
 - **config行の行頭を全角スペース（　）にすると go2rtc がその行を無視**する（日本語入力ON時に多発）。
   行頭は必ず半角スペース2つ。症状は「その1台だけ stream not found / 一覧に出ない」。
 
+### Phase 3 トラブルボタン（2026-07-15・進行中）
+- **専用ボタンは新設せず、既存の「進捗管理タブのトラブル記録」を発報源に流用**した。
+- `dantori_navi.html`: `LINE_CAM_AREA`(ラインID→camera_gridエリアID) を追加。A1/A2→a-line、
+  B1/B2/BP2/Bライン→b-line、CP3/Cライン①/CP3_2/Cライン②→c-line。ロボットライン・技術はカメラ無し。
+- `addTrouble/endTrouble/deleteTrouble` にフックし `syncCamTrouble(area)` で Firebase `/trouble/<area>` を
+  active/解除。camera_grid（受信側は既存実装）が該当カメラ枠を赤点滅＋バナー表示。
+- 新規の進行中トラブルで `troubleSlackNotify()` → `settings/troubleSlackUrl`(Slack中継GAS)へPOST。
+  GASコードは `docs/trouble_slack_gas.gs.example`。Slack Webhook URLはGASのスクリプトプロパティに保管（リポジトリ非掲載）。
+- **前提**: camera_grid の各カメラのエリアIDが a-line/b-line/c-line と一致していること
+  （cam2=a-line, cam3=c-line, cam6=b-line）。不一致だと点滅しない。
+- 残: ESP32/Shelly等の物理ボタン化（同じ `/trouble/<area>` 書き込みをするだけ）。
+
 ### camera_grid ↔ H-Hubレイアウト連携（2026-07-15）
 - `camera_grid.html` は `?cams=cam2,cam6` で特定カメラだけ表示（部署タブは「← 全カメラ表示」に変わる）。
 - `dantori_navi.html` の工場レイアウトSVG末尾 `<g id="cameraMarks">` に📷マークを配置。
