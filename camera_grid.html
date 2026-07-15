@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   camera_grid.html — 工場カメラ一覧表示(HHub)
-  v2026.07.15-1
+  v2026.07.15-2
   仕様書: docs/camera_system_spec.md (Phase 2)
   構成: Tapoカメラ(RTSP) → 中継サーバーPC(go2rtc) → 本ページ(iframe/WebRTC)
   トラブル発報: Firebase /trouble/<エリアID> を監視して該当カメラ枠を赤点滅
@@ -77,6 +77,9 @@
   table.cams input{padding:6px 8px;font-size:12px;}
   table.cams .del{background:#fee2e2;color:#b91c1c;border:none;border-radius:5px;
     padding:5px 9px;cursor:pointer;font-size:11px;}
+  table.cams .rowmv{background:#eef2f7;color:#334155;border:none;border-radius:5px;
+    padding:5px 8px;cursor:pointer;font-size:12px;margin-right:3px;line-height:1;}
+  table.cams .rowmv:hover{background:#dbe3ee;}
   .cfg-actions{display:flex;gap:10px;margin-top:18px;}
   .btn-primary{background:#2563eb;color:#fff;border:none;border-radius:7px;padding:9px 18px;
     font-weight:700;font-size:13px;cursor:pointer;}
@@ -99,7 +102,7 @@
 <header>
   <div>
     <div class="logo-main">HASHIMOTO KOGYO</div>
-    <div class="logo-sub">工場カメラ一覧 <span class="ver">v2026.07.15-1</span></div>
+    <div class="logo-sub">工場カメラ一覧 <span class="ver">v2026.07.15-2</span></div>
   </div>
   <div class="spacer"></div>
   <span id="fbStatus" class="fb-status">● Firebase未接続</span>
@@ -288,10 +291,18 @@ function addCamRowWith(cam){
     <td><input class="c-name" value="${esc(cam.name)}" placeholder="プレスAライン"></td>
     <td><input class="c-dept" value="${esc(cam.dept)}" placeholder="プレス"></td>
     <td><input class="c-area" value="${esc(cam.area)}" placeholder="a-line"></td>
-    <td><button class="del" onclick="this.closest('tr').remove()">削除</button></td>`;
+    <td style="white-space:nowrap">
+      <button class="rowmv" onclick="moveCamRow(this,-1)" title="上へ">↑</button>
+      <button class="rowmv" onclick="moveCamRow(this,1)" title="下へ">↓</button>
+      <button class="del" onclick="this.closest('tr').remove()">削除</button></td>`;
   document.getElementById('camRows').appendChild(tr);
 }
 window.addCamRow = () => addCamRowWith({src:'',name:'',dept:'',area:''});
+window.moveCamRow = (btn, dir) => {
+  const tr = btn.closest('tr');
+  if(dir < 0 && tr.previousElementSibling) tr.parentNode.insertBefore(tr, tr.previousElementSibling);
+  else if(dir > 0 && tr.nextElementSibling) tr.parentNode.insertBefore(tr.nextElementSibling, tr);
+};
 window.saveCfg = () => {
   config.serverUrl = document.getElementById('cfg-server').value.trim();
   config.cams = [...document.querySelectorAll('#camRows tr')].map(tr => ({
