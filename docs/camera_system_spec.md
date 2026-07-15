@@ -141,6 +141,13 @@ RTSP URL形式: `rtsp://<RTSPユーザー>:<パスワード>@<IP>:554/stream1`(�
   （cam2=a-line, cam3=c-line, cam6=b-line）。不一致だと点滅しない。
 - 残: ESP32/Shelly等の物理ボタン化（同じ `/trouble/<area>` 書き込みをするだけ）。
 
+### トラブル履歴の永続化（2026-07-15）
+- 進捗管理(`lines/<id>/troubles`)は日次で使い捨てだが、トラブルは **Firebase `/troubleHistory/<lineId>/<troubleId>`** に
+  別途永続化（addTrouble/endTrouble/deleteTroubleにフック、`_persistTroubleHist`/`_removeTroubleHist`）。日次リセットの影響を受けない。
+- 履歴モーダル(`#troubleHistOv`): ライン絞り込み＋期間(開始日〜終了日)指定で一覧、行ごと削除・「表示中の期間をすべて削除」。
+  入口はトラブル記録モーダルの「📋 履歴」ボタンと、設定の「📋 トラブル履歴を見る」。
+- 削除はローカル即時反映＋裏でFirebase削除（get()はサーバ往復で遅延するため）。firebaseインポートに `get` を追加。
+
 ### camera_grid ↔ H-Hubレイアウト連携（2026-07-15）
 - `camera_grid.html` は `?cams=cam2,cam6` で特定カメラだけ表示（部署タブは「← 全カメラ表示」に変わる）。
 - `dantori_navi.html` の工場レイアウトSVG末尾 `<g id="cameraMarks">` に📷マークを配置。

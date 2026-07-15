@@ -2057,6 +2057,10 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
       <input type="text" id="thr-slack" placeholder="https://script.google.com/macros/s/.../exec" style="width:100%;padding:7px 9px;border:1px solid #ddd;border-radius:6px;font-size:12px;margin-bottom:8px;">
       <button class="bp" onclick="saveTroubleSlackUrl()">Slack通知URLを保存</button>
       <div class="msg" id="slackmsg"></div>
+
+      <div class="ftitle" style="margin-top:16px;">トラブル履歴</div>
+      <div style="font-size:11px;color:#888;margin-bottom:8px;">進捗管理は日次で使い捨てですが、トラブルはライン別に履歴として残ります。期間を指定して確認・削除できます。</div>
+      <button class="bp" onclick="openTroubleHist('')">📋 トラブル履歴を見る</button>
     </div>
   </div>
 </div>
@@ -2066,6 +2070,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
   <div class="modal" style="max-width:480px;">
     <div class="mhd">
       <div class="mttl" id="troubleMttl">⚠ トラブル・停止記録</div>
+      <button class="bp" style="padding:4px 10px;font-size:11px;margin-left:auto;margin-right:8px;" onclick="openTroubleHistForLine()">📋 履歴</button>
       <button class="mclose" onclick="closeTroubleOvD()">×</button>
     </div>
     <!-- 既存トラブル一覧 -->
@@ -2102,6 +2107,30 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
         <button class="bd" id="tCancelBtn" onclick="cancelEditTrouble()" style="display:none;">キャンセル</button>
       </div>
       <div id="tMsg" style="font-size:11px;color:#27ae60;margin-top:6px;min-height:14px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- トラブル履歴モーダル -->
+<div class="ov" id="troubleHistOv" onclick="closeTHist(event)">
+  <div class="modal" style="max-width:600px;">
+    <div class="mhd">
+      <div class="mttl">📋 トラブル履歴</div>
+      <button class="mclose" onclick="closeTHistD()">×</button>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;">
+      <div class="fi"><label>ライン</label>
+        <select id="thLine" onchange="loadTroubleHist()" style="padding:7px 9px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:inherit;"></select></div>
+      <div class="fi"><label>開始日</label>
+        <input type="date" id="thFrom" onchange="loadTroubleHist()" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px;"></div>
+      <div class="fi"><label>終了日</label>
+        <input type="date" id="thTo" onchange="loadTroubleHist()" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px;"></div>
+      <button class="bp" onclick="loadTroubleHist()">表示</button>
+    </div>
+    <div id="thList" style="max-height:52vh;overflow:auto;"></div>
+    <div style="border-top:1px solid #eee;padding-top:10px;margin-top:10px;display:flex;justify-content:space-between;align-items:center;">
+      <span id="thCount" style="font-size:11px;color:#888;"></span>
+      <button class="bd" onclick="deleteTroubleHistRange()">表示中の期間をすべて削除</button>
     </div>
   </div>
 </div>
@@ -8843,7 +8872,7 @@ window.qcPrintHinpyo = function(){
 <!-- ===== 進捗管理ボード JS ===== -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, onValue, set, update } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getDatabase, ref, onValue, set, update, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 const cfg={apiKey:"AIzaSyCvh4rDrk6ljWhNBJc-Kt_YFpvEevLxb6o",authDomain:"hashimoto-press.firebaseapp.com",databaseURL:"https://hashimoto-press-default-rtdb.asia-southeast1.firebasedatabase.app",projectId:"hashimoto-press",storageBucket:"hashimoto-press.firebasestorage.app",messagingSenderId:"508495109760",appId:"1:508495109760:web:53d266bb4483ab04a29065"};
 const app=initializeApp(cfg);
@@ -9751,9 +9780,10 @@ window.addTrouble=function(){
   }
   update(ref(db,'lines/'+_troubleLineId),{troubles:newTroubles});
   if(lines[_troubleLineId]) lines[_troubleLineId].troubles=newTroubles;
-  // カメラ点滅の同期＋（新規の進行中トラブルのみ）Slack通知
+  // カメラ点滅の同期＋（新規の進行中トラブルのみ）Slack通知＋履歴の永続化
   syncCamTrouble(LINE_CAM_AREA[_troubleLineId]);
   if(!isEdit && !end) troubleSlackNotify(_troubleLineId, type, note);
+  newTroubles.forEach(t=>_persistTroubleHist(_troubleLineId,t));
   document.getElementById('tEnd').value='';
   document.getElementById('tNote').value='';
   document.getElementById('tMsg').style.color='#27ae60';
@@ -9794,14 +9824,17 @@ window.endTrouble=function(idx){
   update(ref(db,'lines/'+_troubleLineId),{troubles});
   if(lines[_troubleLineId]) lines[_troubleLineId].troubles=troubles;
   syncCamTrouble(LINE_CAM_AREA[_troubleLineId]); // 終了→他に進行中が無ければカメラ点滅解除
+  _persistTroubleHist(_troubleLineId, troubles[idx]); // 終了時刻を履歴にも反映
   _renderTroubleList();
 };
 window.deleteTrouble=function(idx){
   if(!_troubleLineId) return;
+  const _rem=_getTroubles(_troubleLineId)[idx];
   const troubles=_getTroubles(_troubleLineId).filter((_,i)=>i!==idx);
   update(ref(db,'lines/'+_troubleLineId),{troubles:troubles.length?troubles:null});
   if(lines[_troubleLineId]) lines[_troubleLineId].troubles=troubles.length?troubles:undefined;
   syncCamTrouble(LINE_CAM_AREA[_troubleLineId]);
+  if(_rem&&_rem.id) _removeTroubleHist(_troubleLineId,_rem.id); // 履歴からも削除（当日の入力ミス訂正）
   _renderTroubleList();
 };
 // ===== トラブル→カメラ点滅・Slack通知 の実処理 =====
@@ -9827,6 +9860,86 @@ window.saveTroubleSlackUrl=function(){
   troubleSlackUrl=url;
   update(ref(db,'settings'),{troubleSlackUrl:url});
   const m=document.getElementById('slackmsg'); if(m){m.textContent='保存しました ✓'; setTimeout(()=>{if(m)m.textContent='';},2000);}
+};
+
+// ===== トラブル履歴の永続化（/troubleHistory は進捗の日次リセットの影響を受けない）=====
+function _thEsc(s){ return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function _thDstr(id){ const d=new Date(Number(id)); return isNaN(d.getTime())?new Date().toLocaleDateString('sv-SE'):d.toLocaleDateString('sv-SE'); }
+function _thDurMin(s,e){ const a=s.split(':').map(Number),b=e.split(':').map(Number); let d=(b[0]*60+b[1])-(a[0]*60+a[1]); if(d<0)d+=1440; return d; }
+function _persistTroubleHist(lineId,t){
+  if(!lineId||!t||!t.id) return;
+  update(ref(db,'troubleHistory/'+lineId+'/'+t.id),{
+    date:_thDstr(t.id), lineName:LINE_LABEL[lineId]||lineId,
+    type:t.type||'', start:t.start||'', end:t.end||null, note:t.note||null, ts:Number(t.id)||Date.now()
+  });
+}
+function _removeTroubleHist(lineId,id){ if(lineId&&id) set(ref(db,'troubleHistory/'+lineId+'/'+id),null); }
+
+let _thData=[]; // 表示中の履歴（範囲削除用）
+window.openTroubleHistForLine=function(){ openTroubleHist(LINE_LABEL[_troubleLineId]||''); };
+window.openTroubleHist=function(preLineName){
+  const sel=document.getElementById('thLine');
+  const names=[...new Set(Object.values(LINE_LABEL))];
+  sel.innerHTML='<option value="">すべてのライン</option>'+names.map(n=>`<option value="${_thEsc(n)}">${_thEsc(n)}</option>`).join('');
+  sel.value=preLineName||'';
+  const to=new Date(), from=new Date(); from.setDate(from.getDate()-30);
+  document.getElementById('thFrom').value=from.toLocaleDateString('sv-SE');
+  document.getElementById('thTo').value=to.toLocaleDateString('sv-SE');
+  document.getElementById('troubleHistOv').classList.add('open');
+  loadTroubleHist();
+};
+window.closeTHist=function(e){ if(e.target===document.getElementById('troubleHistOv')) closeTHistD(); };
+window.closeTHistD=function(){ document.getElementById('troubleHistOv').classList.remove('open'); };
+window.loadTroubleHist=async function(){
+  const from=document.getElementById('thFrom').value, to=document.getElementById('thTo').value;
+  const lineName=document.getElementById('thLine').value;
+  let all={};
+  try{ const snap=await get(ref(db,'troubleHistory')); all=snap.val()||{}; }catch(e){ console.warn('履歴取得エラー',e); }
+  const rows=[];
+  Object.keys(all).forEach(lid=>{
+    const entries=all[lid]||{};
+    Object.keys(entries).forEach(id=>{
+      const e=entries[id]||{}; const d=e.date||_thDstr(id);
+      if(from&&d<from) return;
+      if(to&&d>to) return;
+      if(lineName&&(e.lineName||'')!==lineName) return;
+      rows.push({lineId:lid,id,date:d,lineName:e.lineName||LINE_LABEL[lid]||lid,type:e.type||'',start:e.start||'',end:e.end||null,note:e.note||''});
+    });
+  });
+  rows.sort((a,b)=>(b.date+(b.start||'')).localeCompare(a.date+(a.start||'')));
+  _thData=rows;
+  _thRenderRows();
+};
+function _thRenderRows(){
+  const rows=_thData;
+  const list=document.getElementById('thList');
+  document.getElementById('thCount').textContent=rows.length+'件';
+  if(!rows.length){ list.innerHTML='<div style="color:#bbb;font-size:12px;padding:10px 0;">該当する履歴はありません</div>'; return; }
+  const byLine={}; rows.forEach(r=>{(byLine[r.lineName]=byLine[r.lineName]||[]).push(r);});
+  list.innerHTML=Object.keys(byLine).map(ln=>{
+    const items=byLine[ln].map(r=>{
+      const dur=(r.start&&r.end)?_thDurMin(r.start,r.end):null;
+      return `<div style="display:flex;align-items:center;gap:8px;padding:5px 2px;border-bottom:1px solid #f2f2f2;font-size:12px;">
+        <span style="color:#888;min-width:78px;">${r.date}</span>
+        <span style="min-width:66px;">${_thEsc(r.type)}</span>
+        <span style="color:#555;min-width:120px;">${r.start||'--'}〜${r.end||'（継続中）'}${dur!=null?' ('+dur+'分)':''}</span>
+        <span style="flex:1;color:#666;">${_thEsc(r.note)}</span>
+        <button onclick="deleteTroubleHistOne('${r.lineId}','${r.id}')" style="background:#fee2e2;color:#b91c1c;border:none;border-radius:5px;padding:3px 8px;font-size:11px;cursor:pointer;">削除</button>
+      </div>`;
+    }).join('');
+    return `<div style="margin-bottom:12px;"><div style="font-weight:700;font-size:12px;color:#1F4E79;margin-bottom:3px;">${_thEsc(ln)}（${byLine[ln].length}）</div>${items}</div>`;
+  }).join('');
+};
+window.deleteTroubleHistOne=function(lineId,id){
+  if(!confirm('この履歴を削除しますか？')) return;
+  _removeTroubleHist(lineId,id);
+  _thData=_thData.filter(r=>!(r.lineId===lineId&&String(r.id)===String(id))); _thRenderRows();
+};
+window.deleteTroubleHistRange=function(){
+  if(!_thData.length) return;
+  if(!confirm('表示中の '+_thData.length+' 件を削除しますか？（元に戻せません）')) return;
+  _thData.forEach(r=>_removeTroubleHist(r.lineId,r.id));
+  _thData=[]; _thRenderRows();
 };
 
 window.saveTroubleThresh=function(){
