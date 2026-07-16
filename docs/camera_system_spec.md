@@ -124,6 +124,11 @@ RTSP URL形式: `rtsp://<RTSPユーザー>:<パスワード>@<IP>:554/stream1`(�
 - go2rtcを非表示(vbs)で起動していると Web UI の「Save & Restart」で**本体が再起動されず設定が反映されない**。
   対策: 設定変更後は `restart_go2rtc.bat`(kill→hidden再起動)を実行。config反映漏れの切り分けは
   `http://localhost:1984/api/streams` で読み込み中ストリームを確認する
+- **自動起動(2026-07-16設定済み)**: PC再起動/ログオフでgo2rtc・ページ配信が両方落ち「カメラに繋がらない」
+  事象が発生した。`schtasks`はAccess denied(要管理者)のため、**スタートアップフォルダにショートカットを配置**する方式で登録。
+  `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\` に `go2rtc.lnk` / `camera_page_server.lnk`
+  (いずれも wscript で各vbsを起動)。解除は当該.lnkを削除するだけ。
+  復旧手順: 繋がらない時はまずポート1984/8080の待受を確認し、落ちていれば各vbsを実行する
 - go2rtc.yaml の `api:`/`listen:` はインデントを崩すと "api"/"listen" が幽霊ストリーム化する。
   既定APIポートは :1984 なので、迷ったら api ブロックごと省略してよい(streams: と cam 行のみ)
 - **config行の行頭を全角スペース（　）にすると go2rtc がその行を無視**する（日本語入力ON時に多発）。
