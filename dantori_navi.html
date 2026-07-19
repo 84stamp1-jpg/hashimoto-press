@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
-<!-- H-Hub v2026.07.19-2 : WBGTパネルに推移グラフ・記録の修正削除・作業項目/基準温度/入力者の設定画面を追加 -->
+<!-- H-Hub v2026.07.19-3 : WBGTパネルを製造現場のみに限定（技術現場は mold_repair_plan.html 側に表示） -->
 <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 /* ===== スクロールバー常時表示 ===== */
@@ -3009,8 +3009,11 @@ setInterval(updateClock,1000); updateClock();
 // 現在値は履歴の最新レコードから導く（別に持つと記録を修正したときにズレるため）。
 // 古い値をそのまま表示すると誤った安心を与えるため、staleMin を過ぎたら数値を消して「要測定」にする。
 // 作業項目・基準温度・入力者・対応の選択肢は /wbgt/config で全端末共有（画面から編集可）。
+// このページで表示する測定場所。H-Hubは製造現場のみ（技術現場は金型管理システム側に表示する）。
+// 設定(/wbgt/config)は両システムで共有するため、場所の定義自体は両方を持つ。
+const WB_SHOW = ['press'];
 const WB_DEFAULT_CFG = {
-  places: { press:'プレス現場', gijutsu:'技術現場' },
+  places: { press:'製造現場', gijutsu:'技術現場' },
   works: [
     { name:'選別検査作業',   n:30, a:28 },
     { name:'段取り・型交換', n:30, a:28 },
@@ -3028,6 +3031,8 @@ const wbEsc = s => String(s == null ? '' : s).replace(/[&<>"']/g,
   c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const wbFb  = () => (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
 const wbDay = d => (d || new Date()).toLocaleDateString('sv-SE');
+// このページで扱う場所だけに絞る（設定に存在するものに限る）
+const wbPlaces = () => WB_SHOW.filter(k => wbCfg.places && wbCfg.places[k]);
 
 function wbLevel(v){
   if(v >= 31) return { n:4, label:'危険' };
@@ -3060,7 +3065,7 @@ async function wbLoadHist(day){
     const res = await fetch(`${wbFb()}/wbgt/history/${d}.json`);
     const data = res.ok ? (await res.json()) || {} : {};
     const out = {};
-    Object.keys(wbCfg.places).forEach(k => out[k] = wbToList(data[k]));
+    wbPlaces().forEach(k => out[k] = wbToList(data[k]));
     return out;
   } catch(e){ return {}; }
 }
@@ -3092,7 +3097,7 @@ function wbSpark(list){
 function wbRender(){
   const bar = document.getElementById('wbgtBar');
   if(!bar) return;
-  bar.innerHTML = Object.keys(wbCfg.places).map(key => {
+  bar.innerHTML = wbPlaces().map(key => {
     const list = wbHist[key] || [];
     const d = list[list.length - 1];
     const stale = !d || (Date.now() - d.ts) > (wbCfg.staleMin || 150) * 60000;
@@ -3137,7 +3142,7 @@ function wbOpenModal(key, rec){
   wbEditing = rec ? { place:key, id:rec.id } : null;
   document.getElementById('wbgtModalTitle').textContent = rec ? '記録の修正' : '暑さ指数の入力';
   document.getElementById('wb-savebtn').textContent     = rec ? '修正する' : '記録する';
-  wbFillSelect('wb-place', Object.keys(wbCfg.places).map(k => ({ v:k, label:wbCfg.places[k] })), key || 'press');
+  wbFillSelect('wb-place', wbPlaces().map(k => ({ v:k, label:wbCfg.places[k] })), key || wbPlaces()[0]);
   wbFillSelect('wb-act',   wbCfg.actions || [], rec ? rec.act : (wbCfg.actions || [])[0]);
   wbFillSelect('wb-by',    wbCfg.people  || [], rec ? rec.by  : (localStorage.getItem('wb_by') || (wbCfg.people||[])[0]));
   document.getElementById('wb-value').value = rec ? rec.v : '';
@@ -3184,7 +3189,7 @@ async function wbRenderList(){
   const day  = wbListDate();
   const data = await wbLoadHist(day);
   const rows = [];
-  Object.keys(wbCfg.places).forEach(k => (data[k] || []).forEach(r => rows.push({ ...r, place:k })));
+  wbPlaces().forEach(k => (data[k] || []).forEach(r => rows.push({ ...r, place:k })));
   rows.sort((a, b) => a.ts - b.ts);
   const body = document.getElementById('wb-listbody');
   if(!rows.length){ body.innerHTML = '<div style="color:#888;padding:12px 0;">この日の記録はありません</div>'; return; }
