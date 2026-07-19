@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
-<!-- H-Hub v2026.07.19-3 : WBGTパネルを製造現場のみに限定（技術現場は mold_repair_plan.html 側に表示） -->
+<!-- H-Hub v2026.07.19-4 : WBGT表示を工場レイアウト内（旧・金型置場の枠）へ移設。上部バーは廃止。31℃以上は全作業×に固定 -->
 <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 /* ===== スクロールバー常時表示 ===== */
@@ -898,6 +898,23 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
   </div>
 </div>
 
+<!-- ===== WBGT 詳細パネル（レイアウトの枠をクリックで開く） ===== -->
+<div class="modal-overlay" id="wbgtDetailModal" style="display:none;"
+     onclick="if(event.target===this)this.style.display='none'">
+  <div class="modal" style="max-width:440px;">
+    <div id="wb-detail-body"></div>
+    <div class="modal-btns">
+      <button onclick="wbOpenModal(wbPlaces()[0])">測定値を入力</button>
+      <button onclick="wbOpenList()">記録</button>
+      <button onclick="wbOpenCfg()">設定</button>
+    </div>
+    <div style="margin-top:8px;">
+      <button style="width:100%;padding:9px;border:1px solid #ddd;border-radius:6px;font-size:13px;cursor:pointer;"
+              onclick="document.getElementById('wbgtDetailModal').style.display='none'">閉じる</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== WBGT 記録一覧モーダル ===== -->
 <div class="modal-overlay" id="wbgtListModal" style="display:none;">
   <div class="modal" style="max-width:640px;">
@@ -964,7 +981,6 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 </div>
 
 <div class="content active" id="tab-factory">
-  <div id="wbgtBar"></div>
   <div class="factory-header">
     <button class="refresh-btn" onclick="refreshFactory()">↻ 更新</button>
   </div>
@@ -974,9 +990,8 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
   <!-- 背景 -->
   <rect x="0" y="0" width="824" height="446" fill="#9ca3af" rx="6"/>
 
-  <!-- ===== 左外：金型置場 ===== -->
-  <rect x="8" y="8" width="88" height="120" rx="4" fill="#fafafa" stroke="#6b7280" stroke-width="1.5"/>
-  <text x="52" y="72" text-anchor="middle" font-size="9" font-weight="700" fill="#1f2937">金型置場</text>
+  <!-- ===== 左外：暑さ指数WBGT（旧・金型置場の枠を転用。ビーコン表示は無い場所） ===== -->
+  <g id="wbgtBox" style="cursor:pointer" onclick="wbOpenDetail()"></g>
 
   <!-- ===== 左外：事務所 ===== -->
   <rect x="8" y="132" width="88" height="226" rx="4" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
@@ -3024,6 +3039,8 @@ const WB_DEFAULT_CFG = {
   actions: ['通常（対応なし）','休憩を増やした','重作業を涼しい時間帯へ変更','作業を中止・延期'],
   staleMin: 150,
 };
+// 危険域。この値以上は基準温度の設定にかかわらず全作業を×にする（安全側に倒す固定ルール）
+const WB_DANGER = 31;
 let wbCfg  = JSON.parse(JSON.stringify(WB_DEFAULT_CFG));
 let wbHist = {};   // { place: [ {id,v,by,act,note,ts}, ... ] }（当日分・古い順）
 
@@ -3094,43 +3111,104 @@ function wbSpark(list){
   return `<div class="wb-spark"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="本日の推移">` +
     `${line}${list.length > 1 ? `<polyline points="${pts}" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>` : ''}${dots}${ticks}</svg></div>`;
 }
+// 工場レイアウト内（旧・金型置場の枠 x8 y8 w88 h120）に描画する
+const WB_BOX = { x:8, y:8, w:88, h:120 };
+const WB_LV_COLOR = {
+  1:{ bg:'#eff6ff', bd:'#3b82f6', chip:'#dbeafe', tx:'#1e40af' },
+  2:{ bg:'#fefce8', bd:'#eab308', chip:'#fef9c3', tx:'#854d0e' },
+  3:{ bg:'#fff7ed', bd:'#f97316', chip:'#ffedd5', tx:'#9a3412' },
+  4:{ bg:'#fef2f2', bd:'#dc2626', chip:'#fee2e2', tx:'#991b1b' },
+};
+// 枠内のミニグラフ（目盛りラベルは入らないので基準線の色だけで示す）
+function wbMiniSpark(list){
+  if(list.length < 1) return '';
+  const x0 = 20, x1 = 88, yb = 101, yt = 75;
+  const y = v => yb - (Math.min(36, Math.max(20, v)) - 20) / 16 * (yb - yt);
+  const t0 = new Date(list[0].ts).setHours(7,0,0,0);
+  const x  = ts => x0 + Math.min(11, Math.max(0, (ts - t0) / 3600000)) / 11 * (x1 - x0);
+  const ref = [{v:31,c:'#dc2626'},{v:28,c:'#f97316'},{v:25,c:'#9ca3af'}]
+    .map(g => `<line x1="${x0}" y1="${y(g.v).toFixed(1)}" x2="${x1}" y2="${y(g.v).toFixed(1)}" stroke="${g.c}" stroke-width="0.6" stroke-dasharray="2 2"/>`).join('');
+  const pts = list.map(r => `${x(r.ts).toFixed(1)},${y(r.v).toFixed(1)}`).join(' ');
+  const last = list[list.length - 1];
+  return ref +
+    (list.length > 1 ? `<polyline points="${pts}" fill="none" stroke="#3b82f6" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>` : '') +
+    `<circle cx="${x(last.ts).toFixed(1)}" cy="${y(last.v).toFixed(1)}" r="2.4" fill="${last.v >= WB_DANGER ? '#dc2626' : '#b45309'}"/>`;
+}
 function wbRender(){
-  const bar = document.getElementById('wbgtBar');
-  if(!bar) return;
-  bar.innerHTML = wbPlaces().map(key => {
-    const list = wbHist[key] || [];
-    const d = list[list.length - 1];
-    const stale = !d || (Date.now() - d.ts) > (wbCfg.staleMin || 150) * 60000;
-    const tools = `<div class="wb-tools">
-        <button class="wb-btn" onclick="wbOpenModal('${key}')">入力</button>
-        <button class="wb-btn" onclick="wbOpenList('${key}')" title="記録の確認・修正">記録</button>
-        <button class="wb-btn" onclick="wbOpenCfg()" title="作業項目・基準温度の設定">設定</button>
-      </div>`;
-    if(stale){
-      const last = d ? `最終 ${new Date(d.ts).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}` : '本日の記録なし';
-      return `<div class="wb-card stale">
-        <div class="wb-place">${wbEsc(wbCfg.places[key])}</div>
-        <div class="wb-main"><span class="wb-val">--</span><span class="wb-unit">℃</span></div>
-        <div class="wb-lv stale">要測定</div>
-        ${wbSpark(list)}
-        <div class="wb-jud"></div>
-        <div class="wb-time warn">${last}<br>測定してください</div>${tools}</div>`;
-    }
-    const lv = wbLevel(d.v);
-    const rows = (wbCfg.works || []).map(w =>
-      `<span class="n">${wbEsc(w.name)}</span>` +
-      [w.n, w.a].map(l => `<span class="m ${d.v <= l ? 'wb-ok' : 'wb-ng'}">${d.v <= l ? '○' : '×'}</span>`).join('')
-    ).join('');
-    const act = d.act ? `<br><span class="wb-act">${wbEsc(d.act)}${d.note ? '／'+wbEsc(d.note) : ''}</span>` : '';
-    return `<div class="wb-card lv${lv.n}">
-      <div class="wb-place">${wbEsc(wbCfg.places[key])}</div>
-      <div class="wb-main"><span class="wb-val">${d.v.toFixed(1)}</span><span class="wb-unit">℃</span></div>
-      <div class="wb-lv lv${lv.n}">${lv.label}</div>
+  const box = document.getElementById('wbgtBox');
+  if(!box) return;
+  const key   = wbPlaces()[0];
+  const list  = wbHist[key] || [];
+  const d     = list[list.length - 1];
+  const stale = !d || (Date.now() - d.ts) > (wbCfg.staleMin || 150) * 60000;
+  const B = WB_BOX;
+  const name = wbEsc((wbCfg.places && wbCfg.places[key]) || '製造現場');
+  if(stale){
+    const last = d ? `最終 ${new Date(d.ts).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}` : '本日の記録なし';
+    box.innerHTML =
+      `<rect x="${B.x}" y="${B.y}" width="${B.w}" height="${B.h}" rx="4" fill="#fff" stroke="#dc2626" stroke-width="2" stroke-dasharray="5 3"/>
+       <text x="52" y="20" text-anchor="middle" font-size="7.5" font-weight="700" fill="#6b7280">${name}</text>
+       <text x="48" y="50" text-anchor="middle" font-size="26" font-weight="800" fill="#9ca3af">--</text>
+       <text x="78" y="50" text-anchor="middle" font-size="9" fill="#9ca3af">℃</text>
+       <rect x="22" y="56" width="60" height="14" rx="3" fill="#fee2e2"/>
+       <text x="52" y="66" text-anchor="middle" font-size="8" font-weight="800" fill="#991b1b">要測定</text>
+       <text x="52" y="88" text-anchor="middle" font-size="7" fill="#dc2626">${last}</text>
+       <text x="52" y="100" text-anchor="middle" font-size="7" font-weight="700" fill="#dc2626">測定してください</text>`;
+    return;
+  }
+  const lv = wbLevel(d.v), c = WB_LV_COLOR[lv.n];
+  const danger = d.v >= WB_DANGER;
+  box.innerHTML =
+    `<rect x="${B.x}" y="${B.y}" width="${B.w}" height="${B.h}" rx="4" fill="${c.bg}" stroke="${c.bd}" stroke-width="${danger ? 2.5 : 2}"/>
+     <text x="52" y="20" text-anchor="middle" font-size="7.5" font-weight="700" fill="#6b7280">${name}</text>
+     <text x="48" y="50" text-anchor="middle" font-size="26" font-weight="800" fill="${danger ? '#dc2626' : '#111'}">${d.v.toFixed(1)}</text>
+     <text x="78" y="50" text-anchor="middle" font-size="9" fill="#6b7280">℃</text>
+     <rect x="22" y="56" width="60" height="14" rx="3" fill="${c.chip}"/>
+     <text x="52" y="66" text-anchor="middle" font-size="8" font-weight="800" fill="${c.tx}">${lv.label}</text>
+     ${wbMiniSpark(list)}
+     ${danger
+       ? `<rect x="14" y="112" width="76" height="12" rx="2" fill="#dc2626"/>
+          <text x="52" y="121" text-anchor="middle" font-size="7" font-weight="800" fill="#fff">全作業 中止・延期</text>`
+       : `<text x="52" y="118" text-anchor="middle" font-size="6.5" fill="#6b7280">${new Date(d.ts).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}（${wbAgo(d.ts)}）</text>`}`;
+}
+// レイアウトの枠クリックで開く詳細パネル（判定表はここに置く。枠内には入らないため）
+function wbOpenDetail(){
+  const key   = wbPlaces()[0];
+  const list  = wbHist[key] || [];
+  const d     = list[list.length - 1];
+  const stale = !d || (Date.now() - d.ts) > (wbCfg.staleMin || 150) * 60000;
+  const name  = wbEsc((wbCfg.places && wbCfg.places[key]) || '製造現場');
+  const body  = document.getElementById('wb-detail-body');
+  if(stale){
+    body.innerHTML = `<h3>${name}　暑さ指数</h3>
+      <div style="color:#dc2626;font-weight:700;padding:10px 0;">
+        ${d ? '最後の測定から時間が経っています' : '本日はまだ測定されていません'}。測定してください。</div>`;
+  } else {
+    const lv = wbLevel(d.v), danger = d.v >= WB_DANGER;
+    const rows = (wbCfg.works || []).map(w => {
+      const cell = l => { const ok = !danger && d.v <= l;
+        return `<td style="text-align:center;font-weight:800;font-size:15px;color:${ok ? '#16a34a' : '#dc2626'}">${ok ? '○' : '×'}</td>`; };
+      return `<tr><td style="padding:4px 0;">${wbEsc(w.name)}
+        <span style="color:#aaa;font-size:11px;">${w.n}/${w.a}</span></td>${cell(w.n)}${cell(w.a)}</tr>`;
+    }).join('');
+    body.innerHTML = `<h3>${name}　暑さ指数</h3>
+      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px;">
+        <span style="font-size:34px;font-weight:800;color:${danger ? '#dc2626' : '#111'}">${d.v.toFixed(1)}</span>
+        <span style="font-size:14px;color:#6b7280;">℃</span>
+        <span style="font-size:13px;font-weight:800;padding:3px 10px;border-radius:6px;
+          background:${WB_LV_COLOR[lv.n].chip};color:${WB_LV_COLOR[lv.n].tx};">${lv.label}</span></div>
+      ${danger ? `<div style="background:#fee2e2;color:#991b1b;font-size:12px;padding:8px 12px;border-radius:6px;margin-bottom:10px;">
+          ${WB_DANGER}℃以上のため、基準値にかかわらず全作業を × としています</div>` : ''}
       ${wbSpark(list)}
-      <div class="wb-jud"><span></span><span class="h">通常</span><span class="h">順化なし</span>${rows}</div>
-      <div class="wb-time">${new Date(d.ts).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}
-        （${wbAgo(d.ts)}）<br>${wbEsc(d.by || '')}${act}</div>${tools}</div>`;
-  }).join('');
+      <table style="width:100%;font-size:13px;margin:10px 0;">
+        <tr style="font-size:10px;color:#888;"><td></td>
+          <td style="text-align:center;width:70px;">通常</td>
+          <td style="text-align:center;width:70px;">順化なし</td></tr>${rows}</table>
+      <div style="font-size:12px;color:#6b7280;">
+        ${new Date(d.ts).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})} 測定・${wbEsc(d.by || '')}
+        ${d.act ? '<br><span style="color:#1d4ed8;">'+wbEsc(d.act)+(d.note ? '／'+wbEsc(d.note) : '')+'</span>' : ''}</div>`;
+  }
+  document.getElementById('wbgtDetailModal').style.display = 'flex';
 }
 // ---- 入力（新規／修正の両方に使う） ----
 let wbEditing = null;   // {place, id} 修正時のみ

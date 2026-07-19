@@ -536,7 +536,7 @@ input.nm-img-input{display:none}
 <body>
 
 <header>
-  <div class="logo">⚙ <span>金型</span>管理システム<span style="font-size:9px;color:#9aa3b2;font-weight:400;margin-left:6px">v2026.07.19-1</span></div>
+  <div class="logo">⚙ <span>金型</span>管理システム<span style="font-size:9px;color:#9aa3b2;font-weight:400;margin-left:6px">v2026.07.19-2</span></div>
   <div class="main-tab-bar">
     <button class="main-tab-btn active" id="mainTabRepair" onclick="switchMainTab('repair')">🔧 改修計画表</button>
     <button class="main-tab-btn" id="mainTabNew" onclick="switchMainTab('newmold')">🏗️ 新規製作 日程表</button>
@@ -1160,6 +1160,8 @@ const WB_DEFAULT_CFG = {
   actions: ['通常（対応なし）','休憩を増やした','重作業を涼しい時間帯へ変更','作業を中止・延期'],
   staleMin: 150,
 };
+// 危険域。この値以上は基準温度の設定にかかわらず全作業を×にする（安全側に倒す固定ルール）
+const WB_DANGER = 31;
 let wbCfg  = JSON.parse(JSON.stringify(WB_DEFAULT_CFG));
 let wbHist = {};
 
@@ -1244,9 +1246,11 @@ function wbRender(){
         <div class="wb-time warn">${last}<br>測定してください</div>${tools}</div>`;
     }
     const lv = wbLevel(d.v);
+    const danger = d.v >= WB_DANGER;   // 危険域は基準値にかかわらず全作業×
     const rows = (wbCfg.works || []).map(w =>
       `<span class="n">${wbEsc(w.name)}</span>` +
-      [w.n, w.a].map(l => `<span class="m ${d.v <= l ? 'wb-ok' : 'wb-ng'}">${d.v <= l ? '○' : '×'}</span>`).join('')).join('');
+      [w.n, w.a].map(l => { const ok = !danger && d.v <= l;
+        return `<span class="m ${ok ? 'wb-ok' : 'wb-ng'}">${ok ? '○' : '×'}</span>`; }).join('')).join('');
     const act = d.act ? `<br><span class="wb-act">${wbEsc(d.act)}${d.note ? '／'+wbEsc(d.note) : ''}</span>` : '';
     return `<div class="wb-card lv${lv.n}">
       <div class="wb-place">${wbEsc(wbCfg.places[key])}</div>
@@ -1254,7 +1258,8 @@ function wbRender(){
       <div class="wb-lv lv${lv.n}">${lv.label}</div>${wbSpark(list)}
       <div class="wb-jud"><span></span><span class="h">通常</span><span class="h">順化なし</span>${rows}</div>
       <div class="wb-time">${new Date(d.ts).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}
-        （${wbAgo(d.ts)}）<br>${wbEsc(d.by || '')}${act}</div>${tools}</div>`;
+        （${wbAgo(d.ts)}）<br>${wbEsc(d.by || '')}${act}
+        ${danger ? '<br><span style="color:#dc2626;font-weight:700">'+WB_DANGER+'℃以上：全作業 中止・延期</span>' : ''}</div>${tools}</div>`;
   }).join('');
 }
 let wbEditing = null;
