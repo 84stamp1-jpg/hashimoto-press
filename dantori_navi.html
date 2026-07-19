@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.07.19-1 : 工場レイアウトにWBGT（暑さ指数）パネルを追加（プレス／技術の2拠点・手入力） -->
 <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 /* ===== スクロールバー常時表示 ===== */
@@ -133,6 +134,36 @@ html, body {
 .firebase-status{margin-top:4px;font-size:11px;color:#888;display:flex;align-items:center;gap:5px;}
 .status-dot{width:7px;height:7px;border-radius:50%;background:#aaa;}
 .status-dot.connected{background:#16a34a;}
+/* ===== WBGT（暑さ指数）パネル ===== */
+#wbgtBar{display:flex;gap:8px;margin-bottom:6px;align-items:stretch;}
+.wb-card{flex:1;min-width:0;border:2px solid #d1d5db;border-radius:10px;background:#fff;padding:8px 12px;display:flex;align-items:center;gap:14px;}
+.wb-card.lv1{border-color:#3b82f6;background:#eff6ff;}
+.wb-card.lv2{border-color:#eab308;background:#fefce8;}
+.wb-card.lv3{border-color:#f97316;background:#fff7ed;}
+.wb-card.lv4{border-color:#dc2626;background:#fef2f2;}
+.wb-card.stale{border-color:#dc2626;border-style:dashed;background:#fff;}
+.wb-place{font-size:13px;font-weight:700;color:#374151;writing-mode:vertical-rl;text-orientation:upright;letter-spacing:2px;flex:none;}
+.wb-main{display:flex;align-items:baseline;gap:6px;flex:none;}
+.wb-val{font-size:46px;font-weight:800;line-height:1;color:#111;font-variant-numeric:tabular-nums;}
+.wb-card.stale .wb-val{color:#9ca3af;}
+.wb-unit{font-size:17px;color:#6b7280;}
+.wb-lv{font-size:17px;font-weight:800;padding:4px 12px;border-radius:6px;flex:none;}
+.wb-lv.lv1{background:#dbeafe;color:#1e40af;}
+.wb-lv.lv2{background:#fef9c3;color:#854d0e;}
+.wb-lv.lv3{background:#ffedd5;color:#9a3412;}
+.wb-lv.lv4{background:#fee2e2;color:#991b1b;}
+.wb-lv.stale{background:#fee2e2;color:#991b1b;}
+.wb-jud{flex:1;min-width:0;display:grid;grid-template-columns:auto auto auto;gap:1px 8px;font-size:12px;align-content:center;}
+.wb-jud .h{font-size:10px;color:#6b7280;text-align:center;}
+.wb-jud .n{color:#374151;white-space:nowrap;}
+.wb-jud .m{text-align:center;font-weight:800;font-size:15px;line-height:1.25;}
+.wb-ok{color:#16a34a;}
+.wb-ng{color:#dc2626;}
+.wb-time{font-size:11px;color:#6b7280;flex:none;text-align:right;line-height:1.5;}
+.wb-time.warn{color:#dc2626;font-weight:700;}
+.wb-btn{padding:6px 12px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;font-size:12px;cursor:pointer;color:#334155;flex:none;}
+.wb-btn:hover{background:#f1f5f9;}
+@media(max-width:900px){#wbgtBar{flex-direction:column;}.wb-val{font-size:34px;}.wb-jud{display:none;}}
 /* ===== 担当者パネル ===== */
 .person-panel{width:245px;flex-shrink:0;display:flex;flex-direction:column;gap:2px;}
 .pp-card{background:white;border-radius:6px;padding:7px 11px;display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;}
@@ -829,7 +860,36 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 </div>
 
 <!-- ===== 工場レイアウトタブ ===== -->
+<!-- ===== WBGT 入力モーダル ===== -->
+<div class="modal-overlay" id="wbgtModal" style="display:none;">
+  <div class="modal" style="max-width:400px;">
+    <h3 id="wbgtModalTitle">暑さ指数の入力</h3>
+    <div class="form-group">
+      <label>測定場所</label>
+      <select id="wb-place">
+        <option value="press">プレス現場</option>
+        <option value="gijutsu">技術現場</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>WBGT値（℃）</label>
+      <input type="number" id="wb-value" step="0.1" min="0" max="50" placeholder="27.2"
+             style="font-size:22px;font-family:inherit;text-align:center;"/>
+      <div class="form-hint">計測器の表示値をそのまま入力してください（屋内モード・黒球安定後）</div>
+    </div>
+    <div class="form-group">
+      <label>入力者</label>
+      <input type="text" id="wb-by" placeholder="氏名" style="font-family:inherit;"/>
+    </div>
+    <div class="modal-btns">
+      <button onclick="wbCloseModal()">キャンセル</button>
+      <button class="save-btn" onclick="wbSave()">記録する</button>
+    </div>
+  </div>
+</div>
+
 <div class="content active" id="tab-factory">
+  <div id="wbgtBar"></div>
   <div class="factory-header">
     <button class="refresh-btn" onclick="refreshFactory()">↻ 更新</button>
   </div>
@@ -2868,6 +2928,101 @@ function updateClock(){
     n.toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});
 }
 setInterval(updateClock,1000); updateClock();
+
+// ===== WBGT（暑さ指数）=====
+// 計測器（A&D AD-5698B）にデータ出力が無いため手入力。2時間ごとに現場リーダーまたは総務が入力する。
+// 古い値をそのまま表示すると誤った安心を与えるため、WB_STALE_MIN を過ぎたら数値を消して「要測定」にする。
+const WB_PLACES = { press:'プレス現場', gijutsu:'技術現場' };
+const WB_STALE_MIN = 150;   // 2時間ごと運用のため、2時間半で「要測定」
+// 作業別の基準値（ISO7243ベース／掲示ポスターと同じ値）[慣れている, 慣れていない]
+const WB_WORK = [
+  { name:'選別・軽作業',  lim:[30, 28] },
+  { name:'プレス作業',    lim:[28, 26] },
+  { name:'段取り・型交換', lim:[26, 23] },
+  { name:'溶接',          lim:[28, 26] },
+];
+function wbLevel(v){
+  if(v >= 31) return { n:4, label:'危険' };
+  if(v >= 28) return { n:3, label:'厳重警戒' };
+  if(v >= 25) return { n:2, label:'警戒' };
+  return { n:1, label:'注意' };
+}
+function wbAgo(ts){
+  const m = Math.floor((Date.now() - ts) / 60000);
+  if(m < 60) return m + '分前';
+  const h = Math.floor(m / 60);
+  return h + '時間' + (m % 60) + '分前';
+}
+let wbData = {};
+async function wbLoad(){
+  const fbUrl = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
+  try {
+    const res = await fetch(`${fbUrl}/wbgt/latest.json`);
+    if(res.ok) wbData = (await res.json()) || {};
+  } catch(e){ /* オフラインでも画面は出す */ }
+  wbRender();
+}
+function wbRender(){
+  const bar = document.getElementById('wbgtBar');
+  if(!bar) return;
+  bar.innerHTML = Object.keys(WB_PLACES).map(key => {
+    const d = wbData[key];
+    const stale = !d || (Date.now() - d.ts) > WB_STALE_MIN * 60000;
+    const btn = `<button class="wb-btn" onclick="wbOpenModal('${key}')">入力</button>`;
+    if(stale){
+      const last = d ? `最終 ${new Date(d.ts).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}` : '記録なし';
+      return `<div class="wb-card stale">
+        <div class="wb-place">${WB_PLACES[key]}</div>
+        <div class="wb-main"><span class="wb-val">--</span><span class="wb-unit">℃</span></div>
+        <div class="wb-lv stale">要測定</div>
+        <div class="wb-jud"></div>
+        <div class="wb-time warn">${last}<br>測定してください</div>${btn}</div>`;
+    }
+    const lv = wbLevel(d.v);
+    const rows = WB_WORK.map(w =>
+      `<span class="n">${w.name}</span>` +
+      w.lim.map(l => `<span class="m ${d.v <= l ? 'wb-ok' : 'wb-ng'}">${d.v <= l ? '○' : '×'}</span>`).join('')
+    ).join('');
+    return `<div class="wb-card lv${lv.n}">
+      <div class="wb-place">${WB_PLACES[key]}</div>
+      <div class="wb-main"><span class="wb-val">${d.v.toFixed(1)}</span><span class="wb-unit">℃</span></div>
+      <div class="wb-lv lv${lv.n}">${lv.label}</div>
+      <div class="wb-jud"><span></span><span class="h">慣れ</span><span class="h">不慣れ</span>${rows}</div>
+      <div class="wb-time">${new Date(d.ts).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}<br>${wbAgo(d.ts)}${d.by ? '<br>'+d.by : ''}</div>${btn}</div>`;
+  }).join('');
+}
+function wbOpenModal(key){
+  document.getElementById('wb-place').value = key || 'press';
+  document.getElementById('wb-value').value = '';
+  document.getElementById('wb-by').value = localStorage.getItem('wb_by') || '';
+  document.getElementById('wbgtModal').style.display = 'flex';
+  setTimeout(() => document.getElementById('wb-value').focus(), 50);
+}
+function wbCloseModal(){ document.getElementById('wbgtModal').style.display = 'none'; }
+async function wbSave(){
+  const key = document.getElementById('wb-place').value;
+  const v   = parseFloat(document.getElementById('wb-value').value);
+  const by  = document.getElementById('wb-by').value.trim();
+  if(isNaN(v) || v < 0 || v > 50){ alert('WBGT値を正しく入力してください（0〜50）'); return; }
+  localStorage.setItem('wb_by', by);
+  const entry = { v, by, ts: Date.now() };
+  const fbUrl = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
+  try {
+    // 現在値（表示用）
+    await fetch(`${fbUrl}/wbgt/latest/${key}.json`,
+      {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(entry)});
+    // 履歴（記録として残す。監督署対応・後からの振り返り用）
+    const day = new Date().toLocaleDateString('sv-SE');
+    await fetch(`${fbUrl}/wbgt/history/${day}/${key}.json`,
+      {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(entry)});
+    wbData[key] = entry;
+    wbCloseModal();
+    wbRender();
+  } catch(e){ alert('保存エラー：'+e.message); }
+}
+wbLoad();
+setInterval(wbLoad, 5 * 60 * 1000);   // 5分ごとに再取得（他端末からの入力を拾う）
+setInterval(wbRender, 60 * 1000);     // 1分ごとに経過時間と要測定判定を更新
 
 // ===== タブ切替 =====
 function switchTab(name){
