@@ -50,7 +50,8 @@ WORKS = [
 # 事象があったため、文字として直接描き込む方式に変更した（2026-07-21）。
 # 変更するときはこの辞書を直して再生成する。空文字にすると記入用の下線になる。
 CONTACTS = {
-    'responsible':  '深津　英介',
+    # 責任者は「氏名　TEL 番号」の形で1行にまとめる（欄が1つのため）
+    'responsible':  '深津　英介　TEL ________________',
     'hospital':     '藤枝市立総合病院',
     'hospital_tel': '054-646-1111',
     'address':      '藤枝市横内800-16',
@@ -78,6 +79,10 @@ S = {
                                leftIndent=4, spaceBefore=3, spaceAfter=2, leading=16),
     'body':     ParagraphStyle('body', fontName=F, fontSize=9, textColor=colors.HexColor('#1a1a2e'), leading=13.5),
     'bodyc':    ParagraphStyle('bodyc', fontName=F, fontSize=9, textColor=colors.HexColor('#1a1a2e'),
+                               leading=13.5, alignment=TA_CENTER),
+    # 濃色の見出し行に載せる白文字。TableStyleのTEXTCOLORはParagraphには効かない
+    # （Paragraphは自分のstyleの色で描く）ため、専用スタイルが要る
+    'headc':    ParagraphStyle('headc', fontName=F, fontSize=9.5, textColor=WHITE,
                                leading=13.5, alignment=TA_CENTER),
     'step_no':  ParagraphStyle('step_no', fontName=F, fontSize=11, textColor=WHITE, alignment=TA_CENTER, leading=14),
     'step_t':   ParagraphStyle('step_t', fontName=F, fontSize=11, textColor=DARKRED, leading=14),
@@ -211,8 +216,8 @@ def build(out_path):
 
     # ── 5. 予防（WBGT） ──
     st.append(Paragraph('■ ４．予防　―　暑さ指数（WBGT）を確認してから作業する', S['sec']))
-    wbgt = [[Paragraph('<b>作業の種類</b>', S['bodyc']), Paragraph('<b>通常</b>', S['bodyc']),
-             Paragraph('<b>暑熱順化なし</b>', S['bodyc'])]]
+    wbgt = [[Paragraph('<b>作業の種類</b>', S['headc']), Paragraph('<b>通常</b>', S['headc']),
+             Paragraph('<b>暑熱順化なし</b>', S['headc'])]]
     for name, n, a in WORKS:
         wbgt.append([Paragraph('<b>%s</b>' % name, S['bodyc']),
                      Paragraph('<b>%g℃</b>' % n, S['bodyc']),

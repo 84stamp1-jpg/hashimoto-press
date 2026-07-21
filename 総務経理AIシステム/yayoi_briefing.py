@@ -41,6 +41,9 @@ S = {
                              leftIndent=5, spaceBefore=6, spaceAfter=3, leading=17),
     'b':      ParagraphStyle('b', fontName=F, fontSize=9, textColor=colors.HexColor('#1a1a2e'), leading=13.5),
     'bc':     ParagraphStyle('bc', fontName=F, fontSize=9, textColor=colors.HexColor('#1a1a2e'), leading=13.5, alignment=TA_CENTER),
+    # 濃色の見出し行に載せる白文字。TableStyleのTEXTCOLORはParagraphには効かない
+    'hw':     ParagraphStyle('hw', fontName=F, fontSize=9, textColor=colors.white, leading=13.5),
+    'hwc':    ParagraphStyle('hwc', fontName=F, fontSize=9, textColor=colors.white, leading=13.5, alignment=TA_CENTER),
     'small':  ParagraphStyle('sm', fontName=F, fontSize=8, textColor=colors.HexColor('#444'), leading=11.5),
     'q':      ParagraphStyle('q', fontName=F, fontSize=9.5, textColor=colors.HexColor('#1a1a2e'), leading=14),
     'note':   ParagraphStyle('n', fontName=F, fontSize=7.5, textColor=colors.HexColor('#666'), leading=10.5),
@@ -124,7 +127,7 @@ def build(out):
     # ── 3. 月次の流れ ──
     st.append(hdr('３．月次の流れ'))
     st.append(box([
-        [Paragraph('<b>時期</b>', S['bc']), Paragraph('<b>作業内容</b>', S['b'])],
+        [Paragraph('<b>時期</b>', S['hwc']), Paragraph('<b>作業内容</b>', S['hw'])],
         [Paragraph('日々', S['bc']),
          Paragraph('i-Proへ入力（出荷入力・材料入力・仕入入力）', S['b'])],
         [Paragraph('3〜8日ごろ', S['bc']),
@@ -142,8 +145,8 @@ def build(out):
 
     # ── 4. 実測時間 ──
     st.append(hdr('４．どこに時間がかかっているか（担当者の実測）'))
-    rows = [[Paragraph('<b>作業</b>', S['b']), Paragraph('<b>頻度</b>', S['bc']),
-             Paragraph('<b>所要時間</b>', S['bc']), Paragraph('<b>月換算</b>', S['bc'])]]
+    rows = [[Paragraph('<b>作業</b>', S['hw']), Paragraph('<b>頻度</b>', S['hwc']),
+             Paragraph('<b>所要時間</b>', S['hwc']), Paragraph('<b>月換算</b>', S['hwc'])]]
     data = [
         ('売上・仕入を請求書と1個ずつ照合', '月1回', '5〜6日', '約5.5日', True),
         ('ユタカ技研の請求書を i-Pro へ1行ずつ入力', '月1回', '1日', '1日', False),
