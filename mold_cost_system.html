@@ -838,8 +838,8 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
                       <input type="checkbox" id="qf_fX" onchange="onFinishCheckChange()"> ▽▽
                     </label>
                   </label>
-                  <!-- 丸材の「Φ65」等を保存できるよう type=number にしない -->
-                  <input class="form-input" id="qf_sizeX" type="text" inputmode="decimal" placeholder="長さ / Φ65" oninput="">
+                  <!-- 丸材はX欄にΦ記号を入れる運用のため type=number にしない -->
+                  <input class="form-input" id="qf_sizeX" type="text" inputmode="decimal" placeholder="長さ（丸材はΦ）" oninput="">
                 </div>
                 <!-- Y -->
                 <div>
@@ -1472,15 +1472,15 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
         </div>
         <div class="form-group">
           <label class="form-label">長さX (mm)</label>
-          <!-- 丸材の「Φ65」等を保存できるよう type=number にしない（数値欄は非数字を破棄するため） -->
-          <input class="form-input" id="matf_sizeX" type="text" inputmode="decimal" placeholder="185 / Φ65">
+          <!-- 丸材はX欄にΦ記号を入れる運用のため type=number にしない（数値欄は非数字を破棄する） -->
+          <input class="form-input" id="matf_sizeX" type="text" inputmode="decimal" placeholder="185（丸材はΦ）">
         </div>
         <div class="form-group">
-          <label class="form-label">幅Y (mm)</label>
+          <label class="form-label">幅Y (mm)<span style="font-weight:400;color:var(--text2)">／丸材=直径</span></label>
           <input class="form-input" id="matf_sizeY" type="text" inputmode="decimal" placeholder="210">
         </div>
         <div class="form-group">
-          <label class="form-label">材厚Z (mm)</label>
+          <label class="form-label">材厚Z (mm)<span style="font-weight:400;color:var(--text2)">／丸材=長さ</span></label>
           <input class="form-input" id="matf_sizeZ" type="text" inputmode="decimal" placeholder="30">
         </div>
         <div class="form-group">
@@ -1787,8 +1787,8 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
         </div>
         <div class="form-group">
           <label class="form-label">X 長さ (mm)</label>
-          <!-- 丸材の「Φ65」等を保存できるよう type=number にしない -->
-          <input class="form-input" id="cim_sizeX" type="text" inputmode="decimal" placeholder="0 / Φ65">
+          <!-- 丸材はX欄にΦ記号を入れる運用のため type=number にしない -->
+          <input class="form-input" id="cim_sizeX" type="text" inputmode="decimal" placeholder="0（丸材はΦ）">
         </div>
         <div class="form-group">
           <label class="form-label">Y 幅 (mm)</label>
@@ -4612,11 +4612,8 @@ async function deleteQuoteRequest(reqKey) {
 
 // ㎏単価の自動計算（重量 = X×Y×Z×比重 / 1000000）
 function calcKgPrice(unitPrice, sizeX, sizeY, sizeZ, material, qty) {
-  // 丸材（Φ表記）は直径と長さの2つだけで計算するため、Y欄が空でも通す
   if (!unitPrice || !sizeX) return 0;
   if (!isRoundSize(sizeX) && (!sizeY || !sizeZ)) return 0;
-  // 丸材の「Φ65」等に対応するため sizeNum で数字だけを取り出す
-  const x = sizeNum(sizeX), y = sizeNum(sizeY), z = sizeNum(sizeZ);
   // 材質別比重
   const density = {
     'SS400':7.85,'S50C':7.85,'S45C':7.85,'SK3':7.85,'SKD11':7.7,
@@ -4626,10 +4623,12 @@ function calcKgPrice(unitPrice, sizeX, sizeY, sizeZ, material, qty) {
   const d = density[mat] || density[Object.keys(density).find(k=>mat.includes(k))||''] || 7.85;
   let vol;
   if (isRoundSize(sizeX)) {
-    const len = z || y;
-    if (!x || !len) return 0;
-    vol = Math.PI / 4 * x * x * len;
+    // 丸材【X=Φ記号 / Y=直径 / Z=長さ】
+    const { dia, len } = roundDims(sizeX, sizeY, sizeZ);
+    if (!dia || !len) return 0;
+    vol = Math.PI / 4 * dia * dia * len;
   } else {
+    const x = sizeNum(sizeX), y = sizeNum(sizeY), z = sizeNum(sizeZ);
     if (!x||!y||!z) return 0;
     vol = x * y * z;
   }
@@ -7636,20 +7635,26 @@ function isRoundSize(v) {
   return /[ΦφΦ⌀]|パイ/i.test(String(v == null ? '' : v));
 }
 
+// 丸材の直径と長さを取り出す。社内の入力ルールは【X=Φ記号 / Y=直径 / Z=長さ】。
+// X欄に「Φ65」のように直径ごと書かれている場合も拾えるようにしてある。
+function roundDims(sizeX, sizeY, sizeZ) {
+  const x = sizeNum(sizeX), y = sizeNum(sizeY), z = sizeNum(sizeZ);
+  // X欄が記号だけ（Φ）＝標準ルール → 直径Y・長さZ
+  // X欄に数値がある（Φ65）＝直径X・長さZ（無ければY）
+  return x ? { dia: x, len: z || y } : { dia: y, len: z };
+}
+
 // X×Y×Z(mm)と材質から重量(kg)を計算
-// 丸材（X欄にΦ表記）の場合は円柱として計算する： π/4 × Φ² × 長さ
+// 丸材（X欄にΦ表記）は円柱として計算する： π/4 × 直径² × 長さ
 function calcWeight(sizeX, sizeY, sizeZ, material, qty) {
-  const x = sizeNum(sizeX);
-  const y = sizeNum(sizeY);
-  const z = sizeNum(sizeZ);
   const sg = getSpecificGravity(material);
   let vol;                          // mm³
   if (isRoundSize(sizeX)) {
-    // 丸材：Φ = x、長さ = z（無ければ y）。直径と長さの2つが揃えば計算できる
-    const len = z || y;
-    if (!x || !len) return null;
-    vol = Math.PI / 4 * x * x * len;
+    const { dia, len } = roundDims(sizeX, sizeY, sizeZ);
+    if (!dia || !len) return null;
+    vol = Math.PI / 4 * dia * dia * len;
   } else {
+    const x = sizeNum(sizeX), y = sizeNum(sizeY), z = sizeNum(sizeZ);
     if (!x || !y || !z) return null;
     vol = x * y * z;
   }
