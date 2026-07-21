@@ -622,7 +622,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.05.15-26</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.07.21-1</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -838,7 +838,8 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
                       <input type="checkbox" id="qf_fX" onchange="onFinishCheckChange()"> ▽▽
                     </label>
                   </label>
-                  <input class="form-input" id="qf_sizeX" type="number" placeholder="長さ" oninput="">
+                  <!-- 丸材の「Φ65」等を保存できるよう type=number にしない -->
+                  <input class="form-input" id="qf_sizeX" type="text" inputmode="decimal" placeholder="長さ / Φ65" oninput="">
                 </div>
                 <!-- Y -->
                 <div>
@@ -848,7 +849,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
                       <input type="checkbox" id="qf_fY" onchange="onFinishCheckChange()"> ▽▽
                     </label>
                   </label>
-                  <input class="form-input" id="qf_sizeY" type="number" placeholder="幅">
+                  <input class="form-input" id="qf_sizeY" type="text" inputmode="decimal" placeholder="幅">
                 </div>
                 <!-- Z -->
                 <div>
@@ -858,7 +859,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
                       <input type="checkbox" id="qf_fZ" onchange="onFinishCheckChange()"> ▽▽
                     </label>
                   </label>
-                  <input class="form-input" id="qf_sizeZ" type="number" placeholder="厚み">
+                  <input class="form-input" id="qf_sizeZ" type="text" inputmode="decimal" placeholder="厚み">
                 </div>
                 <!-- 仕上結果 -->
                 <div>
@@ -1471,15 +1472,16 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
         </div>
         <div class="form-group">
           <label class="form-label">長さX (mm)</label>
-          <input class="form-input" id="matf_sizeX" type="number" placeholder="185">
+          <!-- 丸材の「Φ65」等を保存できるよう type=number にしない（数値欄は非数字を破棄するため） -->
+          <input class="form-input" id="matf_sizeX" type="text" inputmode="decimal" placeholder="185 / Φ65">
         </div>
         <div class="form-group">
           <label class="form-label">幅Y (mm)</label>
-          <input class="form-input" id="matf_sizeY" type="number" placeholder="210">
+          <input class="form-input" id="matf_sizeY" type="text" inputmode="decimal" placeholder="210">
         </div>
         <div class="form-group">
           <label class="form-label">材厚Z (mm)</label>
-          <input class="form-input" id="matf_sizeZ" type="number" placeholder="30">
+          <input class="form-input" id="matf_sizeZ" type="text" inputmode="decimal" placeholder="30">
         </div>
         <div class="form-group">
           <label class="form-label">仕上</label>
@@ -1785,15 +1787,16 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
         </div>
         <div class="form-group">
           <label class="form-label">X 長さ (mm)</label>
-          <input class="form-input" id="cim_sizeX" type="number" placeholder="0">
+          <!-- 丸材の「Φ65」等を保存できるよう type=number にしない -->
+          <input class="form-input" id="cim_sizeX" type="text" inputmode="decimal" placeholder="0 / Φ65">
         </div>
         <div class="form-group">
           <label class="form-label">Y 幅 (mm)</label>
-          <input class="form-input" id="cim_sizeY" type="number" placeholder="0">
+          <input class="form-input" id="cim_sizeY" type="text" inputmode="decimal" placeholder="0">
         </div>
         <div class="form-group">
           <label class="form-label">Z 厚さ (mm)</label>
-          <input class="form-input" id="cim_sizeZ" type="number" placeholder="0">
+          <input class="form-input" id="cim_sizeZ" type="text" inputmode="decimal" placeholder="0">
         </div>
         <div class="form-group">
           <label class="form-label">仕上</label>
@@ -4609,9 +4612,11 @@ async function deleteQuoteRequest(reqKey) {
 
 // ㎏単価の自動計算（重量 = X×Y×Z×比重 / 1000000）
 function calcKgPrice(unitPrice, sizeX, sizeY, sizeZ, material, qty) {
-  if (!unitPrice || !sizeX || !sizeY || !sizeZ) return 0;
-  const x = parseFloat(sizeX)||0, y = parseFloat(sizeY)||0, z = parseFloat(sizeZ)||0;
-  if (!x||!y||!z) return 0;
+  // 丸材（Φ表記）は直径と長さの2つだけで計算するため、Y欄が空でも通す
+  if (!unitPrice || !sizeX) return 0;
+  if (!isRoundSize(sizeX) && (!sizeY || !sizeZ)) return 0;
+  // 丸材の「Φ65」等に対応するため sizeNum で数字だけを取り出す
+  const x = sizeNum(sizeX), y = sizeNum(sizeY), z = sizeNum(sizeZ);
   // 材質別比重
   const density = {
     'SS400':7.85,'S50C':7.85,'S45C':7.85,'SK3':7.85,'SKD11':7.7,
@@ -4619,7 +4624,16 @@ function calcKgPrice(unitPrice, sizeX, sizeY, sizeZ, material, qty) {
   };
   const mat = (material||'').toUpperCase().replace(/[\s-]/g,'');
   const d = density[mat] || density[Object.keys(density).find(k=>mat.includes(k))||''] || 7.85;
-  const weight = (x * y * z * d) / 1000000;  // cm³ × g/cm³ = g → kg
+  let vol;
+  if (isRoundSize(sizeX)) {
+    const len = z || y;
+    if (!x || !len) return 0;
+    vol = Math.PI / 4 * x * x * len;
+  } else {
+    if (!x||!y||!z) return 0;
+    vol = x * y * z;
+  }
+  const weight = (vol * d) / 1000000;  // mm³ × g/cm³ → kg
   if (!weight) return 0;
   const totalPrice = unitPrice * (qty||1);
   return Math.round(totalPrice / weight);
@@ -7611,14 +7625,34 @@ function getSpecificGravity(material) {
   return 7.85;
 }
 
+// サイズ欄から数値だけを取り出す。丸材は「Φ65」のように記号が付くため、
+// parseFloat そのままだと NaN になり重量が出せない
+function sizeNum(v) {
+  const n = parseFloat(String(v == null ? '' : v).replace(/[^\d.\-]/g, ''));
+  return isNaN(n) ? 0 : n;
+}
+// サイズ欄が丸材（Φ・φ・パイ表記）かどうか
+function isRoundSize(v) {
+  return /[ΦφΦ⌀]|パイ/i.test(String(v == null ? '' : v));
+}
+
 // X×Y×Z(mm)と材質から重量(kg)を計算
+// 丸材（X欄にΦ表記）の場合は円柱として計算する： π/4 × Φ² × 長さ
 function calcWeight(sizeX, sizeY, sizeZ, material, qty) {
-  const x = parseFloat(sizeX) || 0;
-  const y = parseFloat(sizeY) || 0;
-  const z = parseFloat(sizeZ) || 0;
-  if (!x || !y || !z) return null;
-  const sg  = getSpecificGravity(material);
-  const vol = x * y * z;            // mm³
+  const x = sizeNum(sizeX);
+  const y = sizeNum(sizeY);
+  const z = sizeNum(sizeZ);
+  const sg = getSpecificGravity(material);
+  let vol;                          // mm³
+  if (isRoundSize(sizeX)) {
+    // 丸材：Φ = x、長さ = z（無ければ y）。直径と長さの2つが揃えば計算できる
+    const len = z || y;
+    if (!x || !len) return null;
+    vol = Math.PI / 4 * x * x * len;
+  } else {
+    if (!x || !y || !z) return null;
+    vol = x * y * z;
+  }
   const kg  = vol * sg / 1e6;       // kg (1cm³=1e3mm³, 1kg=sg g/cm³)
   const unitKg = Math.round(kg * 1000) / 1000;
   const totalKg = Math.round(unitKg * ((qty||1)) * 1000) / 1000;
