@@ -40,8 +40,7 @@ DANGER = 31
 
 # WBGT基準値 (作業名, 通常, 暑熱順化なし)。/wbgt/config の works と揃えること
 WORKS = [
-    ('選別・検査',        30, 28),
-    ('プレス・溶接作業',  32, 30),
+    ('現場作業', 30, 28),
 ]
 
 RED     = colors.HexColor('#c0392b')
@@ -126,7 +125,7 @@ def build(out_path):
     rep = [[Paragraph(
         '● <b>自分の体調がおかしい</b>と思ったら　→　<b>すぐ作業を止めて報告する</b><br/>'
         '● <b>誰かの様子がおかしい</b>と思ったら　→　<b>すぐ声をかけ、代わりに報告する</b><br/><br/>'
-        '<b>報告先：　職長・ラインリーダー　→　安全衛生担当</b>　（不在時は近くの社員なら誰でもよい）', S['body'])]]
+        '<b>報告先：　ラインリーダー　→　安全衛生担当</b>　（不在時は近くの社員なら誰でもよい）', S['body'])]]
     t = Table(rep, colWidths=[188 * mm])
     t.setStyle(TableStyle([('BOX', (0, 0), (-1, -1), 1, NAVY), ('BACKGROUND', (0, 0), (-1, -1), LGRAY),
                            ('TOPPADDING', (0, 0), (-1, -1), 5), ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
@@ -211,19 +210,19 @@ def build(out_path):
         wbgt.append([Paragraph('<b>%s</b>' % name, S['bodyc']),
                      Paragraph('<b>%g℃</b>' % n, S['bodyc']),
                      Paragraph('<font color="#c0392b"><b>%g℃</b></font>' % a, S['bodyc'])])
-    t = Table(wbgt, colWidths=[74 * mm, 47 * mm, 67 * mm])
+    t = Table(wbgt, colWidths=[74 * mm, 57 * mm, 57 * mm])
     t.setStyle(TableStyle([('GRID', (0, 0), (-1, -1), 0.5, MGRAY), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
                            ('BACKGROUND', (0, 0), (-1, 0), NAVY), ('TEXTCOLOR', (0, 0), (-1, 0), WHITE),
                            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [WHITE, LGRAY]),
-                           ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4)]))
+                           ('TOPPADDING', (0, 0), (-1, -1), 6), ('BOTTOMPADDING', (0, 0), (-1, -1), 6)]))
     st.append(t)
     st.append(Paragraph(
         '<b>暑熱順化なし</b>＝ ① この作業に慣れていない人　② 連休明けの人　③ 体調を崩して復帰した直後の人', S['note']))
 
     st.append(Spacer(1, 1 * mm))
     act = [[Paragraph(
-        '<b>この値を超えたら</b>　→　① 休憩を増やす（例：60分作業→15分休憩）　'
-        '② <b>重い作業は涼しい時間帯（朝一番）へ回す</b>　③ 単独作業をさせない　④ 送風機を強化', S['body'])]]
+        '<b>この値を超えたら</b>　→　① <b>休憩を増やす（60分作業　→　15分休憩）</b>　'
+        '② <b>単独作業をさせない</b>', S['body'])]]
     t = Table(act, colWidths=[188 * mm])
     t.setStyle(TableStyle([('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#e0c66b')),
                            ('BACKGROUND', (0, 0), (-1, -1), YELLOW),
