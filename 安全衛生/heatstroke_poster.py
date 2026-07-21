@@ -9,9 +9,11 @@
 使い方:
     python heatstroke_poster.py 出力先.pdf
 
-緊急連絡先の欄は**PDFの入力フォーム**にしてある。
-総務が Adobe Reader / Edge / Chrome で開いて直接入力→保存→印刷できる。
-手書きしたい場合はそのまま印刷すれば記入欄として使える。
+緊急連絡先は下の CONTACTS に書いた内容がそのまま印字される。
+変更するときは CONTACTS を直して再生成すること。空文字にすると記入用の下線になる。
+
+※ 以前はPDFの入力フォーム(AcroForm)にしていたが、ビューアによって入力値が
+   表示されない事象が出たため、文字として直接描き込む方式に変更した(2026-07-21)。
 
 WBGT基準値(WORKS)は H-Hub / 金型管理システムの設定 (/wbgt/config) と
 **必ず揃えること**。掲示物と画面で違う基準が出ると現場が混乱し、
@@ -43,6 +45,20 @@ WORKS = [
     ('現場作業', 30, 28),
 ]
 
+# 緊急連絡先。ここに書いた内容がそのまま印字される。
+# 以前はPDFの入力フォームにしていたが、ビューアによって入力値が表示されない
+# 事象があったため、文字として直接描き込む方式に変更した（2026-07-21）。
+# 変更するときはこの辞書を直して再生成する。空文字にすると記入用の下線になる。
+CONTACTS = {
+    'responsible':  '深津　英介',
+    'hospital':     '藤枝市立総合病院',
+    'hospital_tel': '054-646-1111',
+    'address':      '藤枝市横内800-16',
+    'restroom':     '事務所',
+    'made_date':    '',
+    'made_by':      '',
+}
+
 RED     = colors.HexColor('#c0392b')
 DARKRED = colors.HexColor('#7f1d1d')
 NAVY    = colors.HexColor('#2c3e6b')
@@ -73,41 +89,31 @@ S = {
 }
 
 
-class FormField(Paragraph):
-    """テーブルの中に置ける入力欄。描画時に自分の位置へフォーム部品を作る。
+class FilledField(Paragraph):
+    """記入欄。値があればその文字を、無ければ記入用の下線だけを描く。
 
-    reportlab の acroForm はキャンバス座標で描くため、Flowable として
-    埋め込んでおき drawOn 時の実座標を使う。こうするとテーブルの
-    レイアウト計算に任せたまま、ズレない位置にフォームを置ける。
+    PDFの入力フォーム（AcroForm）は、ビューアによって入力値が表示されない
+    ことがあったため使わない。値は文字として直接描き込む。
     """
 
-    def __init__(self, name, width, tooltip=''):
-        super().__init__('', S['fill'])
-        self._name = name
+    def __init__(self, value, width):
+        self._val = (value or '').strip()
         self._w = width
-        self._tip = tooltip
+        super().__init__(
+            ('<b>%s</b>' % self._val) if self._val else '', S['fill'])
 
     def wrap(self, aw, ah):
         self._w = min(self._w, aw)
-        return self._w, 13
+        Paragraph.wrap(self, self._w, ah)
+        return self._w, 14
 
     def drawOn(self, canv, x, y, _sW=0):
-        # AcroFormの注釈はページ絶対座標で持つため、表による座標変換を自分で解決する。
-        # canv.line は変換行列に従うのでx,yのままでよいが、textfieldは絶対位置が要る。
-        ax, ay = canv.absolutePosition(x, y)
-        canv.acroForm.textfield(
-            name=self._name, tooltip=self._tip or self._name,
-            x=ax, y=ay - 1, width=self._w, height=13,
-            fontName='Helvetica', fontSize=9,
-            borderWidth=0, borderColor=None,
-            fillColor=colors.HexColor('#fffdf0'),
-            textColor=colors.HexColor('#1a1a2e'),
-            forceBorder=False,
-        )
-        # 記入線（印刷して手書きする場合の目安）
+        # 記入線（未記入の欄は手書きできるように、記入済みでも下線を残す）
         canv.setStrokeColor(colors.HexColor('#9aa3b2'))
         canv.setLineWidth(0.5)
-        canv.line(x, y - 2, x + self._w, y - 2)
+        canv.line(x, y, x + self._w, y)
+        if self._val:
+            Paragraph.drawOn(self, canv, x + 2, y + 3, _sW)
 
 
 def build(out_path):
@@ -186,14 +192,15 @@ def build(out_path):
     st.append(Paragraph('※ 救急車を待つ間も、<b>体を冷やし続ける</b>こと。付き添いを離さない。', S['warn']))
 
     # ── 4. 緊急連絡先（入力フォーム） ──
-    st.append(Paragraph('■ ３．緊急連絡先　（総務が記入して掲示すること）', S['sec']))
+    st.append(Paragraph('■ ３．緊急連絡先', S['sec']))
+    C = CONTACTS
     contacts = [
         [Paragraph('救急', S['fill']), Paragraph('<b>１１９</b>', S['fill']),
-         Paragraph('社内 責任者', S['fill']), FormField('責任者', 74 * mm, '氏名とTEL')],
-        [Paragraph('最寄り医療機関', S['fill']), FormField('医療機関', 48 * mm, '名称'),
-         Paragraph('TEL', S['fill']), FormField('医療機関TEL', 74 * mm, '医療機関の電話番号')],
-        [Paragraph('会社の所在地<br/>（救急に伝える）', S['fill']), FormField('所在地', 48 * mm, '番地まで記入'),
-         Paragraph('休憩場所', S['fill']), FormField('休憩場所', 74 * mm, 'エアコンのある部屋')],
+         Paragraph('社内 責任者', S['fill']), FilledField(C.get('responsible'), 74 * mm)],
+        [Paragraph('最寄り医療機関', S['fill']), FilledField(C.get('hospital'), 48 * mm),
+         Paragraph('TEL', S['fill']), FilledField(C.get('hospital_tel'), 74 * mm)],
+        [Paragraph('会社の所在地<br/>（救急に伝える）', S['fill']), FilledField(C.get('address'), 48 * mm),
+         Paragraph('休憩場所', S['fill']), FilledField(C.get('restroom'), 74 * mm)],
     ]
     t = Table(contacts, colWidths=[32 * mm, 52 * mm, 26 * mm, 78 * mm])
     t.setStyle(TableStyle([('GRID', (0, 0), (-1, -1), 0.5, MGRAY), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -247,8 +254,8 @@ def build(out_path):
         '／ 測定値はH-Hub（製造現場）・金型管理システム（技術現場）に記録すること。', S['note']))
     st.append(HRFlowable(width='100%', thickness=0.8, color=MGRAY, spaceBefore=2))
 
-    foot = [[Paragraph('作成日', S['note']), FormField('作成日', 28 * mm),
-             Paragraph('作成者', S['note']), FormField('作成者', 32 * mm),
+    foot = [[Paragraph('作成日', S['note']), FilledField(C.get('made_date'), 28 * mm),
+             Paragraph('作成者', S['note']), FilledField(C.get('made_by'), 32 * mm),
              Paragraph('橋本工業株式会社　安全衛生', S['note'])]]
     t = Table(foot, colWidths=[12 * mm, 30 * mm, 12 * mm, 34 * mm, 96 * mm])
     t.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
