@@ -36,13 +36,16 @@ from reportlab.platypus import (HRFlowable, Paragraph, SimpleDocTemplate,
 pdfmetrics.registerFont(UnicodeCIDFont('HeiseiKakuGo-W5'))
 F = 'HeiseiKakuGo-W5'
 
+# ※現在掲示しているのは同フォルダの 熱中症_緊急対応手順.docx（2026-07-22改訂）。
+#   このスクリプトを実行すると別物のPDFができるので、掲示物を差し替える意図が
+#   ないかぎり実行しないこと。基準値だけは食い違わないよう揃えてある。
 # ---------------------------------------------------------------- 設定
 # 危険域。この値以上は基準値にかかわらず全作業を中止・延期する（システム側の WB_DANGER と同じ）
 DANGER = 31
 
 # WBGT基準値 (作業名, 通常, 暑熱順化なし)。/wbgt/config の works と揃えること
 WORKS = [
-    ('現場作業', 30, 28),
+    ('現場作業', 28, 26),
 ]
 
 # 緊急連絡先。ここに書いた内容がそのまま印字される。
