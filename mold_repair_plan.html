@@ -536,7 +536,7 @@ input.nm-img-input{display:none}
 <body>
 
 <header>
-  <div class="logo">⚙ <span>金型</span>管理システム<span style="font-size:9px;color:#9aa3b2;font-weight:400;margin-left:6px">v2026.07.19-2</span></div>
+  <div class="logo">⚙ <span>金型</span>管理システム<span style="font-size:9px;color:#9aa3b2;font-weight:400;margin-left:6px">v2026.07.22-1</span></div>
   <div class="main-tab-bar">
     <button class="main-tab-btn active" id="mainTabRepair" onclick="switchMainTab('repair')">🔧 改修計画表</button>
     <button class="main-tab-btn" id="mainTabNew" onclick="switchMainTab('newmold')">🏗️ 新規製作 日程表</button>
@@ -1263,6 +1263,12 @@ function wbRender(){
   }).join('');
 }
 let wbEditing = null;
+// 記録済みの値が選択肢から外れていたら、その値も選べるように足して返す
+function wbWithCur(arr, cur){
+  const a = (arr || []).slice();
+  if(cur && !a.includes(cur)) a.push(cur);
+  return a;
+}
 function wbFillSelect(id, arr, val){
   document.getElementById(id).innerHTML = arr.map(o => {
     const v = (o && o.v != null) ? o.v : o, l = (o && o.label != null) ? o.label : o;
@@ -1274,8 +1280,9 @@ function wbOpenModal(key, rec){
   document.getElementById('wbgtModalTitle').textContent = rec ? '🌡 記録の修正' : '🌡 暑さ指数の入力';
   document.getElementById('wb-savebtn').textContent     = rec ? '修正する' : '記録する';
   wbFillSelect('wb-place', wbPlaces().map(k => ({ v:k, label:wbCfg.places[k] })), key || wbPlaces()[0]);
-  wbFillSelect('wb-act',   wbCfg.actions || [], rec ? rec.act : (wbCfg.actions || [])[0]);
-  wbFillSelect('wb-by',    wbCfg.people  || [], rec ? rec.by  : (localStorage.getItem('wb_by') || (wbCfg.people||[])[0]));
+  // 選択肢を後から変えても、記録済みの対応・入力者が修正時に別の値へ化けないようにする
+  wbFillSelect('wb-act',   wbWithCur(wbCfg.actions, rec && rec.act), rec ? rec.act : (wbCfg.actions || [])[0]);
+  wbFillSelect('wb-by',    wbWithCur(wbCfg.people,  rec && rec.by),  rec ? rec.by  : (localStorage.getItem('wb_by') || (wbCfg.people||[])[0]));
   document.getElementById('wb-value').value = rec ? rec.v : '';
   document.getElementById('wb-note').value  = rec ? (rec.note || '') : '';
   wbShow('wbgtModal', true);
@@ -1360,7 +1367,10 @@ function wbCfgAddAction(v){
     `<input class="wba-name" value="${wbEsc(v||'')}" placeholder="対応の内容" style="flex:1;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:var(--font)">
      <button class="wb-btn" onclick="this.parentNode.remove()">×</button>`));
 }
-function wbOpenCfg(){
+// 設定は2システムで共有し、保存は全体をPUTする。開く前に必ず取り直さないと
+// もう一方のシステムで加えた変更を、古い内容で上書きして消してしまう。
+async function wbOpenCfg(){
+  await wbLoadCfg();
   const pl = document.getElementById('wb-cfg-places'); pl.innerHTML = '';
   Object.keys(wbCfg.places).forEach(k => pl.appendChild(wbCfgRow(
     `<span style="font-size:10px;color:#9aa3b2;width:60px">${k}</span>

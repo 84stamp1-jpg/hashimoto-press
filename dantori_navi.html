@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
-<!-- H-Hub v2026.07.19-4 : WBGT表示を工場レイアウト内（旧・金型置場の枠）へ移設。上部バーは廃止。31℃以上は全作業×に固定 -->
+<!-- H-Hub v2026.07.22-1 : WBGT設定を開くとき最新を取り直す（他システムの変更を古い内容で上書きしていた）。記録済みの対応・入力者が修正時に化けないよう選択肢へ残す -->
 <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 /* ===== スクロールバー常時表示 ===== */
@@ -3212,6 +3212,12 @@ function wbOpenDetail(){
 }
 // ---- 入力（新規／修正の両方に使う） ----
 let wbEditing = null;   // {place, id} 修正時のみ
+// 記録済みの値が選択肢から外れていたら、その値も選べるように足して返す
+function wbWithCur(arr, cur){
+  const a = (arr || []).slice();
+  if(cur && !a.includes(cur)) a.push(cur);
+  return a;
+}
 function wbFillSelect(id, arr, val){
   document.getElementById(id).innerHTML =
     arr.map(o => `<option value="${wbEsc(o.v != null ? o.v : o)}"${(o.v != null ? o.v : o) === val ? ' selected' : ''}>${wbEsc(o.label != null ? o.label : o)}</option>`).join('');
@@ -3221,8 +3227,9 @@ function wbOpenModal(key, rec){
   document.getElementById('wbgtModalTitle').textContent = rec ? '記録の修正' : '暑さ指数の入力';
   document.getElementById('wb-savebtn').textContent     = rec ? '修正する' : '記録する';
   wbFillSelect('wb-place', wbPlaces().map(k => ({ v:k, label:wbCfg.places[k] })), key || wbPlaces()[0]);
-  wbFillSelect('wb-act',   wbCfg.actions || [], rec ? rec.act : (wbCfg.actions || [])[0]);
-  wbFillSelect('wb-by',    wbCfg.people  || [], rec ? rec.by  : (localStorage.getItem('wb_by') || (wbCfg.people||[])[0]));
+  // 選択肢を後から変えても、記録済みの対応・入力者が修正時に別の値へ化けないようにする
+  wbFillSelect('wb-act',   wbWithCur(wbCfg.actions, rec && rec.act), rec ? rec.act : (wbCfg.actions || [])[0]);
+  wbFillSelect('wb-by',    wbWithCur(wbCfg.people,  rec && rec.by),  rec ? rec.by  : (localStorage.getItem('wb_by') || (wbCfg.people||[])[0]));
   document.getElementById('wb-value').value = rec ? rec.v : '';
   document.getElementById('wb-note').value  = rec ? (rec.note || '') : '';
   document.getElementById('wbgtModal').style.display = 'flex';
@@ -3314,7 +3321,10 @@ function wbCfgAddAction(v){
     `<input class="wba-name" value="${wbEsc(v||'')}" placeholder="対応の内容" style="flex:1;font-family:inherit;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:12px;">
      <button class="wb-btn" onclick="this.parentNode.remove()">×</button>`));
 }
-function wbOpenCfg(){
+// 設定は2システムで共有し、保存は全体をPUTする。開く前に必ず取り直さないと
+// もう一方のシステムで加えた変更を、古い内容で上書きして消してしまう。
+async function wbOpenCfg(){
+  await wbLoadCfg();
   const pl = document.getElementById('wb-cfg-places');
   pl.innerHTML = '';
   Object.keys(wbCfg.places).forEach(k => pl.appendChild(wbCfgRow(
