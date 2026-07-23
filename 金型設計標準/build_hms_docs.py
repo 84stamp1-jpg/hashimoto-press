@@ -342,7 +342,7 @@ def build_pdf(chapters, intro, title_ja, clearance, prefix, out_path):
             fig = figure_for(it['no'])
             if fig is not None:
                 group += [Spacer(1, 1.5 * mm), fig,
-                          Paragraph('図：原資料をもとに作成（社内用）', st_note)]
+                          Paragraph('図：原資料をもとに作成（社内用）', st_body)]
             group.append(Spacer(1, 2.5 * mm))
             block.append(KeepTogether(group))
         story.extend(block)
