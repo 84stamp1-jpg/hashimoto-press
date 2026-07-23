@@ -97,7 +97,7 @@ td.c{text-align:center}td.mn{font-family:'IBM Plex Mono',monospace;font-size:11p
 <body>
 <header>
   <div class="logo">HK</div>
-  <div><h1>材料単価改訂システム</h1><small>橋本工業株式会社 ／ ver.2025-04-24d</small></div>
+  <div><h1>材料単価改訂システム</h1><small>橋本工業株式会社 ／ ver.2026-07-23（STEP4 Excel対応）</small></div>
 </header>
 <nav class="snav">
   <div class="si active" onclick="gotoStep(0)"><div class="sn" id="sn0">1</div><div class="sl">ファイル読み込み</div></div>
@@ -216,7 +216,7 @@ td.c{text-align:center}td.mn{font-family:'IBM Plex Mono',monospace;font-size:11p
     <div class="gbox" style="margin-bottom:14px">
       <h3>📋 手順</h3>
       <div class="gs cur"><div class="gn">1</div><div>デスクトップの <strong>見積一覧表_v2_改訂済み.xlsx</strong> をExcelで開き、<strong>Ctrl+S保存</strong>してから読み込む</div></div>
-      <div class="gs cur"><div class="gn">2</div><div><strong>調達基準表PDF</strong>（R_6106・S_6106・Y_6106）を読み込む</div></div>
+      <div class="gs cur"><div class="gn">2</div><div><strong>調達基準表</strong>を読み込む（新様式 price_adjustment_*.xlsx／旧様式 R_6106・S_6106・Y_6106 PDF）</div></div>
       <div class="gs cur"><div class="gn">3</div><div>「照合開始」を押す</div></div>
     </div>
     <div class="ugrid">
@@ -227,10 +227,10 @@ td.c{text-align:center}td.mn{font-family:'IBM Plex Mono',monospace;font-size:11p
         <small>見積一覧表_v2_改訂済み.xlsx</small>
       </div>
       <div class="ubox" id="box-choutatsu2">
-        <input type="file" accept=".pdf" multiple id="fi-choutatsu2">
+        <input type="file" accept=".pdf,.xlsx" multiple id="fi-choutatsu2">
         <span class="ic">📑</span>
-        <p>② 調達基準表PDF（複数可）</p>
-        <small>R_6106・S_6106・Y_6106 など</small>
+        <p>② 調達基準表（Excel または PDF・複数可）</p>
+        <small>新様式: price_adjustment_*.xlsx ／ 旧様式: R_6106・S_6106・Y_6106 PDF</small>
         <div class="flist" id="fl-choutatsu2"></div>
       </div>
     </div>
@@ -253,7 +253,7 @@ td.c{text-align:center}td.mn{font-family:'IBM Plex Mono',monospace;font-size:11p
       <div class="tw"><table>
         <thead><tr>
           <th>製作所</th><th>調達NO</th><th>品番</th><th class="r">適用年月日</th>
-          <th class="r">PDF 購入単価</th><th class="r">Excel 型レス単価</th>
+          <th class="r">調達基準表 購入単価</th><th class="r">Excel 型レス単価</th>
           <th class="r">差異</th><th class="r">差異率</th><th>判定</th>
         </tr></thead>
         <tbody id="tbody3"></tbody>
@@ -524,6 +524,34 @@ async function parseAnnaiPDF(buf) {
   return diffs;
 }
 
+// --- 調達基準表Excel解析（2026.08〜 新様式）---
+// ユタカの price_adjustment_*.xlsx の data シートを読み、PDF解析と同じ
+// {chou_no, factory, price(購入単価)} の配列を返す。製作所フルネーム→R/S/Y。
+var CHOU_FAC_MAP = { '嵐山製作所': 'R', '三重製作所': 'S', '豊製作所': 'Y' };
+function parseChoutatsuExcel(buf) {
+  var wb = XLSX.read(new Uint8Array(buf), { type: 'array' });
+  var ws = wb.Sheets['data'];
+  if (!ws) { console.warn('[STEP4] Excelに data シートがありません'); return []; }
+  var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+  // 列(0始まり): 1=part_code 25=if_key1(調達No) 27=delivery_site(製作所) 37=購入単価
+  var out = [];
+  for (var i = 1; i < rows.length; i++) {
+    var r = rows[i]; if (!r) continue;
+    var k = r[25], site = r[27], price = r[37];
+    if (k === null || k === undefined || k === '') continue;
+    var no = parseInt(String(k), 10); if (!no) continue;
+    if (typeof price !== 'number') continue;
+    out.push({ chou_no: no, factory: CHOU_FAC_MAP[String(site || '').trim()] || '', price: price });
+  }
+  return out;
+}
+
+// ファイル名の拡張子で PDF/Excel を振り分けて調達基準表を解析
+async function parseChoutatsuFile(f) {
+  if (/\.xlsx?$/i.test(f.name)) return parseChoutatsuExcel(f.buf);
+  return await parseChoutatsuPDF(f.buf);
+}
+
 // --- 調達基準表PDF解析 ---
 async function parseChoutatsuPDF(buf) {
   var pdf = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
@@ -711,7 +739,7 @@ async function startAnalysis() {
     setProg('pf0', 75);
     var chouAll = [];
     for (var i = 0; i < S.choutatsuPDFs.length; i++) {
-      var r = await parseChoutatsuPDF(S.choutatsuPDFs[i].buf);
+      var r = await parseChoutatsuFile(S.choutatsuPDFs[i]);
       chouAll = chouAll.concat(r);
     }
     S.choutatsuParsed = chouAll;
@@ -1040,7 +1068,7 @@ async function runMatch() {
       document.getElementById('status') && (document.getElementById('status').textContent = '調達基準表PDFを解析中...');
       var chouAll = [];
       for (var i = 0; i < S.choutatsuPDFs.length; i++) {
-        var r = await parseChoutatsuPDF(S.choutatsuPDFs[i].buf);
+        var r = await parseChoutatsuFile(S.choutatsuPDFs[i]);
         chouAll = chouAll.concat(r);
         setProg('pf3', 10 + Math.round((i+1)/S.choutatsuPDFs.length*30));
       }
