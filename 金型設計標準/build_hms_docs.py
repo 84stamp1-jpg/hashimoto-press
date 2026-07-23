@@ -212,6 +212,8 @@ def build_pdf(chapters, intro, title_ja, clearance, prefix, out_path):
     st_th = ps('th', fontSize=8.5, leading=11.5, textColor=colors.white)
     st_appx = ps('ax', fontSize=9, leading=13, textColor=colors.black)
     st_foot = ps('ft', fontSize=8, leading=10, textColor=GRAY)
+    from reportlab.lib.enums import TA_CENTER
+    st_cap = ps('cap', fontSize=9, leading=12, textColor=GRAY, alignment=TA_CENTER)
 
     story = []
 
@@ -323,6 +325,7 @@ def build_pdf(chapters, intro, title_ja, clearance, prefix, out_path):
         return Image(path, width=iw * scale, height=ih * scale)
 
     appendix = []       # 適用対象外の一覧
+    fig_no = [0]        # 図の通し番号
     for cname, items in chapters:
         block = [Spacer(1, 3 * mm), chapter_bar(cname), Spacer(1, 2 * mm)]
         for it in items:
@@ -334,15 +337,19 @@ def build_pdf(chapters, intro, title_ja, clearance, prefix, out_path):
                 appendix.append((it['no'], it['item'], it['dec']))
                 continue
             head = esc('%s　%s' % (it['no'], it['item']))
-            # 「※図は他社資料Sxxxを参照」は、図を自社標準へ取り込んだので削除する
-            # （他社資料の整理番号を標準に残さない）。
-            rule = re.sub(r'※?\s*図は他社資料[^。]*?参照。?', '', it['rule']).strip()
-            body = esc(rule)
+            # 他社資料(高木)の整理番号Sxxxは標準に残さない。図は自社へ取り込み済み。
+            rule = it['rule']
+            rule = re.sub(r'※?\s*(図|表|写真)?は?他社資料\s*S\d+[〜～\-]*S?\d*[^。]*?(参照|あり)。?',
+                          '', rule)
+            rule = re.sub(r'（\s*S\d+[〜～\-]*S?\d*[^）]*）', '', rule)
+            rule = re.sub(r'※?\s*S\d+\s*に写真あり。?', '', rule)
+            body = esc(rule.strip())
             group = [Paragraph(head, st_item), Paragraph(body, st_body)]
             fig = figure_for(it['no'])
             if fig is not None:
+                fig_no[0] += 1
                 group += [Spacer(1, 1.5 * mm), fig,
-                          Paragraph('図：原資料をもとに作成（社内用）', st_body)]
+                          Paragraph('図%d' % fig_no[0], st_cap)]
             group.append(Spacer(1, 2.5 * mm))
             block.append(KeepTogether(group))
         story.extend(block)
