@@ -21,6 +21,7 @@ Excelはドラフト用（作業メモ・採否・過去トラ等の欄を持つ
 依存: pip install openpyxl reportlab python-pptx
 """
 import os
+import re
 import sys
 import warnings
 
@@ -30,12 +31,14 @@ warnings.filterwarnings('ignore')
 
 BASE = r'C:\Users\Owner\Desktop\金型仕様書'
 OUT = os.path.join(BASE, '出力')
+FIGDIR = os.path.join(BASE, 'HMS図')
 CLEAR_XLSX = os.path.join(BASE, '金型設計クリアランス基準書.xlsx')
 
+# (Excelファイル, シート名, 表示名, 図ファイルの接頭辞)
 EDITIONS = {
-    '共通': ('HMS金型設計標準_共通編.xlsx', '01_共通編', '共通編'),
-    '単発': ('HMS金型設計標準_単発編_骨格.xlsx', '01_単発編', '単発編'),
-    '順送': ('HMS金型設計標準_順送編_骨格.xlsx', '01_順送編', '順送編'),
+    '共通': ('HMS金型設計標準_共通編.xlsx', '01_共通編', '共通編', '共'),
+    '単発': ('HMS金型設計標準_単発編_骨格.xlsx', '01_単発編', '単発編', '単'),
+    '順送': ('HMS金型設計標準_順送編_骨格.xlsx', '01_順送編', '順送編', '順'),
 }
 
 # クリアランス基準書のうち本文へ入れるシート（表紙は除く）
@@ -160,7 +163,7 @@ def _parse_clear_sheet(rows):
 
 
 # ================================================================ PDF
-def build_pdf(chapters, intro, title_ja, clearance, out_path):
+def build_pdf(chapters, intro, title_ja, clearance, prefix, out_path):
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_LEFT
     from reportlab.lib.pagesizes import A4
@@ -168,9 +171,10 @@ def build_pdf(chapters, intro, title_ja, clearance, out_path):
     from reportlab.lib.units import mm
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.cidfonts import UnicodeCIDFont
-    from reportlab.platypus import (BaseDocTemplate, Frame, KeepTogether,
+    from reportlab.platypus import (BaseDocTemplate, Frame, Image, KeepTogether,
                                     NextPageTemplate, PageBreak, PageTemplate,
                                     Paragraph, Spacer, Table, TableStyle)
+    from reportlab.lib.utils import ImageReader
 
     pdfmetrics.registerFont(UnicodeCIDFont('HeiseiKakuGo-W5'))
     F = 'HeiseiKakuGo-W5'
@@ -307,6 +311,17 @@ def build_pdf(chapters, intro, title_ja, clearance, out_path):
                     flow.append(Spacer(1, 1 * mm))
         return flow
 
+    def figure_for(no):
+        """項目番号に対応する図があれば、幅に収めた Image を返す。"""
+        path = os.path.join(FIGDIR, 'hms_%s%s.png' % (prefix, no))
+        if not os.path.exists(path):
+            return None
+        iw, ih = ImageReader(path).getSize()
+        maxw = 150 * mm
+        maxh = 95 * mm
+        scale = min(maxw / iw, maxh / ih)
+        return Image(path, width=iw * scale, height=ih * scale)
+
     appendix = []       # 適用対象外の一覧
     for cname, items in chapters:
         block = [Spacer(1, 3 * mm), chapter_bar(cname), Spacer(1, 2 * mm)]
@@ -319,12 +334,17 @@ def build_pdf(chapters, intro, title_ja, clearance, out_path):
                 appendix.append((it['no'], it['item'], it['dec']))
                 continue
             head = esc('%s　%s' % (it['no'], it['item']))
-            body = esc(it['rule'])
-            block.append(KeepTogether([
-                Paragraph(head, st_item),
-                Paragraph(body, st_body),
-                Spacer(1, 2.5 * mm),
-            ]))
+            # 「※図は他社資料Sxxxを参照」は、図を自社標準へ取り込んだので削除する
+            # （他社資料の整理番号を標準に残さない）。
+            rule = re.sub(r'※?\s*図は他社資料[^。]*?参照。?', '', it['rule']).strip()
+            body = esc(rule)
+            group = [Paragraph(head, st_item), Paragraph(body, st_body)]
+            fig = figure_for(it['no'])
+            if fig is not None:
+                group += [Spacer(1, 1.5 * mm), fig,
+                          Paragraph('図：原資料をもとに作成（社内用）', st_note)]
+            group.append(Spacer(1, 2.5 * mm))
+            block.append(KeepTogether(group))
         story.extend(block)
         # 共通編の第5章の直後にクリアランス基準を差し込む
         if clearance and '設計値' in cname:
@@ -381,13 +401,13 @@ def main():
     keys = [sys.argv[1]] if len(sys.argv) > 1 else list(EDITIONS)
     clearance = load_clearance()
     for k in keys:
-        fname, sheet, ja = EDITIONS[k]
+        fname, sheet, ja, prefix = EDITIONS[k]
         path = os.path.join(BASE, fname)
         chapters = load_edition(path, sheet)
         intro = load_intro(path)
         cl = clearance if k == '共通' else None
         out = os.path.join(OUT, 'HMS金型設計標準_%s.pdf' % ja)
-        build_pdf(chapters, intro, ja, cl, out)
+        build_pdf(chapters, intro, ja, cl, prefix, out)
         print('PDF:', out)
 
 
