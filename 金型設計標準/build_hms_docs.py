@@ -217,13 +217,13 @@ def build_pdf(chapters, intro, title_ja, clearance, prefix, out_path):
 
     # ---- 表紙
     story.append(Spacer(1, 55 * mm))
-    story.append(Paragraph('HMS 金型設計標準', st_cover_t))
+    story.append(Paragraph('HMDS 金型設計標準', st_cover_t))
     story.append(Spacer(1, 4 * mm))
     story.append(Paragraph('【%s】' % title_ja, st_cover_t))
     story.append(Spacer(1, 10 * mm))
     story.append(Paragraph('橋本工業株式会社　技術部', st_cover_org))
     story.append(Spacer(1, 2 * mm))
-    story.append(Paragraph('HASHIMOTO KOGYO — Mold design standard', st_cover_s))
+    story.append(Paragraph('HASHIMOTO KOGYO — Mold Design Standard（HMDS）', st_cover_s))
     story.append(Spacer(1, 16 * mm))
     intro_tbl = []
     for a, b in intro:
@@ -367,7 +367,7 @@ def build_pdf(chapters, intro, title_ja, clearance, prefix, out_path):
         canv.setFont(F, 8)
         canv.setFillColor(GRAY)
         canv.drawString(20 * mm, 12 * mm,
-                        'HMS 金型設計標準【%s】　橋本工業株式会社' % title_ja)
+                        'HMDS 金型設計標準【%s】　橋本工業株式会社' % title_ja)
         canv.drawRightString(190 * mm, 12 * mm, '%d' % doc.page)
         canv.setStrokeColor(LINE)
         canv.setLineWidth(0.4)
@@ -406,7 +406,7 @@ def main():
         chapters = load_edition(path, sheet)
         intro = load_intro(path)
         cl = clearance if k == '共通' else None
-        out = os.path.join(OUT, 'HMS金型設計標準_%s.pdf' % ja)
+        out = os.path.join(OUT, 'HMDS金型設計標準_%s.pdf' % ja)
         build_pdf(chapters, intro, ja, cl, prefix, out)
         print('PDF:', out)
 
