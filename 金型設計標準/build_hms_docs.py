@@ -319,8 +319,8 @@ def build_pdf(chapters, intro, title_ja, clearance, prefix, out_path):
         if not os.path.exists(path):
             return None
         iw, ih = ImageReader(path).getSize()
-        maxw = 150 * mm
-        maxh = 95 * mm
+        maxw = 168 * mm          # 本文幅いっぱいまで使う
+        maxh = 180 * mm
         scale = min(maxw / iw, maxh / ih)
         return Image(path, width=iw * scale, height=ih * scale)
 

@@ -14,7 +14,7 @@
 import os
 import sys
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 FIGDIR = r'C:\Users\Owner\Desktop\金型仕様書\HMS図'
 MEIRYO = r'C:\Windows\Fonts\meiryo.ttc'
@@ -32,6 +32,15 @@ RED = (200, 0, 0)
 
 def font(sz):
     return ImageFont.truetype(MEIRYO, sz)
+
+
+def trim(im, border=8, bg=248):
+    """白背景を詰めて白縁を付ける"""
+    g = im.convert('L').point(lambda p: 0 if p >= bg else 255)
+    bbox = g.getbbox()
+    if bbox:
+        im = im.crop(bbox)
+    return ImageOps.expand(im, border=border, fill='white')
 
 
 def wbox(d, x0, y0, x1, y1):
@@ -216,6 +225,16 @@ def relabel_共C3_15(im):
     plain(d, 502, 908, '曲げパンチorダイ', INK, font(20))
     plain(d, 166, 1021, '偏荷重', INK, f22)
     plain(d, 365, 1031, '〈図2〉', INK, f22)
+    # 縦積み（図1上・図2下）を横並び（図1左・図2右）に組み替えて余白を減らす
+    w, h = im.size
+    fig1 = trim(im.crop((0, 0, w, 468)))
+    fig2 = trim(im.crop((0, 476, w, h)))
+    gap = 48
+    nh = max(fig1.height, fig2.height)
+    out = Image.new('RGB', (fig1.width + gap + fig2.width, nh), 'white')
+    out.paste(fig1, (0, (nh - fig1.height) // 2))
+    out.paste(fig2, (fig1.width + gap, (nh - fig2.height) // 2))
+    return out
 
 
 # ============================================================ 共C3-21 ダイの刃先形状
@@ -515,8 +534,8 @@ def main():
         print('対象:', ', '.join(FIGS)); return
     path = os.path.join(FIGDIR, 'hms_%s.png' % key)
     im = Image.open(path).convert('RGB')
-    FIGS[key](im)
-    im.save(path)
+    result = FIGS[key](im)     # 画像を返す関数（レイアウト変更）はそれを保存する
+    (result if result is not None else im).save(path)
     print('書き換え:', path)
 
 
