@@ -132,11 +132,17 @@ def _parse_clear_sheet(rows):
     def flush():
         nonlocal tbl
         if tbl:
-            # 右端の全空列を落とす
             w = max((len(r) for r in tbl), default=0)
-            while w > 1 and all(len(r) < w or r[w - 1] == '' for r in tbl):
+            grid = [r + [''] * (w - len(r)) for r in tbl]
+            # 右端の全空列を落とす
+            while w > 1 and all(row[w - 1] == '' for row in grid):
                 w -= 1
-            blocks.append(('table', [r[:w] + [''] * (w - len(r)) for r in tbl]))
+                grid = [row[:w] for row in grid]
+            # 左端の全空列を落とす（元Excelの空白A列対策）
+            while w > 1 and all(row[0] == '' for row in grid):
+                grid = [row[1:] for row in grid]
+                w -= 1
+            blocks.append(('table', grid))
             tbl = []
 
     for vals in rows:
@@ -286,11 +292,11 @@ def build_pdf(chapters, intro, title_ja, clearance, prefix, out_path):
 
     def clearance_flowables():
         flow = [Spacer(1, 3 * mm),
-                chapter_bar('5-補. クリアランス基準（早見表）'),
+                chapter_bar('5-補. 設計早見表・チェックリスト'),
                 Spacer(1, 2 * mm),
-                Paragraph('材質と板厚でクリアランスを決めるための早見表。'
-                          '数値は標準値で、材料ロット・型構造・製品要求により調整する。',
-                          st_body),
+                Paragraph('クリアランス（ピアス・抜き／バーリング）、曲げ、順送レイアウトの'
+                          '早見表と設計チェックリスト。数値は標準値で、材料ロット・型構造・'
+                          '製品要求により調整する。', st_body),
                 Spacer(1, 2 * mm)]
         for sh, blocks in clearance:
             for kind, payload in blocks:
