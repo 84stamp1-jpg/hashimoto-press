@@ -106,10 +106,10 @@ def load_intro(path):
 
 
 def load_clearance():
-    """クリアランス基準書の各シートを block 列に変換して返す。
+    """クリアランス基準書の各シートを {シート名: block列} で返す。
     block = ('title'|'sub'|'head'|'note'|'para', text) または ('table', [row...])"""
     wb = openpyxl.load_workbook(CLEAR_XLSX, data_only=True)
-    out = []
+    out = {}
     for sh in CLEAR_SHEETS:
         if sh not in wb.sheetnames:
             continue
@@ -120,7 +120,7 @@ def load_clearance():
                      str(ws.cell(r, c).value).strip())
                     for c in range(1, ws.max_column + 1)]
             rows.append(vals)
-        out.append((sh, _parse_clear_sheet(rows)))
+        out[sh] = _parse_clear_sheet(rows)
     return out
 
 
@@ -169,7 +169,10 @@ def _parse_clear_sheet(rows):
 
 
 # ================================================================ PDF
-def build_pdf(chapters, intro, title_ja, clearance, prefix, out_path):
+def build_pdf(chapters, intro, title_ja, clear_section, checklist, prefix, out_path):
+    # clear_section = (barタイトル, 説明文, [(シート名, blocks), ...]) または None
+    #                 …「設計値」章の直後に差し込む早見表群
+    # checklist     = (見出し, blocks) または None …巻末（付録）へ入れる
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_LEFT
     from reportlab.lib.pagesizes import A4
@@ -290,33 +293,34 @@ def build_pdf(chapters, intro, title_ja, clearance, prefix, out_path):
         t.setStyle(TableStyle(ts))
         return t
 
+    def render_blocks(blocks):
+        flow = []
+        for kind, payload in blocks:
+            if kind == 'title':
+                flow.append(Spacer(1, 2 * mm))
+                flow.append(Paragraph('◆ ' + esc(payload), st_item))
+                flow.append(Spacer(1, 1 * mm))
+            elif kind == 'sub':
+                flow.append(Paragraph(esc(payload), st_sub))
+            elif kind == 'head':
+                flow.append(Spacer(1, 1 * mm))
+                flow.append(Paragraph('■ ' + esc(payload), st_head))
+            elif kind == 'note':
+                flow.append(Paragraph('※ ' + esc(payload), st_note))
+            elif kind == 'para':
+                flow.append(Paragraph(esc(payload), st_body))
+            elif kind == 'table':
+                flow.append(Spacer(1, 1 * mm))
+                flow.append(render_table(payload))
+                flow.append(Spacer(1, 1 * mm))
+        return flow
+
     def clearance_flowables():
-        flow = [Spacer(1, 3 * mm),
-                chapter_bar('5-補. 設計早見表・チェックリスト'),
-                Spacer(1, 2 * mm),
-                Paragraph('クリアランス（ピアス・抜き／バーリング）、曲げ、順送レイアウトの'
-                          '早見表と設計チェックリスト。数値は標準値で、材料ロット・型構造・'
-                          '製品要求により調整する。', st_body),
-                Spacer(1, 2 * mm)]
-        for sh, blocks in clearance:
-            for kind, payload in blocks:
-                if kind == 'title':
-                    flow.append(Spacer(1, 2 * mm))
-                    flow.append(Paragraph('◆ ' + esc(payload), st_item))
-                    flow.append(Spacer(1, 1 * mm))
-                elif kind == 'sub':
-                    flow.append(Paragraph(esc(payload), st_sub))
-                elif kind == 'head':
-                    flow.append(Spacer(1, 1 * mm))
-                    flow.append(Paragraph('■ ' + esc(payload), st_head))
-                elif kind == 'note':
-                    flow.append(Paragraph('※ ' + esc(payload), st_note))
-                elif kind == 'para':
-                    flow.append(Paragraph(esc(payload), st_body))
-                elif kind == 'table':
-                    flow.append(Spacer(1, 1 * mm))
-                    flow.append(render_table(payload))
-                    flow.append(Spacer(1, 1 * mm))
+        bar_title, intro_text, sheets = clear_section
+        flow = [Spacer(1, 3 * mm), chapter_bar(bar_title), Spacer(1, 2 * mm),
+                Paragraph(intro_text, st_body), Spacer(1, 2 * mm)]
+        for sh, blocks in sheets:
+            flow += render_blocks(blocks)
         return flow
 
     def figure_for(no):
@@ -359,8 +363,8 @@ def build_pdf(chapters, intro, title_ja, clearance, prefix, out_path):
             group.append(Spacer(1, 2.5 * mm))
             block.append(KeepTogether(group))
         story.extend(block)
-        # 共通編の第5章の直後にクリアランス基準を差し込む
-        if clearance and '設計値' in cname:
+        # 「設計値」章の直後に早見表群を差し込む（共通=クリアランス・曲げ／順送=順送レイアウト）
+        if clear_section and '設計値' in cname:
             story.extend(clearance_flowables())
 
     # ---- 巻末：適用対象外
@@ -373,6 +377,14 @@ def build_pdf(chapters, intro, title_ja, clearance, prefix, out_path):
         story.append(Spacer(1, 2 * mm))
         rows = [['No', '項目', '区分']] + [[a, b, c] for a, b, c in appendix]
         story.append(render_table(rows))
+
+    # ---- 巻末：設計チェックリスト（共通編）
+    if checklist:
+        heading, blocks = checklist
+        story.append(PageBreak())
+        story.append(chapter_bar(heading))
+        story.append(Spacer(1, 2 * mm))
+        story.extend(render_blocks(blocks))
 
     # ---- レイアウト
     def on_page(canv, doc):
@@ -412,15 +424,34 @@ def build_pdf(chapters, intro, title_ja, clearance, prefix, out_path):
 def main():
     os.makedirs(OUT, exist_ok=True)
     keys = [sys.argv[1]] if len(sys.argv) > 1 else list(EDITIONS)
-    clearance = load_clearance()
+    cl = load_clearance()
+
+    def sheets(names):
+        return [(n, cl[n]) for n in names if n in cl]
+
+    # 早見表の振り分け：共通=クリアランス・曲げ／順送=順送レイアウト／チェックリストは共通の巻末
+    common_clear = ('5-補. クリアランス・曲げ 早見表',
+                    'クリアランス（ピアス・抜き／バーリング）と曲げの早見表。'
+                    '数値は標準値で、材料ロット・型構造・製品要求により調整する。',
+                    sheets(['ピアス・抜き', 'バーリング', '曲げ']))
+    junso_clear = ('補. 順送レイアウト早見表',
+                   '順送型のレイアウト設計基準（早見表）。数値は標準値で、'
+                   '製品・材料により調整する。',
+                   sheets(['順送レイアウト']))
+    checklist = ('付. 設計チェックリスト', cl['設計チェックリスト']) \
+        if '設計チェックリスト' in cl else None
+
+    CLEAR = {'共通': (common_clear, checklist),
+             '単発': (None, None),
+             '順送': (junso_clear, None)}
     for k in keys:
         fname, sheet, ja, prefix = EDITIONS[k]
         path = os.path.join(BASE, fname)
         chapters = load_edition(path, sheet)
         intro = load_intro(path)
-        cl = clearance if k == '共通' else None
+        clear_section, chk = CLEAR[k]
         out = os.path.join(OUT, 'HMDS金型設計標準_%s.pdf' % ja)
-        build_pdf(chapters, intro, ja, cl, prefix, out)
+        build_pdf(chapters, intro, ja, clear_section, chk, prefix, out)
         print('PDF:', out)
 
 
