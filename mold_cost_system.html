@@ -622,7 +622,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.07.21-1</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.07.23-1</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -3423,6 +3423,7 @@ function openMatModal() {
   initMoldComboField('matf_moldNo','matf_partNo','matf_partNoDisp');
   const hid = document.getElementById('matf_editKey');
   if (hid) hid.value = '';
+  window._matDupSrcKey = null;  // 通常の新規入力は複製リンクを持たない
   document.getElementById('matModal').classList.add('open');
 }
 async function saveMaterial() {
@@ -3449,9 +3450,19 @@ async function saveMaterial() {
   const editKey = document.getElementById('matf_editKey')?.value;
   const key = editKey || 'mat_' + Date.now();
   // 編集時は既存データ（quoteReqKey等）を保持してマージ
-  const existing = editKey ? (DB.materials[editKey] || {}) : {};
+  let existing = editKey ? (DB.materials[editKey] || {}) : {};
+  // 再注文（複製）時は元レコードの注文書リンク（quoteReqKey等）を引き継ぐ→注文書ボタンを表示
+  if (!editKey && window._matDupSrcKey && DB.materials[window._matDupSrcKey]) {
+    const src = DB.materials[window._matDupSrcKey];
+    existing = {
+      quoteReqKey:  src.quoteReqKey,
+      quoteKey:     src.quoteKey,
+      orderedSupId: src.orderedSupId,
+    };
+  }
+  window._matDupSrcKey = null;  // 使用後クリア（次の保存に持ち越さない）
   DB.materials[key] = {
-    ...existing,  // quoteReqKey, orderedSupId, orderHidden等を保持
+    ...existing,  // quoteReqKey, orderedSupId等を保持
     ...data       // 編集した内容で上書き
   };
   await writeToFirebase('materials', DB.materials);
@@ -6736,6 +6747,7 @@ function resetModal(prefix) {
 function editMaterial(key) {
   const r = DB.materials?.[key];
   if (!r) { toast('データが見つかりません', 'error'); return; }
+  window._matDupSrcKey = null;  // 編集は複製リンクを持たない
   // フォームリセット
   initMoldComboField('matf_moldNo','matf_partNo','matf_partNoDisp');
   // 値を設定
@@ -6802,6 +6814,7 @@ function duplicateMaterial(key) {
   let hid = document.getElementById('matf_editKey');
   if (!hid) { hid = document.createElement('input'); hid.type='hidden'; hid.id='matf_editKey'; document.getElementById('matModal').appendChild(hid); }
   hid.value = '';
+  window._matDupSrcKey = key;  // 元レコードの注文書リンクを保存時に引き継ぐ
   if (r.moldNo) showMoldInfo('matf', r.moldNo);
   document.getElementById('matModal').classList.add('open');
 }
