@@ -83,7 +83,7 @@ def fig_soft(ax):
     _notes(ax, [(BLUE, ['(1) 刃先はプレスに直角']),
                 (RED, ['(3) 逃がし勾配か', '　　座ぐりを施す事']),
                 (GREEN, ['(3) 底面の肉が', '　　なくならぬよう注意'])])
-    ax.text(11, BOT - 3.2, '〈図1〉引張り強さ590N/mm²未満の鋼材',
+    ax.text(11, BOT - 3.2, '引張り強さ590N/mm²未満の鋼材',
             fontsize=10.5, color=INK, ha='center', va='top')
 
 
@@ -103,7 +103,7 @@ def fig_hard(ax):
     _notes(ax, [(BLUE, ["(2) 5'〜7'の勾配", '　　（刃長部位）']),
                 (RED, ['(3) 逃がし勾配か', '　　座ぐりを施す事']),
                 (GREEN, ['(3) 底面の肉が', '　　なくならぬよう注意'])])
-    ax.text(11, BOT - 3.2, '〈図2〉590N/mm²以上及びステンレスの鋼材',
+    ax.text(11, BOT - 3.2, '590N/mm²以上及びステンレスの鋼材',
             fontsize=10.5, color=INK, ha='center', va='top')
 
 
@@ -124,7 +124,7 @@ def fig_counterbore(ax):
     _land_dim(ax, -3.5)
     _notes(ax, [(BLUE, ['(1) 刃先はプレスに直角']),
                 (GREEN, ['(3) 座ぐりの', '　　オフセット量 ≦1mm'])])
-    ax.text(11, BOT - 3.2, '〈図3〉座ぐりの場合', fontsize=10.5,
+    ax.text(11, BOT - 3.2, '座ぐりの場合', fontsize=10.5,
             color=INK, ha='center', va='top')
 
 
