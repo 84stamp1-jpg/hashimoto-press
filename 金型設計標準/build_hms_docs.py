@@ -367,24 +367,12 @@ def build_pdf(chapters, intro, title_ja, clear_section, checklist, prefix, out_p
         if clear_section and '設計値' in cname:
             story.extend(clearance_flowables())
 
-    # ---- 巻末：適用対象外
-    if appendix:
-        story.append(PageBreak())
-        story.append(chapter_bar('付. 適用対象外とした項目'))
-        story.append(Spacer(1, 2 * mm))
-        story.append(Paragraph('次の項目は、当社の運用上あてはまらないため本標準では規定しない。',
-                               st_appx))
-        story.append(Spacer(1, 2 * mm))
-        rows = [['No', '項目', '区分']] + [[a, b, c] for a, b, c in appendix]
-        story.append(render_table(rows))
-
-    # ---- 巻末：設計チェックリスト（共通編）
-    if checklist:
-        heading, blocks = checklist
-        story.append(PageBreak())
-        story.append(chapter_bar(heading))
-        story.append(Spacer(1, 2 * mm))
-        story.extend(render_blocks(blocks))
+    # 巻末付録（「付. 適用対象外とした項目」「付. 設計チェックリスト」）は
+    # 本標準では載せない方針のため出力しない。
+    #   ・適用対象外：対象外/不要の項目は本文から外すだけとし、一覧化しない
+    #   ・設計チェックリスト：早見表（本文中）に集約したため巻末には付けない
+    # ※ appendix・checklist の受け渡しは互換のため残すが、描画はしない。
+    _ = (appendix, checklist)
 
     # ---- レイアウト
     def on_page(canv, doc):

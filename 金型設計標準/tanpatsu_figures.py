@@ -65,6 +65,40 @@ def white_boxes(im, boxes):
     return im
 
 
+def draw_texts(im, texts):
+    """最終画像へ文字を差し替え描画する。texts は dict のリスト。
+      box  … (x0,y0,x1,y1) 割合。まず白で消してから中央へ描く
+      text … 描く文字列
+      size … フォント高さ(px)、rot … 反時計回りの回転角、color … 既定は黒
+    元図(高木)の寸法数値を当社基準へ書き換える等の最小限の用途に使う。"""
+    from PIL import ImageDraw, ImageFont
+    w, h = im.size
+    d = ImageDraw.Draw(im)
+    try:
+        fnt_path = r'C:\Windows\Fonts\arial.ttf'
+    except Exception:
+        fnt_path = None
+    for t in texts:
+        x0, y0, x1, y1 = t['box']
+        d.rectangle([x0 * w, y0 * h, x1 * w, y1 * h], fill='white')
+        font = ImageFont.truetype(fnt_path, t.get('size', 18)) if fnt_path else \
+            ImageFont.load_default()
+        # いったん横書きで作字→回転して貼る（縦寸法に合わせる）
+        s = t['text']
+        bb = d.textbbox((0, 0), s, font=font)
+        tw, th = bb[2] - bb[0], bb[3] - bb[1]
+        tile = Image.new('RGBA', (tw + 4, th + 4), (255, 255, 255, 0))
+        ImageDraw.Draw(tile).text((2 - bb[0], 2 - bb[1]), s, font=font,
+                                  fill=t.get('color', (0, 0, 0)))
+        rot = t.get('rot', 0)
+        if rot:
+            tile = tile.rotate(rot, expand=True)
+        cx = int((x0 + x1) / 2 * w) - tile.width // 2
+        cy = int((y0 + y1) / 2 * h) - tile.height // 2
+        im.paste(tile, (cx, cy), tile)
+    return im
+
+
 # 図の定義。page=PDFページ番号(1始まり)、box=ページに対する割合、hide=固有情報の白塗り
 FIGS = {
     # 単発 4-1 ワークのセット方向（p20 例1〜3。TPSヘッダー・フッターは範囲外）
@@ -78,9 +112,17 @@ FIGS = {
     # 単発 4-6 ガイドの固定・材質（p21 ガイドブロック/ガイドピン/位置決めブロック/位置決めピン）
     '単4-6': dict(page=21, box=(0.05, 0.235, 0.96, 0.575), hide=[]),
     # 共通 C3-1 ガイドポスト（p9 下段の断面図）
-    '共C3-1': dict(page=9, box=(0.05, 0.69, 0.95, 0.905), hide=[]),
+    # ・上部見出しと右側「(7)20mm以上重なる事」の寸法は、本文C3-1の
+    #   「ポスト径の1.5倍勘合」と矛盾するため白塗りで除去する（顧客指摘）。
+    '共C3-1': dict(page=9, box=(0.05, 0.69, 0.95, 0.905), hide=[],
+                  hide_final=[(0.00, 0.00, 1.00, 0.135),
+                              (0.528, 0.12, 0.605, 0.83),
+                              (0.510, 0.60, 0.535, 0.80)]),
     # 共通 C3-8 ストロークエンドブロック（p17 160トン以下／200トン以上のレイアウト）
-    '共C3-8': dict(page=17, box=(0.05, 0.575, 0.95, 0.805), hide=[]),
+    # ・A部のスキ寸法を 0.2→0.3 に是正（本文C3-8＝スキ0.3mmと整合。先頭桁のみ差替）。
+    '共C3-8': dict(page=17, box=(0.05, 0.575, 0.95, 0.805), hide=[],
+                  text_final=[dict(box=(0.752, 0.832, 0.787, 0.876),
+                                   text='3', size=17, rot=90)]),
 }
 
 
@@ -98,6 +140,13 @@ def build(key, dpi=2.4):
         im = white_boxes(im, fig['hide'])
     im = whiten(im)
     im = autotrim(im)
+    # 最終画像への後処理（見出し等の白塗り／数値の書換）→ 端の余白を再度詰める
+    if fig.get('hide_final'):
+        im = white_boxes(im, fig['hide_final'])
+    if fig.get('text_final'):
+        im = draw_texts(im, fig['text_final'])
+    if fig.get('hide_final') or fig.get('text_final'):
+        im = autotrim(im)
     os.makedirs(OUT, exist_ok=True)
     path = os.path.join(OUT, 'hms_%s.png' % key)
     im.save(path)
