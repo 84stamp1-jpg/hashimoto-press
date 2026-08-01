@@ -335,9 +335,13 @@ def build_pdf(chapters, intro, title_ja, clear_section, checklist, prefix, out_p
         return Image(path, width=iw * scale, height=ih * scale)
 
     appendix = []       # 適用対象外の一覧
-    fig_no = [0]        # 図の通し番号
-    for cname, items in chapters:
-        block = [Spacer(1, 3 * mm), chapter_bar(cname), Spacer(1, 2 * mm)]
+    # この文字列を含む章は新しいページの先頭から始める（読みやすさのため）
+    page_break_before = ('送り・ガイド',)
+    for ci, (cname, items) in enumerate(chapters):
+        block = []
+        if ci > 0 and any(k in cname for k in page_break_before):
+            block.append(PageBreak())
+        block += [Spacer(1, 3 * mm), chapter_bar(cname), Spacer(1, 2 * mm)]
         for it in items:
             if it['kind'] == 'ref':
                 block.append(Paragraph('▶ ' + esc(it['text']), st_ref))
@@ -357,9 +361,8 @@ def build_pdf(chapters, intro, title_ja, clear_section, checklist, prefix, out_p
             group = [Paragraph(head, st_item), Paragraph(body, st_body)]
             fig = figure_for(it['no'])
             if fig is not None:
-                fig_no[0] += 1
-                group += [Spacer(1, 1.5 * mm), fig,
-                          Paragraph('図%d' % fig_no[0], st_cap)]
+                # 図番号キャプション（図1・図2…）は本文が参照しないため付けない。
+                group += [Spacer(1, 1.5 * mm), fig]
             group.append(Spacer(1, 2.5 * mm))
             block.append(KeepTogether(group))
         story.extend(block)
