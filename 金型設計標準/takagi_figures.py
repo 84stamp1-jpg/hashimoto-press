@@ -114,6 +114,20 @@ def draw_texts(im, texts):
 LOGO_BOX = (0.90, 0.00, 1.00, 0.095)
 
 
+def split_side_by_side(im, split_frac, gap=44):
+    """縦に積まれた2図を、上下で割って横並びにする（split_frac の高さで分割）。"""
+    w, h = im.size
+    sy = int(h * split_frac)
+    top = autotrim(im.crop((0, 0, w, sy)), border=10)
+    bot = autotrim(im.crop((0, sy, w, h)), border=10)
+    hh = max(top.height, bot.height)
+    ww = top.width + gap + bot.width
+    canvas = Image.new('RGB', (ww, hh), 'white')
+    canvas.paste(top, (0, (hh - top.height) // 2))
+    canvas.paste(bot, (top.width + gap, (hh - bot.height) // 2))
+    return canvas
+
+
 def process(fig, slides_dir, out_dir):
     src = os.path.join(slides_dir, 'スライド%d.PNG' % fig['slide'])
     im = Image.open(src).convert('RGB')
@@ -132,6 +146,8 @@ def process(fig, slides_dir, out_dir):
         im = white_boxes(im, fig['hide_final'])
     if fig.get('text_final'):
         im = draw_texts(im, fig['text_final'])
+    if fig.get('split_h'):                      # 縦積み2図を横並びへ
+        im = split_side_by_side(im, fig['split_h'])
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, 'hms_%s.png' % fig['id'])
     im.save(path)
@@ -173,7 +189,8 @@ FIGS = [
     # 共通 C3-15 座ぐりインサート部品 ※旧・順送5-10（第3次移行）
     {'id': '共C3-15', 'slide': 45, 'box': (0.575, 0.02, 1.00, 0.96), 'thr': 200,
      'hide_final': [(0.505, 0.35, 0.61, 0.40),            # 〈図1〉（図1直下）
-                    (0.52, 0.90, 0.66, 1.00)]},           # 〈図2〉（下段）
+                    (0.52, 0.90, 0.66, 1.00)],            # 〈図2〉（下段）
+     'split_h': 0.47},                                    # 縦積み→横並びに再配置
     # （順4-7 は第3次移行で共通編へ→ 共C2-10 として上に定義）
     # 順送 6-1 コイル材投入ガイド（スライド69 右上の図1）
     {'id': '順6-1', 'slide': 69, 'box': (0.60, 0.04, 1.00, 0.46), 'thr': 200,

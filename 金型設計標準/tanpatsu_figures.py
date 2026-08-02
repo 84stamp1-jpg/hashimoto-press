@@ -125,7 +125,8 @@ FIGS = {
     # ・A部のスキ寸法を 0.2→0.3 に是正（本文C3-8＝スキ0.3mmと整合。先頭桁のみ差替）。
     # ・右端の改訂マーク（△2・6）と断片は削除（本文にない表記）。「2±0.01」は残す。
     '共C3-8': dict(page=17, box=(0.05, 0.575, 0.95, 0.805), hide=[],
-                  hide_final=[(0.855, 0.00, 1.00, 1.00)],
+                  hide_final=[(0.855, 0.00, 1.00, 1.00),   # 右端の改訂△2・6と断片
+                              (0.71, 0.918, 0.78, 0.99)],  # A部の加工記号△2（0.3は残す）
                   text_final=[dict(box=(0.752, 0.832, 0.787, 0.876),
                                    text='3', size=17, rot=90)]),
 }
@@ -145,13 +146,12 @@ def build(key, dpi=2.4):
         im = white_boxes(im, fig['hide'])
     im = whiten(im)
     im = autotrim(im)
-    # 最終画像への後処理（見出し等の白塗り／数値の書換）→ 端の余白を再度詰める
+    # 最終画像への後処理（白塗り／数値書換）。※再トリミングは割合座標が動いて
+    # 調整が不安定になるため行わない（白塗り跡の余白は残る＝autotrim後基準で固定）。
     if fig.get('hide_final'):
         im = white_boxes(im, fig['hide_final'])
     if fig.get('text_final'):
         im = draw_texts(im, fig['text_final'])
-    if fig.get('hide_final') or fig.get('text_final'):
-        im = autotrim(im)
     os.makedirs(OUT, exist_ok=True)
     path = os.path.join(OUT, 'hms_%s.png' % key)
     im.save(path)
