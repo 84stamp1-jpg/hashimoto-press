@@ -74,7 +74,7 @@ def _block(ax, left_pts):
 def fig_soft(ax):
     """図1：引張り強さ590N/mm²未満の鋼材（刃先はプレス直角）"""
     _base(ax)
-    relief_x = 4.0
+    relief_x = 2.6
     _block(ax, [(0, TOP), (0, LAND), (relief_x, BOT)])
     ax.plot([0, 0], [TOP, LAND], color=BLUE, lw=5)           # 刃先ストレート
     ax.plot([0, relief_x], [LAND, BOT], color=RED, lw=4)     # 逃がし勾配
@@ -90,15 +90,12 @@ def fig_soft(ax):
 def fig_hard(ax):
     """図2：引張り強さ590N/mm²以上及びステンレス（刃長部に5'〜7'の勾配）"""
     _base(ax)
-    relief_x = 4.2
-    taper = 0.9       # 刃長部の勾配（誇張）
-    _block(ax, [(0, TOP), (taper, LAND), (relief_x, BOT)])
-    ax.plot([0, taper], [TOP, LAND], color=BLUE, lw=5)         # 刃長部の勾配
-    ax.plot([taper, relief_x], [LAND, BOT], color=RED, lw=4)   # 逃がし勾配
-    ax.plot([taper - 0.9, taper + 0.9], [LAND, LAND], color=GREEN, lw=5)
-    # 勾配を示す補助（垂直基準線＋角記号）
-    ax.plot([0, 0], [TOP, LAND - 0.5], color=GRAY, lw=LWT, dashes=(4, 3))
-    ax.add_patch(Arc((0, TOP), 5, 5, theta1=291, theta2=306, color=GRAY, lw=LWT))
+    relief_x = 2.6
+    # 「5'〜7'」は数分角（＝ほぼ0°）なので刃先は垂直に描く。勾配はラベルで示す。
+    _block(ax, [(0, TOP), (0, LAND), (relief_x, BOT)])
+    ax.plot([0, 0], [TOP, LAND], color=BLUE, lw=5)            # 刃先（ほぼ直角）
+    ax.plot([0, relief_x], [LAND, BOT], color=RED, lw=4)      # 逃がし勾配
+    ax.plot([-0.9, 0.9], [LAND, LAND], color=GREEN, lw=5)
     _land_dim(ax, -3.5)
     _notes(ax, [(BLUE, ["(2) 5'〜7'の勾配", '　　（刃長部位）']),
                 (RED, ['(3) 逃がし勾配か', '　　座ぐりを施す事']),

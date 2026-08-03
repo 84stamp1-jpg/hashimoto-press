@@ -275,7 +275,7 @@ def build_cover(doc, title_ja, intro):
         _set_font(r, sz, NAVY, bold=True)
     tb2 = s.shapes.add_textbox(Cm(ML), Cm(14), Cm(CW), Cm(2))
     tf2 = tb2.text_frame
-    for i, (txt, sz, col) in enumerate([('橋本工業株式会社　技術部', 13, BLACK),
+    for i, (txt, sz, col) in enumerate([('橋本工業株式会社　技術チーム', 13, BLACK),
                                         ('HASHIMOTO KOGYO — Mold Design Standard（HMDS）', 11, GRAY)]):
         p = tf2.paragraphs[0] if i == 0 else tf2.add_paragraph()
         r = p.add_run()

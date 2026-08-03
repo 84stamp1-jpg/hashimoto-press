@@ -232,7 +232,7 @@ def build_pdf(chapters, intro, title_ja, clear_section, checklist, prefix, out_p
     story.append(Spacer(1, 4 * mm))
     story.append(Paragraph('【%s】' % title_ja, st_cover_t))
     story.append(Spacer(1, 10 * mm))
-    story.append(Paragraph('橋本工業株式会社　技術部', st_cover_org))
+    story.append(Paragraph('橋本工業株式会社　技術チーム', st_cover_org))
     story.append(Spacer(1, 2 * mm))
     story.append(Paragraph('HASHIMOTO KOGYO — Mold Design Standard（HMDS）', st_cover_s))
     story.append(Spacer(1, 16 * mm))
