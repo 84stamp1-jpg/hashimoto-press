@@ -40,7 +40,7 @@ LAND = 3.0       # 刃先ストレート下端の y（＝刃先長さ 3mm）
 def _base(ax):
     ax.set_aspect('equal')
     ax.set_xlim(-16, 40)
-    ax.set_ylim(-22, 12)
+    ax.set_ylim(-20.5, 9)          # 余白を詰める（内容は約 -19.5〜8）
     ax.axis('off')
 
 
@@ -126,19 +126,19 @@ def fig_counterbore(ax):
 
 
 def render(out_dir):
-    fig, axes = plt.subplots(1, 3, figsize=(13.5, 4.3))
+    fig, axes = plt.subplots(1, 3, figsize=(13.5, 3.4))
     for ax, fn in zip(axes, (fig_soft, fig_hard, fig_counterbore)):
         fn(ax)
     # パネル間の仕切り線
     for xx in (0.353, 0.66):
-        fig.add_artist(plt.Line2D([xx, xx], [0.08, 0.92], color=GRAY,
+        fig.add_artist(plt.Line2D([xx, xx], [0.06, 0.90], color=GRAY,
                                   lw=1.0, dashes=(6, 4), transform=fig.transFigure))
     fig.suptitle('ダイの刃先形状・逃がし', fontsize=13, fontweight='bold',
-                 color=INK, y=0.98)
-    fig.tight_layout(rect=(0, 0, 1, 0.95))
+                 color=INK, y=0.99)
+    fig.tight_layout(rect=(0, 0, 1, 0.96))
     os.makedirs(out_dir, exist_ok=True)
     p = os.path.join(out_dir, 'hms_共C3-21.png')
-    fig.savefig(p, dpi=170, facecolor='white')
+    fig.savefig(p, dpi=170, facecolor='white', bbox_inches='tight', pad_inches=0.03)
     plt.close(fig)
     return p
 

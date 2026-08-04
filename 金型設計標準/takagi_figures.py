@@ -114,12 +114,12 @@ def draw_texts(im, texts):
 LOGO_BOX = (0.90, 0.00, 1.00, 0.095)
 
 
-def split_side_by_side(im, split_frac, gap=44):
+def split_side_by_side(im, split_frac, gap=36):
     """縦に積まれた2図を、上下で割って横並びにする（split_frac の高さで分割）。"""
     w, h = im.size
     sy = int(h * split_frac)
-    top = autotrim(im.crop((0, 0, w, sy)), border=10)
-    bot = autotrim(im.crop((0, sy, w, h)), border=10)
+    top = autotrim(im.crop((0, 0, w, sy)), border=5)
+    bot = autotrim(im.crop((0, sy, w, h)), border=5)
     hh = max(top.height, bot.height)
     ww = top.width + gap + bot.width
     canvas = Image.new('RGB', (ww, hh), 'white')
