@@ -342,7 +342,7 @@ def build_edition(prs, key, clear_section):
     doc.new_slide()
 
     for cname, items in chapters:
-        pb = '送り・ガイド' in cname
+        pb = any(k in cname for k in ('送り・ガイド', 'ワークのセット'))
         doc.bar(cname, page_break=pb)
         for it in items:
             if it['kind'] == 'ref':

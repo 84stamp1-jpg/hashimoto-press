@@ -341,7 +341,7 @@ def build_pdf(chapters, intro, title_ja, clear_section, checklist, prefix, out_p
 
     appendix = []       # 適用対象外の一覧
     # この文字列を含む章は新しいページの先頭から始める（読みやすさのため）
-    page_break_before = ('送り・ガイド',)
+    page_break_before = ('送り・ガイド', 'ワークのセット')
     for ci, (cname, items) in enumerate(chapters):
         block = []
         if ci > 0 and any(k in cname for k in page_break_before):
