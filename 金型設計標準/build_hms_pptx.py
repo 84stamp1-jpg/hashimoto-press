@@ -43,6 +43,9 @@ BOTTOM = PH - MB                   # 下限y
 CPL = 43                           # 本文1行あたりの全角文字数の目安
 LH = 0.52                          # 本文の行送り(cm)
 
+# 図ごとの最大表示幅(cm)。指定が無ければ本文幅いっぱい。単2-4は小さめに。
+FIG_MAXW_CM = {'単2-4': 10.0}
+
 
 def _set_font(run, size, color, bold=False, name=FONT):
     f = run.font
@@ -194,7 +197,8 @@ class Doc:
     def figure(self, path):
         iw, ih = Image.open(path).size
         natural_w = iw / 47.0                  # ≒120dpi
-        w = min(CW, natural_w)
+        fid = os.path.basename(path).replace('hms_', '').replace('.png', '')
+        w = min(CW, natural_w, FIG_MAXW_CM.get(fid, 99.0))
         h = w * ih / iw
         max_h = BOTTOM - MT - 1.0
         if h > max_h:

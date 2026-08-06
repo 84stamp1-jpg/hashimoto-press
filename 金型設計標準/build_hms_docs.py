@@ -44,6 +44,10 @@ EDITIONS = {
 # クリアランス基準書のうち本文へ入れるシート（表紙は除く）
 CLEAR_SHEETS = ['ピアス・抜き', 'バーリング', '曲げ', '順送レイアウト', '設計チェックリスト']
 
+# 図ごとの最大表示幅(mm)。指定が無ければ本文幅いっぱい(168mm)。
+# 単2-4（材料の送り方向）は小さめに載せて後続の章を詰める。
+FIG_MAXW_MM = {'単2-4': 100}
+
 
 # ================================================================ 読み込み
 def _cols(hdr):
@@ -329,7 +333,8 @@ def build_pdf(chapters, intro, title_ja, clear_section, checklist, prefix, out_p
         if not os.path.exists(path):
             return None
         iw, ih = ImageReader(path).getSize()
-        maxw = 168 * mm          # 本文幅いっぱいまで使う
+        # 図ごとに最大幅を絞れる（既定は本文幅いっぱい168mm）。小さく載せたい図に使う。
+        maxw = FIG_MAXW_MM.get('%s%s' % (prefix, no), 168) * mm
         maxh = 180 * mm
         scale = min(maxw / iw, maxh / ih)
         return Image(path, width=iw * scale, height=ih * scale)
