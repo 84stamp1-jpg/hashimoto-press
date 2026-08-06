@@ -59,10 +59,22 @@ def _set_font(run, size, color, bold=False, name=FONT):
         el.set('typeface', name)
 
 
-def _lines(text):
+def _lines(text, cpl=CPL):
     n = 0
     for seg in str(text).split('\n'):
-        n += max(1, math.ceil(len(seg) / CPL))
+        n += max(1, math.ceil(len(seg) / cpl))
+    return n
+
+
+def _cell_lines(text, col_w_cm, pt=8.5):
+    """列幅に対して、セル内の文字が何行に折り返すかの概算。
+    日本語は任意位置で折り返せるので、半角も含め素の文字数で数えて安全側（多め）に見積もる。"""
+    usable = max(0.4, col_w_cm - 0.22)          # セル左右マージン分を引く
+    char_w = pt / 72 * 2.54                      # 全角1文字の概算幅(cm)
+    cpl = max(1, int(usable / char_w))
+    n = 0
+    for seg in str(text).split('\n'):
+        n += max(1, math.ceil(len(seg) / cpl))
     return n
 
 
@@ -130,8 +142,9 @@ class Doc:
         _set_font(r, 14, 'FFFFFF', bold=True)
         self.y += h + 0.35
 
-    def _text(self, text, size, color, bold=False, indent=0.0, gap=0.18, teal=False):
-        h = _lines(text) * LH + 0.12
+    def _text(self, text, size, color, bold=False, indent=0.0, gap=0.18, teal=False,
+              cpl=CPL, line_h=LH, line_spacing=1.15):
+        h = _lines(text, cpl) * line_h + 0.12
         self.ensure(h)
         tb = self.slide.shapes.add_textbox(Cm(ML + indent), Cm(self.y),
                                            Cm(CW - indent), Cm(h))
@@ -143,7 +156,7 @@ class Doc:
         for seg in str(text).split('\n'):
             p = tf.paragraphs[0] if first else tf.add_paragraph()
             first = False
-            p.line_spacing = 1.15
+            p.line_spacing = line_spacing
             r = p.add_run()
             r.text = seg
             _set_font(r, size, color, bold=bold)
@@ -170,7 +183,10 @@ class Doc:
         self._text('■ ' + text, 10.5, TEAL, bold=True, gap=0.1)
 
     def note(self, text):
-        self._text('※ ' + text, 8.5, GRAY, gap=0.1)
+        # 8.5ptの小さい文字。本文用の行送り(LH)だと余白が大きく間延びするため、
+        # 文字サイズに合わせて行高さ・行間・下余白を詰める（1行相当で連続させる）。
+        self._text('※ ' + text, 8.5, GRAY, gap=0.05,
+                   cpl=54, line_h=0.42, line_spacing=1.0)
 
     def title2(self, text):
         self._text('◆ ' + text, 10.5, NAVY, bold=True, gap=0.08)
@@ -194,20 +210,30 @@ class Doc:
     def table(self, rows, first_is_header=True):
         nr = len(rows)
         nc = max(len(r) for r in rows)
-        rh = 0.72
-        th = nr * rh
+        # 列幅：1列目広め
+        first_w = CW * 0.26 if nc > 1 else CW
+        rest = (CW - first_w) / (nc - 1) if nc > 1 else 0
+        colw = [first_w] + [rest] * (nc - 1)
+        # 各行の高さは、セル内の折り返し行数から見積もる。
+        # 固定0.72cmだと、備考など長文セルが伸びた分だけ下の要素に被るため。
+        line_h = 8.5 / 72 * 2.54 * 1.2           # セル内の1行高さ(cm)
+        row_h = []
+        for row in rows:
+            ln = 1
+            for ci in range(nc):
+                val = row[ci] if ci < len(row) else ''
+                ln = max(ln, _cell_lines(val, colw[ci]))
+            row_h.append(max(0.72, ln * line_h + 0.16))
+        th = sum(row_h)
         if self.y + th > BOTTOM:
             self.new_slide()
         gtbl = self.slide.shapes.add_table(nr, nc, Cm(ML), Cm(self.y),
                                            Cm(CW), Cm(th)).table
-        # 列幅：1列目広め
-        first_w = CW * 0.26 if nc > 1 else CW
-        rest = (CW - first_w) / (nc - 1) if nc > 1 else 0
         gtbl.columns[0].width = Cm(first_w)
         for c in range(1, nc):
             gtbl.columns[c].width = Cm(rest)
         for ri, row in enumerate(rows):
-            gtbl.rows[ri].height = Cm(rh)
+            gtbl.rows[ri].height = Cm(row_h[ri])
             for ci in range(nc):
                 cell = gtbl.cell(ri, ci)
                 cell.margin_left = Cm(0.12)
