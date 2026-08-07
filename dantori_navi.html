@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
-<!-- H-Hub v2026.07.22-1 : WBGT設定を開くとき最新を取り直す（他システムの変更を古い内容で上書きしていた）。記録済みの対応・入力者が修正時に化けないよう選択肢へ残す -->
+<!-- H-Hub v2026.07.23-1 : 品質チェック一括振り分けで既実績(分納など)を取りこぼす問題を修正。製造番号/工順の照合をtrim+文字列比較に頑健化し、一括モードを開くとき記録を最新化する -->
 <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 /* ===== スクロールバー常時表示 ===== */
@@ -8907,6 +8907,9 @@ window.qcShowPendingList = function(){
 };
 
 // ----- 一括振り分け -----
+// 製造番号・工順の照合を前後空白/全半角の型差に強くする（既実績の取りこぼし防止）
+function _qcNorm(v){ return String(v==null?'':v).trim(); }
+function _qcRecMatch(r, seizoNo, junjo){ return _qcNorm(r[13])===_qcNorm(seizoNo) && _qcNorm(r[14])===_qcNorm(junjo); }
 window.qcOpenBulkMode = function(){
   if(QC_SEL_SAKUYO){ QC_BULK_HINBAN=QC_SEL_SAKUYO.hinban; QC_BULK_JUNJO=QC_SEL_SAKUYO.junjo; }
   else{ var q=prompt('品番を入力してください'); if(!q) return; QC_BULK_HINBAN=q.trim(); QC_BULK_JUNJO=null; }
@@ -8925,6 +8928,13 @@ window.qcOpenBulkMode = function(){
   var ex=document.getElementById('qc-bulk-progress'); if(ex) ex.parentNode.removeChild(ex);
   qcShowScreen('bulk');
   qcRenderBulkProgress();
+  // 既実績の取りこぼし防止：一括モードを開くとき記録を最新化し進捗/割当を再計算
+  qcGasPost('getRecords',{}, function(res){
+    if(res&&res.ok){ QC_ALL_RECORDS=res.records||[]; try{ localStorage.setItem('qcAllRecordsCache', JSON.stringify(QC_ALL_RECORDS)); }catch(e){}
+      qcRenderBulkProgress();
+      if(document.getElementById('qc-alloc-list-card').style.display!=='none') qcShowAllocList();
+    }
+  }, function(){});
 };
 window.qcBulkPhotoTap = function(){ if(QC_BULK_PHOTO) qcOpenBulkViewer(); else qcBulkOpenSrc(); };
 window.qcOpenBulkViewer = function(){ document.getElementById('qc-viewer-img').src=QC_BULK_PHOTO; document.getElementById('qc-viewer-retake').style.display='none'; document.getElementById('qc-bulk-viewer-retake').style.display='inline-block'; document.getElementById('qc-bulk-viewer-delete').style.display='inline-block'; document.getElementById('qc-photo-viewer').className='on'; };
@@ -8939,12 +8949,12 @@ window.qcShowAllocList = function(){
   if(!document.getElementById('qc-bulk-op').value){ alert('作業者を選択してください'); return; }
   if(!QC_SAKUYO){ alert('作業予定データが読み込まれていません'); return; }
   var doneSeizoSet={};
-  QC_ALL_RECORDS.forEach(function(r){ if(r[7]==='完納'||r[7]==='完了') doneSeizoSet[(r[13]||'')+'_'+String(r[14]||'')]=true; });
-  var list=QC_SAKUYO.filter(function(s){ if(s.hinban!==QC_BULK_HINBAN) return false; if(QC_BULK_JUNJO&&String(s.junjo)!==String(QC_BULK_JUNJO)) return false; return !doneSeizoSet[s.seizoNo+'_'+String(s.junjo||'')]; });
+  QC_ALL_RECORDS.forEach(function(r){ if(r[7]==='完納'||r[7]==='完了') doneSeizoSet[_qcNorm(r[13])+'_'+_qcNorm(r[14])]=true; });
+  var list=QC_SAKUYO.filter(function(s){ if(s.hinban!==QC_BULK_HINBAN) return false; if(QC_BULK_JUNJO&&String(s.junjo)!==String(QC_BULK_JUNJO)) return false; return !doneSeizoSet[_qcNorm(s.seizoNo)+'_'+_qcNorm(s.junjo)]; });
   function _noukiVal(s){ var p=(s||'99/99').split('/'); return (parseInt(p[0])||99)*100+(parseInt(p[1])||99); }
   list.sort(function(a,b){ return _noukiVal(a['納期'])-_noukiVal(b['納期']); });
   if(!list.length){ alert('未完納の製造番号が見つかりません'); return; }
-  list.forEach(function(s){ var done=QC_ALL_RECORDS.filter(function(r){ return r[13]===s.seizoNo&&String(r[14])===String(s.junjo)&&r[7]!=='中間実績'; }).reduce(function(sum,r){ return sum+(parseInt(r[5]||0)||0); },0); s._done=done; s._remain=Math.max(0,(parseInt(s.shiji)||0)-done); });
+  list.forEach(function(s){ var done=QC_ALL_RECORDS.filter(function(r){ return _qcRecMatch(r,s.seizoNo,s.junjo)&&r[7]!=='中間実績'; }).reduce(function(sum,r){ return sum+(parseInt(r[5]||0)||0); },0); s._done=done; s._remain=Math.max(0,(parseInt(s.shiji)||0)-done); });
   var remain=prod;
   QC_ALLOC_DATA=list.map(function(s){ var alloc=Math.min(remain,s._remain); remain-=alloc; var shijiInt=parseInt(s.shiji)||0, doneInt=parseInt(s._done)||0, allocInt=parseInt(alloc)||0; var kubun=shijiInt<=0||allocInt<=0?'分納':(doneInt+allocInt>=shijiInt?'完納':'分納'); return {seizoNo:s.seizoNo,junjo:s.junjo,kosei:s.kosei,hinban:s.hinban,hinmei:s.hinmei,shiji:s.shiji,nouki:s['納期']||'',done:s._done,remain:s._remain,alloc:alloc,kubun:kubun}; }).filter(function(d){ return d.remain>0&&d.alloc>0; });
   qcRenderAllocRows(); qcRenderBulkProgress();
@@ -8954,7 +8964,7 @@ function qcRenderBulkProgress(){
   if(!QC_BULK_HINBAN) return;
   var seizoNo=QC_SEL_SAKUYO?QC_SEL_SAKUYO.seizoNo:null, junjo=QC_SEL_SAKUYO?QC_SEL_SAKUYO.junjo:QC_BULK_JUNJO, shiji=QC_SEL_SAKUYO?(parseInt(QC_SEL_SAKUYO.shiji)||0):0;
   var done=0;
-  if(seizoNo) QC_ALL_RECORDS.forEach(function(r){ if(r[13]===seizoNo&&String(r[14])===String(junjo)&&r[7]!=='中間実績') done+=parseInt(r[5]||0)||0; });
+  if(seizoNo) QC_ALL_RECORDS.forEach(function(r){ if(_qcRecMatch(r,seizoNo,junjo)&&r[7]!=='中間実績') done+=parseInt(r[5]||0)||0; });
   var remain=Math.max(0,shiji-done), pct=shiji>0?Math.min(100,Math.round(done/shiji*100)):0;
   var ex=document.getElementById('qc-bulk-progress'); if(ex) ex.parentNode.removeChild(ex);
   if(!seizoNo) return;
