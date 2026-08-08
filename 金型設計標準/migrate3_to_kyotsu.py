@@ -16,7 +16,7 @@ import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 warnings.filterwarnings('ignore')
-BASE = r'C:\Users\Owner\Desktop\金型仕様書'
+BASE = os.path.join(os.path.expanduser('~'), 'Desktop', '橋本_作業データ', '金型仕様書')
 WRAP = Alignment(wrap_text=True, vertical='top')
 THIN = Side(style='thin', color='FFB0B8C4')
 BOX = Border(left=THIN, right=THIN, top=THIN, bottom=THIN)

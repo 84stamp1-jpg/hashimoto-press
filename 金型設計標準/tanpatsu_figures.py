@@ -16,9 +16,9 @@ import sys
 import fitz
 from PIL import Image, ImageOps
 
-SRC_XLS = r'C:\Users\Owner\Desktop\金型仕様書\資料\【67-025-02】単発ダイセット金型仕様書 .xls'
+SRC_XLS = os.path.join(os.path.expanduser('~'), 'Desktop', '橋本_作業データ', '金型仕様書', '資料', '【67-025-02】単発ダイセット金型仕様書 .xls')
 PDF = os.path.join(os.environ.get('LOCALAPPDATA', ''), r'Temp\claude\tanpatsu_単発仕様書.pdf')
-OUT = r'C:\Users\Owner\Desktop\金型仕様書\HMS図'
+OUT = os.path.join(os.path.expanduser('~'), 'Desktop', '橋本_作業データ', '金型仕様書', 'HMS図')
 
 
 def ensure_pdf():

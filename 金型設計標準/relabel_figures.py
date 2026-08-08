@@ -16,7 +16,7 @@ import sys
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
-FIGDIR = r'C:\Users\Owner\Desktop\金型仕様書\HMS図'
+FIGDIR = os.path.join(os.path.expanduser('~'), 'Desktop', '橋本_作業データ', '金型仕様書', 'HMS図')
 MEIRYO = r'C:\Windows\Fonts\meiryo.ttc'
 
 MAGENTA = (214, 0, 160)

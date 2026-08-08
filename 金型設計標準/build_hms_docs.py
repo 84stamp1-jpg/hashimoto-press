@@ -29,7 +29,7 @@ import openpyxl
 
 warnings.filterwarnings('ignore')
 
-BASE = r'C:\Users\Owner\Desktop\金型仕様書'
+BASE = os.path.join(os.path.expanduser('~'), 'Desktop', '橋本_作業データ', '金型仕様書')
 OUT = os.path.join(BASE, '出力')
 FIGDIR = os.path.join(BASE, 'HMS図')
 CLEAR_XLSX = os.path.join(BASE, '金型設計クリアランス基準書.xlsx')

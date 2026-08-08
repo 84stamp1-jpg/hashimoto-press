@@ -23,7 +23,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
 warnings.filterwarnings('ignore')
 
-BASE = r'C:\Users\Owner\Desktop\金型仕様書'
+BASE = os.path.join(os.path.expanduser('~'), 'Desktop', '橋本_作業データ', '金型仕様書')
 WRAP = Alignment(wrap_text=True, vertical='top')
 F9 = Font(name='Meiryo UI', size=9)
 THIN = Side(style='thin', color='FFB0B8C4')

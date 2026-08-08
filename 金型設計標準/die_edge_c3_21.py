@@ -144,5 +144,5 @@ def render(out_dir):
 
 
 if __name__ == '__main__':
-    outdir = sys.argv[1] if len(sys.argv) > 1 else r'C:\Users\Owner\Desktop\金型仕様書\HMS図'
+    outdir = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.expanduser('~'), 'Desktop', '橋本_作業データ', '金型仕様書', 'HMS図')
     print('作成:', render(outdir))

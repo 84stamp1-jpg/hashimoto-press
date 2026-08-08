@@ -27,7 +27,7 @@ SLIDES = (r'C:\Users\Owner\AppData\Local\Temp\claude'
           r'\C--Users-Owner-Desktop-513dcad3-989a-4a86-aede-4a6d6dbccb8c'
           r'\scratchpad\takagi_slides')
 # ↑ 実行時に存在チェックして自動補正する（下の _slides_dir）
-OUT = r'C:\Users\Owner\Desktop\金型仕様書\HMS図'
+OUT = os.path.join(os.path.expanduser('~'), 'Desktop', '橋本_作業データ', '金型仕様書', 'HMS図')
 
 
 def _slides_dir():
