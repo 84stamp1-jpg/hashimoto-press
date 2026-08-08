@@ -115,7 +115,11 @@ RTSP URL形式: `rtsp://<RTSPユーザー>:<パスワード>@<IP>:554/stream1`(�
   ゲストWiFiは**TCP遮断**(pingのみ)で、事務所LAN側の中継サーバーから到達できなかった
 - **採用した解決策: (1)社内WiFiへカメラを移行**。カメラを 192.168.30.x 帯に載せ替え、
   事務所LANの中継PC(go2rtc, 192.168.30.9)から直接RTSP到達できるようにした
-- 中継PC: BLEスキャナーPC兼用(192.168.30.9)。go2rtc v1.9.14 を C:\Users\Owner\Desktop\go2rtc_win64\ で稼働
+- 中継PC: BLEスキャナーPC兼用(192.168.30.9)。go2rtc v1.9.14 を go2rtc_win64\ で稼働
+- **2026-08 PC移行**: 旧Owner PC → 新k--fu PC(社長PC)へ中継を引き継ぎ。go2rtc一式を
+  `C:\Users\k--fu\Desktop\橋本_作業データ\go2rtc_win64\`、表示ページを `…\camera_view\` に再配置。
+  .vbs/.bat は自己相対参照(WScript.ScriptFullName / %~dp0)へ改造し日本語フォルダ名の直書きを排除
+  (CP932文字化け対策)。localhost:1984/8080 で稼働確認済み。**残: 新PCのIPを 192.168.30.9 に固定(社長作業)**
 
 ### つまずきメモ(2026-07-14・再発防止)
 - go2rtc.yaml の RTSP URL に `<...>`(パスワードの目印カッコ)を残すと `net/url: invalid userinfo`。カッコは外す
