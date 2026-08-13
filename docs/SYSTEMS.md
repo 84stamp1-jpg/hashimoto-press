@@ -183,9 +183,13 @@
 
 ### 9. 保全スケジュール自動化(maint_schedule_v7)
 - **目的**: kintone App6 → PDF/HTML生成 → Slack投稿の自動パイプライン
-- **構成**: Pythonスクリプト5本(現場PC `C:\Users\Owner\Desktop\maint_schedule\`)。
-  Slack Bot「Kanagata-Bot」
-- **注記**: 本リポジトリには未収録(現場PCローカル運用)
+- **構成**: Pythonスクリプト5本(run.py/kintone_client/pdf_builder/html_builder/slack_notifier)。
+  Slack Bot「Kanagata-Bot」。投稿先はSLACK_CHANNEL_IDにカンマ区切りで複数ch指定可
+- **配置**: 常時稼働PC(=社長PC/カメラ中継と同一)の `C:\Users\k--fu\Desktop\橋本_作業データ\maint_schedule\`。
+  **2026-08 PC移行(Owner→k--fu)で旧 `Owner\Desktop\maint_schedule\` から移設・復元済み**
+- **自動実行**: Windowsタスク `kanagata_maint_report`(毎日08:00・pythonw run.py・ログオン中実行)。
+  run.pyは出力を自フォルダに書き土日はSlack投稿をスキップ。依存: requests/pandas/python-dotenv/reportlab
+- **注記**: 本リポジトリには未収録(ローカル運用)。kintone API/Slack Botトークンは `.env` に保持しコミットしない
 
 ### 10. 月次会レポート自動生成
 - **目的**: #月次会チャンネル(C06PJTWQJ15)の投稿からA4 2ページのPDFレポートを生成
