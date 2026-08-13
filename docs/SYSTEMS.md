@@ -187,7 +187,8 @@
   Slack Bot「Kanagata-Bot」。投稿先はSLACK_CHANNEL_IDにカンマ区切りで複数ch指定可
 - **配置**: 常時稼働PC(=社長PC/カメラ中継と同一)の `C:\Users\k--fu\Desktop\橋本_作業データ\maint_schedule\`。
   **2026-08 PC移行(Owner→k--fu)で旧 `Owner\Desktop\maint_schedule\` から移設・復元済み**
-- **自動実行**: Windowsタスク `kanagata_maint_report`(毎日08:00・pythonw run.py・ログオン中実行)。
+- **自動実行**: Windowsタスク `kanagata_maint_report`(毎日07:30・pythonw run.py・ログオン中実行)。
+  WakeToRun有効(スリープから起きて実行)＋電源のスリープ解除タイマー許可。StartWhenAvailableで取りこぼし時は起動後に実行。
   run.pyは出力を自フォルダに書き土日はSlack投稿をスキップ。依存: requests/pandas/python-dotenv/reportlab
 - **注記**: 本リポジトリには未収録(ローカル運用)。kintone API/Slack Botトークンは `.env` に保持しコミットしない
 
