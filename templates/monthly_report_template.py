@@ -314,8 +314,8 @@ def make_styles():
     s['label'] = ParagraphStyle('label', fontSize=6.5, fontName='HeiseiKakuGo-W5', textColor=colors.HexColor('#555555'), alignment=TA_CENTER, leading=9)
     s['notice'] = ParagraphStyle('notice', fontSize=7.3, fontName='HeiseiKakuGo-W5', textColor=colors.HexColor('#1a1a2e'), leading=11.5, leftIndent=4, rightIndent=4,
                                   backColor=colors.HexColor('#fef9e7'), borderColor=colors.HexColor('#e0c66b'), borderWidth=0.6, borderPadding=4, spaceAfter=4)
-    s['cell'] = ParagraphStyle('cell', fontSize=6.6, fontName='HeiseiKakuGo-W5', textColor=colors.HexColor('#222222'), leading=9.2)
-    s['cellc'] = ParagraphStyle('cellc', fontSize=6.8, fontName='HeiseiKakuGo-W5', textColor=colors.HexColor('#222222'), leading=9.2, alignment=TA_CENTER)
+    s['cell'] = ParagraphStyle('cell', fontSize=6.6, fontName='HeiseiKakuGo-W5', textColor=colors.HexColor('#222222'), leading=8.6)
+    s['cellc'] = ParagraphStyle('cellc', fontSize=6.8, fontName='HeiseiKakuGo-W5', textColor=colors.HexColor('#222222'), leading=8.6, alignment=TA_CENTER)
     s['cellc_ok'] = ParagraphStyle('cellc_ok', parent=s['cellc'], textColor=GREEN)
     s['cellc_warn'] = ParagraphStyle('cellc_warn', parent=s['cellc'], textColor=AMBER)
     s['cellc_bad'] = ParagraphStyle('cellc_bad', parent=s['cellc'], textColor=RED)
@@ -379,7 +379,7 @@ def chart_profit_trend(trend):
 
 def build_pdf(data, out_path):
     S = make_styles()
-    doc = SimpleDocTemplate(out_path, pagesize=A4, leftMargin=10 * mm, rightMargin=10 * mm, topMargin=6 * mm, bottomMargin=5 * mm)
+    doc = SimpleDocTemplate(out_path, pagesize=A4, leftMargin=10 * mm, rightMargin=10 * mm, topMargin=5 * mm, bottomMargin=3 * mm)
     story = []
     month = data['report_month']; page_label = data['page_label']
 
