@@ -1,42 +1,59 @@
 '==============================================================
-' 橋本工業　基準遵守手当システム　マクロ集
+' 橋本工業　基準遵守手当システム　マクロ集（モジュール名: BasunJunshu）
+'  ※減点記録エリア＝5〜254行 / 個人別集計＝257〜288行
+'  ※カードは同一内容を合算。段取り時間・計画達成率・5S指摘はまとめる
+'  ※波及元は最頻名。8種類超は最終行に「（ほかN項目）」
+'  ※明細セルは結合あり→クリアは範囲で実施
+'
+'  【2026-08-21 修正】シート名の取り違えによる集計ミスの対策
+'   ・NextMonthPrep：当月シートは常に「③月次減点記録」の名前を保持し、
+'     前月分を複製して「③控え_YYYY-MM」に退避する方式へ変更。
+'     （旧実装は新シートに別名を付け、前月データが「③月次減点記録」の名前を
+'       持ったまま残るため、以後カードの合計・手当額が前月の値になっていた）
+'   ・UpdateFeedbackCards：個人別明細と③の期間が食い違う場合に警告を出す
 '==============================================================
 
 Sub UpdateFeedbackCards()
-    '【毎月実行】個人別明細→④フィードバックカードに転記
     Dim wsD As Worksheet, ws4 As Worksheet, ws3 As Worksheet
     On Error GoTo ErrHandler
     Set wsD = ThisWorkbook.Sheets("個人別明細")
     Set ws4 = ThisWorkbook.Sheets("④個人フィードバックカード")
     Set ws3 = ThisWorkbook.Sheets("③月次減点記録")
-    
     Dim lastRow As Long
     lastRow = wsD.Cells(wsD.Rows.Count, 1).End(xlUp).Row
     If lastRow < 2 Then MsgBox "個人別明細にデータがありません。": Exit Sub
-    
-    ' ④シート全体をスキャンしてカード位置を取得
-    ' 従業員番号（200〜700の数値）がある行・列を検索
-    Dim empRows(50) As Long
-    Dim empCols(50) As Long
-    Dim empNos(50) As Variant
+
+    ' --- 期間の食い違いチェック（別の月のシートを見ていないか）---
+    Dim dMax As Date, sMax As Date
+    dMax = MaxDateIn(wsD, 7, 2, lastRow)
+    sMax = MaxDateIn(ws3, 7, 5, 254)
+    If CLng(dMax) > 0 And CLng(sMax) > 0 Then
+        If Abs(DateDiff("d", dMax, sMax)) > 3 Then
+            If MsgBox("【警告】シートの期間が食い違っています。" & Chr(13) & Chr(13) & _
+                      "　個人別明細の最終日　： " & Format(dMax, "yyyy/mm/dd") & Chr(13) & _
+                      "　③月次減点記録の最終日： " & Format(sMax, "yyyy/mm/dd") & Chr(13) & Chr(13) & _
+                      "このまま実行すると、合計減点・残pt・手当額が" & Chr(13) & _
+                      "別の月の値で転記されます。" & Chr(13) & Chr(13) & _
+                      "続行しますか？", vbYesNo + vbExclamation, "期間の不一致") = vbNo Then Exit Sub
+        End If
+    End If
+
+    ' --- カード位置をスキャン ---
+    Dim empRows(50) As Long, empCols(50) As Long, empNos(50) As Variant
     Dim cardCount As Integer
     cardCount = 0
-    
-    Dim r As Long, c As Long
-    Dim maxRow As Long
+    Dim r As Long, c As Long, maxRow As Long
     maxRow = ws4.Cells(ws4.Rows.Count, 1).End(xlUp).Row + 50
-    
     For r = 1 To maxRow
         For c = 1 To 32
             Dim v As Variant
             v = ws4.Cells(r, c).Value
             If IsNumeric(v) And v <> "" Then
                 If v >= 100 And v <= 700 Then
-                    ' 隣のセルが「氏名」ラベルかチェック（従業員番号ラベルの隣）
                     If ws4.Cells(r, c - 1).Value = "No." Then
                         empNos(cardCount) = v
-                        empRows(cardCount) = r - 1  ' カード開始行（タイトル行）
-                        empCols(cardCount) = c - 1  ' カード開始列
+                        empRows(cardCount) = r - 1
+                        empCols(cardCount) = c - 1
                         cardCount = cardCount + 1
                         If cardCount > 50 Then GoTo ScanDone
                     End If
@@ -45,64 +62,114 @@ Sub UpdateFeedbackCards()
         Next c
     Next r
 ScanDone:
-    
     If cardCount = 0 Then
         MsgBox "カードが見つかりません。" & Chr(13) & "④シートの「No.」ラベルを確認してください。"
         Exit Sub
     End If
-    
-    ' 明細エリアをクリア（sr+4〜sr+11の8行）
-    Dim idx As Integer
+
+    ' --- 明細(8行)クリア：結合セルがあるため範囲でまとめてクリア ---
+    Dim idx As Integer, sr As Long, sc As Long
     For idx = 0 To cardCount - 1
-        Dim sr As Long, sc As Long
         sr = empRows(idx): sc = empCols(idx)
-        Dim di As Integer
-        For di = 0 To 7
-            Dim dc As Integer
-            For dc = 0 To 7
-                ws4.Cells(sr + 4 + di, sc + dc).Value = ""
-            Next dc
-        Next di
-        ' 集計行クリア（sr+12）
+        ws4.Range(ws4.Cells(sr + 4, sc), ws4.Cells(sr + 11, sc + 7)).ClearContents
         ws4.Cells(sr + 12, sc + 1).Value = ""
         ws4.Cells(sr + 12, sc + 4).Value = ""
         ws4.Cells(sr + 12, sc + 7).Value = ""
     Next idx
-    
-    ' 個人別明細→カードに転記
-    Dim detailCnt(50) As Integer
+
+    ' --- 個人別明細を集計（同一内容は合算。段取り/計画達成率/5Sはまとめる）---
+    Dim dict As Object
+    Set dict = CreateObject("Scripting.Dictionary")
     Dim i As Long
     For i = 2 To lastRow
         Dim empNo As Variant
         empNo = wsD.Cells(i, 1).Value
         If empNo = "" Then GoTo NextRow
-        
-        For idx = 0 To cardCount - 1
-            If empNos(idx) = empNo Then
-                If detailCnt(idx) < 8 Then
-                    Dim dr As Long
-                    dr = empRows(idx) + 4 + detailCnt(idx)
-                    sc = empCols(idx)
-                    ws4.Cells(dr, sc).Value = wsD.Cells(i, 7).Value
-                    ws4.Cells(dr, sc + 1).Value = wsD.Cells(i, 4).Value & _
-                        " / " & wsD.Cells(i, 6).Value
-                    ws4.Cells(dr, sc + 3).Value = wsD.Cells(i, 8).Value
-                    ws4.Cells(dr, sc + 4).Value = wsD.Cells(i, 9).Value
-                    ws4.Cells(dr, sc + 5).Value = wsD.Cells(i, 5).Value
-                    detailCnt(idx) = detailCnt(idx) + 1
-                End If
-                Exit For
+        Dim reason As String, itemNm As String, itemStr As String
+        reason = CStr(wsD.Cells(i, 4).Value)
+        itemNm = CStr(wsD.Cells(i, 6).Value)
+        itemStr = normItem(reason, itemNm)
+        Dim pt As Double, pat As String, src As String, dt As String
+        pt = Val(wsD.Cells(i, 8).Value)
+        pat = CStr(wsD.Cells(i, 9).Value)
+        src = CStr(wsD.Cells(i, 5).Value)
+        dt = CStr(wsD.Cells(i, 7).Value)
+        Dim key As String
+        key = CStr(empNo) & "||" & itemStr
+        Dim a As Variant
+        If dict.Exists(key) Then
+            a = dict(key)
+            a(0) = a(0) + pt
+            a(1) = a(1) + 1
+            If src <> "" Then
+                Dim sd As Object
+                Set sd = a(3)
+                If sd.Exists(src) Then sd(src) = sd(src) + 1 Else sd.Add src, 1
             End If
-        Next idx
+            dict(key) = a
+        Else
+            Dim srcDict As Object
+            Set srcDict = CreateObject("Scripting.Dictionary")
+            If src <> "" Then srcDict.Add src, 1
+            dict.Add key, Array(pt, 1, pat, srcDict, dt, itemStr, CStr(empNo))
+        End If
 NextRow:
     Next i
-    
-    ' ③個人別集計→合計減点・残pt・手当額を転記
+
+    ' --- 転記（8行上限・超過は最終行に「ほかN項目」）---
+    Dim overflowAny As Boolean
+    overflowAny = False
+    For idx = 0 To cardCount - 1
+        sr = empRows(idx): sc = empCols(idx)
+        Dim items As Collection
+        Set items = New Collection
+        Dim k As Variant, e As Variant
+        For Each k In dict.Keys
+            e = dict(k)
+            If e(6) = CStr(empNos(idx)) Then items.Add e
+        Next k
+        Dim n As Long
+        n = items.Count
+        Dim lim As Long
+        If n <= 8 Then lim = n Else lim = 7
+        Dim w As Long, dr As Long
+        For w = 1 To lim
+            e = items(w)
+            dr = sr + 4 + (w - 1)
+            If e(1) > 1 Then
+                ws4.Cells(dr, sc).Value = e(1) & "回"
+            Else
+                ws4.Cells(dr, sc).Value = e(4)
+            End If
+            ws4.Cells(dr, sc + 1).Value = e(5)
+            ws4.Cells(dr, sc + 3).Value = e(0)
+            ws4.Cells(dr, sc + 4).Value = e(2)
+            ws4.Cells(dr, sc + 5).Value = topSrc(e(3))
+        Next w
+        If n > 8 Then
+            overflowAny = True
+            Dim remPt As Double, remCnt As Long
+            remPt = 0: remCnt = 0
+            For w = 8 To n
+                e = items(w)
+                remPt = remPt + e(0)
+                remCnt = remCnt + 1
+            Next w
+            dr = sr + 4 + 7
+            ws4.Cells(dr, sc).Value = ""
+            ws4.Cells(dr, sc + 1).Value = "（ほか " & remCnt & "項目）"
+            ws4.Cells(dr, sc + 3).Value = remPt
+            ws4.Cells(dr, sc + 4).Value = ""
+            ws4.Cells(dr, sc + 5).Value = ""
+        End If
+    Next idx
+
+    ' --- ③個人別集計→合計減点・残pt・手当額（従業員番号照合）---
+    Dim r3 As Long
     For idx = 0 To cardCount - 1
         sr = empRows(idx): sc = empCols(idx)
         empNo = empNos(idx)
-        Dim r3 As Long
-        For r3 = 57 To 90
+        For r3 = 257 To 290
             If ws3.Cells(r3, 1).Value = empNo Then
                 ws4.Cells(sr + 12, sc + 1).Value = ws3.Cells(r3, 9).Value
                 ws4.Cells(sr + 12, sc + 4).Value = ws3.Cells(r3, 10).Value
@@ -111,31 +178,112 @@ NextRow:
             End If
         Next r3
     Next idx
-    
-    MsgBox "フィードバックカード更新完了！（" & cardCount & "名分）", vbInformation
+
+    Dim msg As String
+    msg = "フィードバックカード更新完了！（" & cardCount & "名分）"
+    If overflowAny Then msg = msg & Chr(13) & "※ 8種類を超えたカードは最終行に「（ほか N項目）」とまとめて表示しました。"
+    MsgBox msg, vbInformation
     Exit Sub
 ErrHandler:
-    MsgBox "エラー: " & Err.Description & Chr(13) & "行: " & Erl, vbExclamation
+    MsgBox "エラー: " & Err.Description, vbExclamation
 End Sub
 
+' 指定列の最大日付を返す（日付が1件も無ければ 0）
+Function MaxDateIn(ws As Worksheet, col As Long, r1 As Long, r2 As Long) As Date
+    Dim r As Long, v As Variant, m As Date
+    m = 0
+    For r = r1 To r2
+        v = ws.Cells(r, col).Value
+        If IsDate(v) Then
+            If CDate(v) > m Then m = CDate(v)
+        End If
+    Next r
+    MaxDateIn = m
+End Function
+
+' 減点理由/項目を正規化（段取り時間・計画達成率は%無視、5Sは全て1グループ）
+Function normItem(ByVal reason As String, ByVal itemNm As String) As String
+    If InStr(reason, "5S") > 0 Or InStr(itemNm, "5S") > 0 Then
+        normItem = "5S指摘"
+        Exit Function
+    End If
+    Dim base As String
+    base = itemNm
+    If InStr(itemNm, "段取り時間") > 0 Then base = "段取り時間"
+    If InStr(itemNm, "計画達成率") > 0 Then base = "計画達成率"
+    normItem = reason & " / " & base
+End Function
+
+' 波及元カウント辞書から最も件数の多い名前を返す
+Function topSrc(ByVal sd As Object) As String
+    Dim best As String, bestCnt As Long, sk As Variant
+    best = "": bestCnt = -1
+    For Each sk In sd.Keys
+        If sd(sk) > bestCnt Then
+            bestCnt = sd(sk)
+            best = CStr(sk)
+        End If
+    Next sk
+    topSrc = best
+End Function
+
+'--------------------------------------------------------------
+' 【翌月準備】前月分を「③控え_YYYY-MM」に複製して退避し、
+'   「③月次減点記録」を空にして当月用にする。
+'   ★重要：シート「③月次減点記録」は常に“当月”であり続ける。
+'   （カード更新・月次確定はこの名前のシートを見るため）
+'--------------------------------------------------------------
 Sub NextMonthPrep()
-    '【翌月準備】③シートをコピーして新月用シートを作成
-    Dim wsNew As Worksheet
-    Dim newName As String
-    newName = InputBox("新シート名を入力してください", "次月準備", "③月次減点記録_")
-    If newName = "" Then Exit Sub
-    ThisWorkbook.Sheets("③月次減点記録").Copy After:=ThisWorkbook.Sheets("③月次減点記録")
-    Set wsNew = ActiveSheet
-    wsNew.Name = newName
-    wsNew.Range("B5:N54").ClearContents
-    wsNew.Range("F57:K88").ClearContents
-    wsNew.Range("C2").ClearContents
-    wsNew.Range("I2").ClearContents
-    MsgBox "「" & newName & "」を作成しました。", vbInformation
+    Dim wsCur As Worksheet, wsArc As Worksheet, ws As Worksheet
+    Dim arcName As String
+    On Error GoTo ErrHandler
+    Set wsCur = ThisWorkbook.Sheets("③月次減点記録")
+
+    arcName = InputBox("いま入っているデータ（前月分）を控えとして残す名前を入力してください。" & Chr(13) & _
+                       "※「③月次減点記録」は空にして当月用になります。", _
+                       "次月準備", "③控え_" & Format(Date, "yyyy-mm"))
+    If arcName = "" Then Exit Sub
+
+    For Each ws In ThisWorkbook.Worksheets
+        If ws.Name = arcName Then
+            MsgBox "「" & arcName & "」というシートは既にあります。" & Chr(13) & _
+                   "別の名前にしてください。", vbExclamation
+            Exit Sub
+        End If
+    Next ws
+
+    Application.ScreenUpdating = False
+
+    ' 前月分を末尾に複製して控えにする
+    wsCur.Copy After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count)
+    Set wsArc = ActiveSheet
+    wsArc.Name = arcName
+
+    ' 控えに付いてきたボタンは誤操作防止のため削除
+    Dim si As Long
+    For si = wsArc.Shapes.Count To 1 Step -1
+        wsArc.Shapes(si).Delete
+    Next si
+
+    ' 当月シートを空にする（名前は「③月次減点記録」のまま）
+    wsCur.Range("B5:N254").ClearContents
+    wsCur.Range("F257:K288").ClearContents
+    wsCur.Range("C2:F2").ClearContents
+    wsCur.Range("I2:N2").ClearContents
+    wsCur.Activate
+    wsCur.Range("B5").Select
+
+    Application.ScreenUpdating = True
+    MsgBox "前月分を「" & arcName & "」に控えました。" & Chr(13) & Chr(13) & _
+           "「③月次減点記録」を空にしましたので、" & Chr(13) & _
+           "今月分の減点記録一覧と個人別集計を貼り付けてください。", vbInformation
+    Exit Sub
+ErrHandler:
+    Application.ScreenUpdating = True
+    MsgBox "エラー: " & Err.Description, vbExclamation
 End Sub
 
 Sub ConfirmMonth()
-    '【月次確定】⑤月次履歴DBに現月データを転記
     Dim ws3 As Worksheet, ws5 As Worksheet
     Set ws3 = ThisWorkbook.Sheets("③月次減点記録")
     Set ws5 = ThisWorkbook.Sheets("⑤月次履歴DB")
@@ -144,16 +292,23 @@ Sub ConfirmMonth()
     If monthNum < 1 Or monthNum > 6 Then MsgBox "1〜6を入力してください。": Exit Sub
     Dim targetCol As Integer
     targetCol = 5 + (monthNum - 1) * 3
+
+    ' 既に値が入っている月目への上書きは確認する（二重登録の防止）
+    If ws5.Cells(4, targetCol).Value <> "" Then
+        If MsgBox(monthNum & "月目には既にデータが入っています。" & Chr(13) & _
+                  "上書きしますか？", vbYesNo + vbExclamation, "確認") = vbNo Then Exit Sub
+    End If
+
     Dim i As Integer, r5 As Integer
     For i = 0 To 31
         Dim empNo As Variant
-        empNo = ws3.Cells(57 + i, 1).Value
+        empNo = ws3.Cells(257 + i, 1).Value
         If empNo = "" Then GoTo Continue
         For r5 = 4 To 35
             If ws5.Cells(r5, 1).Value = empNo Then
-                ws5.Cells(r5, targetCol).Value = ws3.Cells(57 + i, 9).Value
-                ws5.Cells(r5, targetCol + 1).Value = ws3.Cells(57 + i, 10).Value
-                ws5.Cells(r5, targetCol + 2).Value = ws3.Cells(57 + i, 11).Value
+                ws5.Cells(r5, targetCol).Value = ws3.Cells(257 + i, 9).Value
+                ws5.Cells(r5, targetCol + 1).Value = ws3.Cells(257 + i, 10).Value
+                ws5.Cells(r5, targetCol + 2).Value = ws3.Cells(257 + i, 11).Value
                 Exit For
             End If
         Next r5
