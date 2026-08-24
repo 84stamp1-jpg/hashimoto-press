@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
-<!-- H-Hub v2026.07.23-1 : 品質チェック一括振り分けで既実績(分納など)を取りこぼす問題を修正。製造番号/工順の照合をtrim+文字列比較に頑健化し、一括モードを開くとき記録を最新化する -->
+<!-- H-Hub v2026.08.24-1 : 予定インポートの「実績・稼働状況を維持」で、品番ごとの実績(actualCount/actualStart/actualEnd/status)が消えていた問題を修正。既存jobsから品番照合で実績を引き継ぐようにし、引き継げない品番がある場合は確認ダイアログで警告する -->
 <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 /* ===== スクロールバー常時表示 ===== */
@@ -11879,6 +11879,36 @@ window.savePlanEdit=async function(){
   }
 };
 
+// ジョブに実績が入っているか
+function _jobHasActual(j){
+  if(!j) return false;
+  return (Number(j.actualCount)||0)>0
+      || (j.actualStart&&j.actualStart!=='')
+      || (j.actualEnd&&j.actualEnd!=='')
+      || j.status==='done';
+}
+// 既存jobsの実績を、新しくインポートしたjobsへ品番照合で引き継ぐ。
+// 同じ品番が複数ある場合は出現順に1件ずつ引き当てる（先頭から消費）。
+function _mergeActualIntoJobs(oldJobs,newJobs){
+  const old=Array.isArray(oldJobs)?oldJobs:[];
+  const used=new Array(old.length).fill(false);
+  const key=v=>String(v==null?'':v).trim();
+  const merged=(newJobs||[]).map(nj=>{
+    const idx=old.findIndex((oj,i)=>!used[i]&&key(oj.part)===key(nj.part));
+    if(idx<0) return {...nj};
+    used[idx]=true;
+    const oj=old[idx];
+    return {...nj,
+      actualCount:Number(oj.actualCount)||0,
+      actualStart:oj.actualStart||'',
+      actualEnd  :oj.actualEnd||'',
+      status     :oj.status||'waiting'};
+  });
+  // 新しい計画に該当品番が無く、実績を引き継げなかったもの
+  const lost=old.filter((oj,i)=>!used[i]&&_jobHasActual(oj)).map(oj=>key(oj.part)||'(品番なし)');
+  return {merged,lost};
+}
+
 window.doImport=async function(){
   const gi=parseInt(document.getElementById('impGrp').value)||0;
   const g=groupCfg[gi]||groupCfg[0];
@@ -11890,10 +11920,37 @@ window.doImport=async function(){
   const totalJobs=activeIds.reduce((s,id)=>s+(_impParsedJobs[id]||[]).length,0);
   const lineNames=activeIds.map(id=>getLineName(id)).join('、')||'なし';
   const emptyNames=emptyIds.map(id=>getLineName(id)).join('、');
+
+  // 実績維持モードでは、書き込む前に既存実績とのマージ結果を作っておく
+  const mergedJobs={};      // lineId -> jobs
+  const lostWarn=[];        // 実績を引き継げない品番の警告
+  if(keepActual){
+    activeIds.forEach(lineId=>{
+      const cur=(lines[lineId]&&Array.isArray(lines[lineId].jobs))?lines[lineId].jobs:[];
+      const r=_mergeActualIntoJobs(cur,_impParsedJobs[lineId]);
+      mergedJobs[lineId]=r.merged;
+      if(r.lost.length) lostWarn.push('・'+getLineName(lineId)+'：'+r.lost.join('、'));
+    });
+    // データなし→クリア対象のラインに実績が残っている場合も警告
+    emptyIds.forEach(lineId=>{
+      const cur=(lines[lineId]&&Array.isArray(lines[lineId].jobs))?lines[lineId].jobs:[];
+      const l=lines[lineId]||{};
+      if(cur.some(_jobHasActual)||(Number(l.actual)||0)>0){
+        lostWarn.push('・'+getLineName(lineId)+'：ライン全体（今回のExcelにデータなし）');
+      }
+    });
+  }
+
   const confirmMsg=`【インポート】${lineNames}　合計${totalJobs}件\n`
     +(emptyNames?`【データなし→クリア】${emptyNames}\n`:'')
     +'\n'+(keepActual
-      ? '✅ 実績・稼働状況を維持したまま、生産計画のみ上書きします。\nよろしいですか？'
+      ? '✅ 実績・稼働状況を維持したまま、生産計画のみ上書きします。\n'
+        +(lostWarn.length
+          ? '\n⚠️ 次の品番は新しい計画に見当たらないため、実績を引き継げません。\n'
+            +'（消えて困る場合は、キャンセルして計画に品番を残してください）\n'
+            +lostWarn.join('\n')+'\n'
+          : '')
+        +'\nよろしいですか？'
       : '既存の計画データ・実績はすべて上書きされます。よろしいですか？');
   if(!confirm(confirmMsg)) return;
   const btn=document.getElementById('impBtn');
@@ -11903,15 +11960,19 @@ window.doImport=async function(){
   try{
     const updates={};
     if(keepActual){
-      // 実績維持モード: jobs・plan のみ部分更新、actual/status/workStart/workEnd は触らない
+      // 実績維持モード: ライン側の actual/status/workStart/workEnd は触らず、
+      // jobs は「既存の品番ごとの実績を引き継いだもの」で置き換える
       activeIds.forEach(lineId=>{
-        const jobs=_impParsedJobs[lineId];
+        const jobs=mergedJobs[lineId]||_impParsedJobs[lineId];
         const totalPlan=jobs.reduce((s,j)=>s+j.plan,0);
         updates['lines/'+lineId+'/jobs'] = jobs;
         updates['lines/'+lineId+'/plan'] = totalPlan;
-        updates['lines/'+lineId+'/part'] = jobs[0]?.part||'';
+        // 稼働中の品番があればそれを残す（無ければ先頭）
+        const curPart=(lines[lineId]||{}).part||'';
+        const keepPart=jobs.some(j=>String(j.part||'').trim()===String(curPart).trim())?curPart:(jobs[0]?.part||'');
+        updates['lines/'+lineId+'/part'] = keepPart;
       });
-      // データなしライン: jobs・plan のみクリア（実績は維持）
+      // データなしライン: jobs・plan のみクリア（ライン実績は維持）
       emptyIds.forEach(lineId=>{
         updates['lines/'+lineId+'/jobs'] = [];
         updates['lines/'+lineId+'/plan'] = 0;
