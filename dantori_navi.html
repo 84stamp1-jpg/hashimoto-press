@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
-<!-- H-Hub v2026.08.24-1 : 予定インポートの「実績・稼働状況を維持」で、品番ごとの実績(actualCount/actualStart/actualEnd/status)が消えていた問題を修正。既存jobsから品番照合で実績を引き継ぐようにし、引き継げない品番がある場合は確認ダイアログで警告する -->
+<!-- H-Hub v2026.08.26-1 : 進捗管理ボードの2件を修正。(1)「計画修正(実績を維持したまま変更)」が実績を actual という誤ったフィールド名で見ており、保存後にキャッシュから actualCount/status が欠落→2回目の保存で実績が消えていた。実績バッジが常に「未実施」表示・行削除の警告も出ない状態だった。(2)並行生産や同名品番で、別の行を完了しただけで他行まで完了扱いになる問題。ライン単位の part 一致で現在行を探していたのをやめ、lines/<id>/curSeq(行番号)を正として curJobIndex() 1か所で判定するようにした -->
 <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 /* ===== スクロールバー常時表示 ===== */
@@ -9406,6 +9406,40 @@ function getLineName(id){return lineNamesMap[id]||lines[id]?.name||id;}
 
 const SDEFS={A1:45,A2:45,B1:60,B2:45,BP2:45,CP3:45,CP3_2:45};
 let lines={},sets={...SDEFS};
+
+/* ===== 現在稼働行の特定（2026-08-26 追加）=====================================
+   従来は「ライン単位の part（現在品番）」で行を探していたため、
+   ・同じ品番が計画に2行あると必ず先頭がヒットしてしまう
+   ・並行生産（1行目と3行目を同時に流す）を表現できない
+   という問題があった。そこで行番号 seq を正として lines/<id>/curSeq に持たせ、
+   ここ1か所で解決する。curSeq が無い旧データは従来ロジックで推定する。      */
+function curJobIndex(l){
+  const jobs=(l&&Array.isArray(l.jobs))?l.jobs:[];
+  if(!jobs.length) return -1;
+  const cs=Number(l&&l.curSeq)||0;
+  if(cs>0){
+    const i=jobs.findIndex(j=>Number(j.seq)===cs);
+    if(i>=0) return i;
+  }
+  const part=(l&&l.part)||'', ws=(l&&l.workStart)||'';
+  let i=ws?jobs.findIndex(j=>j.part===part&&j.actualStart===ws):-1;
+  if(i<0) i=jobs.findIndex(j=>j.part===part&&j.status==='running');
+  if(i<0) i=jobs.findIndex(j=>j.part===part&&j.plan>0);
+  if(i<0) i=jobs.findIndex(j=>j.part===part);
+  return i;
+}
+function curJob(l){ const i=curJobIndex(l); return i>=0?l.jobs[i]:null; }
+/* 計画を入れ替えたあと、稼働中だった行が新計画のどの seq になるかを求める。
+   品番で引き当て、見つからなければ 0（＝未設定）を返す。 */
+function remapCurSeq(oldJobs,newJobs,l){
+  const oi=curJobIndex({...(l||{}),jobs:oldJobs||[]});
+  if(oi<0) return 0;
+  const oj=(oldJobs||[])[oi];
+  if(!oj) return 0;
+  const key=v=>String(v==null?'':v).trim();
+  const ni=(newJobs||[]).findIndex(j=>key(j.part)===key(oj.part));
+  return ni>=0?(Number(newJobs[ni].seq)||ni+1):0;
+}
 // 段取り時間の内訳（片付けC分＋準備P分）per lineId
 let setupParams={}; // { lineId: { c:前作業片付け分, p:次作業準備分 } }
 
@@ -9498,9 +9532,7 @@ function calcLineRate(l){
 
   // 現在稼働中jobを特定（関数外で一度だけ計算）
   const curActiveJob=(function(){
-    let ci=jobs.findIndex(jj=>jj.part===l.part&&l.workStart&&jj.actualStart===l.workStart);
-    if(ci<0) ci=jobs.findIndex(jj=>jj.part===l.part&&jj.status==='running');
-    if(ci<0) ci=jobs.findIndex(jj=>jj.part===l.part&&jj.plan>0);
+    const ci=curJobIndex({...l,jobs:jobs});
     return ci>=0?jobs[ci]:null;
   })();
 
@@ -9620,7 +9652,10 @@ function getProRata(l){
   const sm=timeToMin(j.start),em=timeToMin(j.end);
   if(!sm||!em||em===sm) return null;
   // 作業終了済み（jobレベル）→ null（表示しない）
-  const jobDone=j.status==='done'||(j.actualEnd&&j.actualEnd!=='')||(l.workEnd&&l.workEnd!==''&&l.part===j.part);
+  // ★完了はその行自身の状態だけで判定する（2026-08-26）。
+  //   以前は「ラインのworkEndがあり、ラインのpartと品番が一致」も完了扱いにしていたため、
+  //   並行生産や同名品番があると、別の行を完了しただけで巻き込まれて完了になっていた。
+  const jobDone=j.status==='done'||(j.actualEnd&&j.actualEnd!=='');
   if(jobDone) return{proRata:null,phase:'done'};
   // 未開始 → null（表示しない）
   if(nowMin<sm) return{proRata:null,phase:'before'};
@@ -9701,12 +9736,7 @@ function renderBoard(){
     const pr=s.pr||getProRata(l);
     const pv=pr&&pr.proRata>0?pr.proRata:0;
     // 現在品番のjobからactualCountを取得（lineレベルに依存しない）
-    const _curJob2=(l.jobs||[]).find(function(j){
-      if(!j.plan||j.part!==l.part) return false;
-      if(l.workStart&&j.actualStart===l.workStart) return true;
-      if(j.status==='running') return true;
-      return false;
-    })||(l.jobs||[]).find(j=>j.part===l.part&&j.plan>0);
+    const _curJob2=curJob(l);
     const partActual=_curJob2?((_curJob2.actualCount)||0):(l.actual||0);
     const proRataDisp=pv>0?pv.toLocaleString()+'個':'';
     // 達成率（入力時点の目標CT個数比・全て統一）
@@ -9820,9 +9850,7 @@ function renderBoard(){
       sched='<div class="sched">';
       // 現在稼働中jobのインデックスを特定（品番+開始時刻）
       // 現在稼働中jobを特定（workStartが一致するjob優先）
-      var curJobIdx=jobs.findIndex(function(j){return j.part===l.part&&l.workStart&&j.actualStart===l.workStart;});
-      if(curJobIdx<0) curJobIdx=jobs.findIndex(function(j){return j.part===l.part&&j.status==='running';});
-      if(curJobIdx<0) curJobIdx=jobs.findIndex(function(j){return j.part===l.part;});
+      var curJobIdx=curJobIndex({...l,jobs:jobs});
       jobs.forEach(function(j,jIdx){
         if(j.history&&j.status==='history'){
           // 履歴品番（計画から削除されたが実績あり）
@@ -10093,7 +10121,7 @@ function isSetupWaiting(l){
   const jobs=(l.jobs||[]).filter(j=>!j.history&&j.plan>0&&j.start&&j.end);
   if(!jobs.length) return false;
   // 現品番 job を特定
-  let curJi=jobs.findIndex(j=>j.part===l.part);
+  let curJi=curJobIndex({...l,jobs:jobs});
   if(curJi<=0) return false; // 先頭品番または見つからない場合は対象外
   const curJob=jobs[curJi];
   if(curJob.actualStart&&curJob.actualStart!=='') return false; // 既に開始済み
@@ -10617,10 +10645,7 @@ function restoreJobFields(lineId, partVal, startVal, seqVal){
   const isCurPart=(l.part===partVal&&(!startVal||!job||job.start===startVal||(l.jobs||[]).findIndex(j=>j.part===l.part)===((l.jobs||[]).findIndex(j=>j.part===partVal&&(!startVal||j.start===startVal)))));
   // 現在のlineレベルのデータがこのjobのものか判定
   // workStartで現在稼働中jobを特定
-  const curWS3=lines[lineId]?.workStart||'';
-  let activeCurIdx=curWS3?(l.jobs||[]).findIndex(j=>j.part===l.part&&j.actualStart===curWS3):-1;
-  if(activeCurIdx<0) activeCurIdx=(l.jobs||[]).findIndex(j=>j.status==='running'&&j.part===l.part);
-  if(activeCurIdx<0) activeCurIdx=(l.jobs||[]).findIndex(j=>j.part===l.part&&j.plan>0);
+  const activeCurIdx=curJobIndex(lines[lineId]||l);
   const selJobIdx=(l.jobs||[]).indexOf(job);
   const isActivePart=selJobIdx>=0&&selJobIdx===activeCurIdx;
   const actVal=isActivePart?(l.actual>0?l.actual:''):(job&&job.actualCount>0?job.actualCount:'');
@@ -10761,20 +10786,16 @@ window.doSub=function(){
     const curJobs=[...(lines[id]?.jobs||[])];
     // job更新からlineレベルへの同期用一時変数
     let _syncActual=null,_syncWS=null,_syncWE=null,_syncSS=null,_syncSE=null;
-    let _restorePart=null,_restoreWS=null;
+    let _restorePart=null,_restoreWS=null,_restoreSeq=null,_newCurSeq=null;
 
     // seqで選択したjobを特定（同名品番対応）
     const selJi=selSeq>0
       ?curJobs.findIndex(j=>j.seq===selSeq&&j.part===part)
       :curJobs.findIndex(j=>j.part===part&&(!selStart||j.start===selStart));
 
-    // 現在稼働中のjobインデックスを特定（lineレベルのpart+現在のjobsから）
+    // 現在稼働中のjobインデックスを特定（curSeq優先。旧データは従来ロジックで推定）
     const curLinePart=lines[id]?.part||'';
-    const curLineStart=lines[id]?.workStart||'';
-    // 現在品番のjobを特定：workStartが一致するjob、なければpart名だけで
-    let curJi=curJobs.findIndex(j=>j.part===curLinePart&&curLineStart&&j.actualStart===curLineStart);
-    if(curJi<0) curJi=curJobs.findIndex(j=>j.part===curLinePart&&j.status==='running');
-    if(curJi<0) curJi=curJobs.findIndex(j=>j.part===curLinePart);
+    const curJi=curJobIndex({...(lines[id]||{}),jobs:curJobs});
 
     // 選択したjobを更新
     if(selJi>=0){
@@ -10840,13 +10861,21 @@ window.doSub=function(){
       };
       // lineレベルに反映
       // 選択jobが現在品番と同じ、またはweが空（終了取り消し）の場合は常に同期
-      if(selJi===curJi||curJobs[selJi].part===curLinePart){
+      // ★同期は「選択した行が、いま稼働中の行そのもの」のときだけ（2026-08-26）。
+      //   以前は品番一致でも同期していたため、同名品番や並行生産で別の行の
+      //   実績・終了時刻がライン側に書き込まれていた。
+      if(selJi===curJi){
         _syncActual=actVal; _syncWS=ws; _syncWE=we; _syncSS=ss; _syncSE=se;
       }
       // weが空で再保存＝作業終了取り消し：l.partをこのjobに戻す
       if((!we||we==='')&&newStatus==='running'){
         _restorePart=curJobs[selJi].part;
         _restoreWS=ws;
+        _restoreSeq=Number(curJobs[selJi].seq)||(selJi+1);
+      }
+      // 稼働開始した行を「いま稼働中の行」として記録（稼働中の行が無い場合も引き受ける）
+      if(newStatus==='running'&&(curJi<0||selJi===curJi||!(lines[id]||{}).curSeq)){
+        _newCurSeq=Number(curJobs[selJi].seq)||(selJi+1);
       }
     }
 
@@ -10860,22 +10889,24 @@ window.doSub=function(){
       upd.workStart=_restoreWS;
       upd.workEnd='';
       upd.actual=isNaN(actual)?0:actual;
+      if(_restoreSeq) upd.curSeq=_restoreSeq;
     }
+    if(_newCurSeq!==null&&upd.curSeq===undefined) upd.curSeq=_newCurSeq;
     if(prevT>0){upd.prevActual=prevA;upd.prevUpdatedAt=prevT;upd.prev2Actual=prev2A;upd.prev2UpdatedAt=prev2T;}
     if(!isNaN(plan))upd.plan=plan;
     if(setupMin!==null)upd.setupMin=setupMin;
 
-    // 作業終了→次品番に切替（選択jobが終了した場合）
-    if(selJi>=0&&we&&we!==''){
+    // 作業終了→次品番に切替（★いま稼働中の行そのものが終了した場合だけ・2026-08-26）
+    if(selJi>=0&&we&&we!==''&&selJi===curJi){
       const activeJobs=curJobs.filter(j=>j.plan>0&&!j.history);
       const activeSelIdx=activeJobs.findIndex(j=>j===curJobs[selJi]);
-      // 現在稼働中jobが終了した場合のみ次品番に切替
-      const _linePart=lines[id]?.part||'';
-      const _lineWS=lines[id]?.workStart||'';
-      if(activeSelIdx>=0&&activeSelIdx===activeJobs.findIndex(j=>j.part===_linePart&&(!_lineWS||j.actualStart===_lineWS||j.status==='running'))){
-        if(activeSelIdx<activeJobs.length-1){
-          const nj=activeJobs[activeSelIdx+1];
+      if(activeSelIdx>=0&&activeSelIdx<activeJobs.length-1){
+        // まだ終わっていない次の行へ移す（並行生産で先に終えた行を飛ばさない）
+        const nj=activeJobs.slice(activeSelIdx+1)
+          .find(j=>j.status!=='done'&&!(j.actualEnd&&j.actualEnd!==''));
+        if(nj){
           upd.part=nj.part;
+          upd.curSeq=Number(nj.seq)||0;
           upd.actual=0;
           upd.workStart='';
           upd.workEnd='';
@@ -11760,10 +11791,23 @@ function _renderPeAllTables(ids){
   container.style.display='block';
 }
 
+// jobの実績数。実績はjobs要素の actualCount に入る（旧データ互換で actual も見る）
+function _jobActualCount(j){
+  if(!j) return 0;
+  const v = (j.actualCount!=null?j.actualCount:j.actual);
+  return Number(v)||0;
+}
+function _jobHasActualData(j){
+  return _jobActualCount(j)>0
+      || (j&&j.actualStart&&j.actualStart!=='')
+      || (j&&j.actualEnd&&j.actualEnd!=='')
+      || (j&&j.status==='done');
+}
+
 function _buildPeRow(j,origJi,rowNum,lineId){
-  const hasActual=(j.actual>0)||(j.actualStart&&j.actualStart!=='');
+  const hasActual=_jobHasActualData(j);
   const actBadge=hasActual
-    ?`<span class="pe-act has">✓ ${j.actual||0}個${j.actualStart?' / '+j.actualStart:''}</span>`
+    ?`<span class="pe-act has">✓ ${_jobActualCount(j)}個${j.actualStart?' / '+j.actualStart:''}</span>`
     :`<span class="pe-act none">未実施</span>`;
   return `<tr class="pe-row" data-origji="${origJi}" data-lineid="${lineId}">
     <td style="color:#bbb;font-size:10px;text-align:center;">${rowNum}</td>
@@ -11805,7 +11849,7 @@ window.removePeRow=function(btn){
   const origJi=parseInt(row.dataset.origji);
   const lineId=row.dataset.lineid;
   const oj=(origJi>=0&&_peAllLines[lineId])?_peAllLines[lineId][origJi]:null;
-  const hasActual=oj&&((oj.actual>0)||(oj.actualStart&&oj.actualStart!==''));
+  const hasActual=_jobHasActualData(oj);
   if(hasActual&&!confirm('この品番には実績データが入力されています。\n削除すると実績データも失われます。続けますか？')) return;
   row.remove();
   const tbody=document.querySelector(`.pe-body[data-lineid="${lineId}"]`);
@@ -11856,6 +11900,8 @@ window.savePlanEdit=async function(){
       const totalPlan=mergedJobs.reduce((s,j)=>s+j.plan,0);
       updates['lines/'+lineId+'/jobs']=mergedJobs;
       updates['lines/'+lineId+'/plan']=totalPlan;
+      // 行を入れ替えても「いま稼働中の行」を見失わないよう seq を貼り直す
+      updates['lines/'+lineId+'/curSeq']=remapCurSeq(origJobs,mergedJobs,lines[lineId]||{});
     });
     await update(ref(db),updates);
     const gi=parseInt(document.getElementById('peGrp')?.value)||0;
@@ -11865,13 +11911,27 @@ window.savePlanEdit=async function(){
     sections.forEach(sec=>{
       const lineId=sec.dataset.lineid;
       const rows=sec.querySelectorAll('.pe-row');
-      const newJobs=[...rows].map(row=>{
+      // ★保存後のキャッシュは「元のjobをそのまま残して編集値だけ上書き」する。
+      //   以前はここで一部フィールドだけを拾い直しており、actualCount/status/kata/ninzu/hito/seq が
+      //   欠落していた。その状態で2回目の保存をすると実績が消えていた（2026-08-26修正）。
+      const newJobs=[...rows].map((row,ri)=>{
         const origJi=parseInt(row.dataset.origji);
         const oj=(origJi>=0&&(_peAllLines[lineId]||[])[origJi])?_peAllLines[lineId][origJi]:{};
         const inps=row.querySelectorAll('.pe-inp');
-        return {part:inps[0].value.trim(),plan:parseInt(inps[1].value)||0,start:inps[2].value,end:inps[3].value,noSetup:row.querySelector('input[type="checkbox"]').checked,actual:oj.actual||0,actualStart:oj.actualStart||'',actualEnd:oj.actualEnd||'',setupActualMin:oj.setupActualMin||0,prevActual:oj.prevActual||0};
+        return {
+          ...oj,
+          seq:   ri+1,
+          part:  inps[0].value.trim(),
+          plan:  parseInt(inps[1].value)||0,
+          start: inps[2].value,
+          end:   inps[3].value,
+          noSetup: row.querySelector('input[type="checkbox"]').checked,
+          hito:  parseInt(inps[4]?.value)||oj.hito||0,
+        };
       });
       _peAllLines[lineId]=newJobs;
+      // 行と元データの対応も貼り直す（次の保存で origji がズレないように）
+      [...rows].forEach((row,ri)=>{ row.dataset.origji=String(ri); });
     });
     setTimeout(()=>{if(pemsg)pemsg.textContent='';},4000);
   }catch(e){
@@ -11971,6 +12031,9 @@ window.doImport=async function(){
         const curPart=(lines[lineId]||{}).part||'';
         const keepPart=jobs.some(j=>String(j.part||'').trim()===String(curPart).trim())?curPart:(jobs[0]?.part||'');
         updates['lines/'+lineId+'/part'] = keepPart;
+        // 稼働中だった行が新計画のどの seq になるかを引き継ぐ
+        const oldJobs=(lines[lineId]&&Array.isArray(lines[lineId].jobs))?lines[lineId].jobs:[];
+        updates['lines/'+lineId+'/curSeq'] = remapCurSeq(oldJobs,jobs,lines[lineId]||{});
       });
       // データなしライン: jobs・plan のみクリア（ライン実績は維持）
       emptyIds.forEach(lineId=>{
@@ -11983,7 +12046,7 @@ window.doImport=async function(){
       activeIds.forEach(lineId=>{
         const jobs=_impParsedJobs[lineId];
         const totalPlan=jobs.reduce((s,j)=>s+j.plan,0);
-        updates['lines/'+lineId]={jobs,plan:totalPlan,actual:0,part:jobs[0]?.part||'',status:'waiting',updatedAt:0,workStart:'',workEnd:''};
+        updates['lines/'+lineId]={jobs,plan:totalPlan,actual:0,part:jobs[0]?.part||'',status:'waiting',updatedAt:0,workStart:'',workEnd:'',curSeq:0};
       });
       // データなしラインはフィールドを個別に上書きクリア（実績・ペース等も含む）
       emptyIds.forEach(lineId=>{
@@ -11997,6 +12060,7 @@ window.doImport=async function(){
         updates['lines/'+lineId+'/updatedAt']      = 0;
         updates['lines/'+lineId+'/prevUpdatedAt']  = 0;
         updates['lines/'+lineId+'/prev2UpdatedAt'] = 0;
+        updates['lines/'+lineId+'/curSeq']         = 0;
       });
     }
     await update(ref(db),updates);
@@ -13122,8 +13186,11 @@ async function apPushToProgress() {
   } catch(e) { existingData = {}; }
 
   // 既存の実績データがあるか確認
+  // 実績は jobs要素の actualCount に入る。旧データ互換で actual も見る（2026-08-26修正）
   const hasActual = Object.values(existingData).some(line =>
-    Array.isArray(line?.jobs) && line.jobs.some(j => (j.actual||0) > 0 || j.actualStart)
+    Array.isArray(line?.jobs) && line.jobs.some(j =>
+      (Number(j.actualCount!=null?j.actualCount:j.actual)||0) > 0
+      || j.actualStart || j.actualEnd || j.status==='done')
   );
 
   // 更新モードを選択（実績があれば選択ダイアログ、なければそのまま上書き）
