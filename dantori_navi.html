@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.02-7 : 作業者交代の「入:」候補が全作業者だったため、その時間に他の工程へ入っている人も選べてしまい、ダブルブッキングを作り込めた。getBusyWorkersInRange() を追加し(交代区間・段取り役割も考慮)、交代行ごとに候補を作り直すようにした。入:はその時間に空いている人だけ、退:はこの工程の現在の作業者だけを候補にする。既に埋まっている人が入力されている場合は行の下に⚠でどの工程と重なるかを表示する -->
 <!-- H-Hub v2026.09.02-6 : 配置表で同じ作業者が同じ時間に2つ以上の工程へ入っていると、バーが同じ座標(top:5px固定)に描かれて完全に重なり、1本しか見えなかった。作業者交代で入った人が「追加されていない」ように見える原因になっていた。バーの座標を先に集めてから、時間が重なるものに段(lane)を割り当てて縦に並べ、トラックの高さもそれに合わせて広げるようにした。2段以上になった作業者には名前の横に⚠N重バッジを出す -->
 <!-- H-Hub v2026.09.02-5 : 配置表のバー編集ポップアップは「その工程まるごと」の担当設定なので、工程の途中から別の作業者に替えることができなかった。時間で割る仕組み(段取り計画の「⏱作業者交代」)は以前からあるが、配置表からは辿り着けなかったため、ポップアップに「⏱ 時間で区切る」ボタンを追加。押すとその工程の段取り計画編集画面が開き、交代行が無ければ空行を1つ用意して交代欄までスクロールする -->
 <!-- H-Hub v2026.09.02-4 : 配置表のバー担当者編集で、作業者チップを押すとポップアップが閉じ、選択の追加も解除もできなかった。rtToggleWorker が rt-ep-inner を innerHTML で作り直すため、押したチップ自体がDOMから外れ、そのあと document の外クリック判定 !p.contains(e.target) が真になって rtCloseEntryEdit() が走っていた。チップの onclick に event を渡して stopPropagation() し、外クリック判定側でも e.target.isConnected===false の要素は「外」と扱わないようにした -->
@@ -2662,7 +2663,8 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
             </button>
           </div>
           <div id="dt-shift-container" style="display:flex;flex-direction:column;gap:4px;"></div>
-          <div style="font-size:10px;color:#94a3b8;margin-top:3px;">交代時刻と交代後の作業者を設定します。複数回の交代も登録できます。</div>
+          <div style="font-size:10px;color:#94a3b8;margin-top:3px;">交代時刻と交代後の作業者を設定します。複数回の交代も登録できます。<br>
+            <b>「入:」の候補には、その時間に空いている人だけが出ます</b>（他の工程に入っている人は候補から外れます）。</div>
         </div>
       </div>
     </div>
@@ -5665,6 +5667,70 @@ function onDtNoSetupChange(){
 }
 
 // ===== 作業者交代 =====
+// 分 → "HH:MM"
+function _m2t(m){ return String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0'); }
+
+// 指定した時間帯に、他の工程で既に埋まっている作業者を返す（Map: 名前 → 何で埋まっているか）
+// 編集中の工程(excludeId)は除く。作業者交代で入った分も考慮する。
+function getBusyWorkersInRange(startMin, endMin, excludeId){
+  const busy = new Map();
+  if(startMin === null || endMin === null || endMin <= startMin) return busy;
+  (dantoriSchedule||[]).forEach(e => {
+    if(!e || e._id === excludeId) return;
+    const label = `${getLineDisplayName(e.lineId)}（${e.partNo||'品番不明'}）`;
+    // 生産：交代を反映した区間ごとに見る
+    buildShiftRanges(e).forEach(r => {
+      if(r.start === null || r.end === null) return;
+      if(r.end <= startMin || r.start >= endMin) return;   // 重ならない
+      r.workers.forEach(w => { if(w && !busy.has(w)) busy.set(w, `${label} ${_m2t(r.start)}〜${_m2t(r.end)}`); });
+    });
+    // 段取り：金型取付・品質確認・初品出し
+    const sm = rt_toMin(e.setupStart), ps = rt_toMin(e.prodStart);
+    if(sm !== null && ps !== null && ps > sm && !(ps <= startMin || sm >= endMin)){
+      const r = e.roles || {};
+      [...(r.金型取付||'').split(/[,、]/), r.品質確認, r.初品出し]
+        .map(x => (x||'').trim()).filter(Boolean)
+        .forEach(w => { if(!busy.has(w)) busy.set(w, `${label} 段取り ${e.setupStart}〜${e.prodStart}`); });
+    }
+  });
+  return busy;
+}
+
+// 交代1行ぶんの候補を作り直す。
+//   入場者 … その時間帯に空いている人だけを候補に出す（埋まっている人は飛ばす）
+//   退場者 … いまこの工程に入っている作業者だけを候補に出す
+function refreshShiftCandidates(row){
+  if(!row) return;
+  const uid  = row.dataset.chipId;
+  const from = rt_toMin(row.querySelector('.sc-time').value);
+  const peEl = document.getElementById('dt-prod-end');
+  const to   = rt_toMin(row.querySelector('.sc-end').value) ?? rt_toMin(peEl ? peEl.value : '');
+  // 退場者の候補＝この工程の現在の作業者
+  const outDl = document.getElementById('sc-dl-out-' + uid);
+  if(outDl) outDl.innerHTML = chipGetValues('chip-wrap-worker')
+    .map(n => `<option value="${n}"></option>`).join('');
+  // 入場者の候補＝その時間帯に空いている人
+  const inDl = document.getElementById('sc-dl-in-' + uid);
+  const warn = row.querySelector('.sc-busy');
+  if(!inDl) return;
+  if(from === null || to === null || to <= from){
+    inDl.innerHTML = getPressWorkerList().map(n => `<option value="${n}"></option>`).join('');
+    if(warn) warn.textContent = '';
+    return;
+  }
+  const busy = getBusyWorkersInRange(from, to, editingDantoriId);
+  const free = getPressWorkerList().filter(n => !busy.has(n));
+  inDl.innerHTML = free.map(n => `<option value="${n}"></option>`).join('');
+  // 既に入っている名前が埋まっている人なら知らせる（入力自体は止めない）
+  const cur = (row.querySelector('.sc-in').value||'').trim();
+  if(warn){
+    warn.textContent = (cur && busy.has(cur))
+      ? `⚠ ${cur} は ${busy.get(cur)} と重なります`
+      : (free.length ? '' : '⚠ この時間に空いている人がいません');
+    warn.style.color = '#dc2626';
+  }
+}
+
 let _scIdx = 0; // 交代行チップIDの連番
 function addShiftChange(time='', outWorker='', inWorker='', endTime=''){
   const container = document.getElementById('dt-shift-container');
@@ -5677,23 +5743,29 @@ function addShiftChange(time='', outWorker='', inWorker='', endTime=''){
     <span style="font-size:10px;color:#6366f1;white-space:nowrap;font-weight:600;">⏱ 交代</span>
     <input type="time" class="sc-time" value="${time}"
       style="border:1px solid #ddd;border-radius:4px;padding:3px 6px;font-size:12px;width:84px;"
-      oninput="validateShiftTime(this)">
+      oninput="validateShiftTime(this);refreshShiftCandidates(this.closest('.sc-row'))">
     <span style="font-size:10px;color:#94a3b8;white-space:nowrap;">〜</span>
     <input type="time" class="sc-end" value="${endTime}" title="終了時間（空欄=終わりまで）"
       style="border:1px solid #ddd;border-radius:4px;padding:3px 6px;font-size:12px;width:84px;background:#fafafa;"
-      placeholder="終了(任意)">
+      placeholder="終了(任意)" oninput="refreshShiftCandidates(this.closest('.sc-row'))">
     <span style="font-size:9px;color:#94a3b8;white-space:nowrap;">(任意)</span>
     <span style="font-size:10px;color:#dc2626;white-space:nowrap;font-weight:600;">退:</span>
-    <input list="staffDatalist-press" class="sc-out" value="${outWorker}" placeholder="退場者(任意)"
+    <input list="sc-dl-out-${uid}" class="sc-out" value="${outWorker}" placeholder="退場者(任意)"
       style="border:1px solid #fca5a5;border-radius:4px;padding:3px 6px;font-size:12px;width:90px;background:#fff5f5;">
+    <datalist id="sc-dl-out-${uid}"></datalist>
     <span style="font-size:12px;color:#64748b;">→</span>
     <span style="font-size:10px;color:#16a34a;white-space:nowrap;font-weight:600;">入:</span>
-    <input list="staffDatalist-press" class="sc-in" value="${inWorker}" placeholder="入場者"
-      style="border:1px solid #86efac;border-radius:4px;padding:3px 6px;font-size:12px;width:90px;background:#f0fdf4;">
+    <input list="sc-dl-in-${uid}" class="sc-in" value="${inWorker}" placeholder="入場者(空いている人)"
+      title="この時間に空いている作業者だけが候補に出ます"
+      style="border:1px solid #86efac;border-radius:4px;padding:3px 6px;font-size:12px;width:110px;background:#f0fdf4;"
+      oninput="refreshShiftCandidates(this.closest('.sc-row'))">
+    <datalist id="sc-dl-in-${uid}"></datalist>
     <button type="button" onclick="removeShiftChange(this)"
       style="font-size:13px;color:#dc2626;background:none;border:none;cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0;">✕</button>
+    <div class="sc-busy" style="flex-basis:100%;font-size:10px;color:#dc2626;font-weight:600;"></div>
   `;
   container.appendChild(row);
+  refreshShiftCandidates(row);
 }
 function removeShiftChange(btn){ btn.closest('.sc-row').remove(); }
 function validateShiftTime(input){
