@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.02-2 : 「段取り計画だけ作る」でグループを切り替えて連続取込すると、先に取り込んだ他グループの計画が消えていた。_mergePlanEntries は「entriesが全ラインを網羅している」前提(linesからの同期用)で、entriesに無い計画エントリを落とす作りだったため。第4引数 scopeLineIds を追加し、指定されたラインだけを置き換え、対象外ラインの計画は残すようにした。インポートは選択中グループのラインのみをscopeとして渡す(同期側は従来どおり全置換) -->
 <!-- H-Hub v2026.09.02-1 : 段取り指示タブを日付切替に対応。(1)getDantoriDatePath()が今日決め打ちだったため段取り計画は当日分しか作れなかった。表示日(DANTORI_VIEW_DATE)を持たせ、日付入力＋「今日/明日」ボタンで切り替えられるようにした。(2)進捗管理ボード(lines)は日付を持たない当日の状態なので、linesからの同期(自動同期・今すぐ同期)は常に「今日」へ書くよう固定し、本日以外を表示中は「今すぐ同期」を無効化した(今日の計画を別日に書く事故の防止)。(3)生産予定インポートに「📅 段取り計画だけ作る(対象日指定)」を追加。Excelのパース結果から dantori/<日付> だけを作り、linesには書き込まないため当日の実績が壊れない。前日夕方に翌日分を仕込める。(4)段取り標準時間設定の計算式表記に括弧が抜けており「C×人数＋P×型数÷人数」と読めていた。実装は (C×人数＋P×型数)÷人数 ＝ C＋P×型数÷人数 なので表記を修正し、片付けは人数で短縮されない／準備は型数を人数で分担できる、という意味も添えた -->
 <!-- H-Hub v2026.08.26-1 : 進捗管理ボードの2件を修正。(1)「計画修正(実績を維持したまま変更)」が実績を actual という誤ったフィールド名で見ており、保存後にキャッシュから actualCount/status が欠落→2回目の保存で実績が消えていた。実績バッジが常に「未実施」表示・行削除の警告も出ない状態だった。(2)並行生産や同名品番で、別の行を完了しただけで他行まで完了扱いになる問題。ライン単位の part 一致で現在行を探していたのをやめ、lines/<id>/curSeq(行番号)を正として curJobIndex() 1か所で判定するようにした -->
 <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -6994,7 +6995,12 @@ function _debouncedDantoriAutoSync(){
 
 // 既存のplanエントリ(fromPlan)を lineId+partNo+prodStart で照合し
 // roles・stdSetupMin・Firebaseキーを引き継いでマージする共通処理
-function _mergePlanEntries(entries, existing, dateStr){
+//
+// scopeLineIds … 省略時は「entriesが全ラインを網羅している」前提で、
+//   entriesに無い計画エントリは消える（＝linesからの同期の挙動）。
+//   Setを渡すと、そこに含まれないラインの計画エントリはそのまま残す。
+//   Excelインポートはグループ単位なので、他グループを消さないために使う。
+function _mergePlanEntries(entries, existing, dateStr, scopeLineIds){
   // 既存planエントリをキーでインデックス化
   const existMap = {};
   Object.entries(existing).forEach(([id, v]) => {
@@ -7008,6 +7014,13 @@ function _mergePlanEntries(entries, existing, dateStr){
   Object.entries(existing).forEach(([id, v]) => {
     if(v && v.isManual === true) newData[id] = v;
   });
+  // ★対象ラインが指定されているときは、対象外ラインの計画エントリも残す
+  //   （グループ単位のインポートで、先に取り込んだ他グループを消さないため）
+  if(scopeLineIds && scopeLineIds.size){
+    Object.entries(existing).forEach(([id, v]) => {
+      if(v && v.isManual !== true && !scopeLineIds.has(v.lineId)) newData[id] = v;
+    });
+  }
 
   // 新規エントリ用に既存キーと衝突しない連番を確保
   const usedKeys = new Set(Object.keys(existing));
@@ -11858,6 +11871,10 @@ window.doImportToDantori = async function(){
   const entries = _buildDantoriEntriesFromLines(asLines);
   if(!entries.length){ alert('段取り計画に変換できる行がありませんでした（品番・開始・終了時刻を確認してください）'); return; }
 
+  // ★書き換えるのは「いま選んでいるグループのライン」だけに限定する。
+  //   他グループを先に取り込んでいても消えないようにするため。
+  const scopeLineIds = new Set(Object.keys(_impParsedJobs).map(id => resolveLineId(id)));
+
   const d  = _dtParse(ymd);
   const wd = ['日','月','火','水','木','金','土'][d.getDay()];
   const dateLabel = `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}(${wd})`;
@@ -11867,7 +11884,8 @@ window.doImportToDantori = async function(){
   if(!confirm(
     `${dateLabel} の段取り計画として ${entries.length} 件を作ります。\n\n${preview}\n\n`
     + '※ 進捗管理ボード（当日の生産・実績）には書き込みません\n'
-    + '※ この日に手で追加した計画は残ります\n\nよろしいですか？'
+    + '※ 上のライン以外（他グループ）で先に作った計画は残ります\n'
+    + '※ この日に手で追加した計画も残ります\n\nよろしいですか？'
   )) return;
 
   const btn = document.getElementById('impDantoriBtn');
@@ -11877,7 +11895,7 @@ window.doImportToDantori = async function(){
     const fbUrl = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
     const res = await fetch(`${fbUrl}/dantori/${ymd}.json`);
     const existing = res.ok ? (await res.json() || {}) : {};
-    const newData = _mergePlanEntries(entries, existing, ymd);
+    const newData = _mergePlanEntries(entries, existing, ymd, scopeLineIds);
     const put = await fetch(`${fbUrl}/dantori/${ymd}.json`,
       {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newData)});
     if(!put.ok){ const t = await put.text(); throw new Error(`HTTP ${put.status}: ${t}`); }
