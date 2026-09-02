@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.02-6 : 配置表で同じ作業者が同じ時間に2つ以上の工程へ入っていると、バーが同じ座標(top:5px固定)に描かれて完全に重なり、1本しか見えなかった。作業者交代で入った人が「追加されていない」ように見える原因になっていた。バーの座標を先に集めてから、時間が重なるものに段(lane)を割り当てて縦に並べ、トラックの高さもそれに合わせて広げるようにした。2段以上になった作業者には名前の横に⚠N重バッジを出す -->
 <!-- H-Hub v2026.09.02-5 : 配置表のバー編集ポップアップは「その工程まるごと」の担当設定なので、工程の途中から別の作業者に替えることができなかった。時間で割る仕組み(段取り計画の「⏱作業者交代」)は以前からあるが、配置表からは辿り着けなかったため、ポップアップに「⏱ 時間で区切る」ボタンを追加。押すとその工程の段取り計画編集画面が開き、交代行が無ければ空行を1つ用意して交代欄までスクロールする -->
 <!-- H-Hub v2026.09.02-4 : 配置表のバー担当者編集で、作業者チップを押すとポップアップが閉じ、選択の追加も解除もできなかった。rtToggleWorker が rt-ep-inner を innerHTML で作り直すため、押したチップ自体がDOMから外れ、そのあと document の外クリック判定 !p.contains(e.target) が真になって rtCloseEntryEdit() が走っていた。チップの onclick に event を渡して stopPropagation() し、外クリック判定側でも e.target.isConnected===false の要素は「外」と扱わないようにした -->
 <!-- H-Hub v2026.09.02-3 : 配置表(kp4)でバー単位の担当者編集が見つけられない状態だったので3点直した。(1).rt-block の cursor が後段の指定で default に上書きされており、クリックできることが分からなかった → pointer に。(2)段取りバー(rt-setup=金型取付・品質確認・初品出し)に onclick が無く、生産バーしか開けなかった → 同じエントリの編集ポップアップを開くようにした。(3)配置表の見出しに操作方法を明記（バーをクリック＝その時間帯だけ変更／🔀入れ替えモード＝1日まるごと交換） -->
@@ -6671,7 +6672,10 @@ function renderPressTimeline(allEntries){
     // 段取り計画の roles から割り当て取得
     const assigns = getWorkerSchedule(name, allEntries);
     // TODO: pressSchedule（任意タスク）からも取得（後で追加）
-    let blk = '';
+    // ★同じ時間に2つ以上の工程へ入っていると、バーが同じ位置に重なって1本しか見えない。
+    //   いったん座標を集めてから、重なるものを段違いに並べる（下で lane を割り当てる）。
+    const barDefs = [];
+    const pushBar = (x, w, make) => barDefs.push({ x, w, make });
     assigns.forEach(d => {
       const color   = LINE_COLORS_MAP[d.lineId] || '#6b7280';
       const label   = getLineDisplayName(d.lineId);
@@ -6706,10 +6710,10 @@ function renderPressTimeline(allEntries){
         // 段取り担当（品質/初品/取付）: 段取り時間帯のみ（setupStart〜prodStart）
         if(sm !== null && ps !== null && ps > sm){
           const sx = rt_toX(sm), sw = Math.max(rt_toX(ps) - sx, 8);
-          blk += `<div class="rt-block rt-setup" style="left:${sx}px;width:${sw}px;background:${color};" title="${tip}" onclick="rtOpenEntryEdit('${eid}',event)">${setupBarInner}</div>`;
+          pushBar(sx, sw, top => `<div class="rt-block rt-setup" style="left:${sx}px;top:${top}px;width:${sw}px;background:${color};" title="${tip}" onclick="rtOpenEntryEdit('${eid}',event)">${setupBarInner}</div>`);
         } else if(sm !== null && ps === null){
           const sx = rt_toX(sm), sw = 60 * RT_PPM;
-          blk += `<div class="rt-block rt-setup" style="left:${sx}px;width:${sw}px;background:${color};" title="${tip}" onclick="rtOpenEntryEdit('${eid}',event)">段取中<span style="opacity:0.5;margin:0 2px;">｜</span><span style="font-size:0.85em;">${part}</span></div>`;
+          pushBar(sx, sw, top => `<div class="rt-block rt-setup" style="left:${sx}px;top:${top}px;width:${sw}px;background:${color};" title="${tip}" onclick="rtOpenEntryEdit('${eid}',event)">段取中<span style="opacity:0.5;margin:0 2px;">｜</span><span style="font-size:0.85em;">${part}</span></div>`);
         }
       }
       // 作業者バー描画：roles.作業者 または shiftChanges の inWorker
@@ -6739,10 +6743,26 @@ function renderPressTimeline(allEntries){
           const pw = wr.end !== null ? Math.max(rt_toX(wr.end) - px, 8) : 90 * RT_PPM;
           // 交代入場者（ジョブ開始より後から始まる）はスタイルを変える
           const isShifted = (psMin !== null && wr.start !== null && wr.start !== psMin);
-          blk += `<div class="rt-block" style="left:${px}px;width:${pw}px;background:${color};opacity:${isShifted?'0.65':'0.8'};${isShifted?'border-top:2px solid #6366f1;':''}" title="${tip}" onclick="rtOpenEntryEdit('${eid}',event)">${prodBarInner}</div>`;
+          pushBar(px, pw, top => `<div class="rt-block" style="left:${px}px;top:${top}px;width:${pw}px;background:${color};opacity:${isShifted?'0.65':'0.8'};${isShifted?'border-top:2px solid #6366f1;':''}" title="${tip}" onclick="rtOpenEntryEdit('${eid}',event)">${prodBarInner}</div>`);
         });
       }
     });
+    // ── 重なるバーを段違いに並べる（ダブルブッキングが隠れないように）──
+    barDefs.sort((a, b) => a.x - b.x || a.w - b.w);
+    const laneEnd = [];
+    barDefs.forEach(b => {
+      let lane = 0;
+      while(lane < laneEnd.length && laneEnd[lane] > b.x + 0.5) lane++;
+      laneEnd[lane] = b.x + b.w;
+      b.lane = lane;
+    });
+    const laneCount = Math.max(1, laneEnd.length);
+    const blk       = barDefs.map(b => b.make(5 + b.lane * 27)).join('');
+    // 2段以上になった＝同じ時間に複数の工程に入っている
+    const dupTag = laneCount > 1
+      ? `<span title="同じ時間に${laneCount}つの工程に入っています" style="margin-left:4px;font-size:9px;padding:1px 4px;border-radius:3px;background:#fee2e2;color:#b91c1c;font-weight:700;flex-shrink:0;">⚠${laneCount}重</span>`
+      : '';
+    const trackH = 5 + laneCount * 27;
     // ── 出勤状況バッジ＆不在シェーディング ──
     const attInfo = WORKER_ATTENDANCE[name] || {};
     const amOk = attInfo.am !== false;
@@ -6794,13 +6814,13 @@ function renderPressTimeline(allEntries){
     }
     const nameCell = _rtOverrideMode
       ? `<div class="rt-name" data-name="${name}" style="${swapNameStyle}" ${swapClick}>
-           <div style="display:flex;align-items:center;white-space:nowrap;">${name}${attTag}${_rtSwapMode?'<span style="font-size:9px;color:#7c3aed;margin-left:2px;">⇄</span>':''}</div>
+           <div style="display:flex;align-items:center;white-space:nowrap;">${name}${attTag}${dupTag}${_rtSwapMode?'<span style="font-size:9px;color:#7c3aed;margin-left:2px;">⇄</span>':''}</div>
            ${ovrHtml}
          </div>`
-      : `<div class="rt-name" title="${_rtSwapMode ? 'クリックして選択' : name}" data-name="${name}" style="${swapNameStyle}" ${swapClick}>${name}${attTag}${ovrHtml}${_rtSwapMode ? '<span style="font-size:9px;color:#7c3aed;margin-left:2px;">⇄</span>' : ''}</div>`;
+      : `<div class="rt-name" title="${_rtSwapMode ? 'クリックして選択' : name}" data-name="${name}" style="${swapNameStyle}" ${swapClick}>${name}${attTag}${dupTag}${ovrHtml}${_rtSwapMode ? '<span style="font-size:9px;color:#7c3aed;margin-left:2px;">⇄</span>' : ''}</div>`;
     rowsHtml += `<div class="rt-row" style="${rowOpacity}">
       ${nameCell}
-      <div class="rt-track" style="width:${RT_W}px;">${blk}${unavailOverlay}</div>
+      <div class="rt-track" style="width:${RT_W}px;height:${trackH}px;">${blk}${unavailOverlay}</div>
     </div>`;
   });
 
