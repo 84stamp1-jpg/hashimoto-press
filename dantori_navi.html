@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.03-3 : 前日に組んだ担当が、翌朝のインポート(lines同期)で一部消える問題を修正。(1)_mergePlanEntries が roles しか引き継いでおらず、shiftChanges(作業者ごとの時間割り)が毎回落ちていた → 引き継ぐようにした。ただし新しい生産時間帯の外に出た交代時刻は捨てる。(2)照合が ライン+品番+生産開始 の完全一致のみで、時刻が少し変わっただけで担当が空になっていた → ライン+品番 の予備照合を追加(先に完全一致を使い、1つの既存エントリを2工程で奪い合わないようtakenIdsで管理)。品番自体が差し替わった工程は従来どおり担当なしで作り直す -->
 <!-- H-Hub v2026.09.03-2 : 配置表(kp4)を1画面で完結させた。(1)下の余白にライン別の「この日の計画」を追加。品番チップに 時刻・品番・担当人数(👷)・途中交代あり(⏱)を表示し、担当が0人のものは赤くする。押すとその工程の担当者選択が開く。(2)担当者選択ポップアップの「作業者」に、選んだ人ごとの作業時間欄を追加。空欄＝計画の開始〜終了、途中で交代する人だけ時刻を入れる。他工程と重なる人には⚠を出す。(3)保存時は buildWorkerRolesFrom() で roles.作業者＋shiftChanges へ変換、読み込みは entryToWorkerRows() で戻す。配置表の表示は従来どおり作業者ベース -->
 <!-- H-Hub v2026.09.03-1 : 段取り計画の作業者入力を「部品ベース＝1人1行＋時間」に変更。従来は 作業者(チップ) と ⏱作業者交代(時刻・退・入) の2段構えで、途中で担当が変わる場合に頭の中で交代を組み立てる必要があった。作業者は1人1行にし、開始〜終了を入れられるようにした(空欄＝工程まるごと)。候補にはその時間に空いている人だけを出し、同じ工程で既に選んだ人も除く。保存時は workerRowsToRoles() で従来の roles.作業者＋shiftChanges へ変換し、読み込み時はsetWorkerRowsFromEntry() が buildShiftRanges() から1人1行へ戻すため、配置表(作業者ベース表示)・自動割り振り・既存データはそのまま動く(往復して同一の区間になることを実データで確認済み)。旧交代UI(addShiftChange/refreshShiftCandidates/validateShiftTime)は削除 -->
 <!-- H-Hub v2026.09.02-7 : 作業者交代の「入:」候補が全作業者だったため、その時間に他の工程へ入っている人も選べてしまい、ダブルブッキングを作り込めた。getBusyWorkersInRange() を追加し(交代区間・段取り役割も考慮)、交代行ごとに候補を作り直すようにした。入:はその時間に空いている人だけ、退:はこの工程の現在の作業者だけを候補にする。既に埋まっている人が入力されている場合は行の下に⚠でどの工程と重なるかを表示する -->
@@ -7289,12 +7290,15 @@ function _debouncedDantoriAutoSync(){
 //   Setを渡すと、そこに含まれないラインの計画エントリはそのまま残す。
 //   Excelインポートはグループ単位なので、他グループを消さないために使う。
 function _mergePlanEntries(entries, existing, dateStr, scopeLineIds){
-  // 既存planエントリをキーでインデックス化
-  const existMap = {};
+  // 既存planエントリを2通りでインデックス化する
+  //   厳密キー: ライン＋品番＋生産開始 … 予定が変わっていなければこれで当たる
+  //   予備キー: ライン＋品番          … 時刻だけ変わった場合の受け皿（担当を引き継ぐため）
+  const existMap = {}, looseMap = {};
   Object.entries(existing).forEach(([id, v]) => {
     if(v && v.fromPlan){
-      const k = `${v.lineId}||${v.partNo}||${v.prodStart}`;
-      existMap[k] = {id, entry: v};
+      existMap[`${v.lineId}||${v.partNo}||${v.prodStart}`] = {id, entry: v};
+      const lk = `${v.lineId}||${v.partNo}`;
+      (looseMap[lk] = looseMap[lk] || []).push({id, entry: v});
     }
   });
   const newData = {};
@@ -7321,15 +7325,27 @@ function _mergePlanEntries(entries, existing, dateStr, scopeLineIds){
     return key;
   }
 
-  // 計画エントリ：既存rolesとFBキーを引き継ぎ、stdSetupMinを初回固定
+  // 計画エントリ：既存の担当者・作業者交代・FBキーを引き継ぎ、stdSetupMinを初回固定
+  const takenIds = new Set();   // 1つの既存エントリを2つに使い回さないため
   entries.forEach((e) => {
     const {_key, ...rest} = e;
     const matchKey = `${rest.lineId}||${rest.partNo}||${rest.prodStart}`;
-    const prev = existMap[matchKey];
+    let prev = existMap[matchKey];
+    if(prev && takenIds.has(prev.id)) prev = null;
+    if(!prev){
+      // 時刻が変わった工程でも、同じライン・同じ品番なら担当を引き継ぐ
+      prev = (looseMap[`${rest.lineId}||${rest.partNo}`] || []).find(c => !takenIds.has(c.id)) || null;
+    }
     const fbKey = prev ? prev.id : _newFbKey();
-    if(prev) usedKeys.add(prev.id); // 既存キーを使用済みとしてマーク
+    if(prev){ usedKeys.add(prev.id); takenIds.add(prev.id); }
     const prevRoles = prev?.entry?.roles || {};
     const hasRoles = Object.values(prevRoles).some(v => v);
+    // 作業者交代も引き継ぐ。ただし新しい生産時間帯の外に出た交代時刻は捨てる
+    const ns = rt_toMin(rest.prodStart), ne = rt_toMin(rest.prodEnd);
+    const keptShifts = (prev?.entry?.shiftChanges || []).filter(c => {
+      const t = rt_toMin(c.time);
+      return t !== null && (ns === null || t > ns) && (ne === null || t < ne);
+    });
     // 標準段取り時間：既存値があれば引き継ぐ、なければ今のマスタで計算して固定
     const stdSetupMin = prev?.entry?.stdSetupMin != null
       ? prev.entry.stdSetupMin
@@ -7337,6 +7353,7 @@ function _mergePlanEntries(entries, existing, dateStr, scopeLineIds){
     newData[fbKey] = {
       ...rest,
       roles: hasRoles ? prevRoles : rest.roles,
+      ...(keptShifts.length ? { shiftChanges: keptShifts } : {}),
       stdSetupMin,
     };
   });
