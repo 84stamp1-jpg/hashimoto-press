@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.02-5 : 配置表のバー編集ポップアップは「その工程まるごと」の担当設定なので、工程の途中から別の作業者に替えることができなかった。時間で割る仕組み(段取り計画の「⏱作業者交代」)は以前からあるが、配置表からは辿り着けなかったため、ポップアップに「⏱ 時間で区切る」ボタンを追加。押すとその工程の段取り計画編集画面が開き、交代行が無ければ空行を1つ用意して交代欄までスクロールする -->
 <!-- H-Hub v2026.09.02-4 : 配置表のバー担当者編集で、作業者チップを押すとポップアップが閉じ、選択の追加も解除もできなかった。rtToggleWorker が rt-ep-inner を innerHTML で作り直すため、押したチップ自体がDOMから外れ、そのあと document の外クリック判定 !p.contains(e.target) が真になって rtCloseEntryEdit() が走っていた。チップの onclick に event を渡して stopPropagation() し、外クリック判定側でも e.target.isConnected===false の要素は「外」と扱わないようにした -->
 <!-- H-Hub v2026.09.02-3 : 配置表(kp4)でバー単位の担当者編集が見つけられない状態だったので3点直した。(1).rt-block の cursor が後段の指定で default に上書きされており、クリックできることが分からなかった → pointer に。(2)段取りバー(rt-setup=金型取付・品質確認・初品出し)に onclick が無く、生産バーしか開けなかった → 同じエントリの編集ポップアップを開くようにした。(3)配置表の見出しに操作方法を明記（バーをクリック＝その時間帯だけ変更／🔀入れ替えモード＝1日まるごと交換） -->
 <!-- H-Hub v2026.09.02-2 : 「段取り計画だけ作る」でグループを切り替えて連続取込すると、先に取り込んだ他グループの計画が消えていた。_mergePlanEntries は「entriesが全ラインを網羅している」前提(linesからの同期用)で、entriesに無い計画エントリを落とす作りだったため。第4引数 scopeLineIds を追加し、指定されたラインだけを置き換え、対象外ラインの計画は残すようにした。インポートは選択中グループのラインのみをscopeとして渡す(同期側は従来どおり全置換) -->
@@ -2532,6 +2533,8 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 <div id="rt-entry-popup">
   <div id="rt-ep-scroll"><div id="rt-ep-inner"></div></div>
   <div id="rt-ep-footer">
+    <button onclick="rtOpenShiftEdit()" title="この工程を時間で区切り、途中から別の作業者に交代させます"
+      style="padding:4px 12px;font-size:11px;border:1px solid #6366f1;border-radius:5px;cursor:pointer;background:#eef2ff;color:#6366f1;font-weight:600;margin-right:auto;">⏱ 時間で区切る</button>
     <button onclick="rtCloseEntryEdit()" style="padding:4px 14px;font-size:11px;border:1px solid #d1d5db;border-radius:5px;cursor:pointer;background:#f9fafb;">閉じる</button>
     <button onclick="rtSaveEntryEdit()"  style="padding:4px 14px;font-size:11px;border:none;border-radius:5px;cursor:pointer;background:#1d4ed8;color:#fff;font-weight:600;">保存</button>
   </div>
@@ -6592,6 +6595,26 @@ window.rtCloseEntryEdit = function(){
   const p = document.getElementById('rt-entry-popup');
   if(p) p.style.display = 'none';
   _rtEditEntryId = null; _rtEditRoles = {};
+};
+// このポップアップは「その工程まるごと」の担当設定なので、時間では割れない。
+// 途中で人を替えたいときは、段取り計画の編集画面（⏱作業者交代）へ受け渡す。
+window.rtOpenShiftEdit = function(){
+  const id = _rtEditEntryId;
+  if(!id) return;
+  rtCloseEntryEdit();          // ※ _rtEditEntryId が消えるので先にidを控えている
+  showEditDantori(id);
+  // 交代行が1つも無ければ空行を出して、すぐ入力できるようにする
+  const cont = document.getElementById('dt-shift-container');
+  if(cont && !cont.querySelector('.sc-row')) addShiftChange();
+  // 交代欄までスクロールして、どこを触ればよいか分かるように一瞬色を付ける
+  setTimeout(() => {
+    const box = (document.getElementById('dt-shift-container')||{}).parentElement;
+    if(!box) return;
+    box.scrollIntoView({block:'center', behavior:'smooth'});
+    box.style.transition = 'background .3s';
+    box.style.background = '#eef2ff';
+    setTimeout(() => { box.style.background = ''; }, 1800);
+  }, 120);
 };
 window.rtSaveEntryEdit = async function(){
   if(!_rtEditEntryId) return;
