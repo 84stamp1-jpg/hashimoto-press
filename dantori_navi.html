@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.03-2 : 配置表(kp4)を1画面で完結させた。(1)下の余白にライン別の「この日の計画」を追加。品番チップに 時刻・品番・担当人数(👷)・途中交代あり(⏱)を表示し、担当が0人のものは赤くする。押すとその工程の担当者選択が開く。(2)担当者選択ポップアップの「作業者」に、選んだ人ごとの作業時間欄を追加。空欄＝計画の開始〜終了、途中で交代する人だけ時刻を入れる。他工程と重なる人には⚠を出す。(3)保存時は buildWorkerRolesFrom() で roles.作業者＋shiftChanges へ変換、読み込みは entryToWorkerRows() で戻す。配置表の表示は従来どおり作業者ベース -->
 <!-- H-Hub v2026.09.03-1 : 段取り計画の作業者入力を「部品ベース＝1人1行＋時間」に変更。従来は 作業者(チップ) と ⏱作業者交代(時刻・退・入) の2段構えで、途中で担当が変わる場合に頭の中で交代を組み立てる必要があった。作業者は1人1行にし、開始〜終了を入れられるようにした(空欄＝工程まるごと)。候補にはその時間に空いている人だけを出し、同じ工程で既に選んだ人も除く。保存時は workerRowsToRoles() で従来の roles.作業者＋shiftChanges へ変換し、読み込み時はsetWorkerRowsFromEntry() が buildShiftRanges() から1人1行へ戻すため、配置表(作業者ベース表示)・自動割り振り・既存データはそのまま動く(往復して同一の区間になることを実データで確認済み)。旧交代UI(addShiftChange/refreshShiftCandidates/validateShiftTime)は削除 -->
 <!-- H-Hub v2026.09.02-7 : 作業者交代の「入:」候補が全作業者だったため、その時間に他の工程へ入っている人も選べてしまい、ダブルブッキングを作り込めた。getBusyWorkersInRange() を追加し(交代区間・段取り役割も考慮)、交代行ごとに候補を作り直すようにした。入:はその時間に空いている人だけ、退:はこの工程の現在の作業者だけを候補にする。既に埋まっている人が入力されている場合は行の下に⚠でどの工程と重なるかを表示する -->
 <!-- H-Hub v2026.09.02-6 : 配置表で同じ作業者が同じ時間に2つ以上の工程へ入っていると、バーが同じ座標(top:5px固定)に描かれて完全に重なり、1本しか見えなかった。作業者交代で入った人が「追加されていない」ように見える原因になっていた。バーの座標を先に集めてから、時間が重なるものに段(lane)を割り当てて縦に並べ、トラックの高さもそれに合わせて広げるようにした。2段以上になった作業者には名前の横に⚠N重バッジを出す -->
@@ -372,6 +373,18 @@ html, body {
 .rt-name{flex-shrink:0;width:110px;padding:4px 7px;font-size:11px;font-weight:600;color:#1a1a1a;border-right:1px solid #e8e8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:34px;display:flex;align-items:center;position:sticky;left:0;z-index:5;background:white;}
 .rt-row:hover .rt-name{background:#f5f9ff;}
 .rt-track{position:relative;flex-shrink:0;min-height:34px;overflow:visible;}
+/* 配置表の下：この日の計画（ライン別の品番リスト） */
+.rt-plan{margin-top:10px;border:1px solid #e2e8f0;border-radius:8px;background:#fcfcfd;overflow:hidden;}
+.rt-plan-hdr{padding:6px 10px;font-size:11px;font-weight:700;color:#334155;background:#f1f5f9;border-bottom:1px solid #e2e8f0;}
+.rt-plan-row{display:flex;align-items:stretch;border-bottom:1px solid #f1f5f9;}
+.rt-plan-row:last-child{border-bottom:none;}
+.rt-plan-line{flex-shrink:0;width:104px;padding:6px 8px;font-size:11px;font-weight:700;color:#1a1a1a;background:#fff;display:flex;align-items:center;}
+.rt-plan-jobs{flex:1;display:flex;flex-wrap:wrap;gap:4px;padding:5px 8px;}
+.rt-plan-job{display:inline-flex;align-items:center;gap:2px;font-size:11px;padding:3px 8px;border:1px solid #cbd5e1;border-radius:14px;background:#fff;cursor:pointer;white-space:nowrap;transition:all .12s;}
+.rt-plan-job:hover{border-color:#1d4ed8;background:#eff6ff;box-shadow:0 1px 4px rgba(29,78,216,.15);}
+.rt-plan-nobody{border-color:#fca5a5;background:#fff5f5;}
+.rt-plan-cnt{margin-left:5px;font-size:10px;font-weight:700;color:#0369a1;background:#e0f2fe;border-radius:9px;padding:0 6px;}
+.rt-plan-nobody .rt-plan-cnt{color:#b91c1c;background:#fee2e2;}
 /* 優先ライン上書きモード */
 .rt-ovr-mode .rt-name{flex-direction:column;align-items:flex-start;justify-content:center;white-space:normal;gap:2px;min-height:50px;}
 .rt-ovr-mode .rt-track{min-height:50px;}
@@ -5800,6 +5813,53 @@ function setWorkerRowsFromEntry(entry){
   )));
 }
 
+// 1人1行のリスト → 従来形式（roles.作業者 と shiftChanges）へ変換する共通処理。
+// rows: [{name, start:'HH:MM'|'', end:'HH:MM'|''}]　空欄＝工程まるごと
+function buildWorkerRolesFrom(rows, prodStart, prodEnd){
+  const ps = rt_toMin(prodStart), pe = rt_toMin(prodEnd);
+  const base = [], changes = [];
+  (rows||[]).forEach(({name, start, end}) => {
+    if(!name) return;
+    const s = rt_toMin(start), e = rt_toMin(end);
+    const from = (s === null) ? ps : s;
+    const to   = (e === null) ? pe : e;
+    if(from === null || (ps !== null && from <= ps)){
+      if(!base.includes(name)) base.push(name);
+    } else {
+      changes.push({ time:_m2t(from), outWorker:'', inWorker:name, endTime:'' });
+    }
+    if(pe !== null && to !== null && to < pe){
+      changes.push({ time:_m2t(to), outWorker:name, inWorker:'', endTime:'' });
+    }
+  });
+  changes.sort((a,b) => a.time.localeCompare(b.time));
+  return { workers: base.join('、'), shiftChanges: changes };
+}
+
+// エントリ → 1人1行（{name,start,end}）へ戻す共通処理
+function entryToWorkerRows(entry){
+  const ps = rt_toMin(entry.prodStart || entry.setupStart);
+  const pe = rt_toMin(entry.prodEnd);
+  const byWorker = new Map();
+  buildShiftRanges(entry).forEach(r => {
+    (r.workers||[]).forEach(w => {
+      if(!w) return;
+      const arr = byWorker.get(w) || [];
+      const last = arr[arr.length - 1];
+      if(last && last.end === r.start) last.end = r.end;
+      else arr.push({ start:r.start, end:r.end });
+      byWorker.set(w, arr);
+    });
+  });
+  const rows = [];
+  byWorker.forEach((arr, w) => arr.forEach(r => rows.push({
+    name:  w,
+    start: (r.start !== null && r.start !== ps) ? _m2t(r.start) : '',
+    end:   (r.end   !== null && r.end   !== pe) ? _m2t(r.end)   : '',
+  })));
+  return rows;
+}
+
 // 1人1行のリスト → 従来形式（roles.作業者 と shiftChanges）へ変換
 function workerRowsToRoles(){
   const ps = rt_toMin((document.getElementById('dt-prod-start')||{}).value);
@@ -6593,6 +6653,7 @@ document.addEventListener('click', function(e){
 // ===== kp4：バー単位 担当者編集ポップアップ =====
 let _rtEditEntryId = null;
 let _rtEditRoles   = {};  // { roleKey: string[] }
+let _rtEditTimes   = {};  // 作業者ごとの時間 { 名前: {start:'HH:MM'|'', end:'HH:MM'|''} } 空欄＝工程まるごと
 
 const _RT_ROLES = [
   { key:'金型取付', multi:true,  label:'金型取付' },
@@ -6615,10 +6676,53 @@ function _rtBuildPopupHtml(entry){
       const esc = name.replace(/'/g,"\\'");
       html += `<span class="rt-ep-chip${isSel?' ep-sel':''}" onclick="rtToggleWorker('${key}','${esc}',${multi},event)">${name}</span>`;
     });
-    html += `</div></div>`;
+    html += `</div>`;
+    // 作業者だけは、選んだ人ごとに時間を変えられるようにする
+    if(key === '作業者' && sel.length){
+      const ps = entry.prodStart || '', pe = entry.prodEnd || '';
+      html += `<div style="margin-top:5px;border-top:1px dashed #e0e7ff;padding-top:5px;">
+        <div style="font-size:10px;color:#64748b;margin-bottom:3px;">
+          作業時間　<b>空欄＝${ps}〜${pe}（計画どおり）</b>。途中で交代する人だけ入れてください</div>`;
+      sel.forEach(name => {
+        const t   = _rtEditTimes[name] || {};
+        const esc = name.replace(/'/g,"\\'");
+        const busyMsg = _rtWorkerBusyMsg(entry, name, t);
+        html += `<div style="display:flex;align-items:center;gap:4px;margin-bottom:3px;flex-wrap:wrap;">
+          <span style="font-size:11px;min-width:92px;">${name}</span>
+          <input type="time" value="${t.start||''}" title="空欄＝${ps}から"
+            style="border:1px solid #ddd;border-radius:4px;padding:2px 4px;font-size:11px;width:78px;"
+            onchange="rtSetWorkerTime('${esc}','start',this.value,event)" onclick="event.stopPropagation()">
+          <span style="font-size:10px;color:#94a3b8;">〜</span>
+          <input type="time" value="${t.end||''}" title="空欄＝${pe}まで"
+            style="border:1px solid #ddd;border-radius:4px;padding:2px 4px;font-size:11px;width:78px;"
+            onchange="rtSetWorkerTime('${esc}','end',this.value,event)" onclick="event.stopPropagation()">
+          ${busyMsg ? `<span style="flex-basis:100%;font-size:10px;color:#dc2626;font-weight:600;">${busyMsg}</span>` : ''}
+        </div>`;
+      });
+      html += `</div>`;
+    }
+    html += `</div>`;
   });
   return html;
 }
+
+// その作業者が、指定の時間帯に他の工程と重なっていないか
+function _rtWorkerBusyMsg(entry, name, t){
+  const ps = rt_toMin(entry.prodStart || entry.setupStart), pe = rt_toMin(entry.prodEnd);
+  const s  = rt_toMin(t.start), e = rt_toMin(t.end);
+  const from = (s === null) ? ps : s, to = (e === null) ? pe : e;
+  if(from === null || to === null || to <= from) return '';
+  const busy = getBusyWorkersInRange(from, to, entry._id);
+  return busy.has(name) ? `⚠ ${busy.get(name)} と重なります` : '';
+}
+
+window.rtSetWorkerTime = function(name, which, value, ev){
+  if(ev) ev.stopPropagation();
+  if(!_rtEditTimes[name]) _rtEditTimes[name] = { start:'', end:'' };
+  _rtEditTimes[name][which] = value || '';
+  const entry = dantoriSchedule.find(e => e._id === _rtEditEntryId);
+  if(entry) document.getElementById('rt-ep-inner').innerHTML = _rtBuildPopupHtml(entry);
+};
 
 window.rtToggleWorker = function(roleKey, name, multi, ev){
   // ★このあと rt-ep-inner を作り直すと、押したチップ自体がDOMから外れる。
@@ -6633,6 +6737,11 @@ window.rtToggleWorker = function(roleKey, name, multi, ev){
   } else {
     _rtEditRoles[roleKey] = sel.includes(name) ? sel.filter(w=>w!==name) : [...sel, name];
   }
+  // 作業者から外した人の時間設定は捨てる
+  if(roleKey === '作業者'){
+    const keep = _rtEditRoles['作業者'] || [];
+    Object.keys(_rtEditTimes).forEach(n => { if(!keep.includes(n)) delete _rtEditTimes[n]; });
+  }
   const entry = dantoriSchedule.find(e=>e._id===_rtEditEntryId);
   if(entry) document.getElementById('rt-ep-inner').innerHTML = _rtBuildPopupHtml(entry);
 };
@@ -6643,11 +6752,15 @@ window.rtOpenEntryEdit = function(entryId, event){
   event.stopPropagation();
   _rtEditEntryId = entryId;
   const r = entry.roles || {};
+  // 作業者は交代を展開して「誰が何時から何時まで」に戻す（空欄＝工程まるごと）
+  const wrows = entryToWorkerRows(entry);
+  _rtEditTimes = {};
+  wrows.forEach(w => { _rtEditTimes[w.name] = { start:w.start, end:w.end }; });
   _rtEditRoles = {
     '金型取付': (r.金型取付||'').split(/[,、]/).map(w=>w.trim()).filter(Boolean),
     '品質確認': (r.品質確認||'').split(/[,、]/).map(w=>w.trim()).filter(Boolean),
     '初品出し':  (r.初品出し ||'').split(/[,、]/).map(w=>w.trim()).filter(Boolean),
-    '作業者':   (r.作業者  ||'').split(/[,、]/).map(w=>w.trim()).filter(Boolean),
+    '作業者':   wrows.map(w => w.name),
   };
   const popup = document.getElementById('rt-entry-popup');
   if(!popup) return;
@@ -6667,7 +6780,7 @@ window.rtOpenEntryEdit = function(entryId, event){
 window.rtCloseEntryEdit = function(){
   const p = document.getElementById('rt-entry-popup');
   if(p) p.style.display = 'none';
-  _rtEditEntryId = null; _rtEditRoles = {};
+  _rtEditEntryId = null; _rtEditRoles = {}; _rtEditTimes = {};
 };
 // このポップアップは「その工程まるごと」の担当設定なので、時間では割れない。
 // 途中で人を替えたいときは、段取り計画の編集画面（⏱作業者交代）へ受け渡す。
@@ -6698,7 +6811,13 @@ window.rtSaveEntryEdit = async function(){
   entry.roles.金型取付 = _rtEditRoles['金型取付'].join('、');
   entry.roles.品質確認 = _rtEditRoles['品質確認'][0] || '';
   entry.roles.初品出し  = _rtEditRoles['初品出し'][0]  || '';
-  entry.roles.作業者   = _rtEditRoles['作業者'].join('、');
+  // 作業者は「1人1行＋時間」から、従来形式（roles.作業者＋shiftChanges）へ変換
+  const rows = _rtEditRoles['作業者'].map(n => ({
+    name:n, start:(_rtEditTimes[n]||{}).start||'', end:(_rtEditTimes[n]||{}).end||''
+  }));
+  const conv = buildWorkerRolesFrom(rows, entry.prodStart, entry.prodEnd);
+  entry.roles.作業者 = conv.workers;
+  entry.shiftChanges = conv.shiftChanges;
   rtCloseEntryEdit();
   await saveDantoriToFirebase();
   await loadDantoriSchedule();
@@ -6922,7 +7041,49 @@ function renderPressTimeline(allEntries){
       <div class="rt-overlay" style="width:${RT_W}px;">${breakHtml}${nowHtml}</div>
     </div>
   </div>
+  ${_rtBuildPlanList(allEntries)}
 </div>`;
+}
+
+// ===== 配置表の下：この日の計画をライン別に並べる =====
+// 品番を押すと担当者の選択画面が開き、そのまま上の配置表へ反映される。
+function _rtBuildPlanList(allEntries){
+  const byLine = {};
+  (allEntries||[]).forEach(e => {
+    if(!e || !e.lineId) return;
+    (byLine[e.lineId] = byLine[e.lineId] || []).push(e);
+  });
+  const lineIds = Object.keys(byLine).sort();
+  if(!lineIds.length){
+    return `<div class="rt-plan"><div class="rt-plan-hdr">📋 この日の計画</div>
+      <div style="padding:10px;font-size:11px;color:#94a3b8;">予定がありません。「＋ 追加」か「📥 今すぐ同期」で取り込んでください。</div></div>`;
+  }
+  let html = `<div class="rt-plan">
+    <div class="rt-plan-hdr">📋 この日の計画　<span style="font-weight:400;color:#94a3b8;font-size:10px;">品番を押すと、その工程の担当者と作業時間を設定できます</span></div>`;
+  lineIds.forEach(lid => {
+    const jobs = byLine[lid].slice().sort((a,b) =>
+      String(a.prodStart||a.setupStart||'').localeCompare(String(b.prodStart||b.setupStart||'')));
+    html += `<div class="rt-plan-row">
+      <div class="rt-plan-line" style="border-left:4px solid ${LINE_COLORS_MAP[lid]||'#6b7280'};">${getLineDisplayName(lid)}</div>
+      <div class="rt-plan-jobs">`;
+    jobs.forEach(d => {
+      const eid   = (d._id||'').replace(/'/g,"\\'");
+      const nW    = (((d.roles||{}).作業者)||'').split(/[,、]/).map(s=>s.trim()).filter(Boolean).length;
+      const nAdd  = (d.shiftChanges||[]).filter(c => c.inWorker).length;
+      const noOne = !nW && !nAdd && !d.noWorker;
+      const shift = nAdd ? `<span style="color:#6366f1;font-weight:700;" title="途中で担当が変わります">⏱</span>` : '';
+      html += `<span class="rt-plan-job${noOne?' rt-plan-nobody':''}" onclick="rtOpenEntryEdit('${eid}',event)"
+        title="${d.partNo||''}　${d.prodStart||''}〜${d.prodEnd||''}">
+        <b>${d.prodStart||d.setupStart||''}</b>
+        <span style="opacity:.5;">〜</span>${d.prodEnd||''}
+        <span style="margin-left:4px;">${d.partNo||'（品番なし）'}</span>
+        <span class="rt-plan-cnt">${noOne ? '担当なし' : `👷${nW + nAdd}`}${shift}</span>
+      </span>`;
+    });
+    html += `</div></div>`;
+  });
+  html += `</div>`;
+  return html;
 }
 
 // ===== 生産計画から段取り計画を取り込む =====
