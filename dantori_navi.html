@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.02-1 : 段取り指示タブを日付切替に対応。(1)getDantoriDatePath()が今日決め打ちだったため段取り計画は当日分しか作れなかった。表示日(DANTORI_VIEW_DATE)を持たせ、日付入力＋「今日/明日」ボタンで切り替えられるようにした。(2)進捗管理ボード(lines)は日付を持たない当日の状態なので、linesからの同期(自動同期・今すぐ同期)は常に「今日」へ書くよう固定し、本日以外を表示中は「今すぐ同期」を無効化した(今日の計画を別日に書く事故の防止)。(3)生産予定インポートに「📅 段取り計画だけ作る(対象日指定)」を追加。Excelのパース結果から dantori/<日付> だけを作り、linesには書き込まないため当日の実績が壊れない。前日夕方に翌日分を仕込める。(4)段取り標準時間設定の計算式表記に括弧が抜けており「C×人数＋P×型数÷人数」と読めていた。実装は (C×人数＋P×型数)÷人数 ＝ C＋P×型数÷人数 なので表記を修正し、片付けは人数で短縮されない／準備は型数を人数で分担できる、という意味も添えた -->
 <!-- H-Hub v2026.08.26-1 : 進捗管理ボードの2件を修正。(1)「計画修正(実績を維持したまま変更)」が実績を actual という誤ったフィールド名で見ており、保存後にキャッシュから actualCount/status が欠落→2回目の保存で実績が消えていた。実績バッジが常に「未実施」表示・行削除の警告も出ない状態だった。(2)並行生産や同名品番で、別の行を完了しただけで他行まで完了扱いになる問題。ライン単位の part 一致で現在行を探していたのをやめ、lines/<id>/curSeq(行番号)を正として curJobIndex() 1か所で判定するようにした -->
 <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
@@ -1554,7 +1555,15 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 
 <div class="content" id="tab-dantori">
   <div class="dt-controls">
-    <div style="font-size:12px;color:#888;white-space:nowrap;">本日の段取り計画</div>
+    <div style="display:flex;align-items:center;gap:3px;white-space:nowrap;">
+      <button class="btn" style="padding:4px 7px;font-size:12px;" onclick="shiftDantoriDate(-1)" title="前の日">‹</button>
+      <input type="date" id="dtViewDate" onchange="onDantoriDateChange()"
+             style="padding:3px 6px;border:1px solid #ddd;border-radius:5px;font-size:12px;font-family:inherit;">
+      <button class="btn" style="padding:4px 7px;font-size:12px;" onclick="shiftDantoriDate(1)" title="次の日">›</button>
+      <button class="btn" style="padding:4px 9px;font-size:11px;" onclick="setDantoriDate(0)">今日</button>
+      <button class="btn" style="padding:4px 9px;font-size:11px;" onclick="setDantoriDate(1)">明日</button>
+    </div>
+    <div id="dtDateLabel" style="font-size:12px;color:#888;white-space:nowrap;">本日の段取り計画</div>
     <div class="kanban-tabs" id="kanbanTabs">
       <button class="kanban-tab active" data-page="kp1" onclick="switchKanbanPage('kp1')">A・Bライン</button>
       <button class="kanban-tab"        data-page="kp2" onclick="switchKanbanPage('kp2')">C・Dライン</button>
@@ -1563,7 +1572,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
     </div>
     <span id="dantoriSyncStatus" style="font-size:10px;color:#888;white-space:nowrap;"></span>
     <button class="btn" style="padding:5px 10px;font-size:11px;" onclick="refreshDantori()">↻ 更新</button>
-    <button class="add-btn-dt" style="background:#0369a1;" onclick="importFromProductionPlan()">📥 今すぐ同期</button>
+    <button class="add-btn-dt" id="dtSyncBtn" style="background:#0369a1;" onclick="importFromProductionPlan()">📥 今すぐ同期</button>
     <button class="add-btn-dt" style="background:#7c3aed;" onclick="autoAssignRoles()" title="PRESS_LINE_MASTERに基づき品質確認・初品出し・金型取付を自動割り振り">🤖 自動割り振り</button>
     <button class="add-btn-dt" style="background:#0f766e;" onclick="showWorkerRoleMaster()">👥 作業者マスタ</button>
     <button class="add-btn-dt" onclick="showAddDantori()">＋ 追加</button>
@@ -2089,6 +2098,21 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
         <span id="impOverwriteNote" style="font-size:11px;color:#aaa;">※既存の計画データは上書きされます</span>
       </div>
       <div class="msg" id="impmsg"></div>
+
+      <!-- 翌日分の段取り計画づくり（進捗管理ボードには入れない） -->
+      <div style="margin-top:10px;background:#eef6ff;border:1px solid #90caf9;border-radius:7px;padding:9px 12px;">
+        <div style="font-size:12px;font-weight:700;color:#0d47a1;margin-bottom:5px;">📅 翌日の段取り計画をつくる</div>
+        <div style="font-size:11px;color:#37474f;line-height:1.6;margin-bottom:7px;">
+          選んだExcelから<b>段取り計画だけ</b>を作ります。<b>進捗管理ボード（当日の生産・実績）には一切書き込みません。</b><br>
+          前日の夕方に翌日のExcelを選び、日付を翌日にして押してください。当日の朝はいつもどおり「この内容でインポート」を使います。
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <label style="font-size:11px;color:#37474f;">対象日</label>
+          <input type="date" id="impDantoriDate" style="padding:4px 7px;border:1px solid #90caf9;border-radius:5px;font-size:12px;font-family:inherit;">
+          <button class="bp" id="impDantoriBtn" style="background:#0369a1;" onclick="doImportToDantori()" disabled>📅 段取り計画だけ作る</button>
+        </div>
+        <div class="msg" id="impDantoriMsg"></div>
+      </div>
     </div>
 
     <!-- 計画修正セクション -->
@@ -2117,8 +2141,10 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
       <div class="ftitle">段取り標準時間設定</div>
       <div style="font-size:11px;color:#888;margin-bottom:8px;line-height:1.6;">
         ライン毎に「前作業の片付け時間（C）」と「次作業の準備時間（P）」を設定します。<br>
-        <b>計算式：</b> 段取り時間 ＝ C × 人数 ＋ P × 型数 ÷ 人数
-        <span style="margin-left:8px;color:#1a1a1a;">例）3型・2人 ＝ C×2 ＋ P×3÷2</span>
+        <b>計算式：</b> 段取り時間 ＝ <b>（C × 人数 ＋ P × 型数）÷ 人数</b>
+        <span style="margin-left:8px;color:#1a1a1a;">例）3型・2人 ＝ （C×2 ＋ P×3）÷2</span><br>
+        ※ 展開すると <b>C ＋ P × 型数 ÷ 人数</b>。<b>片付け(C)は人数を増やしても短くなりません</b>（全員で同時に行うため）。
+        <b>準備(P)は型ごとに必要なので、人数で分担できます</b>。
       </div>
       <div class="sr2" id="srRows"></div>
       <button class="bp" onclick="saveSets()">保存する</button>
@@ -5409,11 +5435,73 @@ function chipHideDd(wid){
   if(dd) dd.style.display='none';
 }
 
-function getDantoriDatePath(){
-  const n = new Date();
-  return n.getFullYear()
-    + String(n.getMonth()+1).padStart(2,'0')
-    + String(n.getDate()).padStart(2,'0');
+// ===== 段取りタブの表示日 =====
+// 進捗管理ボード(lines)は日付を持たない「当日の状態」なので、
+// linesからの同期は常に「今日」へ書き、表示する日だけをここで切り替える。
+let DANTORI_VIEW_DATE = '';   // YYYYMMDD。空なら今日
+
+function _dtYmd(d){
+  return d.getFullYear()
+    + String(d.getMonth()+1).padStart(2,'0')
+    + String(d.getDate()).padStart(2,'0');
+}
+function dantoriTodayPath(){ return _dtYmd(new Date()); }
+function getDantoriDatePath(){ return DANTORI_VIEW_DATE || dantoriTodayPath(); }
+function isDantoriToday(){ return getDantoriDatePath() === dantoriTodayPath(); }
+
+function _dtToInput(ymd){ return ymd.slice(0,4)+'-'+ymd.slice(4,6)+'-'+ymd.slice(6,8); }
+function _dtFromInput(v){ return String(v||'').replace(/-/g,''); }
+function _dtParse(ymd){ return new Date(+ymd.slice(0,4), +ymd.slice(4,6)-1, +ymd.slice(6,8)); }
+
+// offset: 0=今日 / 1=明日
+function setDantoriDate(offset){
+  const d = new Date(); d.setDate(d.getDate() + offset);
+  DANTORI_VIEW_DATE = _dtYmd(d);
+  _applyDantoriDateUi(); refreshDantori();
+}
+function shiftDantoriDate(delta){
+  const d = _dtParse(getDantoriDatePath());
+  d.setDate(d.getDate() + delta);
+  DANTORI_VIEW_DATE = _dtYmd(d);
+  _applyDantoriDateUi(); refreshDantori();
+}
+function onDantoriDateChange(){
+  const v = _dtFromInput((document.getElementById('dtViewDate')||{}).value);
+  if(v.length !== 8) return;
+  DANTORI_VIEW_DATE = v;
+  _applyDantoriDateUi(); refreshDantori();
+}
+// 表示日を外から設定する（インポート側は<script type="module">のため直接代入できない）
+function setDantoriViewDate(ymd){
+  if(String(ymd||'').length !== 8) return;
+  DANTORI_VIEW_DATE = ymd;
+  _applyDantoriDateUi();
+}
+
+// 見出し・日付入力・同期ボタンの状態を表示日に合わせる
+function _applyDantoriDateUi(){
+  const ymd = getDantoriDatePath();
+  const today = isDantoriToday();
+  const inp = document.getElementById('dtViewDate');
+  if(inp) inp.value = _dtToInput(ymd);
+  const d  = _dtParse(ymd);
+  const wd = ['日','月','火','水','木','金','土'][d.getDay()];
+  const lbl = document.getElementById('dtDateLabel');
+  if(lbl){
+    lbl.textContent = `${d.getMonth()+1}/${d.getDate()}(${wd}) の段取り計画` + (today ? '' : '　※本日以外');
+    lbl.style.color = today ? '#888' : '#b45309';
+    lbl.style.fontWeight = today ? '400' : '700';
+  }
+  // linesは当日の状態なので、本日以外を表示中は同期させない（今日の計画を別日に書く事故を防ぐ）
+  const sy = document.getElementById('dtSyncBtn');
+  if(sy){
+    sy.disabled = !today;
+    sy.style.opacity = today ? '1' : '.4';
+    sy.style.cursor  = today ? 'pointer' : 'not-allowed';
+    sy.title = today ? ''
+      : '「今すぐ同期」は本日のみ使えます。進捗管理ボードは当日の状態しか持たないためです。'
+        + '翌日の計画は［設定］→［生産予定インポート］の「段取り計画だけ作る」で取り込んでください。';
+  }
 }
 
 async function loadDantoriSchedule(){
@@ -6711,6 +6799,15 @@ function renderPressTimeline(allEntries){
 
 // ===== 生産計画から段取り計画を取り込む =====
 async function importFromProductionPlan(){
+  // linesは「当日の状態」しか持たない。本日以外を表示中に実行すると、
+  // 今日の生産計画を別の日の段取り計画として書いてしまうため止める。
+  if(!isDantoriToday()){
+    alert('「今すぐ同期」は本日のみ使えます。\n'
+      + '進捗管理ボードは当日の状態しか持たないためです。\n\n'
+      + '翌日の段取り計画は、［設定］→［生産予定インポート］で\n'
+      + '翌日のExcelを選び「📅 段取り計画だけ作る」で取り込んでください。');
+    return;
+  }
   const fbUrl = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
 
   // Firebase REST APIから直接最新のlinesデータを取得
@@ -6952,14 +7049,15 @@ async function _autoSyncDantoriFromPlan(){
   if(!Object.keys(srcLines).length) return;
   const entries = _buildDantoriEntriesFromLines(srcLines);
   const fbUrl   = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
-  const dateStr = getDantoriDatePath();
+  // ★linesは当日の状態なので、自動同期の書き込み先は常に「今日」。表示日には従わない
+  const dateStr = dantoriTodayPath();
   try {
     const res = await fetch(`${fbUrl}/dantori/${dateStr}.json`);
     const existing = res.ok ? (await res.json() || {}) : {};
     const newData = _mergePlanEntries(entries, existing, dateStr);
     await fetch(`${fbUrl}/dantori/${dateStr}.json`,
       {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newData)});
-    await loadDantoriSchedule();
+    if(isDantoriToday()) await loadDantoriSchedule();   // 別日を見ているときは画面を触らない
     const now = new Date();
     const t = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
     _updateDantoriSyncStatus(`⟳ 自動同期済 ${t}`, '#27ae60');
@@ -7785,6 +7883,12 @@ function postToSlack(){
 
 checkConfig();
 renderChips();
+_applyDantoriDateUi();
+// 「段取り計画だけ作る」の対象日は、既定で翌日を入れておく（前日夕方に使うため）
+(function(){
+  const d = document.getElementById('impDantoriDate');
+  if(d && !d.value){ const t = new Date(); t.setDate(t.getDate()+1); d.value = _dtToInput(_dtYmd(t)); }
+})();
 renderDantori();
 updatePersonPanel();
 connectFirebase();
@@ -11681,6 +11785,17 @@ window.onImpFile=async function(){
     console.error(e);
   }
 };
+// 「段取り計画だけ作る」ボタンの活性を「この内容でインポート」に合わせる。
+// 日付が空なら既定で翌日を入れておく（前日夕方に使う想定のため）。
+window._syncImpDantoriBtn = function(enabled){
+  const b=document.getElementById('impDantoriBtn');
+  if(b) b.disabled=!enabled;
+  const d=document.getElementById('impDantoriDate');
+  if(d && !d.value){
+    const t=new Date(); t.setDate(t.getDate()+1);
+    d.value=_dtToInput(_dtYmd(t));
+  }
+};
 function renderImpPreview(jobsObj,mp,g){
   const prevEl=document.getElementById('impPreview');
   const btn=document.getElementById('impBtn');
@@ -11690,7 +11805,7 @@ function renderImpPreview(jobsObj,mp,g){
 
   if(totalJobs===0){
     prevEl.innerHTML='<div style="color:#e67e22;font-size:12px;padding:8px;">データが見つかりませんでした。設定（方式・列・フィルタ値）を確認してください。</div>';
-    btn.disabled=true;return;
+    btn.disabled=true;_syncImpDantoriBtn(false);return;
   }
 
   let h=`<div style="font-size:11px;color:#27ae60;margin-bottom:6px;">✓ 合計 ${totalJobs}件 / ${activeIds.length}ライン 検出</div>`;
@@ -11724,7 +11839,63 @@ function renderImpPreview(jobsObj,mp,g){
   }
   prevEl.innerHTML=h;
   btn.disabled=false;
+  _syncImpDantoriBtn(true);
 }
+
+// ===== Excelの生産予定から「段取り計画だけ」を作る（linesには書き込まない）=====
+// 前日の夕方に翌日分を仕込む用途。進捗管理ボード(lines)は当日の実績を持つので触らない。
+window.doImportToDantori = async function(){
+  const msg = document.getElementById('impDantoriMsg');
+  const ymd = _dtFromInput((document.getElementById('impDantoriDate')||{}).value);
+  if(ymd.length !== 8){ alert('対象日を選んでください'); return; }
+
+  const activeIds = Object.keys(_impParsedJobs).filter(id => (_impParsedJobs[id]||[]).length > 0);
+  if(!activeIds.length){ alert('取り込むデータがありません。先にExcelを選んでプレビューを出してください'); return; }
+
+  // _impParsedJobs を lines と同じ形 {lineId:{jobs:[...]}} にして共通ビルダーへ渡す
+  const asLines = {};
+  activeIds.forEach(id => { asLines[id] = { jobs: _impParsedJobs[id] }; });
+  const entries = _buildDantoriEntriesFromLines(asLines);
+  if(!entries.length){ alert('段取り計画に変換できる行がありませんでした（品番・開始・終了時刻を確認してください）'); return; }
+
+  const d  = _dtParse(ymd);
+  const wd = ['日','月','火','水','木','金','土'][d.getDay()];
+  const dateLabel = `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}(${wd})`;
+  const preview = activeIds.map(id =>
+    `  ${getLineName(id)}：${(_impParsedJobs[id]||[]).length}件`).join('\n');
+
+  if(!confirm(
+    `${dateLabel} の段取り計画として ${entries.length} 件を作ります。\n\n${preview}\n\n`
+    + '※ 進捗管理ボード（当日の生産・実績）には書き込みません\n'
+    + '※ この日に手で追加した計画は残ります\n\nよろしいですか？'
+  )) return;
+
+  const btn = document.getElementById('impDantoriBtn');
+  btn.disabled = true;
+  msg.style.color = '#888'; msg.textContent = '書き込み中...';
+  try{
+    const fbUrl = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
+    const res = await fetch(`${fbUrl}/dantori/${ymd}.json`);
+    const existing = res.ok ? (await res.json() || {}) : {};
+    const newData = _mergePlanEntries(entries, existing, ymd);
+    const put = await fetch(`${fbUrl}/dantori/${ymd}.json`,
+      {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newData)});
+    if(!put.ok){ const t = await put.text(); throw new Error(`HTTP ${put.status}: ${t}`); }
+    msg.style.color = '#27ae60';
+    msg.textContent = `✓ ${dateLabel} に ${entries.length} 件を作成しました`;
+    // 作った日を段取りタブで開いておく
+    setDantoriViewDate(ymd);
+    await loadDantoriSchedule();
+    alert(`✓ ${dateLabel} の段取り計画を ${entries.length} 件つくりました。\n\n`
+      + '段取り指示タブがその日に切り替わっています。役割の割り振りはそこで行ってください。');
+  }catch(e){
+    msg.style.color = '#c0392b';
+    msg.textContent = 'エラー: ' + e.message;
+    alert('作成エラー: ' + e.message);
+  }finally{
+    btn.disabled = false;
+  }
+};
 // インポートプレビューの「段取りなし」チェックボックス変更時に_impParsedJobsを更新
 window._impToggleNoSetup = function(cb){
   const lid = cb.dataset.lid;
