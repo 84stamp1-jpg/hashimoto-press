@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.02-4 : 配置表のバー担当者編集で、作業者チップを押すとポップアップが閉じ、選択の追加も解除もできなかった。rtToggleWorker が rt-ep-inner を innerHTML で作り直すため、押したチップ自体がDOMから外れ、そのあと document の外クリック判定 !p.contains(e.target) が真になって rtCloseEntryEdit() が走っていた。チップの onclick に event を渡して stopPropagation() し、外クリック判定側でも e.target.isConnected===false の要素は「外」と扱わないようにした -->
 <!-- H-Hub v2026.09.02-3 : 配置表(kp4)でバー単位の担当者編集が見つけられない状態だったので3点直した。(1).rt-block の cursor が後段の指定で default に上書きされており、クリックできることが分からなかった → pointer に。(2)段取りバー(rt-setup=金型取付・品質確認・初品出し)に onclick が無く、生産バーしか開けなかった → 同じエントリの編集ポップアップを開くようにした。(3)配置表の見出しに操作方法を明記（バーをクリック＝その時間帯だけ変更／🔀入れ替えモード＝1日まるごと交換） -->
 <!-- H-Hub v2026.09.02-2 : 「段取り計画だけ作る」でグループを切り替えて連続取込すると、先に取り込んだ他グループの計画が消えていた。_mergePlanEntries は「entriesが全ラインを網羅している」前提(linesからの同期用)で、entriesに無い計画エントリを落とす作りだったため。第4引数 scopeLineIds を追加し、指定されたラインだけを置き換え、対象外ラインの計画は残すようにした。インポートは選択中グループのラインのみをscopeとして渡す(同期側は従来どおり全置換) -->
 <!-- H-Hub v2026.09.02-1 : 段取り指示タブを日付切替に対応。(1)getDantoriDatePath()が今日決め打ちだったため段取り計画は当日分しか作れなかった。表示日(DANTORI_VIEW_DATE)を持たせ、日付入力＋「今日/明日」ボタンで切り替えられるようにした。(2)進捗管理ボード(lines)は日付を持たない当日の状態なので、linesからの同期(自動同期・今すぐ同期)は常に「今日」へ書くよう固定し、本日以外を表示中は「今すぐ同期」を無効化した(今日の計画を別日に書く事故の防止)。(3)生産予定インポートに「📅 段取り計画だけ作る(対象日指定)」を追加。Excelのパース結果から dantori/<日付> だけを作り、linesには書き込まないため当日の実績が壊れない。前日夕方に翌日分を仕込める。(4)段取り標準時間設定の計算式表記に括弧が抜けており「C×人数＋P×型数÷人数」と読めていた。実装は (C×人数＋P×型数)÷人数 ＝ C＋P×型数÷人数 なので表記を修正し、片付けは人数で短縮されない／準備は型数を人数で分担できる、という意味も添えた -->
@@ -6532,18 +6533,22 @@ function _rtBuildPopupHtml(entry){
     const sel = _rtEditRoles[key] || [];
     const isNone = sel.length === 0;
     html += `<div class="rt-ep-role-row"><div class="rt-ep-label">${label}${multi?' <span style="color:#9ca3af;font-weight:400;">（複数可）</span>':''}</div><div class="rt-ep-chips">`;
-    html += `<span class="rt-ep-chip ep-none${isNone?' ep-sel':''}" onclick="rtToggleWorker('${key}',null,${multi})">なし</span>`;
+    html += `<span class="rt-ep-chip ep-none${isNone?' ep-sel':''}" onclick="rtToggleWorker('${key}',null,${multi},event)">なし</span>`;
     workers.forEach(name => {
       const isSel = sel.includes(name);
       const esc = name.replace(/'/g,"\\'");
-      html += `<span class="rt-ep-chip${isSel?' ep-sel':''}" onclick="rtToggleWorker('${key}','${esc}',${multi})">${name}</span>`;
+      html += `<span class="rt-ep-chip${isSel?' ep-sel':''}" onclick="rtToggleWorker('${key}','${esc}',${multi},event)">${name}</span>`;
     });
     html += `</div></div>`;
   });
   return html;
 }
 
-window.rtToggleWorker = function(roleKey, name, multi){
+window.rtToggleWorker = function(roleKey, name, multi, ev){
+  // ★このあと rt-ep-inner を作り直すと、押したチップ自体がDOMから外れる。
+  //   そのままだと document の外クリック判定が「ポップアップの外を押した」と
+  //   誤認して閉じてしまうため、ここで伝播を止める。
+  if(ev) ev.stopPropagation();
   const sel = _rtEditRoles[roleKey] || [];
   if(name === null){
     _rtEditRoles[roleKey] = [];
@@ -6605,7 +6610,11 @@ window.rtSaveEntryEdit = async function(){
 // 外クリックでポップアップを閉じる
 document.addEventListener('click', function(e){
   const p = document.getElementById('rt-entry-popup');
-  if(p && p.style.display !== 'none' && !p.contains(e.target)) rtCloseEntryEdit();
+  if(!p || p.style.display === 'none') return;
+  // 押した要素が既にDOMから外れている＝ポップアップ内の再描画で消えた要素なので、
+  // 「外を押した」とは扱わない（保険。個々のonclickでも伝播を止めている）
+  if(e.target && e.target.isConnected === false) return;
+  if(!p.contains(e.target)) rtCloseEntryEdit();
 });
 
 // ===== kp4：プレス計画タイムライン（Ganttチャート） =====
