@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.02-3 : 配置表(kp4)でバー単位の担当者編集が見つけられない状態だったので3点直した。(1).rt-block の cursor が後段の指定で default に上書きされており、クリックできることが分からなかった → pointer に。(2)段取りバー(rt-setup=金型取付・品質確認・初品出し)に onclick が無く、生産バーしか開けなかった → 同じエントリの編集ポップアップを開くようにした。(3)配置表の見出しに操作方法を明記（バーをクリック＝その時間帯だけ変更／🔀入れ替えモード＝1日まるごと交換） -->
 <!-- H-Hub v2026.09.02-2 : 「段取り計画だけ作る」でグループを切り替えて連続取込すると、先に取り込んだ他グループの計画が消えていた。_mergePlanEntries は「entriesが全ラインを網羅している」前提(linesからの同期用)で、entriesに無い計画エントリを落とす作りだったため。第4引数 scopeLineIds を追加し、指定されたラインだけを置き換え、対象外ラインの計画は残すようにした。インポートは選択中グループのラインのみをscopeとして渡す(同期側は従来どおり全置換) -->
 <!-- H-Hub v2026.09.02-1 : 段取り指示タブを日付切替に対応。(1)getDantoriDatePath()が今日決め打ちだったため段取り計画は当日分しか作れなかった。表示日(DANTORI_VIEW_DATE)を持たせ、日付入力＋「今日/明日」ボタンで切り替えられるようにした。(2)進捗管理ボード(lines)は日付を持たない当日の状態なので、linesからの同期(自動同期・今すぐ同期)は常に「今日」へ書くよう固定し、本日以外を表示中は「今すぐ同期」を無効化した(今日の計画を別日に書く事故の防止)。(3)生産予定インポートに「📅 段取り計画だけ作る(対象日指定)」を追加。Excelのパース結果から dantori/<日付> だけを作り、linesには書き込まないため当日の実績が壊れない。前日夕方に翌日分を仕込める。(4)段取り標準時間設定の計算式表記に括弧が抜けており「C×人数＋P×型数÷人数」と読めていた。実装は (C×人数＋P×型数)÷人数 ＝ C＋P×型数÷人数 なので表記を修正し、片付けは人数で短縮されない／準備は型数を人数で分担できる、という意味も添えた -->
 <!-- H-Hub v2026.08.26-1 : 進捗管理ボードの2件を修正。(1)「計画修正(実績を維持したまま変更)」が実績を actual という誤ったフィールド名で見ており、保存後にキャッシュから actualCount/status が欠落→2回目の保存で実績が消えていた。実績バッジが常に「未実施」表示・行削除の警告も出ない状態だった。(2)並行生産や同名品番で、別の行を完了しただけで他行まで完了扱いになる問題。ライン単位の part 一致で現在行を探していたのをやめ、lines/<id>/curSeq(行番号)を正として curJobIndex() 1か所で判定するようにした -->
@@ -397,7 +398,7 @@ html, body {
 .rt-ep-btns{display:flex;gap:6px;margin-top:10px;justify-content:flex-end;border-top:1px solid #f3f4f6;padding-top:8px;}
 .rt-block{cursor:pointer;}
 .rt-block:hover{filter:brightness(1.1);}
-.rt-block{position:absolute;top:5px;height:24px;border-radius:3px;display:flex;align-items:center;padding:0 4px;font-size:9px;font-weight:700;color:rgba(255,255,255,.95);overflow:hidden;white-space:nowrap;cursor:default;min-width:4px;box-shadow:0 1px 3px rgba(0,0,0,.2);}
+.rt-block{position:absolute;top:5px;height:24px;border-radius:3px;display:flex;align-items:center;padding:0 4px;font-size:9px;font-weight:700;color:rgba(255,255,255,.95);overflow:hidden;white-space:nowrap;cursor:pointer;min-width:4px;box-shadow:0 1px 3px rgba(0,0,0,.2);}
 .rt-block.rt-setup{background-color:#fef9c3!important;color:#92400e!important;border:1px solid #fcd34d!important;box-shadow:0 1px 2px rgba(0,0,0,.1)!important;background-image:repeating-linear-gradient(135deg,rgba(0,0,0,.06) 0,rgba(0,0,0,.06) 3px,transparent 3px,transparent 7px)!important;}
 .rt-overlay{position:absolute;top:0;left:110px;bottom:0;pointer-events:none;overflow:hidden;}
 .rt-break-band{position:absolute;top:0;bottom:0;background:rgba(0,0,0,.07);}
@@ -6667,14 +6668,16 @@ function renderPressTimeline(allEntries){
         ? `${label}<span style="opacity:0.5;margin:0 2px;">｜</span><span style="font-size:0.85em;">${part}</span>`
         : label;
 
+      // バーをクリックしたら、その1本（＝その時間帯の1工程）の担当者を編集できる
+      const eid = (d._id||'').replace(/'/g,"\\'");
       if(isSetupRole){
         // 段取り担当（品質/初品/取付）: 段取り時間帯のみ（setupStart〜prodStart）
         if(sm !== null && ps !== null && ps > sm){
           const sx = rt_toX(sm), sw = Math.max(rt_toX(ps) - sx, 8);
-          blk += `<div class="rt-block rt-setup" style="left:${sx}px;width:${sw}px;background:${color};" title="${tip}">${setupBarInner}</div>`;
+          blk += `<div class="rt-block rt-setup" style="left:${sx}px;width:${sw}px;background:${color};" title="${tip}" onclick="rtOpenEntryEdit('${eid}',event)">${setupBarInner}</div>`;
         } else if(sm !== null && ps === null){
           const sx = rt_toX(sm), sw = 60 * RT_PPM;
-          blk += `<div class="rt-block rt-setup" style="left:${sx}px;width:${sw}px;background:${color};" title="${tip}">段取中<span style="opacity:0.5;margin:0 2px;">｜</span><span style="font-size:0.85em;">${part}</span></div>`;
+          blk += `<div class="rt-block rt-setup" style="left:${sx}px;width:${sw}px;background:${color};" title="${tip}" onclick="rtOpenEntryEdit('${eid}',event)">段取中<span style="opacity:0.5;margin:0 2px;">｜</span><span style="font-size:0.85em;">${part}</span></div>`;
         }
       }
       // 作業者バー描画：roles.作業者 または shiftChanges の inWorker
@@ -6704,7 +6707,6 @@ function renderPressTimeline(allEntries){
           const pw = wr.end !== null ? Math.max(rt_toX(wr.end) - px, 8) : 90 * RT_PPM;
           // 交代入場者（ジョブ開始より後から始まる）はスタイルを変える
           const isShifted = (psMin !== null && wr.start !== null && wr.start !== psMin);
-          const eid = (d._id||'').replace(/'/g,"\\'");
           blk += `<div class="rt-block" style="left:${px}px;width:${pw}px;background:${color};opacity:${isShifted?'0.65':'0.8'};${isShifted?'border-top:2px solid #6366f1;':''}" title="${tip}" onclick="rtOpenEntryEdit('${eid}',event)">${prodBarInner}</div>`;
         });
       }
@@ -6779,7 +6781,7 @@ function renderPressTimeline(allEntries){
   const ovrCount = Object.keys(WORKER_PRIORITY_OVERRIDE).length;
   return `<div style="overflow:hidden;" class="${_rtOverrideMode ? 'rt-ovr-mode' : ''}">
   <div class="rt-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px;">
-    <span>📍 作業者 ライン配置表 ── ${timeStr} 現在　<span style="font-size:10px;color:#aaa;">※ 下の「🤖 自動割り振り」で役割を自動設定できます</span></span>
+    <span>📍 作業者 ライン配置表 ── ${timeStr} 現在　<span style="font-size:10px;color:#aaa;">※ <b style="color:#0369a1;">バーをクリック</b>すると、その時間帯だけ担当者を変えられます／<b style="color:#0369a1;">🔀入れ替えモード</b>は名前を2人押すと1日まるごと交換／「🤖 自動割り振り」で一括設定</span></span>
     <div style="display:flex;gap:6px;flex-shrink:0;">
       <button onclick="rtToggleOverrideMode()" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid;border-radius:5px;cursor:pointer;white-space:nowrap;${ovrBtnStyle}">${_rtOverrideMode ? '✕ 優先ライン変更終了' : `📌 今日の優先ライン${ovrCount?'('+ovrCount+'件)':''}`}</button>
       <button onclick="rtToggleSwapMode()" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid;border-radius:5px;cursor:pointer;white-space:nowrap;${swapBtnStyle}">${_rtSwapMode ? '✕ 入れ替えモード終了' : '🔀 入れ替えモード'}</button>
