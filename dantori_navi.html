@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.03-4 : 前日に組んだ段取り計画の担当者が、翌朝ごっそり消える不具合を修正。自動同期(_autoSyncDantoriFromPlan)は lines の jobs が変わるたびに走り、その日の dantori をlines から作り直す。ところが lines は「当日の状態」しか持たないため、日付をまたいだ直後は前日の内容のまま同期が走り、前日に組んだ翌日分の計画を上書きしていた。進捗ボードは1日中更新されるので、そのたびに同じことが起きる。_mergePlanEntries に protectAssigned を追加し、自動同期では「担当者または作業者交代が入っているエントリ」に一切触れないようにした。手動の「今すぐ同期」とExcel取込は従来どおり作り直す -->
 <!-- H-Hub v2026.09.03-3 : 前日に組んだ担当が、翌朝のインポート(lines同期)で一部消える問題を修正。(1)_mergePlanEntries が roles しか引き継いでおらず、shiftChanges(作業者ごとの時間割り)が毎回落ちていた → 引き継ぐようにした。ただし新しい生産時間帯の外に出た交代時刻は捨てる。(2)照合が ライン+品番+生産開始 の完全一致のみで、時刻が少し変わっただけで担当が空になっていた → ライン+品番 の予備照合を追加(先に完全一致を使い、1つの既存エントリを2工程で奪い合わないようtakenIdsで管理)。品番自体が差し替わった工程は従来どおり担当なしで作り直す -->
 <!-- H-Hub v2026.09.03-2 : 配置表(kp4)を1画面で完結させた。(1)下の余白にライン別の「この日の計画」を追加。品番チップに 時刻・品番・担当人数(👷)・途中交代あり(⏱)を表示し、担当が0人のものは赤くする。押すとその工程の担当者選択が開く。(2)担当者選択ポップアップの「作業者」に、選んだ人ごとの作業時間欄を追加。空欄＝計画の開始〜終了、途中で交代する人だけ時刻を入れる。他工程と重なる人には⚠を出す。(3)保存時は buildWorkerRolesFrom() で roles.作業者＋shiftChanges へ変換、読み込みは entryToWorkerRows() で戻す。配置表の表示は従来どおり作業者ベース -->
 <!-- H-Hub v2026.09.03-1 : 段取り計画の作業者入力を「部品ベース＝1人1行＋時間」に変更。従来は 作業者(チップ) と ⏱作業者交代(時刻・退・入) の2段構えで、途中で担当が変わる場合に頭の中で交代を組み立てる必要があった。作業者は1人1行にし、開始〜終了を入れられるようにした(空欄＝工程まるごと)。候補にはその時間に空いている人だけを出し、同じ工程で既に選んだ人も除く。保存時は workerRowsToRoles() で従来の roles.作業者＋shiftChanges へ変換し、読み込み時はsetWorkerRowsFromEntry() が buildShiftRanges() から1人1行へ戻すため、配置表(作業者ベース表示)・自動割り振り・既存データはそのまま動く(往復して同一の区間になることを実データで確認済み)。旧交代UI(addShiftChange/refreshShiftCandidates/validateShiftTime)は削除 -->
@@ -7289,7 +7290,12 @@ function _debouncedDantoriAutoSync(){
 //   entriesに無い計画エントリは消える（＝linesからの同期の挙動）。
 //   Setを渡すと、そこに含まれないラインの計画エントリはそのまま残す。
 //   Excelインポートはグループ単位なので、他グループを消さないために使う。
-function _mergePlanEntries(entries, existing, dateStr, scopeLineIds){
+//
+// protectAssigned … trueなら「担当者や作業者交代が入っているエントリ」には一切触らない。
+//   自動同期（linesの変化で走る）で使う。前日に組んだ段取り計画を、
+//   進捗管理ボードの更新や日付またぎで壊さないため。
+//   手動の「今すぐ同期」やExcel取込では false（＝従来どおり作り直す）。
+function _mergePlanEntries(entries, existing, dateStr, scopeLineIds, protectAssigned){
   // 既存planエントリを2通りでインデックス化する
   //   厳密キー: ライン＋品番＋生産開始 … 予定が変わっていなければこれで当たる
   //   予備キー: ライン＋品番          … 時刻だけ変わった場合の受け皿（担当を引き継ぐため）
@@ -7311,6 +7317,17 @@ function _mergePlanEntries(entries, existing, dateStr, scopeLineIds){
   if(scopeLineIds && scopeLineIds.size){
     Object.entries(existing).forEach(([id, v]) => {
       if(v && v.isManual !== true && !scopeLineIds.has(v.lineId)) newData[id] = v;
+    });
+  }
+
+  // ★担当者が入っているエントリは、自動同期では手を触れずそのまま残す
+  const protectedIds = new Set();
+  if(protectAssigned){
+    Object.entries(existing).forEach(([id, v]) => {
+      if(!v || v.isManual === true) return;
+      const r = v.roles || {};
+      const assigned = Object.values(r).some(x => x) || (v.shiftChanges || []).length > 0;
+      if(assigned){ newData[id] = v; protectedIds.add(id); }
     });
   }
 
@@ -7336,6 +7353,8 @@ function _mergePlanEntries(entries, existing, dateStr, scopeLineIds){
       // 時刻が変わった工程でも、同じライン・同じ品番なら担当を引き継ぐ
       prev = (looseMap[`${rest.lineId}||${rest.partNo}`] || []).find(c => !takenIds.has(c.id)) || null;
     }
+    // 担当済みのエントリに当たったら、それを正としてこの取り込み分は捨てる
+    if(prev && protectedIds.has(prev.id)){ takenIds.add(prev.id); return; }
     const fbKey = prev ? prev.id : _newFbKey();
     if(prev){ usedKeys.add(prev.id); takenIds.add(prev.id); }
     const prevRoles = prev?.entry?.roles || {};
@@ -7372,7 +7391,10 @@ async function _autoSyncDantoriFromPlan(){
   try {
     const res = await fetch(`${fbUrl}/dantori/${dateStr}.json`);
     const existing = res.ok ? (await res.json() || {}) : {};
-    const newData = _mergePlanEntries(entries, existing, dateStr);
+    // ★第5引数 true ＝ 担当者が入っているエントリには触らない。
+    //   進捗管理ボードは1日中更新され、そのたびにここが走る。前日に組んだ
+    //   段取り計画（担当者・作業者交代）を上書きしないための保護。
+    const newData = _mergePlanEntries(entries, existing, dateStr, null, true);
     await fetch(`${fbUrl}/dantori/${dateStr}.json`,
       {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(newData)});
     if(isDantoriToday()) await loadDantoriSchedule();   // 別日を見ているときは画面を触らない
