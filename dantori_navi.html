@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.03-8 : 配置表の印刷で、予定の終わりに合わせて時間軸を切り詰め、空いた分だけ拡大するようにした。8:00-20:00の固定描画だと17時までしか予定がない日に右の3時間が白紙になり、その分だけ表が小さくなっていた。dantoriScheduleから当日の最終時刻を求めて次の正時までを描画幅とし（最短でも12:00まで）、A4横に収まる倍率を逆算してzoomに入れる。例：17:00終わりなら幅1080→810px、倍率0.88→1.14で約3割大きくなる。見出しに「08:00〜17:00」と描画範囲も出す -->
 <!-- H-Hub v2026.09.03-7 : 配置表の印刷から「この日の計画」を外した（2枚目になるため。社長判断）。印刷されるのは 日付つき見出し ＋ 配置表 のみで、A4横1枚に収まる -->
 <!-- H-Hub v2026.09.03-6 : 配置表の印刷が真っ白になる不具合を修正。印刷ウィンドウへページのCSSを丸ごと複製していたが、その中に現品票用の@media print{ body>*:not(#hp-print-area){display:none!important;} } が含まれており、印刷時に全要素が非表示になっていた。_stripPrintMedia() を追加し、複製するCSSから @media print ブロックを { } の対応を数えて正しく取り除くようにした（既存のスナップショット印刷は「最初の@media print以降を全部削る」雑な除去だが、このファイルには@media printが3か所あるためブロック単位で除去している） -->
 <!-- H-Hub v2026.09.03-5 : 配置表(kp4)に「🖨 印刷」を追加。表示中の日付を見出しに入れてA4横で印刷できる。position:fixed や sticky はChromeの印刷で崩れるため、進捗管理スナップショットと同じ「別ウィンドウへ複製して印刷」方式にした。.rt-outer の max-height/overflow を外して全行を出し、rt-name の sticky も解除。本日以外を表示しているときは現在時刻線を消す（別の日に「現在」は紛らわしいため）。配置表の下の「この日の計画」も一緒に印刷される -->
@@ -6882,6 +6883,31 @@ window.rtPrintRoster = function(){
   clone.querySelectorAll('.rt-ovr-trigger').forEach(el => el.remove());
   // ★「この日の計画」は印刷しない（2枚目になるため。2026-09-03 社長より）
 
+  // ★予定の終わりに合わせて時間軸を切り詰め、空いた分だけ拡大して印刷する。
+  //   17時までしか予定がない日に20時まで描くと、右の3時間が白紙で無駄になるため。
+  let lastMin = null;
+  const _upd = t => { const m = rt_toMin(t); if(m !== null && (lastMin === null || m > lastMin)) lastMin = m; };
+  (dantoriSchedule || []).forEach(d2 => {
+    _upd(d2.prodEnd); _upd(d2.prodStart); _upd(d2.setupStart);
+    (d2.shiftChanges || []).forEach(c => _upd(c.endTime || ''));
+  });
+  // 次の正時まで。短すぎる日でも12時までは描く
+  const axisEnd = (lastMin === null) ? RT_END
+                : Math.min(RT_END, Math.max(12 * 60, Math.ceil(lastMin / 60) * 60));
+  const usedW = rt_toX(axisEnd);
+  if(usedW < RT_W){
+    clone.querySelectorAll('*').forEach(el => {
+      if(el.style && el.style.width === RT_W + 'px') el.style.width = usedW + 'px';
+    });
+    clone.querySelectorAll('.rt-hour-mark').forEach(el => {
+      if(parseFloat(el.style.left || '0') > usedW + 1) el.remove();
+    });
+  }
+  // A4横（幅297mm − 余白12mm ≒ 1077px）に、名前欄110px＋グラフを収める倍率。
+  // 右端が切れないよう少し内側（1050px）に収める
+  const zoom = Math.min(1.5, Math.max(0.6, 1050 / (110 + usedW)));
+  const spanStr = `08:00〜${String(Math.floor(axisEnd / 60)).padStart(2, '0')}:00`;
+
   // ★アプリの @media print（現品票用）を必ず取り除く。残すと印刷が真っ白になる
   const css = _stripPrintMedia(
     [...document.querySelectorAll('style')].map(s => s.textContent).join('\n'));
@@ -6915,7 +6941,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#fff;margin:0;padding:8px;
 @media print{
   .pr-btn{display:none!important;}
   body{padding:0!important;}
-  #pr-scale{zoom:0.88;}
+  #pr-scale{zoom:${zoom.toFixed(3)};}
   .rt-block,.rt-break-band,.rt-plan-job,.rt-plan-cnt,.rt-plan-line,.rt-hdr,.rt-row,.rt-name{
     -webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .rt-row{break-inside:avoid;}
@@ -6928,6 +6954,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#fff;margin:0;padding:8px;
   <div class="pr-hdr">
     <b>📍 作業者 ライン配置表</b>
     <span class="pr-date">${dateStr}</span>
+    <span style="font-size:12px;color:#555;">${spanStr}</span>
     <span class="pr-stamp">印刷 ${stamp}</span>
   </div>
   ${clone.outerHTML}
