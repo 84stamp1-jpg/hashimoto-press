@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.03-7 : 配置表の印刷から「この日の計画」を外した（2枚目になるため。社長判断）。印刷されるのは 日付つき見出し ＋ 配置表 のみで、A4横1枚に収まる -->
 <!-- H-Hub v2026.09.03-6 : 配置表の印刷が真っ白になる不具合を修正。印刷ウィンドウへページのCSSを丸ごと複製していたが、その中に現品票用の@media print{ body>*:not(#hp-print-area){display:none!important;} } が含まれており、印刷時に全要素が非表示になっていた。_stripPrintMedia() を追加し、複製するCSSから @media print ブロックを { } の対応を数えて正しく取り除くようにした（既存のスナップショット印刷は「最初の@media print以降を全部削る」雑な除去だが、このファイルには@media printが3か所あるためブロック単位で除去している） -->
 <!-- H-Hub v2026.09.03-5 : 配置表(kp4)に「🖨 印刷」を追加。表示中の日付を見出しに入れてA4横で印刷できる。position:fixed や sticky はChromeの印刷で崩れるため、進捗管理スナップショットと同じ「別ウィンドウへ複製して印刷」方式にした。.rt-outer の max-height/overflow を外して全行を出し、rt-name の sticky も解除。本日以外を表示しているときは現在時刻線を消す（別の日に「現在」は紛らわしいため）。配置表の下の「この日の計画」も一緒に印刷される -->
 <!-- H-Hub v2026.09.03-4 : 前日に組んだ段取り計画の担当者が、翌朝ごっそり消える不具合を修正。自動同期(_autoSyncDantoriFromPlan)は lines の jobs が変わるたびに走り、その日の dantori をlines から作り直す。ところが lines は「当日の状態」しか持たないため、日付をまたいだ直後は前日の内容のまま同期が走り、前日に組んだ翌日分の計画を上書きしていた。進捗ボードは1日中更新されるので、そのたびに同じことが起きる。_mergePlanEntries に protectAssigned を追加し、自動同期では「担当者または作業者交代が入っているエントリ」に一切触れないようにした。手動の「今すぐ同期」とExcel取込は従来どおり作り直す -->
@@ -6879,8 +6880,7 @@ window.rtPrintRoster = function(){
     clone.querySelectorAll('.rt-now-line').forEach(el => el.remove());  // 別の日に「現在時刻」は紛らわしい
   }
   clone.querySelectorAll('.rt-ovr-trigger').forEach(el => el.remove());
-  const planEl = document.querySelector('.rt-plan');
-  const planHtml = planEl ? planEl.outerHTML : '';
+  // ★「この日の計画」は印刷しない（2枚目になるため。2026-09-03 社長より）
 
   // ★アプリの @media print（現品票用）を必ず取り除く。残すと印刷が真っ白になる
   const css = _stripPrintMedia(
@@ -6911,7 +6911,6 @@ body{font-family:'Noto Sans JP',sans-serif;background:#fff;margin:0;padding:8px;
 /* 画面の制約を外す（印刷では全行を出す） */
 .rt-outer{overflow:visible!important;max-height:none!important;}
 .rt-name{position:static!important;}
-.rt-plan{margin-top:8px;}
 @page{size:A4 landscape;margin:6mm;}
 @media print{
   .pr-btn{display:none!important;}
@@ -6932,7 +6931,6 @@ body{font-family:'Noto Sans JP',sans-serif;background:#fff;margin:0;padding:8px;
     <span class="pr-stamp">印刷 ${stamp}</span>
   </div>
   ${clone.outerHTML}
-  ${planHtml}
 </div>
 </body></html>`);
   win.document.close();
