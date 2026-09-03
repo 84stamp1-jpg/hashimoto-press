@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.03-5 : 配置表(kp4)に「🖨 印刷」を追加。表示中の日付を見出しに入れてA4横で印刷できる。position:fixed や sticky はChromeの印刷で崩れるため、進捗管理スナップショットと同じ「別ウィンドウへ複製して印刷」方式にした。.rt-outer の max-height/overflow を外して全行を出し、rt-name の sticky も解除。本日以外を表示しているときは現在時刻線を消す（別の日に「現在」は紛らわしいため）。配置表の下の「この日の計画」も一緒に印刷される -->
 <!-- H-Hub v2026.09.03-4 : 前日に組んだ段取り計画の担当者が、翌朝ごっそり消える不具合を修正。自動同期(_autoSyncDantoriFromPlan)は lines の jobs が変わるたびに走り、その日の dantori をlines から作り直す。ところが lines は「当日の状態」しか持たないため、日付をまたいだ直後は前日の内容のまま同期が走り、前日に組んだ翌日分の計画を上書きしていた。進捗ボードは1日中更新されるので、そのたびに同じことが起きる。_mergePlanEntries に protectAssigned を追加し、自動同期では「担当者または作業者交代が入っているエントリ」に一切触れないようにした。手動の「今すぐ同期」とExcel取込は従来どおり作り直す -->
 <!-- H-Hub v2026.09.03-3 : 前日に組んだ担当が、翌朝のインポート(lines同期)で一部消える問題を修正。(1)_mergePlanEntries が roles しか引き継いでおらず、shiftChanges(作業者ごとの時間割り)が毎回落ちていた → 引き継ぐようにした。ただし新しい生産時間帯の外に出た交代時刻は捨てる。(2)照合が ライン+品番+生産開始 の完全一致のみで、時刻が少し変わっただけで担当が空になっていた → ライン+品番 の予備照合を追加(先に完全一致を使い、1つの既存エントリを2工程で奪い合わないようtakenIdsで管理)。品番自体が差し替わった工程は従来どおり担当なしで作り直す -->
 <!-- H-Hub v2026.09.03-2 : 配置表(kp4)を1画面で完結させた。(1)下の余白にライン別の「この日の計画」を追加。品番チップに 時刻・品番・担当人数(👷)・途中交代あり(⏱)を表示し、担当が0人のものは赤くする。押すとその工程の担当者選択が開く。(2)担当者選択ポップアップの「作業者」に、選んだ人ごとの作業時間欄を追加。空欄＝計画の開始〜終了、途中で交代する人だけ時刻を入れる。他工程と重なる人には⚠を出す。(3)保存時は buildWorkerRolesFrom() で roles.作業者＋shiftChanges へ変換、読み込みは entryToWorkerRows() で戻す。配置表の表示は従来どおり作業者ベース -->
@@ -6835,6 +6836,85 @@ document.addEventListener('click', function(e){
   if(!p.contains(e.target)) rtCloseEntryEdit();
 });
 
+// ===== kp4：配置表の印刷 =====
+// position:fixed や sticky はChromeの印刷で崩れるため、別ウィンドウへ複製して印刷する
+// （進捗管理スナップショットと同じ方式）。表示中の日付を必ず見出しに入れる。
+window.rtPrintRoster = function(){
+  const outer = document.querySelector('.rt-outer');
+  if(!outer){
+    alert('配置表を表示してから押してください（「📍 配置表」タブ）。');
+    return;
+  }
+  const ymd   = getDantoriDatePath();
+  const d     = _dtParse(ymd);
+  const wd    = ['日','月','火','水','木','金','土'][d.getDay()];
+  const dateStr = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${wd}）`;
+
+  // 複製して、印刷に不要なものを取り除く
+  const clone = outer.cloneNode(true);
+  if(!isDantoriToday()){
+    clone.querySelectorAll('.rt-now-line').forEach(el => el.remove());  // 別の日に「現在時刻」は紛らわしい
+  }
+  clone.querySelectorAll('.rt-ovr-trigger').forEach(el => el.remove());
+  const planEl = document.querySelector('.rt-plan');
+  const planHtml = planEl ? planEl.outerHTML : '';
+
+  const css = [...document.querySelectorAll('style')].map(s => s.textContent).join('\n');
+  const now = new Date();
+  const stamp = `${now.getFullYear()}/${now.getMonth()+1}/${now.getDate()} `
+              + `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+  const win = window.open('', '_blank');
+  if(!win){
+    alert('ポップアップがブロックされました。\nアドレスバー右側のブロック解除アイコンから許可してください。');
+    return;
+  }
+  win.document.write(`<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8">
+<title>作業者 ライン配置表 ${ymd}</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+<style>
+${css}
+*{box-sizing:border-box;}
+body{font-family:'Noto Sans JP',sans-serif;background:#fff;margin:0;padding:8px;}
+.pr-hdr{display:flex;align-items:baseline;gap:14px;border-bottom:2px solid #1f3864;padding-bottom:5px;margin-bottom:8px;}
+.pr-hdr b{font-size:17px;color:#1f3864;}
+.pr-hdr .pr-date{font-size:20px;font-weight:700;}
+.pr-hdr .pr-stamp{margin-left:auto;font-size:10px;color:#888;}
+.pr-btn{margin-bottom:8px;}
+.pr-btn button{background:#2980b9;color:#fff;border:none;border-radius:5px;padding:7px 16px;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;}
+/* 画面の制約を外す（印刷では全行を出す） */
+.rt-outer{overflow:visible!important;max-height:none!important;}
+.rt-name{position:static!important;}
+.rt-plan{margin-top:8px;}
+@page{size:A4 landscape;margin:6mm;}
+@media print{
+  .pr-btn{display:none!important;}
+  body{padding:0!important;}
+  #pr-scale{zoom:0.88;}
+  .rt-block,.rt-break-band,.rt-plan-job,.rt-plan-cnt,.rt-plan-line,.rt-hdr,.rt-row,.rt-name{
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  .rt-row{break-inside:avoid;}
+}
+</style></head>
+<body>
+<div class="pr-btn"><button onclick="window.print()">🖨 印刷する（Ctrl+P）</button>
+  <span style="font-size:11px;color:#888;margin-left:8px;">A4横。用紙に収まらないときは、印刷設定の「倍率」を下げてください。</span></div>
+<div id="pr-scale">
+  <div class="pr-hdr">
+    <b>📍 作業者 ライン配置表</b>
+    <span class="pr-date">${dateStr}</span>
+    <span class="pr-stamp">印刷 ${stamp}</span>
+  </div>
+  ${clone.outerHTML}
+  ${planHtml}
+</div>
+</body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => { try { win.print(); } catch(e){} }, 800);
+};
+
 // ===== kp4：プレス計画タイムライン（Ganttチャート） =====
 function renderPressTimeline(allEntries){
   const now     = new Date();
@@ -7031,6 +7111,7 @@ function renderPressTimeline(allEntries){
     <div style="display:flex;gap:6px;flex-shrink:0;">
       <button onclick="rtToggleOverrideMode()" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid;border-radius:5px;cursor:pointer;white-space:nowrap;${ovrBtnStyle}">${_rtOverrideMode ? '✕ 優先ライン変更終了' : `📌 今日の優先ライン${ovrCount?'('+ovrCount+'件)':''}`}</button>
       <button onclick="rtToggleSwapMode()" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid;border-radius:5px;cursor:pointer;white-space:nowrap;${swapBtnStyle}">${_rtSwapMode ? '✕ 入れ替えモード終了' : '🔀 入れ替えモード'}</button>
+      <button onclick="rtPrintRoster()" title="表示中の日付の配置表を印刷します（A4横）" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid #cbd5e1;border-radius:5px;cursor:pointer;white-space:nowrap;background:#fff;color:#475569;">🖨 印刷</button>
     </div>
   </div>
   <div class="rt-outer">
