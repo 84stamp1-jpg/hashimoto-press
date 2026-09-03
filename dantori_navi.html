@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.03-6 : 配置表の印刷が真っ白になる不具合を修正。印刷ウィンドウへページのCSSを丸ごと複製していたが、その中に現品票用の@media print{ body>*:not(#hp-print-area){display:none!important;} } が含まれており、印刷時に全要素が非表示になっていた。_stripPrintMedia() を追加し、複製するCSSから @media print ブロックを { } の対応を数えて正しく取り除くようにした（既存のスナップショット印刷は「最初の@media print以降を全部削る」雑な除去だが、このファイルには@media printが3か所あるためブロック単位で除去している） -->
 <!-- H-Hub v2026.09.03-5 : 配置表(kp4)に「🖨 印刷」を追加。表示中の日付を見出しに入れてA4横で印刷できる。position:fixed や sticky はChromeの印刷で崩れるため、進捗管理スナップショットと同じ「別ウィンドウへ複製して印刷」方式にした。.rt-outer の max-height/overflow を外して全行を出し、rt-name の sticky も解除。本日以外を表示しているときは現在時刻線を消す（別の日に「現在」は紛らわしいため）。配置表の下の「この日の計画」も一緒に印刷される -->
 <!-- H-Hub v2026.09.03-4 : 前日に組んだ段取り計画の担当者が、翌朝ごっそり消える不具合を修正。自動同期(_autoSyncDantoriFromPlan)は lines の jobs が変わるたびに走り、その日の dantori をlines から作り直す。ところが lines は「当日の状態」しか持たないため、日付をまたいだ直後は前日の内容のまま同期が走り、前日に組んだ翌日分の計画を上書きしていた。進捗ボードは1日中更新されるので、そのたびに同じことが起きる。_mergePlanEntries に protectAssigned を追加し、自動同期では「担当者または作業者交代が入っているエントリ」に一切触れないようにした。手動の「今すぐ同期」とExcel取込は従来どおり作り直す -->
 <!-- H-Hub v2026.09.03-3 : 前日に組んだ担当が、翌朝のインポート(lines同期)で一部消える問題を修正。(1)_mergePlanEntries が roles しか引き継いでおらず、shiftChanges(作業者ごとの時間割り)が毎回落ちていた → 引き継ぐようにした。ただし新しい生産時間帯の外に出た交代時刻は捨てる。(2)照合が ライン+品番+生産開始 の完全一致のみで、時刻が少し変わっただけで担当が空になっていた → ライン+品番 の予備照合を追加(先に完全一致を使い、1つの既存エントリを2工程で奪い合わないようtakenIdsで管理)。品番自体が差し替わった工程は従来どおり担当なしで作り直す -->
@@ -6836,6 +6837,28 @@ document.addEventListener('click', function(e){
   if(!p.contains(e.target)) rtCloseEntryEdit();
 });
 
+// ページのCSSから @media print ブロックを丸ごと取り除く。
+// ★このアプリのCSSには現品票用の
+//     @media print{ body>*:not(#hp-print-area){display:none!important;} }
+//   があり、そのまま印刷ウィンドウへ持っていくと「全部消える＝真っ白」になる。
+//   入れ子の { } を数えて正しく1ブロックずつ取り除く（末尾まで消す雑な除去はしない）。
+function _stripPrintMedia(css){
+  const re = /@media[^{]*\bprint\b[^{]*\{/gi;
+  let out = '', i = 0, m;
+  while((m = re.exec(css))){
+    out += css.slice(i, m.index);
+    let depth = 1, j = re.lastIndex;
+    while(j < css.length && depth > 0){
+      const ch = css[j];
+      if(ch === '{') depth++;
+      else if(ch === '}') depth--;
+      j++;
+    }
+    i = j; re.lastIndex = j;
+  }
+  return out + css.slice(i);
+}
+
 // ===== kp4：配置表の印刷 =====
 // position:fixed や sticky はChromeの印刷で崩れるため、別ウィンドウへ複製して印刷する
 // （進捗管理スナップショットと同じ方式）。表示中の日付を必ず見出しに入れる。
@@ -6859,7 +6882,9 @@ window.rtPrintRoster = function(){
   const planEl = document.querySelector('.rt-plan');
   const planHtml = planEl ? planEl.outerHTML : '';
 
-  const css = [...document.querySelectorAll('style')].map(s => s.textContent).join('\n');
+  // ★アプリの @media print（現品票用）を必ず取り除く。残すと印刷が真っ白になる
+  const css = _stripPrintMedia(
+    [...document.querySelectorAll('style')].map(s => s.textContent).join('\n'));
   const now = new Date();
   const stamp = `${now.getFullYear()}/${now.getMonth()+1}/${now.getDate()} `
               + `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
