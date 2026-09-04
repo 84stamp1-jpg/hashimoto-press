@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.09.04-2 : 集計ビューを 購入品費・外注費・加工費 にも広げた。3段目と数量列は費目ごとに変える（材料費＝材質／重量kg・購入品費＝品名または仕入先／数量・外注費＝外注先または加工内容／数量・加工費＝作業区分または作業者／時間h）。外注費と加工費は process フィールドを持っているのでそれを工程として使い、無いときだけ管理NO.から読み取る。renderCostSummary() に共通化してある -->
 <!-- 金型原価 v2026.09.04-1 : 材料費タブに「品番 ＞ 工程 ＞ 材質」の集計ビューを追加。材料費と重量を3段で積み上げて見られるようにした。工程は材料管理NO.から割り出す（手入力＝金型NO+工程番号+連番2桁 → 金型マスタのprocesses[番号-1]で工程名を引く／CSV取込＝金型NO+-+工程名+連番2桁 → 工程名をそのまま使う／読み取れないものは「工程未設定」にまとめる）。重量は明細表と同じ扱いで、手入力の重量は1枚あたりなので数量を掛け、未入力ならサイズと材質の比重から計算する。既存の絞り込み（検索・金型・日付・手配先）がそのまま効く。金型一覧は従来どおり材料費の合計だけで変更なし -->
 
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
@@ -624,7 +625,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.04-1</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.04-2</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -1014,9 +1015,33 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
         <option value="">全仕入先</option>
       </select>
       <button class="btn btn-primary btn-sm" onclick="openOutModal()">＋ 外注費入力</button>
+      <div style="display:flex;gap:4px;margin-left:auto;">
+        <button class="btn btn-primary btn-sm"   id="outViewBtn_detail"  onclick="setOutView('detail')">📋 明細</button>
+        <button class="btn btn-secondary btn-sm" id="outViewBtn_summary" onclick="setOutView('summary')">📊 品番×工程×外注先</button>
+      </div>
     </div>
     <div id="outSupplierSummary"></div>
-    <div class="table-wrap">
+
+    <!-- ★品番×工程×外注先（または加工内容）の集計 -->
+    <div class="table-wrap" id="outSummaryWrap" style="display:none">
+      <div class="table-header">
+        <div class="table-title">外注費　品番 ＞ 工程 ＞ 外注先</div>
+        <div class="table-count" id="outSummaryCount"></div>
+        <div class="table-actions">
+          <select class="filter-select" id="outSummaryBy" onchange="renderOutsource()" style="width:130px">
+            <option value="supplier">3段目＝外注先</option>
+            <option value="detail">3段目＝加工内容</option>
+          </select>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;margin:0 6px;">
+            <input type="checkbox" id="outSummaryOpenAll" checked onchange="renderOutsource()"> 工程まで開く
+          </label>
+          <button class="btn btn-secondary btn-sm" onclick="copyTableToClipboard('outSummaryBody','外注費集計')">📋 全行コピー</button>
+        </div>
+      </div>
+      <div id="outSummaryBody"></div>
+    </div>
+
+    <div class="table-wrap" id="outDetailWrap">
       <div class="table-header">
         <div class="table-title">外注費一覧</div>
         <div class="table-count" id="outCount"></div>
@@ -1046,9 +1071,33 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
       <button class="btn btn-primary btn-sm" onclick="openPurModal()">＋ 購入品費入力</button>
       <button class="btn btn-secondary btn-sm" onclick="document.getElementById('csvFile').click()">📥 CSV取込</button>
       <input type="file" id="csvFile" accept=".csv" onchange="importCSV(event)">
+      <div style="display:flex;gap:4px;margin-left:auto;">
+        <button class="btn btn-primary btn-sm"   id="purViewBtn_detail"  onclick="setPurView('detail')">📋 明細</button>
+        <button class="btn btn-secondary btn-sm" id="purViewBtn_summary" onclick="setPurView('summary')">📊 品番×工程×品名</button>
+      </div>
     </div>
     <div id="purSupplierSummary"></div>
-    <div class="table-wrap">
+
+    <!-- ★品番×工程×品名（または仕入先）の集計 -->
+    <div class="table-wrap" id="purSummaryWrap" style="display:none">
+      <div class="table-header">
+        <div class="table-title">購入品費　品番 ＞ 工程 ＞ 品名</div>
+        <div class="table-count" id="purSummaryCount"></div>
+        <div class="table-actions">
+          <select class="filter-select" id="purSummaryBy" onchange="renderPurchase()" style="width:120px">
+            <option value="name">3段目＝品名</option>
+            <option value="supplier">3段目＝仕入先</option>
+          </select>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;margin:0 6px;">
+            <input type="checkbox" id="purSummaryOpenAll" checked onchange="renderPurchase()"> 工程まで開く
+          </label>
+          <button class="btn btn-secondary btn-sm" onclick="copyTableToClipboard('purSummaryBody','購入品費集計')">📋 全行コピー</button>
+        </div>
+      </div>
+      <div id="purSummaryBody"></div>
+    </div>
+
+    <div class="table-wrap" id="purDetailWrap">
       <div class="table-header">
         <div class="table-title">購入品一覧</div>
         <div class="table-count" id="purCount"></div>
@@ -1072,8 +1121,32 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
       <select class="filter-select" id="labMonthFilter" onchange="renderLabor()">
         <option value="">全月</option>
       </select>
+      <div style="display:flex;gap:4px;margin-left:auto;">
+        <button class="btn btn-primary btn-sm"   id="laborViewBtn_detail"  onclick="setLaborView('detail')">📋 明細</button>
+        <button class="btn btn-secondary btn-sm" id="laborViewBtn_summary" onclick="setLaborView('summary')">📊 品番×工程×作業区分</button>
+      </div>
     </div>
-    <div class="table-wrap">
+
+    <!-- ★品番×工程×作業区分（または作業者）の集計 -->
+    <div class="table-wrap" id="laborSummaryWrap" style="display:none">
+      <div class="table-header">
+        <div class="table-title">加工費　品番 ＞ 工程 ＞ 作業区分</div>
+        <div class="table-count" id="laborSummaryCount"></div>
+        <div class="table-actions">
+          <select class="filter-select" id="laborSummaryBy" onchange="renderLabor()" style="width:140px">
+            <option value="workType">3段目＝作業区分</option>
+            <option value="worker">3段目＝作業者</option>
+          </select>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;margin:0 6px;">
+            <input type="checkbox" id="laborSummaryOpenAll" checked onchange="renderLabor()"> 工程まで開く
+          </label>
+          <button class="btn btn-secondary btn-sm" onclick="copyTableToClipboard('laborSummaryBody','加工費集計')">📋 全行コピー</button>
+        </div>
+      </div>
+      <div id="laborSummaryBody"></div>
+    </div>
+
+    <div class="table-wrap" id="laborDetailWrap">
       <div class="table-header">
         <div class="table-title">作業実績一覧</div>
         <div class="table-count" id="labCount"></div>
@@ -2640,30 +2713,50 @@ function renderMaterials() {
 }
 
 // ═══════════════════════════════════════════════
-// ★材料費・重量の集計（品番 ＞ 工程 ＞ 材質）
+// ★原価の集計（品番 ＞ 工程 ＞ 材質／品名）
+//   材料費（重量）と購入品費（数量）で同じ仕組みを使う
 // ═══════════════════════════════════════════════
 
-// 明細 / 集計 の切替
-let MAT_VIEW = 'detail';
-function setMatView(v) {
-  MAT_VIEW = v;
-  const det = document.getElementById('matDetailWrap');
-  const sum = document.getElementById('matSummaryWrap');
+// 明細 / 集計 の切替。pre は 'mat'（材料費）か 'pur'（購入品費）
+const COST_VIEW = { mat: 'detail', pur: 'detail', out: 'detail', labor: 'detail' };
+const COST_RERENDER = { mat: 'renderMaterials', pur: 'renderPurchase',
+                        out: 'renderOutsource', labor: 'renderLabor' };
+function setCostView(pre, v) {
+  COST_VIEW[pre] = v;
+  const det = document.getElementById(pre + 'DetailWrap');
+  const sum = document.getElementById(pre + 'SummaryWrap');
   if (det) det.style.display = (v === 'detail')  ? '' : 'none';
   if (sum) sum.style.display = (v === 'summary') ? '' : 'none';
   ['detail','summary'].forEach(k => {
-    const b = document.getElementById('matViewBtn_' + k);
+    const b = document.getElementById(pre + 'ViewBtn_' + k);
     if (b) b.className = 'btn btn-sm ' + (k === v ? 'btn-primary' : 'btn-secondary');
   });
-  if (v === 'summary') renderMaterials();
+  if (v === 'summary') window[COST_RERENDER[pre]]?.();
 }
+function setMatView(v)   { setCostView('mat',   v); }
+function setPurView(v)   { setCostView('pur',   v); }
+function setOutView(v)   { setCostView('out',   v); }
+function setLaborView(v) { setCostView('labor', v); }
 
-// 材料管理NO.から工程を割り出す。
-//   手入力  : 金型NO + 工程番号(数字) + 連番2桁   例 71-B101 → 工程1
-//   CSV取込 : 金型NO + - + 工程名 + 連番2桁       例 71-A-TRM01 → 工程TRM
+// 工程を割り出す。
+//   ① 外注費・加工費は process フィールドを持っているのでそれを使う
+//   ② 無ければ管理NO.から読み取る
+//        手入力  : 金型NO + 工程番号(数字) + 連番2桁   例 71-B101   → 工程1
+//        CSV取込 : 金型NO + - + 工程名 + 連番2桁       例 71-A-TRM01 → 工程TRM
 // 工程番号のときは金型マスタの processes[番号-1] で工程名を引く。
 function matProcessOf(r) {
   const matNo = (r.partNo || '').trim();
+  const direct = (r.process == null ? '' : String(r.process)).trim();
+  if (direct) {
+    const mold0 = findMoldByNo(r.moldNo) || findMoldByMatNo(matNo);
+    if (/^\d+$/.test(direct)) {
+      const i  = parseInt(direct, 10);
+      const nm = (mold0?.processes || [])[i - 1] || '';
+      return { key: 'N' + String(i).padStart(2,'0'), sort: i, label: nm ? `${i}: ${nm}` : `工程${i}` };
+    }
+    const u = direct.toUpperCase();
+    return { key: 'S' + u, sort: 900, label: direct };
+  }
   const mold  = findMoldByNo(r.moldNo) || findMoldByMatNo(matNo);
   let base = '';
   if (r.moldNo && matNo.startsWith(r.moldNo))      base = r.moldNo;
@@ -2704,43 +2797,45 @@ function kgFmt(n) {
   return (Math.round(n * 10) / 10).toLocaleString('ja-JP', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
 
-function renderMatSummary(entries) {
-  const body = document.getElementById('matSummaryBody');
+// 品番 ＞ 工程 ＞ （材質 または 品名/仕入先）の3段で積み上げる。
+//   pre : 'mat'（材料費・重量）／'pur'（購入品費・数量）
+//   cfg : l3Head=3段目の見出し, l3Of=3段目のキー, mHead/mOf/mFmt=数量列, aHead/aOf=金額列
+function renderCostSummary(pre, entries, cfg) {
+  const body = document.getElementById(pre + 'SummaryBody');
   if (!body) return;
-  const openAll = document.getElementById('matSummaryOpenAll')?.checked !== false;
+  const openAll = document.getElementById(pre + 'SummaryOpenAll')?.checked !== false;
 
-  // 品番 ＞ 工程 ＞ 材質 の3段で束ねる
   const parts = {};
   entries.forEach(([, r]) => {
-    const mold   = findMoldByNo(r.moldNo) || findMoldByMatNo(r.partNo || '');
-    const pKey   = (mold?.partNo || r.moldNo || '（品番なし）');
-    const proc   = matProcessOf(r);
-    const matNm  = (r.material || '').trim() || '（材質なし）';
-    const kg     = matWeightKg(r);
-    const amt    = r.amount || 0;
+    const mold = findMoldByNo(r.moldNo) || findMoldByMatNo(r.partNo || '');
+    const pKey = (mold?.partNo || r.moldNo || '（品番なし）');
+    const proc = matProcessOf(r);
+    const l3   = cfg.l3Of(r);
+    const m    = cfg.mOf(r);
+    const a    = cfg.aOf(r);
 
     const P = parts[pKey] || (parts[pKey] = {
       partNo: mold?.partNo || '', partName: mold?.partName || '',
-      moldNos: new Set(), n: 0, kg: 0, amt: 0, procs: {}
+      moldNos: new Set(), n: 0, m: 0, a: 0, procs: {}
     });
     if (r.moldNo) P.moldNos.add(r.moldNo);
-    P.n++; P.kg += kg; P.amt += amt;
+    P.n++; P.m += m; P.a += a;
 
     const Q = P.procs[proc.key] || (P.procs[proc.key] = {
-      label: proc.label, sort: proc.sort, n: 0, kg: 0, amt: 0, mats: {}
+      label: proc.label, sort: proc.sort, n: 0, m: 0, a: 0, subs: {}
     });
-    Q.n++; Q.kg += kg; Q.amt += amt;
+    Q.n++; Q.m += m; Q.a += a;
 
-    const M = Q.mats[matNm] || (Q.mats[matNm] = { n: 0, kg: 0, amt: 0 });
-    M.n++; M.kg += kg; M.amt += amt;
+    const S = Q.subs[l3] || (Q.subs[l3] = { n: 0, m: 0, a: 0 });
+    S.n++; S.m += m; S.a += a;
   });
 
   const pKeys = Object.keys(parts).sort();
-  const gN   = entries.length;
-  const gKg  = pKeys.reduce((s,k)=>s+parts[k].kg, 0);
-  const gAmt = pKeys.reduce((s,k)=>s+parts[k].amt, 0);
-  const cnt = document.getElementById('matSummaryCount');
-  if (cnt) cnt.textContent = `${pKeys.length}品番 / ${gN}件 / ${kgFmt(gKg)} kg / ¥${fmt(gAmt)}`;
+  const gN = entries.length;
+  const gM = pKeys.reduce((s,k)=>s+parts[k].m, 0);
+  const gA = pKeys.reduce((s,k)=>s+parts[k].a, 0);
+  const cnt = document.getElementById(pre + 'SummaryCount');
+  if (cnt) cnt.textContent = `${pKeys.length}品番 / ${gN}件 / ${cfg.mFmt(gM)}${cfg.mUnit||''} / ¥${fmt(gA)}`;
 
   if (!pKeys.length) {
     body.innerHTML = '<div class="empty"><div class="empty-icon">📊</div>データなし</div>';
@@ -2759,8 +2854,8 @@ function renderMatSummary(entries) {
           ${molds ? '<div style="font-size:10px;color:var(--text3);font-family:var(--mono)">金型 ' + molds + '</div>' : ''}
         </td>
         <td class="mono" style="text-align:right;font-weight:700">${P.n}</td>
-        <td class="mono" style="text-align:right;font-weight:700">${kgFmt(P.kg)}</td>
-        <td class="mono" style="text-align:right;font-weight:700">¥${fmt(P.amt)}</td>
+        <td class="mono" style="text-align:right;font-weight:700">${cfg.mFmt(P.m)}</td>
+        <td class="mono" style="text-align:right;font-weight:700">¥${fmt(P.a)}</td>
       </tr>`);
     if (!openAll) return;
 
@@ -2770,18 +2865,18 @@ function renderMatSummary(entries) {
           <td style="padding-left:22px;font-weight:600;font-size:12px">${Q.label}</td>
           <td></td>
           <td class="mono" style="text-align:right;font-size:12px">${Q.n}</td>
-          <td class="mono" style="text-align:right;font-size:12px">${kgFmt(Q.kg)}</td>
-          <td class="mono" style="text-align:right;font-size:12px">¥${fmt(Q.amt)}</td>
+          <td class="mono" style="text-align:right;font-size:12px">${cfg.mFmt(Q.m)}</td>
+          <td class="mono" style="text-align:right;font-size:12px">¥${fmt(Q.a)}</td>
         </tr>`);
-      Object.keys(Q.mats).sort().forEach(mn => {
-        const M = Q.mats[mn];
+      Object.keys(Q.subs).sort().forEach(sn => {
+        const S = Q.subs[sn];
         rows.push(`
           <tr>
             <td></td>
-            <td class="mono" style="padding-left:44px;font-size:13px">${mn}</td>
-            <td class="mono" style="text-align:right;color:var(--text2)">${M.n}</td>
-            <td class="mono" style="text-align:right">${kgFmt(M.kg)}</td>
-            <td class="mono" style="text-align:right">¥${fmt(M.amt)}</td>
+            <td class="mono" style="padding-left:44px;font-size:13px;word-break:break-all">${sn}</td>
+            <td class="mono" style="text-align:right;color:var(--text2)">${S.n}</td>
+            <td class="mono" style="text-align:right">${cfg.mFmt(S.m)}</td>
+            <td class="mono" style="text-align:right">¥${fmt(S.a)}</td>
           </tr>`);
       });
     });
@@ -2791,21 +2886,75 @@ function renderMatSummary(entries) {
     <table>
       <thead><tr>
         <th style="min-width:200px">品番 / 工程</th>
-        <th style="min-width:120px">材質</th>
+        <th style="min-width:120px">${cfg.l3Head}</th>
         <th style="text-align:right;width:70px">件数</th>
-        <th style="text-align:right;width:110px">重量(kg)</th>
-        <th style="text-align:right;width:130px">材料費</th>
+        <th style="text-align:right;width:110px">${cfg.mHead}</th>
+        <th style="text-align:right;width:130px">${cfg.aHead}</th>
       </tr></thead>
       <tbody>
         ${rows.join('')}
         <tr style="background:var(--bg3);border-top:2px solid var(--accent)">
           <td colspan="2" style="font-weight:700">合計（${pKeys.length}品番）</td>
           <td class="mono" style="text-align:right;font-weight:700">${gN}</td>
-          <td class="mono" style="text-align:right;font-weight:700">${kgFmt(gKg)}</td>
-          <td class="mono" style="text-align:right;font-weight:700;color:var(--accent)">¥${fmt(gAmt)}</td>
+          <td class="mono" style="text-align:right;font-weight:700">${cfg.mFmt(gM)}</td>
+          <td class="mono" style="text-align:right;font-weight:700;color:var(--accent)">¥${fmt(gA)}</td>
         </tr>
       </tbody>
     </table>`;
+}
+
+// 材料費：3段目＝材質、数量列＝重量(kg)
+function renderMatSummary(entries) {
+  renderCostSummary('mat', entries, {
+    l3Head: '材質',
+    l3Of:  r => (r.material || '').trim() || '（材質なし）',
+    mHead: '重量(kg)', mUnit: ' kg', mOf: matWeightKg, mFmt: kgFmt,
+    aHead: '材料費',   aOf: r => r.amount || 0,
+  });
+}
+
+// 購入品費：3段目は 品名／仕入先 を選べる。数量列＝数量
+function renderPurSummary(entries) {
+  const by = document.getElementById('purSummaryBy')?.value || 'name';
+  renderCostSummary('pur', entries, {
+    l3Head: by === 'supplier' ? '仕入先' : '品名',
+    l3Of:  r => ((by === 'supplier' ? r.supplier : r.name) || '').trim()
+                || (by === 'supplier' ? '（仕入先なし）' : '（品名なし）'),
+    mHead: '数量', mUnit: ' 点', mOf: r => parseFloat(r.qty) || 0,
+    mFmt:  numFmt1,
+    aHead: '購入品費', aOf: r => r.total || 0,
+  });
+}
+
+// 外注費：3段目は 外注先／加工内容 を選べる。数量列＝数量
+function renderOutSummary(entries) {
+  const by = document.getElementById('outSummaryBy')?.value || 'supplier';
+  renderCostSummary('out', entries, {
+    l3Head: by === 'detail' ? '加工内容' : '外注先',
+    l3Of:  r => ((by === 'detail' ? r.detail : r.supplier) || '').trim()
+                || (by === 'detail' ? '（内容なし）' : '（外注先なし）'),
+    mHead: '数量', mUnit: ' 点', mOf: r => parseFloat(r.qty) || 0,
+    mFmt:  numFmt1,
+    aHead: '外注費', aOf: r => r.total || 0,
+  });
+}
+
+// 加工費：3段目は 作業区分／作業者 を選べる。数量列＝時間(h)
+function renderLaborSummary(entries) {
+  const by = document.getElementById('laborSummaryBy')?.value || 'workType';
+  renderCostSummary('labor', entries, {
+    l3Head: by === 'worker' ? '作業者' : '作業区分',
+    l3Of:  r => ((by === 'worker' ? r.worker : r.workType) || '').trim()
+                || (by === 'worker' ? '（作業者なし）' : '（区分なし）'),
+    mHead: '時間(h)', mUnit: ' h', mOf: r => parseFloat(r.time) || 0,
+    mFmt:  numFmt1,
+    aHead: '加工費', aOf: r => r.amount || 0,
+  });
+}
+
+function numFmt1(n) {
+  if (!n) return '—';
+  return (Math.round(n * 10) / 10).toLocaleString('ja-JP', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
 
 function printMaterials() {
@@ -2984,6 +3133,7 @@ function renderOutsource() {
   document.getElementById('outCount').textContent = entries.length + '件 / ¥' + fmt(entries.reduce((s,[,r])=>s+(r.total||0),0));
   const _outMonthLabel = month ? month.replace(/^(\d{4})-(\d{2})$/,'$1年$2月') : '全期間';
   renderSupplierSummary(entries.filter(([,r]) => (r.month||'').length >= 8), 'outSupplierSummary', r => r.total||0, _outMonthLabel);
+  renderOutSummary(entries);   // ★品番×工程×外注先の集計
   if (!entries.length) { document.getElementById('outTableBody').innerHTML = '<div class="empty"><div class="empty-icon">🏭</div>データなし</div>'; return; }
   document.getElementById('outTableBody').innerHTML = `
     <table>
@@ -3056,6 +3206,7 @@ function renderPurchase() {
   document.getElementById('purCount').textContent = entries.length + '件 / ¥' + fmt(entries.reduce((s,[,r])=>s+(r.total||0),0));
   const _purMonthLabel = month ? month.replace(/^(\d{4})-(\d{2})$/,'$1年$2月') : '全期間';
   renderSupplierSummary(entries.filter(([,r]) => (r.month||'').length >= 8), 'purSupplierSummary', r => r.total||0, _purMonthLabel);
+  renderPurSummary(entries);   // ★品番×工程×品名の集計
   if (!entries.length) { document.getElementById('purTableBody').innerHTML = '<div class="empty"><div class="empty-icon">🛒</div>データなし</div>'; return; }
   document.getElementById('purTableBody').innerHTML = `
     <table>
@@ -3109,6 +3260,7 @@ function renderLabor() {
   const labTotal  = entries.reduce((s,[,r])=>s+(r.amount||0),0);
   const labBudget = entries.reduce((s,[,r])=>s+(r.budget||0),0);
   document.getElementById('labCount').textContent = entries.length + '件　加工予算: ¥' + fmt(labBudget) + '　加工実績: ¥' + fmt(labTotal);
+  renderLaborSummary(entries);   // ★品番×工程×作業区分の集計
   if (!entries.length) { document.getElementById('labTableBody').innerHTML = '<div class="empty"><div class="empty-icon">⚙️</div>データなし（データ取込タブからkintone CSVを取り込んでください）</div>'; return; }
   document.getElementById('labTableBody').innerHTML = `
     <table>
