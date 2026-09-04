@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.09.04-4 : 加工費に「作業内容」を通した。kintoneのこのアプリはサブテーブルを2つ持っており（作業明細＝日付/作業員/作業内容/チャージ/時間/金額、TRY履歴＝日付/作業員/問題点/対策/対策区分）、これまで取り込んでいたCSVはTRY履歴の方だったため作業内容も時間も入らず、チャージと時間は0固定になっていた。取込を列の有無で振り分け、作業明細形式なら1行＝1作業として work/charge/time/amount を取り込む。サブテーブルCSVは親の値（管理コード・部品番号・工程・トライ状況）が「レコードの開始行」の行にしか入らないため持ち回る。集計の3段目は既定を作業内容にし（作業員・トライ状況にも切替可）、列は 時間(h)／加工費 に戻した。編集モーダルの「作業内容」欄が workType(トライ状況)に紐づいていたのを work に直し、トライ状況の欄を別に用意。保存時に budget/remain を落としていたのもマージで修正 -->
 <!-- 金型原価 v2026.09.04-3 : 加工費の集計を直した。3段目に出していた「作業区分」は kintone の 「トライ状況」（作業の内容ではなく状態）だったため名前をそのままにし、既定の3段目を「作業員」へ変更。また数値列の「時間(h)」は kintone取込で time が常に0で入るため全て「—」になっていたので廃止し、実データである 加工予算／加工実績／残予算 の3列に置き換えた。renderCostSummary の数値列を可変（cfg.cols）にして費目ごとに列数を変えられるようにしてある -->
 <!-- 金型原価 v2026.09.04-2 : 集計ビューを 購入品費・外注費・加工費 にも広げた。3段目と数量列は費目ごとに変える（材料費＝材質／重量kg・購入品費＝品名または仕入先／数量・外注費＝外注先または加工内容／数量・加工費＝作業区分または作業者／時間h）。外注費と加工費は process フィールドを持っているのでそれを工程として使い、無いときだけ管理NO.から読み取る。renderCostSummary() に共通化してある -->
 <!-- 金型原価 v2026.09.04-1 : 材料費タブに「品番 ＞ 工程 ＞ 材質」の集計ビューを追加。材料費と重量を3段で積み上げて見られるようにした。工程は材料管理NO.から割り出す（手入力＝金型NO+工程番号+連番2桁 → 金型マスタのprocesses[番号-1]で工程名を引く／CSV取込＝金型NO+-+工程名+連番2桁 → 工程名をそのまま使う／読み取れないものは「工程未設定」にまとめる）。重量は明細表と同じ扱いで、手入力の重量は1枚あたりなので数量を掛け、未入力ならサイズと材質の比重から計算する。既存の絞り込み（検索・金型・日付・手配先）がそのまま効く。金型一覧は従来どおり材料費の合計だけで変更なし -->
@@ -626,7 +627,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.04-3</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.04-4</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -1124,17 +1125,18 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
       </select>
       <div style="display:flex;gap:4px;margin-left:auto;">
         <button class="btn btn-primary btn-sm"   id="laborViewBtn_detail"  onclick="setLaborView('detail')">📋 明細</button>
-        <button class="btn btn-secondary btn-sm" id="laborViewBtn_summary" onclick="setLaborView('summary')">📊 品番×工程×作業員</button>
+        <button class="btn btn-secondary btn-sm" id="laborViewBtn_summary" onclick="setLaborView('summary')">📊 品番×工程×作業内容</button>
       </div>
     </div>
 
     <!-- ★品番×工程×作業区分（または作業者）の集計 -->
     <div class="table-wrap" id="laborSummaryWrap" style="display:none">
       <div class="table-header">
-        <div class="table-title">加工費　品番 ＞ 工程 ＞ 作業員</div>
+        <div class="table-title">加工費　品番 ＞ 工程 ＞ 作業内容</div>
         <div class="table-count" id="laborSummaryCount"></div>
         <div class="table-actions">
-          <select class="filter-select" id="laborSummaryBy" onchange="renderLabor()" style="width:140px">
+          <select class="filter-select" id="laborSummaryBy" onchange="renderLabor()" style="width:150px">
+            <option value="work">3段目＝作業内容</option>
             <option value="worker">3段目＝作業員</option>
             <option value="status">3段目＝トライ状況</option>
           </select>
@@ -1825,9 +1827,17 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
           <label class="form-label">作業員</label>
           <input class="form-input" id="lf_worker" placeholder="例: 大石辰祥">
         </div>
-        <div class="form-group" style="grid-column:1/-1">
-          <label class="form-label">作業内容</label>
-          <input class="form-input" id="lf_workType" placeholder="例: M/C (自動)">
+        <div class="form-group">
+          <label class="form-label">作業内容
+            <span style="font-size:9px;color:var(--text3);margin-left:4px;">kintone「作業明細」の列</span>
+          </label>
+          <input class="form-input" id="lf_work" placeholder="例: M/C (段取)、データ">
+        </div>
+        <div class="form-group">
+          <label class="form-label">トライ状況
+            <span style="font-size:9px;color:var(--text3);margin-left:4px;">進捗。作業の内容ではない</span>
+          </label>
+          <input class="form-input" id="lf_workType" placeholder="例: 準備中、トライ中">
         </div>
         <div class="form-group">
           <label class="form-label">チャージ（円/h）</label>
@@ -2947,23 +2957,27 @@ function renderOutSummary(entries) {
   });
 }
 
-// 加工費：3段目は 作業員／トライ状況 を選べる。
-//   ★kintone取込では time（時間）が常に0で入るため、時間は出さない。
-//     実データは 加工予算・加工実績・残予算 なのでそれを並べる。
-//   ★「トライ状況」は作業の内容ではなく状態（kintoneの列名そのまま）。
+// 加工費：3段目は 作業内容／作業員／トライ状況 を選べる（既定＝作業内容）。
+//   「作業内容」は kintone サブテーブル「作業明細」の列（データ／M/C(段取)／W/C(段取) など）。
+//   「トライ状況」は進捗であって作業の内容ではないので、既定にはしない。
 function renderLaborSummary(entries) {
-  const by = document.getElementById('laborSummaryBy')?.value || 'worker';
+  const by = document.getElementById('laborSummaryBy')?.value || 'work';
+  const L3 = {
+    work:   { head: '作業内容',   of: r => r.work,     none: '（作業内容なし）' },
+    worker: { head: '作業員',     of: r => r.worker,   none: '（作業員なし）'   },
+    status: { head: 'トライ状況', of: r => r.workType, none: '（状況なし）'     },
+  }[by] || { head: '作業内容', of: r => r.work, none: '（作業内容なし）' };
+
   renderCostSummary('labor', entries, {
-    l3Head: by === 'status' ? 'トライ状況' : '作業員',
-    l3Of:  r => ((by === 'status' ? r.workType : r.worker) || '').trim()
-                || (by === 'status' ? '（状況なし）' : '（作業員なし）'),
+    l3Head: L3.head,
+    l3Of:  r => (L3.of(r) || '').trim() || L3.none,
     cols: [
-      { head: '加工予算', of: r => r.budget || 0, fmt: yenFmt },
-      { head: '加工実績', of: r => r.amount || 0, fmt: yenFmt },
-      { head: '残予算',   of: r => r.remain || 0, fmt: yenFmt },
+      { head: '時間(h)', of: r => parseFloat(r.time) || 0, fmt: numFmt1 },
+      { head: '加工費',  of: r => r.amount || 0,           fmt: yenFmt  },
     ],
   });
 }
+
 
 function numFmt1(n) {
   if (!n) return '—';
@@ -3273,14 +3287,15 @@ function renderLabor() {
   const labTotal  = entries.reduce((s,[,r])=>s+(r.amount||0),0);
   const labBudget = entries.reduce((s,[,r])=>s+(r.budget||0),0);
   document.getElementById('labCount').textContent = entries.length + '件　加工予算: ¥' + fmt(labBudget) + '　加工実績: ¥' + fmt(labTotal);
-  renderLaborSummary(entries);   // ★品番×工程×作業員の集計
+  renderLaborSummary(entries);   // ★品番×工程×作業内容の集計
   if (!entries.length) { document.getElementById('labTableBody').innerHTML = '<div class="empty"><div class="empty-icon">⚙️</div>データなし（データ取込タブからkintone CSVを取り込んでください）</div>'; return; }
   document.getElementById('labTableBody').innerHTML = `
     <table>
       <thead><tr>
         <th style="width:44px"></th>
         <th>月</th><th>管理NO.</th><th>部品番号</th><th>工程</th>
-        <th>作業員</th><th>状況</th><th>加工予算</th><th>加工実績</th><th>残予算</th>
+        <th>作業員</th><th>作業内容</th><th>チャージ</th><th>時間</th>
+        <th>状況</th><th>加工予算</th><th>加工実績</th><th>残予算</th>
       </tr></thead>
       <tbody>${entries.map(([k,r])=>`
         <tr>
@@ -3297,6 +3312,9 @@ function renderLabor() {
           <td class="mono" style="font-size:11px">${r.partNo||''}</td>
           <td><span class="chip">${r.process||''}</span></td>
           <td style="font-size:11px">${r.worker||''}</td>
+          <td style="font-size:12px;font-weight:600">${r.work||'—'}</td>
+          <td class="mono" style="text-align:right;font-size:11px;color:var(--text2)">${r.charge?fmt(r.charge):'—'}</td>
+          <td class="mono" style="text-align:right;font-size:13px">${r.time?(Math.round(r.time*100)/100):'—'}</td>
           <td style="font-size:11px">${r.workType||''}</td>
           <td class="mono" style="text-align:right">¥${fmt(r.budget||0)}</td>
           <td class="mono" style="text-align:right;font-size:14px;font-weight:700;color:var(--accent)">¥${fmt(r.amount||0)}</td>
@@ -3331,16 +3349,26 @@ function importKintoneCSV(e) {
   const file = e.target.files[0]; if (!file) return;
   const reader = new FileReader();
   reader.onload = async ev => {
-    // Shift-JIS(CP932)対応
+    // 文字コードの判定。kintoneの書き出しはShift-JIS(CP932)が既定だが、
+    // UTF-8で保存し直したものも読めるようにする。
+    // ※ TextDecoder('shift-jis') はUTF-8のバイト列を渡しても例外を投げず
+    //   文字化けした文字列を返すため、try/catchでは判別できない。
+    //   UTF-8として厳密(fatal)にデコードできるかで見分ける。
     let text = '';
-    try { text = new TextDecoder('shift-jis').decode(ev.target.result); }
-    catch(_) { text = new TextDecoder('utf-8').decode(ev.target.result); }
+    const buf = ev.target.result;
+    try {
+      text = new TextDecoder('utf-8', { fatal: true }).decode(buf);
+      if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);   // BOMを外す
+    } catch (_) {
+      text = new TextDecoder('shift-jis').decode(buf);
+    }
 
     const lines = text.split(/\r?\n/);
     const headers = parseCSVLine(lines[0]);
     console.log('[kintoneCSV] ヘッダー:', headers);
 
     let count = 0, skipped = 0;
+    const carry = {};   // サブテーブルCSVで空になる親の値を持ち回る
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
@@ -3350,18 +3378,32 @@ function importKintoneCSV(e) {
       headers.forEach((h, j) => { row[h.trim()] = (vals[j] || '').trim(); });
 
       // ★新規物件(工程別作業実績) CSV のフィールドマッピング
-      // ヘッダー: レコードの開始行,管理コード,部品番号,工程,トライ状況,日付,作業員,
-      //           問題点,対策,対策区分[完了],加工予算,加工実績,残予算,更新日時
+      //
+      // このアプリはサブテーブルを2つ持っていて、書き出したCSVで形が変わる。
+      //   A「作業明細」形式 … 日付,作業員,作業内容,チャージ,時間,金額
+      //        ← 作業内容と時間が入る。こちらが本命
+      //   B「TRY履歴」形式  … 日付,作業員,問題点,対策,対策区分[完了]
+      //        ← 従来取り込んでいた形。作業内容も時間も無い
+      // どちらでも読めるように、列の有無で振り分ける。
+      //
+      // ★サブテーブルのCSVは、親の値（管理コード・部品番号・工程など）が
+      //   「レコードの開始行」の行にしか入らず、続きの行は空になる。
+      //   そのため直前の親の値を持ち回る（carry）。
+      const isDetailForm = ('作業内容' in row) || ('チャージ' in row);
       const startRow = row['レコードの開始行'] || '';
-      const moldNo   = row['管理コード'] || '';
-      const partNo   = row['部品番号']   || '';
-      const process  = row['工程']       || '';
-      const workType = row['トライ状況'] || '';
-      const worker   = row['作業員']     || '';
-      const budget   = parseFloat(row['加工予算']  || '0');
-      const actual   = parseFloat(row['加工実績']  || '0');
-      const remain   = parseFloat(row['残予算']    || '0');
-      const dateStr  = row['日付']       || row['更新日時'] || '';
+      const isStart  = !!startRow.trim();
+      const pick = (key, keep) => {
+        const v = (row[key] || '').trim();
+        if (v) { carry[keep] = v; return v; }
+        return isStart ? (carry[keep] = '') : (carry[keep] || '');
+      };
+      const moldNo  = pick('管理コード', 'moldNo');
+      const partNo  = pick('部品番号',   'partNo');
+      const process = pick('工程',       'process');
+      const status  = pick('トライ状況', 'status');
+
+      const worker  = (row['作業員'] || '').trim();
+      const dateStr = (row['日付'] || row['更新日時'] || '').trim();
 
       // 月を取得（2026/4/3 → 2026-04）
       let month = new Date().toISOString().slice(0, 7);
@@ -3378,19 +3420,37 @@ function importKintoneCSV(e) {
 
       const key = 'lab_' + Date.now() + '_' + i;
       if (!DB.labor) DB.labor = {};
-      DB.labor[key] = {
-        month,
-        moldNo,
-        partNo,
-        process,
-        worker,
-        workType,
-        charge:   0,       // チャージ単価は別途設定
-        time:     0,       // 時間は別途設定
-        amount:   actual,  // 加工実績を金額として使用
-        budget,            // 加工予算
-        remain,            // 残予算
-      };
+
+      if (isDetailForm) {
+        // A「作業明細」形式：1行＝1作業。作業内容・チャージ・時間・金額が入る
+        const work   = (row['作業内容'] || '').trim();
+        const charge = parseFloat((row['チャージ'] || '0').replace(/[,¥円\s]/g, '')) || 0;
+        const time   = parseFloat((row['時間']     || '0').replace(/[,\s]/g, ''))     || 0;
+        const amount = parseFloat((row['金額']     || '0').replace(/[,¥円\s]/g, ''))
+                       || (charge * time);
+        // 作業のある行だけ入れる（親だけの行・空行は落とす）
+        if (!work && !time && !amount) { skipped++; continue; }
+        DB.labor[key] = {
+          month, moldNo, partNo, process,
+          worker, work,
+          workType: status,     // トライ状況（進捗。作業の内容ではない）
+          charge, time, amount,
+        };
+      } else {
+        // B「TRY履歴」形式：親の加工予算・加工実績・残予算を持つ
+        const budget = parseFloat((row['加工予算'] || '0').replace(/[,¥円\s]/g, '')) || 0;
+        const actual = parseFloat((row['加工実績'] || '0').replace(/[,¥円\s]/g, '')) || 0;
+        const remain = parseFloat((row['残予算']   || '0').replace(/[,¥円\s]/g, '')) || 0;
+        DB.labor[key] = {
+          month, moldNo, partNo, process,
+          worker, work: '',
+          workType: status,
+          charge: 0,
+          time:   0,
+          amount: actual,
+          budget, remain,
+        };
+      }
       count++;
     }
 
@@ -6785,6 +6845,7 @@ function editLabor(key) {
   document.getElementById('lf_partNo').value   = r.partNo   || '';
   document.getElementById('lf_process').value  = r.process  || '';
   document.getElementById('lf_worker').value   = r.worker   || '';
+  document.getElementById('lf_work').value     = r.work     || '';
   document.getElementById('lf_workType').value = r.workType || '';
   document.getElementById('lf_charge').value   = r.charge   || '';
   document.getElementById('lf_time').value     = r.time     || '';
@@ -6809,12 +6870,14 @@ async function saveLaborEdit() {
   const amount = parseFloat(document.getElementById('lf_amount').value) || (charge * time);
 
   DB.labor[key] = {
+    ...DB.labor[key],   // budget / remain など編集欄に無い項目を残す
     month:    document.getElementById('lf_month').value.trim(),
     moldNo:   document.getElementById('lf_moldNo').value.trim(),
     partNo:   document.getElementById('lf_partNo').value.trim(),
     process:  document.getElementById('lf_process').value.trim(),
     worker:   document.getElementById('lf_worker').value.trim(),
-    workType: document.getElementById('lf_workType').value.trim(),
+    work:     document.getElementById('lf_work').value.trim(),      // 作業内容
+    workType: document.getElementById('lf_workType').value.trim(),  // トライ状況
     charge,
     time,
     amount,
