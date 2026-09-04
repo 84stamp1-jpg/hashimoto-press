@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.09.04-8 : 直接取込がApp39（物件マスタ側で作業明細を持たない）を見ていたため、作業実績App IDを優先する順に変更し、「🔍 App IDを指定して試す」ボタンを追加（成功した値は設定に保存）。テーブルが無いときのメッセージに、kintoneのURLからApp IDを確認する手順を入れた -->
 <!-- 金型原価 v2026.09.04-7 : kintoneから作業実績を直接取り込むボタンを追加（CSV不要）。kintoneは「ファイルに書き出す」の項目選択を保存せず、毎回テーブル「作業明細」を足し直す必要があるため、既存のGASプロキシ(fetchKintoneApp)でレコードを取り、サブテーブルを展開する方式にした。サブテーブルは列名(作業内容/チャージ)で自動判定し、TRY履歴(問題点/対策)は除外する。作業員のユーザー選択フィールドは表示名に変換。予算・残予算は各レコードの1行目にだけ持たせる。CSV取込も従来どおり残してある -->
 <!-- 金型原価 v2026.09.04-6 : 取込手順を実際のkintone書き出し画面に合わせて書き直した（チェックボックスではなく項目ボタンを右へ足す形。TRY履歴のサブテーブルはフィールド名が「テーブル」のままなので「作業明細」と取り違えやすい）。あわせて作業明細形式の取込で 加工予算・残予算 を「レコードの開始行」の行にだけ持たせるようにした。親の値なので続きの行にも入れると合計が水増しされる -->
 <!-- 金型原価 v2026.09.04-5 : データ取込タブに、kintoneからCSVを書き出す手順（どの項目にチェックするか）を画面上に明記。テーブルは1つしか書き出せないので TRY履歴 ではなく 作業実績（作業明細） を選ぶ必要がある、という点が一番間違えやすい。あわせて取込後に「どちらの形式だったか」を必ず表示し、作業内容の列が無いCSVを読ませたときは赤字とエラートーストで知らせる -->
@@ -630,7 +631,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.04-7</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.04-8</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -1210,6 +1211,9 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
             style="background:var(--green,#16a34a);border-color:var(--green,#16a34a)">
             🔗 kintoneから直接取込（CSV不要・おすすめ）
           </button>
+          <button class="btn btn-secondary" onclick="askLaborAppId()">
+            🔍 App IDを指定して試す
+          </button>
           <button class="btn btn-secondary" onclick="document.getElementById('kintoneCSV').click()">
             📥 CSVを選択して取込
           </button>
@@ -1224,7 +1228,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
           <div class="import-sub">クリックしてファイルを選択（Shift-JIS対応）</div>
         </div>
         <input type="file" id="kintoneCSV" accept=".csv" onchange="importKintoneCSV(event)">
-        <div id="kintoneImportLog" style="font-size:11px;color:var(--text3);font-family:var(--mono);max-height:100px;overflow-y:auto;"></div>
+        <div id="kintoneImportLog" style="font-size:11px;color:var(--text3);font-family:var(--mono);max-height:140px;overflow-y:auto;white-space:pre-wrap;line-height:1.6;"></div>
       </div>
 
       <!-- 購入品CSV -->
@@ -3413,18 +3417,35 @@ function stVal(row, ...names) {
   return '';
 }
 
-async function importLaborFromKintone() {
+// App IDを手で指定して取り込む。うまくいったらその値を設定に保存する。
+function askLaborAppId() {
+  const cur = (document.getElementById('cfgKtApp')?.value || cfg.ktApp || '').trim();
+  const v = prompt(
+    'kintoneで「★新規物件(工程別作業実績)」を開いたときの\n'
+    + 'URL  .../k/●●/  の●●（数字）を入れてください。\n\n'
+    + '例: https://hashimoto-kogyo.cybozu.com/k/61/ → 61', cur);
+  if (v === null) return;
+  const appId = String(v).trim();
+  if (!/^\d+$/.test(appId)) { toast('数字で入れてください', 'error'); return; }
+  const el = document.getElementById('cfgKtApp');
+  if (el) el.value = appId;
+  cfg.ktApp = appId;
+  try { localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); } catch(_) {}
+  importLaborFromKintone(appId);
+}
+
+async function importLaborFromKintone(appIdArg) {
   const logEl = document.getElementById('kintoneImportLog');
   const setLog = (m, red) => { if (logEl) { logEl.textContent = m; logEl.style.color = red ? 'var(--red)' : ''; } };
 
   const gasUrl = cfg.gasUrl || document.getElementById('cfgGasUrl')?.value.trim();
   if (!gasUrl) { toast('GASプロキシURLを設定してください（設定タブ）', 'error'); return; }
 
-  // ★新規物件アプリ（既定39）を先に見る。見つからなければ作業実績App IDも試す
-  const apps = [
-    (document.getElementById('cfgKtMoldApp')?.value || cfg.ktMoldApp || '39').trim(),
+  // 作業実績App IDを優先。未設定なら★新規物件アプリ（既定39）も試す
+  const apps = (appIdArg ? [String(appIdArg).trim()] : [
     (document.getElementById('cfgKtApp')?.value || cfg.ktApp || '').trim(),
-  ].filter((v, i, a) => v && a.indexOf(v) === i);
+    (document.getElementById('cfgKtMoldApp')?.value || cfg.ktMoldApp || '39').trim(),
+  ]).filter((v, i, a) => v && a.indexOf(v) === i);
 
   setLog('kintoneへ接続中...');
   let records = null, usedApp = '', stKey = '';
@@ -3442,9 +3463,14 @@ async function importLaborFromKintone() {
   }
   if (!records) { toast('kintoneからデータを取得できませんでした', 'error'); return; }
   if (!stKey) {
-    const fields = Object.keys(records[0]).join(', ');
-    setLog('サブテーブルが見つかりません。取得できたフィールド: ' + fields, true);
-    toast('「作業明細」テーブルが見つかりませんでした。App IDをご確認ください', 'error');
+    const fields = Object.keys(records[0]).filter(k => !k.startsWith('$')).join('、');
+    setLog(`App ${usedApp} にテーブルがありません。別のアプリのようです。
+`
+      + `取得できたフィールド: ${fields}
+`
+      + `→ kintoneで「★新規物件(工程別作業実績)」を開き、URLの /k/●●/ の数字を確認して、`
+      + `下の「🔍 App IDを指定して試す」に入れてください。`, true);
+    toast('このApp IDには「作業明細」テーブルがありません', 'error');
     return;
   }
 
