@@ -531,15 +531,44 @@ input.nm-img-input{display:none}
   font-size:11px;padding:6px;resize:vertical;font-family:var(--font);outline:none}
 .nm-modal textarea:focus{border-color:var(--accent)}
 .nm-modal-footer{display:flex;gap:6px;justify-content:flex-end;margin-top:10px}
+
+/* ===== 実績入力チェック ===== */
+#tab-actual{padding:10px 14px}
+.act-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.act-week{font-size:15px;font-weight:700;min-width:230px}
+.act-note{font-size:11px;color:var(--text2)}
+.act-wrap{overflow:auto;border:1px solid var(--border);border-radius:8px;background:#fff}
+table.act{border-collapse:separate;border-spacing:0;width:100%;font-size:12px}
+table.act th,table.act td{border-bottom:1px solid var(--border);padding:5px 8px;white-space:nowrap}
+table.act thead th{position:sticky;top:0;background:#f7f8fa;z-index:2;font-size:11px;
+  font-weight:700;color:var(--text2);border-bottom:2px solid var(--border)}
+table.act th.act-name,table.act td.act-name{position:sticky;left:0;background:#fff;z-index:1;
+  text-align:left;min-width:130px;border-right:1px solid var(--border)}
+table.act thead th.act-name{background:#f7f8fa;z-index:3}
+table.act td.num{text-align:right;font-variant-numeric:tabular-nums}
+tr.act-worker td{font-weight:700;background:#fbfcfe}
+tr.act-worker td.act-name{background:#fbfcfe}
+tr.act-work td{color:var(--text2)}
+tr.act-work td.act-name{padding-left:22px;font-size:11px;color:var(--text2)}
+tr.act-total td{font-weight:700;background:#eef2f7;border-top:2px solid var(--border)}
+tr.act-total td.act-name{background:#eef2f7}
+.act-ok{background:#eaf7ee}      /* 基準を満たす */
+.act-few{background:#fff6e0}     /* 基準に足りない */
+.act-zero{background:#fdecec;color:#c0392b}  /* 入力なし */
+.act-holiday{background:#fafafa;color:#b8bfc9}
+.act-legend{display:flex;gap:12px;font-size:11px;align-items:center;color:var(--text2)}
+.act-legend i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:4px;
+  vertical-align:-1px;border:1px solid rgba(0,0,0,.08)}
 </style>
 </head>
 <body>
 
 <header>
-  <div class="logo">⚙ <span>金型</span>管理システム<span style="font-size:9px;color:#9aa3b2;font-weight:400;margin-left:6px">v2026.07.22-1</span></div>
+  <div class="logo">⚙ <span>金型</span>管理システム<span style="font-size:9px;color:#9aa3b2;font-weight:400;margin-left:6px">v2026.09.04-1</span></div>
   <div class="main-tab-bar">
     <button class="main-tab-btn active" id="mainTabRepair" onclick="switchMainTab('repair')">🔧 改修計画表</button>
     <button class="main-tab-btn" id="mainTabNew" onclick="switchMainTab('newmold')">🏗️ 新規製作 日程表</button>
+    <button class="main-tab-btn" id="mainTabAct" onclick="switchMainTab('actual')">📋 実績入力チェック</button>
   </div>
   <div class="date-nav" id="dateNav">
     <button class="nav-arrow" onclick="shiftWeek(-1)">‹</button>
@@ -871,6 +900,37 @@ input.nm-img-input{display:none}
   </div>
 </div>
 </div><!-- /tab-newmold -->
+
+<!-- ===== TAB: 実績入力チェック ===== -->
+<div id="tab-actual" class="tab-pane">
+  <div class="act-bar">
+    <button class="nav-arrow" onclick="actShiftWeek(-1)">‹</button>
+    <span class="act-week" id="actWeekLabel">—</span>
+    <button class="nav-arrow" onclick="actShiftWeek(1)">›</button>
+    <button class="btn btn-secondary btn-sm" onclick="actShiftWeek(0)">今週</button>
+    <button class="btn btn-primary btn-sm" onclick="actLoad(true)">🔄 kintone取得</button>
+    <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
+      <input type="checkbox" id="actShowWork" onchange="actRender()"> 作業内容の内訳を出す
+    </label>
+    <label style="display:flex;align-items:center;gap:4px;font-size:12px">
+      基準 <input type="number" id="actStd" value="8" min="0" step="0.5"
+        style="width:52px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;text-align:right"
+        onchange="actRender()"> 時間/日
+    </label>
+    <span class="act-legend">
+      <span><i class="act-ok"></i>基準以上</span>
+      <span><i class="act-few"></i>基準未満</span>
+      <span><i class="act-zero"></i>入力なし</span>
+    </span>
+  </div>
+  <div class="act-note" id="actStatus" style="margin-bottom:8px">「🔄 kintone取得」を押してください</div>
+  <div class="act-wrap" id="actTableWrap"></div>
+  <div class="act-note" style="margin-top:8px;line-height:1.7">
+    ※ kintone <b>★新規物件(工程別作業実績)</b> の「作業明細」に入力された時間を、作業者ごと・日ごとに合計しています。<br>
+    ※ <b>実績入力は新規製作の部品だけ</b>です。改修作業などをしている日は8時間になりません。空欄＝その日の入力が1件も無い、という意味です。<br>
+    ※ 週次チェック・減点記録シート【技術】の「前日の金型実績記録（コスト・工数）が入力済みか（3日以内に入力完了）」の確認に使えます。
+  </div>
+</div>
 
 <!-- 履歴モーダル -->
 <div class="nm-modal-ov" id="nmHistModal">
@@ -4447,14 +4507,217 @@ requestAnimationFrame(()=>{
 function switchMainTab(tab){
   document.getElementById('tab-repair').classList.toggle('active', tab==='repair');
   document.getElementById('tab-newmold').classList.toggle('active', tab==='newmold');
+  document.getElementById('tab-actual').classList.toggle('active', tab==='actual');
   document.getElementById('mainTabRepair').classList.toggle('active', tab==='repair');
   document.getElementById('mainTabNew').classList.toggle('active', tab==='newmold');
+  document.getElementById('mainTabAct').classList.toggle('active', tab==='actual');
+  if(tab==='actual'){ actInit(); }
   const repairOnly=tab==='repair';
   document.getElementById('dateNav').style.display=repairOnly?'':'none';
   document.querySelector('.hdr-right').style.display=repairOnly?'':'none';
   // 凡例バーは新規製作タブのみ表示
   const lb=document.getElementById('nmLegendBar');
   if(lb) lb.classList.toggle('visible', tab==='newmold');
+}
+
+
+// ══════════════════════════════════════════════
+// 実績入力チェック（kintone App61 ★新規物件(工程別作業実績)）
+//   作業明細に入力された時間を 作業者×日付 で1週間分まとめて見る。
+//   週次チェック・減点記録シート【技術】の実績記録の確認用。
+// ══════════════════════════════════════════════
+const ACT_APP = 61;
+const ACT_LS_APP = 'moldPlan_actualApp';
+let actRecords = null;      // kintoneの生レコード（取得後キャッシュ）
+let actWeekStart = null;    // 表示中の週の月曜
+
+function actMonday(d){
+  const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const w = (x.getDay() + 6) % 7;          // 月=0
+  x.setDate(x.getDate() - w);
+  return x;
+}
+function actYmd(d){
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0')
+       + '-' + String(d.getDate()).padStart(2,'0');
+}
+function actSetStatus(t){ const e=document.getElementById('actStatus'); if(e) e.textContent=t; }
+
+function actInit(){
+  if(!actWeekStart) actWeekStart = actMonday(new Date());
+  actRender();
+  if(!actRecords) actLoad(false);
+}
+function actShiftWeek(n){
+  if(n === 0) actWeekStart = actMonday(new Date());
+  else { const d=new Date(actWeekStart); d.setDate(d.getDate()+n*7); actWeekStart=d; }
+  actRender();
+}
+
+// ----- kintone取得（GASのJSONPプロキシ経由）-----
+function actLoad(force){
+  if(actRecords && !force){ actRender(); return; }
+  const app = localStorage.getItem(ACT_LS_APP) || ACT_APP;
+  actSetStatus('🔄 kintone App ' + app + ' から取得中...');
+  const cb = 'actKtCb_' + Date.now();
+  const q  = encodeURIComponent('order by $id asc limit 500');
+  const url = GAS_URL + '?app=' + encodeURIComponent(app) + '&query=' + q + '&callback=' + cb;
+  const timer = setTimeout(()=>{ cleanup(); actSetStatus('❌ タイムアウト（GASのKT_TOKEN_'+app+'を確認してください）'); }, 20000);
+  function cleanup(){ clearTimeout(timer); delete window[cb];
+    const el=document.getElementById('act_jsonp'); if(el) el.remove(); }
+  window[cb] = function(data){
+    cleanup();
+    if(data && data.error){ actSetStatus('❌ kintoneエラー: ' + data.error); return; }
+    const recs = Array.isArray(data) ? data : (data && data.records) || [];
+    if(!recs.length){ actSetStatus('❌ レコードが0件です'); return; }
+    actRecords = recs;
+    actRender();
+  };
+  const sc = document.createElement('script');
+  sc.id = 'act_jsonp'; sc.src = url;
+  sc.onerror = ()=>{ cleanup(); actSetStatus('❌ 取得に失敗しました（GASプロキシに接続できません）'); };
+  document.body.appendChild(sc);
+}
+
+// ----- 作業明細サブテーブルを探す -----
+function actSubKey(recs){
+  for(const rec of recs){
+    for(const k of Object.keys(rec)){
+      const f = rec[k];
+      if(!f || f.type !== 'SUBTABLE' || !Array.isArray(f.value) || !f.value.length) continue;
+      const cols = Object.keys(f.value[0].value || {}).join(' ');
+      if(/作業内容|チャージ/.test(cols)) return k;
+    }
+  }
+  return '';
+}
+// サブテーブル1行から値を取る
+function actVal(row, ...names){
+  const o = (row && row.value) || {};
+  for(const n of names){
+    const f = o[n]; if(!f) continue;
+    let v = f.value;
+    if(Array.isArray(v)) v = v.map(x=>(x&&(x.name||x.code))||x).filter(Boolean).join(' ');
+    if(v !== undefined && v !== null && v !== '') return String(v);
+  }
+  return '';
+}
+// ユーザー選択型の列から作業者名を取る（フィールドコードが「作業員」とは限らない）
+function actWorker(row){
+  const byName = actVal(row, '作業員', '作業者');
+  if(byName) return byName;
+  const o = (row && row.value) || {};
+  for(const k of Object.keys(o)){
+    const f = o[k];
+    if(!f || !/USER_SELECT|ORGANIZATION_SELECT|GROUP_SELECT/.test(f.type||'')) continue;
+    const v = f.value;
+    if(Array.isArray(v) && v.length){
+      const n = v.map(x=>(x&&(x.name||x.code))||x).filter(Boolean);
+      if(n.length) return n.join(' ');
+    }
+  }
+  return '';
+}
+
+function actRender(){
+  const wrap = document.getElementById('actTableWrap');
+  if(!wrap) return;
+  if(!actWeekStart) actWeekStart = actMonday(new Date());
+
+  // 週の7日分
+  const days = [];
+  for(let i=0;i<7;i++){ const d=new Date(actWeekStart); d.setDate(d.getDate()+i); days.push(d); }
+  const dow = ['月','火','水','木','金','土','日'];
+  const label = `${actWeekStart.getFullYear()}年 `
+    + `${actWeekStart.getMonth()+1}/${actWeekStart.getDate()}（月） 〜 `
+    + `${days[6].getMonth()+1}/${days[6].getDate()}（日）`;
+  const lb = document.getElementById('actWeekLabel'); if(lb) lb.textContent = label;
+
+  if(!actRecords){ wrap.innerHTML=''; return; }
+
+  const stKey = actSubKey(actRecords);
+  if(!stKey){
+    wrap.innerHTML = '';
+    actSetStatus('❌ 「作業明細」テーブルが見つかりません。App IDをご確認ください');
+    return;
+  }
+
+  // 作業者 × 日付（×作業内容）で時間を積む
+  const ymds = days.map(actYmd);
+  const inWeek = new Set(ymds);
+  const byWorker = {};
+  let rows = 0;
+  actRecords.forEach(rec=>{
+    (rec[stKey]?.value || []).forEach(row=>{
+      const d = actVal(row,'日付').slice(0,10).replace(/\//g,'-');
+      if(!inWeek.has(d)) return;
+      const w = actWorker(row) || '（作業者なし）';
+      const h = parseFloat(actVal(row,'時間').replace(/[,\s]/g,'')) || 0;
+      const work = actVal(row,'作業内容') || '（作業内容なし）';
+      const W = byWorker[w] || (byWorker[w] = { days:{}, works:{}, total:0 });
+      W.days[d] = (W.days[d]||0) + h;
+      W.total += h;
+      const K = W.works[work] || (W.works[work] = { days:{}, total:0 });
+      K.days[d] = (K.days[d]||0) + h;
+      K.total += h;
+      rows++;
+    });
+  });
+
+  const names = Object.keys(byWorker).sort();
+  const std = parseFloat(document.getElementById('actStd')?.value) || 0;
+  const showWork = document.getElementById('actShowWork')?.checked;
+  const num = h => h ? (Math.round(h*10)/10).toFixed(1) : '';
+
+  const cls = (h, i) => {
+    if(i >= 5) return 'act-holiday';               // 土日は判定しない
+    if(!h) return 'act-zero';
+    return (std && h + 1e-9 >= std) ? 'act-ok' : 'act-few';
+  };
+
+  const dayTotal = ymds.map(d => names.reduce((s,n)=>s+(byWorker[n].days[d]||0),0));
+  const grand = dayTotal.reduce((a,b)=>a+b,0);
+
+  wrap.innerHTML = `
+    <table class="act">
+      <thead><tr>
+        <th class="act-name">作業者</th>
+        ${days.map((d,i)=>`<th style="text-align:right${i>=5?';color:#b8bfc9':''}">`
+          + `${d.getMonth()+1}/${d.getDate()}<div style="font-weight:400">${dow[i]}</div></th>`).join('')}
+        <th style="text-align:right">週計</th>
+      </tr></thead>
+      <tbody>
+        ${names.length ? names.map(n=>{
+          const W = byWorker[n];
+          let html = `<tr class="act-worker">
+            <td class="act-name">${n}</td>
+            ${ymds.map((d,i)=>{const h=W.days[d]||0;
+              return `<td class="num ${cls(h,i)}">${num(h) || (i>=5?'':'—')}</td>`;}).join('')}
+            <td class="num">${num(W.total)}</td>
+          </tr>`;
+          if(showWork){
+            html += Object.keys(W.works).sort().map(k=>{
+              const K = W.works[k];
+              return `<tr class="act-work">
+                <td class="act-name">${k}</td>
+                ${ymds.map(d=>`<td class="num">${num(K.days[d]||0)}</td>`).join('')}
+                <td class="num">${num(K.total)}</td>
+              </tr>`;
+            }).join('');
+          }
+          return html;
+        }).join('') : `<tr><td class="act-name" colspan="9"
+            style="text-align:center;color:var(--text2);padding:24px">この週の入力はありません</td></tr>`}
+        <tr class="act-total">
+          <td class="act-name">合計</td>
+          ${dayTotal.map(h=>`<td class="num">${num(h)}</td>`).join('')}
+          <td class="num">${num(grand)}</td>
+        </tr>
+      </tbody>
+    </table>`;
+
+  actSetStatus(`${names.length}人 / この週の入力 ${rows}件 / 合計 ${num(grand)}時間`
+    + `　（全${actRecords.length}レコードから集計）`);
 }
 
 const NM_DAYS=35;
