@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.09.04-12 : 加工費の2段目を常に金型（管理NO.）でまとめるようにし、工程一覧は見出しに添える形で統一。あわせて作業明細の行に「工程」列が付いた場合に備えて workProcess を取り込んでおき、値が入っていれば自動で工程ごとに割れるようにした -->
+<!-- 金型原価 v2026.09.04-11 : 加工費の品番段が金型NOになっていたのを修正。金型マスタに無い金型でも、作業実績レコードが持つ部品番号で束ねる（cfg.pKeyOf）。これで同じ品番の複数の金型（71-J と 71-L など）が1つの品番の下にまとまる。材料費のr.partNoは材料管理NO.なので品番には使わない -->
+<!-- 金型原価 v2026.09.04-10 : ★kintoneのこのアプリには工程ごとの作業記録が無いことが判明。「工程」「実工程」「見積工程」のいずれにも金型の全工程が一覧で入っており（1.BL 2.DR 3.RST…）、作業明細の行に「どの工程か」を示す情報が無い。データに無いので工程では割れない。そこで工程が一覧のときは金型（管理NO.）でまとめ、工程一覧は見出しに添える形にした。将来kintoneの作業明細に工程の列が付けば自動で工程ごとに割れる。部品番号は作業実績アプリでは 文字列__1行__9（物件アプリは 文字列__1行__7）。「取得できる項目を見る」もApp IDを選べるようにした -->
 <!-- 金型原価 v2026.09.04-9 : App61の実データで、部品番号が空・工程が「1.BL 2.DR 3.RST…」と全工程まとめて1つになる問題が出た。フィールドコードを目で確かめられるよう「🧾 取得できる項目を見る」を追加。あわせて部品番号は名前に「部品」を含むフィールドも探し、工程は1レコード分を持つ「実工程」「見積工程」を優先して見るようにした（無ければ従来どおり「工程」） -->
 <!-- 金型原価 v2026.09.04-8 : 直接取込がApp39（物件マスタ側で作業明細を持たない）を見ていたため、作業実績App IDを優先する順に変更し、「🔍 App IDを指定して試す」ボタンを追加（成功した値は設定に保存）。テーブルが無いときのメッセージに、kintoneのURLからApp IDを確認する手順を入れた -->
 <!-- 金型原価 v2026.09.04-7 : kintoneから作業実績を直接取り込むボタンを追加（CSV不要）。kintoneは「ファイルに書き出す」の項目選択を保存せず、毎回テーブル「作業明細」を足し直す必要があるため、既存のGASプロキシ(fetchKintoneApp)でレコードを取り、サブテーブルを展開する方式にした。サブテーブルは列名(作業内容/チャージ)で自動判定し、TRY履歴(問題点/対策)は除外する。作業員のユーザー選択フィールドは表示名に変換。予算・残予算は各レコードの1行目にだけ持たせる。CSV取込も従来どおり残してある -->
@@ -632,7 +635,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.04-9</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.04-12</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -1130,14 +1133,14 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
       </select>
       <div style="display:flex;gap:4px;margin-left:auto;">
         <button class="btn btn-primary btn-sm"   id="laborViewBtn_detail"  onclick="setLaborView('detail')">📋 明細</button>
-        <button class="btn btn-secondary btn-sm" id="laborViewBtn_summary" onclick="setLaborView('summary')">📊 品番×工程×作業内容</button>
+        <button class="btn btn-secondary btn-sm" id="laborViewBtn_summary" onclick="setLaborView('summary')">📊 品番×金型×作業内容</button>
       </div>
     </div>
 
     <!-- ★品番×工程×作業区分（または作業者）の集計 -->
     <div class="table-wrap" id="laborSummaryWrap" style="display:none">
       <div class="table-header">
-        <div class="table-title">加工費　品番 ＞ 工程 ＞ 作業内容</div>
+        <div class="table-title">加工費　品番 ＞ 金型 ＞ 作業内容</div>
         <div class="table-count" id="laborSummaryCount"></div>
         <div class="table-actions">
           <select class="filter-select" id="laborSummaryBy" onchange="renderLabor()" style="width:150px">
@@ -2861,12 +2864,16 @@ function renderCostSummary(pre, entries, cfg) {
   const parts = {};
   entries.forEach(([, r]) => {
     const mold = findMoldByNo(r.moldNo) || findMoldByMatNo(r.partNo || '');
-    const pKey = (mold?.partNo || r.moldNo || '（品番なし）');
-    const proc = matProcessOf(r);
+    // 品番の決め方。金型マスタに無いときの拾い方は費目で違う
+    //   加工費: レコードが部品番号を持つ（cfg.pKeyOf で渡す）
+    //   材料費: r.partNo は材料管理NO.なので品番には使えない
+    const pKey = (mold?.partNo || (cfg.pKeyOf ? cfg.pKeyOf(r) : '') || r.moldNo || '（品番なし）');
+    const proc = (cfg.l2Of || matProcessOf)(r);
     const l3   = cfg.l3Of(r);
 
     const P = parts[pKey] || (parts[pKey] = {
-      partNo: mold?.partNo || '', partName: mold?.partName || '',
+      partNo: mold?.partNo || (cfg.pKeyOf ? cfg.pKeyOf(r) : '') || '',
+      partName: mold?.partName || '',
       moldNos: new Set(), n: 0, v: zero(), procs: {}
     });
     if (r.moldNo) P.moldNos.add(r.moldNo);
@@ -3007,6 +3014,23 @@ function renderLaborSummary(entries) {
   }[by] || { head: '作業内容', of: r => r.work, none: '（作業内容なし）' };
 
   renderCostSummary('labor', entries, {
+    // ★kintoneの「工程」には金型の全工程が一覧で入っており（1.BL 2.DR 3.RST…）、
+    //   作業明細の行に工程の区別が無い。そのため一覧が入っているときは
+    //   金型（管理NO.）でまとめ、工程一覧は見出しに添えるだけにする。
+    //   将来kintoneの作業明細に工程の列が付いたら、自動で工程ごとに割れる。
+    pKeyOf: r => (r.partNo || '').trim(),   // 作業実績レコードは部品番号を持っている
+    l2Of: r => {
+      // 作業の行に工程が入っていればそれで割る（kintoneに列が追加されたとき）
+      if (String(r.workProcess || '').trim()) {
+        return matProcessOf({ ...r, process: r.workProcess });
+      }
+      // 今は作業の行に工程が無いので、金型（管理NO.）でまとめる。
+      // 「工程」はその金型の全工程一覧なので、見出しに添えるだけにする。
+      const p = String(r.process || '').trim();
+      return { key: 'M' + (r.moldNo || ''), sort: 0,
+               label: '金型 ' + (r.moldNo || '—')
+                    + (p ? '　<span style="font-weight:400;color:var(--text3);font-size:11px">' + p + '</span>' : '') };
+    },
     l3Head: L3.head,
     l3Of:  r => (L3.of(r) || '').trim() || L3.none,
     cols: [
@@ -3425,8 +3449,11 @@ function stVal(row, ...names) {
 // どのフィールドが部品番号・工程なのかを目で確かめるための道具。
 async function inspectKintoneFields() {
   const logEl = document.getElementById('kintoneImportLog');
-  const appId = (document.getElementById('cfgKtApp')?.value || cfg.ktApp || '').trim()
+  const guess = (document.getElementById('cfgKtApp')?.value || cfg.ktApp || '').trim()
              || (document.getElementById('cfgKtMoldApp')?.value || cfg.ktMoldApp || '39').trim();
+  const ans = prompt('どのApp IDの項目を見ますか（kintoneのURL .../k/●●/ の数字）', guess);
+  if (ans === null) return;
+  const appId = String(ans).trim() || guess;
   logEl.style.color = '';
   logEl.textContent = `App ${appId} に接続中...`;
   try {
@@ -3526,15 +3553,18 @@ async function importLaborFromKintone(appIdArg) {
   records.forEach((rec, ri) => {
     const moldNo  = ktVal(rec, F.moldNo, '管理コード', '文字列__1行__6');
     // 部品番号：フィールドコードが分からないので、名前に「部品」を含むものも探す
-    let partNo = ktVal(rec, F.partNo, '部品番号', '文字列__1行__7');
+    // 部品番号のフィールドコードはアプリごとに違う。
+    //   作業実績(App61)＝文字列__1行__9 ／ 物件(App39)＝文字列__1行__7
+    let partNo = ktVal(rec, F.partNo, '部品番号', '文字列__1行__9', '文字列__1行__7');
     if (!partNo) {
       const k = Object.keys(rec).find(k => /部品/.test(k) && rec[k]?.type !== 'SUBTABLE');
       if (k) partNo = ktVal(rec, k);
     }
-    // 工程：「工程」は全工程の一覧（例 1.BL 2.DR 3.RST…）が入っていることがある。
-    //       1レコード分の工程を持つ「実工程」「見積工程」があればそちらを優先する。
-    let process = ktVal(rec, '実工程', '見積工程');
-    if (!process) process = ktVal(rec, F.process, '工程');
+    // 工程：★この kintone アプリでは「工程」「実工程」「見積工程」のいずれにも
+    //   その金型の全工程が一覧で入っている（例 1.BL 2.DR 3.RST 4.CUT …）。
+    //   作業明細の行に「どの工程の作業か」を示す情報は無いため、工程ごとには割れない。
+    //   ここでは一覧をそのまま持ち、表示側で金型単位にまとめる。
+    const process = ktVal(rec, F.process, '工程', '実工程', '見積工程');
     const status  = ktVal(rec, 'トライ状況');
     const numOf   = (...n) => parseFloat(String(ktVal(rec, ...n)).replace(/[,¥円\s]/g, '')) || 0;
     const budget  = numOf('加工予算');
@@ -3546,6 +3576,9 @@ async function importLaborFromKintone(appIdArg) {
     rows.forEach((row, i) => {
       const work   = stVal(row, '作業内容');
       const worker = stVal(row, '作業員');
+      // ★将来、作業明細に「工程」の列が追加されたらここで拾う。
+      //   入っていれば集計の2段目が自動で工程ごとに割れる。
+      const workProcess = stVal(row, '工程', '実工程');
       const charge = parseFloat(stVal(row, 'チャージ').replace(/[,¥円\s]/g, '')) || 0;
       const time   = parseFloat(stVal(row, '時間').replace(/[,\s]/g, ''))        || 0;
       const amount = parseFloat(stVal(row, '金額').replace(/[,¥円\s]/g, '')) || (charge * time);
@@ -3559,7 +3592,7 @@ async function importLaborFromKintone(appIdArg) {
       }
       DB.labor['lab_kt_' + ri + '_' + i] = {
         month, moldNo, partNo, process,
-        worker, work, workType: status,
+        worker, work, workProcess, workType: status,
         charge, time, amount,
         // 予算・残予算はレコード単位の数字。1行目にだけ持たせて合計の水増しを防ぐ
         budget: i === 0 ? budget : 0,
