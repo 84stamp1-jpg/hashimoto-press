@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.09.04-7 : kintoneから作業実績を直接取り込むボタンを追加（CSV不要）。kintoneは「ファイルに書き出す」の項目選択を保存せず、毎回テーブル「作業明細」を足し直す必要があるため、既存のGASプロキシ(fetchKintoneApp)でレコードを取り、サブテーブルを展開する方式にした。サブテーブルは列名(作業内容/チャージ)で自動判定し、TRY履歴(問題点/対策)は除外する。作業員のユーザー選択フィールドは表示名に変換。予算・残予算は各レコードの1行目にだけ持たせる。CSV取込も従来どおり残してある -->
 <!-- 金型原価 v2026.09.04-6 : 取込手順を実際のkintone書き出し画面に合わせて書き直した（チェックボックスではなく項目ボタンを右へ足す形。TRY履歴のサブテーブルはフィールド名が「テーブル」のままなので「作業明細」と取り違えやすい）。あわせて作業明細形式の取込で 加工予算・残予算 を「レコードの開始行」の行にだけ持たせるようにした。親の値なので続きの行にも入れると合計が水増しされる -->
 <!-- 金型原価 v2026.09.04-5 : データ取込タブに、kintoneからCSVを書き出す手順（どの項目にチェックするか）を画面上に明記。テーブルは1つしか書き出せないので TRY履歴 ではなく 作業実績（作業明細） を選ぶ必要がある、という点が一番間違えやすい。あわせて取込後に「どちらの形式だったか」を必ず表示し、作業内容の列が無いCSVを読ませたときは赤字とエラートーストで知らせる -->
 <!-- 金型原価 v2026.09.04-4 : 加工費に「作業内容」を通した。kintoneのこのアプリはサブテーブルを2つ持っており（作業明細＝日付/作業員/作業内容/チャージ/時間/金額、TRY履歴＝日付/作業員/問題点/対策/対策区分）、これまで取り込んでいたCSVはTRY履歴の方だったため作業内容も時間も入らず、チャージと時間は0固定になっていた。取込を列の有無で振り分け、作業明細形式なら1行＝1作業として work/charge/time/amount を取り込む。サブテーブルCSVは親の値（管理コード・部品番号・工程・トライ状況）が「レコードの開始行」の行にしか入らないため持ち回る。集計の3段目は既定を作業内容にし（作業員・トライ状況にも切替可）、列は 時間(h)／加工費 に戻した。編集モーダルの「作業内容」欄が workType(トライ状況)に紐づいていたのを work に直し、トライ状況の欄を別に用意。保存時に budget/remain を落としていたのもマージで修正 -->
@@ -629,7 +630,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.04-6</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.04-7</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -1177,35 +1178,39 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
       <div class="config-box">
         <div class="config-title">🔗 kintone 作業実績取込</div>
         <div style="background:var(--accent-dim);border:1px solid var(--accent);border-radius:6px;padding:11px 12px;margin-bottom:12px;font-size:11.5px;line-height:1.8;color:var(--text2);">
-          <b style="font-size:12.5px;color:var(--text)">📌 kintoneからCSVを書き出す手順</b>
-          <div style="margin:6px 0 0 0">
-            <b>①</b> kintoneで「★新規物件（工程別作業実績）」の一覧 → 右上 <b>⋮</b> → <b>「ファイルに書き出す」</b><br>
-            <b>②</b> 文字コードは <b>Shift-JIS（日本語）</b> のままでOK<br>
-            <b>③</b> 左の項目一覧を<b>いちばん下までスクロール</b>すると
-            <b>「テーブル」</b>という見出しがあり、その下に2つ並んでいます
-            <div style="margin:5px 0 5px 14px;padding:7px 10px;background:var(--bg2);border-radius:5px;font-size:11px;line-height:1.9">
-              <b style="color:var(--accent)">■ 作業明細</b> … これを追加する<br>
-              　<span style="font-family:var(--mono);color:var(--text3)">日付／作業員／作業内容／チャージ／時間／金額</span><br>
-              <b style="color:var(--red)">■ テーブル</b> … <b>これは追加しない</b>（中身がTRY履歴＝問題点・対策）<br>
-              　<span style="font-family:var(--mono);color:var(--text3)">日付／作業員／問題点／対策／対策区分</span>
+          <b style="font-size:12.5px;color:var(--text)">📌 取込のしかた（2通り）</b>
+          <div style="margin:7px 0 0 0">
+            <div style="padding:7px 10px;background:var(--bg2);border-left:3px solid var(--green,#16a34a);border-radius:4px;margin-bottom:8px;">
+              <b style="color:var(--green,#16a34a)">■ おすすめ：「🔗 kintoneから直接取込」を押すだけ</b><br>
+              CSVを書き出す必要がありません。kintoneのレコードとテーブル「作業明細」を
+              そのまま読み込み、<b>1行＝1作業</b>として全件入れ替えます。<br>
+              <span style="color:var(--text3)">※ 設定タブの「GASプロキシURL」と「★新規物件 App ID」が入っていれば動きます。</span>
             </div>
-            <b>④</b> <b style="color:var(--accent)">「作業明細」をクリック（または右の表へドラッグ）して書き出し項目に加える</b><br>
-            <b>⑤</b> 右側が下の並びになっていればOKです
-            <div style="margin:5px 0 5px 14px;padding:7px 10px;background:var(--bg2);border-radius:5px;font-family:var(--mono);font-size:11px;line-height:1.8">
-              管理コード ／ 部品番号 ／ 工程 ／ トライ状況 ／ 加工予算 ／ 加工実績 ／ 残予算 ／ 更新日時<br>
-              ＋ 日付 ／ 作業員 ／ <b style="color:var(--accent)">作業内容</b> ／ チャージ ／ 時間 ／ 金額
+            <div style="padding:7px 10px;background:var(--bg2);border-left:3px solid var(--border2);border-radius:4px;">
+              <b>■ CSVで取り込む場合</b>（直接取込がうまくいかないとき）<br>
+              <b>①</b> kintoneで一覧 → 右上 <b>⋮</b> → <b>「ファイルに書き出す」</b>。文字コードは Shift-JIS のままでOK<br>
+              <b>②</b> 左の項目一覧を<b>いちばん下までスクロール</b> →「テーブル」の下に2つあります
+              <div style="margin:5px 0 5px 14px;font-size:11px;line-height:1.9">
+                <b style="color:var(--accent)">■ 作業明細</b> … <b>これを追加</b>（日付／作業員／作業内容／チャージ／時間／金額）<br>
+                <b style="color:var(--red)">■ テーブル</b> … <b>追加しない</b>（中身はTRY履歴＝問題点・対策）
+              </div>
+              <b>③</b> 出力オプションの
+              <b style="color:var(--accent)">☑ ユーザー、組織、グループを表示名で出力する</b> にチェック<br>
+              　（入れないと作業員がログイン名で出ます）<br>
+              <b>④</b> 「書き出す」→ 下の <b style="color:var(--red)">「🔄 全件削除して再取込」</b> に読ませる<br>
+              <span style="color:var(--text3)">※ kintoneは書き出し項目の設定を保存しません。毎回②をやり直す必要があるため、上の直接取込をおすすめします。</span>
             </div>
-            <b>⑥</b> 左上の <b>「書き出す」</b> → ダウンロードしたCSVを、下の
-            <b style="color:var(--red)">「🔄 全件削除して再取込」</b> に読ませる
           </div>
           <div style="margin-top:8px;padding-top:7px;border-top:1px solid var(--border2);">
-            <b>毎月の運用は「全件削除→全件再取込」</b>です。1行＝1作業として取り込み、
-            工程ごと・作業内容ごとに集計できます（加工費タブの「📊 品番×工程×作業内容」）。<br>
-            <span style="color:var(--text3)">※「作業明細」を追加すると、先頭に「レコードの開始行」列が自動で付きます。そのままで結構です。</span>
+            取り込んだら <b>加工費タブ →「📊 品番×工程×作業内容」</b> で、工程ごと・作業内容ごとの時間と金額が見られます。
           </div>
         </div>
         <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
-          <button class="btn btn-primary" onclick="document.getElementById('kintoneCSV').click()">
+          <button class="btn btn-primary" onclick="importLaborFromKintone()"
+            style="background:var(--green,#16a34a);border-color:var(--green,#16a34a)">
+            🔗 kintoneから直接取込（CSV不要・おすすめ）
+          </button>
+          <button class="btn btn-secondary" onclick="document.getElementById('kintoneCSV').click()">
             📥 CSVを選択して取込
           </button>
           <button class="btn btn-danger btn-sm" onclick="labClearAndImport()"
@@ -3370,6 +3375,130 @@ function renderImport() {
 }
 
 // ── kintone CSV import ──
+// ═══════════════════════════════════════════════
+// ★kintoneから作業実績を直接取得（CSV不要）
+//   書き出し画面の項目選択はkintone側で保存されず毎回やり直しになるため、
+//   GASプロキシ経由でレコードを取り、サブテーブル「作業明細」を展開する。
+// ═══════════════════════════════════════════════
+
+// レコードの中から「作業明細」らしいサブテーブルのキーを探す
+function findWorkSubtableKey(rec) {
+  let fallback = '';
+  for (const [k, v] of Object.entries(rec || {})) {
+    if (!v || v.type !== 'SUBTABLE' || !Array.isArray(v.value)) continue;
+    if (!v.value.length) { fallback = fallback || k; continue; }
+    const cols = Object.keys(v.value[0]?.value || {}).join(' ');
+    if (/作業内容|チャージ/.test(cols)) return k;      // 作業明細
+    if (/問題点|対策/.test(cols)) continue;             // TRY履歴は使わない
+    fallback = fallback || k;
+  }
+  return fallback;
+}
+
+// サブテーブル1行から値を取り出す（ユーザー選択・数値・文字列に対応）
+function stVal(row, ...names) {
+  const obj = row?.value || {};
+  for (const n of names) {
+    const f = obj[n] ?? obj[String(n).replace(/[ \t\u3000]+/g, '_')];
+    if (f === undefined || f === null) continue;
+    const v = f.value ?? f;
+    if (v === null || v === undefined || v === '') continue;
+    if (Array.isArray(v)) {
+      const names2 = v.map(x => x?.name || x?.code || x).filter(Boolean);
+      if (names2.length) return names2.join(' ');
+      continue;
+    }
+    return String(v);
+  }
+  return '';
+}
+
+async function importLaborFromKintone() {
+  const logEl = document.getElementById('kintoneImportLog');
+  const setLog = (m, red) => { if (logEl) { logEl.textContent = m; logEl.style.color = red ? 'var(--red)' : ''; } };
+
+  const gasUrl = cfg.gasUrl || document.getElementById('cfgGasUrl')?.value.trim();
+  if (!gasUrl) { toast('GASプロキシURLを設定してください（設定タブ）', 'error'); return; }
+
+  // ★新規物件アプリ（既定39）を先に見る。見つからなければ作業実績App IDも試す
+  const apps = [
+    (document.getElementById('cfgKtMoldApp')?.value || cfg.ktMoldApp || '39').trim(),
+    (document.getElementById('cfgKtApp')?.value || cfg.ktApp || '').trim(),
+  ].filter((v, i, a) => v && a.indexOf(v) === i);
+
+  setLog('kintoneへ接続中...');
+  let records = null, usedApp = '', stKey = '';
+  for (const appId of apps) {
+    try {
+      const data = await fetchKintoneApp(appId);
+      const recs = Array.isArray(data) ? data : (data.records || []);
+      if (!recs.length) { setLog(`App ${appId}: レコード0件`); continue; }
+      const k = findWorkSubtableKey(recs[0]);
+      if (k) { records = recs; usedApp = appId; stKey = k; break; }
+      if (!records) { records = recs; usedApp = appId; }
+    } catch (e) {
+      setLog(`App ${appId} 取得失敗: ${e.message}`, true);
+    }
+  }
+  if (!records) { toast('kintoneからデータを取得できませんでした', 'error'); return; }
+  if (!stKey) {
+    const fields = Object.keys(records[0]).join(', ');
+    setLog('サブテーブルが見つかりません。取得できたフィールド: ' + fields, true);
+    toast('「作業明細」テーブルが見つかりませんでした。App IDをご確認ください', 'error');
+    return;
+  }
+
+  const F = cfg.ktF || {};
+  const before = Object.keys(DB.labor || {}).length;
+  DB.labor = {};
+  let count = 0, noRow = 0;
+
+  records.forEach((rec, ri) => {
+    const moldNo  = ktVal(rec, F.moldNo, '管理コード', '文字列__1行__6');
+    const partNo  = ktVal(rec, F.partNo, '部品番号',   '文字列__1行__7');
+    const process = ktVal(rec, F.process, '工程');
+    const status  = ktVal(rec, 'トライ状況');
+    const numOf   = (...n) => parseFloat(String(ktVal(rec, ...n)).replace(/[,¥円\s]/g, '')) || 0;
+    const budget  = numOf('加工予算');
+    const remain  = numOf('残予算');
+
+    const rows = rec[stKey]?.value || [];
+    if (!rows.length) { noRow++; return; }
+
+    rows.forEach((row, i) => {
+      const work   = stVal(row, '作業内容');
+      const worker = stVal(row, '作業員');
+      const charge = parseFloat(stVal(row, 'チャージ').replace(/[,¥円\s]/g, '')) || 0;
+      const time   = parseFloat(stVal(row, '時間').replace(/[,\s]/g, ''))        || 0;
+      const amount = parseFloat(stVal(row, '金額').replace(/[,¥円\s]/g, '')) || (charge * time);
+      if (!work && !time && !amount) return;
+
+      const dateStr = stVal(row, '日付') || ktVal(rec, '更新日時');
+      let month = new Date().toISOString().slice(0, 7);
+      if (dateStr) {
+        const dt = new Date(String(dateStr).replace(/\//g, '-').slice(0, 10));
+        if (!isNaN(dt)) month = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0');
+      }
+      DB.labor['lab_kt_' + ri + '_' + i] = {
+        month, moldNo, partNo, process,
+        worker, work, workType: status,
+        charge, time, amount,
+        // 予算・残予算はレコード単位の数字。1行目にだけ持たせて合計の水増しを防ぐ
+        budget: i === 0 ? budget : 0,
+        remain: i === 0 ? remain : 0,
+      };
+      count++;
+    });
+  });
+
+  await writeToFirebase('labor', DB.labor);
+  logImport('kintone直取り(App ' + usedApp + ')', count);
+  setLog(`✅ App ${usedApp} から ${count}件取込（${records.length}レコード／作業明細なし ${noRow}件）`
+       + `／前回 ${before}件を置き換え (${new Date().toLocaleString('ja-JP')})`);
+  toast(`kintoneから${count}件の作業実績を取込しました`, 'success');
+  renderLabor();
+}
+
 function importKintoneCSV(e) {
   const file = e.target.files[0]; if (!file) return;
   const reader = new FileReader();
