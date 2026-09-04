@@ -564,7 +564,7 @@ tr.act-total td.act-name{background:#eef2f7}
 <body>
 
 <header>
-  <div class="logo">⚙ <span>金型</span>管理システム<span style="font-size:9px;color:#9aa3b2;font-weight:400;margin-left:6px">v2026.09.04-1</span></div>
+  <div class="logo">⚙ <span>金型</span>管理システム<span style="font-size:9px;color:#9aa3b2;font-weight:400;margin-left:6px">v2026.09.04-2</span></div>
   <div class="main-tab-bar">
     <button class="main-tab-btn active" id="mainTabRepair" onclick="switchMainTab('repair')">🔧 改修計画表</button>
     <button class="main-tab-btn" id="mainTabNew" onclick="switchMainTab('newmold')">🏗️ 新規製作 日程表</button>
@@ -909,6 +909,7 @@ tr.act-total td.act-name{background:#eef2f7}
     <button class="nav-arrow" onclick="actShiftWeek(1)">›</button>
     <button class="btn btn-secondary btn-sm" onclick="actShiftWeek(0)">今週</button>
     <button class="btn btn-primary btn-sm" onclick="actLoad(true)">🔄 kintone取得</button>
+    <button class="btn btn-secondary btn-sm" onclick="actConfig()">⚙ 接続設定</button>
     <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
       <input type="checkbox" id="actShowWork" onchange="actRender()"> 作業内容の内訳を出す
     </label>
@@ -927,7 +928,8 @@ tr.act-total td.act-name{background:#eef2f7}
   <div class="act-wrap" id="actTableWrap"></div>
   <div class="act-note" style="margin-top:8px;line-height:1.7">
     ※ kintone <b>★新規物件(工程別作業実績)</b> の「作業明細」に入力された時間を、作業者ごと・日ごとに合計しています。<br>
-    ※ <b>実績入力は新規製作の部品だけ</b>です。改修作業などをしている日は8時間になりません。空欄＝その日の入力が1件も無い、という意味です。<br>
+    ※ 1行目は <b>新規＋改修の合計</b>です。その下に「新規（実績入力）」と「改修（計画表）」の内訳を出しています。<br>
+    ※ <b>kintoneの実績入力は新規製作の部品だけ</b>です。改修の時間は改修計画表タブの実績（開始〜終了）から拾っています。<br>
     ※ 週次チェック・減点記録シート【技術】の「前日の金型実績記録（コスト・工数）が入力済みか（3日以内に入力完了）」の確認に使えます。
   </div>
 </div>
@@ -4528,6 +4530,10 @@ function switchMainTab(tab){
 // ══════════════════════════════════════════════
 const ACT_APP = 61;
 const ACT_LS_APP = 'moldPlan_actualApp';
+// ★このシステムのGAS(GAS_URL)はApp61のトークン(KT_TOKEN_61)を持っていないため、
+//   金型製作原価管理システムが使っている別のGASを先に試す。そちらはApp61を取得できる。
+const ACT_GAS_ALT = 'https://script.google.com/macros/s/AKfycbwhW0jn30gacz6dGaSKdoSoky3XNFSThmu57Dar1X1w5zGG2OvpgVeGuMyPzrVAXl3X/exec';
+const ACT_LS_GAS = 'moldPlan_actualGas';
 let actRecords = null;      // kintoneの生レコード（取得後キャッシュ）
 let actWeekStart = null;    // 表示中の週の月曜
 
@@ -4554,29 +4560,83 @@ function actShiftWeek(n){
   actRender();
 }
 
-// ----- kintone取得（GASのJSONPプロキシ経由）-----
+// ----- kintone取得 -----
+// 2つの経路を順に試す。
+//   A: 原価管理システムのGAS（App61のトークンを持っている）へ通常のfetch
+//   B: このシステムのGAS（GAS_URL）へJSONP
 function actLoad(force){
   if(actRecords && !force){ actRender(); return; }
   const app = localStorage.getItem(ACT_LS_APP) || ACT_APP;
+  const alt = localStorage.getItem(ACT_LS_GAS) || ACT_GAS_ALT;
   actSetStatus('🔄 kintone App ' + app + ' から取得中...');
-  const cb = 'actKtCb_' + Date.now();
-  const q  = encodeURIComponent('order by $id asc limit 500');
-  const url = GAS_URL + '?app=' + encodeURIComponent(app) + '&query=' + q + '&callback=' + cb;
-  const timer = setTimeout(()=>{ cleanup(); actSetStatus('❌ タイムアウト（GASのKT_TOKEN_'+app+'を確認してください）'); }, 20000);
-  function cleanup(){ clearTimeout(timer); delete window[cb];
-    const el=document.getElementById('act_jsonp'); if(el) el.remove(); }
-  window[cb] = function(data){
-    cleanup();
-    if(data && data.error){ actSetStatus('❌ kintoneエラー: ' + data.error); return; }
-    const recs = Array.isArray(data) ? data : (data && data.records) || [];
-    if(!recs.length){ actSetStatus('❌ レコードが0件です'); return; }
-    actRecords = recs;
-    actRender();
-  };
-  const sc = document.createElement('script');
-  sc.id = 'act_jsonp'; sc.src = url;
-  sc.onerror = ()=>{ cleanup(); actSetStatus('❌ 取得に失敗しました（GASプロキシに接続できません）'); };
-  document.body.appendChild(sc);
+
+  actFetchJson(alt, app)
+    .then(recs => { actRecords = recs; actRender(); })
+    .catch(e1 => {
+      actSetStatus('… 別経路で再試行中（' + e1.message + '）');
+      actJsonp(GAS_URL, app)
+        .then(recs => { actRecords = recs; actRender(); })
+        .catch(e2 => {
+          actSetStatus('❌ 取得できませんでした。'
+            + '［1］' + e1.message + '　［2］' + e2.message
+            + '　→「⚙ 接続設定」でGASのURLとApp IDを確認してください');
+        });
+    });
+}
+
+function actPickRecords(data){
+  if(data && data.error) throw new Error('kintone: ' + data.error);
+  const recs = Array.isArray(data) ? data : (data && data.records) || [];
+  if(!recs.length) throw new Error('レコード0件');
+  return recs;
+}
+
+// A: 通常のfetch（CORS対応のGAS向け）
+async function actFetchJson(gas, app){
+  if(!gas) throw new Error('GAS URL未設定');
+  const urls = [gas + '?app=' + encodeURIComponent(app) + '&limit=500',
+                gas + '?app=' + encodeURIComponent(app)];
+  let last = '';
+  for(const u of urls){
+    try{
+      const res = await fetch(u);
+      if(!res.ok){ last = 'HTTP ' + res.status; continue; }
+      return actPickRecords(JSON.parse(await res.text()));
+    }catch(e){ last = e.message; }
+  }
+  throw new Error(last || '取得失敗');
+}
+
+// B: JSONP（このシステムの既存GAS向け）
+function actJsonp(gas, app){
+  return new Promise((resolve, reject)=>{
+    const cb = 'actKtCb_' + Date.now();
+    const q  = encodeURIComponent('order by $id asc limit 500');
+    const timer = setTimeout(()=>{ cleanup(); reject(new Error('タイムアウト')); }, 20000);
+    function cleanup(){ clearTimeout(timer); delete window[cb];
+      const el = document.getElementById('act_jsonp'); if(el) el.remove(); }
+    window[cb] = data => { cleanup();
+      try{ resolve(actPickRecords(data)); }catch(e){ reject(e); } };
+    const sc = document.createElement('script');
+    sc.id = 'act_jsonp';
+    sc.src = gas + '?app=' + encodeURIComponent(app) + '&query=' + q + '&callback=' + cb;
+    sc.onerror = ()=>{ cleanup(); reject(new Error('接続できません')); };
+    document.body.appendChild(sc);
+  });
+}
+
+// 接続設定（GASのURLとApp IDを変えたいとき）
+function actConfig(){
+  const app = prompt('kintoneのApp ID（★新規物件(工程別作業実績)）',
+    localStorage.getItem(ACT_LS_APP) || String(ACT_APP));
+  if(app === null) return;
+  const gas = prompt('GASプロキシのURL（空にすると既定に戻します）',
+    localStorage.getItem(ACT_LS_GAS) || ACT_GAS_ALT);
+  if(gas === null) return;
+  localStorage.setItem(ACT_LS_APP, String(app).trim() || String(ACT_APP));
+  if(String(gas).trim()) localStorage.setItem(ACT_LS_GAS, String(gas).trim());
+  else localStorage.removeItem(ACT_LS_GAS);
+  actLoad(true);
 }
 
 // ----- 作業明細サブテーブルを探す -----
@@ -4617,6 +4677,30 @@ function actWorker(row){
     }
   }
   return '';
+}
+
+// 改修計画表(tasksByDate)から 担当者×日付 の実働時間を集める
+function actRepairHours(ymds){
+  const out = {};   // { 表示名: { 日付: 時間 } }
+  const want = new Set(ymds);
+  Object.keys(tasksByDate || {}).forEach(ds=>{
+    if(!want.has(ds)) return;
+    (tasksByDate[ds] || []).forEach(t=>{
+      const key = (ASSIGNEE_NORM && ASSIGNEE_NORM[t.assignee]) || t.assignee;
+      const nm  = (WORKER_CONFIG[key] && WORKER_CONFIG[key].name) || key || '（担当なし）';
+      let h = 0;
+      try{ h = calcWorkedH([t]) || 0; }catch(e){ h = 0; }
+      if(!h) return;
+      (out[nm] || (out[nm] = {}));
+      out[nm][ds] = Math.round(((out[nm][ds]||0) + h) * 10) / 10;
+    });
+  });
+  return out;
+}
+// 改修計画表の担当者名（松本 等）と kintoneの表示名（松本 みなみ 等）を突き合わせる
+function actMatchName(shortName, ktNames){
+  const t = String(shortName).replace(/\s/g,'');
+  return ktNames.find(n => String(n).replace(/\s/g,'').startsWith(t)) || '';
 }
 
 function actRender(){
@@ -4664,6 +4748,19 @@ function actRender(){
     });
   });
 
+  // ★改修計画表の実績を混ぜる（新規の実績入力だけでは8時間にならないため）
+  const repair = actRepairHours(ymds);
+  const ktNames = Object.keys(byWorker);
+  Object.keys(repair).forEach(short=>{
+    const hit = actMatchName(short, ktNames);
+    const key = hit || short;
+    const W = byWorker[key] || (byWorker[key] = { days:{}, works:{}, total:0 });
+    W.repair = W.repair || {};
+    Object.keys(repair[short]).forEach(d=>{
+      W.repair[d] = (W.repair[d]||0) + repair[short][d];
+    });
+  });
+
   const names = Object.keys(byWorker).sort();
   const std = parseFloat(document.getElementById('actStd')?.value) || 0;
   const showWork = document.getElementById('actShowWork')?.checked;
@@ -4675,8 +4772,12 @@ function actRender(){
     return (std && h + 1e-9 >= std) ? 'act-ok' : 'act-few';
   };
 
-  const dayTotal = ymds.map(d => names.reduce((s,n)=>s+(byWorker[n].days[d]||0),0));
+  const sumOf  = (W,d) => (W.days[d]||0) + ((W.repair && W.repair[d])||0);
+  const totOf  = W => ymds.reduce((s,d)=>s+sumOf(W,d),0);
+  const dayTotal = ymds.map(d => names.reduce((s,n)=>s+sumOf(byWorker[n],d),0));
   const grand = dayTotal.reduce((a,b)=>a+b,0);
+  const hasRepair = names.some(n => byWorker[n].repair
+    && Object.values(byWorker[n].repair).some(v=>v));
 
   wrap.innerHTML = `
     <table class="act">
@@ -4689,17 +4790,33 @@ function actRender(){
       <tbody>
         ${names.length ? names.map(n=>{
           const W = byWorker[n];
+          const rep = W.repair || {};
+          const repTot = ymds.reduce((s,d)=>s+(rep[d]||0),0);
+          // 1行目＝新規＋改修の合計（基準と比べて色を付ける）
           let html = `<tr class="act-worker">
             <td class="act-name">${n}</td>
-            ${ymds.map((d,i)=>{const h=W.days[d]||0;
+            ${ymds.map((d,i)=>{const h=sumOf(W,d);
               return `<td class="num ${cls(h,i)}">${num(h) || (i>=5?'':'—')}</td>`;}).join('')}
+            <td class="num">${num(totOf(W))}</td>
+          </tr>`;
+          // 内訳：新規（kintone実績入力）／改修（改修計画表）
+          html += `<tr class="act-work">
+            <td class="act-name">新規（実績入力）</td>
+            ${ymds.map(d=>`<td class="num">${num(W.days[d]||0)}</td>`).join('')}
             <td class="num">${num(W.total)}</td>
           </tr>`;
+          if(hasRepair){
+            html += `<tr class="act-work">
+              <td class="act-name">改修（計画表）</td>
+              ${ymds.map(d=>`<td class="num">${num(rep[d]||0)}</td>`).join('')}
+              <td class="num">${num(repTot)}</td>
+            </tr>`;
+          }
           if(showWork){
             html += Object.keys(W.works).sort().map(k=>{
               const K = W.works[k];
               return `<tr class="act-work">
-                <td class="act-name">${k}</td>
+                <td class="act-name" style="padding-left:38px">${k}</td>
                 ${ymds.map(d=>`<td class="num">${num(K.days[d]||0)}</td>`).join('')}
                 <td class="num">${num(K.total)}</td>
               </tr>`;
@@ -4716,8 +4833,9 @@ function actRender(){
       </tbody>
     </table>`;
 
-  actSetStatus(`${names.length}人 / この週の入力 ${rows}件 / 合計 ${num(grand)}時間`
-    + `　（全${actRecords.length}レコードから集計）`);
+  actSetStatus(`${names.length}人 / 新規の入力 ${rows}件 / 合計 ${num(grand)}時間`
+    + (hasRepair ? '（新規＋改修）' : '')
+    + `　（kintone 全${actRecords.length}レコードから集計）`);
 }
 
 const NM_DAYS=35;
