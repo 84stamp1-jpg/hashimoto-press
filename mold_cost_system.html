@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.09.04-16 : 「⚙ 項目の対応づけ」を押しても何も出ない不具合を修正。このシステムのモーダルは 外側=.modal-overlay ／ 内側=.modal の2重構造で、表示は外側に .open を付けて行うが、動的生成した要素の外側を .modal にしていたため画面下に見えない形で描画されていた。閉じるボタンのクラスも .close-btn に合わせた -->
 <!-- 金型原価 v2026.09.04-15 : 部品番号の欄に工程が入り工程が空になる列ズレを修正。原因は金型マスタ用のフィールドコード設定(cfg.ktF.partNo=文字列__1行__7)を作業実績アプリにも流用していたこと。アプリごとにコードが違うため推測をやめ、「⚙ 項目の対応づけ」で 管理NO./部品番号/工程 を画面から選ぶ方式にした。各コードの横に実データの値を出すので値を見て選べる。対応づけはlocalStorageに保存する。取込後に部品番号や工程が全件空なら対応づけを促す -->
 <!-- 金型原価 v2026.09.04-14 : 作業実績のApp ID(61)が保存されず、毎回App39を見に行ってしまう問題を修正。cfgは起動時にFirebaseの共有設定で上書きされるため、localStorageのcfgだけでは消えていた。専用キー(moldCost_laborAppId)にも保存し、あわせてsaveKintoneConfig()で共有設定にも書くようにした。取込に成功したApp IDは自動で記憶する -->
 <!-- 金型原価 v2026.09.04-13 : 工程の読み方を訂正。実データでは1レコード＝1工程で「工程」に単一の値（例 DR）が入り、全工程の一覧は「見積工程」の方だった。v-9で実工程/見積工程を優先させたのが誤りで、一覧を拾っていた。「工程」だけを見るようにし（cfg.ktF.processは金型マスタ用なので参照しない）、集計の2段目も工程に戻した -->
@@ -638,7 +639,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.04-15</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.04-16</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -3542,16 +3543,18 @@ async function openLaborFieldMap() {
   };
   const guessBy = re => { const f = fields.find(f => re.test(f.val)); return f ? f.code : ''; };
 
+  // ★このシステムのモーダルは 外側=.modal-overlay ／ 内側=.modal の2重構造。
+  //   表示は外側に .open を付けて行う。外側を .modal にすると画面に出ない。
   let m = document.getElementById('laborFieldMapModal');
   if (!m) {
     m = document.createElement('div');
     m.id = 'laborFieldMapModal';
-    m.className = 'modal';
+    m.className = 'modal-overlay';
     document.body.appendChild(m);
   }
-  m.innerHTML = '<div class="modal-box" style="max-width:660px">'
+  m.innerHTML = '<div class="modal">'
     + '<div class="modal-head"><div class="modal-title">加工費の項目を対応づける（App ' + appId + '）</div>'
-    + '<button class="modal-close" onclick="closeModal(\'laborFieldMapModal\')">×</button></div>'
+    + '<button class="close-btn" onclick="closeModal(\'laborFieldMapModal\')">×</button></div>'
     + '<div class="modal-body">'
     + '<div style="font-size:11.5px;color:var(--text2);line-height:1.7;margin-bottom:10px">'
     + 'kintoneのフィールドコードはアプリごとに違うため、どの項目が何かをここで決めます。<br>'
