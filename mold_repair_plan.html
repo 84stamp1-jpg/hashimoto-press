@@ -552,19 +552,24 @@ tr.act-work td{color:var(--text2)}
 tr.act-work td.act-name{padding-left:22px;font-size:11px;color:var(--text2)}
 tr.act-total td{font-weight:700;background:#eef2f7;border-top:2px solid var(--border)}
 tr.act-total td.act-name{background:#eef2f7}
-.act-ok{background:#eaf7ee}      /* 基準を満たす */
-.act-few{background:#fff6e0}     /* 基準に足りない */
-.act-zero{background:#fdecec;color:#c0392b}  /* 入力なし */
-.act-holiday{background:#fafafa;color:#b8bfc9}
+/* 一目で見分けられるよう、はっきり色を付ける */
+.act-ok  {background:#bfe9cd;color:#0f5132;font-weight:700;
+          box-shadow:inset 3px 0 0 #2f9e5f}                    /* 基準を満たす */
+.act-few {background:#ffe1a3;color:#7a4b00;font-weight:700;
+          box-shadow:inset 3px 0 0 #e8a33d}                    /* 基準に足りない */
+.act-zero{background:#ffc9c9;color:#a01c1c;font-weight:700;
+          box-shadow:inset 3px 0 0 #d94a4a}                    /* 入力なし */
+.act-holiday{background:#f5f6f8;color:#b8bfc9}
 .act-legend{display:flex;gap:12px;font-size:11px;align-items:center;color:var(--text2)}
-.act-legend i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:4px;
-  vertical-align:-1px;border:1px solid rgba(0,0,0,.08)}
+.act-legend i{display:inline-block;width:13px;height:13px;border-radius:2px;margin-right:4px;
+  vertical-align:-2px;border:1px solid rgba(0,0,0,.12)}
+.act-legend span{font-weight:600}
 </style>
 </head>
 <body>
 
 <header>
-  <div class="logo">⚙ <span>金型</span>管理システム<span style="font-size:9px;color:#9aa3b2;font-weight:400;margin-left:6px">v2026.09.04-4</span></div>
+  <div class="logo">⚙ <span>金型</span>管理システム<span style="font-size:9px;color:#9aa3b2;font-weight:400;margin-left:6px">v2026.09.05-1</span></div>
   <div class="main-tab-bar">
     <button class="main-tab-btn active" id="mainTabRepair" onclick="switchMainTab('repair')">🔧 改修計画表</button>
     <button class="main-tab-btn" id="mainTabNew" onclick="switchMainTab('newmold')">🏗️ 新規製作 日程表</button>
@@ -931,8 +936,10 @@ tr.act-total td.act-name{background:#eef2f7}
   <div class="act-note" style="margin-top:8px;line-height:1.7">
     ※ kintone <b>★新規物件(工程別作業実績)</b> の「作業明細」に入力された時間を、作業者ごと・日ごとに合計しています。<br>
     ※ 1行目は <b>新規＋改修の合計</b>です。その下に「新規（実績入力）」と「改修（計画表）」の内訳を出しています。<br>
-    ※ <b>松本利・松永</b>のように改修計画表にも実績を入れている人は、kintoneの新規実績と時間が重なるため
-    <b>新規を(括弧)で参考表示にして合計には入れていません</b>。対象者は「👥 重複する担当者」で変えられます。<br>
+    ※ <b>松本利・松永</b>のように改修計画表にも実績を入れている人は、kintoneの新規実績と時間が重なるため、
+    <b>その日に改修の実績がある日だけ新規を(括弧)にして合計から外して</b>います。改修が無い日は重複しないのでそのまま数えます。
+    対象者は「👥 重複する担当者」で変えられます。<br>
+    ※ <b>改修（計画表）の実績は直近14日分しか保存されません。</b>それより古い週は改修の欄が空になります。<br>
     ※ <b>kintoneの実績入力は新規製作の部品だけ</b>です。改修の時間は改修計画表タブの実績（開始〜終了）から拾っています。<br>
     ※ 週次チェック・減点記録シート【技術】の「前日の金型実績記録（コスト・工数）が入力済みか（3日以内に入力完了）」の確認に使えます。
   </div>
@@ -4856,8 +4863,18 @@ function actRender(){
     return (std && h + 1e-9 >= std) ? 'act-ok' : 'act-few';
   };
 
-  // 参考表示の人は 新規を合計に入れない（改修と重複するため）
-  const sumOf  = (W,d) => (W.refOnly ? 0 : (W.days[d]||0)) + ((W.repair && W.repair[d])||0);
+  // 参考表示の人（改修計画表にも実績を入れている人）は、その日に改修の実績があれば
+  // 新規と重複するので改修だけを数える。改修が無い日は重複しないので新規を数える。
+  //   ※改修計画表の実績はFirebaseに直近14日分しか残らないため、
+  //     古い週は改修が空になる。その週まで「入力なし」と判定しないための切替でもある。
+  const repOf = (W,d) => (W.repair && W.repair[d]) || 0;
+  const sumOf = (W,d) => {
+    const rep = repOf(W,d), nw = W.days[d]||0;
+    if(!W.refOnly) return nw + rep;
+    return rep > 0 ? rep : nw;
+  };
+  // その日の新規が合計から外されているか（＝括弧で参考表示にするか）
+  const isRef = (W,d) => W.refOnly && repOf(W,d) > 0;
   const totOf  = W => ymds.reduce((s,d)=>s+sumOf(W,d),0);
   const dayTotal = ymds.map(d => names.reduce((s,n)=>s+sumOf(byWorker[n],d),0));
   const grand = dayTotal.reduce((a,b)=>a+b,0);
@@ -4881,16 +4898,21 @@ function actRender(){
           let html = `<tr class="act-worker">
             <td class="act-name">${n}</td>
             ${ymds.map((d,i)=>{const h=sumOf(W,d);
-              return `<td class="num ${cls(h,i)}">${num(h) || (i>=5?'':'—')}</td>`;}).join('')}
+              return `<td class="num ${cls(h,i)}">${num(h) || (i>=5?'':'なし')}</td>`;}).join('')}
             <td class="num">${num(totOf(W))}</td>
           </tr>`;
           // 内訳：新規（kintone実績入力）／改修（改修計画表）
           const ref = W.refOnly;
-          const wrapN = v => v ? (ref ? '(' + v + ')' : v) : '';
-          html += `<tr class="act-work"${ref?' style="opacity:.65"':''}>
-            <td class="act-name">新規（実績入力）${ref?'<span style="font-size:9px;color:var(--text2)"> ※改修と重複のため合計せず</span>':''}</td>
-            ${ymds.map(d=>`<td class="num">${wrapN(num(W.days[d]||0))}</td>`).join('')}
-            <td class="num">${wrapN(num(W.total))}</td>
+          // 合計から外した日だけ括弧にする（改修が無い日はそのまま数えている）
+          const excluded = ymds.filter(d => isRef(W,d));
+          const excH = excluded.reduce((t,d)=>t+(W.days[d]||0),0);
+          html += `<tr class="act-work">
+            <td class="act-name">新規（実績入力）${excluded.length
+              ? '<span style="font-size:9px;color:var(--text2)"> ※( )は改修と重複のため合計せず</span>' : ''}</td>
+            ${ymds.map(d=>{const v=num(W.days[d]||0);
+              return `<td class="num"${isRef(W,d)?' style="opacity:.55"':''}>`
+                + (v ? (isRef(W,d) ? '('+v+')' : v) : '') + '</td>';}).join('')}
+            <td class="num">${num(W.total)}${excH?`<span style="font-size:9px;color:var(--text2)"> (−${num(excH)})</span>`:''}</td>
           </tr>`;
           if(hasRepair){
             html += `<tr class="act-work">
