@@ -564,7 +564,7 @@ tr.act-total td.act-name{background:#eef2f7}
 <body>
 
 <header>
-  <div class="logo">⚙ <span>金型</span>管理システム<span style="font-size:9px;color:#9aa3b2;font-weight:400;margin-left:6px">v2026.09.04-2</span></div>
+  <div class="logo">⚙ <span>金型</span>管理システム<span style="font-size:9px;color:#9aa3b2;font-weight:400;margin-left:6px">v2026.09.04-4</span></div>
   <div class="main-tab-bar">
     <button class="main-tab-btn active" id="mainTabRepair" onclick="switchMainTab('repair')">🔧 改修計画表</button>
     <button class="main-tab-btn" id="mainTabNew" onclick="switchMainTab('newmold')">🏗️ 新規製作 日程表</button>
@@ -910,6 +910,8 @@ tr.act-total td.act-name{background:#eef2f7}
     <button class="btn btn-secondary btn-sm" onclick="actShiftWeek(0)">今週</button>
     <button class="btn btn-primary btn-sm" onclick="actLoad(true)">🔄 kintone取得</button>
     <button class="btn btn-secondary btn-sm" onclick="actConfig()">⚙ 接続設定</button>
+    <button class="btn btn-secondary btn-sm" onclick="actDumpColumns()">🧾 列を確認</button>
+    <button class="btn btn-secondary btn-sm" onclick="actEditRefOnly()" title="改修計画表にも実績を入れている担当者">👥 重複する担当者</button>
     <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">
       <input type="checkbox" id="actShowWork" onchange="actRender()"> 作業内容の内訳を出す
     </label>
@@ -924,11 +926,13 @@ tr.act-total td.act-name{background:#eef2f7}
       <span><i class="act-zero"></i>入力なし</span>
     </span>
   </div>
-  <div class="act-note" id="actStatus" style="margin-bottom:8px">「🔄 kintone取得」を押してください</div>
+  <div class="act-note" id="actStatus" style="margin-bottom:8px;white-space:pre-wrap;line-height:1.6">「🔄 kintone取得」を押してください</div>
   <div class="act-wrap" id="actTableWrap"></div>
   <div class="act-note" style="margin-top:8px;line-height:1.7">
     ※ kintone <b>★新規物件(工程別作業実績)</b> の「作業明細」に入力された時間を、作業者ごと・日ごとに合計しています。<br>
     ※ 1行目は <b>新規＋改修の合計</b>です。その下に「新規（実績入力）」と「改修（計画表）」の内訳を出しています。<br>
+    ※ <b>松本利・松永</b>のように改修計画表にも実績を入れている人は、kintoneの新規実績と時間が重なるため
+    <b>新規を(括弧)で参考表示にして合計には入れていません</b>。対象者は「👥 重複する担当者」で変えられます。<br>
     ※ <b>kintoneの実績入力は新規製作の部品だけ</b>です。改修の時間は改修計画表タブの実績（開始〜終了）から拾っています。<br>
     ※ 週次チェック・減点記録シート【技術】の「前日の金型実績記録（コスト・工数）が入力済みか（3日以内に入力完了）」の確認に使えます。
   </div>
@@ -4534,6 +4538,30 @@ const ACT_LS_APP = 'moldPlan_actualApp';
 //   金型製作原価管理システムが使っている別のGASを先に試す。そちらはApp61を取得できる。
 const ACT_GAS_ALT = 'https://script.google.com/macros/s/AKfycbwhW0jn30gacz6dGaSKdoSoky3XNFSThmu57Dar1X1w5zGG2OvpgVeGuMyPzrVAXl3X/exec';
 const ACT_LS_GAS = 'moldPlan_actualGas';
+// ★改修計画表にも実績を入れている担当者は、kintoneの新規実績と時間が重複する。
+//   この人たちは 新規＝参考（括弧つき・合計しない）、改修だけを合計する。
+const ACT_LS_REFONLY = 'moldPlan_actualRefOnly';
+const ACT_REFONLY_DEFAULT = ['松本利', '松永'];
+function actRefOnly(){
+  try{
+    const v = JSON.parse(localStorage.getItem(ACT_LS_REFONLY) || 'null');
+    if(Array.isArray(v)) return v;
+  }catch(e){}
+  return ACT_REFONLY_DEFAULT;
+}
+function actIsRefOnly(name){
+  const t = String(name).replace(/\s/g,'');
+  return actRefOnly().some(x => t.startsWith(String(x).replace(/\s/g,'')));
+}
+function actEditRefOnly(){
+  const cur = actRefOnly().join('、');
+  const v = prompt('改修計画表にも実績を入れている担当者（新規実績は参考表示にして合計しません）\n'
+    + '「、」で区切って入力してください', cur);
+  if(v === null) return;
+  const list = String(v).split(/[、,\s]+/).map(x=>x.trim()).filter(Boolean);
+  localStorage.setItem(ACT_LS_REFONLY, JSON.stringify(list));
+  actRender();
+}
 let actRecords = null;      // kintoneの生レコード（取得後キャッシュ）
 let actWeekStart = null;    // 表示中の週の月曜
 
@@ -4662,21 +4690,76 @@ function actVal(row, ...names){
   }
   return '';
 }
-// ユーザー選択型の列から作業者名を取る（フィールドコードが「作業員」とは限らない）
-function actWorker(row){
-  const byName = actVal(row, '作業員', '作業者');
-  if(byName) return byName;
+
+// サブテーブル1行から作業者名を取り出す。
+// kintoneのフィールドコードも型も分からないので、順に広げて探す。
+//   ①コード名で探す ②ユーザー選択型 ③配列で中身が{name|code} ④オブジェクトで{name|code}
+//   ⑤コード名に ユーザー/作業員/作業者/担当 を含むもの
+function pickWorkerFromRow(row) {
   const o = (row && row.value) || {};
-  for(const k of Object.keys(o)){
+  const nameOf = v => {
+    if (v == null) return '';
+    if (Array.isArray(v)) {
+      const n = v.map(x => (x && (x.name || x.code)) || (typeof x === 'string' ? x : ''))
+                 .filter(Boolean);
+      return n.join(' ');
+    }
+    if (typeof v === 'object') return v.name || v.code || '';
+    return String(v);
+  };
+  // ① コード名
+  // ★App61の作業明細では 作業員 の列コードが「ルックアップ_0」（ただの文字列）
+  for (const k of ['作業員', '作業者', '担当者', 'ルックアップ_0', 'ユーザー選択']) {
+    const t = nameOf(o[k] && o[k].value).trim();
+    if (t) return t;
+  }
+  // ② 型で
+  for (const k of Object.keys(o)) {
     const f = o[k];
-    if(!f || !/USER_SELECT|ORGANIZATION_SELECT|GROUP_SELECT/.test(f.type||'')) continue;
-    const v = f.value;
-    if(Array.isArray(v) && v.length){
-      const n = v.map(x=>(x&&(x.name||x.code))||x).filter(Boolean);
-      if(n.length) return n.join(' ');
+    if (f && /USER_SELECT|ORGANIZATION_SELECT|GROUP_SELECT/.test(f.type || '')) {
+      const t = nameOf(f.value).trim();
+      if (t) return t;
     }
   }
+  // ③④ 値の形で
+  for (const k of Object.keys(o)) {
+    const v = o[k] && o[k].value;
+    if (Array.isArray(v) && v.length && v[0] && typeof v[0] === 'object' && (v[0].name || v[0].code)) {
+      const t = nameOf(v).trim(); if (t) return t;
+    }
+    if (v && !Array.isArray(v) && typeof v === 'object' && (v.name || v.code)) {
+      const t = nameOf(v).trim(); if (t) return t;
+    }
+  }
+  // ⑤ コード名にそれらしい語を含むもの
+  for (const k of Object.keys(o)) {
+    if (!/ユーザー|作業員|作業者|担当/.test(k)) continue;
+    const t = nameOf(o[k] && o[k].value).trim();
+    if (t) return t;
+  }
   return '';
+}
+
+function actWorker(row){ return pickWorkerFromRow(row); }
+
+// サブテーブルの列名と型を書き出す（作業者が取れないときの確認用）
+function actDumpColumns(){
+  if(!actRecords){ actSetStatus('先に「🔄 kintone取得」を押してください'); return; }
+  const k = actSubKey(actRecords);
+  if(!k){ actSetStatus('作業明細テーブルが見つかりません'); return; }
+  for(const rec of actRecords){
+    const rows = (rec[k]||{}).value || [];
+    if(!rows.length) continue;
+    const o = rows[0].value || {};
+    const lines = Object.keys(o).map(c=>{
+      let v = o[c] && o[c].value;
+      if(v && typeof v === 'object') v = JSON.stringify(v).slice(0,60);
+      return `${c}  [${(o[c]&&o[c].type)||'?'}]  = ${String(v==null?'':v).slice(0,40)}`;
+    });
+    actSetStatus('【作業明細の列】' + k + '\n' + lines.join('\n'));
+    return;
+  }
+  actSetStatus('中身のある作業明細が見つかりません');
 }
 
 // 改修計画表(tasksByDate)から 担当者×日付 の実働時間を集める
@@ -4762,6 +4845,7 @@ function actRender(){
   });
 
   const names = Object.keys(byWorker).sort();
+  names.forEach(n => { byWorker[n].refOnly = actIsRefOnly(n); });
   const std = parseFloat(document.getElementById('actStd')?.value) || 0;
   const showWork = document.getElementById('actShowWork')?.checked;
   const num = h => h ? (Math.round(h*10)/10).toFixed(1) : '';
@@ -4772,7 +4856,8 @@ function actRender(){
     return (std && h + 1e-9 >= std) ? 'act-ok' : 'act-few';
   };
 
-  const sumOf  = (W,d) => (W.days[d]||0) + ((W.repair && W.repair[d])||0);
+  // 参考表示の人は 新規を合計に入れない（改修と重複するため）
+  const sumOf  = (W,d) => (W.refOnly ? 0 : (W.days[d]||0)) + ((W.repair && W.repair[d])||0);
   const totOf  = W => ymds.reduce((s,d)=>s+sumOf(W,d),0);
   const dayTotal = ymds.map(d => names.reduce((s,n)=>s+sumOf(byWorker[n],d),0));
   const grand = dayTotal.reduce((a,b)=>a+b,0);
@@ -4800,10 +4885,12 @@ function actRender(){
             <td class="num">${num(totOf(W))}</td>
           </tr>`;
           // 内訳：新規（kintone実績入力）／改修（改修計画表）
-          html += `<tr class="act-work">
-            <td class="act-name">新規（実績入力）</td>
-            ${ymds.map(d=>`<td class="num">${num(W.days[d]||0)}</td>`).join('')}
-            <td class="num">${num(W.total)}</td>
+          const ref = W.refOnly;
+          const wrapN = v => v ? (ref ? '(' + v + ')' : v) : '';
+          html += `<tr class="act-work"${ref?' style="opacity:.65"':''}>
+            <td class="act-name">新規（実績入力）${ref?'<span style="font-size:9px;color:var(--text2)"> ※改修と重複のため合計せず</span>':''}</td>
+            ${ymds.map(d=>`<td class="num">${wrapN(num(W.days[d]||0))}</td>`).join('')}
+            <td class="num">${wrapN(num(W.total))}</td>
           </tr>`;
           if(hasRepair){
             html += `<tr class="act-work">

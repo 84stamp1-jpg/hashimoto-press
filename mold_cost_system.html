@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.09.04-20 : App61の実際のフィールドコードを実データで確認し、既定値に入れた。作業明細の作業員は「ルックアップ_0」（ユーザー選択ではなくただの文字列）。親は 管理コード=文字列__1行__6／部品番号=ルックアップ／工程=文字列__1行__9／トライ状況=ラジオボタン_0／加工予算=budget／残予算=計算。これで「項目の対応づけ」をしなくても既定で正しく取り込める -->
+<!-- 金型原価 v2026.09.04-19 : 作業者が全て「（作業員なし）」になる件。ユーザー選択型だけを見ていたため取れていなかった。pickWorkerFromRow() に置き換え、コード名→型→値の形（配列や{name,code}）→コード名に「ユーザー/作業員/作業者/担当」を含むもの、の順で探すようにした。あわせて「取得できる項目を見る」でサブテーブル各列の型も表示するようにし、原因を追えるようにした -->
 <!-- 金型原価 v2026.09.04-18 : ①3段目を作業員にすると全部「（作業員なし）」になる問題を修正。サブテーブル内のフィールドコードが「作業員」ではないため名前で拾えていなかった。ユーザー選択型(USER_SELECT等)の列を型で探して表示名を取るようにした。②加工費はkintoneから過去の物件も全部来るので、「金型一覧にある品番だけ」のチェックを追加（金型NOか部品番号がDB.moldsに在るものだけ残す）。明細と集計の両方に効く -->
 <!-- 金型原価 v2026.09.04-17 : 「項目の対応づけ」でGASプロキシが404を返して開けないことがあったため、fetchLaborRecords() を用意して (1)直前の取込で取れたレコードを再利用し通信そのものを省く (2)取得するときはURLの組み立てを変えながら2回ずつ試す ようにした。取得できないときは「先に直接取込を1度押してください」と案内する -->
 <!-- 金型原価 v2026.09.04-16 : 「⚙ 項目の対応づけ」を押しても何も出ない不具合を修正。このシステムのモーダルは 外側=.modal-overlay ／ 内側=.modal の2重構造で、表示は外側に .open を付けて行うが、動的生成した要素の外側を .modal にしていたため画面下に見えない形で描画されていた。閉じるボタンのクラスも .close-btn に合わせた -->
@@ -641,7 +643,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.04-18</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.04-20</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -3440,17 +3442,52 @@ function findWorkSubtableKey(rec) {
   return fallback;
 }
 
-// サブテーブル1行から、ユーザー選択型の列の表示名を取り出す
-function stUserVal(row) {
-  const obj = (row && row.value) || {};
-  for (const k of Object.keys(obj)) {
-    const f = obj[k];
-    if (!f || !/USER_SELECT|ORGANIZATION_SELECT|GROUP_SELECT/.test(f.type || '')) continue;
-    const v = f.value;
-    if (Array.isArray(v) && v.length) {
-      const names = v.map(x => (x && (x.name || x.code)) || x).filter(Boolean);
-      if (names.length) return names.join(' ');
+
+// サブテーブル1行から作業者名を取り出す。
+// kintoneのフィールドコードも型も分からないので、順に広げて探す。
+//   ①コード名で探す ②ユーザー選択型 ③配列で中身が{name|code} ④オブジェクトで{name|code}
+//   ⑤コード名に ユーザー/作業員/作業者/担当 を含むもの
+function pickWorkerFromRow(row) {
+  const o = (row && row.value) || {};
+  const nameOf = v => {
+    if (v == null) return '';
+    if (Array.isArray(v)) {
+      const n = v.map(x => (x && (x.name || x.code)) || (typeof x === 'string' ? x : ''))
+                 .filter(Boolean);
+      return n.join(' ');
     }
+    if (typeof v === 'object') return v.name || v.code || '';
+    return String(v);
+  };
+  // ① コード名
+  // ★App61の作業明細では 作業員 の列コードが「ルックアップ_0」（ただの文字列）
+  for (const k of ['作業員', '作業者', '担当者', 'ルックアップ_0', 'ユーザー選択']) {
+    const t = nameOf(o[k] && o[k].value).trim();
+    if (t) return t;
+  }
+  // ② 型で
+  for (const k of Object.keys(o)) {
+    const f = o[k];
+    if (f && /USER_SELECT|ORGANIZATION_SELECT|GROUP_SELECT/.test(f.type || '')) {
+      const t = nameOf(f.value).trim();
+      if (t) return t;
+    }
+  }
+  // ③④ 値の形で
+  for (const k of Object.keys(o)) {
+    const v = o[k] && o[k].value;
+    if (Array.isArray(v) && v.length && v[0] && typeof v[0] === 'object' && (v[0].name || v[0].code)) {
+      const t = nameOf(v).trim(); if (t) return t;
+    }
+    if (v && !Array.isArray(v) && typeof v === 'object' && (v.name || v.code)) {
+      const t = nameOf(v).trim(); if (t) return t;
+    }
+  }
+  // ⑤ コード名にそれらしい語を含むもの
+  for (const k of Object.keys(o)) {
+    if (!/ユーザー|作業員|作業者|担当/.test(k)) continue;
+    const t = nameOf(o[k] && o[k].value).trim();
+    if (t) return t;
   }
   return '';
 }
@@ -3499,8 +3536,8 @@ async function inspectKintoneFields() {
         cols.forEach(c => {
           const v = rows[0].value[c];
           let vv = v?.value;
-          if (Array.isArray(vv)) vv = vv.map(x => x?.name || x?.code || x).join(' ');
-          out.push(`    ${c} = ${String(vv ?? '').slice(0, 50)}`);
+          if (vv && typeof vv === 'object') vv = JSON.stringify(vv).slice(0, 60);
+          out.push(`    ${c}  [${v?.type || '?'}]  = ${String(vv ?? '').slice(0, 50)}`);
         });
         return;
       }
@@ -3725,16 +3762,18 @@ async function importLaborFromKintone(appIdArg) {
 
   records.forEach((rec, ri) => {
     // ★項目の対応づけ（設定済みならそれだけを使う。コードはアプリごとに違うので推測しない）
-    const moldNo = M.moldNo ? ktVal(rec, M.moldNo) : ktVal(rec, '管理コード', F.moldNo, '文字列__1行__6');
-    const partNo = M.partNo ? ktVal(rec, M.partNo) : ktVal(rec, '部品番号');
+    // ★App61の実際のコード（2026-09-04に実データで確認）
+    //   管理コード=文字列__1行__6 ／ 部品番号=ルックアップ ／ 工程=文字列__1行__9
+    const moldNo = M.moldNo ? ktVal(rec, M.moldNo) : ktVal(rec, '管理コード', '文字列__1行__6');
+    const partNo = M.partNo ? ktVal(rec, M.partNo) : ktVal(rec, '部品番号', 'ルックアップ');
     // 工程：1レコード＝1工程で「工程」に単一の値が入る（例 DR）。
     //   「見積工程」はその金型の全工程の一覧（1.BL 2.DR 3.RST …）なので使わない。
     //   cfg.ktF.process は金型マスタ取込用の設定なのでここでは参照しない。
-    const process = M.process ? ktVal(rec, M.process) : ktVal(rec, '工程');
-    const status  = ktVal(rec, 'トライ状況');
+    const process = M.process ? ktVal(rec, M.process) : ktVal(rec, '工程', '文字列__1行__9');
+    const status  = ktVal(rec, 'トライ状況', 'ラジオボタン_0');
     const numOf   = (...n) => parseFloat(String(ktVal(rec, ...n)).replace(/[,¥円\s]/g, '')) || 0;
-    const budget  = numOf('加工予算');
-    const remain  = numOf('残予算');
+    const budget  = numOf('加工予算', 'budget');   // ★App61は budget
+    const remain  = numOf('残予算',   '計算');     // ★App61は 計算(CALC)
 
     const rows = rec[stKey]?.value || [];
     if (!rows.length) { noRow++; return; }
@@ -3743,8 +3782,7 @@ async function importLaborFromKintone(appIdArg) {
       const work   = stVal(row, '作業内容');
       // 作業員：サブテーブル内のフィールドコードが「作業員」とは限らないので、
       //   名前で見つからなければ ユーザー選択型の列を型で探す
-      let worker = stVal(row, '作業員', '作業者', 'ユーザー選択');
-      if (!worker) worker = stUserVal(row);
+      const worker = pickWorkerFromRow(row);
       // ★将来、作業明細に「工程」の列が追加されたらここで拾う。
       //   入っていれば集計の2段目が自動で工程ごとに割れる。
       const workProcess = stVal(row, '工程', '実工程');
