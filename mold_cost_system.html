@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.09.04-1 : 材料費タブに「品番 ＞ 工程 ＞ 材質」の集計ビューを追加。材料費と重量を3段で積み上げて見られるようにした。工程は材料管理NO.から割り出す（手入力＝金型NO+工程番号+連番2桁 → 金型マスタのprocesses[番号-1]で工程名を引く／CSV取込＝金型NO+-+工程名+連番2桁 → 工程名をそのまま使う／読み取れないものは「工程未設定」にまとめる）。重量は明細表と同じ扱いで、手入力の重量は1枚あたりなので数量を掛け、未入力ならサイズと材質の比重から計算する。既存の絞り込み（検索・金型・日付・手配先）がそのまま効く。金型一覧は従来どおり材料費の合計だけで変更なし -->
+
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -622,7 +624,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.07.23-1</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.04-1</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -955,9 +957,29 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
         <option value="">全手配先</option>
       </select>
       <button class="btn btn-primary btn-sm" onclick="openMatModal()">＋ 材料費入力</button>
+      <div style="display:flex;gap:4px;margin-left:auto;">
+        <button class="btn btn-primary btn-sm"   id="matViewBtn_detail"  onclick="setMatView('detail')">📋 明細</button>
+        <button class="btn btn-secondary btn-sm" id="matViewBtn_summary" onclick="setMatView('summary')">📊 品番×工程×材質</button>
+      </div>
     </div>
     <div id="matSupplierSummary"></div>
-    <div class="table-wrap">
+
+    <!-- ★品番×工程×材質の集計（材料費と重量）。明細と切り替えて表示する -->
+    <div class="table-wrap" id="matSummaryWrap" style="display:none">
+      <div class="table-header">
+        <div class="table-title">材料費・重量　品番 ＞ 工程 ＞ 材質</div>
+        <div class="table-count" id="matSummaryCount"></div>
+        <div class="table-actions">
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;margin-right:6px;">
+            <input type="checkbox" id="matSummaryOpenAll" checked onchange="renderMaterials()"> 工程・材質まで開く
+          </label>
+          <button class="btn btn-secondary btn-sm" onclick="copyTableToClipboard('matSummaryBody','材料費集計')">📋 全行コピー</button>
+        </div>
+      </div>
+      <div id="matSummaryBody"></div>
+    </div>
+
+    <div class="table-wrap" id="matDetailWrap">
       <div class="table-header">
         <div class="table-title">材料費一覧</div>
         <div class="table-count" id="matCount"></div>
@@ -2566,6 +2588,7 @@ function renderMaterials() {
   document.getElementById('matCount').textContent = entries.length + '件 / ¥' + fmt(total);
   const _matMonthLabel = (() => { const v = document.getElementById('matDateFilter')?.value||''; if (!v) return '全期間'; if (v==='nodate') return '入荷予定日なし'; return v.replace(/^(\d{4})-(\d{2})$/,'$1年$2月'); })();
   renderSupplierSummary(entries.filter(([,r]) => (r.month||'').length >= 8), 'matSupplierSummary', r => r.amount||0, _matMonthLabel);
+  renderMatSummary(entries);   // ★品番×工程×材質の集計（明細と同じ絞り込みを使う）
   if (!entries.length) { document.getElementById('matTableBody').innerHTML = '<div class="empty"><div class="empty-icon">🔩</div>データなし</div>'; return; }
   document.getElementById('matTableBody').innerHTML = `
     <table>
@@ -2612,6 +2635,175 @@ function renderMaterials() {
           <td style="font-size:10px;word-break:break-all;min-width:70px;max-width:100px;color:var(--text2)">${r.supplier||''}</td>
           <td style="font-size:11px;color:var(--text2);min-width:80px;max-width:150px;word-break:break-all">${r.note||''}</td>
         </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+// ═══════════════════════════════════════════════
+// ★材料費・重量の集計（品番 ＞ 工程 ＞ 材質）
+// ═══════════════════════════════════════════════
+
+// 明細 / 集計 の切替
+let MAT_VIEW = 'detail';
+function setMatView(v) {
+  MAT_VIEW = v;
+  const det = document.getElementById('matDetailWrap');
+  const sum = document.getElementById('matSummaryWrap');
+  if (det) det.style.display = (v === 'detail')  ? '' : 'none';
+  if (sum) sum.style.display = (v === 'summary') ? '' : 'none';
+  ['detail','summary'].forEach(k => {
+    const b = document.getElementById('matViewBtn_' + k);
+    if (b) b.className = 'btn btn-sm ' + (k === v ? 'btn-primary' : 'btn-secondary');
+  });
+  if (v === 'summary') renderMaterials();
+}
+
+// 材料管理NO.から工程を割り出す。
+//   手入力  : 金型NO + 工程番号(数字) + 連番2桁   例 71-B101 → 工程1
+//   CSV取込 : 金型NO + - + 工程名 + 連番2桁       例 71-A-TRM01 → 工程TRM
+// 工程番号のときは金型マスタの processes[番号-1] で工程名を引く。
+function matProcessOf(r) {
+  const matNo = (r.partNo || '').trim();
+  const mold  = findMoldByNo(r.moldNo) || findMoldByMatNo(matNo);
+  let base = '';
+  if (r.moldNo && matNo.startsWith(r.moldNo))      base = r.moldNo;
+  else if (mold?.no && matNo.startsWith(mold.no))  base = mold.no;
+
+  let token = '';
+  if (base) {
+    const rest = matNo.slice(base.length);
+    const m = rest.match(/^(.*?)(\d{2})$/);   // 末尾2桁は連番
+    token = (m ? m[1] : rest);
+  }
+  token = token.replace(/^[-_\s]+/, '').trim();
+
+  if (/^\d+$/.test(token)) {
+    const i  = parseInt(token, 10);
+    const nm = (mold?.processes || [])[i - 1] || '';
+    return { key: 'N' + String(i).padStart(2,'0'), sort: i, label: nm ? `${i}: ${nm}` : `工程${i}` };
+  }
+  if (token) {
+    const u = token.toUpperCase();
+    return { key: 'S' + u, sort: 900, label: u };
+  }
+  return { key: 'Z', sort: 999, label: '工程未設定' };
+}
+
+// 1行の重量(kg)。手入力の重量は1枚あたりなので数量を掛ける。
+// 未入力ならサイズと材質の比重から計算する（明細表と同じ扱い）。
+function matWeightKg(r) {
+  const qty = parseFloat(r.qty) || 1;
+  const manual = r.weight ? parseFloat(r.weight) : null;
+  if (manual) return manual * qty;
+  const w = calcWeight(r.sizeX, r.sizeY, r.sizeZ, r.material, r.qty);
+  if (!w) return 0;
+  return (w.total != null ? w.total : w.unit * qty);
+}
+function kgFmt(n) {
+  if (!n) return '—';
+  return (Math.round(n * 10) / 10).toLocaleString('ja-JP', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+
+function renderMatSummary(entries) {
+  const body = document.getElementById('matSummaryBody');
+  if (!body) return;
+  const openAll = document.getElementById('matSummaryOpenAll')?.checked !== false;
+
+  // 品番 ＞ 工程 ＞ 材質 の3段で束ねる
+  const parts = {};
+  entries.forEach(([, r]) => {
+    const mold   = findMoldByNo(r.moldNo) || findMoldByMatNo(r.partNo || '');
+    const pKey   = (mold?.partNo || r.moldNo || '（品番なし）');
+    const proc   = matProcessOf(r);
+    const matNm  = (r.material || '').trim() || '（材質なし）';
+    const kg     = matWeightKg(r);
+    const amt    = r.amount || 0;
+
+    const P = parts[pKey] || (parts[pKey] = {
+      partNo: mold?.partNo || '', partName: mold?.partName || '',
+      moldNos: new Set(), n: 0, kg: 0, amt: 0, procs: {}
+    });
+    if (r.moldNo) P.moldNos.add(r.moldNo);
+    P.n++; P.kg += kg; P.amt += amt;
+
+    const Q = P.procs[proc.key] || (P.procs[proc.key] = {
+      label: proc.label, sort: proc.sort, n: 0, kg: 0, amt: 0, mats: {}
+    });
+    Q.n++; Q.kg += kg; Q.amt += amt;
+
+    const M = Q.mats[matNm] || (Q.mats[matNm] = { n: 0, kg: 0, amt: 0 });
+    M.n++; M.kg += kg; M.amt += amt;
+  });
+
+  const pKeys = Object.keys(parts).sort();
+  const gN   = entries.length;
+  const gKg  = pKeys.reduce((s,k)=>s+parts[k].kg, 0);
+  const gAmt = pKeys.reduce((s,k)=>s+parts[k].amt, 0);
+  const cnt = document.getElementById('matSummaryCount');
+  if (cnt) cnt.textContent = `${pKeys.length}品番 / ${gN}件 / ${kgFmt(gKg)} kg / ¥${fmt(gAmt)}`;
+
+  if (!pKeys.length) {
+    body.innerHTML = '<div class="empty"><div class="empty-icon">📊</div>データなし</div>';
+    return;
+  }
+
+  const rows = [];
+  pKeys.forEach(pk => {
+    const P = parts[pk];
+    const molds = [...P.moldNos].sort().join(', ');
+    rows.push(`
+      <tr style="background:var(--bg3);border-top:2px solid var(--border2)">
+        <td colspan="2" style="font-weight:700">
+          <span class="mono" style="font-size:14px;color:var(--accent)">${P.partNo || pk}</span>
+          ${P.partName ? '<span style="font-size:11px;color:var(--text2);margin-left:8px">' + P.partName + '</span>' : ''}
+          ${molds ? '<div style="font-size:10px;color:var(--text3);font-family:var(--mono)">金型 ' + molds + '</div>' : ''}
+        </td>
+        <td class="mono" style="text-align:right;font-weight:700">${P.n}</td>
+        <td class="mono" style="text-align:right;font-weight:700">${kgFmt(P.kg)}</td>
+        <td class="mono" style="text-align:right;font-weight:700">¥${fmt(P.amt)}</td>
+      </tr>`);
+    if (!openAll) return;
+
+    Object.values(P.procs).sort((a,b)=> a.sort - b.sort || (a.label>b.label?1:-1)).forEach(Q => {
+      rows.push(`
+        <tr style="background:var(--bg2)">
+          <td style="padding-left:22px;font-weight:600;font-size:12px">${Q.label}</td>
+          <td></td>
+          <td class="mono" style="text-align:right;font-size:12px">${Q.n}</td>
+          <td class="mono" style="text-align:right;font-size:12px">${kgFmt(Q.kg)}</td>
+          <td class="mono" style="text-align:right;font-size:12px">¥${fmt(Q.amt)}</td>
+        </tr>`);
+      Object.keys(Q.mats).sort().forEach(mn => {
+        const M = Q.mats[mn];
+        rows.push(`
+          <tr>
+            <td></td>
+            <td class="mono" style="padding-left:44px;font-size:13px">${mn}</td>
+            <td class="mono" style="text-align:right;color:var(--text2)">${M.n}</td>
+            <td class="mono" style="text-align:right">${kgFmt(M.kg)}</td>
+            <td class="mono" style="text-align:right">¥${fmt(M.amt)}</td>
+          </tr>`);
+      });
+    });
+  });
+
+  body.innerHTML = `
+    <table>
+      <thead><tr>
+        <th style="min-width:200px">品番 / 工程</th>
+        <th style="min-width:120px">材質</th>
+        <th style="text-align:right;width:70px">件数</th>
+        <th style="text-align:right;width:110px">重量(kg)</th>
+        <th style="text-align:right;width:130px">材料費</th>
+      </tr></thead>
+      <tbody>
+        ${rows.join('')}
+        <tr style="background:var(--bg3);border-top:2px solid var(--accent)">
+          <td colspan="2" style="font-weight:700">合計（${pKeys.length}品番）</td>
+          <td class="mono" style="text-align:right;font-weight:700">${gN}</td>
+          <td class="mono" style="text-align:right;font-weight:700">${kgFmt(gKg)}</td>
+          <td class="mono" style="text-align:right;font-weight:700;color:var(--accent)">¥${fmt(gAmt)}</td>
+        </tr>
       </tbody>
     </table>`;
 }
