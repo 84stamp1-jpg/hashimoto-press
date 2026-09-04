@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.09.04-14 : 作業実績のApp ID(61)が保存されず、毎回App39を見に行ってしまう問題を修正。cfgは起動時にFirebaseの共有設定で上書きされるため、localStorageのcfgだけでは消えていた。専用キー(moldCost_laborAppId)にも保存し、あわせてsaveKintoneConfig()で共有設定にも書くようにした。取込に成功したApp IDは自動で記憶する -->
 <!-- 金型原価 v2026.09.04-13 : 工程の読み方を訂正。実データでは1レコード＝1工程で「工程」に単一の値（例 DR）が入り、全工程の一覧は「見積工程」の方だった。v-9で実工程/見積工程を優先させたのが誤りで、一覧を拾っていた。「工程」だけを見るようにし（cfg.ktF.processは金型マスタ用なので参照しない）、集計の2段目も工程に戻した -->
 <!-- 金型原価 v2026.09.04-12 : 加工費の2段目を常に金型（管理NO.）でまとめるようにし、工程一覧は見出しに添える形で統一。あわせて作業明細の行に「工程」列が付いた場合に備えて workProcess を取り込んでおき、値が入っていれば自動で工程ごとに割れるようにした -->
 <!-- 金型原価 v2026.09.04-11 : 加工費の品番段が金型NOになっていたのを修正。金型マスタに無い金型でも、作業実績レコードが持つ部品番号で束ねる（cfg.pKeyOf）。これで同じ品番の複数の金型（71-J と 71-L など）が1つの品番の下にまとまる。材料費のr.partNoは材料管理NO.なので品番には使わない -->
@@ -636,7 +637,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.04-13</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.04-14</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -3441,7 +3442,7 @@ function stVal(row, ...names) {
 // どのフィールドが部品番号・工程なのかを目で確かめるための道具。
 async function inspectKintoneFields() {
   const logEl = document.getElementById('kintoneImportLog');
-  const guess = (document.getElementById('cfgKtApp')?.value || cfg.ktApp || '').trim()
+  const guess = laborAppId()
              || (document.getElementById('cfgKtMoldApp')?.value || cfg.ktMoldApp || '39').trim();
   const ans = prompt('どのApp IDの項目を見ますか（kintoneのURL .../k/●●/ の数字）', guess);
   if (ans === null) return;
@@ -3480,6 +3481,23 @@ async function inspectKintoneFields() {
   }
 }
 
+// 作業実績のApp IDは専用キーでも保存する。
+// cfg は起動時にFirebaseの共有設定で上書きされるため、localStorage単独では消えてしまう。
+const LABOR_APP_LS = 'moldCost_laborAppId';
+function laborAppId() {
+  return (localStorage.getItem(LABOR_APP_LS) || '').trim()
+      || (document.getElementById('cfgKtApp')?.value || cfg.ktApp || '').trim();
+}
+function rememberLaborAppId(appId) {
+  if (!appId) return;
+  try { localStorage.setItem(LABOR_APP_LS, String(appId)); } catch(_) {}
+  const el = document.getElementById('cfgKtApp');
+  if (el) el.value = appId;
+  cfg.ktApp = String(appId);
+  // 共有設定にも書いて、他のPCでも同じApp IDを使えるようにする
+  try { saveKintoneConfig(); } catch(_) {}
+}
+
 // App IDを手で指定して取り込む。うまくいったらその値を設定に保存する。
 function askLaborAppId() {
   const cur = (document.getElementById('cfgKtApp')?.value || cfg.ktApp || '').trim();
@@ -3490,10 +3508,7 @@ function askLaborAppId() {
   if (v === null) return;
   const appId = String(v).trim();
   if (!/^\d+$/.test(appId)) { toast('数字で入れてください', 'error'); return; }
-  const el = document.getElementById('cfgKtApp');
-  if (el) el.value = appId;
-  cfg.ktApp = appId;
-  try { localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); } catch(_) {}
+  rememberLaborAppId(appId);
   importLaborFromKintone(appId);
 }
 
@@ -3506,7 +3521,7 @@ async function importLaborFromKintone(appIdArg) {
 
   // 作業実績App IDを優先。未設定なら★新規物件アプリ（既定39）も試す
   const apps = (appIdArg ? [String(appIdArg).trim()] : [
-    (document.getElementById('cfgKtApp')?.value || cfg.ktApp || '').trim(),
+    laborAppId(),
     (document.getElementById('cfgKtMoldApp')?.value || cfg.ktMoldApp || '39').trim(),
   ]).filter((v, i, a) => v && a.indexOf(v) === i);
 
@@ -3594,6 +3609,7 @@ async function importLaborFromKintone(appIdArg) {
   });
 
   await writeToFirebase('labor', DB.labor);
+  rememberLaborAppId(usedApp);   // 次回からこのApp IDを最初に見る
   logImport('kintone直取り(App ' + usedApp + ')', count);
   setLog(`✅ App ${usedApp} から ${count}件取込（${records.length}レコード／作業明細なし ${noRow}件）`
        + `／前回 ${before}件を置き換え (${new Date().toLocaleString('ja-JP')})`);
