@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.09.04-9 : App61の実データで、部品番号が空・工程が「1.BL 2.DR 3.RST…」と全工程まとめて1つになる問題が出た。フィールドコードを目で確かめられるよう「🧾 取得できる項目を見る」を追加。あわせて部品番号は名前に「部品」を含むフィールドも探し、工程は1レコード分を持つ「実工程」「見積工程」を優先して見るようにした（無ければ従来どおり「工程」） -->
 <!-- 金型原価 v2026.09.04-8 : 直接取込がApp39（物件マスタ側で作業明細を持たない）を見ていたため、作業実績App IDを優先する順に変更し、「🔍 App IDを指定して試す」ボタンを追加（成功した値は設定に保存）。テーブルが無いときのメッセージに、kintoneのURLからApp IDを確認する手順を入れた -->
 <!-- 金型原価 v2026.09.04-7 : kintoneから作業実績を直接取り込むボタンを追加（CSV不要）。kintoneは「ファイルに書き出す」の項目選択を保存せず、毎回テーブル「作業明細」を足し直す必要があるため、既存のGASプロキシ(fetchKintoneApp)でレコードを取り、サブテーブルを展開する方式にした。サブテーブルは列名(作業内容/チャージ)で自動判定し、TRY履歴(問題点/対策)は除外する。作業員のユーザー選択フィールドは表示名に変換。予算・残予算は各レコードの1行目にだけ持たせる。CSV取込も従来どおり残してある -->
 <!-- 金型原価 v2026.09.04-6 : 取込手順を実際のkintone書き出し画面に合わせて書き直した（チェックボックスではなく項目ボタンを右へ足す形。TRY履歴のサブテーブルはフィールド名が「テーブル」のままなので「作業明細」と取り違えやすい）。あわせて作業明細形式の取込で 加工予算・残予算 を「レコードの開始行」の行にだけ持たせるようにした。親の値なので続きの行にも入れると合計が水増しされる -->
@@ -631,7 +632,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.04-8</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.04-9</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -1214,6 +1215,9 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
           <button class="btn btn-secondary" onclick="askLaborAppId()">
             🔍 App IDを指定して試す
           </button>
+          <button class="btn btn-secondary" onclick="inspectKintoneFields()">
+            🧾 取得できる項目を見る
+          </button>
           <button class="btn btn-secondary" onclick="document.getElementById('kintoneCSV').click()">
             📥 CSVを選択して取込
           </button>
@@ -1228,7 +1232,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
           <div class="import-sub">クリックしてファイルを選択（Shift-JIS対応）</div>
         </div>
         <input type="file" id="kintoneCSV" accept=".csv" onchange="importKintoneCSV(event)">
-        <div id="kintoneImportLog" style="font-size:11px;color:var(--text3);font-family:var(--mono);max-height:140px;overflow-y:auto;white-space:pre-wrap;line-height:1.6;"></div>
+        <div id="kintoneImportLog" style="font-size:11px;color:var(--text3);font-family:var(--mono);max-height:320px;overflow-y:auto;white-space:pre-wrap;line-height:1.6;"></div>
       </div>
 
       <!-- 購入品CSV -->
@@ -3417,6 +3421,46 @@ function stVal(row, ...names) {
   return '';
 }
 
+// kintoneから1レコード取って、フィールドコードと値を一覧表示する。
+// どのフィールドが部品番号・工程なのかを目で確かめるための道具。
+async function inspectKintoneFields() {
+  const logEl = document.getElementById('kintoneImportLog');
+  const appId = (document.getElementById('cfgKtApp')?.value || cfg.ktApp || '').trim()
+             || (document.getElementById('cfgKtMoldApp')?.value || cfg.ktMoldApp || '39').trim();
+  logEl.style.color = '';
+  logEl.textContent = `App ${appId} に接続中...`;
+  try {
+    const data = await fetchKintoneApp(appId);
+    const recs = Array.isArray(data) ? data : (data.records || []);
+    if (!recs.length) { logEl.textContent = `App ${appId}: レコード0件`; return; }
+    const rec = recs[0];
+    const out = [`■ App ${appId} の1件目（全${recs.length}件）`, ''];
+    Object.keys(rec).sort().forEach(k => {
+      if (k.startsWith('$')) return;
+      const f = rec[k];
+      if (f && f.type === 'SUBTABLE') {
+        const rows = f.value || [];
+        out.push(`【テーブル】${k}  ${rows.length}行`);
+        const cols = Object.keys(rows[0]?.value || {});
+        cols.forEach(c => {
+          const v = rows[0].value[c];
+          let vv = v?.value;
+          if (Array.isArray(vv)) vv = vv.map(x => x?.name || x?.code || x).join(' ');
+          out.push(`    ${c} = ${String(vv ?? '').slice(0, 50)}`);
+        });
+        return;
+      }
+      let v = f?.value ?? f;
+      if (Array.isArray(v)) v = v.map(x => x?.name || x?.code || x).join(' ');
+      out.push(`${k} = ${String(v ?? '').slice(0, 60)}`);
+    });
+    logEl.textContent = out.join('\n');
+  } catch (e) {
+    logEl.style.color = 'var(--red)';
+    logEl.textContent = '取得失敗: ' + e.message;
+  }
+}
+
 // App IDを手で指定して取り込む。うまくいったらその値を設定に保存する。
 function askLaborAppId() {
   const cur = (document.getElementById('cfgKtApp')?.value || cfg.ktApp || '').trim();
@@ -3481,8 +3525,16 @@ async function importLaborFromKintone(appIdArg) {
 
   records.forEach((rec, ri) => {
     const moldNo  = ktVal(rec, F.moldNo, '管理コード', '文字列__1行__6');
-    const partNo  = ktVal(rec, F.partNo, '部品番号',   '文字列__1行__7');
-    const process = ktVal(rec, F.process, '工程');
+    // 部品番号：フィールドコードが分からないので、名前に「部品」を含むものも探す
+    let partNo = ktVal(rec, F.partNo, '部品番号', '文字列__1行__7');
+    if (!partNo) {
+      const k = Object.keys(rec).find(k => /部品/.test(k) && rec[k]?.type !== 'SUBTABLE');
+      if (k) partNo = ktVal(rec, k);
+    }
+    // 工程：「工程」は全工程の一覧（例 1.BL 2.DR 3.RST…）が入っていることがある。
+    //       1レコード分の工程を持つ「実工程」「見積工程」があればそちらを優先する。
+    let process = ktVal(rec, '実工程', '見積工程');
+    if (!process) process = ktVal(rec, F.process, '工程');
     const status  = ktVal(rec, 'トライ状況');
     const numOf   = (...n) => parseFloat(String(ktVal(rec, ...n)).replace(/[,¥円\s]/g, '')) || 0;
     const budget  = numOf('加工予算');
