@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.09.04-5 : データ取込タブに、kintoneからCSVを書き出す手順（どの項目にチェックするか）を画面上に明記。テーブルは1つしか書き出せないので TRY履歴 ではなく 作業実績（作業明細） を選ぶ必要がある、という点が一番間違えやすい。あわせて取込後に「どちらの形式だったか」を必ず表示し、作業内容の列が無いCSVを読ませたときは赤字とエラートーストで知らせる -->
 <!-- 金型原価 v2026.09.04-4 : 加工費に「作業内容」を通した。kintoneのこのアプリはサブテーブルを2つ持っており（作業明細＝日付/作業員/作業内容/チャージ/時間/金額、TRY履歴＝日付/作業員/問題点/対策/対策区分）、これまで取り込んでいたCSVはTRY履歴の方だったため作業内容も時間も入らず、チャージと時間は0固定になっていた。取込を列の有無で振り分け、作業明細形式なら1行＝1作業として work/charge/time/amount を取り込む。サブテーブルCSVは親の値（管理コード・部品番号・工程・トライ状況）が「レコードの開始行」の行にしか入らないため持ち回る。集計の3段目は既定を作業内容にし（作業員・トライ状況にも切替可）、列は 時間(h)／加工費 に戻した。編集モーダルの「作業内容」欄が workType(トライ状況)に紐づいていたのを work に直し、トライ状況の欄を別に用意。保存時に budget/remain を落としていたのもマージで修正 -->
 <!-- 金型原価 v2026.09.04-3 : 加工費の集計を直した。3段目に出していた「作業区分」は kintone の 「トライ状況」（作業の内容ではなく状態）だったため名前をそのままにし、既定の3段目を「作業員」へ変更。また数値列の「時間(h)」は kintone取込で time が常に0で入るため全て「—」になっていたので廃止し、実データである 加工予算／加工実績／残予算 の3列に置き換えた。renderCostSummary の数値列を可変（cfg.cols）にして費目ごとに列数を変えられるようにしてある -->
 <!-- 金型原価 v2026.09.04-2 : 集計ビューを 購入品費・外注費・加工費 にも広げた。3段目と数量列は費目ごとに変える（材料費＝材質／重量kg・購入品費＝品名または仕入先／数量・外注費＝外注先または加工内容／数量・加工費＝作業区分または作業者／時間h）。外注費と加工費は process フィールドを持っているのでそれを工程として使い、無いときだけ管理NO.から読み取る。renderCostSummary() に共通化してある -->
@@ -627,7 +628,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.04-4</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.04-5</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -1174,10 +1175,27 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
       <!-- kintone -->
       <div class="config-box">
         <div class="config-title">🔗 kintone 作業実績取込</div>
-        <div style="background:var(--accent-dim);border:1px solid var(--accent);border-radius:6px;padding:10px;margin-bottom:12px;font-size:11px;line-height:1.7;color:var(--text2);">
-          <b>📌 推奨運用：毎月「全件削除→全件再取込」</b><br>
-          kintoneからCSVを全件エクスポートして取込むと最新状態に更新されます。<br>
-          下の「全件削除して再取込」ボタンを使うと1クリックで完了します。
+        <div style="background:var(--accent-dim);border:1px solid var(--accent);border-radius:6px;padding:11px 12px;margin-bottom:12px;font-size:11.5px;line-height:1.8;color:var(--text2);">
+          <b style="font-size:12.5px;color:var(--text)">📌 kintoneからCSVを書き出す手順</b>
+          <div style="margin:6px 0 0 0">
+            <b>①</b> kintoneで「新規物件（工程別作業実績）」アプリの一覧を開く<br>
+            <b>②</b> 右上の <b>⋮</b>（オプション）→ <b>「ファイルに書き出す」</b><br>
+            <b>③</b> 文字コードはそのままで可（Shift-JIS・UTF-8どちらも読めます）<br>
+            <b>④</b> <b style="color:var(--accent)">「書き出す項目」で下の6＋4項目にチェック</b>
+            <div style="margin:5px 0 5px 14px;padding:7px 10px;background:var(--bg2);border-radius:5px;font-family:var(--mono);font-size:11px;line-height:1.9">
+              管理コード ／ 部品番号 ／ 工程 ／ トライ状況<br>
+              <span style="color:var(--accent);font-weight:700">▼ テーブル「作業実績（作業明細）」の中身</span><br>
+              　日付 ／ 作業員 ／ <b style="color:var(--accent)">作業内容</b> ／ チャージ ／ 時間 ／ 金額
+            </div>
+            <b style="color:var(--red)">※ TRY履歴（問題点・対策・対策区分）のチェックは外してください。</b>
+            テーブルは1つしか書き出せません。TRY履歴の方を選ぶと作業内容と時間が入りません<br>
+            <b>⑤</b> 「書き出す」→ ダウンロードしたCSVを、下の
+            <b style="color:var(--red)">「🔄 全件削除して再取込」</b> に読ませる
+          </div>
+          <div style="margin-top:8px;padding-top:7px;border-top:1px solid var(--border2);">
+            <b>毎月の運用は「全件削除→全件再取込」</b>です。1行＝1作業として取り込み、
+            工程ごと・作業内容ごとに集計できます（加工費タブの「📊 品番×工程×作業内容」）。
+          </div>
         </div>
         <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
           <button class="btn btn-primary" onclick="document.getElementById('kintoneCSV').click()">
@@ -3456,9 +3474,20 @@ function importKintoneCSV(e) {
 
     logImport('kintone作業実績', count);
     await writeToFirebase('labor', DB.labor);
-    const msg = `✅ ${count}件取込完了（スキップ: ${skipped}件） (${new Date().toLocaleString('ja-JP')})`;
-    toast(`${count}件の作業実績を取込しました`, 'success');
-    document.getElementById('kintoneImportLog').textContent = msg;
+    // ★どちらのテーブルのCSVだったかを必ず伝える。
+    //   TRY履歴の方を書き出すと作業内容も時間も入らず、原因が分かりにくいため。
+    const hasWork = headers.some(h => h.trim() === '作業内容');
+    const msg = `✅ ${count}件取込（スキップ ${skipped}件）`
+      + `／形式: ${hasWork ? '作業明細（作業内容あり）' : '★TRY履歴（作業内容なし）'}`
+      + ` (${new Date().toLocaleString('ja-JP')})`;
+    if (hasWork) {
+      toast(`${count}件の作業実績を取込しました`, 'success');
+    } else {
+      toast('作業内容の列がありません。kintoneで「作業実績（作業明細）」の項目を選んで書き出し直してください', 'error');
+    }
+    const logEl = document.getElementById('kintoneImportLog');
+    logEl.textContent = msg;
+    logEl.style.color = hasWork ? '' : 'var(--red)';
     e.target.value = '';
     renderLabor();
   };
