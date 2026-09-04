@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.09.04-18 : ①3段目を作業員にすると全部「（作業員なし）」になる問題を修正。サブテーブル内のフィールドコードが「作業員」ではないため名前で拾えていなかった。ユーザー選択型(USER_SELECT等)の列を型で探して表示名を取るようにした。②加工費はkintoneから過去の物件も全部来るので、「金型一覧にある品番だけ」のチェックを追加（金型NOか部品番号がDB.moldsに在るものだけ残す）。明細と集計の両方に効く -->
 <!-- 金型原価 v2026.09.04-17 : 「項目の対応づけ」でGASプロキシが404を返して開けないことがあったため、fetchLaborRecords() を用意して (1)直前の取込で取れたレコードを再利用し通信そのものを省く (2)取得するときはURLの組み立てを変えながら2回ずつ試す ようにした。取得できないときは「先に直接取込を1度押してください」と案内する -->
 <!-- 金型原価 v2026.09.04-16 : 「⚙ 項目の対応づけ」を押しても何も出ない不具合を修正。このシステムのモーダルは 外側=.modal-overlay ／ 内側=.modal の2重構造で、表示は外側に .open を付けて行うが、動的生成した要素の外側を .modal にしていたため画面下に見えない形で描画されていた。閉じるボタンのクラスも .close-btn に合わせた -->
 <!-- 金型原価 v2026.09.04-15 : 部品番号の欄に工程が入り工程が空になる列ズレを修正。原因は金型マスタ用のフィールドコード設定(cfg.ktF.partNo=文字列__1行__7)を作業実績アプリにも流用していたこと。アプリごとにコードが違うため推測をやめ、「⚙ 項目の対応づけ」で 管理NO./部品番号/工程 を画面から選ぶ方式にした。各コードの横に実データの値を出すので値を見て選べる。対応づけはlocalStorageに保存する。取込後に部品番号や工程が全件空なら対応づけを促す -->
@@ -640,7 +641,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.04-17</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.04-18</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -1136,6 +1137,9 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
       <select class="filter-select" id="labMonthFilter" onchange="renderLabor()">
         <option value="">全月</option>
       </select>
+      <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap;">
+        <input type="checkbox" id="labMoldOnly" onchange="renderLabor()"> 金型一覧にある品番だけ
+      </label>
       <div style="display:flex;gap:4px;margin-left:auto;">
         <button class="btn btn-primary btn-sm"   id="laborViewBtn_detail"  onclick="setLaborView('detail')">📋 明細</button>
         <button class="btn btn-secondary btn-sm" id="laborViewBtn_summary" onclick="setLaborView('summary')">📊 品番×工程×作業内容</button>
@@ -3346,6 +3350,15 @@ function renderLabor() {
     (r.worker||'').toLowerCase().includes(search)
   );
   if (month) entries = entries.filter(([,r]) => (r.month||'').slice(0,7) === month);
+  // ★金型一覧（DB.molds）にある品番だけに絞る。
+  //   kintoneからは過去の物件も全部来るので、いま管理している金型だけ見たいとき用。
+  if (document.getElementById('labMoldOnly')?.checked) {
+    const molds = Object.values(DB.molds || {});
+    const nos   = new Set(molds.map(m => (m.no     || '').trim()).filter(Boolean));
+    const parts = new Set(molds.map(m => (m.partNo || '').trim()).filter(Boolean));
+    entries = entries.filter(([,r]) =>
+      nos.has((r.moldNo || '').trim()) || parts.has((r.partNo || '').trim()));
+  }
   const labTotal  = entries.reduce((s,[,r])=>s+(r.amount||0),0);
   const labBudget = entries.reduce((s,[,r])=>s+(r.budget||0),0);
   document.getElementById('labCount').textContent = entries.length + '件　加工予算: ¥' + fmt(labBudget) + '　加工実績: ¥' + fmt(labTotal);
@@ -3425,6 +3438,21 @@ function findWorkSubtableKey(rec) {
     fallback = fallback || k;
   }
   return fallback;
+}
+
+// サブテーブル1行から、ユーザー選択型の列の表示名を取り出す
+function stUserVal(row) {
+  const obj = (row && row.value) || {};
+  for (const k of Object.keys(obj)) {
+    const f = obj[k];
+    if (!f || !/USER_SELECT|ORGANIZATION_SELECT|GROUP_SELECT/.test(f.type || '')) continue;
+    const v = f.value;
+    if (Array.isArray(v) && v.length) {
+      const names = v.map(x => (x && (x.name || x.code)) || x).filter(Boolean);
+      if (names.length) return names.join(' ');
+    }
+  }
+  return '';
 }
 
 // サブテーブル1行から値を取り出す（ユーザー選択・数値・文字列に対応）
@@ -3713,7 +3741,10 @@ async function importLaborFromKintone(appIdArg) {
 
     rows.forEach((row, i) => {
       const work   = stVal(row, '作業内容');
-      const worker = stVal(row, '作業員');
+      // 作業員：サブテーブル内のフィールドコードが「作業員」とは限らないので、
+      //   名前で見つからなければ ユーザー選択型の列を型で探す
+      let worker = stVal(row, '作業員', '作業者', 'ユーザー選択');
+      if (!worker) worker = stUserVal(row);
       // ★将来、作業明細に「工程」の列が追加されたらここで拾う。
       //   入っていれば集計の2段目が自動で工程ごとに割れる。
       const workProcess = stVal(row, '工程', '実工程');
