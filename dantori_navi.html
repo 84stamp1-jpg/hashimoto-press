@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.05-5 : 不良品報告ペインに4点。(1)ステータス「品質確認中」の背景を薄い黄色(#fff4cc)にした。まだ品管の手を離れていないものが目に留まるようにするため。(2)報告した人を「発見者」として表示（kintone側の呼び方に合わせた。自動判別も 発見者→作業者→担当者 の順に変更）。(3)「実績入力」の有無を緑/赤のバッジで表示。値が入っていれば有、'無/なし/未'なら無。見る欄は⚙設定で指定できる。(4)在庫管理「i-PRO W 入力者」はルックアップなので、kintoneが受け付けるのは"コピー元アプリのキーの値"だけ。文字列で渡せばkintoneが引き当ててくれる（USER_SELECTのときだけ{code:ログイン名}が要る）ので送り方は従来どおりで正しいが、どの値なら合うのか分からないため、⚙設定の「入力者の名前」を datalist にして、すでにkintoneに入っている値から選べるようにした（既存の値は必ず引き当てに成功する）。欄の型（ルックアップ/ユーザー選択/文字列）も判定して説明を出し、引き当て失敗のエラーには原因の一言を添える -->
 <!-- H-Hub v2026.09.05-4 : 不良品報告ペインの3点。(1)「🔌 接続テスト」を押しても何も起きないように見えた件。ボタン自体は動いていたが、結果をモーダル下端の共通メッセージ欄(#qc-ng-cfg-msg)に出しており、フィールドが並ぶ長いモーダルでは画面外だった。ボタンの真横(#qc-ng-wgas-msg)に出すようにし、ボタンも折り返さないようにした。(2)同じレコードの中の不具合数量・廃棄数量を、合計だけでなく明細で一覧表示。qcNgSubRows()がサブテーブルの各行から数量と同じ行の他の列(不具合内容・廃棄内容)を取り出す。合計と✓による三点確認はそのまま残している。(3)並び順を不具合発生日の古い順にした(日付なしはその組の最後)。品番が完全一致でないもの(参考表示)は、日付に関わらず常に下にまとめる -->
 <!-- H-Hub v2026.09.05-3 : kintoneへの書き込み(在庫管理の記入・在庫調整/在庫投入)を、既存の品質チェックGASに手を入れずに済むようにした。前版は品質チェックGASへ kintoneWrite を足す前提だったが、あれは記録の保存・読み込みに毎日使っているもので、直し損ねると品質チェックそのものが止まる。書き込み専用の別GASを1つ立ててそちらへ投げる形に変更(qcNgWriteUrl)。qcGasPost を qcGasPostTo(url,...) に分け、URLを指定して叩けるようにしている(ヘッダーは付けない。付けるとプリフライトが飛んでCORSで落ちる)。「⚙ 不良品報告の設定」に「書き込み用GASのURL」と「🔌 接続テスト」(ping)を追加。未登録でも照合(読み取り)は今までどおり動き、書き込みボタンを押したときだけ理由を出して止まる。GASのコードは docs/kintone_write_gas.gs.example に全文(そのまま貼るだけ・doPost込み)、作成手順は docs/kintone_write_gas_setup.md -->
 <!-- H-Hub v2026.09.05-2 : システム入力待ちの不良品報告ペインを実用形に。(1)記録カードを元の幅(476px)へ戻した。前版はカードを986pxまで広げたため中央に余白ができて読みにくかった。広げるのはコンテナだけ(980px＝カード476＋ペイン)にした。(2)ステータスが「完了」の報告は突合せから外す(⚙設定でカンマ区切り変更可)。(3)1品番に報告が複数あるのが普通なので全件出す(件数も表示)。(4)不具合数量・廃棄数量・合格数量の三点を表示。不具合数量と廃棄数量は「不具合一覧」「品質管理【処置結果】」のサブテーブル内にあるため、qcNgFindField()がテーブルの中まで探して全行を合計する。「🧾 列を確認」もテーブルの中の列を字下げして出す。(5)三点はそれぞれ押すと✓が付き、3つ揃うと「✓ 在庫管理に記入」が押せる(在庫管理の入力者・入力日へ書き込み)。(6)「▶在庫調整」「▶在庫投入」でプロセス管理を進める。在庫投入は合格数量>0のときだけ押せる。書き込みは毎回 confirm で内容を出してから実行する。※(5)(6)は品質チェックGASに kintoneWrite アクションの追加が必要(docs/kintone_write_gas.gs.example)。未追加の場合はその旨をペインに表示する -->
@@ -573,7 +574,13 @@ html, body {
 .qc-ng-item{background:#f8fafc;border-radius:8px;padding:7px 9px;margin-bottom:6px;border:1px solid #e2e8f0;}
 .qc-ng-item-top{display:flex;justify-content:space-between;gap:6px;align-items:baseline;margin-bottom:3px;}
 .qc-ng-date{font-weight:700;color:#1F4E79;font-size:12px;}
-.qc-ng-status{font-size:10px;padding:1px 6px;border-radius:10px;background:#e0e7ff;color:#3730a3;font-weight:700;white-space:nowrap;}
+.qc-ng-status{font-size:10px;padding:1px 6px;border-radius:10px;background:#e0e7ff;color:#3730a3;font-weight:700;white-space:nowrap;border:1px solid transparent;}
+/* 品質確認中は「まだ品管の手を離れていない」ので、目に留まるよう薄い黄色にする */
+.qc-ng-status.st-hinshitsu{background:#fff4cc;color:#8a6100;border-color:#f0c419;}
+/* 実績入力の有無 */
+.qc-ng-jisseki{font-size:11px;font-weight:700;border-radius:6px;padding:2px 7px;display:inline-block;margin-top:4px;}
+.qc-ng-jisseki.yes{background:#e8f5e9;color:#2e7d32;}
+.qc-ng-jisseki.no{background:#ffe9e9;color:#b91c1c;}
 .qc-ng-line{font-size:11px;color:#555;margin-top:2px;}
 .qc-ng-open{display:inline-block;margin-top:5px;font-size:11px;font-weight:700;color:#1F4E79;text-decoration:none;border:1px solid #1F4E79;border-radius:6px;padding:3px 9px;}
 .qc-ng-open:hover{background:#eef4fb;}
@@ -9724,7 +9731,7 @@ function qcNgDefaultCfg(){
     actInput:'在庫投入',
     f:{ hinban:'', hinmei:'', date:'', status:'', worker:'', memo:'',
         qtyNg:'不具合数量', qtyScrap:'廃棄数量', qtyOk:'合格数量',
-        inpUser:'', inpDate:'' }
+        inpUser:'', inpDate:'', jisseki:'' }
   };
 }
 function qcNgCfg(){
@@ -9831,7 +9838,8 @@ function qcNgGuessFields(rec){
   if(!f.hinmei)  f.hinmei  = pick(['部品名称','品名']);
   if(!f.date)    f.date    = pick(['不具合発生日','発生日']);
   if(!f.status)  f.status  = codes.indexOf('ステータス')>=0 ? 'ステータス' : pick(['ステータス','状態']);
-  if(!f.worker)  f.worker  = pick(['作業者','担当者']);
+  if(!f.worker)  f.worker  = pick(['発見者','作業者','担当者']);
+  if(!f.jisseki) f.jisseki = pick(['実績入力','実績']);
   if(!f.memo)    f.memo    = pick(['メモ','備考']);
   if(!f.inpUser) f.inpUser = pick(['入力者']);
   if(!f.inpDate) f.inpDate = pick(['入力日']);
@@ -9854,7 +9862,7 @@ function qcNgFetch(force){
     if(!res || !res.ok){ QC_NG_STATE='error'; QC_NG_ERR=(res&&(res.err||res.error))||'取得に失敗しました'; qcNgRenderAll(); return; }
     QC_NG_RECORDS = res.records || [];
     if(QC_NG_RECORDS.length) qcNgGuessFields(QC_NG_RECORDS[0]);
-    QC_NG_STATE='ok'; qcNgRenderAll();
+    QC_NG_STATE='ok'; qcNgRenderAll(); qcNgRefreshUserHint();
   }, function(e){ QC_NG_STATE='error'; QC_NG_ERR=e.message||'通信エラー'; qcNgRenderAll(); });
 }
 
@@ -10015,13 +10023,28 @@ function qcNgMakeItem(r, g){
   var dt=document.createElement('span'); dt.className='qc-ng-date';
   dt.textContent=(f.date?qcNgVal(r,f.date):'') || '(日付なし)';
   top.appendChild(dt);
-  if(f.status){ var st=document.createElement('span'); st.className='qc-ng-status'; st.textContent=qcNgVal(r,f.status)||'—'; top.appendChild(st); }
+  if(f.status){
+    var stv=qcNgVal(r,f.status)||'—';
+    var st=document.createElement('span');
+    st.className='qc-ng-status'+(stv.indexOf('品質確認')>=0?' st-hinshitsu':'');
+    st.textContent=stv; top.appendChild(st);
+  }
   it.appendChild(top);
 
   var l1=document.createElement('div'); l1.className='qc-ng-line';
   l1.textContent=qcNgVal(r,f.hinban)+(f.hinmei&&qcNgVal(r,f.hinmei)?' / '+qcNgVal(r,f.hinmei):'');
   it.appendChild(l1);
-  if(f.worker && qcNgVal(r,f.worker)){ var l2=document.createElement('div'); l2.className='qc-ng-line'; l2.textContent='作業者: '+qcNgVal(r,f.worker); it.appendChild(l2); }
+  if(f.worker && qcNgVal(r,f.worker)){ var l2=document.createElement('div'); l2.className='qc-ng-line'; l2.textContent='発見者: '+qcNgVal(r,f.worker); it.appendChild(l2); }
+
+  // 実績入力の有無。値が入っていれば「有」。'無'/'なし'/'未' と書いてある場合はその通り「無」にする
+  if(f.jisseki){
+    var jv=qcNgVal(r,f.jisseki).trim();
+    var yes = !!jv && ['無','なし','未','未入力','no','NO','false','0'].indexOf(jv)<0;
+    var jb=document.createElement('div');
+    var sp=document.createElement('span'); sp.className='qc-ng-jisseki '+(yes?'yes':'no');
+    sp.textContent='実績入力: '+(yes?'有':'無')+(jv&&jv!=='有'&&yes?'（'+jv+'）':'');
+    jb.appendChild(sp); it.appendChild(jb);
+  }
 
   // ---- 三点（不具合数量・廃棄数量・合格数量）。押すと確認済みの✓が付く ----
   var nNg    = qcNgNumber(r, f.qtyNg);
@@ -10112,6 +10135,9 @@ function qcNgMakeItem(r, g){
       +'　入力者: '+cfg.user+'\n　入力日: '+ds+'\n\nよろしいですか？')) return;
     var rec={};
     if(f.inpUser){
+      // ルックアップ(LOOKUP)は「コピー元のキーとなるフィールドの値」を文字列で渡す。
+      // kintone側が引き当てて、関連するコピー先フィールドも一緒に埋めてくれる。
+      // ユーザー選択(USER_SELECT)のときだけ {code: ログイン名} の形が要る。
       var t = r[f.inpUser] && r[f.inpUser].type;
       rec[f.inpUser] = (t==='USER_SELECT') ? {value:[{code:cfg.user}]} : {value:cfg.user};
     }
@@ -10121,7 +10147,15 @@ function qcNgMakeItem(r, g){
       busy(bWrite,false,'✓ 在庫管理に記入');
       show('記入しました（'+cfg.user+' / '+ds+'）');
       wrote.textContent='在庫管理: '+cfg.user+'　'+ds;
-    }, function(e){ busy(bWrite,false,'✓ 在庫管理に記入'); show('記入できませんでした: '+e, true); });
+    }, function(e){
+      busy(bWrite,false,'✓ 在庫管理に記入');
+      var add='';
+      // ルックアップの引き当て失敗はここに出る。原因が分かる一言を足す
+      if(/CB_VA01|GAIA_LK|ルックアップ|lookup/i.test(String(e)))
+        add='　→「'+cfg.user+'」がコピー元アプリのキーと一致していない可能性があります。'
+           +'⚙設定の「入力者の名前」を、候補（すでにkintoneに入っている値）から選び直してください。';
+      show('記入できませんでした: '+e+add, true);
+    });
   };
 
   function advance(btn, actionName, label){
@@ -10144,6 +10178,49 @@ function qcNgMakeItem(r, g){
   return it;
 }
 
+// 「入力者」欄にすでに入っている値を集める。
+// この欄はルックアップなので、kintoneが受け付けるのは「コピー元アプリのキーの値」だけ。
+// 既にレコードに入っている値は必ず引き当てに成功するので、それを候補として出す。
+function qcNgKnownInputUsers(){
+  var code = qcNgCfg().f.inpUser;
+  if(!code || !QC_NG_RECORDS) return [];
+  var seen={}, out=[];
+  QC_NG_RECORDS.forEach(function(r){
+    var v = qcNgVal(r, code).trim();
+    if(v && !seen[v]){ seen[v]=true; out.push(v); }
+  });
+  return out.sort();
+}
+// 「入力者」欄の型を1件目から見る（LOOKUP / USER_SELECT / 文字列）
+function qcNgInputUserType(){
+  var code = qcNgCfg().f.inpUser;
+  if(!code || !QC_NG_RECORDS || !QC_NG_RECORDS.length) return '';
+  var fld = QC_NG_RECORDS[0][code];
+  return fld ? (fld.type||'') : '';
+}
+// 設定モーダルの「入力者の名前」欄に、候補と型の説明を出す
+function qcNgRefreshUserHint(){
+  var dl = document.getElementById('qc-ng-user-list');
+  var hint = document.getElementById('qc-ng-user-hint');
+  if(!dl || !hint) return;
+  var vals = qcNgKnownInputUsers(), type = qcNgInputUserType();
+  dl.innerHTML='';
+  vals.forEach(function(v){ var o=document.createElement('option'); o.value=v; dl.appendChild(o); });
+  if(type==='USER_SELECT'){
+    hint.textContent='この欄はユーザー選択です。表示名ではなく kintone の「ログイン名」を入れてください。';
+    hint.style.color='#b45309';
+  } else if(vals.length){
+    hint.textContent='この欄は'+(type==='LOOKUP'?'ルックアップ':'文字列')+'です。'
+      +'欄をクリックすると、すでにkintoneに入っている値（'+vals.length+'種）から選べます。'
+      +'ルックアップは、コピー元アプリのキーと一致する値でないと書き込めません。';
+    hint.style.color='#475569';
+  } else {
+    hint.textContent='まだ誰も入力していないため候補が出せません。'
+      +'kintoneで1件だけ手入力し、「🔄 不良品報告を再取得」を押すと、その値が候補になります。';
+    hint.style.color='#b45309';
+  }
+}
+
 // ----- 不良品報告の設定モーダル -----
 window.qcNgOpenConfig = function(){
   var cfg=qcNgCfg();
@@ -10164,7 +10241,11 @@ window.qcNgOpenConfig = function(){
       + '<div class="qc-fld"><label>APIトークン</label><input type="text" id="qc-ng-token" placeholder="kintoneで生成したトークン"></div>'
       + '<div class="qc-fld"><label>取得件数の上限</label><input type="text" id="qc-ng-limit" placeholder="500"></div>'
       + '<div class="qc-fld"><label>突合せから外すステータス（カンマ区切り）</label><input type="text" id="qc-ng-exst" placeholder="完了"></div>'
-      + '<div class="qc-fld"><label>入力者の名前（在庫管理へ記入する名前。ユーザー選択の欄ならkintoneのログイン名）</label><input type="text" id="qc-ng-user" placeholder="深津健介"></div>'
+      + '<div class="qc-fld"><label>入力者の名前（在庫管理「i-PRO W 入力者」へ書く値）</label>'
+      +   '<input type="text" id="qc-ng-user" list="qc-ng-user-list" placeholder="深津健介">'
+      +   '<datalist id="qc-ng-user-list"></datalist>'
+      +   '<div id="qc-ng-user-hint" style="font-size:11px;color:#475569;margin-top:4px;line-height:1.6;"></div>'
+      + '</div>'
       + '<div class="qc-fld"><label>書き込み用GASのURL（記入・在庫調整・在庫投入に使う）</label>'
       +   '<input type="text" id="qc-ng-wgas" placeholder="https://script.google.com/macros/s/..../exec">'
       +   '<div style="display:flex;align-items:center;gap:8px;margin-top:5px;">'
@@ -10202,11 +10283,13 @@ window.qcNgOpenConfig = function(){
   document.getElementById('qc-ng-act2').value  = cfg.actInput||'';
   QC_NG_FIELD_ROWS.forEach(function(p){ document.getElementById('qc-ng-f-'+p[0]).value = cfg.f[p[0]]||''; });
   document.getElementById('qc-ng-cfg-msg').textContent='';
+  qcNgRefreshUserHint();
   bg.className='qc-modal-bg on';
 };
 var QC_NG_FIELD_ROWS = [
   ['hinban','部品番号（照合キー）'],['hinmei','部品名称'],['date','不具合発生日'],
-  ['status','ステータス'],['worker','作業者'],['memo','メモ'],
+  ['status','ステータス'],['worker','発見者（報告した人）'],['memo','メモ'],
+  ['jisseki','実績入力の有無を見る欄'],
   ['qtyNg','不具合数量（サブテーブル内でも可）'],['qtyScrap','廃棄数量（サブテーブル内でも可）'],['qtyOk','合格数量'],
   ['inpUser','在庫管理 入力者'],['inpDate','在庫管理 入力日']
 ];
