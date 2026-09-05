@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.05-7 : 「記入を押したがkintoneに反映されない」を、推測ではなく事実で切り分けられるようにした。従来はGASが ok:true を返した時点で「記入しました」と出していたため、GASまでは通っているのに kintone に入っていない場合を見分けられなかった。qcNgReread() を追加し、書き込みの直後に $id = <id> でそのレコードを読み直して、実際に値が入ったか／ステータスが変わったかを確かめてから結果を出す。入っていれば緑で「✓ kintoneに入りました（値）」、入っていなければ赤で「⚠ kintoneに反映されていません」と、書き込み先に指定している欄のコードを添えて出す(フィールドコード違いが最有力のため)。②在庫調整の解放も、読み直して確認できたときだけにした。ステータスも同様に 変更前→変更後 を照合し、変わっていなければアクション名の不一致を疑うよう促す。あわせて結果表示(.qc-ng-done)に枠と背景を付け、scrollIntoViewで見える位置へ寄せる(小さい文字で下に出していたため見落とされていた) -->
 <!-- H-Hub v2026.09.05-6 : 「在庫管理に記入」が押せない件と、手順の順序。(1)三点(不具合数量・廃棄数量・合格数量)は押して確認する仕組みだったが、押せることが画面から分からず、3つ揃うまでボタンがグレーのまま＝理由も出ないので詰まっていた。セルに ☐/☑ を付け、上に「↓ 3つとも押して確認してください（n/3）」を出し、揃うと緑で「☑ 三点を確認しました」に変える。(2)ボタンが押せない理由を必ず文字で出すようにした(.qc-ng-need)。$idが取れていない場合もその旨を出す。グレーのボタンだけでは何が足りないか分からないため。(3)現場の流れ(在庫管理に記入 → 在庫調整)に合わせ、①在庫管理に記入 ②在庫調整 ③在庫投入 と番号を振り、②は①が済むまで押せないようにした。①が済んでいるかは、kintone側に入力者/入力日が既に入っているか、またはこの画面で書いたかで判定する。③は従来どおり合格数量>0のときだけ。記入済みのレコードでは①を押せなくし、三点の確認も促さない -->
 <!-- H-Hub v2026.09.05-5 : 不良品報告ペインに4点。(1)ステータス「品質確認中」の背景を薄い黄色(#fff4cc)にした。まだ品管の手を離れていないものが目に留まるようにするため。(2)報告した人を「発見者」として表示（kintone側の呼び方に合わせた。自動判別も 発見者→作業者→担当者 の順に変更）。(3)「実績入力」の有無を緑/赤のバッジで表示。値が入っていれば有、'無/なし/未'なら無。見る欄は⚙設定で指定できる。(4)在庫管理「i-PRO W 入力者」はルックアップなので、kintoneが受け付けるのは"コピー元アプリのキーの値"だけ。文字列で渡せばkintoneが引き当ててくれる（USER_SELECTのときだけ{code:ログイン名}が要る）ので送り方は従来どおりで正しいが、どの値なら合うのか分からないため、⚙設定の「入力者の名前」を datalist にして、すでにkintoneに入っている値から選べるようにした（既存の値は必ず引き当てに成功する）。欄の型（ルックアップ/ユーザー選択/文字列）も判定して説明を出し、引き当て失敗のエラーには原因の一言を添える -->
 <!-- H-Hub v2026.09.05-4 : 不良品報告ペインの3点。(1)「🔌 接続テスト」を押しても何も起きないように見えた件。ボタン自体は動いていたが、結果をモーダル下端の共通メッセージ欄(#qc-ng-cfg-msg)に出しており、フィールドが並ぶ長いモーダルでは画面外だった。ボタンの真横(#qc-ng-wgas-msg)に出すようにし、ボタンも折り返さないようにした。(2)同じレコードの中の不具合数量・廃棄数量を、合計だけでなく明細で一覧表示。qcNgSubRows()がサブテーブルの各行から数量と同じ行の他の列(不具合内容・廃棄内容)を取り出す。合計と✓による三点確認はそのまま残している。(3)並び順を不具合発生日の古い順にした(日付なしはその組の最後)。品番が完全一致でないもの(参考表示)は、日付に関わらず常に下にまとめる -->
@@ -613,7 +614,10 @@ html, body {
 .qc-ng-btn:disabled{opacity:.4;cursor:not-allowed;}
 .qc-ng-btn.go{border-color:#0f766e;color:#0f766e;}
 .qc-ng-btn.go:hover:not(:disabled){background:#effcfa;}
-.qc-ng-done{font-size:11px;color:#15803d;font-weight:700;margin-top:5px;}
+/* 書き込みの結果。小さい文字だと見落とすので、枠と背景を付けて必ず目に入るようにする */
+.qc-ng-done{font-size:12px;font-weight:700;margin-top:6px;padding:6px 9px;border-radius:7px;
+  background:#ecfdf3;border-left:4px solid #16a34a;color:#15803d;line-height:1.6;}
+.qc-ng-done.bad{background:#fff1f1;border-left-color:#dc2626;color:#b91c1c;}
 .qc-ng-wrote{font-size:11px;color:#475569;margin-top:4px;background:#f1f5f9;border-radius:6px;padding:3px 7px;}
 @media (max-width:1000px){
   /* 縦に積む。align-items が flex-start のままだと交差軸＝横幅が内容なりに縮むので stretch に戻す */
@@ -9967,6 +9971,27 @@ window.qcNgTestWrite = function(){
   });
 };
 
+// 書き込んだ直後に、そのレコードをkintoneから読み直す。
+// 「GASは成功と言っているのにkintoneに入っていない」を、推測ではなく事実で切り分けるため。
+function qcNgReread(id, cb){
+  var cfg=qcNgCfg();
+  qcGasPost('getKintonePartData', {
+    domain:(config.domain||'hashimoto-kogyo'), appId:String(cfg.appId), token:cfg.token,
+    query:'$id = '+id+' limit 1', fields:[]
+  }, function(res){
+    if(!res || !res.ok){ cb(null, (res&&(res.err||res.error))||'再取得に失敗'); return; }
+    var rec=(res.records||[])[0];
+    // 手元の一覧も入れ替えて、再描画しても新しい値が出るようにする
+    if(rec && QC_NG_RECORDS){
+      for(var i=0;i<QC_NG_RECORDS.length;i++){
+        var old=QC_NG_RECORDS[i];
+        if(old['$id'] && String(old['$id'].value)===String(id)){ QC_NG_RECORDS[i]=rec; break; }
+      }
+    }
+    cb(rec||null, rec?'':'そのレコードが読めませんでした');
+  }, function(e){ cb(null, e.message||'通信エラー'); });
+}
+
 function qcNgRenderPane(pane, g){
   pane.innerHTML=''; pane.className='qc-ng-pane';
   var cfg=qcNgCfg(), f=cfg.f;
@@ -10156,7 +10181,13 @@ function qcNgMakeItem(r, g){
   syncButtons();
 
   function busy(btn, on, label){ btn.disabled=on; btn.textContent = on ? '処理中…' : label; if(!on) syncButtons(); }
-  function show(txt, bad){ msg.style.display='block'; msg.style.color = bad ? '#b91c1c' : '#15803d'; msg.textContent=txt; }
+  function show(txt, bad){
+    msg.style.display='block';
+    msg.className = 'qc-ng-done'+(bad?' bad':'');
+    msg.textContent=txt;
+    // 画面外だと気づかないので、結果が見える位置まで寄せる
+    try{ msg.scrollIntoView({block:'nearest'}); }catch(e){}
+  }
 
   bWrite.onclick=function(){
     if(!cfg.user){ alert('「⚙ 不良品報告の設定」で「入力者の名前」を登録してください。'); return; }
@@ -10177,10 +10208,30 @@ function qcNgMakeItem(r, g){
     if(f.inpDate) rec[f.inpDate] = {value:ds};
     busy(bWrite,true,'① 在庫管理に記入');
     qcNgWrite('record', {id:id, record:rec}, function(){
-      written = true;                       // ②在庫調整を解放する
-      busy(bWrite,false,'① 在庫管理に記入');
-      show('記入しました（'+cfg.user+' / '+ds+'）。続けて②在庫調整へ進めます');
-      wrote.textContent='在庫管理: '+cfg.user+'　'+ds;
+      // ★GASが成功と返しても鵜呑みにせず、kintoneを読み直して実際に入ったか確かめる
+      show('送信しました。kintoneを読み直して確認しています…');
+      qcNgReread(id, function(fresh, err){
+        busy(bWrite,false,'① 在庫管理に記入');
+        if(!fresh){
+          show('送信は通りましたが、確認のための再取得ができませんでした（'+err+'）。'
+             +'kintoneを開いて、入力者・入力日が入っているか見てください。', true);
+          return;
+        }
+        var u = f.inpUser ? qcNgVal(fresh, f.inpUser) : '';
+        var d = f.inpDate ? qcNgVal(fresh, f.inpDate) : '';
+        if(u || d){
+          written = true;                       // ②在庫調整を解放する
+          syncButtons();
+          wrote.textContent='在庫管理: '+(u||'—')+'　'+(d||'—');
+          show('✓ kintoneに入りました（'+(u||'—')+' / '+(d||'—')+'）。続けて②在庫調整へ進めます');
+        } else {
+          // ここに来るのが「反映されない」の正体。原因を具体的に出す
+          show('⚠ kintoneに反映されていません。'
+             +'書き込み先として指定している欄（入力者: '+(f.inpUser||'未設定')+' ／ 入力日: '+(f.inpDate||'未設定')+'）が'
+             +'実際の欄と違う可能性があります。⚙設定 →「🧾 列を確認」で、'
+             +'在庫管理の欄のフィールドコードを確かめてください。', true);
+        }
+      });
     }, function(e){
       busy(bWrite,false,'① 在庫管理に記入');
       var add='';
@@ -10196,11 +10247,22 @@ function qcNgMakeItem(r, g){
     if(!confirm('kintoneのプロセス管理を進めます。\n\n　品番: '+qcNgVal(r,f.hinban)
       +'\n　いまのステータス: '+(f.status?qcNgVal(r,f.status):'—')
       +'\n　実行するアクション: '+actionName+'\n\nよろしいですか？')) return;
+    var before = f.status ? qcNgVal(r, f.status) : '';
     busy(btn,true,label);
     qcNgWrite('status', {id:id, statusAction:actionName}, function(){
-      busy(btn,false,label);
-      show('「'+actionName+'」を実行しました。再取得して確認してください。');
-      btn.disabled=true;
+      show('送信しました。kintoneを読み直して確認しています…');
+      qcNgReread(id, function(fresh, err){
+        busy(btn,false,label);
+        if(!fresh){ show('送信は通りましたが、確認のための再取得ができませんでした（'+err+'）。kintoneで確かめてください。', true); return; }
+        var after = f.status ? qcNgVal(fresh, f.status) : '';
+        if(after && after!==before){
+          show('✓ ステータスが「'+before+'」→「'+after+'」に変わりました');
+          btn.disabled=true;
+        } else {
+          show('⚠ ステータスが変わっていません（'+(after||'—')+'のまま）。'
+             +'アクション名「'+actionName+'」が、kintoneのプロセス管理の設定と一致しているか確かめてください。', true);
+        }
+      });
     }, function(e){ busy(btn,false,label); show('進められませんでした: '+e, true); });
   }
   bAdj.onclick=function(){ advance(bAdj, cfg.actAdjust||'在庫調整', '② '+(cfg.actAdjust||'在庫調整')); };
