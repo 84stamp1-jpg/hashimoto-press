@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.06-3 : 「記録の不良 N個」の真下に、kintone側の合計を並べて出すようにした（社長要望）。この2つは並んでいるのに単位も出どころも違い、目で比べようがなかった。★記録＝品質チェックシート(QC_ALL_RECORDS)の「不良+保留+その他」を製造番号で集計したHHubの入力実績、★kintone＝App31の不具合数量を品番で集計したもの。qcNgKintoneTotal(hinban,includeExcluded) と qcNgMakeCompare() を追加し、両方の数字と差（一致なら緑✓）を1つの箱に入れた。完了は除外（qcNgMatchが既に外している）。合計するのは品番が完全一致のものだけ（部分一致は参考表示なので混ぜると水増しになる）。※完了を外した結果0個になる場合に「報告が無い」と取り違えないよう、完了を含めた数も小さく添える。※不具合数量が空の報告は0として足し、その件数を注記する。※未設定・読込中・エラーの間は0と出てしまうので箱ごと出さない -->
 <!-- H-Hub v2026.09.06-2 : ★②在庫調整 完（システム）が通り、kintone側で「作業者以外でも実行できるアクション」を作れば動くことを実機で確認。それに伴い、完了になった報告が一覧に残り続けていたのを直した。突合せから外れるステータス(既定は完了)になったら、結果を1.4秒見せてから薄れて消え、その品番の報告が全部なくなればペインを描き直す。※このとき単純に描き直すと「⚠ この品番の不良品報告が見つかりません」と赤で出てしまい、片付けたのに叱られているように見える。qcNgMatch(hinban, includeExcluded) を足して「1件も無い」のか「全部片付いた」のかを見分け、後者は緑で「✓ この品番の不良品報告 N件 は、すべて処理が終わっています」と出すようにした -->
 <!-- H-Hub v2026.09.06-1 : (1)★②が進まない原因が確定。kintoneが GAIA_NT02「このアクションは作業者のみ実行できます」を返した。App31の在庫調整中は作業者が深津健介に限定されており、H-HubはAPIトークンで呼ぶためトークンに利用者がおらず、何度押しても通らない。アクション名の問題ではない。kintone側で プロセス管理 →「＋ 作業者以外でも実行できるアクションを作成する」から同じ行き先のアクションを作り、その名前を⚙設定に入れる必要がある。この案内をエラー時に出すようにした。(2)不良品報告の取得が遅い／Failed to fetch で消える件。500件×全フィールドはGASの往復に数秒かかるのに毎回待たせ、失敗すると表示が消えていた。localStorage(qcNgRecordsCache)に前回分を持ち、開いた瞬間に描画してから裏で差し替える方式に変更（実測8〜9ms）。Failed to fetch は1.5秒後に一度だけ自動で再試行し、それでも駄目なら前回のデータを残したまま「⚠最新の取得に失敗。下は◯◯時点のデータです」と断る。※再試行は qcNgFetch(true,...) で呼ぶこと（force=falseだとキャッシュ復元済みのため冒頭の早期returnで弾かれ再試行が走らない）。※stale状態は再描画で'ok'に戻さない（断りが消えるため） -->
 <!-- H-Hub v2026.09.05-14 : 設定の取り違えを保存時に止めるようにした。(1)アクション名の欄にステータス名（在庫調整中／在庫投入中）を入れてしまう間違いが起きた。プロセス管理の画面は左がステータス・右がアクションで、見分けがつきにくいのが原因。取得済みレコードのステータス値を集める qcNgKnownStatuses() を追加し、アクション名の欄がそのいずれかと一致したら保存時に赤字で知らせ、モーダルを閉じない。(2)「次の作業者」に表示名（深津健介）を入れると kintone が GAIA_IL26「指定したユーザーが見つかりません」を返す。ここはログイン名しか受け付けない。GAIA_IL26 はアクション名の不一致でも同じ番号なので、返ってきた文面に「ユーザー」「code：」が含まれるかで案内を振り分けるようにした。あわせて設定の説明を「ふつうは空欄のまま。入れるなら表示名ではなくログイン名」に書き換えた。※結果表示は textContent なのでHTMLタグを書かないこと（そのまま文字として出る） -->
@@ -582,6 +583,15 @@ html, body {
 .qc-ng-pane.qc-ng-miss{border-left-color:#E24B4A;background:linear-gradient(to right,#fff7f7,#fff);}
 .qc-ng-pane.qc-ng-none{border-left-color:#cbd5e1;background:#fbfcfd;}
 .qc-ng-hdr{font-size:11px;font-weight:700;color:#475569;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:6px;}
+/* 記録(HHub)とkintoneの合計を並べて比べるための箱 */
+.qc-ng-cmp{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:6px 8px;margin-bottom:7px;}
+.qc-ng-cmp-row{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:11px;color:#475569;line-height:1.7;}
+.qc-ng-cmp-row .qc-ng-cmp-v{font-size:13px;font-weight:700;color:#1F4E79;white-space:nowrap;}
+.qc-ng-cmp-row .qc-ng-cmp-v.zero{color:#94a3b8;}
+.qc-ng-cmp-diff{margin-top:4px;padding-top:4px;border-top:1px dashed #cbd5e1;font-size:11px;font-weight:700;}
+.qc-ng-cmp-diff.same{color:#15803d;}
+.qc-ng-cmp-diff.gap{color:#b45309;}
+.qc-ng-cmp-note{font-size:10px;color:#94a3b8;margin-top:3px;line-height:1.5;}
 .qc-ng-item{background:#f8fafc;border-radius:8px;padding:7px 9px;margin-bottom:6px;border:1px solid #e2e8f0;}
 .qc-ng-item-top{display:flex;justify-content:space-between;gap:6px;align-items:baseline;margin-bottom:3px;}
 .qc-ng-date{font-weight:700;color:#1F4E79;font-size:12px;}
@@ -9773,7 +9783,7 @@ window.qcShowPendingList = function(){
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.06-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.06-3';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -10034,6 +10044,70 @@ function qcNgRecordedNg(g){
   return t;
 }
 
+// kintone側の、この品番の合計（ステータス「完了」など突合せ対象外は qcNgMatch が既に外している）。
+// 記録(HHub)は製造番号単位・kintoneは品番単位で、キーが違うことを承知の上で並べるための集計。
+// 品番が完全一致のものだけを足す（部分一致は参考表示なので、合計に混ぜると数が水増しになる）。
+function qcNgKintoneTotal(hinban, includeExcluded){
+  var f=qcNgCfg().f;
+  var t={ng:0, scrap:0, ok:0, cases:0, partial:0, noQty:0};
+  qcNgMatch(hinban, includeExcluded).forEach(function(r){
+    if(!r.__qcExact){ t.partial++; return; }
+    t.cases++;
+    var n=qcNgNumber(r, f.qtyNg), sc=qcNgNumber(r, f.qtyScrap), ok=qcNgNumber(r, f.qtyOk);
+    if(n===null) t.noQty++; else t.ng+=n;
+    if(sc!==null) t.scrap+=sc;
+    if(ok!==null) t.ok+=ok;
+  });
+  return t;
+}
+
+// 「記録の不良 N個」の真下に、kintoneの合計を並べて出す。
+// 数字が離れて出ていると比べようがなく、目で足し算をさせていたため。
+function qcNgMakeCompare(g, rec){
+  var cfg=qcNgCfg();
+  var k = qcNgKintoneTotal(g.hinban);
+  var box=document.createElement('div'); box.className='qc-ng-cmp';
+
+  function row(label, val){
+    var d=document.createElement('div'); d.className='qc-ng-cmp-row';
+    var l=document.createElement('span'); l.textContent=label;
+    var v=document.createElement('span'); v.className='qc-ng-cmp-v'+(val?'':' zero'); v.textContent=val+'個';
+    d.appendChild(l); d.appendChild(v); box.appendChild(d); return d;
+  }
+  function note(txt){
+    var d=document.createElement('div'); d.className='qc-ng-cmp-note'; d.textContent=txt; box.appendChild(d);
+  }
+
+  row('記録（製造番号 '+(g.seizoNo||'—')+'）', rec.total);
+  row('kintone 不具合数量（品番 '+(g.hinban||'—')+'・'+k.cases+'件）', k.ng);
+
+  var kAll = qcNgKintoneTotal(g.hinban, true);
+  var diff=document.createElement('div');
+  var d = rec.total - k.ng;
+  if(k.cases===0 && kAll.cases>0){
+    // 報告はあるが全部「完了」の場合。ここで「差 +202個」と出すと、片付いているのに
+    // 数が合っていないように見える。比べる相手が居ないことを言う
+    diff.className='qc-ng-cmp-diff same';
+    diff.textContent='— この品番の報告は全て「'+(cfg.excludeStatus||'完了')+'」のため、比べる相手がありません';
+  } else {
+    diff.className='qc-ng-cmp-diff'+(d===0?' same':' gap');
+    diff.textContent = (d===0) ? '✓ 一致' : ('差 '+(d>0?'+':'')+d+'個（'+(d>0?'記録':'kintone')+'が多い）');
+  }
+  box.appendChild(diff);
+
+  // 完了になった分を外した結果、数字が大きく違って見えることがある。
+  // 「片付け済みだから0」なのか「本当に報告が無い」のかを取り違えないよう、含めた場合も添える
+  if(kAll.ng!==k.ng || kAll.cases!==k.cases){
+    note('ステータス「'+(cfg.excludeStatus||'完了')+'」も含めると '+kAll.ng+'個（'+kAll.cases+'件）');
+  }
+  if(k.scrap) note('kintoneの廃棄数量 '+k.scrap+'個／合格数量 '+k.ok+'個');
+  if(k.noQty) note('※ 不具合数量が空の報告が '+k.noQty+'件あります（0として足しています）');
+  if(k.partial) note('※ 品番が完全一致でない報告 '+k.partial+'件 は合計に入れていません');
+  note('記録は製造番号単位・kintoneは品番単位（他ロットの報告も含む）／ステータス「'
+       +(cfg.excludeStatus||'完了')+'」は除外');
+  return box;
+}
+
 function qcNgMakePane(g){
   var pane=document.createElement('div'); pane.className='qc-ng-pane';
   QC_NG_PANES.push({el:pane, g:g});
@@ -10119,6 +10193,12 @@ function qcNgRenderPane(pane, g){
   var h2=document.createElement('span'); h2.className='qc-ng-muted';
   h2.textContent = rec.total>0 ? ('記録の不良 '+rec.total+'個') : '記録の不良 なし';
   hdr.appendChild(h1); hdr.appendChild(h2); pane.appendChild(hdr);
+
+  // 見出しの数字（記録の不良）の真下に、kintone側の合計を並べる。
+  // データが揃っていないうち（未設定・読込中・エラー）は 0 と出てしまうので出さない。
+  if((QC_NG_STATE==='ok'||QC_NG_STATE==='stale') && f.hinban && g.hinban){
+    pane.appendChild(qcNgMakeCompare(g, rec));
+  }
 
   function line(txt, cls){ var d=document.createElement('div'); if(cls) d.className=cls; d.textContent=txt; pane.appendChild(d); return d; }
 
