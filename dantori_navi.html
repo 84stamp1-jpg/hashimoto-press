@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.05-14 : 設定の取り違えを保存時に止めるようにした。(1)アクション名の欄にステータス名（在庫調整中／在庫投入中）を入れてしまう間違いが起きた。プロセス管理の画面は左がステータス・右がアクションで、見分けがつきにくいのが原因。取得済みレコードのステータス値を集める qcNgKnownStatuses() を追加し、アクション名の欄がそのいずれかと一致したら保存時に赤字で知らせ、モーダルを閉じない。(2)「次の作業者」に表示名（深津健介）を入れると kintone が GAIA_IL26「指定したユーザーが見つかりません」を返す。ここはログイン名しか受け付けない。GAIA_IL26 はアクション名の不一致でも同じ番号なので、返ってきた文面に「ユーザー」「code：」が含まれるかで案内を振り分けるようにした。あわせて設定の説明を「ふつうは空欄のまま。入れるなら表示名ではなくログイン名」に書き換えた。※結果表示は textContent なのでHTMLタグを書かないこと（そのまま文字として出る） -->
 <!-- H-Hub v2026.09.05-13 : 「在庫投入 完」(在庫投入中→完了)は製造の担当なので、この画面から外した。品管が触るのは ①在庫管理に記入 → ②在庫調整 完（合格数量がなければ完了）／③在庫投入（合格数量があれば在庫投入中まで）の3つまで。設定のアクション欄も2つに戻している。ボタンの出し分けはいまのステータスで行い、すでに在庫投入中のレコードは3つとも押せない状態にして「この画面での作業は済んでいます（ここから先の完了は製造が行います）」と出す -->
 <!-- H-Hub v2026.09.05-12 : ②が GAIA_IL03 で進まなかった原因の一つが判明。★アクション名が違っていた。「在庫調整中」はステータス名で、そこから実行するアクションは「在庫調整 完」「在庫投入」「差し戻す」。プロセス管理の画面は左がステータス・右がアクションで、既定に入れていた「在庫調整」というアクションは存在しない。実際の設定に合わせて既定を 在庫調整 完／在庫投入／在庫投入 完 にし、設定画面にも「左はステータス名・右がアクション名」と明記した。あわせて 在庫投入中→完了 の ④在庫投入 完 を追加し、ボタンの出し分けをいまのステータスで行うようにした（在庫調整中なら②③、在庫投入中なら④のみ。順番違いの GAIA_IQ11 を未然に防ぐ）。GAIA_IL03 の案内も、筆頭に「アクションは既定でそのステータスの作業者しか実行できない。APIトークンには利用者がいないので必ず弾かれる → プロセス管理の『＋作業者以外でも実行できるアクションを作成する』で作り直す」を置いた（App31の在庫調整中は作業者=深津健介に限定されているため） -->
 <!-- H-Hub v2026.09.05-11 : ①在庫管理に記入は通るようになった（ルックアップも解決）。②在庫調整で kintone が GAIA_IL03「ステータスの変更に失敗しました」を返す件への対応。この番号は原因が1つに定まらないので、確かめる場所を4つ並べて出すようにした（次のステータスの作業者が「実行時に選択」／アクション名の不一致／順番／同時編集）。あわせて、進めた先のステータスが作業者を要求する場合に備え、⚙設定に「次の作業者（kintoneのログイン名）」を追加し、指定があれば status.json の assignee として送る（GAS側は p.assignee をそのまま渡す作りなので変更不要）。GAIA_IL26・GAIA_IQ11 にも個別の案内を出す。また、GASがJSONではなくHTMLを返したとき「解析エラー: <!DOCTYPE html...」と生のHTMLを80文字出すだけで原因が読めなかったため、qcGasDiagnose() を追加してページの中身から判別する（ログイン画面／承認切れ／doPostなし／URL違い）。押し間違い防止に「kintoneで開く」と①②③の間へ区切りを入れた -->
@@ -9765,7 +9766,7 @@ window.qcShowPendingList = function(){
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.05-13';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.05-14';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -10421,8 +10422,18 @@ function qcNgMakeItem(r, g){
             + BR2 + '③ いまのステータス（'+before+'）からそのアクションに進めるか。'
             + BR2 + '④ 進めた先が「実行時に作業者を選択」なら、⚙設定の「次の作業者」にログイン名が必要です。';
       } else if(/GAIA_IL26/.test(String(e))){
-        add = BR2 + '→ アクション名「'+actionName+'」が、kintoneのプロセス管理の設定と一致していません。'
-            + '⚙設定の「プロセス アクション①／②」を直してください。';
+        // 同じ番号でも中身が違う。ユーザーの話か、アクション名の話かで案内を分ける
+        if(/ユーザー|code[：:]/.test(String(e))){
+          add = BR2 + '→ ⚙設定の「次の作業者」に入れた「'+(cfg.assignee||'')+'」は、'
+              + 'kintoneの「表示名」であって「ログイン名」ではないようです。'
+              + BR2 + 'ログイン名は kintone → 右上のユーザー画像 → 「アカウント設定」または'
+              + '管理画面のユーザー一覧で確認できます（英字のことが多いです）。'
+              + BR2 + '★そもそも「次の作業者」は、進めた先が「実行時に選択」のときだけ必要です。'
+              + 'まずは空欄にして試してください。';
+        } else {
+          add = BR2 + '→ アクション名「'+actionName+'」が、kintoneのプロセス管理の設定と一致していません。'
+              + 'ステータス名ではなくアクション名（右側の列）を、空白の有無まで同じに入れてください。';
+        }
       } else if(/GAIA_IQ11/.test(String(e))){
         add = BR2 + '→ いまのステータス（'+before+'）からは、そのアクションに進めません。順番を確かめてください。';
       }
@@ -10439,6 +10450,19 @@ function qcNgMakeItem(r, g){
   };
 
   return it;
+}
+
+// いまkintoneに入っているステータスの値を集める。
+// アクション名の欄にステータス名を入れてしまう取り違えを、保存時に止めるために使う。
+function qcNgKnownStatuses(){
+  var code = qcNgCfg().f.status;
+  if(!code || !QC_NG_RECORDS) return [];
+  var seen={}, out=[];
+  QC_NG_RECORDS.forEach(function(r){
+    var v = qcNgVal(r, code).trim();
+    if(v && !seen[v]){ seen[v]=true; out.push(v); }
+  });
+  return out;
 }
 
 // 「入力者」欄にすでに入っている値を集める。
@@ -10536,11 +10560,12 @@ window.qcNgOpenConfig = function(){
       +   '<div class="qc-fld" style="flex:1"><label>③ 在庫調整中 → 在庫投入中（合格数量があるとき）</label><input type="text" id="qc-ng-act2" placeholder="在庫投入"></div>'
       + '</div>'
       + '<div class="qc-fld"><label>次の作業者（kintoneのログイン名）</label>'
-      +   '<input type="text" id="qc-ng-assignee" placeholder="空欄でよい場合が多いです">'
+      +   '<input type="text" id="qc-ng-assignee" placeholder="ふつうは空欄のまま">'
       +   '<div style="font-size:11px;color:#475569;margin-top:4px;line-height:1.6;">'
-      +     '進めた先のステータスの作業者が「実行時に選択」になっている場合だけ必要です。'
-      +     'エラー <b>GAIA_IL03</b> が出るときは、kintone → アプリの設定 → プロセス管理 で'
-      +     '次のステータスの作業者の設定を確かめてください。'
+      +     '★<b>ふつうは空欄のままにしてください。</b>進めた先のステータスの作業者が'
+      +     '「実行時に選択」になっている場合だけ必要です。<br>'
+      +     '入れる場合は<b>表示名ではなくログイン名</b>です（「深津健介」ではなく英字のIDなど）。'
+      +     '表示名を入れると <b>GAIA_IL26「指定したユーザーが見つかりません」</b>になります。'
       +   '</div></div>'
       + '<div style="font-size:12px;font-weight:700;color:#1F4E79;margin:14px 0 6px;">フィールドコード（空欄なら自動判別）</div>'
       + '<div id="qc-ng-fieldrows"></div>'
@@ -10595,10 +10620,24 @@ window.qcNgSaveConfig = function(){
   cfg.assignee  = document.getElementById('qc-ng-assignee').value.trim();
   QC_NG_FIELD_ROWS.forEach(function(p){ cfg.f[p[0]] = document.getElementById('qc-ng-f-'+p[0]).value.trim(); });
   qcNgSaveCfg();
+  var m0=document.getElementById('qc-ng-cfg-msg');
+  // ★アクション名の欄にステータス名を入れる取り違えを止める。
+  //   プロセス管理の画面は左がステータス・右がアクションで、間違えやすい。
+  var sts = qcNgKnownStatuses();
+  var bad = [];
+  if(sts.indexOf(cfg.actAdjust)>=0) bad.push('②「'+cfg.actAdjust+'」');
+  if(sts.indexOf(cfg.actInput)>=0)  bad.push('③「'+cfg.actInput+'」');
+  if(bad.length){
+    m0.style.color='#b91c1c';
+    m0.textContent='※ '+bad.join('・')+' は「ステータス名」です。ここに入れるのは「アクション名」です。'
+      +'kintone → アプリの設定 → プロセス管理 の右側の列（例：在庫調整 完／在庫投入）を、空白の有無まで同じに入れてください。';
+    qcNgFetch(true);
+    return;   // モーダルは閉じずに気づいてもらう
+  }
   // 入力者の名前が、kintoneに実在する値と違うなら先に知らせる（書いてから気づくと二度手間）
   var known = qcNgKnownInputUsers();
   if(cfg.user && known.length && known.indexOf(cfg.user)<0){
-    var m=document.getElementById('qc-ng-cfg-msg');
+    var m=m0;
     m.style.color='#b45309';
     m.textContent='※「'+cfg.user+'」は、いまkintoneに入っている値（'+known.join('／')+'）と一致しません。'
       +'ルックアップの場合、一致しないと書き込めません。欄を押して候補から選び直すことをお勧めします。';
