@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.05-3 : kintoneへの書き込み(在庫管理の記入・在庫調整/在庫投入)を、既存の品質チェックGASに手を入れずに済むようにした。前版は品質チェックGASへ kintoneWrite を足す前提だったが、あれは記録の保存・読み込みに毎日使っているもので、直し損ねると品質チェックそのものが止まる。書き込み専用の別GASを1つ立ててそちらへ投げる形に変更(qcNgWriteUrl)。qcGasPost を qcGasPostTo(url,...) に分け、URLを指定して叩けるようにしている(ヘッダーは付けない。付けるとプリフライトが飛んでCORSで落ちる)。「⚙ 不良品報告の設定」に「書き込み用GASのURL」と「🔌 接続テスト」(ping)を追加。未登録でも照合(読み取り)は今までどおり動き、書き込みボタンを押したときだけ理由を出して止まる。GASのコードは docs/kintone_write_gas.gs.example に全文(そのまま貼るだけ・doPost込み)、作成手順は docs/kintone_write_gas_setup.md -->
 <!-- H-Hub v2026.09.05-2 : システム入力待ちの不良品報告ペインを実用形に。(1)記録カードを元の幅(476px)へ戻した。前版はカードを986pxまで広げたため中央に余白ができて読みにくかった。広げるのはコンテナだけ(980px＝カード476＋ペイン)にした。(2)ステータスが「完了」の報告は突合せから外す(⚙設定でカンマ区切り変更可)。(3)1品番に報告が複数あるのが普通なので全件出す(件数も表示)。(4)不具合数量・廃棄数量・合格数量の三点を表示。不具合数量と廃棄数量は「不具合一覧」「品質管理【処置結果】」のサブテーブル内にあるため、qcNgFindField()がテーブルの中まで探して全行を合計する。「🧾 列を確認」もテーブルの中の列を字下げして出す。(5)三点はそれぞれ押すと✓が付き、3つ揃うと「✓ 在庫管理に記入」が押せる(在庫管理の入力者・入力日へ書き込み)。(6)「▶在庫調整」「▶在庫投入」でプロセス管理を進める。在庫投入は合格数量>0のときだけ押せる。書き込みは毎回 confirm で内容を出してから実行する。※(5)(6)は品質チェックGASに kintoneWrite アクションの追加が必要(docs/kintone_write_gas.gs.example)。未追加の場合はその旨をペインに表示する -->
 <!-- H-Hub v2026.09.05-1 : 品質チェックタブを3点直した。(1)表示が遅い件。記録一覧(getRecords)はGASの往復に数秒かかるのに、タブ初期化・日別一覧・製造番号検索がそれぞれ別々に投げていた(同じ通信が2〜3本重なる)うえ、返るまで画面を「読み込み中...」で空にしていたため、バッジを押すまで何も出ないように見えていた。localStorageのqcAllRecordsCacheを実際に読むようにし(以前は書くだけで読んでいなかった)、手元のデータを即描画→裏で最新に差し替える方式に変更。qcFetchRecords()で多重リクエストも1本にまとめた。(2)製造番号・部品番号をワンタップでコピーできるチップにした。行ごと選択すると「製造番号: 」まで入ってしまい、社内システムへの貼り付けで直す手間があったため、番号だけをクリップボードへ入れる。(3)システム入力待ちの一覧に、kintone「★不良品報告」を右ペインで並べた。記録した不良が報告に挙がっているかを画面を移動せずに確かめられる。品番で突き合わせ、不良の記録があるのに報告が無い場合は赤で警告、報告があれば「kintoneで開く」で該当レコードへ直行する。一覧の幅上限(500px)はこの画面だけ外している。※LOGINUSER()はAPIトークンでは効かないため、ビューの絞り込みではなく直近レコードを取って品番照合する方式にした。トークンとフィールドコードは「⚙ 不良品報告の設定」から登録(このPCのlocalStorageのみ・リポジトリには入らない) -->
 <!-- H-Hub v2026.09.03-9 : 配置表の印刷で周囲が切れる不具合を修正。@page{margin:6mm} を効かせていたが、@page の余白は印刷ダイアログの「余白」設定（なし／デフォルト）で上書きされるため、「なし」を選ぶと余白0で出力される。プリンタには物理的に印刷できない外周（LBP841Cは約5mm）があるので、そこで内容が切れていた。@page ではなく body{padding:8mm} で余白を持たせ、ダイアログの設定に関わらず用紙の内側に入るようにした。あわせて描画幅の上限を 980px（≒259mm）にし、余白「なし」でも「デフォルト」(約10mm)でも A4横に収まるようにしている。実測：用紙297mmに対し内容は左8mm〜右289mm -->
@@ -8475,13 +8476,17 @@ function qcSonotaLoad(hidId,chipsId,val){
 // ----- GAS通信ヘルパー -----
 function QC_GAS_URL(){ return config.qualityGasUrl || FIXED_CONFIG.qualityGasUrl; }
 
-function qcGasPost(action, payload, successCb, failCb){
+// URLを指定してGASを叩く。ヘッダーを付けないこと（付けるとプリフライトが飛んでCORSで落ちる）
+function qcGasPostTo(url, action, payload, successCb, failCb){
   var body = JSON.stringify(Object.assign({action: action}, payload||{}));
-  fetch(QC_GAS_URL(), {method:'POST', redirect:'follow', body:body})
+  fetch(url, {method:'POST', redirect:'follow', body:body})
     .then(function(r){ return r.text(); })
     .then(function(t){ try{return JSON.parse(t);}catch(e){throw new Error('解析エラー: '+t.slice(0,80));} })
     .then(successCb)
     .catch(function(e){ if(failCb) failCb(e); else alert('通信エラー: '+e.message); });
+}
+function qcGasPost(action, payload, successCb, failCb){
+  qcGasPostTo(QC_GAS_URL(), action, payload, successCb, failCb);
 }
 
 // ----- QC実績マップ構築（組立計画タブで参照） -----
@@ -9705,6 +9710,7 @@ var QC_NG_CHECKED = {};     // { レコードid: {ng:true, scrap:true, ok:true} 
 function qcNgDefaultCfg(){
   return {
     appId:'31', token:'', limit:500,
+    writeGas:'',                // 書き込み専用GASのデプロイURL（既存の品質チェックGASは触らない）
     user:'',                    // 在庫管理「入力者」に書く名前（ユーザー選択ならkintoneのログイン名）
     excludeStatus:'完了',        // 突合せから外すステータス（カンマ区切り）
     actAdjust:'在庫調整',        // プロセス管理のアクション名
@@ -9871,16 +9877,40 @@ function qcNgKintoneUrl(id){
 }
 
 // ----- kintoneへの書き込み（在庫管理の記入・プロセス管理を進める） -----
-// 品質チェックGASに kintoneWrite アクションが必要。未追加なら分かるようにエラーを出す。
+// 書き込みは「書き込み専用GAS」に投げる（既存の品質チェックGASを触らずに済ませるため）。
+// 未登録なら品質チェックGASへ投げる（そちらに kintoneWrite を足した場合の互換）。
+// 作り方: docs/kintone_write_gas_setup.md ／ コード: docs/kintone_write_gas.gs.example
+function qcNgWriteUrl(){ return (qcNgCfg().writeGas || '').trim() || QC_GAS_URL(); }
 function qcNgWrite(op, payload, okCb, errCb){
   var cfg=qcNgCfg();
+  if(!cfg.writeGas){
+    errCb('書き込み用GASのURLが未登録です。「⚙ 不良品報告の設定」→「書き込み用GASのURL」に入れてください（作り方は docs/kintone_write_gas_setup.md）');
+    return;
+  }
   var body = Object.assign({ domain:(config.domain||'hashimoto-kogyo'), appId:String(cfg.appId),
                              token:cfg.token, op:op }, payload);
-  qcGasPost('kintoneWrite', body, function(res){
+  qcGasPostTo(qcNgWriteUrl(), 'kintoneWrite', body, function(res){
     if(res && res.ok) okCb(res);
-    else errCb((res && (res.err||res.error)) || 'GAS側に kintoneWrite がありません（docs/kintone_write_gas.gs.example を参照）');
+    else errCb((res && (res.err||res.error)) || 'GASが kintoneWrite に応答しませんでした');
   }, function(e){ errCb(e.message||'通信エラー'); });
 }
+// 書き込み用GASが生きているか確かめる
+window.qcNgTestWrite = function(){
+  var msg=document.getElementById('qc-ng-cfg-msg');
+  var url=(document.getElementById('qc-ng-wgas').value||'').trim();
+  if(!url){ msg.style.color='#b91c1c'; msg.textContent='書き込み用GASのURLを入れてください。'; return; }
+  if(url.indexOf('https://script.google.com/macros/')!==0){
+    msg.style.color='#b91c1c'; msg.textContent='URLが違うようです。https://script.google.com/macros/s/.../exec の形で入れてください。'; return;
+  }
+  msg.style.color='#555'; msg.textContent='接続中…';
+  qcGasPostTo(url, 'ping', {}, function(res){
+    if(res && res.ok){ msg.style.color='#15803d'; msg.textContent='✓ つながりました（'+(res.msg||'OK')+'）'; }
+    else { msg.style.color='#b91c1c'; msg.textContent='応答はありましたが ping に対応していません。貼り付けたコードが古くないか確認してください。'; }
+  }, function(e){
+    msg.style.color='#b91c1c';
+    msg.textContent='つながりません: '+e.message+'　→ デプロイの「アクセスできるユーザー」が「全員」になっているか確認してください。';
+  });
+};
 
 function qcNgRenderPane(pane, g){
   pane.innerHTML=''; pane.className='qc-ng-pane';
@@ -10077,6 +10107,12 @@ window.qcNgOpenConfig = function(){
       + '<div class="qc-fld"><label>取得件数の上限</label><input type="text" id="qc-ng-limit" placeholder="500"></div>'
       + '<div class="qc-fld"><label>突合せから外すステータス（カンマ区切り）</label><input type="text" id="qc-ng-exst" placeholder="完了"></div>'
       + '<div class="qc-fld"><label>入力者の名前（在庫管理へ記入する名前。ユーザー選択の欄ならkintoneのログイン名）</label><input type="text" id="qc-ng-user" placeholder="深津健介"></div>'
+      + '<div class="qc-fld"><label>書き込み用GASのURL（記入・在庫調整・在庫投入に使う）</label>'
+      +   '<input type="text" id="qc-ng-wgas" placeholder="https://script.google.com/macros/s/..../exec">'
+      +   '<div style="display:flex;align-items:center;gap:8px;margin-top:5px;">'
+      +     '<button class="qc-ng-btn" onclick="qcNgTestWrite()">🔌 接続テスト</button>'
+      +     '<span style="font-size:11px;color:#64748b;">未登録でも照合（読み取り）は動きます。作り方は docs/kintone_write_gas_setup.md</span>'
+      +   '</div></div>'
       + '<div style="display:flex;gap:8px;">'
       +   '<div class="qc-fld" style="flex:1"><label>プロセス アクション①</label><input type="text" id="qc-ng-act1" placeholder="在庫調整"></div>'
       +   '<div class="qc-fld" style="flex:1"><label>プロセス アクション②（合格数量があるとき）</label><input type="text" id="qc-ng-act2" placeholder="在庫投入"></div>'
@@ -10102,6 +10138,7 @@ window.qcNgOpenConfig = function(){
   document.getElementById('qc-ng-limit').value = cfg.limit||500;
   document.getElementById('qc-ng-exst').value  = cfg.excludeStatus||'';
   document.getElementById('qc-ng-user').value  = cfg.user||'';
+  document.getElementById('qc-ng-wgas').value  = cfg.writeGas||'';
   document.getElementById('qc-ng-act1').value  = cfg.actAdjust||'';
   document.getElementById('qc-ng-act2').value  = cfg.actInput||'';
   QC_NG_FIELD_ROWS.forEach(function(p){ document.getElementById('qc-ng-f-'+p[0]).value = cfg.f[p[0]]||''; });
@@ -10122,6 +10159,7 @@ window.qcNgSaveConfig = function(){
   cfg.limit = parseInt(document.getElementById('qc-ng-limit').value)||500;
   cfg.excludeStatus = document.getElementById('qc-ng-exst').value.trim();
   cfg.user  = document.getElementById('qc-ng-user').value.trim();
+  cfg.writeGas = document.getElementById('qc-ng-wgas').value.trim();
   cfg.actAdjust = document.getElementById('qc-ng-act1').value.trim() || '在庫調整';
   cfg.actInput  = document.getElementById('qc-ng-act2').value.trim() || '在庫投入';
   QC_NG_FIELD_ROWS.forEach(function(p){ cfg.f[p[0]] = document.getElementById('qc-ng-f-'+p[0]).value.trim(); });

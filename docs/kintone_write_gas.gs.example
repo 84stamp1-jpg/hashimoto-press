@@ -1,112 +1,138 @@
 /**
- * 品質チェックGAS に追加する「kintoneへの書き込み」アクション
- * ------------------------------------------------------------------
- * 追加先: qualityGasUrl のスクリプト
- *   https://script.google.com/macros/s/AKfycbw3zssfr-pWlRcgMT4fhQ40HoOUeJHz7-_yYIcA0b4hxh2BXdWAPe96D2kXPizLzsqI/exec
+ * H-Hub → kintone 書き込み用 GAS（まるごと1ファイル・そのまま貼り付けて使う）
+ * =====================================================================
+ * これは「新しく作る」Apps Scriptプロジェクトの中身です。
+ * 既存の品質チェックGASには一切さわりません（壊す心配がありません）。
  *
- * H-Hub の 品質チェック →「システム入力待ち」→ 右の不良品報告ペインから、
- *   ・在庫管理の「入力者」「入力日」を書き込む      （op:'record'）
- *   ・プロセス管理を進める（在庫調整／在庫投入）     （op:'status'）
- * ために使う。読み取り側の getKintonePartData は既にあるので、これを足すだけでよい。
+ * 手順書: docs/kintone_write_gas_setup.md
  *
- * ■ 入れ方
- *   1. 上のURLのGASプロジェクトを開く
- *   2. 下の handleKintoneWrite_() を貼り付ける
- *   3. doPost の action 分岐に 1行足す（下の「■ doPost への差し込み」を参照）
- *   4. デプロイ →「デプロイを管理」→ 鉛筆アイコン → バージョン「新バージョン」→ デプロイ
- *      ★必ず既存のデプロイを編集すること。新規デプロイにするとURLが変わり、H-Hub側の設定も直す必要が出る
+ * 何をするか:
+ *   H-Hub の 品質チェック →「システム入力待ち」→ 右の不良品報告ペインから、
+ *     ・在庫管理の「入力者」「入力日」を書き込む   （op:'record'）
+ *     ・プロセス管理を進める（在庫調整／在庫投入） （op:'status'）
  *
- * ■ トークン
- *   kintone「★不良品報告」のAPIトークンに、閲覧に加えて
- *   「レコード編集」（プロセス管理を進めるなら「ステータス変更」も）の権限が要る。
- *   トークンはH-Hub側（各PCのlocalStorage）から毎回渡されるので、GASには保存しない。
+ * 安全のため:
+ *   ・APIトークンはこのGASに保存しません。H-Hub側（各PCのlocalStorage）から毎回届きます
+ *   ・書き込みを許すアプリIDを下の ALLOWED_APPS で限定しています
+ *   ・読み取り（照合）はこのGASを通りません。既存の品質チェックGASのままです
  */
 
-// ■ doPost への差し込み（既存の分岐に合わせて1行足す）
-//
-//   if (p.action === 'getKintonePartData') return json_(handleGetKintonePartData_(p));
-//   if (p.action === 'kintoneWrite')       return json_(handleKintoneWrite_(p));   // ★これを追加
-//
-//   ※ 既存コードの「JSONを返すヘルパー」の名前に合わせてください（json_ / out_ など）
+// 書き込みを許可するkintoneアプリID。★不良品報告=31。増やすときはカンマで足す
+var ALLOWED_APPS = ['31'];
+
+
+/** H-Hubからの受け口。ここが入口です */
+function doPost(e) {
+  var out;
+  try {
+    var p = JSON.parse(e.postData.contents);
+    if (p.action === 'ping') {
+      out = { ok: true, msg: '書き込み用GASは動いています' };
+    } else if (p.action === 'kintoneWrite') {
+      out = kintoneWrite_(p);
+    } else {
+      out = { ok: false, err: '知らないaction: ' + p.action };
+    }
+  } catch (err) {
+    out = { ok: false, err: String(err) };
+  }
+  return ContentService.createTextOutput(JSON.stringify(out))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+/** ブラウザでURLを直接開いたときの表示（動作確認用） */
+function doGet(e) {
+  return ContentService
+    .createTextOutput(JSON.stringify({ ok: true, msg: 'H-Hub kintone書き込み用GAS' }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
 
 
 /**
- * kintoneへの書き込み。
- * @param {Object} p H-Hubから届くリクエスト本体
+ * kintoneへの書き込み本体
  *   p.domain       'hashimoto-kogyo'
  *   p.appId        '31'
- *   p.token        APIトークン（編集権限つき）
+ *   p.token        APIトークン（レコード編集／ステータス変更の権限つき）
  *   p.op           'record'（フィールドを更新） / 'status'（プロセス管理を進める）
- *   p.id           レコード番号（$id）
+ *   p.id           レコード番号
  *   p.record       op='record' のとき { フィールドコード: {value: ...}, ... }
  *   p.statusAction op='status' のとき 実行するアクション名（例 '在庫調整'）
  *   p.assignee     op='status' で次の作業者を指定する場合のログイン名（任意）
  */
-function handleKintoneWrite_(p) {
-  try {
-    if (!p.domain || !p.appId || !p.token || !p.id) {
-      return { ok: false, err: 'domain / appId / token / id が足りません' };
-    }
-
-    var base = 'https://' + p.domain + '.cybozu.com/k/v1/';
-    var url, payload;
-
-    if (p.op === 'status') {
-      if (!p.statusAction) return { ok: false, err: 'statusAction（アクション名）が指定されていません' };
-      url = base + 'record/status.json';
-      payload = { app: p.appId, id: p.id, action: p.statusAction };
-      if (p.assignee) payload.assignee = p.assignee;
-
-    } else {
-      if (!p.record || !Object.keys(p.record).length) {
-        return { ok: false, err: 'record（更新する内容）が空です' };
-      }
-      url = base + 'record.json';
-      payload = { app: p.appId, id: p.id, record: p.record };
-    }
-
-    var res = UrlFetchApp.fetch(url, {
-      method: 'put',
-      contentType: 'application/json',
-      headers: { 'X-Cybozu-API-Token': p.token },
-      payload: JSON.stringify(payload),
-      muteHttpExceptions: true
-    });
-
-    var code = res.getResponseCode();
-    var text = res.getContentText();
-
-    if (code >= 200 && code < 300) {
-      var body = {};
-      try { body = JSON.parse(text); } catch (e) {}
-      return { ok: true, revision: body.revision || null };
-    }
-
-    // kintoneのエラーはそのまま返す。原因（権限不足・アクション名違い等）が画面で分かるようにする
-    var msg = text;
-    try {
-      var e = JSON.parse(text);
-      msg = (e.message || '') + (e.code ? '（' + e.code + '）' : '');
-      if (e.errors) msg += ' ' + JSON.stringify(e.errors);
-    } catch (e2) {}
-    return { ok: false, err: 'kintone ' + code + ': ' + msg };
-
-  } catch (err) {
-    return { ok: false, err: String(err) };
+function kintoneWrite_(p) {
+  if (!p.domain || !p.appId || !p.token || !p.id) {
+    return { ok: false, err: 'domain / appId / token / id が足りません' };
   }
+  if (ALLOWED_APPS.indexOf(String(p.appId)) < 0) {
+    return { ok: false, err: 'アプリID ' + p.appId + ' への書き込みは許可されていません（ALLOWED_APPSを確認）' };
+  }
+
+  var base = 'https://' + p.domain + '.cybozu.com/k/v1/';
+  var url, payload;
+
+  if (p.op === 'status') {
+    if (!p.statusAction) return { ok: false, err: 'statusAction（アクション名）が指定されていません' };
+    url = base + 'record/status.json';
+    payload = { app: p.appId, id: p.id, action: p.statusAction };
+    if (p.assignee) payload.assignee = p.assignee;
+
+  } else {
+    if (!p.record || !Object.keys(p.record).length) {
+      return { ok: false, err: 'record（更新する内容）が空です' };
+    }
+    url = base + 'record.json';
+    payload = { app: p.appId, id: p.id, record: p.record };
+  }
+
+  var res = UrlFetchApp.fetch(url, {
+    method: 'put',
+    contentType: 'application/json',
+    headers: { 'X-Cybozu-API-Token': p.token },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true
+  });
+
+  var code = res.getResponseCode();
+  var text = res.getContentText();
+
+  if (code >= 200 && code < 300) {
+    var body = {};
+    try { body = JSON.parse(text); } catch (e) {}
+    return { ok: true, revision: body.revision || null };
+  }
+
+  // kintone側のエラーはそのまま返す。原因が画面で分かるようにする
+  var msg = text;
+  try {
+    var er = JSON.parse(text);
+    msg = (er.message || '') + (er.code ? '（' + er.code + '）' : '');
+    if (er.errors) msg += ' ' + JSON.stringify(er.errors);
+  } catch (e2) {}
+  return { ok: false, err: 'kintone ' + code + ': ' + msg };
 }
 
+
 /**
- * よくあるエラー
- *  403 / GAIA_NO01  … トークンにレコード編集（またはステータス変更）の権限が無い。
- *                     kintoneでアクセス権を足したあと「アプリを更新」を押し忘れていないか確認。
- *  400 / GAIA_IL26  … statusAction のアクション名が、そのアプリのプロセス管理の設定と一致していない。
- *                     kintone → アプリの設定 → プロセス管理 で「アクション名」を確認し、
- *                     H-Hub の「⚙ 不良品報告の設定」の アクション①／② に同じ文字列を入れる。
- *  400 / GAIA_IQ11  … 現在のステータスからそのアクションは実行できない（順番が違う）。
- *  400 / CB_VA01    … フィールドの型と値が合っていない。
- *                     「入力者」がユーザー選択なら {value:[{code:'ログイン名'}]}、
- *                     文字列なら {value:'名前'} で送る必要がある（H-Hub側で型を見て切り替えている）。
- *                     ユーザー選択の場合、設定の「入力者の名前」は表示名ではなく
- *                     kintoneの<ログイン名>を入れること。
+ * ■ よくあるエラーと原因
+ *
+ *  つながりません / Failed to fetch
+ *      デプロイの「アクセスできるユーザー」が「全員」になっていない。
+ *      デプロイを管理 → 鉛筆 → アクセスできるユーザー: 全員 → デプロイ
+ *
+ *  403 / GAIA_NO01
+ *      APIトークンに「レコード編集」（プロセスなら「ステータス変更」）の権限が無い。
+ *      kintoneでアクセス権を足したあと、右上の「アプリを更新」を押し忘れていないか確認。
+ *
+ *  400 / GAIA_IL26
+ *      statusAction のアクション名が、そのアプリのプロセス管理の設定と一致していない。
+ *      kintone → アプリの設定 → プロセス管理 で「アクション名」を確認し、
+ *      H-Hubの「⚙ 不良品報告の設定」のアクション①／②に同じ文字列を入れる。
+ *
+ *  400 / GAIA_IQ11
+ *      いまのステータスからそのアクションは実行できない（順番が違う）。
+ *
+ *  400 / CB_VA01
+ *      フィールドの型と値が合っていない。
+ *      「入力者」がユーザー選択なら、設定の「入力者の名前」は表示名ではなく
+ *      kintoneの<ログイン名>を入れること。
  */
