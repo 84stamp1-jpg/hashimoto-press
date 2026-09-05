@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.05-8 : 「記入ボタンを押しても変わらない」の原因と、見出しの固定。(1)★条件が足りないボタンを disabled にしていたため、押しても本当に何も起きず「壊れている」ようにしか見えなかった。三点(不具合数量・廃棄数量・合格数量)のマスを押して確認するまで①は無効、という決まりが伝わっていなかったのが実害。disabled をやめ、blockWrite()/blockAdj()/blockIn() が押せない理由を返す形にして、押したら必ず赤枠でその理由を出すようにした(見た目は is-off で薄いまま)。書き込み用GAS未登録・入力者名が空・書き込み先の欄が未指定 も、alert ではなく同じ赤枠に出す。(2)「システム入力待ち」の操作行(件数・再取得・設定・閉じる)を position:sticky で上部に固定。下の報告を見ながら再取得や設定を押せる。(3)その行に読み込まれている版(QC_UI_VERSION)を小さく表示。GitHub Pagesのキャッシュで古い版を見ているのかどうかを、その場で確かめられるようにするため -->
 <!-- H-Hub v2026.09.05-7 : 「記入を押したがkintoneに反映されない」を、推測ではなく事実で切り分けられるようにした。従来はGASが ok:true を返した時点で「記入しました」と出していたため、GASまでは通っているのに kintone に入っていない場合を見分けられなかった。qcNgReread() を追加し、書き込みの直後に $id = <id> でそのレコードを読み直して、実際に値が入ったか／ステータスが変わったかを確かめてから結果を出す。入っていれば緑で「✓ kintoneに入りました（値）」、入っていなければ赤で「⚠ kintoneに反映されていません」と、書き込み先に指定している欄のコードを添えて出す(フィールドコード違いが最有力のため)。②在庫調整の解放も、読み直して確認できたときだけにした。ステータスも同様に 変更前→変更後 を照合し、変わっていなければアクション名の不一致を疑うよう促す。あわせて結果表示(.qc-ng-done)に枠と背景を付け、scrollIntoViewで見える位置へ寄せる(小さい文字で下に出していたため見落とされていた) -->
 <!-- H-Hub v2026.09.05-6 : 「在庫管理に記入」が押せない件と、手順の順序。(1)三点(不具合数量・廃棄数量・合格数量)は押して確認する仕組みだったが、押せることが画面から分からず、3つ揃うまでボタンがグレーのまま＝理由も出ないので詰まっていた。セルに ☐/☑ を付け、上に「↓ 3つとも押して確認してください（n/3）」を出し、揃うと緑で「☑ 三点を確認しました」に変える。(2)ボタンが押せない理由を必ず文字で出すようにした(.qc-ng-need)。$idが取れていない場合もその旨を出す。グレーのボタンだけでは何が足りないか分からないため。(3)現場の流れ(在庫管理に記入 → 在庫調整)に合わせ、①在庫管理に記入 ②在庫調整 ③在庫投入 と番号を振り、②は①が済むまで押せないようにした。①が済んでいるかは、kintone側に入力者/入力日が既に入っているか、またはこの画面で書いたかで判定する。③は従来どおり合格数量>0のときだけ。記入済みのレコードでは①を押せなくし、三点の確認も促さない -->
 <!-- H-Hub v2026.09.05-5 : 不良品報告ペインに4点。(1)ステータス「品質確認中」の背景を薄い黄色(#fff4cc)にした。まだ品管の手を離れていないものが目に留まるようにするため。(2)報告した人を「発見者」として表示（kintone側の呼び方に合わせた。自動判別も 発見者→作業者→担当者 の順に変更）。(3)「実績入力」の有無を緑/赤のバッジで表示。値が入っていれば有、'無/なし/未'なら無。見る欄は⚙設定で指定できる。(4)在庫管理「i-PRO W 入力者」はルックアップなので、kintoneが受け付けるのは"コピー元アプリのキーの値"だけ。文字列で渡せばkintoneが引き当ててくれる（USER_SELECTのときだけ{code:ログイン名}が要る）ので送り方は従来どおりで正しいが、どの値なら合うのか分からないため、⚙設定の「入力者の名前」を datalist にして、すでにkintoneに入っている値から選べるようにした（既存の値は必ず引き当てに成功する）。欄の型（ルックアップ/ユーザー選択/文字列）も判定して説明を出し、引き当て失敗のエラーには原因の一言を添える -->
@@ -612,6 +613,8 @@ html, body {
 .qc-ng-btn{font-size:11px;font-weight:700;border-radius:6px;padding:4px 9px;cursor:pointer;border:1px solid #1F4E79;background:#fff;color:#1F4E79;}
 .qc-ng-btn:hover:not(:disabled){background:#eef4fb;}
 .qc-ng-btn:disabled{opacity:.4;cursor:not-allowed;}
+/* 条件が足りないボタン。押すと理由が出るので cursor は pointer のままにする */
+.qc-ng-btn.is-off{opacity:.45;}
 .qc-ng-btn.go{border-color:#0f766e;color:#0f766e;}
 .qc-ng-btn.go:hover:not(:disabled){background:#effcfa;}
 /* 書き込みの結果。小さい文字だと見落とすので、枠と背景を付けて必ず目に入るようにする */
@@ -625,6 +628,10 @@ html, body {
   .qc-pair > .qc-rec{flex:1 1 auto;max-width:none;width:auto;box-sizing:border-box;}
   .qc-ng-pane{flex:1 1 auto;max-width:none;width:auto;box-sizing:border-box;}
 }
+/* スクロールしても操作行が残るようにする（下の方の報告を見ながら再取得・閉じるを押せるように） */
+.qc-pending-hdr{position:sticky;top:0;z-index:20;display:flex;justify-content:space-between;align-items:center;
+  gap:8px;margin-bottom:10px;padding:8px;background:#ffebee;border-radius:8px;border-left:4px solid #E24B4A;
+  box-shadow:0 2px 6px rgba(0,0,0,.10);}
 .qc-refresh-note{font-size:11px;color:#64748b;text-align:right;padding:2px 2px 6px;}
 .qc-alloc-card{background:#fff;border-radius:12px;padding:14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-top:3px solid #854F0B;}
 .qc-alloc-title{font-size:13px;font-weight:700;color:#854F0B;margin-bottom:10px;}
@@ -9680,8 +9687,11 @@ window.qcShowPendingList = function(){
   var sa=document.getElementById('qc-summary-area'); if(sa) sa.innerHTML='';
   qcSetRefreshNote('');
   var el=document.getElementById('qc-rec-list'); el.innerHTML='';
-  var hdr=document.createElement('div'); hdr.style.cssText='display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;padding:8px;background:#ffebee;border-radius:8px;border-left:4px solid #E24B4A;';
-  var lbl=document.createElement('span'); lbl.style.cssText='font-size:13px;color:#E24B4A;font-weight:700;'; lbl.textContent='⚠️ システム入力待ち: '+pending.length+'件';
+  var hdr=document.createElement('div'); hdr.className='qc-pending-hdr';
+  var lbl=document.createElement('span'); lbl.style.cssText='font-size:13px;color:#E24B4A;font-weight:700;white-space:nowrap;';
+  lbl.textContent='⚠️ システム入力待ち: '+pending.length+'件';
+  var ver=document.createElement('span'); ver.style.cssText='font-size:10px;color:#94a3b8;margin-left:8px;font-weight:400;';
+  ver.textContent=QC_UI_VERSION; lbl.appendChild(ver);
   var btns=document.createElement('span'); btns.style.cssText='display:flex;gap:6px;';
   var ngBtn=document.createElement('button'); ngBtn.textContent='🔄 不良品報告を再取得'; ngBtn.style.cssText='padding:4px 10px;background:#fff;color:#1F4E79;border:1px solid #1F4E79;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;';
   ngBtn.onclick=function(){ QC_NG_RECORDS=null; qcNgFetch(true); };
@@ -9721,6 +9731,7 @@ window.qcShowPendingList = function(){
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
+var QC_UI_VERSION = 'v2026.09.05-8';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -10149,16 +10160,36 @@ function qcNgMakeItem(r, g){
   // 在庫管理に記入済みか（kintoneに既に値がある／この画面で書いた）
   var written = !!(wroteUser || wroteDate);
 
+  // 押せない理由を返す（null なら押せる）。
+  // ★ disabled にすると押しても何も起きず、利用者には「壊れている」ようにしか見えない。
+  //   常に押せるようにして、条件が足りなければ理由を出す。
+  function blockWrite(){
+    var n = (chk.ng?1:0)+(chk.scrap?1:0)+(chk.ok?1:0);
+    if(!id)      return 'レコード番号($id)が取れていません。⚙設定の「🧾 列を確認」で $id が返っているか見てください。';
+    if(written)  return 'この報告はすでに在庫管理へ記入済みです。②在庫調整へ進んでください。';
+    if(n<3)      return '先に三点を確認してください。不具合数量・廃棄数量・合格数量の3つのマスを押すと ☑ が付きます（いま '+n+'/3）。';
+    return null;
+  }
+  function blockAdj(){
+    if(!id)      return 'レコード番号($id)が取れていません。';
+    if(!written) return '先に①「在庫管理に記入」を済ませてください。（記入 → 在庫調整 の順です）';
+    return null;
+  }
+  function blockIn(){
+    if(!id)      return 'レコード番号($id)が取れていません。';
+    if(!written) return '先に①「在庫管理に記入」を済ませてください。';
+    if(!(nOk>0)) return '合格数量がないため在庫投入は進められません。';
+    return null;
+  }
+
   function syncButtons(){
     var n = (chk.ng?1:0)+(chk.scrap?1:0)+(chk.ok?1:0);
     var all3 = n===3;
 
-    // ① 三点を確認してから記入
-    bWrite.disabled = !all3 || !id || written;
-    // ② 在庫管理に記入してから在庫調整（現場の流れ：記入 → 在庫調整）
-    bAdj.disabled   = !id || !written;
-    // ③ 合格数量があるときだけ在庫投入
-    bIn.disabled    = !id || !written || !(nOk>0);
+    // 見た目だけグレーにする（押すこと自体はできる＝理由を出せる）
+    bWrite.className = 'qc-ng-btn'    + (blockWrite()?' is-off':'');
+    bAdj.className   = 'qc-ng-btn go' + (blockAdj()  ?' is-off':'');
+    bIn.className    = 'qc-ng-btn go' + (blockIn()   ?' is-off':'');
 
     // 記入済みならもう確認を促す必要はない
     numsHead.textContent = written ? '記入済み'
@@ -10166,21 +10197,24 @@ function qcNgMakeItem(r, g){
                                  : '↓ 3つとも押して確認してください（'+n+'/3）');
     numsHead.className = 'qc-ng-nums-head'+((all3||written)?' ok':'');
 
-    var why='';
-    if(!id) why='レコード番号($id)が取れていません。⚙設定の「🧾 列を確認」で $id が返っているか見てください';
-    else if(!written && !all3) why='まず①：3つの数量を押して確認してください（'+n+'/3）';
+    // いま何ができるのかを常に1行で出す（グレーのボタンだけでは伝わらない）
+    var why;
+    if(!id)                    why='レコード番号($id)が取れていません。⚙設定の「🧾 列を確認」で $id が返っているか見てください';
+    else if(!written && !all3) why='まず①：3つの数量のマスを押して確認してください（'+n+'/3）';
     else if(!written)          why='①「在庫管理に記入」が押せます';
     else if(nOk>0)             why='①は記入済みです。②在庫調整 → ③在庫投入 と進めてください';
     else                       why='①は記入済みです。②在庫調整へ進めてください（合格数量がないため③はありません）';
     need.textContent = why;
 
-    bWrite.title = written ? 'すでに記入済みです' : (all3?'在庫管理の入力者・入力日に記入します':'3つの数量を確認してから押せます');
-    bAdj.title   = written ? '' : '先に①在庫管理へ記入してください';
-    bIn.title    = !written ? '先に①在庫管理へ記入してください' : ((nOk>0)?'':'合格数量がないため進めません');
+    bWrite.title = blockWrite() || '在庫管理の入力者・入力日に記入します';
+    bAdj.title   = blockAdj()   || '';
+    bIn.title    = blockIn()    || '';
   }
   syncButtons();
 
   function busy(btn, on, label){ btn.disabled=on; btn.textContent = on ? '処理中…' : label; if(!on) syncButtons(); }
+  // 条件が足りないまま押されたとき：理由を出して、直すべき場所へ目を向けさせる
+  function refuse(why){ show(why, true); }
   function show(txt, bad){
     msg.style.display='block';
     msg.className = 'qc-ng-done'+(bad?' bad':'');
@@ -10190,8 +10224,10 @@ function qcNgMakeItem(r, g){
   }
 
   bWrite.onclick=function(){
-    if(!cfg.user){ alert('「⚙ 不良品報告の設定」で「入力者の名前」を登録してください。'); return; }
-    if(!f.inpUser && !f.inpDate){ alert('在庫管理の「入力者」「入力日」のフィールドコードが判別できませんでした。\n「⚙ 不良品報告の設定」→「🧾 列を確認」で指定してください。'); return; }
+    var whyW = blockWrite(); if(whyW){ refuse(whyW); return; }
+    if(!cfg.writeGas){ refuse('書き込み用GASのURLが未登録です。⚙設定の「書き込み用GASのURL」に入れて、「🔌 接続テスト」で確かめてください。'); return; }
+    if(!cfg.user){ refuse('⚙設定の「入力者の名前」が空です。在庫管理へ書く値を登録してください（欄を押すと、すでにkintoneに入っている値から選べます）。'); return; }
+    if(!f.inpUser && !f.inpDate){ refuse('書き込み先の欄が指定されていません。⚙設定 →「🧾 列を確認」で、在庫管理の「入力者」「入力日」のフィールドコードを入れてください。'); return; }
     var today=new Date(), ds=today.getFullYear()+'-'+('0'+(today.getMonth()+1)).slice(-2)+'-'+('0'+today.getDate()).slice(-2);
     if(!confirm('kintoneの不良品報告に記入します。\n\n'
       +'　品番: '+qcNgVal(r,f.hinban)+'\n'
@@ -10265,9 +10301,12 @@ function qcNgMakeItem(r, g){
       });
     }, function(e){ busy(btn,false,label); show('進められませんでした: '+e, true); });
   }
-  bAdj.onclick=function(){ advance(bAdj, cfg.actAdjust||'在庫調整', '② '+(cfg.actAdjust||'在庫調整')); };
+  bAdj.onclick=function(){
+    var why = blockAdj(); if(why){ refuse(why); return; }
+    advance(bAdj, cfg.actAdjust||'在庫調整', '② '+(cfg.actAdjust||'在庫調整'));
+  };
   bIn.onclick =function(){
-    if(!(nOk>0)){ alert('合格数量がないため在庫投入は進められません。'); return; }
+    var why = blockIn(); if(why){ refuse(why); return; }
     advance(bIn, cfg.actInput||'在庫投入', '③ '+(cfg.actInput||'在庫投入'));
   };
 
