@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.06-2 : ★②在庫調整 完（システム）が通り、kintone側で「作業者以外でも実行できるアクション」を作れば動くことを実機で確認。それに伴い、完了になった報告が一覧に残り続けていたのを直した。突合せから外れるステータス(既定は完了)になったら、結果を1.4秒見せてから薄れて消え、その品番の報告が全部なくなればペインを描き直す。※このとき単純に描き直すと「⚠ この品番の不良品報告が見つかりません」と赤で出てしまい、片付けたのに叱られているように見える。qcNgMatch(hinban, includeExcluded) を足して「1件も無い」のか「全部片付いた」のかを見分け、後者は緑で「✓ この品番の不良品報告 N件 は、すべて処理が終わっています」と出すようにした -->
 <!-- H-Hub v2026.09.06-1 : (1)★②が進まない原因が確定。kintoneが GAIA_NT02「このアクションは作業者のみ実行できます」を返した。App31の在庫調整中は作業者が深津健介に限定されており、H-HubはAPIトークンで呼ぶためトークンに利用者がおらず、何度押しても通らない。アクション名の問題ではない。kintone側で プロセス管理 →「＋ 作業者以外でも実行できるアクションを作成する」から同じ行き先のアクションを作り、その名前を⚙設定に入れる必要がある。この案内をエラー時に出すようにした。(2)不良品報告の取得が遅い／Failed to fetch で消える件。500件×全フィールドはGASの往復に数秒かかるのに毎回待たせ、失敗すると表示が消えていた。localStorage(qcNgRecordsCache)に前回分を持ち、開いた瞬間に描画してから裏で差し替える方式に変更（実測8〜9ms）。Failed to fetch は1.5秒後に一度だけ自動で再試行し、それでも駄目なら前回のデータを残したまま「⚠最新の取得に失敗。下は◯◯時点のデータです」と断る。※再試行は qcNgFetch(true,...) で呼ぶこと（force=falseだとキャッシュ復元済みのため冒頭の早期returnで弾かれ再試行が走らない）。※stale状態は再描画で'ok'に戻さない（断りが消えるため） -->
 <!-- H-Hub v2026.09.05-14 : 設定の取り違えを保存時に止めるようにした。(1)アクション名の欄にステータス名（在庫調整中／在庫投入中）を入れてしまう間違いが起きた。プロセス管理の画面は左がステータス・右がアクションで、見分けがつきにくいのが原因。取得済みレコードのステータス値を集める qcNgKnownStatuses() を追加し、アクション名の欄がそのいずれかと一致したら保存時に赤字で知らせ、モーダルを閉じない。(2)「次の作業者」に表示名（深津健介）を入れると kintone が GAIA_IL26「指定したユーザーが見つかりません」を返す。ここはログイン名しか受け付けない。GAIA_IL26 はアクション名の不一致でも同じ番号なので、返ってきた文面に「ユーザー」「code：」が含まれるかで案内を振り分けるようにした。あわせて設定の説明を「ふつうは空欄のまま。入れるなら表示名ではなくログイン名」に書き換えた。※結果表示は textContent なのでHTMLタグを書かないこと（そのまま文字として出る） -->
 <!-- H-Hub v2026.09.05-13 : 「在庫投入 完」(在庫投入中→完了)は製造の担当なので、この画面から外した。品管が触るのは ①在庫管理に記入 → ②在庫調整 完（合格数量がなければ完了）／③在庫投入（合格数量があれば在庫投入中まで）の3つまで。設定のアクション欄も2つに戻している。ボタンの出し分けはいまのステータスで行い、すでに在庫投入中のレコードは3つとも押せない状態にして「この画面での作業は済んでいます（ここから先の完了は製造が行います）」と出す -->
@@ -596,6 +597,7 @@ html, body {
 .qc-ng-open:hover{background:#eef4fb;}
 .qc-ng-warn{color:#b91c1c;font-weight:700;font-size:12px;}
 .qc-ng-muted{color:#94a3b8;font-size:11px;}
+.qc-ng-done-all{color:#15803d;font-weight:700;font-size:12px;}
 .qc-ng-newbtn{font-size:11px;font-weight:700;color:#b45309;text-decoration:none;border:1px solid #f59e0b;background:#fffbeb;border-radius:6px;padding:3px 9px;display:inline-block;margin-top:6px;}
 /* 三点（不具合数量・廃棄数量・合格数量）。押すと確認済みの✓が付く */
 .qc-ng-nums-head{font-size:11px;font-weight:700;color:#b45309;margin-top:7px;}
@@ -9771,7 +9773,7 @@ window.qcShowPendingList = function(){
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.06-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.06-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -9992,13 +9994,15 @@ function qcNgExcluded(rec){
 }
 
 // この品番に対する不良品報告を探す（1品番に複数あるのが普通なので全部返す）
-function qcNgMatch(hinban){
+// includeExcluded=true なら「完了」なども含めて返す。
+// 処理済みが1件も無いのか、それとも全部片付いたのかを見分けるために使う。
+function qcNgMatch(hinban, includeExcluded){
   if(!QC_NG_RECORDS || !hinban) return [];
   var code = qcNgCfg().f.hinban; if(!code) return [];
   var target = qcNgNorm(hinban);
   var exact=[], partial=[];
   QC_NG_RECORDS.forEach(function(rec){
-    if(qcNgExcluded(rec)) return;
+    if(!includeExcluded && qcNgExcluded(rec)) return;
     var v = qcNgNorm(qcNgVal(rec, code)); if(!v) return;
     if(v===target){ rec.__qcExact=true; exact.push(rec); }
     else if(v.indexOf(target)>=0 || target.indexOf(v)>=0){ rec.__qcExact=false; partial.push(rec); }
@@ -10144,6 +10148,15 @@ function qcNgRenderPane(pane, g){
   var hits = qcNgMatch(g.hinban);
 
   if(!hits.length){
+    // 報告はあるが全部「完了」になっている場合。
+    // ここで「報告が見つかりません」と赤く出すと、片付けたのに叱られているように見える
+    var everAny = qcNgMatch(g.hinban, true);
+    if(everAny.length){
+      pane.classList.add('qc-ng-hit');
+      line('✓ この品番の不良品報告 '+everAny.length+'件 は、すべて処理が終わっています','qc-ng-done-all');
+      line('（ステータスが「'+(cfg.excludeStatus||'完了')+'」のものは突合せから外しています）','qc-ng-muted');
+      return;
+    }
     if(rec.total>0){
       pane.classList.add('qc-ng-miss');
       line('⚠ この品番の不良品報告が見つかりません','qc-ng-warn');
@@ -10461,6 +10474,22 @@ function qcNgMakeItem(r, g){
         if(after && after!==before){
           show('✓ ステータスが「'+before+'」→「'+after+'」に変わりました');
           btn.disabled=true;
+          // 「完了」など突合せ対象から外れるステータスになったら、一覧から消す。
+          // 済んだものが残っていると、どれがまだ残っているのか分からなくなるため。
+          if(qcNgExcluded(fresh)){
+            setTimeout(function(){
+              var pane = it.parentNode;
+              it.style.transition='opacity .45s';
+              it.style.opacity='0';
+              setTimeout(function(){
+                if(it.parentNode) it.parentNode.removeChild(it);
+                // 最後の1件だったらペインごと描き直す（「すべて処理が終わっています」に変わる）
+                if(pane && pane.classList.contains('qc-ng-pane') && !pane.querySelector('.qc-ng-item')){
+                  qcNgRenderPane(pane, g);
+                }
+              }, 470);
+            }, 1400);   // 結果を読む時間を置いてから消す
+          }
         } else {
           show('⚠ ステータスが変わっていません（'+(after||'—')+'のまま）。'
              +'アクション名「'+actionName+'」が、kintoneのプロセス管理の設定と一致しているか確かめてください。', true);
