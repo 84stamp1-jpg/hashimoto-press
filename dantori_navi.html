@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.05-4 : 不良品報告ペインの3点。(1)「🔌 接続テスト」を押しても何も起きないように見えた件。ボタン自体は動いていたが、結果をモーダル下端の共通メッセージ欄(#qc-ng-cfg-msg)に出しており、フィールドが並ぶ長いモーダルでは画面外だった。ボタンの真横(#qc-ng-wgas-msg)に出すようにし、ボタンも折り返さないようにした。(2)同じレコードの中の不具合数量・廃棄数量を、合計だけでなく明細で一覧表示。qcNgSubRows()がサブテーブルの各行から数量と同じ行の他の列(不具合内容・廃棄内容)を取り出す。合計と✓による三点確認はそのまま残している。(3)並び順を不具合発生日の古い順にした(日付なしはその組の最後)。品番が完全一致でないもの(参考表示)は、日付に関わらず常に下にまとめる -->
 <!-- H-Hub v2026.09.05-3 : kintoneへの書き込み(在庫管理の記入・在庫調整/在庫投入)を、既存の品質チェックGASに手を入れずに済むようにした。前版は品質チェックGASへ kintoneWrite を足す前提だったが、あれは記録の保存・読み込みに毎日使っているもので、直し損ねると品質チェックそのものが止まる。書き込み専用の別GASを1つ立ててそちらへ投げる形に変更(qcNgWriteUrl)。qcGasPost を qcGasPostTo(url,...) に分け、URLを指定して叩けるようにしている(ヘッダーは付けない。付けるとプリフライトが飛んでCORSで落ちる)。「⚙ 不良品報告の設定」に「書き込み用GASのURL」と「🔌 接続テスト」(ping)を追加。未登録でも照合(読み取り)は今までどおり動き、書き込みボタンを押したときだけ理由を出して止まる。GASのコードは docs/kintone_write_gas.gs.example に全文(そのまま貼るだけ・doPost込み)、作成手順は docs/kintone_write_gas_setup.md -->
 <!-- H-Hub v2026.09.05-2 : システム入力待ちの不良品報告ペインを実用形に。(1)記録カードを元の幅(476px)へ戻した。前版はカードを986pxまで広げたため中央に余白ができて読みにくかった。広げるのはコンテナだけ(980px＝カード476＋ペイン)にした。(2)ステータスが「完了」の報告は突合せから外す(⚙設定でカンマ区切り変更可)。(3)1品番に報告が複数あるのが普通なので全件出す(件数も表示)。(4)不具合数量・廃棄数量・合格数量の三点を表示。不具合数量と廃棄数量は「不具合一覧」「品質管理【処置結果】」のサブテーブル内にあるため、qcNgFindField()がテーブルの中まで探して全行を合計する。「🧾 列を確認」もテーブルの中の列を字下げして出す。(5)三点はそれぞれ押すと✓が付き、3つ揃うと「✓ 在庫管理に記入」が押せる(在庫管理の入力者・入力日へ書き込み)。(6)「▶在庫調整」「▶在庫投入」でプロセス管理を進める。在庫投入は合格数量>0のときだけ押せる。書き込みは毎回 confirm で内容を出してから実行する。※(5)(6)は品質チェックGASに kintoneWrite アクションの追加が必要(docs/kintone_write_gas.gs.example)。未追加の場合はその旨をペインに表示する -->
 <!-- H-Hub v2026.09.05-1 : 品質チェックタブを3点直した。(1)表示が遅い件。記録一覧(getRecords)はGASの往復に数秒かかるのに、タブ初期化・日別一覧・製造番号検索がそれぞれ別々に投げていた(同じ通信が2〜3本重なる)うえ、返るまで画面を「読み込み中...」で空にしていたため、バッジを押すまで何も出ないように見えていた。localStorageのqcAllRecordsCacheを実際に読むようにし(以前は書くだけで読んでいなかった)、手元のデータを即描画→裏で最新に差し替える方式に変更。qcFetchRecords()で多重リクエストも1本にまとめた。(2)製造番号・部品番号をワンタップでコピーできるチップにした。行ごと選択すると「製造番号: 」まで入ってしまい、社内システムへの貼り付けで直す手間があったため、番号だけをクリップボードへ入れる。(3)システム入力待ちの一覧に、kintone「★不良品報告」を右ペインで並べた。記録した不良が報告に挙がっているかを画面を移動せずに確かめられる。品番で突き合わせ、不良の記録があるのに報告が無い場合は赤で警告、報告があれば「kintoneで開く」で該当レコードへ直行する。一覧の幅上限(500px)はこの画面だけ外している。※LOGINUSER()はAPIトークンでは効かないため、ビューの絞り込みではなく直近レコードを取って品番照合する方式にした。トークンとフィールドコードは「⚙ 不良品報告の設定」から登録(このPCのlocalStorageのみ・リポジトリには入らない) -->
@@ -589,6 +590,12 @@ html, body {
 .qc-ng-num-v{font-size:14px;font-weight:700;color:#1F4E79;display:block;line-height:1.3;}
 .qc-ng-num.on .qc-ng-num-v{color:#15803d;}
 .qc-ng-num-v.zero{color:#94a3b8;}
+/* サブテーブルの明細（不具合一覧・廃棄の内訳） */
+.qc-ng-rows{margin-top:5px;border:1px solid #e6ebf1;border-radius:7px;overflow:hidden;}
+.qc-ng-rows-h{font-size:10px;font-weight:700;color:#475569;background:#f1f5f9;padding:2px 7px;}
+.qc-ng-row{display:flex;gap:7px;font-size:11px;padding:2px 7px;border-top:1px solid #f0f4f8;}
+.qc-ng-row-q{flex:0 0 46px;text-align:right;font-weight:700;color:#1F4E79;}
+.qc-ng-row-t{color:#555;word-break:break-all;}
 .qc-ng-acts{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;}
 .qc-ng-btn{font-size:11px;font-weight:700;border-radius:6px;padding:4px 9px;cursor:pointer;border:1px solid #1F4E79;background:#fff;color:#1F4E79;}
 .qc-ng-btn:hover:not(:disabled){background:#eef4fb;}
@@ -9783,6 +9790,31 @@ function qcNgNumber(rec, hint){
   return seen ? sum : null;
 }
 
+// サブテーブルの明細を1行ずつ取る。
+// 「不具合数量 1個／汚損」「不具合数量 19個／寸法不良」のように、
+// 同じレコードの中の内訳を合計だけでなく一覧で見せるため。
+function qcNgSubRows(rec, hint){
+  var loc = qcNgFindField(rec, hint);
+  if(!loc || !loc.sub) return [];
+  var rows = (rec[loc.sub] && rec[loc.sub].value) || [];
+  function txt(x){
+    if(x===null||x===undefined) return '';
+    if(Array.isArray(x)) return x.map(function(y){ return (y&&typeof y==='object') ? (y.name||y.code||'') : String(y); }).filter(Boolean).join('・');
+    if(typeof x==='object') return x.name||x.code||'';
+    return String(x);
+  }
+  return rows.map(function(row){
+    var v = row.value || {};
+    var qty = v[loc.code] ? txt(v[loc.code].value) : '';
+    // 同じ行の数量以外の列を、そのまま内容として並べる（不具合内容・廃棄内容など）
+    var label = Object.keys(v).filter(function(c){ return c!==loc.code; })
+      .map(function(c){ return txt(v[c].value); })
+      .filter(function(t){ return t && t.trim(); })
+      .join(' / ');
+    return { qty:qty, label:label };
+  }).filter(function(r){ return String(r.qty).trim()!=='' || r.label; });
+}
+
 // フィールドコードが未設定なら、レコードの中身から推測する
 function qcNgGuessFields(rec){
   if(!rec) return;
@@ -9846,6 +9878,17 @@ function qcNgMatch(hinban){
     if(v===target){ rec.__qcExact=true; exact.push(rec); }
     else if(v.indexOf(target)>=0 || target.indexOf(v)>=0){ rec.__qcExact=false; partial.push(rec); }
   });
+  // 不具合発生日の古い順。日付が入っていないものはその組の最後に置く
+  var dcode = qcNgCfg().f.date;
+  function byDate(a,b){
+    var da=dcode?qcNgVal(a,dcode):'', db=dcode?qcNgVal(b,dcode):'';
+    if(!da && !db) return 0;
+    if(!da) return 1;
+    if(!db) return -1;
+    return da < db ? -1 : (da > db ? 1 : 0);
+  }
+  exact.sort(byDate); partial.sort(byDate);
+  // 品番が完全一致のものが先。部分一致（参考表示）は下にまとめる
   return exact.concat(partial);
 }
 
@@ -9896,7 +9939,7 @@ function qcNgWrite(op, payload, okCb, errCb){
 }
 // 書き込み用GASが生きているか確かめる
 window.qcNgTestWrite = function(){
-  var msg=document.getElementById('qc-ng-cfg-msg');
+  var msg=document.getElementById('qc-ng-wgas-msg') || document.getElementById('qc-ng-cfg-msg');
   var url=(document.getElementById('qc-ng-wgas').value||'').trim();
   if(!url){ msg.style.color='#b91c1c'; msg.textContent='書き込み用GASのURLを入れてください。'; return; }
   if(url.indexOf('https://script.google.com/macros/')!==0){
@@ -10006,6 +10049,21 @@ function qcNgMakeItem(r, g){
   });
   it.appendChild(nums);
 
+  // ---- 同じレコードの中の内訳（不具合一覧・廃棄）を一覧で出す ----
+  [[f.qtyNg,'不具合'],[f.qtyScrap,'廃棄']].forEach(function(pair){
+    var rows = qcNgSubRows(r, pair[0]);
+    if(!rows.length) return;
+    var box=document.createElement('div'); box.className='qc-ng-rows';
+    var h=document.createElement('div'); h.className='qc-ng-rows-h'; h.textContent=pair[1]+'（'+rows.length+'件）'; box.appendChild(h);
+    rows.forEach(function(row){
+      var d=document.createElement('div'); d.className='qc-ng-row';
+      var q=document.createElement('span'); q.className='qc-ng-row-q'; q.textContent=(row.qty===''?'—':row.qty+'個');
+      var t=document.createElement('span'); t.className='qc-ng-row-t'; t.textContent=row.label||'—';
+      d.appendChild(q); d.appendChild(t); box.appendChild(d);
+    });
+    it.appendChild(box);
+  });
+
   if(f.memo && qcNgVal(r,f.memo)){ var l3=document.createElement('div'); l3.className='qc-ng-line'; l3.style.color='#7c5a12'; l3.textContent='📝 '+qcNgVal(r,f.memo); it.appendChild(l3); }
   if(!r.__qcExact){ var pm=document.createElement('div'); pm.className='qc-ng-line'; pm.style.color='#b45309'; pm.textContent='※ 品番が完全一致ではありません（参考表示）'; it.appendChild(pm); }
 
@@ -10110,8 +10168,9 @@ window.qcNgOpenConfig = function(){
       + '<div class="qc-fld"><label>書き込み用GASのURL（記入・在庫調整・在庫投入に使う）</label>'
       +   '<input type="text" id="qc-ng-wgas" placeholder="https://script.google.com/macros/s/..../exec">'
       +   '<div style="display:flex;align-items:center;gap:8px;margin-top:5px;">'
-      +     '<button class="qc-ng-btn" onclick="qcNgTestWrite()">🔌 接続テスト</button>'
-      +     '<span style="font-size:11px;color:#64748b;">未登録でも照合（読み取り）は動きます。作り方は docs/kintone_write_gas_setup.md</span>'
+      +     '<button class="qc-ng-btn" style="white-space:nowrap;" onclick="qcNgTestWrite()">🔌 接続テスト</button>'
+      // ★結果はボタンの真横に出す。モーダル下端の共通メッセージ欄だと画面外で見えない
+      +     '<span id="qc-ng-wgas-msg" style="font-size:12px;font-weight:700;color:#64748b;">未登録でも照合（読み取り）は動きます</span>'
       +   '</div></div>'
       + '<div style="display:flex;gap:8px;">'
       +   '<div class="qc-fld" style="flex:1"><label>プロセス アクション①</label><input type="text" id="qc-ng-act1" placeholder="在庫調整"></div>'
