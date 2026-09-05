@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.05-10 : kintoneの GAIA_LO04（ルックアップの引き当て失敗）への対応。原因は2つあり、(a)値が参照先のキーと一致していない (b)★参照先アプリを読む権限がない。APIトークンは1アプリ分の権限しか持たないため、i_PRO_W_入力者 のようなルックアップ欄へ書くとき、kintoneは参照先（社員マスタ等）を読めず (b) で弾く。kintoneは X-Cybozu-API-Token にカンマ区切りで複数トークンを受け付けるので、⚙設定に「参照先アプリのAPIトークン」を追加し、cfg.token+','+cfg.token2 として送るようにした（GAS側は受け取ったトークンをそのままヘッダーに入れているので変更不要）。あわせて GAIA_LO04 のときは原因2つと、いま入っている値・kintoneに実在する値を並べて出す。設定保存時にも、入力者の名前が実在の値と一致しない場合はモーダルを閉じずに警告する。※結果表示に white-space:pre-wrap を付けて改行を効かせている -->
 <!-- H-Hub v2026.09.05-9 : 「①在庫管理に記入は押せるが何も起きない」の原因は2つあった。(1)★確認に window.confirm() を使っていた。Chromeは同じページが繰り返しダイアログを出すと「このページでこれ以上ダイアログを生成しない」を表示し、一度チェックされると以後 confirm() は何も表示せず false を返す。動作確認で何度も押した結果その状態になっており、押す→confirmがfalse→即return で本当に何も起きなかった。ブラウザのダイアログをやめ、カード内に確認の箱(askInline)を出す方式に変更。alert も既に赤枠表示へ置き換え済みなので、この画面はブラウザのダイアログを一切使わない。(2)★書き込みの直後に、裏で走っていた記録の再取得(getRecords)が終わると qcRenderCurrentList() が入力待ち一覧を丸ごと作り直しており、☑や確認の途中、結果の緑/赤の枠が消えていた。QC_NG_INTERACTING を追加し、一度でも操作を始めたら作り直さないようにした(🔄再取得／✕閉じる で解除)。confirmを常にfalseにした状態で①→②まで通ることを確認済み -->
 <!-- H-Hub v2026.09.05-8 : 「記入ボタンを押しても変わらない」の原因と、見出しの固定。(1)★条件が足りないボタンを disabled にしていたため、押しても本当に何も起きず「壊れている」ようにしか見えなかった。三点(不具合数量・廃棄数量・合格数量)のマスを押して確認するまで①は無効、という決まりが伝わっていなかったのが実害。disabled をやめ、blockWrite()/blockAdj()/blockIn() が押せない理由を返す形にして、押したら必ず赤枠でその理由を出すようにした(見た目は is-off で薄いまま)。書き込み用GAS未登録・入力者名が空・書き込み先の欄が未指定 も、alert ではなく同じ赤枠に出す。(2)「システム入力待ち」の操作行(件数・再取得・設定・閉じる)を position:sticky で上部に固定。下の報告を見ながら再取得や設定を押せる。(3)その行に読み込まれている版(QC_UI_VERSION)を小さく表示。GitHub Pagesのキャッシュで古い版を見ているのかどうかを、その場で確かめられるようにするため -->
 <!-- H-Hub v2026.09.05-7 : 「記入を押したがkintoneに反映されない」を、推測ではなく事実で切り分けられるようにした。従来はGASが ok:true を返した時点で「記入しました」と出していたため、GASまでは通っているのに kintone に入っていない場合を見分けられなかった。qcNgReread() を追加し、書き込みの直後に $id = <id> でそのレコードを読み直して、実際に値が入ったか／ステータスが変わったかを確かめてから結果を出す。入っていれば緑で「✓ kintoneに入りました（値）」、入っていなければ赤で「⚠ kintoneに反映されていません」と、書き込み先に指定している欄のコードを添えて出す(フィールドコード違いが最有力のため)。②在庫調整の解放も、読み直して確認できたときだけにした。ステータスも同様に 変更前→変更後 を照合し、変わっていなければアクション名の不一致を疑うよう促す。あわせて結果表示(.qc-ng-done)に枠と背景を付け、scrollIntoViewで見える位置へ寄せる(小さい文字で下に出していたため見落とされていた) -->
@@ -625,7 +626,7 @@ html, body {
 .qc-ng-ask-l{font-size:11px;color:#334155;line-height:1.7;}
 .qc-ng-ask-row{display:flex;gap:6px;margin-top:8px;}
 .qc-ng-done{font-size:12px;font-weight:700;margin-top:6px;padding:6px 9px;border-radius:7px;
-  background:#ecfdf3;border-left:4px solid #16a34a;color:#15803d;line-height:1.6;}
+  background:#ecfdf3;border-left:4px solid #16a34a;color:#15803d;line-height:1.6;white-space:pre-wrap;}
 .qc-ng-done.bad{background:#fff1f1;border-left-color:#dc2626;color:#b91c1c;}
 .qc-ng-wrote{font-size:11px;color:#475569;margin-top:4px;background:#f1f5f9;border-radius:6px;padding:3px 7px;}
 @media (max-width:1000px){
@@ -9739,7 +9740,7 @@ window.qcShowPendingList = function(){
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.05-9';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.05-10';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -9755,6 +9756,7 @@ var QC_NG_INTERACTING = false;
 function qcNgDefaultCfg(){
   return {
     appId:'31', token:'', limit:500,
+    token2:'',                  // ルックアップの参照先アプリ（社員マスタ等）のAPIトークン
     writeGas:'',                // 書き込み専用GASのデプロイURL（既存の品質チェックGASは触らない）
     user:'',                    // 在庫管理「入力者」に書く名前（ユーザー選択ならkintoneのログイン名）
     excludeStatus:'完了',        // 突合せから外すステータス（カンマ区切り）
@@ -9969,8 +9971,12 @@ function qcNgWrite(op, payload, okCb, errCb){
     errCb('書き込み用GASのURLが未登録です。「⚙ 不良品報告の設定」→「書き込み用GASのURL」に入れてください（作り方は docs/kintone_write_gas_setup.md）');
     return;
   }
+  // ★ルックアップ欄へ書くときは、参照先アプリ（社員マスタ等）も読める必要がある。
+  //   APIトークンは1アプリ分の権限しか持たないため、参照先のトークンをカンマで足して送る。
+  //   kintoneは X-Cybozu-API-Token にカンマ区切りで複数トークンを受け付ける。
+  var tok = cfg.token + (cfg.token2 ? (','+cfg.token2) : '');
   var body = Object.assign({ domain:(config.domain||'hashimoto-kogyo'), appId:String(cfg.appId),
-                             token:cfg.token, op:op }, payload);
+                             token:tok, op:op }, payload);
   qcGasPostTo(qcNgWriteUrl(), 'kintoneWrite', body, function(res){
     if(res && res.ok) okCb(res);
     else errCb((res && (res.err||res.error)) || 'GASが kintoneWrite に応答しませんでした');
@@ -10309,10 +10315,23 @@ function qcNgMakeItem(r, g){
     }, function(e){
       busy(bWrite,false,'① 在庫管理に記入');
       var add='';
-      // ルックアップの引き当て失敗はここに出る。原因が分かる一言を足す
-      if(/CB_VA01|GAIA_LK|ルックアップ|lookup/i.test(String(e)))
+      // ルックアップの引き当て失敗。原因は「値が合っていない」か「参照先を読む権限がない」の2つ
+      if(/GAIA_LO04|ルックアップの参照先/i.test(String(e))){
+        var known = qcNgKnownInputUsers();
+        var inList = known.indexOf(String(cfg.user).trim())>=0;
+        var BR = String.fromCharCode(10);   // 表示は white-space:pre-wrap なので改行がそのまま効く
+        add = BR + BR + '【原因は2つのどちらかです】'
+            + BR + '① 参照先アプリを読む権限がない … APIトークンは1アプリ分の権限しか持ちません。'
+            + '社員マスタ側でも閲覧トークンを作り、⚙設定の「参照先アプリのAPIトークン」に入れてください。'
+            + BR + '② 値が参照先のキーと一致していない … いまの値は「'+cfg.user+'」です。'
+            + (known.length
+                ? (inList ? '（この値はkintoneに実在するので、①の可能性が高いです）'
+                          : '（kintoneに入っている値は '+known.slice(0,5).join('／')+' です。ここから選び直してください）')
+                : '（全角空白と半角空白の違い、氏名か社員コードかを確かめてください）');
+      } else if(/CB_VA01|GAIA_LK|lookup/i.test(String(e))){
         add='　→「'+cfg.user+'」がコピー元アプリのキーと一致していない可能性があります。'
            +'⚙設定の「入力者の名前」を、候補（すでにkintoneに入っている値）から選び直してください。';
+      }
       show('記入できませんでした: '+e+add, true);
     });
   }
@@ -10417,7 +10436,14 @@ window.qcNgOpenConfig = function(){
       +   '<span style="color:#b45309;">※ トークンはこのパソコンの中だけに保存されます（GitHubには入りません）。</span>'
       + '</div>'
       + '<div class="qc-fld"><label>アプリID</label><input type="text" id="qc-ng-appid" placeholder="31"></div>'
-      + '<div class="qc-fld"><label>APIトークン</label><input type="text" id="qc-ng-token" placeholder="kintoneで生成したトークン"></div>'
+      + '<div class="qc-fld"><label>APIトークン（★不良品報告）</label><input type="text" id="qc-ng-token" placeholder="kintoneで生成したトークン"></div>'
+      + '<div class="qc-fld"><label>参照先アプリのAPIトークン（ルックアップ用・社員マスタなど）</label>'
+      +   '<input type="text" id="qc-ng-token2" placeholder="空欄のままでも照合はできます">'
+      +   '<div style="font-size:11px;color:#475569;margin-top:4px;line-height:1.6;">'
+      +     '「入力者」がルックアップの場合、kintoneは<b>参照先アプリを読める権限</b>がないと引き当てられません。'
+      +     'APIトークンは1アプリ分の権限しか持たないため、参照先アプリ側でも閲覧トークンを作ってここに入れてください。'
+      +     '（エラー <b>GAIA_LO04</b> が出たときはこれが原因です）'
+      +   '</div></div>'
       + '<div class="qc-fld"><label>取得件数の上限</label><input type="text" id="qc-ng-limit" placeholder="500"></div>'
       + '<div class="qc-fld"><label>突合せから外すステータス（カンマ区切り）</label><input type="text" id="qc-ng-exst" placeholder="完了"></div>'
       + '<div class="qc-fld"><label>入力者の名前（在庫管理「i-PRO W 入力者」へ書く値）</label>'
@@ -10454,6 +10480,7 @@ window.qcNgOpenConfig = function(){
   }
   document.getElementById('qc-ng-appid').value = cfg.appId||'';
   document.getElementById('qc-ng-token').value = cfg.token||'';
+  document.getElementById('qc-ng-token2').value = cfg.token2||'';
   document.getElementById('qc-ng-limit').value = cfg.limit||500;
   document.getElementById('qc-ng-exst').value  = cfg.excludeStatus||'';
   document.getElementById('qc-ng-user').value  = cfg.user||'';
@@ -10477,6 +10504,7 @@ window.qcNgSaveConfig = function(){
   var cfg=qcNgCfg();
   cfg.appId = document.getElementById('qc-ng-appid').value.trim() || '31';
   cfg.token = document.getElementById('qc-ng-token').value.trim();
+  cfg.token2 = document.getElementById('qc-ng-token2').value.trim();
   cfg.limit = parseInt(document.getElementById('qc-ng-limit').value)||500;
   cfg.excludeStatus = document.getElementById('qc-ng-exst').value.trim();
   cfg.user  = document.getElementById('qc-ng-user').value.trim();
@@ -10485,6 +10513,16 @@ window.qcNgSaveConfig = function(){
   cfg.actInput  = document.getElementById('qc-ng-act2').value.trim() || '在庫投入';
   QC_NG_FIELD_ROWS.forEach(function(p){ cfg.f[p[0]] = document.getElementById('qc-ng-f-'+p[0]).value.trim(); });
   qcNgSaveCfg();
+  // 入力者の名前が、kintoneに実在する値と違うなら先に知らせる（書いてから気づくと二度手間）
+  var known = qcNgKnownInputUsers();
+  if(cfg.user && known.length && known.indexOf(cfg.user)<0){
+    var m=document.getElementById('qc-ng-cfg-msg');
+    m.style.color='#b45309';
+    m.textContent='※「'+cfg.user+'」は、いまkintoneに入っている値（'+known.join('／')+'）と一致しません。'
+      +'ルックアップの場合、一致しないと書き込めません。欄を押して候補から選び直すことをお勧めします。';
+    qcNgFetch(true);
+    return;   // モーダルは閉じずに気づいてもらう
+  }
   qcNgCloseConfig();
   QC_NG_RECORDS=null; qcNgFetch(true);
 };
