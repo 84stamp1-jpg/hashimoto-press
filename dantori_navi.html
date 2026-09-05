@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.05-9 : 「①在庫管理に記入は押せるが何も起きない」の原因は2つあった。(1)★確認に window.confirm() を使っていた。Chromeは同じページが繰り返しダイアログを出すと「このページでこれ以上ダイアログを生成しない」を表示し、一度チェックされると以後 confirm() は何も表示せず false を返す。動作確認で何度も押した結果その状態になっており、押す→confirmがfalse→即return で本当に何も起きなかった。ブラウザのダイアログをやめ、カード内に確認の箱(askInline)を出す方式に変更。alert も既に赤枠表示へ置き換え済みなので、この画面はブラウザのダイアログを一切使わない。(2)★書き込みの直後に、裏で走っていた記録の再取得(getRecords)が終わると qcRenderCurrentList() が入力待ち一覧を丸ごと作り直しており、☑や確認の途中、結果の緑/赤の枠が消えていた。QC_NG_INTERACTING を追加し、一度でも操作を始めたら作り直さないようにした(🔄再取得／✕閉じる で解除)。confirmを常にfalseにした状態で①→②まで通ることを確認済み -->
 <!-- H-Hub v2026.09.05-8 : 「記入ボタンを押しても変わらない」の原因と、見出しの固定。(1)★条件が足りないボタンを disabled にしていたため、押しても本当に何も起きず「壊れている」ようにしか見えなかった。三点(不具合数量・廃棄数量・合格数量)のマスを押して確認するまで①は無効、という決まりが伝わっていなかったのが実害。disabled をやめ、blockWrite()/blockAdj()/blockIn() が押せない理由を返す形にして、押したら必ず赤枠でその理由を出すようにした(見た目は is-off で薄いまま)。書き込み用GAS未登録・入力者名が空・書き込み先の欄が未指定 も、alert ではなく同じ赤枠に出す。(2)「システム入力待ち」の操作行(件数・再取得・設定・閉じる)を position:sticky で上部に固定。下の報告を見ながら再取得や設定を押せる。(3)その行に読み込まれている版(QC_UI_VERSION)を小さく表示。GitHub Pagesのキャッシュで古い版を見ているのかどうかを、その場で確かめられるようにするため -->
 <!-- H-Hub v2026.09.05-7 : 「記入を押したがkintoneに反映されない」を、推測ではなく事実で切り分けられるようにした。従来はGASが ok:true を返した時点で「記入しました」と出していたため、GASまでは通っているのに kintone に入っていない場合を見分けられなかった。qcNgReread() を追加し、書き込みの直後に $id = <id> でそのレコードを読み直して、実際に値が入ったか／ステータスが変わったかを確かめてから結果を出す。入っていれば緑で「✓ kintoneに入りました（値）」、入っていなければ赤で「⚠ kintoneに反映されていません」と、書き込み先に指定している欄のコードを添えて出す(フィールドコード違いが最有力のため)。②在庫調整の解放も、読み直して確認できたときだけにした。ステータスも同様に 変更前→変更後 を照合し、変わっていなければアクション名の不一致を疑うよう促す。あわせて結果表示(.qc-ng-done)に枠と背景を付け、scrollIntoViewで見える位置へ寄せる(小さい文字で下に出していたため見落とされていた) -->
 <!-- H-Hub v2026.09.05-6 : 「在庫管理に記入」が押せない件と、手順の順序。(1)三点(不具合数量・廃棄数量・合格数量)は押して確認する仕組みだったが、押せることが画面から分からず、3つ揃うまでボタンがグレーのまま＝理由も出ないので詰まっていた。セルに ☐/☑ を付け、上に「↓ 3つとも押して確認してください（n/3）」を出し、揃うと緑で「☑ 三点を確認しました」に変える。(2)ボタンが押せない理由を必ず文字で出すようにした(.qc-ng-need)。$idが取れていない場合もその旨を出す。グレーのボタンだけでは何が足りないか分からないため。(3)現場の流れ(在庫管理に記入 → 在庫調整)に合わせ、①在庫管理に記入 ②在庫調整 ③在庫投入 と番号を振り、②は①が済むまで押せないようにした。①が済んでいるかは、kintone側に入力者/入力日が既に入っているか、またはこの画面で書いたかで判定する。③は従来どおり合格数量>0のときだけ。記入済みのレコードでは①を押せなくし、三点の確認も促さない -->
@@ -618,6 +619,11 @@ html, body {
 .qc-ng-btn.go{border-color:#0f766e;color:#0f766e;}
 .qc-ng-btn.go:hover:not(:disabled){background:#effcfa;}
 /* 書き込みの結果。小さい文字だと見落とすので、枠と背景を付けて必ず目に入るようにする */
+/* ページ内の確認箱（ブラウザのダイアログを使わない） */
+.qc-ng-ask{margin-top:7px;padding:8px 10px;border:2px solid #1F4E79;border-radius:8px;background:#f5f9ff;}
+.qc-ng-ask-t{font-size:12px;font-weight:700;color:#1F4E79;margin-bottom:5px;}
+.qc-ng-ask-l{font-size:11px;color:#334155;line-height:1.7;}
+.qc-ng-ask-row{display:flex;gap:6px;margin-top:8px;}
 .qc-ng-done{font-size:12px;font-weight:700;margin-top:6px;padding:6px 9px;border-radius:7px;
   background:#ecfdf3;border-left:4px solid #16a34a;color:#15803d;line-height:1.6;}
 .qc-ng-done.bad{background:#fff1f1;border-left-color:#dc2626;color:#b91c1c;}
@@ -9333,6 +9339,8 @@ function qcFetchRecords(cb){
 function qcRenderCurrentList(){
   var cur = document.querySelector('.qc-screen.qc-on');
   var id = cur ? cur.id : '';
+  // 操作中の入力待ち一覧は作り直さない（☑や確認の途中、結果表示が消えるため）
+  if(id==='qc-screen-list' && QC_PENDING_MODE && QC_NG_INTERACTING) return;
   if(id==='qc-screen-list'){ if(QC_PENDING_MODE) qcShowPendingList(); else qcFilterRecords(); }
   else if(id==='qc-screen-search') qcRunSeizoSearch();
 }
@@ -9694,12 +9702,12 @@ window.qcShowPendingList = function(){
   ver.textContent=QC_UI_VERSION; lbl.appendChild(ver);
   var btns=document.createElement('span'); btns.style.cssText='display:flex;gap:6px;';
   var ngBtn=document.createElement('button'); ngBtn.textContent='🔄 不良品報告を再取得'; ngBtn.style.cssText='padding:4px 10px;background:#fff;color:#1F4E79;border:1px solid #1F4E79;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;';
-  ngBtn.onclick=function(){ QC_NG_RECORDS=null; qcNgFetch(true); };
+  ngBtn.onclick=function(){ QC_NG_INTERACTING=false; QC_NG_RECORDS=null; qcNgFetch(true); };
   var cfgBtn=document.createElement('button'); cfgBtn.textContent='⚙ 不良品報告の設定'; cfgBtn.style.cssText='padding:4px 10px;background:#fff;color:#555;border:1px solid #999;border-radius:6px;font-size:12px;cursor:pointer;';
   cfgBtn.onclick=function(){ qcNgOpenConfig(); };
   var backBtn=document.createElement('button'); backBtn.textContent='✕ 閉じる'; backBtn.style.cssText='padding:4px 12px;background:#555;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;';
   backBtn.onclick=function(){
-    QC_PENDING_MODE=false;
+    QC_PENDING_MODE=false; QC_NG_INTERACTING=false;
     document.getElementById('qc-date-nav').style.display='';
     document.getElementById('qc-list-filter-wrap').style.display='';
     if(cont) cont.classList.remove('qc-wide');
@@ -9731,7 +9739,7 @@ window.qcShowPendingList = function(){
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.05-8';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.05-9';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -9739,6 +9747,10 @@ var QC_NG_STATE   = 'idle'; // idle | loading | ok | error | unset
 var QC_NG_ERR     = '';
 var QC_NG_PANES   = [];     // [{el, g}]
 var QC_NG_CHECKED = {};     // { レコードid: {ng:true, scrap:true, ok:true} } 三点確認の状態
+// ★操作中フラグ。裏で走っている記録の再取得が終わると一覧を作り直すため、
+//   ☑を付けた最中や確認の途中、書き込みの結果表示が、気づかないうちに消えていた。
+//   一度でも操作を始めたら作り直さない（🔄再取得／✕閉じる で解除）。
+var QC_NG_INTERACTING = false;
 
 function qcNgDefaultCfg(){
   return {
@@ -10111,7 +10123,7 @@ function qcNgMakeItem(r, g){
     paint();
     c.appendChild(lb); c.appendChild(vv);
     c.title='この数字を確認したら押してください';
-    c.onclick=function(){ chk[p[0]] = !chk[p[0]]; paint(); syncButtons(); };
+    c.onclick=function(){ QC_NG_INTERACTING=true; chk[p[0]] = !chk[p[0]]; paint(); syncButtons(); };
     cells[p[0]]=c; nums.appendChild(c);
   });
   it.appendChild(nums);
@@ -10214,7 +10226,27 @@ function qcNgMakeItem(r, g){
 
   function busy(btn, on, label){ btn.disabled=on; btn.textContent = on ? '処理中…' : label; if(!on) syncButtons(); }
   // 条件が足りないまま押されたとき：理由を出して、直すべき場所へ目を向けさせる
-  function refuse(why){ show(why, true); }
+  function refuse(why){ QC_NG_INTERACTING = true; show(why, true); }
+
+  // ★ブラウザの confirm() は使わない。
+  //   Chromeは同じページが繰り返しダイアログを出すと「このページでこれ以上ダイアログを生成しない」
+  //   を表示し、一度チェックされると以後 confirm() は何も出さずに false を返す。
+  //   その状態では「押しても何も起きない」ようにしか見えないため、ページの中で確認する。
+  var ask=document.createElement('div'); ask.className='qc-ng-ask'; ask.style.display='none';
+  it.appendChild(ask);
+  function askInline(title, lines, okLabel, onOk){
+    QC_NG_INTERACTING = true;
+    ask.innerHTML=''; ask.style.display='block';
+    var h=document.createElement('div'); h.className='qc-ng-ask-t'; h.textContent=title; ask.appendChild(h);
+    lines.forEach(function(t){ var d=document.createElement('div'); d.className='qc-ng-ask-l'; d.textContent=t; ask.appendChild(d); });
+    var row=document.createElement('div'); row.className='qc-ng-ask-row';
+    var yes=document.createElement('button'); yes.className='qc-ng-btn go'; yes.textContent=okLabel;
+    var no =document.createElement('button'); no.className='qc-ng-btn';    no.textContent='やめる';
+    yes.onclick=function(){ ask.style.display='none'; onOk(); };
+    no.onclick =function(){ ask.style.display='none'; };
+    row.appendChild(yes); row.appendChild(no); ask.appendChild(row);
+    try{ ask.scrollIntoView({block:'nearest'}); }catch(e){}
+  }
   function show(txt, bad){
     msg.style.display='block';
     msg.className = 'qc-ng-done'+(bad?' bad':'');
@@ -10229,10 +10261,16 @@ function qcNgMakeItem(r, g){
     if(!cfg.user){ refuse('⚙設定の「入力者の名前」が空です。在庫管理へ書く値を登録してください（欄を押すと、すでにkintoneに入っている値から選べます）。'); return; }
     if(!f.inpUser && !f.inpDate){ refuse('書き込み先の欄が指定されていません。⚙設定 →「🧾 列を確認」で、在庫管理の「入力者」「入力日」のフィールドコードを入れてください。'); return; }
     var today=new Date(), ds=today.getFullYear()+'-'+('0'+(today.getMonth()+1)).slice(-2)+'-'+('0'+today.getDate()).slice(-2);
-    if(!confirm('kintoneの不良品報告に記入します。\n\n'
-      +'　品番: '+qcNgVal(r,f.hinban)+'\n'
-      +'　不具合数量: '+(nNg===null?'—':nNg)+'　廃棄数量: '+(nScrap===null?'—':nScrap)+'　合格数量: '+(nOk===null?'—':nOk)+'\n\n'
-      +'　入力者: '+cfg.user+'\n　入力日: '+ds+'\n\nよろしいですか？')) return;
+    askInline('kintoneの不良品報告に記入します', [
+      '品番: '+qcNgVal(r,f.hinban),
+      '不具合数量: '+(nNg===null?'—':nNg)+'　廃棄数量: '+(nScrap===null?'—':nScrap)+'　合格数量: '+(nOk===null?'—':nOk),
+      '入力者: '+cfg.user+'　→ 書き込み先 '+(f.inpUser||'未設定'),
+      '入力日: '+ds+'　→ 書き込み先 '+(f.inpDate||'未設定')
+    ], '記入する', function(){ doWrite(ds); });
+  };
+
+  // 確認して「記入する」を押したあとの実処理
+  function doWrite(ds){
     var rec={};
     if(f.inpUser){
       // ルックアップ(LOOKUP)は「コピー元のキーとなるフィールドの値」を文字列で渡す。
@@ -10277,12 +10315,18 @@ function qcNgMakeItem(r, g){
            +'⚙設定の「入力者の名前」を、候補（すでにkintoneに入っている値）から選び直してください。';
       show('記入できませんでした: '+e+add, true);
     });
-  };
+  }
 
   function advance(btn, actionName, label){
-    if(!confirm('kintoneのプロセス管理を進めます。\n\n　品番: '+qcNgVal(r,f.hinban)
-      +'\n　いまのステータス: '+(f.status?qcNgVal(r,f.status):'—')
-      +'\n　実行するアクション: '+actionName+'\n\nよろしいですか？')) return;
+    askInline('kintoneのプロセス管理を進めます', [
+      '品番: '+qcNgVal(r,f.hinban),
+      'いまのステータス: '+(f.status?qcNgVal(r,f.status):'—'),
+      '実行するアクション: '+actionName
+    ], '進める', function(){ doAdvance(btn, actionName, label); });
+  }
+
+  // 確認して「進める」を押したあとの実処理
+  function doAdvance(btn, actionName, label){
     var before = f.status ? qcNgVal(r, f.status) : '';
     busy(btn,true,label);
     qcNgWrite('status', {id:id, statusAction:actionName}, function(){
