@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.06-1 : (1)★②が進まない原因が確定。kintoneが GAIA_NT02「このアクションは作業者のみ実行できます」を返した。App31の在庫調整中は作業者が深津健介に限定されており、H-HubはAPIトークンで呼ぶためトークンに利用者がおらず、何度押しても通らない。アクション名の問題ではない。kintone側で プロセス管理 →「＋ 作業者以外でも実行できるアクションを作成する」から同じ行き先のアクションを作り、その名前を⚙設定に入れる必要がある。この案内をエラー時に出すようにした。(2)不良品報告の取得が遅い／Failed to fetch で消える件。500件×全フィールドはGASの往復に数秒かかるのに毎回待たせ、失敗すると表示が消えていた。localStorage(qcNgRecordsCache)に前回分を持ち、開いた瞬間に描画してから裏で差し替える方式に変更（実測8〜9ms）。Failed to fetch は1.5秒後に一度だけ自動で再試行し、それでも駄目なら前回のデータを残したまま「⚠最新の取得に失敗。下は◯◯時点のデータです」と断る。※再試行は qcNgFetch(true,...) で呼ぶこと（force=falseだとキャッシュ復元済みのため冒頭の早期returnで弾かれ再試行が走らない）。※stale状態は再描画で'ok'に戻さない（断りが消えるため） -->
 <!-- H-Hub v2026.09.05-14 : 設定の取り違えを保存時に止めるようにした。(1)アクション名の欄にステータス名（在庫調整中／在庫投入中）を入れてしまう間違いが起きた。プロセス管理の画面は左がステータス・右がアクションで、見分けがつきにくいのが原因。取得済みレコードのステータス値を集める qcNgKnownStatuses() を追加し、アクション名の欄がそのいずれかと一致したら保存時に赤字で知らせ、モーダルを閉じない。(2)「次の作業者」に表示名（深津健介）を入れると kintone が GAIA_IL26「指定したユーザーが見つかりません」を返す。ここはログイン名しか受け付けない。GAIA_IL26 はアクション名の不一致でも同じ番号なので、返ってきた文面に「ユーザー」「code：」が含まれるかで案内を振り分けるようにした。あわせて設定の説明を「ふつうは空欄のまま。入れるなら表示名ではなくログイン名」に書き換えた。※結果表示は textContent なのでHTMLタグを書かないこと（そのまま文字として出る） -->
 <!-- H-Hub v2026.09.05-13 : 「在庫投入 完」(在庫投入中→完了)は製造の担当なので、この画面から外した。品管が触るのは ①在庫管理に記入 → ②在庫調整 完（合格数量がなければ完了）／③在庫投入（合格数量があれば在庫投入中まで）の3つまで。設定のアクション欄も2つに戻している。ボタンの出し分けはいまのステータスで行い、すでに在庫投入中のレコードは3つとも押せない状態にして「この画面での作業は済んでいます（ここから先の完了は製造が行います）」と出す -->
 <!-- H-Hub v2026.09.05-12 : ②が GAIA_IL03 で進まなかった原因の一つが判明。★アクション名が違っていた。「在庫調整中」はステータス名で、そこから実行するアクションは「在庫調整 完」「在庫投入」「差し戻す」。プロセス管理の画面は左がステータス・右がアクションで、既定に入れていた「在庫調整」というアクションは存在しない。実際の設定に合わせて既定を 在庫調整 完／在庫投入／在庫投入 完 にし、設定画面にも「左はステータス名・右がアクション名」と明記した。あわせて 在庫投入中→完了 の ④在庫投入 完 を追加し、ボタンの出し分けをいまのステータスで行うようにした（在庫調整中なら②③、在庫投入中なら④のみ。順番違いの GAIA_IQ11 を未然に防ぐ）。GAIA_IL03 の案内も、筆頭に「アクションは既定でそのステータスの作業者しか実行できない。APIトークンには利用者がいないので必ず弾かれる → プロセス管理の『＋作業者以外でも実行できるアクションを作成する』で作り直す」を置いた（App31の在庫調整中は作業者=深津健介に限定されているため） -->
@@ -9729,7 +9730,11 @@ window.qcShowPendingList = function(){
   ver.textContent=QC_UI_VERSION; lbl.appendChild(ver);
   var btns=document.createElement('span'); btns.style.cssText='display:flex;gap:6px;';
   var ngBtn=document.createElement('button'); ngBtn.textContent='🔄 不良品報告を再取得'; ngBtn.style.cssText='padding:4px 10px;background:#fff;color:#1F4E79;border:1px solid #1F4E79;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;';
-  ngBtn.onclick=function(){ QC_NG_INTERACTING=false; QC_NG_RECORDS=null; qcNgFetch(true); };
+  ngBtn.onclick=function(){
+    QC_NG_INTERACTING=false; QC_NG_RECORDS=null;
+    try{ localStorage.removeItem(QC_NG_CACHE_LS); }catch(e){}
+    qcNgFetch(true);
+  };
   var cfgBtn=document.createElement('button'); cfgBtn.textContent='⚙ 不良品報告の設定'; cfgBtn.style.cssText='padding:4px 10px;background:#fff;color:#555;border:1px solid #999;border-radius:6px;font-size:12px;cursor:pointer;';
   cfgBtn.onclick=function(){ qcNgOpenConfig(); };
   var backBtn=document.createElement('button'); backBtn.textContent='✕ 閉じる'; backBtn.style.cssText='padding:4px 12px;background:#555;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;';
@@ -9766,7 +9771,7 @@ window.qcShowPendingList = function(){
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.05-14';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.06-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -9911,11 +9916,40 @@ function qcNgGuessFields(rec){
   qcNgSaveCfg();
 }
 
-function qcNgFetch(force){
+// 前回取れた不良品報告を残しておく。500件×全フィールドはGASの往復に数秒かかるので、
+// 毎回そのあいだ「照合中…」で待たせない。通信に失敗しても前回のデータは消さない。
+var QC_NG_CACHE_LS = 'qcNgRecordsCache';
+var QC_NG_FETCHED_AT = '';
+function qcNgLoadCache(){
+  if(QC_NG_RECORDS) return false;
+  try{
+    var c = JSON.parse(localStorage.getItem(QC_NG_CACHE_LS)||'null');
+    if(c && c.records && c.records.length){
+      QC_NG_RECORDS = c.records; QC_NG_FETCHED_AT = c.at||'';
+      return true;
+    }
+  }catch(e){}
+  return false;
+}
+function qcNgSaveCache(){
+  try{
+    localStorage.setItem(QC_NG_CACHE_LS, JSON.stringify({
+      at:new Date().toLocaleString('ja-JP'), records:QC_NG_RECORDS
+    }));
+    QC_NG_FETCHED_AT = new Date().toLocaleString('ja-JP');
+  }catch(e){}   // 容量超過などは無視（キャッシュが無いだけで動作はする）
+}
+
+function qcNgFetch(force, _retry){
   var cfg = qcNgCfg();
   if(!cfg.token || !cfg.appId){ QC_NG_STATE='unset'; qcNgRenderAll(); return; }
-  if(QC_NG_RECORDS && !force){ QC_NG_STATE='ok'; qcNgRenderAll(); return; }
-  QC_NG_STATE='loading'; QC_NG_ERR=''; qcNgRenderAll();
+  // 取得に失敗して古いデータを見せている(stale)状態は、再描画で 'ok' に戻さない。
+  // 戻すと「古い」という断りが消えてしまう
+  if(QC_NG_RECORDS && !force){ if(QC_NG_STATE!=='stale') QC_NG_STATE='ok'; qcNgRenderAll(); return; }
+  // 手元にキャッシュがあれば先に見せて、裏で最新に差し替える
+  var hadCache = qcNgLoadCache();
+  if(hadCache){ QC_NG_STATE='ok'; qcNgRenderAll(); }
+  else { QC_NG_STATE='loading'; QC_NG_ERR=''; qcNgRenderAll(); }
   // fields を空配列で渡すと全フィールド＋$id が返る（$id はkintoneを直接開くリンクと更新に使う）
   qcGasPost('getKintonePartData', {
     domain: (config.domain || 'hashimoto-kogyo'),
@@ -9924,11 +9958,29 @@ function qcNgFetch(force){
     query:  'order by $id desc limit ' + (parseInt(cfg.limit)||500),
     fields: []
   }, function(res){
-    if(!res || !res.ok){ QC_NG_STATE='error'; QC_NG_ERR=(res&&(res.err||res.error))||'取得に失敗しました'; qcNgRenderAll(); return; }
+    if(!res || !res.ok){ fail((res&&(res.err||res.error))||'取得に失敗しました'); return; }
     QC_NG_RECORDS = res.records || [];
     if(QC_NG_RECORDS.length) qcNgGuessFields(QC_NG_RECORDS[0]);
+    qcNgSaveCache();
     QC_NG_STATE='ok'; qcNgRenderAll(); qcNgRefreshUserHint();
-  }, function(e){ QC_NG_STATE='error'; QC_NG_ERR=e.message||'通信エラー'; qcNgRenderAll(); });
+  }, function(e){ fail(e.message||'通信エラー'); });
+
+  function fail(msg){
+    // Failed to fetch は回線の一時的な失敗が多いので一度だけやり直す
+    if(!_retry && /Failed to fetch|NetworkError|通信エラー/i.test(String(msg))){
+      // ★force=true で呼ぶこと。false のままだと、キャッシュから戻した QC_NG_RECORDS が
+      //   あるために冒頭の早期returnで弾かれ、再試行が実際には走らない
+      setTimeout(function(){ qcNgFetch(true, true); }, 1500);
+      return;
+    }
+    QC_NG_ERR = msg;
+    if(QC_NG_RECORDS && QC_NG_RECORDS.length){
+      // 前回のデータがあるなら消さない。古いことだけ伝える
+      QC_NG_STATE='stale'; qcNgRenderAll();
+    } else {
+      QC_NG_STATE='error'; qcNgRenderAll();
+    }
+  }
 }
 
 // 突合せから外すステータス（既定は「完了」）
@@ -10074,7 +10126,15 @@ function qcNgRenderPane(pane, g){
     return;
   }
   if(QC_NG_STATE==='loading'){ pane.classList.add('qc-ng-none'); line('照合中…','qc-ng-muted'); return; }
-  if(QC_NG_STATE==='error'){ pane.classList.add('qc-ng-miss'); line('取得エラー: '+QC_NG_ERR,'qc-ng-warn'); return; }
+  if(QC_NG_STATE==='error'){
+    pane.classList.add('qc-ng-miss');
+    line('取得エラー: '+QC_NG_ERR,'qc-ng-warn');
+    line('回線かGASの一時的な失敗のことが多いです。「🔄 不良品報告を再取得」を押してみてください。','qc-ng-muted');
+    return;
+  }
+  if(QC_NG_STATE==='stale'){
+    line('⚠ 最新の取得に失敗（'+QC_NG_ERR+'）。下は'+(QC_NG_FETCHED_AT||'前回')+'時点のデータです','qc-ng-muted');
+  }
   if(!f.hinban){
     pane.classList.add('qc-ng-none');
     line('部品番号のフィールドが判別できませんでした。「⚙ 不良品報告の設定」で指定してください。','qc-ng-muted');
@@ -10409,7 +10469,16 @@ function qcNgMakeItem(r, g){
     }, function(e){
       busy(btn,false,label);
       var add='';
-      if(/GAIA_IL03/.test(String(e))){
+      if(/GAIA_NT02|作業者のみ実行/.test(String(e))){
+        add = BR2 + '★これはkintone側の設定で決まっている制限です。'
+            + 'このアクションは「そのステータスの作業者だけが実行できる」設定になっています。'
+            + 'H-HubはAPIトークンでkintoneを呼びますが、トークンには利用者がいないため、'
+            + '何度押しても通りません。'
+            + BR2 + '【直し方】kintone → ★不良品報告 → 歯車 → アプリの設定 → プロセス管理'
+            + BR2 + '「'+before+'」の欄の右下にある「＋ 作業者以外でも実行できるアクションを作成する」を押し、'
+            + '行き先が同じアクションをもう1つ作ります（名前は「'+actionName+'（システム）」のように分けると分かりやすいです）。'
+            + BR2 + '保存 → 右上の「アプリを更新」→ H-Hubの⚙設定に、その新しいアクション名を入れてください。';
+      } else if(/GAIA_IL03/.test(String(e))){
         add = BR2 + '【確かめるところ】'
             + BR2 + '★① そのアクションが「作業者しか実行できない」設定になっていないか。'
             + 'kintoneのプロセス管理では、アクションは既定でそのステータスの作業者だけが実行できます。'
