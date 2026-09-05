@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.05-13 : 「在庫投入 完」(在庫投入中→完了)は製造の担当なので、この画面から外した。品管が触るのは ①在庫管理に記入 → ②在庫調整 完（合格数量がなければ完了）／③在庫投入（合格数量があれば在庫投入中まで）の3つまで。設定のアクション欄も2つに戻している。ボタンの出し分けはいまのステータスで行い、すでに在庫投入中のレコードは3つとも押せない状態にして「この画面での作業は済んでいます（ここから先の完了は製造が行います）」と出す -->
 <!-- H-Hub v2026.09.05-12 : ②が GAIA_IL03 で進まなかった原因の一つが判明。★アクション名が違っていた。「在庫調整中」はステータス名で、そこから実行するアクションは「在庫調整 完」「在庫投入」「差し戻す」。プロセス管理の画面は左がステータス・右がアクションで、既定に入れていた「在庫調整」というアクションは存在しない。実際の設定に合わせて既定を 在庫調整 完／在庫投入／在庫投入 完 にし、設定画面にも「左はステータス名・右がアクション名」と明記した。あわせて 在庫投入中→完了 の ④在庫投入 完 を追加し、ボタンの出し分けをいまのステータスで行うようにした（在庫調整中なら②③、在庫投入中なら④のみ。順番違いの GAIA_IQ11 を未然に防ぐ）。GAIA_IL03 の案内も、筆頭に「アクションは既定でそのステータスの作業者しか実行できない。APIトークンには利用者がいないので必ず弾かれる → プロセス管理の『＋作業者以外でも実行できるアクションを作成する』で作り直す」を置いた（App31の在庫調整中は作業者=深津健介に限定されているため） -->
 <!-- H-Hub v2026.09.05-11 : ①在庫管理に記入は通るようになった（ルックアップも解決）。②在庫調整で kintone が GAIA_IL03「ステータスの変更に失敗しました」を返す件への対応。この番号は原因が1つに定まらないので、確かめる場所を4つ並べて出すようにした（次のステータスの作業者が「実行時に選択」／アクション名の不一致／順番／同時編集）。あわせて、進めた先のステータスが作業者を要求する場合に備え、⚙設定に「次の作業者（kintoneのログイン名）」を追加し、指定があれば status.json の assignee として送る（GAS側は p.assignee をそのまま渡す作りなので変更不要）。GAIA_IL26・GAIA_IQ11 にも個別の案内を出す。また、GASがJSONではなくHTMLを返したとき「解析エラー: <!DOCTYPE html...」と生のHTMLを80文字出すだけで原因が読めなかったため、qcGasDiagnose() を追加してページの中身から判別する（ログイン画面／承認切れ／doPostなし／URL違い）。押し間違い防止に「kintoneで開く」と①②③の間へ区切りを入れた -->
 <!-- H-Hub v2026.09.05-10 : kintoneの GAIA_LO04（ルックアップの引き当て失敗）への対応。原因は2つあり、(a)値が参照先のキーと一致していない (b)★参照先アプリを読む権限がない。APIトークンは1アプリ分の権限しか持たないため、i_PRO_W_入力者 のようなルックアップ欄へ書くとき、kintoneは参照先（社員マスタ等）を読めず (b) で弾く。kintoneは X-Cybozu-API-Token にカンマ区切りで複数トークンを受け付けるので、⚙設定に「参照先アプリのAPIトークン」を追加し、cfg.token+','+cfg.token2 として送るようにした（GAS側は受け取ったトークンをそのままヘッダーに入れているので変更不要）。あわせて GAIA_LO04 のときは原因2つと、いま入っている値・kintoneに実在する値を並べて出す。設定保存時にも、入力者の名前が実在の値と一致しない場合はモーダルを閉じずに警告する。※結果表示に white-space:pre-wrap を付けて改行を効かせている -->
@@ -9764,7 +9765,7 @@ window.qcShowPendingList = function(){
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.05-12';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.05-13';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -9788,10 +9789,9 @@ function qcNgDefaultCfg(){
     //   ★不良品報告(App31)の実際の設定：
     //     品質確認中 →[品質処置済]→ 在庫調整中
     //     在庫調整中 →[在庫調整 完]→ 完了 ／ →[在庫投入]→ 在庫投入中
-    //     在庫投入中 →[在庫投入 完]→ 完了
+    //   ※在庫投入中→完了（在庫投入 完）は製造が担当するため、この画面では扱わない
     actAdjust:'在庫調整 完',      // 在庫調整中 → 完了
     actInput:'在庫投入',          // 在庫調整中 → 在庫投入中（合格数量があるとき）
-    actInputDone:'在庫投入 完',   // 在庫投入中 → 完了
     assignee:'',                // 進めた先のステータスが「作業者を選択」の場合に必要なログイン名
     f:{ hinban:'', hinmei:'', date:'', status:'', worker:'', memo:'',
         qtyNg:'不具合数量', qtyScrap:'廃棄数量', qtyOk:'合格数量',
@@ -10200,8 +10200,7 @@ function qcNgMakeItem(r, g){
   var bWrite=document.createElement('button'); bWrite.className='qc-ng-btn'; bWrite.textContent='① 在庫管理に記入';
   var bAdj  =document.createElement('button'); bAdj.className='qc-ng-btn go'; bAdj.textContent='② '+(cfg.actAdjust||'在庫調整');
   var bIn   =document.createElement('button'); bIn.className='qc-ng-btn go';  bIn.textContent='③ '+(cfg.actInput||'在庫投入');
-  var bInD  =document.createElement('button'); bInD.className='qc-ng-btn go'; bInD.textContent='④ '+(cfg.actInputDone||'在庫投入 完');
-  acts.appendChild(bWrite); acts.appendChild(bAdj); acts.appendChild(bIn); acts.appendChild(bInD);
+  acts.appendChild(bWrite); acts.appendChild(bAdj); acts.appendChild(bIn);
   it.appendChild(acts);
   // いま何が足りなくて押せないのかを必ず文字で出す（グレーのボタンだけでは理由が分からない）
   var need=document.createElement('div'); need.className='qc-ng-need'; it.appendChild(need);
@@ -10238,12 +10237,6 @@ function qcNgMakeItem(r, g){
     if(st && st.indexOf('在庫調整')<0) return 'いまのステータスは「'+st+'」です。'+(cfg.actInput||'在庫投入')+' は「在庫調整中」から実行するアクションです。';
     return null;
   }
-  function blockInD(){
-    if(!id)     return 'レコード番号($id)が取れていません。';
-    var st=nowStatus();
-    if(st && st.indexOf('在庫投入')<0) return 'いまのステータスは「'+st+'」です。'+(cfg.actInputDone||'在庫投入 完')+' は「在庫投入中」から実行するアクションです。③を先に実行してください。';
-    return null;
-  }
 
   function syncButtons(){
     var n = (chk.ng?1:0)+(chk.scrap?1:0)+(chk.ok?1:0);
@@ -10253,7 +10246,6 @@ function qcNgMakeItem(r, g){
     bWrite.className = 'qc-ng-btn'    + (blockWrite()?' is-off':'');
     bAdj.className   = 'qc-ng-btn go' + (blockAdj()  ?' is-off':'');
     bIn.className    = 'qc-ng-btn go' + (blockIn()   ?' is-off':'');
-    bInD.className   = 'qc-ng-btn go' + (blockInD()  ?' is-off':'');
 
     // 記入済みならもう確認を促す必要はない
     numsHead.textContent = written ? '記入済み'
@@ -10266,14 +10258,15 @@ function qcNgMakeItem(r, g){
     if(!id)                    why='レコード番号($id)が取れていません。⚙設定の「🧾 列を確認」で $id が返っているか見てください';
     else if(!written && !all3) why='まず①：3つの数量のマスを押して確認してください（'+n+'/3）';
     else if(!written)          why='①「在庫管理に記入」が押せます';
-    else if(nOk>0)             why='①は記入済みです。合格数量があるので ③'+(cfg.actInput||'在庫投入')+' → ④'+(cfg.actInputDone||'在庫投入 完')+' と進めてください';
+    else if(nowStatus() && nowStatus().indexOf('在庫調整')<0)
+                               why='いまのステータスは「'+nowStatus()+'」です。この画面での作業は済んでいます（ここから先の完了は製造が行います）';
+    else if(nOk>0)             why='①は記入済みです。合格数量があるので ③'+(cfg.actInput||'在庫投入')+' へ進めてください（そこから先の完了は製造が行います）';
     else                       why='①は記入済みです。合格数量がないので ②'+(cfg.actAdjust||'在庫調整 完')+' で完了にできます';
     need.textContent = why;
 
     bWrite.title = blockWrite() || '在庫管理の入力者・入力日に記入します';
     bAdj.title   = blockAdj()   || '';
     bIn.title    = blockIn()    || '';
-    bInD.title   = blockInD()   || '';
   }
   syncButtons();
 
@@ -10444,10 +10437,6 @@ function qcNgMakeItem(r, g){
     var why = blockIn(); if(why){ refuse(why); return; }
     advance(bIn, cfg.actInput||'在庫投入', '③ '+(cfg.actInput||'在庫投入'));
   };
-  bInD.onclick=function(){
-    var why = blockInD(); if(why){ refuse(why); return; }
-    advance(bInD, cfg.actInputDone||'在庫投入 完', '④ '+(cfg.actInputDone||'在庫投入 完'));
-  };
 
   return it;
 }
@@ -10539,12 +10528,12 @@ window.qcNgOpenConfig = function(){
       +   '★<b>ステータス名ではなくアクション名</b>を入れてください。'
       +   'kintone → アプリの設定 → プロセス管理 の<b>右側の列</b>に並んでいる文字です'
       +   '（左側はステータス名）。空白の有無まで同じにしてください。<br>'
-      +   '★不良品報告の設定：在庫調整中 →[在庫調整 完]→ 完了 ／ →[在庫投入]→ 在庫投入中 →[在庫投入 完]→ 完了'
+      +   '★不良品報告の設定：在庫調整中 →[在庫調整 完]→ 完了 ／ →[在庫投入]→ 在庫投入中<br>'
+      +   '※在庫投入中→完了（在庫投入 完）は<b>製造の担当</b>なので、この画面では扱いません'
       + '</div>'
       + '<div style="display:flex;gap:8px;">'
       +   '<div class="qc-fld" style="flex:1"><label>② 在庫調整中 → 完了</label><input type="text" id="qc-ng-act1" placeholder="在庫調整 完"></div>'
       +   '<div class="qc-fld" style="flex:1"><label>③ 在庫調整中 → 在庫投入中（合格数量があるとき）</label><input type="text" id="qc-ng-act2" placeholder="在庫投入"></div>'
-      +   '<div class="qc-fld" style="flex:1"><label>④ 在庫投入中 → 完了</label><input type="text" id="qc-ng-act3" placeholder="在庫投入 完"></div>'
       + '</div>'
       + '<div class="qc-fld"><label>次の作業者（kintoneのログイン名）</label>'
       +   '<input type="text" id="qc-ng-assignee" placeholder="空欄でよい場合が多いです">'
@@ -10578,7 +10567,6 @@ window.qcNgOpenConfig = function(){
   document.getElementById('qc-ng-wgas').value  = cfg.writeGas||'';
   document.getElementById('qc-ng-act1').value  = cfg.actAdjust||'';
   document.getElementById('qc-ng-act2').value  = cfg.actInput||'';
-  document.getElementById('qc-ng-act3').value  = cfg.actInputDone||'';
   document.getElementById('qc-ng-assignee').value = cfg.assignee||'';
   QC_NG_FIELD_ROWS.forEach(function(p){ document.getElementById('qc-ng-f-'+p[0]).value = cfg.f[p[0]]||''; });
   document.getElementById('qc-ng-cfg-msg').textContent='';
@@ -10604,7 +10592,6 @@ window.qcNgSaveConfig = function(){
   cfg.writeGas = document.getElementById('qc-ng-wgas').value.trim();
   cfg.actAdjust = document.getElementById('qc-ng-act1').value.trim() || '在庫調整';
   cfg.actInput  = document.getElementById('qc-ng-act2').value.trim() || '在庫投入';
-  cfg.actInputDone = document.getElementById('qc-ng-act3').value.trim() || '在庫投入 完';
   cfg.assignee  = document.getElementById('qc-ng-assignee').value.trim();
   QC_NG_FIELD_ROWS.forEach(function(p){ cfg.f[p[0]] = document.getElementById('qc-ng-f-'+p[0]).value.trim(); });
   qcNgSaveCfg();
