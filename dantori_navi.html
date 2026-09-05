@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.06-4 : kintoneへ書いた後の「読み直し」で止まる件を3点直した。(1)★qcNgReread に再試行を入れた（1.5秒後・3秒後の計3回）。書き込み直後はGASが詰まりやすく Failed to fetch になる。(2)★読み直しに失敗しただけのときに赤で止めるのをやめた。kintoneには入っているのに②在庫調整へ進めなくなっていたため。記入済みとして扱って先へ進めるようにし、黄色の断り＋「🔄 もう一度 kintone を確認する」ボタンを出す（verifyWrite/verifyStatus を関数に切り出して、そのボタンから同じ処理を呼ぶ）。本当に値が入っていなかったとき（読み直しは成功したが欄が空）は今までどおり赤。(3)★「✓ 入力済みにする」が「更新中...」から戻らない件。失敗側のコールバックが件数を数え直しておらず、最後の1件が失敗すると永久に戻らなかった。成功・失敗とも finish() で数え、失敗があればボタンを戻して件数付きで知らせる。対象0件のときも同様に固まっていたので先に弾く。(4)qcGasPostTo に90秒の上限（AbortController）。GASが返らないと fetch は永久に待つため「処理中…」から戻らなくなる。※JSに 
+ を書くときは String.fromCharCode(10) を使うこと（ヒアドキュメント経由だと実改行になって構文エラーになる） -->
 <!-- H-Hub v2026.09.06-3 : 「記録の不良 N個」の真下に、kintone側の合計を並べて出すようにした（社長要望）。この2つは並んでいるのに単位も出どころも違い、目で比べようがなかった。★記録＝品質チェックシート(QC_ALL_RECORDS)の「不良+保留+その他」を製造番号で集計したHHubの入力実績、★kintone＝App31の不具合数量を品番で集計したもの。qcNgKintoneTotal(hinban,includeExcluded) と qcNgMakeCompare() を追加し、両方の数字と差（一致なら緑✓）を1つの箱に入れた。完了は除外（qcNgMatchが既に外している）。合計するのは品番が完全一致のものだけ（部分一致は参考表示なので混ぜると水増しになる）。※完了を外した結果0個になる場合に「報告が無い」と取り違えないよう、完了を含めた数も小さく添える。※不具合数量が空の報告は0として足し、その件数を注記する。※未設定・読込中・エラーの間は0と出てしまうので箱ごと出さない -->
 <!-- H-Hub v2026.09.06-2 : ★②在庫調整 完（システム）が通り、kintone側で「作業者以外でも実行できるアクション」を作れば動くことを実機で確認。それに伴い、完了になった報告が一覧に残り続けていたのを直した。突合せから外れるステータス(既定は完了)になったら、結果を1.4秒見せてから薄れて消え、その品番の報告が全部なくなればペインを描き直す。※このとき単純に描き直すと「⚠ この品番の不良品報告が見つかりません」と赤で出てしまい、片付けたのに叱られているように見える。qcNgMatch(hinban, includeExcluded) を足して「1件も無い」のか「全部片付いた」のかを見分け、後者は緑で「✓ この品番の不良品報告 N件 は、すべて処理が終わっています」と出すようにした -->
 <!-- H-Hub v2026.09.06-1 : (1)★②が進まない原因が確定。kintoneが GAIA_NT02「このアクションは作業者のみ実行できます」を返した。App31の在庫調整中は作業者が深津健介に限定されており、H-HubはAPIトークンで呼ぶためトークンに利用者がおらず、何度押しても通らない。アクション名の問題ではない。kintone側で プロセス管理 →「＋ 作業者以外でも実行できるアクションを作成する」から同じ行き先のアクションを作り、その名前を⚙設定に入れる必要がある。この案内をエラー時に出すようにした。(2)不良品報告の取得が遅い／Failed to fetch で消える件。500件×全フィールドはGASの往復に数秒かかるのに毎回待たせ、失敗すると表示が消えていた。localStorage(qcNgRecordsCache)に前回分を持ち、開いた瞬間に描画してから裏で差し替える方式に変更（実測8〜9ms）。Failed to fetch は1.5秒後に一度だけ自動で再試行し、それでも駄目なら前回のデータを残したまま「⚠最新の取得に失敗。下は◯◯時点のデータです」と断る。※再試行は qcNgFetch(true,...) で呼ぶこと（force=falseだとキャッシュ復元済みのため冒頭の早期returnで弾かれ再試行が走らない）。※stale状態は再描画で'ok'に戻さない（断りが消えるため） -->
@@ -647,6 +649,10 @@ html, body {
 .qc-ng-done{font-size:12px;font-weight:700;margin-top:6px;padding:6px 9px;border-radius:7px;
   background:#ecfdf3;border-left:4px solid #16a34a;color:#15803d;line-height:1.6;white-space:pre-wrap;}
 .qc-ng-done.bad{background:#fff1f1;border-left-color:#dc2626;color:#b91c1c;}
+.qc-ng-done.warn{background:#fffbeb;border-left-color:#f59e0b;color:#92400e;}
+/* 確認だけができなかったときに出す「もう一度確認」 */
+.qc-ng-recheck{font-size:11px;font-weight:700;color:#92400e;background:#fff;border:1px solid #f59e0b;
+  border-radius:6px;padding:3px 9px;margin-top:6px;cursor:pointer;}
 .qc-ng-wrote{font-size:11px;color:#475569;margin-top:4px;background:#f1f5f9;border-radius:6px;padding:3px 7px;}
 @media (max-width:1000px){
   /* 縦に積む。align-items が flex-start のままだと交差軸＝横幅が内容なりに縮むので stretch に戻す */
@@ -8554,11 +8560,22 @@ function qcGasDiagnose(t){
 // URLを指定してGASを叩く。ヘッダーを付けないこと（付けるとプリフライトが飛んでCORSで落ちる）
 function qcGasPostTo(url, action, payload, successCb, failCb){
   var body = JSON.stringify(Object.assign({action: action}, payload||{}));
-  fetch(url, {method:'POST', redirect:'follow', body:body})
+  // ★上限時間を付ける。GASが返ってこないと fetch は永久に待つため、
+  //   「処理中…」「更新中...」のまま二度と戻らない画面になってしまう。
+  //   GASは遅いときで10秒以上かかるので、余裕をみて90秒。
+  var ctl = (typeof AbortController!=='undefined') ? new AbortController() : null;
+  var timer = setTimeout(function(){ if(ctl) ctl.abort(); }, 90000);
+  var opt = {method:'POST', redirect:'follow', body:body};
+  if(ctl) opt.signal = ctl.signal;
+  fetch(url, opt)
     .then(function(r){ return r.text(); })
     .then(function(t){ try{return JSON.parse(t);}catch(e){throw new Error(qcGasDiagnose(t));} })
-    .then(successCb)
-    .catch(function(e){ if(failCb) failCb(e); else alert('通信エラー: '+e.message); });
+    .then(function(res){ clearTimeout(timer); successCb(res); })
+    .catch(function(e){
+      clearTimeout(timer);
+      if(e && e.name==='AbortError') e = new Error('90秒待っても応答がありませんでした');
+      if(failCb) failCb(e); else alert('通信エラー: '+e.message);
+    });
 }
 function qcGasPost(action, payload, successCb, failCb){
   qcGasPostTo(QC_GAS_URL(), action, payload, successCb, failCb);
@@ -9624,12 +9641,32 @@ function qcMakeGroupCard(g){
       var krecs=jt.kannoRecs.filter(function(r){ return (r[12]||'未')==='未'; });
       (function(kr,btn){
         btn.addEventListener('click',function(){
+          var LBL='✓ 入力済みにする';
+          // ★対象が0件のときは何も起きず、ボタンが「更新中...」のまま戻らなかった
+          if(!kr.length){ alert('入力済みにする対象がありません。'); return; }
           btn.disabled=true; btn.textContent='更新中...';
-          var done=0;
+          var done=0, errs=[];
+          function reset(){ btn.disabled=false; btn.textContent=LBL; }
+          function finish(){
+            if(done<kr.length) return;
+            if(errs.length){
+              // ★失敗しても必ずボタンを戻す。以前は失敗側で件数を数え直しておらず、
+              //   最後の1件が失敗すると「更新中...」から永久に戻らなかった。
+              reset();
+              var BR = String.fromCharCode(10);
+              alert('入力済みにできませんでした（'+errs.length+'/'+kr.length+'件）:' + BR
+                   + errs.join(BR) + BR + BR
+                   + '通信が切れただけのこともあります。もう一度押すか、🔄で読み直してください。');
+            } else {
+              qcLoadRecords();
+            }
+          }
           kr.forEach(function(r){
             qcGasPost('markAsInputted',{rowNum:parseInt(r[r.length-1])},function(res){
-              done++; if(done===kr.length){ if(res.ok) qcLoadRecords(); else{ alert('エラー'); btn.disabled=false; btn.textContent='✓ 入力済みにする'; } }
-            }, function(e){ done++; alert('エラー: '+e.message); });
+              done++;
+              if(!res || !res.ok) errs.push((res&&(res.err||res.error))||'GASがokを返しませんでした');
+              finish();
+            }, function(e){ done++; errs.push(e.message||'通信エラー'); finish(); });
           });
         });
       })(krecs,mb);
@@ -9783,7 +9820,7 @@ window.qcShowPendingList = function(){
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.06-3';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.06-4';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -10164,13 +10201,23 @@ window.qcNgTestWrite = function(){
 
 // 書き込んだ直後に、そのレコードをkintoneから読み直す。
 // 「GASは成功と言っているのにkintoneに入っていない」を、推測ではなく事実で切り分けるため。
-function qcNgReread(id, cb){
+// tries は内部用。書き込み直後はGASが詰まりやすく Failed to fetch になりやすいので、
+// 少し間を置いて2回まで自動で数え直す。それでも駄目なら「確認ができなかった」として返す。
+function qcNgReread(id, cb, tries){
   var cfg=qcNgCfg();
+  tries = tries || 0;
+  function retryOr(err){
+    if(tries < 2){
+      setTimeout(function(){ qcNgReread(id, cb, tries+1); }, tries===0 ? 1500 : 3000);
+    } else {
+      cb(null, err);
+    }
+  }
   qcGasPost('getKintonePartData', {
     domain:(config.domain||'hashimoto-kogyo'), appId:String(cfg.appId), token:cfg.token,
     query:'$id = '+id+' limit 1', fields:[]
   }, function(res){
-    if(!res || !res.ok){ cb(null, (res&&(res.err||res.error))||'再取得に失敗'); return; }
+    if(!res || !res.ok){ retryOr((res&&(res.err||res.error))||'再取得に失敗'); return; }
     var rec=(res.records||[])[0];
     // 手元の一覧も入れ替えて、再描画しても新しい値が出るようにする
     if(rec && QC_NG_RECORDS){
@@ -10179,8 +10226,9 @@ function qcNgReread(id, cb){
         if(old['$id'] && String(old['$id'].value)===String(id)){ QC_NG_RECORDS[i]=rec; break; }
       }
     }
-    cb(rec||null, rec?'':'そのレコードが読めませんでした');
-  }, function(e){ cb(null, e.message||'通信エラー'); });
+    if(!rec){ retryOr('そのレコードが読めませんでした'); return; }
+    cb(rec, '');
+  }, function(e){ retryOr(e.message||'通信エラー'); });
 }
 
 function qcNgRenderPane(pane, g){
@@ -10447,12 +10495,24 @@ function qcNgMakeItem(r, g){
     row.appendChild(yes); row.appendChild(no); ask.appendChild(row);
     try{ ask.scrollIntoView({block:'nearest'}); }catch(e){}
   }
+  // bad: true=赤（本当に駄目だった） / 'warn'=黄（送信は通ったが確認だけができなかった）
   function show(txt, bad){
     msg.style.display='block';
-    msg.className = 'qc-ng-done'+(bad?' bad':'');
+    msg.className = 'qc-ng-done'+(bad==='warn'?' warn':(bad?' bad':''));
     msg.textContent=txt;
     // 画面外だと気づかないので、結果が見える位置まで寄せる
     try{ msg.scrollIntoView({block:'nearest'}); }catch(e){}
+  }
+  // ★「送信は通ったが、確認のための読み直しだけができなかった」ときの出し方。
+  //   赤で止めると、kintoneには入っているのに作業が進められなくなる（実際にそうなった）。
+  //   黄色にして先へ進めるようにし、あとから数え直せるボタンを添える。
+  function showRecheck(txt, again){
+    show(txt, 'warn');
+    var b=document.createElement('button'); b.className='qc-ng-recheck';
+    b.textContent='🔄 もう一度 kintone を確認する';
+    b.onclick=function(){ QC_NG_INTERACTING=true; b.disabled=true; b.textContent='確認中…'; again(); };
+    msg.appendChild(document.createElement('br'));
+    msg.appendChild(b);
   }
 
   bWrite.onclick=function(){
@@ -10484,30 +10544,48 @@ function qcNgMakeItem(r, g){
     qcNgWrite('record', {id:id, record:rec}, function(){
       // ★GASが成功と返しても鵜呑みにせず、kintoneを読み直して実際に入ったか確かめる
       show('送信しました。kintoneを読み直して確認しています…');
-      qcNgReread(id, function(fresh, err){
-        busy(bWrite,false,'① 在庫管理に記入');
-        if(!fresh){
-          show('送信は通りましたが、確認のための再取得ができませんでした（'+err+'）。'
-             +'kintoneを開いて、入力者・入力日が入っているか見てください。', true);
-          return;
-        }
-        var u = f.inpUser ? qcNgVal(fresh, f.inpUser) : '';
-        var d = f.inpDate ? qcNgVal(fresh, f.inpDate) : '';
-        if(u || d){
-          written = true;                       // ②在庫調整を解放する
-          syncButtons();
-          wrote.textContent='在庫管理: '+(u||'—')+'　'+(d||'—');
-          show('✓ kintoneに入りました（'+(u||'—')+' / '+(d||'—')+'）。続けて②在庫調整へ進めます');
-        } else {
-          // ここに来るのが「反映されない」の正体。原因を具体的に出す
-          show('⚠ kintoneに反映されていません。'
-             +'書き込み先として指定している欄（入力者: '+(f.inpUser||'未設定')+' ／ 入力日: '+(f.inpDate||'未設定')+'）が'
-             +'実際の欄と違う可能性があります。⚙設定 →「🧾 列を確認」で、'
-             +'在庫管理の欄のフィールドコードを確かめてください。', true);
-        }
-      });
+      verifyWrite();
     }, function(e){
       busy(bWrite,false,'① 在庫管理に記入');
+      showWriteError(e);
+    });
+  }
+
+  // 書き込んだ結果をkintoneから読み直して確かめる。「🔄 もう一度確認」からも呼ぶ。
+  function verifyWrite(){
+    qcNgReread(id, function(fresh, err){
+      busy(bWrite,false,'① 在庫管理に記入');
+      if(!fresh){
+        // ★読み直しができなかっただけで、書き込み自体は通っている。
+        //   ここで赤くして止めると、kintoneには入っているのに②へ進めなくなる。
+        //   記入済みとして扱い、あとから数え直せるようにする。
+        written = true;
+        syncButtons();
+        wrote.textContent='在庫管理: 記入しました（未確認）';
+        showRecheck('送信は通りましたが、確認のための読み直しができませんでした（'+err+'）。'
+           +'kintone側には入っているはずなので、記入済みとして扱い②へ進めるようにしました。'
+           +'念のため kintone を開いて、入力者・入力日が入っているか見てください。', verifyWrite);
+        return;
+      }
+      var u = f.inpUser ? qcNgVal(fresh, f.inpUser) : '';
+      var d = f.inpDate ? qcNgVal(fresh, f.inpDate) : '';
+      if(u || d){
+        written = true;                       // ②在庫調整を解放する
+        syncButtons();
+        wrote.textContent='在庫管理: '+(u||'—')+'　'+(d||'—');
+        show('✓ kintoneに入りました（'+(u||'—')+' / '+(d||'—')+'）。続けて②在庫調整へ進めます');
+      } else {
+        // ここに来るのが「反映されない」の正体。原因を具体的に出す
+        show('⚠ kintoneに反映されていません。'
+           +'書き込み先として指定している欄（入力者: '+(f.inpUser||'未設定')+' ／ 入力日: '+(f.inpDate||'未設定')+'）が'
+           +'実際の欄と違う可能性があります。⚙設定 →「🧾 列を確認」で、'
+           +'在庫管理の欄のフィールドコードを確かめてください。', true);
+      }
+    });
+  }
+
+  // 記入そのものが失敗したときの説明（ルックアップの引き当て失敗が多い）
+  function showWriteError(e){
       var add='';
       // ルックアップの引き当て失敗。原因は「値が合っていない」か「参照先を読む権限がない」の2つ
       if(/GAIA_LO04|ルックアップの参照先/i.test(String(e))){
@@ -10527,7 +10605,6 @@ function qcNgMakeItem(r, g){
            +'⚙設定の「入力者の名前」を、候補（すでにkintoneに入っている値）から選び直してください。';
       }
       show('記入できませんでした: '+e+add, true);
-    });
   }
 
   function advance(btn, actionName, label){
@@ -10547,9 +10624,22 @@ function qcNgMakeItem(r, g){
     if(cfg.assignee) payload.assignee = cfg.assignee;   // 次のステータスが作業者を要求する場合
     qcNgWrite('status', payload, function(){
       show('送信しました。kintoneを読み直して確認しています…');
+      verifyStatus();
+    }, function(e){
+      busy(btn,false,label);
+      showStatusError(e, actionName);
+    });
+
+    // 進めた結果を読み直して確かめる。「🔄 もう一度確認」からも呼ぶ。
+    function verifyStatus(){
       qcNgReread(id, function(fresh, err){
         busy(btn,false,label);
-        if(!fresh){ show('送信は通りましたが、確認のための再取得ができませんでした（'+err+'）。kintoneで確かめてください。', true); return; }
+        if(!fresh){
+          // 読み直しができなかっただけ。赤で止めず、あとから数え直せるようにする
+          showRecheck('送信は通りましたが、確認のための読み直しができませんでした（'+err+'）。'
+             +'kintone側では進んでいる可能性が高いです。', verifyStatus);
+          return;
+        }
         var after = f.status ? qcNgVal(fresh, f.status) : '';
         if(after && after!==before){
           show('✓ ステータスが「'+before+'」→「'+after+'」に変わりました');
@@ -10575,8 +10665,10 @@ function qcNgMakeItem(r, g){
              +'アクション名「'+actionName+'」が、kintoneのプロセス管理の設定と一致しているか確かめてください。', true);
         }
       });
-    }, function(e){
-      busy(btn,false,label);
+    }
+
+    // 進めること自体が失敗したときの説明
+    function showStatusError(e, actionName){
       var add='';
       if(/GAIA_NT02|作業者のみ実行/.test(String(e))){
         add = BR2 + '★これはkintone側の設定で決まっている制限です。'
@@ -10616,7 +10708,7 @@ function qcNgMakeItem(r, g){
         add = BR2 + '→ いまのステータス（'+before+'）からは、そのアクションに進めません。順番を確かめてください。';
       }
       show('進められませんでした: '+e+add, true);
-    });
+    }
   }
   bAdj.onclick=function(){
     var why = blockAdj(); if(why){ refuse(why); return; }
