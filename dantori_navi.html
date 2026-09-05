@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.05-1 : 品質チェックタブを3点直した。(1)表示が遅い件。記録一覧(getRecords)はGASの往復に数秒かかるのに、タブ初期化・日別一覧・製造番号検索がそれぞれ別々に投げていた(同じ通信が2〜3本重なる)うえ、返るまで画面を「読み込み中...」で空にしていたため、バッジを押すまで何も出ないように見えていた。localStorageのqcAllRecordsCacheを実際に読むようにし(以前は書くだけで読んでいなかった)、手元のデータを即描画→裏で最新に差し替える方式に変更。qcFetchRecords()で多重リクエストも1本にまとめた。(2)製造番号・部品番号をワンタップでコピーできるチップにした。行ごと選択すると「製造番号: 」まで入ってしまい、社内システムへの貼り付けで直す手間があったため、番号だけをクリップボードへ入れる。(3)システム入力待ちの一覧に、kintone「★不良品報告」を右ペインで並べた。記録した不良が報告に挙がっているかを画面を移動せずに確かめられる。品番で突き合わせ、不良の記録があるのに報告が無い場合は赤で警告、報告があれば「kintoneで開く」で該当レコードへ直行する。一覧の幅上限(500px)はこの画面だけ外している。※LOGINUSER()はAPIトークンでは効かないため、ビューの絞り込みではなく直近レコードを取って品番照合する方式にした。トークンとフィールドコードは「⚙ 不良品報告の設定」から登録(このPCのlocalStorageのみ・リポジトリには入らない) -->
 <!-- H-Hub v2026.09.03-9 : 配置表の印刷で周囲が切れる不具合を修正。@page{margin:6mm} を効かせていたが、@page の余白は印刷ダイアログの「余白」設定（なし／デフォルト）で上書きされるため、「なし」を選ぶと余白0で出力される。プリンタには物理的に印刷できない外周（LBP841Cは約5mm）があるので、そこで内容が切れていた。@page ではなく body{padding:8mm} で余白を持たせ、ダイアログの設定に関わらず用紙の内側に入るようにした。あわせて描画幅の上限を 980px（≒259mm）にし、余白「なし」でも「デフォルト」(約10mm)でも A4横に収まるようにしている。実測：用紙297mmに対し内容は左8mm〜右289mm -->
 <!-- H-Hub v2026.09.03-8 : 配置表の印刷で、予定の終わりに合わせて時間軸を切り詰め、空いた分だけ拡大するようにした。8:00-20:00の固定描画だと17時までしか予定がない日に右の3時間が白紙になり、その分だけ表が小さくなっていた。dantoriScheduleから当日の最終時刻を求めて次の正時までを描画幅とし（最短でも12:00まで）、A4横に収まる倍率を逆算してzoomに入れる。例：17:00終わりなら幅1080→810px、倍率0.88→1.14で約3割大きくなる。見出しに「08:00〜17:00」と描画範囲も出す -->
 <!-- H-Hub v2026.09.03-7 : 配置表の印刷から「この日の計画」を外した（2枚目になるため。社長判断）。印刷されるのは 日付つき見出し ＋ 配置表 のみで、A4横1枚に収まる -->
@@ -546,6 +547,41 @@ html, body {
 .qc-cum-bar-bg{background:#eee;border-radius:4px;height:8px;overflow:hidden;margin:4px 0;}
 .qc-cum-bar-fg{background:#854F0B;height:100%;border-radius:4px;}
 .qc-cum-nums{display:flex;justify-content:space-between;font-size:10px;color:#666;}
+/* ===== 番号のワンタップコピー ===== */
+.qc-copy{display:inline-flex;align-items:center;gap:4px;cursor:pointer;border:1px solid #cbd5e1;background:#fff;border-radius:6px;padding:1px 7px;font:inherit;color:inherit;line-height:1.5;}
+.qc-copy:hover{background:#eef4fb;border-color:#1F4E79;}
+.qc-copy:active{background:#dbe8f6;}
+.qc-copy .qc-copy-ico{font-size:10px;color:#8794a5;}
+.qc-copy.qc-copied{background:#dcfce7;border-color:#16a34a;color:#15803d;}
+.qc-copy.qc-copied .qc-copy-ico{color:#16a34a;}
+.qc-rec-no .qc-copy{font-size:13px;font-weight:700;color:#1F4E79;padding:2px 8px;}
+
+/* ===== システム入力待ち：左=記録 / 右=kintone不良品報告 ===== */
+#qc-screen-list .qc-cont.qc-wide{max-width:1400px;}
+.qc-pair{display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;}
+.qc-pair > .qc-rec{flex:1 1 auto;min-width:0;margin-bottom:0;}
+.qc-ng-pane{flex:0 0 380px;max-width:380px;background:#fff;border-radius:10px;padding:10px 12px;box-shadow:0 1px 3px rgba(0,0,0,.08);border-left:4px solid #94a3b8;font-size:12px;}
+.qc-ng-pane.qc-ng-hit{border-left-color:#16a34a;}
+.qc-ng-pane.qc-ng-miss{border-left-color:#E24B4A;background:linear-gradient(to right,#fff7f7,#fff);}
+.qc-ng-pane.qc-ng-none{border-left-color:#cbd5e1;background:#fbfcfd;}
+.qc-ng-hdr{font-size:11px;font-weight:700;color:#475569;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:6px;}
+.qc-ng-item{background:#f8fafc;border-radius:8px;padding:7px 9px;margin-bottom:6px;border:1px solid #e2e8f0;}
+.qc-ng-item-top{display:flex;justify-content:space-between;gap:6px;align-items:baseline;margin-bottom:3px;}
+.qc-ng-date{font-weight:700;color:#1F4E79;font-size:12px;}
+.qc-ng-status{font-size:10px;padding:1px 6px;border-radius:10px;background:#e0e7ff;color:#3730a3;font-weight:700;white-space:nowrap;}
+.qc-ng-line{font-size:11px;color:#555;margin-top:2px;}
+.qc-ng-open{display:inline-block;margin-top:5px;font-size:11px;font-weight:700;color:#1F4E79;text-decoration:none;border:1px solid #1F4E79;border-radius:6px;padding:3px 9px;}
+.qc-ng-open:hover{background:#eef4fb;}
+.qc-ng-warn{color:#b91c1c;font-weight:700;font-size:12px;}
+.qc-ng-muted{color:#94a3b8;font-size:11px;}
+.qc-ng-newbtn{font-size:11px;font-weight:700;color:#b45309;text-decoration:none;border:1px solid #f59e0b;background:#fffbeb;border-radius:6px;padding:3px 9px;display:inline-block;margin-top:6px;}
+@media (max-width:1000px){
+  /* 縦に積む。align-items が flex-start のままだと交差軸＝横幅が内容なりに縮むので stretch に戻す */
+  .qc-pair{flex-direction:column;align-items:stretch;}
+  .qc-pair > .qc-rec{width:auto;box-sizing:border-box;}
+  .qc-ng-pane{flex:1 1 auto;max-width:none;width:auto;box-sizing:border-box;}
+}
+.qc-refresh-note{font-size:11px;color:#64748b;text-align:right;padding:2px 2px 6px;}
 .qc-alloc-card{background:#fff;border-radius:12px;padding:14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-top:3px solid #854F0B;}
 .qc-alloc-title{font-size:13px;font-weight:700;color:#854F0B;margin-bottom:10px;}
 .qc-alloc-row{background:#f8f9fa;border-radius:8px;padding:10px 12px;margin-bottom:8px;}
@@ -8511,7 +8547,10 @@ window.qcOnTabActivated = function(){
     document.getElementById('qc-bulk-pi').addEventListener('change', function(){ qcAddBulkPhoto(this.files[0]); this.value=''; });
     document.getElementById('qc-bulk-pi-retake').addEventListener('change', function(){ qcAddBulkPhoto(this.files[0]); this.value=''; qcCloseViewer(); });
     // 作業予定・記録読み込み
-    qcGasPost('getRecords', {}, function(res){ if(res&&res.ok){ QC_ALL_RECORDS=res.records||[]; try{ localStorage.setItem('qcAllRecordsCache', JSON.stringify(QC_ALL_RECORDS)); }catch(e){} qcUpdatePendingBadge(); qcBuildJobStatusMap(); }}, function(){});
+    // ★まず前回のキャッシュを即座に反映する。GASの往復は数秒かかるため、
+    //   キャッシュを使わないと「読み込み中...」のまま画面が固まったように見える
+    qcLoadCachedRecords();
+    qcFetchRecords(function(){ qcRenderCurrentList(); });
     // QC_SAKUYO 読み込み状態を表示するヘルパー
     function _setSakuyoStatus(msg, color){
       var el=document.getElementById('qc-sakuyo-status');
@@ -8871,7 +8910,7 @@ window.qcShowScreen = function(sc){
     if(el) el.className = 'qc-tab' + (s===sc?' qc-active':'');
   });
   if(sc==='list')   qcLoadRecords();
-  if(sc==='search'){ if(!QC_ALL_RECORDS.length) qcLoadRecords(); else qcRunSeizoSearch(); }
+  if(sc==='search'){ qcLoadCachedRecords(); qcRunSeizoSearch(); if(!QC_ALL_RECORDS.length) qcFetchRecords(function(){ qcRunSeizoSearch(); }); }
   if(sc==='upload') qcUpdateCacheInfo();
 };
 
@@ -9157,7 +9196,7 @@ window.qcGo = function(){
       document.getElementById('qc-df').textContent=msg;
       document.getElementById('qc-form-input').style.display='none';
       document.getElementById('qc-form-done').style.display='block';
-      qcGasPost('getRecords',{}, function(r2){ QC_ALL_RECORDS=(r2&&r2.ok)?(r2.records||[]):[];  qcUpdatePendingBadge(); }, function(){});
+      qcFetchRecords(function(){ qcRenderCurrentList(); });
     } else { alert('エラー: '+res.err); btn.disabled=false; btn.textContent='記録を保存する'; }
   }, function(e){ alert('通信エラー: '+e.message); btn.disabled=false; btn.textContent='記録を保存する'; });
 };
@@ -9195,9 +9234,74 @@ window.qcGoToday = function(){ var t=new Date(); QC_VIEW_DATE=new Date(t.getFull
 window.qcGasPost = qcGasPost;
 window.qcBuildJobStatusMap = qcBuildJobStatusMap;
 
+// ----- 記録の取得（キャッシュ優先・多重リクエスト防止） -----
+// 以前は画面を開くたびに getRecords を投げ、そのあいだ「読み込み中...」で全部消していた。
+// 日別一覧・製造番号検索・タブ初期化がそれぞれ投げるので同じ通信が2〜3本重なり、
+// 結果が返るまで何も出ない＝「反応が悪い」状態になっていた。
+var QC_REC_INFLIGHT = null;      // 実行中のリクエストを待っているコールバック
+var QC_REC_CACHE_LOADED = false; // localStorageキャッシュを読んだか
+
+function qcLoadCachedRecords(){
+  if(QC_REC_CACHE_LOADED || QC_ALL_RECORDS.length) return;
+  QC_REC_CACHE_LOADED = true;
+  try{
+    var c = localStorage.getItem('qcAllRecordsCache');
+    if(c){
+      var arr = JSON.parse(c);
+      if(Array.isArray(arr) && arr.length){
+        QC_ALL_RECORDS = arr;
+        qcUpdatePendingBadge();
+        qcBuildJobStatusMap();
+      }
+    }
+  }catch(e){}
+}
+
+function qcFetchRecords(cb){
+  if(QC_REC_INFLIGHT){ if(cb) QC_REC_INFLIGHT.push(cb); return; }
+  QC_REC_INFLIGHT = cb ? [cb] : [];
+  var finish = function(ok){
+    var waiting = QC_REC_INFLIGHT || []; QC_REC_INFLIGHT = null;
+    waiting.forEach(function(f){ try{ f(ok); }catch(e){} });
+  };
+  qcGasPost('getRecords', {}, function(res){
+    if(res && res.ok){
+      QC_ALL_RECORDS = res.records || [];
+      try{ localStorage.setItem('qcAllRecordsCache', JSON.stringify(QC_ALL_RECORDS)); }catch(e){}
+      qcUpdatePendingBadge(); qcBuildJobStatusMap();
+      finish(true);
+    } else finish(false);
+  }, function(){ finish(false); });
+}
+
+// いま開いている一覧を、その画面のやり方で描き直す
+function qcRenderCurrentList(){
+  var cur = document.querySelector('.qc-screen.qc-on');
+  var id = cur ? cur.id : '';
+  if(id==='qc-screen-list'){ if(QC_PENDING_MODE) qcShowPendingList(); else qcFilterRecords(); }
+  else if(id==='qc-screen-search') qcRunSeizoSearch();
+}
+
 function qcLoadRecords(){
-  document.getElementById('qc-rec-list').innerHTML='<div class="qc-loading">読み込み中...</div>';
-  qcGasPost('getRecords',{}, function(res){ QC_ALL_RECORDS=(res&&res.ok)?(res.records||[]): []; try{ localStorage.setItem('qcAllRecordsCache', JSON.stringify(QC_ALL_RECORDS)); }catch(e){} qcFilterRecords(); qcUpdatePendingBadge(); qcBuildJobStatusMap(); }, function(){ document.getElementById('qc-rec-list').innerHTML='<div class="qc-empty">読み込みエラー</div>'; });
+  qcLoadCachedRecords();
+  var el = document.getElementById('qc-rec-list');
+  // 手元にデータがあれば先に描く。空のときだけ「読み込み中」を出す
+  if(QC_ALL_RECORDS.length){ qcFilterRecords(); qcSetRefreshNote('🔄 最新を確認中…'); }
+  else el.innerHTML = '<div class="qc-loading">読み込み中...</div>';
+  qcFetchRecords(function(ok){
+    if(!ok && !QC_ALL_RECORDS.length){ el.innerHTML='<div class="qc-empty">読み込みエラー</div>'; return; }
+    qcRenderCurrentList();
+    qcSetRefreshNote(ok?'':'⚠ 最新の取得に失敗しました（表示は前回のデータ）');
+  });
+}
+
+// 一覧の上に出す小さな状態表示（一覧そのものは消さない）
+function qcSetRefreshNote(msg){
+  var host = document.getElementById('qc-summary-area'); if(!host) return;
+  var n = document.getElementById('qc-refresh-note');
+  if(!msg){ if(n && n.parentNode) n.parentNode.removeChild(n); return; }
+  if(!n){ n=document.createElement('div'); n.id='qc-refresh-note'; n.className='qc-refresh-note'; host.parentNode.insertBefore(n, host); }
+  n.textContent = msg;
 }
 function qcGetViewDateStr(){ return QC_VIEW_DATE.getFullYear()+'/'+ ('0'+(QC_VIEW_DATE.getMonth()+1)).slice(-2)+'/'+ ('0'+QC_VIEW_DATE.getDate()).slice(-2); }
 function qcFilterRecords(){
@@ -9234,6 +9338,47 @@ function qcRenderByTeam(rows){
     var hdr=document.createElement('div'); hdr.className='qc-team-hdr'; hdr.textContent=team+' ('+ks.length+'グループ)'; el.appendChild(hdr);
     ks.forEach(function(k){ el.appendChild(qcMakeGroupCard(gmap[k])); });
   });
+}
+
+// ----- 番号のワンタップコピー -----
+// 製造番号を社内システムへ貼るとき、行ごと選択すると「製造番号: 」まで入ってしまう。
+// 番号だけを1タップでクリップボードに入れる。
+function qcCopyText(text, cb){
+  var ok = function(){ if(cb) cb(true); };
+  var ng = function(){
+    // http や古いブラウザで clipboard API が使えない場合の保険
+    try{
+      var ta=document.createElement('textarea');
+      ta.value=text; ta.setAttribute('readonly','');
+      ta.style.cssText='position:fixed;top:-1000px;left:-1000px;opacity:0;';
+      document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, ta.value.length);
+      var done=document.execCommand('copy');
+      document.body.removeChild(ta);
+      if(cb) cb(!!done);
+    }catch(e){ if(cb) cb(false); }
+  };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(ok).catch(ng);
+  } else ng();
+}
+function qcCopyChip(text, opts){
+  opts = opts || {};
+  var btn=document.createElement('button');
+  btn.type='button'; btn.className='qc-copy';
+  btn.title=(opts.label?opts.label+'「':'「')+text+'」をコピー';
+  var lbl=document.createElement('span'); lbl.textContent=text;
+  var ico=document.createElement('span'); ico.className='qc-copy-ico'; ico.textContent='⧉';
+  btn.appendChild(lbl); btn.appendChild(ico);
+  btn.addEventListener('click', function(e){
+    e.stopPropagation(); e.preventDefault();
+    qcCopyText(text, function(ok){
+      if(!ok){ alert('コピーできませんでした:\n'+text); return; }
+      btn.classList.add('qc-copied');
+      var prev=lbl.textContent; lbl.textContent='コピーしました'; ico.textContent='✓';
+      setTimeout(function(){ btn.classList.remove('qc-copied'); lbl.textContent=prev; ico.textContent='⧉'; }, 1100);
+    });
+  });
+  return btn;
 }
 
 function qcMakeGroupCard(g){
@@ -9283,7 +9428,8 @@ function qcMakeGroupCard(g){
   var isChukan=!hasAnyKanno&&allRecs.every(function(r){ return r[7]==='中間実績'; });
   div.className='qc-rec '+(allDoneAll?'done':(hasAnyKanno?'kanno-pending':(isChukan?'chukan':'pending')));
   var top=document.createElement('div'); top.className='qc-rec-top';
-  var no=document.createElement('div'); no.className='qc-rec-no'; no.textContent=g.hinban||'（部品番号なし）';
+  var no=document.createElement('div'); no.className='qc-rec-no';
+  if(g.hinban) no.appendChild(qcCopyChip(g.hinban,{label:'部品番号'})); else no.textContent='（部品番号なし）';
   var times=recs.map(function(r){ return (r[0]||'').slice(11,16); }).filter(Boolean);
   var tm=document.createElement('div'); tm.className='qc-rec-time'; tm.textContent=times.length>1?times[0]+'〜'+times[times.length-1]:(times[0]||'');
   top.appendChild(no); top.appendChild(tm); div.appendChild(top);
@@ -9291,7 +9437,12 @@ function qcMakeGroupCard(g){
   var nm=document.createElement('div'); nm.className='qc-rec-name'; nm.textContent=(g.hinmei||'')+'　';
   var opsp=document.createElement('span'); opsp.style.cssText='color:#666;font-size:11px'; opsp.textContent=ops.join('・'); nm.appendChild(opsp); div.appendChild(nm);
   var meta=document.createElement('div'); meta.style.cssText='font-size:11px;color:#555;margin-top:3px;display:flex;gap:6px;flex-wrap:wrap';
-  if(g.seizoNo){ var m1=document.createElement('span'); m1.textContent='製造番号: '+g.seizoNo; meta.appendChild(m1); }
+  if(g.seizoNo){
+    var m1=document.createElement('span'); m1.style.cssText='display:inline-flex;align-items:center;gap:4px;';
+    var m1lbl=document.createElement('span'); m1lbl.textContent='製造番号:'; m1.appendChild(m1lbl);
+    m1.appendChild(qcCopyChip(g.seizoNo,{label:'製造番号'}));
+    meta.appendChild(m1);
+  }
   var nouki='';
   if(QC_SAKUYO) QC_SAKUYO.forEach(function(s){ if(s.seizoNo===g.seizoNo&&s['納期']) nouki=s['納期']; });
   if(nouki){ var m5=document.createElement('span'); m5.style.cssText='color:#E24B4A;font-weight:700'; m5.textContent='納期: '+nouki; meta.appendChild(m5); }
@@ -9412,7 +9563,7 @@ function qcRunSeizoSearch(){
   var q=(document.getElementById('qc-seizo-q').value||'').trim();
   var el=document.getElementById('qc-seizo-result');
   if(!q){ el.innerHTML='<div class="qc-empty">製造番号を入力してください</div>'; return; }
-  if(!QC_ALL_RECORDS.length){ el.innerHTML='<div class="qc-loading">読み込み中...</div>'; qcGasPost('getRecords',{}, function(res){ QC_ALL_RECORDS=(res&&res.ok)?(res.records||[]): []; qcRunSeizoSearch(); }, function(){ el.innerHTML='<div class="qc-empty">読み込みエラー</div>'; }); return; }
+  if(!QC_ALL_RECORDS.length){ el.innerHTML='<div class="qc-loading">読み込み中...</div>'; qcFetchRecords(function(ok){ if(ok) qcRunSeizoSearch(); else el.innerHTML='<div class="qc-empty">読み込みエラー</div>'; }); return; }
   var ql=q.toLowerCase();
   var matched=QC_ALL_RECORDS.filter(function(r){ return (r[13]||'').toLowerCase().indexOf(ql)>=0||(r[2]||'').toLowerCase().indexOf(ql)>=0||(r[3]||'').toLowerCase().indexOf(ql)>=0; });
   if(!matched.length){ el.innerHTML='<div class="qc-empty">「'+q+'」の記録が見つかりません</div>'; return; }
@@ -9470,20 +9621,359 @@ function qcUpdatePendingBadge(){
 }
 window.qcShowPendingList = function(){
   qcShowScreen('list');
+  qcLoadCachedRecords();
   var pending=QC_ALL_RECORDS.filter(function(r){ return (r[7]||'')==='完納'&&(r[12]||'未')==='未'; });
   if(!pending.length){ qcUpdatePendingBadge(); return; }
   QC_PENDING_MODE=true;
   document.getElementById('qc-date-nav').style.display='none';
   document.getElementById('qc-list-filter-wrap').style.display='none';
+  // 右にkintone不良品報告を並べるので、幅の上限(500px)を外す
+  var cont=document.querySelector('#qc-screen-list .qc-cont'); if(cont) cont.classList.add('qc-wide');
+  var sa=document.getElementById('qc-summary-area'); if(sa) sa.innerHTML='';
+  qcSetRefreshNote('');
   var el=document.getElementById('qc-rec-list'); el.innerHTML='';
-  var hdr=document.createElement('div'); hdr.style.cssText='display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding:8px;background:#ffebee;border-radius:8px;border-left:4px solid #E24B4A;';
+  var hdr=document.createElement('div'); hdr.style.cssText='display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px;padding:8px;background:#ffebee;border-radius:8px;border-left:4px solid #E24B4A;';
   var lbl=document.createElement('span'); lbl.style.cssText='font-size:13px;color:#E24B4A;font-weight:700;'; lbl.textContent='⚠️ システム入力待ち: '+pending.length+'件';
+  var btns=document.createElement('span'); btns.style.cssText='display:flex;gap:6px;';
+  var ngBtn=document.createElement('button'); ngBtn.textContent='🔄 不良品報告を再取得'; ngBtn.style.cssText='padding:4px 10px;background:#fff;color:#1F4E79;border:1px solid #1F4E79;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;';
+  ngBtn.onclick=function(){ QC_NG_RECORDS=null; qcNgFetch(true); };
+  var cfgBtn=document.createElement('button'); cfgBtn.textContent='⚙ 不良品報告の設定'; cfgBtn.style.cssText='padding:4px 10px;background:#fff;color:#555;border:1px solid #999;border-radius:6px;font-size:12px;cursor:pointer;';
+  cfgBtn.onclick=function(){ qcNgOpenConfig(); };
   var backBtn=document.createElement('button'); backBtn.textContent='✕ 閉じる'; backBtn.style.cssText='padding:4px 12px;background:#555;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;';
-  backBtn.onclick=function(){ QC_PENDING_MODE=false; document.getElementById('qc-date-nav').style.display=''; document.getElementById('qc-list-filter-wrap').style.display=''; qcFilterRecords(); };
-  hdr.appendChild(lbl); hdr.appendChild(backBtn); el.appendChild(hdr);
+  backBtn.onclick=function(){
+    QC_PENDING_MODE=false;
+    document.getElementById('qc-date-nav').style.display='';
+    document.getElementById('qc-list-filter-wrap').style.display='';
+    if(cont) cont.classList.remove('qc-wide');
+    qcFilterRecords();
+  };
+  btns.appendChild(ngBtn); btns.appendChild(cfgBtn); btns.appendChild(backBtn);
+  hdr.appendChild(lbl); hdr.appendChild(btns); el.appendChild(hdr);
   var gmap={}, gorder=[];
   pending.forEach(function(r){ var k=(r[13]||r[2]||''); if(!gmap[k]){ gmap[k]={recs:[],hinban:r[2],hinmei:r[3],seizoNo:r[13],junjo:r[14],kosei:r[15],shiji:r[16],team:qcGetTeam(r[4]||'')}; gorder.push(k); } gmap[k].recs.push(r); });
-  gorder.forEach(function(k){ var card=qcMakeGroupCard(gmap[k]); var toggle=card.querySelector('.qc-grp-toggle'), detail=card.querySelector('.qc-grp-detail'); if(toggle&&detail){ detail.style.display='block'; toggle.textContent=toggle.textContent.replace('▼','▲').replace('を表示（全日付）','（全日付）を非表示'); } el.appendChild(card); });
+  gorder.forEach(function(k){
+    var g=gmap[k];
+    var card=qcMakeGroupCard(g);
+    var toggle=card.querySelector('.qc-grp-toggle'), detail=card.querySelector('.qc-grp-detail');
+    if(toggle&&detail){ detail.style.display='block'; toggle.textContent=toggle.textContent.replace('▼','▲').replace('を表示（全日付）','（全日付）を非表示'); }
+    // 左=記録カード / 右=kintone不良品報告の照合
+    var pair=document.createElement('div'); pair.className='qc-pair';
+    pair.appendChild(card);
+    pair.appendChild(qcNgMakePane(g));
+    el.appendChild(pair);
+  });
+  qcNgFetch(false);
+};
+
+// ============================================================
+//  kintone「★不良品報告」との照合（システム入力待ちの右ペイン）
+//  記録した不良が不良品報告に挙がっているかを、画面を行き来せずに確かめる。
+//  品質チェックGASの getKintonePartData を中継に使う（domain/appId/token/query/fields を渡せる汎用アクション）。
+//  LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
+//  ビューの絞り込みは使わず、直近のレコードをまとめて取って品番で突き合わせる。
+// ============================================================
+var QC_NG_LS      = 'qcNgReportCfg';
+var QC_NG_CFG     = null;
+var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
+var QC_NG_STATE   = 'idle'; // idle | loading | ok | error | unset
+var QC_NG_ERR     = '';
+var QC_NG_PANES   = [];     // [{el, g}]
+
+function qcNgDefaultCfg(){
+  return { appId:'31', token:'', limit:500,
+           f:{ hinban:'', hinmei:'', date:'', status:'', worker:'', memo:'', qty:'' } };
+}
+function qcNgCfg(){
+  if(QC_NG_CFG) return QC_NG_CFG;
+  QC_NG_CFG = qcNgDefaultCfg();
+  try{
+    var s=JSON.parse(localStorage.getItem(QC_NG_LS)||'null');
+    if(s){ Object.keys(s).forEach(function(k){ if(k==='f') Object.assign(QC_NG_CFG.f, s.f||{}); else QC_NG_CFG[k]=s[k]; }); }
+  }catch(e){}
+  return QC_NG_CFG;
+}
+function qcNgSaveCfg(){ try{ localStorage.setItem(QC_NG_LS, JSON.stringify(qcNgCfg())); }catch(e){} }
+
+// 品番の表記ゆれを吸収して比べる（空白・全角英数・記号違い）
+function qcNgNorm(v){
+  return String(v==null?'':v)
+    .replace(/[Ａ-Ｚａ-ｚ０-９]/g, function(c){ return String.fromCharCode(c.charCodeAt(0)-0xFEE0); })
+    .replace(/[\s　]/g,'').replace(/[‐‑‒–—―ー]/g,'-').toUpperCase();
+}
+
+function qcNgVal(rec, code){
+  if(!rec || !code || !rec[code]) return '';
+  var v = rec[code].value;
+  if(v===null || v===undefined) return '';
+  if(Array.isArray(v)){
+    return v.map(function(x){
+      if(x && typeof x==='object'){ return x.name || x.code || x.value || ''; }
+      return String(x);
+    }).filter(Boolean).join('・');
+  }
+  if(typeof v==='object') return v.name || v.code || '';
+  return String(v);
+}
+
+// フィールドコードが未設定なら、レコードの中身から推測する
+function qcNgGuessFields(rec){
+  if(!rec) return;
+  var f = qcNgCfg().f;
+  var codes = Object.keys(rec);
+  function pick(cands){
+    for(var i=0;i<cands.length;i++){ if(codes.indexOf(cands[i])>=0) return cands[i]; }
+    // 部分一致でも探す
+    for(var j=0;j<cands.length;j++){
+      var hit = codes.find(function(c){ return c.indexOf(cands[j])>=0; });
+      if(hit) return hit;
+    }
+    return '';
+  }
+  if(!f.hinban) f.hinban = pick(['部品番号','品番']);
+  if(!f.hinmei) f.hinmei = pick(['部品名称','品名']);
+  if(!f.date)   f.date   = pick(['不具合発生日','発生日']);
+  if(!f.status) f.status = codes.indexOf('ステータス')>=0 ? 'ステータス' : pick(['ステータス','状態']);
+  if(!f.worker) f.worker = pick(['作業者','担当者']);
+  if(!f.memo)   f.memo   = pick(['メモ','備考']);
+  if(!f.qty)    f.qty    = pick(['不良数','不良合計','数量']);
+  qcNgSaveCfg();
+}
+
+function qcNgFetch(force){
+  var cfg = qcNgCfg();
+  if(!cfg.token || !cfg.appId){ QC_NG_STATE='unset'; qcNgRenderAll(); return; }
+  if(QC_NG_RECORDS && !force){ QC_NG_STATE='ok'; qcNgRenderAll(); return; }
+  QC_NG_STATE='loading'; QC_NG_ERR=''; qcNgRenderAll();
+  // fields を指定しないと全フィールド＋$id が返る（$id はkintoneを直接開くリンクに使う）
+  qcGasPost('getKintonePartData', {
+    domain: (config.domain || 'hashimoto-kogyo'),
+    appId:  String(cfg.appId),
+    token:  cfg.token,
+    query:  'order by $id desc limit ' + (parseInt(cfg.limit)||500),
+    fields: []   // 空配列＝全フィールド。GAS側が fields.map() する実装でも落ちないように必ず渡す
+  }, function(res){
+    if(!res || !res.ok){ QC_NG_STATE='error'; QC_NG_ERR=(res&&(res.err||res.error))||'取得に失敗しました'; qcNgRenderAll(); return; }
+    QC_NG_RECORDS = res.records || [];
+    if(QC_NG_RECORDS.length) qcNgGuessFields(QC_NG_RECORDS[0]);
+    QC_NG_STATE='ok'; qcNgRenderAll();
+  }, function(e){ QC_NG_STATE='error'; QC_NG_ERR=e.message||'通信エラー'; qcNgRenderAll(); });
+}
+
+// この品番に対する不良品報告を探す
+function qcNgMatch(hinban){
+  if(!QC_NG_RECORDS || !hinban) return [];
+  var code = qcNgCfg().f.hinban; if(!code) return [];
+  var target = qcNgNorm(hinban);
+  var exact=[], partial=[];
+  QC_NG_RECORDS.forEach(function(rec){
+    var v = qcNgNorm(qcNgVal(rec, code));
+    if(!v) return;
+    if(v===target) exact.push(rec);
+    else if(v.indexOf(target)>=0 || target.indexOf(v)>=0) partial.push(rec);
+  });
+  exact.forEach(function(r){ r.__qcExact=true; });
+  partial.forEach(function(r){ r.__qcExact=false; });
+  return exact.concat(partial);
+}
+
+// この製造番号で記録された不良の合計（不良／保留／その他）
+function qcNgRecordedNg(g){
+  var t={ng:0,hokyu:0,sonota:0};
+  QC_ALL_RECORDS.forEach(function(r){
+    if(r[13]!==g.seizoNo) return;
+    t.ng     += parseInt(r[6] ||0)||0;
+    t.hokyu  += parseInt(r[17]||0)||0;
+    t.sonota += parseInt(r[18]||0)||0;
+  });
+  t.total = t.ng + t.hokyu + t.sonota;
+  return t;
+}
+
+function qcNgMakePane(g){
+  var pane=document.createElement('div'); pane.className='qc-ng-pane';
+  QC_NG_PANES.push({el:pane, g:g});
+  qcNgRenderPane(pane, g);
+  return pane;
+}
+function qcNgRenderAll(){
+  QC_NG_PANES = QC_NG_PANES.filter(function(p){ return p.el && p.el.isConnected; });
+  QC_NG_PANES.forEach(function(p){ qcNgRenderPane(p.el, p.g); });
+}
+
+function qcNgKintoneUrl(id){
+  var d = config.domain || 'hashimoto-kogyo';
+  return 'https://'+d+'.cybozu.com/k/'+(qcNgCfg().appId||'31')+'/show#record='+id;
+}
+
+function qcNgRenderPane(pane, g){
+  pane.innerHTML=''; pane.className='qc-ng-pane';
+  var rec = qcNgRecordedNg(g);
+
+  var hdr=document.createElement('div'); hdr.className='qc-ng-hdr';
+  var h1=document.createElement('span'); h1.textContent='📕 不良品報告（kintone）';
+  var h2=document.createElement('span'); h2.className='qc-ng-muted';
+  h2.textContent = rec.total>0 ? ('記録の不良 '+rec.total+'個') : '記録の不良 なし';
+  hdr.appendChild(h1); hdr.appendChild(h2); pane.appendChild(hdr);
+
+  function line(txt, cls){ var d=document.createElement('div'); if(cls) d.className=cls; d.textContent=txt; pane.appendChild(d); return d; }
+
+  if(QC_NG_STATE==='unset'){
+    pane.classList.add('qc-ng-none');
+    line('未設定です。「⚙ 不良品報告の設定」からkintoneのAPIトークンを登録してください。','qc-ng-muted');
+    var b=document.createElement('button'); b.textContent='⚙ 設定を開く';
+    b.style.cssText='margin-top:6px;padding:4px 10px;font-size:11px;border:1px solid #999;background:#fff;border-radius:6px;cursor:pointer;';
+    b.onclick=function(){ qcNgOpenConfig(); }; pane.appendChild(b);
+    return;
+  }
+  if(QC_NG_STATE==='loading'){ pane.classList.add('qc-ng-none'); line('照合中…','qc-ng-muted'); return; }
+  if(QC_NG_STATE==='error'){ pane.classList.add('qc-ng-miss'); line('取得エラー: '+QC_NG_ERR,'qc-ng-warn'); return; }
+  if(!qcNgCfg().f.hinban){
+    pane.classList.add('qc-ng-none');
+    line('部品番号のフィールドが判別できませんでした。「⚙ 不良品報告の設定」で指定してください。','qc-ng-muted');
+    return;
+  }
+
+  var hits = qcNgMatch(g.hinban);
+  var f = qcNgCfg().f;
+
+  if(!hits.length){
+    if(rec.total>0){
+      pane.classList.add('qc-ng-miss');
+      line('⚠ この品番の不良品報告が見つかりません','qc-ng-warn');
+      line('記録では 不良'+rec.ng+' / 保留'+rec.hokyu+' / その他'+rec.sonota+' が入っています。報告が必要か確認してください。','qc-ng-line');
+      var a=document.createElement('a'); a.className='qc-ng-newbtn'; a.target='_blank'; a.rel='noopener';
+      a.href='https://'+(config.domain||'hashimoto-kogyo')+'.cybozu.com/k/'+(qcNgCfg().appId||'31')+'/';
+      a.textContent='＋ kintoneで不良品報告を開く'; pane.appendChild(a);
+    } else {
+      pane.classList.add('qc-ng-none');
+      line('不良の記録なし・報告なし（照合OK）','qc-ng-muted');
+    }
+    return;
+  }
+
+  pane.classList.add('qc-ng-hit');
+  hits.slice(0,6).forEach(function(r){
+    var it=document.createElement('div'); it.className='qc-ng-item';
+    var top=document.createElement('div'); top.className='qc-ng-item-top';
+    var dt=document.createElement('span'); dt.className='qc-ng-date';
+    dt.textContent=(f.date?qcNgVal(r,f.date):'') || '(日付なし)';
+    top.appendChild(dt);
+    if(f.status){ var st=document.createElement('span'); st.className='qc-ng-status'; st.textContent=qcNgVal(r,f.status)||'—'; top.appendChild(st); }
+    it.appendChild(top);
+
+    var hb=qcNgVal(r,f.hinban);
+    var l1=document.createElement('div'); l1.className='qc-ng-line';
+    l1.textContent=hb+(f.hinmei&&qcNgVal(r,f.hinmei)?' / '+qcNgVal(r,f.hinmei):'');
+    it.appendChild(l1);
+
+    var bits=[];
+    if(f.worker && qcNgVal(r,f.worker)) bits.push('作業者: '+qcNgVal(r,f.worker));
+    if(f.qty    && qcNgVal(r,f.qty))    bits.push('不良: '+qcNgVal(r,f.qty));
+    if(bits.length){ var l2=document.createElement('div'); l2.className='qc-ng-line'; l2.textContent=bits.join('　'); it.appendChild(l2); }
+    if(f.memo && qcNgVal(r,f.memo)){ var l3=document.createElement('div'); l3.className='qc-ng-line'; l3.style.color='#7c5a12'; l3.textContent='📝 '+qcNgVal(r,f.memo); it.appendChild(l3); }
+
+    if(!r.__qcExact){ var pm=document.createElement('div'); pm.className='qc-ng-line'; pm.style.color='#b45309'; pm.textContent='※ 品番が完全一致ではありません（参考表示）'; it.appendChild(pm); }
+
+    var id = r['$id'] ? r['$id'].value : '';
+    if(id){
+      var a=document.createElement('a'); a.className='qc-ng-open'; a.target='_blank'; a.rel='noopener';
+      a.href=qcNgKintoneUrl(id); a.textContent='kintoneで開く（確認を記入）→';
+      it.appendChild(a);
+    }
+    pane.appendChild(it);
+  });
+  if(hits.length>6) line('ほか '+(hits.length-6)+'件','qc-ng-muted');
+}
+
+// ----- 不良品報告の設定モーダル -----
+window.qcNgOpenConfig = function(){
+  var cfg=qcNgCfg();
+  var bg=document.getElementById('qc-ng-cfg-bg');
+  if(!bg){
+    bg=document.createElement('div'); bg.className='qc-modal-bg'; bg.id='qc-ng-cfg-bg';
+    bg.innerHTML =
+      '<div class="qc-modal" style="max-width:560px">'
+      + '<div class="qc-modal-title">⚙ 不良品報告（kintone）との照合設定</div>'
+      + '<div style="font-size:12px;color:#555;line-height:1.7;margin-bottom:12px;background:#f8fafc;padding:10px;border-radius:8px;">'
+      +   'kintoneの「★不良品報告」アプリで<b>APIトークン</b>を作り、ここに貼り付けてください。<br>'
+      +   'kintone → 対象アプリ → 歯車（アプリの設定）→ 設定タブ →「APIトークン」→ 生成する →'
+      +   ' アクセス権で<b>レコード閲覧</b>にチェック → 保存 → <b>アプリを更新</b>。<br>'
+      +   '<span style="color:#b45309;">※ トークンはこのパソコンの中だけに保存されます（GitHubには入りません）。</span>'
+      + '</div>'
+      + '<div class="qc-fld"><label>アプリID</label><input type="text" id="qc-ng-appid" placeholder="31"></div>'
+      + '<div class="qc-fld"><label>APIトークン（レコード閲覧）</label><input type="text" id="qc-ng-token" placeholder="kintoneで生成したトークン"></div>'
+      + '<div class="qc-fld"><label>取得件数の上限</label><input type="text" id="qc-ng-limit" placeholder="500"></div>'
+      + '<div style="font-size:12px;font-weight:700;color:#1F4E79;margin:14px 0 6px;">フィールドコード（空欄なら自動判別）</div>'
+      + '<div id="qc-ng-fieldrows"></div>'
+      + '<div id="qc-ng-cfg-msg" style="font-size:12px;margin-top:10px;"></div>'
+      + '<div class="qc-modal-btn-row">'
+      +   '<button class="qc-modal-btn qc-modal-cancel" onclick="qcNgCloseConfig()">閉じる</button>'
+      +   '<button class="qc-modal-btn" style="background:#e2e8f0;color:#334155" onclick="qcNgDetectFields()">🧾 列を確認</button>'
+      +   '<button class="qc-modal-btn" style="background:#1F4E79;color:#fff" onclick="qcNgSaveConfig()">保存して照合</button>'
+      + '</div></div>';
+    document.getElementById('tab-quality').appendChild(bg);
+    var rows=bg.querySelector('#qc-ng-fieldrows');
+    [['hinban','部品番号（照合キー）'],['hinmei','部品名称'],['date','不具合発生日'],
+     ['status','ステータス'],['worker','作業者'],['qty','不良数'],['memo','メモ']].forEach(function(p){
+      var d=document.createElement('div'); d.className='qc-fld';
+      d.innerHTML='<label>'+p[1]+'</label><input type="text" id="qc-ng-f-'+p[0]+'">';
+      rows.appendChild(d);
+    });
+  }
+  document.getElementById('qc-ng-appid').value = cfg.appId||'';
+  document.getElementById('qc-ng-token').value = cfg.token||'';
+  document.getElementById('qc-ng-limit').value = cfg.limit||500;
+  ['hinban','hinmei','date','status','worker','qty','memo'].forEach(function(k){
+    document.getElementById('qc-ng-f-'+k).value = cfg.f[k]||'';
+  });
+  document.getElementById('qc-ng-cfg-msg').textContent='';
+  bg.className='qc-modal-bg on';
+};
+window.qcNgCloseConfig = function(){ var b=document.getElementById('qc-ng-cfg-bg'); if(b) b.className='qc-modal-bg'; };
+window.qcNgSaveConfig = function(){
+  var cfg=qcNgCfg();
+  cfg.appId = document.getElementById('qc-ng-appid').value.trim() || '31';
+  cfg.token = document.getElementById('qc-ng-token').value.trim();
+  cfg.limit = parseInt(document.getElementById('qc-ng-limit').value)||500;
+  ['hinban','hinmei','date','status','worker','qty','memo'].forEach(function(k){
+    cfg.f[k] = document.getElementById('qc-ng-f-'+k).value.trim();
+  });
+  qcNgSaveCfg();
+  qcNgCloseConfig();
+  QC_NG_RECORDS=null; qcNgFetch(true);
+};
+// 列（フィールドコード）と中身のサンプルを出す。名前を当てずっぽうで書かなくて済むように。
+window.qcNgDetectFields = function(){
+  var cfg=qcNgCfg();
+  var token=document.getElementById('qc-ng-token').value.trim() || cfg.token;
+  var appId=document.getElementById('qc-ng-appid').value.trim() || cfg.appId;
+  var msg=document.getElementById('qc-ng-cfg-msg');
+  if(!token){ msg.style.color='#b91c1c'; msg.textContent='先にAPIトークンを入力してください。'; return; }
+  msg.style.color='#555'; msg.textContent='取得中…';
+  qcGasPost('getKintonePartData', {
+    domain:(config.domain||'hashimoto-kogyo'), appId:String(appId), token:token,
+    query:'order by $id desc limit 1', fields:[]
+  }, function(res){
+    if(!res||!res.ok||!res.records||!res.records.length){
+      msg.style.color='#b91c1c';
+      msg.textContent='取得できませんでした: '+((res&&(res.err||res.error))||'レコードが0件、またはトークンの権限が足りません');
+      return;
+    }
+    var rec=res.records[0];
+    var html='<div style="max-height:220px;overflow:auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px;background:#fbfcfd;">';
+    Object.keys(rec).forEach(function(code){
+      var v=qcNgVal(rec,code); if(v.length>40) v=v.slice(0,40)+'…';
+      html+='<div style="display:flex;gap:8px;padding:2px 0;border-bottom:1px dotted #e2e8f0;">'
+          + '<b style="flex:0 0 46%;word-break:break-all;color:#1F4E79">'+code+'</b>'
+          + '<span style="color:#555;word-break:break-all">'+(v||'—')+'</span></div>';
+    });
+    html+='</div><div style="margin-top:6px;color:#555">上の左側がフィールドコードです。合うものを下の欄に写してください。</div>';
+    msg.style.color='#333'; msg.innerHTML=html;
+    qcNgGuessFields(rec);
+    ['hinban','hinmei','date','status','worker','qty','memo'].forEach(function(k){
+      var el=document.getElementById('qc-ng-f-'+k); if(el && !el.value) el.value=qcNgCfg().f[k]||'';
+    });
+  }, function(e){ msg.style.color='#b91c1c'; msg.textContent='通信エラー: '+e.message; });
 };
 
 // ----- 一括振り分け -----
@@ -9619,7 +10109,7 @@ window.qcSaveAlloc = function(){
       } else {
         alert('✅ '+targets.length+'件の記録を保存しました');
         QC_BULK_PHOTO=null;
-        qcGasPost('getRecords',{},function(r2){ QC_ALL_RECORDS=(r2&&r2.ok)?(r2.records||[]): []; },function(){});
+        qcFetchRecords(function(){});
         qcShowScreen('list'); qcLoadRecords();
       }
       return;
