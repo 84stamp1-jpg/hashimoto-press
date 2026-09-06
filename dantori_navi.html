@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.06-12 : 不良品報告ペインの3点（社長指示）。(1)★「品質確認中」が1件でもあれば、ペインの先頭で黄色く知らせる（.qc-ng-hinshitsu）。品質確認中＝まだ品質管理の手を離れていない印。報告が4件あるとカードを1件ずつ開かないと気づけなかった。(2)「ステータス『完了・在庫投入中』も含めると◯個（◯件）」の行を削除。読む側の関心から外れるため。※kAll の計算自体は「全部片付いているのか、本当に報告が無いのか」の見分けに使うので残す。(3)★報告の入力者は、欄が割り当たっていて値が空のときも「入力者: （未入力）」と橙色で出す。何も出さないと「画面が壊れている」のか「kintone側が空」なのか区別がつかないため。欄そのものが未設定のときは従来どおり出さない（⚙設定→🧾列を確認 でコードを入れる）-->
 <!-- H-Hub v2026.09.06-11 : 発見者の横に出す「入力者」は“報告を打ち込んだ人”(f.reporter)であって、①で書き込む在庫管理の入力者(f.inpUser)ではない。自動判別が報告側の欄を見つけられなかったときに在庫管理側を拾う余地が残っていたので、★f.reporter === f.inpUser なら f.reporter を空にする保険を入れた（在庫管理へ書いた値を「報告の入力者」として見せると事実と違うため。出さないほうがまだ良い）。毎回見るので、前に取り違えて保存されていた端末もここで直る。※自動で見つからない場合は空欄になるので、⚙設定 →「🧾 列を確認」でフィールドコードを調べ、「入力者（報告書を打ち込んだ人）」の欄に手で入れること -->
 <!-- H-Hub v2026.09.06-10 : ①在庫管理に記入 の条件を「不具合数量 ＝ 廃棄数量＋合格数量」だけにした（社長指示）。★三点のマスを押しても押せるようにはしない。品質管理【処置結果】の廃棄数量が空のまま押されると素通りしてしまうため（-9では「三点を押す」か「数が合う」かのどちらかで押せてしまっていた）。合格数量は 不具合＝廃棄 のとき「—」のことがあるので、—は0として計算する（不具合1＝廃棄1＋合格— は押せる）。押せないときは理由を数字入りで出す（不具合1／廃棄—＋合格—＝0（差1））。不具合数量が空・0のときは判定できないので押せない。三点の☑は読んだ印として残すが、ボタンの条件ではなくなった -->
 <!-- H-Hub v2026.09.06-9 : 三点確認の緩和（社長指示）。★不具合数量 ＝ 廃棄数量＋合格数量 のときは数のつじつまが合っているので、三点のマスを1つずつ押さなくても①在庫管理に記入 を押せるようにした（qtyBalanced()）。合わないときだけ従来どおり目で確かめてもらう。※不具合数量が空・0のときは判定できないので従来どおり三点の確認を求める（空を0とみなすと、数量が何も入っていない報告まで素通りしてしまうため）。見出しは「✓ 数が合っています（不具合10＝廃棄4＋合格6）。そのまま①へ進めます」と出し、押せない理由の文にも一致すれば押せる旨を添える -->
@@ -657,6 +658,9 @@ html, body {
   background:#ecfdf3;border-left:4px solid #16a34a;color:#15803d;line-height:1.6;white-space:pre-wrap;}
 .qc-ng-done.bad{background:#fff1f1;border-left-color:#dc2626;color:#b91c1c;}
 .qc-ng-done.warn{background:#fffbeb;border-left-color:#f59e0b;color:#92400e;}
+/* 品質確認中が残っているときの注意（カードの黄色いステータスと同じ色に揃える） */
+.qc-ng-hinshitsu{font-size:12px;font-weight:700;color:#8a6100;background:#fff4cc;
+  border:1px solid #f0c419;border-radius:8px;padding:6px 9px;margin-bottom:7px;}
 /* 入力待ちが全部片付いたときに出す。空の一覧だけが残ると壊れたように見えるため */
 .qc-pending-done{margin:14px auto;max-width:520px;text-align:center;font-size:13px;font-weight:700;
   color:#15803d;background:#ecfdf3;border:1px solid #86efac;border-radius:10px;padding:14px 16px;}
@@ -9888,7 +9892,7 @@ window.qcShowPendingList = function(){
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.06-11';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.06-12';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -10236,11 +10240,8 @@ function qcNgMakeCompare(g, rec){
   }
   box.appendChild(diff);
 
-  // 完了になった分を外した結果、数字が大きく違って見えることがある。
-  // 「片付け済みだから0」なのか「本当に報告が無い」のかを取り違えないよう、含めた場合も添える
-  if(kAll.ng!==k.ng || kAll.cases!==k.cases){
-    note('ステータス「'+qcNgExcludedLabel()+'」も含めると '+kAll.ng+'個（'+kAll.cases+'件）');
-  }
+  // ※「完了・在庫投入中も含めると◯個」の行は、読む側の関心から外れるので出さない（社長指示）。
+  //   kAll は「全部片付いているのか、本当に報告が無いのか」の見分けにだけ使う。
   if(k.scrap) note('kintoneの廃棄数量 '+k.scrap+'個／合格数量 '+k.ok+'個');
   if(k.noQty) note('※ 不具合数量が空の報告が '+k.noQty+'件あります（0として足しています）');
   if(k.partial) note('※ 品番が完全一致でない報告 '+k.partial+'件 は合計に入れていません');
@@ -10346,9 +10347,21 @@ function qcNgRenderPane(pane, g){
   h2.textContent = rec.total>0 ? ('記録の不良 '+rec.total+'個') : '記録の不良 なし';
   hdr.appendChild(h1); hdr.appendChild(h2); pane.appendChild(hdr);
 
-  // 見出しの数字（記録の不良）の真下に、kintone側の合計を並べる。
-  // データが揃っていないうち（未設定・読込中・エラー）は 0 と出てしまうので出さない。
   if((QC_NG_STATE==='ok'||QC_NG_STATE==='stale') && f.hinban && g.hinban){
+    // ★「品質確認中」がまだ残っているかを、カードを1件ずつ開かなくても分かるようにする。
+    //   品質確認中＝まだ品質管理の手を離れていない印なので、何件あっても見落とせない。
+    if(f.status){
+      var hin = qcNgMatch(g.hinban).filter(function(x){
+        return qcNgVal(x, f.status).indexOf('品質確認')>=0;
+      });
+      if(hin.length){
+        var al=document.createElement('div'); al.className='qc-ng-hinshitsu';
+        al.textContent='⚠ 品質確認中が '+hin.length+'件 あります（まだ品質管理の手を離れていません）';
+        pane.appendChild(al);
+      }
+    }
+    // 見出しの数字（記録の不良）の真下に、kintone側の合計を並べる。
+    // データが揃っていないうち（未設定・読込中・エラー）は 0 と出てしまうので出さない。
     pane.appendChild(qcNgMakeCompare(g, rec));
   }
 
@@ -10432,9 +10445,12 @@ function qcNgMakeItem(r, g){
   if(f.worker && qcNgVal(r,f.worker)){ var l2=document.createElement('div'); l2.className='qc-ng-line'; l2.textContent='発見者: '+qcNgVal(r,f.worker); it.appendChild(l2); }
   // ★報告書の「入力者」は発見者とは別人のことがある（見つけた人と、kintoneに打ち込んだ人）。
   //   在庫管理の入力者(inpUser)とも別物なので、ここは reporter を見る。
-  if(f.reporter && qcNgVal(r,f.reporter)){
+  if(f.reporter){
+    var rv=qcNgVal(r,f.reporter);
     var l2b=document.createElement('div'); l2b.className='qc-ng-line';
-    l2b.textContent='入力者: '+qcNgVal(r,f.reporter); it.appendChild(l2b);
+    l2b.textContent='入力者: '+(rv || '（未入力）');
+    if(!rv) l2b.style.color='#b45309';
+    it.appendChild(l2b);
   }
 
   // 実績入力の有無。値が入っていれば「有」。'無'/'なし'/'未' と書いてある場合はその通り「無」にする
