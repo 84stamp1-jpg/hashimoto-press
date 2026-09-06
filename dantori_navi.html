@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.06-8 : 報告書の「入力者」も出すようにした（社長指示）。見つけた人（発見者）とkintoneに打ち込んだ人（入力者）は別人のことがあるため、発見者の下に並べて出す。設定に f.reporter を追加。★あわせて自動判別の取り違えを直した。App31には「入力者」を含む欄が2つある（報告書の「入力者」と 在庫管理の「i_PRO_W_入力者」）。従来は f.inpUser = pick([入力者]) で、pick()は完全一致を先に見るため、素の「入力者」欄がある環境では①在庫管理に記入 の書き込み先がそちらに化ける可能性があった。欄コードに PRO／在庫 を含むかどうかで在庫管理側かを判定し、reporter は在庫管理側を除いた「入力者」、inpUser／inpDate は在庫管理側を優先して選ぶようにした。※既に設定済みの端末は if(!f.xxx) で守られるので上書きされない -->
 <!-- H-Hub v2026.09.06-7 : 「在庫投入中」も「完了」と同じく突合せの一覧から外すようにした（社長指示）。在庫投入中まで進んだものは品管の手を離れ、そこから先の「在庫投入 完」は製造が担当するため（v2026.09.05-13でボタン自体は外してあったが、一覧には残っていた）。★既定値を excludeStatus:「完了」→「完了,在庫投入中」に変更。★設定は端末のlocalStorageに保存されているので、既定値を変えるだけでは既存の端末に効かない。cfgVer を足し、保存済みの値が旧既定の「完了」ちょうどのときだけ1度だけ引き上げる（自分で「完了」だけに戻した人・別の値にしている人の設定は二度と書き換えない）。★画面に出すときは qcNgExcludedLabel() で「完了・在庫投入中」と中黒に直す（カンマのまま出すと設定値が漏れて見える）-->
 <!-- H-Hub v2026.09.06-6 : 「✓ 入力済みにしました」になった行を、システム入力待ちの一覧から消すようにした（社長要望）。済んだものが残っていると、どれがまだ残っているのか分からなくなるため。不良品報告ペインと同じ扱い（v2026.09.06-2）で、結果を1.4秒見せてから薄れて消える。qcPendingRemoveRow() と qcPendingRefreshHeader() を追加。★同じ製造番号に入力待ちの工順がまだ残っている場合は消さない（.qc-mark-btn を数えて data-done が全部立ってから消す）。★手元の記録にも r[12]=「済」を入れる。GASの反映を待たずに見出しの件数とバッジ(qcUpdatePendingBadge)を正しくするため。★0件になったら見出しを緑(.is-clear)にして「✓ システム入力待ちはありません」に変え、「すべて片付きました」の箱を出す（空の一覧だけが残ると壊れたように見えるため） -->
 <!-- H-Hub v2026.09.06-5 : 「✓ 入力済みにする」が成功しても「更新中...」から戻らない件（-4で直しきれていなかった経路）。★成功時はボタンを戻す役目を一覧の描き直しに任せていたのが原因。不良品報告ペインを一度でも操作すると QC_NG_INTERACTING が立ち（☑や結果表示が消えるのを防ぐため）、qcRenderCurrentList() が 「id===qc-screen-list && QC_PENDING_MODE && QC_NG_INTERACTING」で描き直しを見送る。そのためボタンだけ「更新中...」のまま残っていた。qcLoadRecords() を呼ぶ前に btn.textContent=「✓ 入力済みにしました」/disabled=true を先に置く。※教訓＝ボタンの状態を戻す処理を、別の関数の再描画に依存させないこと。その再描画は条件付きで見送られることがある -->
@@ -9884,7 +9885,7 @@ window.qcShowPendingList = function(){
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.06-7';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.06-8';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -9915,7 +9916,9 @@ function qcNgDefaultCfg(){
     actAdjust:'在庫調整 完',      // 在庫調整中 → 完了
     actInput:'在庫投入',          // 在庫調整中 → 在庫投入中（合格数量があるとき）
     assignee:'',                // 進めた先のステータスが「作業者を選択」の場合に必要なログイン名
-    f:{ hinban:'', hinmei:'', date:'', status:'', worker:'', memo:'',
+    // ★「入力者」は2つある。reporter＝報告書そのものの入力者（発見者とは別人のことがある）／
+    //   inpUser＝在庫管理(i-PRO W)の入力者＝①で書き込む先。混同しないこと。
+    f:{ hinban:'', hinmei:'', date:'', status:'', worker:'', reporter:'', memo:'',
         qtyNg:'不具合数量', qtyScrap:'廃棄数量', qtyOk:'合格数量',
         inpUser:'', inpDate:'', jisseki:'' }
   };
@@ -10042,8 +10045,19 @@ function qcNgGuessFields(rec){
   if(!f.worker)  f.worker  = pick(['発見者','作業者','担当者']);
   if(!f.jisseki) f.jisseki = pick(['実績入力','実績']);
   if(!f.memo)    f.memo    = pick(['メモ','備考']);
-  if(!f.inpUser) f.inpUser = pick(['入力者']);
-  if(!f.inpDate) f.inpDate = pick(['入力日']);
+  // ★「入力者」を含む欄が2つある（報告書の「入力者」と 在庫管理の「i_PRO_W_入力者」）。
+  //   pick() は部分一致で拾ってしまい、①の書き込み先を取り違える。ここだけ個別に見分ける。
+  function pickCode(test){
+    for(var i=0;i<codes.length;i++){ if(test(codes[i])) return codes[i]; }
+    return '';
+  }
+  var isStock = function(c){ return c.indexOf('PRO')>=0 || c.indexOf('ＰＲＯ')>=0 || c.indexOf('在庫')>=0; };
+  if(!f.reporter) f.reporter = (codes.indexOf('入力者')>=0) ? '入力者'
+                             : pickCode(function(c){ return c.indexOf('入力者')>=0 && !isStock(c); });
+  if(!f.inpUser)  f.inpUser  = pickCode(function(c){ return c.indexOf('入力者')>=0 && isStock(c); })
+                             || pick(['入力者']);
+  if(!f.inpDate)  f.inpDate  = pickCode(function(c){ return c.indexOf('入力日')>=0 && isStock(c); })
+                             || pick(['入力日']);
   qcNgSaveCfg();
 }
 
@@ -10408,6 +10422,12 @@ function qcNgMakeItem(r, g){
   l1.textContent=qcNgVal(r,f.hinban)+(f.hinmei&&qcNgVal(r,f.hinmei)?' / '+qcNgVal(r,f.hinmei):'');
   it.appendChild(l1);
   if(f.worker && qcNgVal(r,f.worker)){ var l2=document.createElement('div'); l2.className='qc-ng-line'; l2.textContent='発見者: '+qcNgVal(r,f.worker); it.appendChild(l2); }
+  // ★報告書の「入力者」は発見者とは別人のことがある（見つけた人と、kintoneに打ち込んだ人）。
+  //   在庫管理の入力者(inpUser)とも別物なので、ここは reporter を見る。
+  if(f.reporter && qcNgVal(r,f.reporter)){
+    var l2b=document.createElement('div'); l2b.className='qc-ng-line';
+    l2b.textContent='入力者: '+qcNgVal(r,f.reporter); it.appendChild(l2b);
+  }
 
   // 実績入力の有無。値が入っていれば「有」。'無'/'なし'/'未' と書いてある場合はその通り「無」にする
   if(f.jisseki){
@@ -10952,10 +10972,11 @@ window.qcNgOpenConfig = function(){
 };
 var QC_NG_FIELD_ROWS = [
   ['hinban','部品番号（照合キー）'],['hinmei','部品名称'],['date','不具合発生日'],
-  ['status','ステータス'],['worker','発見者（報告した人）'],['memo','メモ'],
+  ['status','ステータス'],['worker','発見者（見つけた人）'],
+  ['reporter','入力者（報告書を打ち込んだ人／※在庫管理の入力者とは別）'],['memo','メモ'],
   ['jisseki','実績入力の有無を見る欄'],
   ['qtyNg','不具合数量（サブテーブル内でも可）'],['qtyScrap','廃棄数量（サブテーブル内でも可）'],['qtyOk','合格数量'],
-  ['inpUser','在庫管理 入力者'],['inpDate','在庫管理 入力日']
+  ['inpUser','在庫管理 入力者（①で書き込む先・i_PRO_W_入力者）'],['inpDate','在庫管理 入力日（①で書き込む先）']
 ];
 window.qcNgCloseConfig = function(){ var b=document.getElementById('qc-ng-cfg-bg'); if(b) b.className='qc-modal-bg'; };
 window.qcNgSaveConfig = function(){
