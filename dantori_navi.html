@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.06-6 : 「✓ 入力済みにしました」になった行を、システム入力待ちの一覧から消すようにした（社長要望）。済んだものが残っていると、どれがまだ残っているのか分からなくなるため。不良品報告ペインと同じ扱い（v2026.09.06-2）で、結果を1.4秒見せてから薄れて消える。qcPendingRemoveRow() と qcPendingRefreshHeader() を追加。★同じ製造番号に入力待ちの工順がまだ残っている場合は消さない（.qc-mark-btn を数えて data-done が全部立ってから消す）。★手元の記録にも r[12]=「済」を入れる。GASの反映を待たずに見出しの件数とバッジ(qcUpdatePendingBadge)を正しくするため。★0件になったら見出しを緑(.is-clear)にして「✓ システム入力待ちはありません」に変え、「すべて片付きました」の箱を出す（空の一覧だけが残ると壊れたように見えるため） -->
 <!-- H-Hub v2026.09.06-5 : 「✓ 入力済みにする」が成功しても「更新中...」から戻らない件（-4で直しきれていなかった経路）。★成功時はボタンを戻す役目を一覧の描き直しに任せていたのが原因。不良品報告ペインを一度でも操作すると QC_NG_INTERACTING が立ち（☑や結果表示が消えるのを防ぐため）、qcRenderCurrentList() が 「id===qc-screen-list && QC_PENDING_MODE && QC_NG_INTERACTING」で描き直しを見送る。そのためボタンだけ「更新中...」のまま残っていた。qcLoadRecords() を呼ぶ前に btn.textContent=「✓ 入力済みにしました」/disabled=true を先に置く。※教訓＝ボタンの状態を戻す処理を、別の関数の再描画に依存させないこと。その再描画は条件付きで見送られることがある -->
 <!-- H-Hub v2026.09.06-4 : kintoneへ書いた後の「読み直し」で止まる件を3点直した。(1)★qcNgReread に再試行を入れた（1.5秒後・3秒後の計3回）。書き込み直後はGASが詰まりやすく Failed to fetch になる。(2)★読み直しに失敗しただけのときに赤で止めるのをやめた。kintoneには入っているのに②在庫調整へ進めなくなっていたため。記入済みとして扱って先へ進めるようにし、黄色の断り＋「🔄 もう一度 kintone を確認する」ボタンを出す（verifyWrite/verifyStatus を関数に切り出して、そのボタンから同じ処理を呼ぶ）。本当に値が入っていなかったとき（読み直しは成功したが欄が空）は今までどおり赤。(3)★「✓ 入力済みにする」が「更新中...」から戻らない件。失敗側のコールバックが件数を数え直しておらず、最後の1件が失敗すると永久に戻らなかった。成功・失敗とも finish() で数え、失敗があればボタンを戻して件数付きで知らせる。対象0件のときも同様に固まっていたので先に弾く。(4)qcGasPostTo に90秒の上限（AbortController）。GASが返らないと fetch は永久に待つため「処理中…」から戻らなくなる。※JSに 
  を書くときは String.fromCharCode(10) を使うこと（ヒアドキュメント経由だと実改行になって構文エラーになる） -->
@@ -651,6 +652,9 @@ html, body {
   background:#ecfdf3;border-left:4px solid #16a34a;color:#15803d;line-height:1.6;white-space:pre-wrap;}
 .qc-ng-done.bad{background:#fff1f1;border-left-color:#dc2626;color:#b91c1c;}
 .qc-ng-done.warn{background:#fffbeb;border-left-color:#f59e0b;color:#92400e;}
+/* 入力待ちが全部片付いたときに出す。空の一覧だけが残ると壊れたように見えるため */
+.qc-pending-done{margin:14px auto;max-width:520px;text-align:center;font-size:13px;font-weight:700;
+  color:#15803d;background:#ecfdf3;border:1px solid #86efac;border-radius:10px;padding:14px 16px;}
 /* 確認だけができなかったときに出す「もう一度確認」 */
 .qc-ng-recheck{font-size:11px;font-weight:700;color:#92400e;background:#fff;border:1px solid #f59e0b;
   border-radius:6px;padding:3px 9px;margin-top:6px;cursor:pointer;}
@@ -665,6 +669,8 @@ html, body {
 .qc-pending-hdr{position:sticky;top:0;z-index:20;display:flex;justify-content:space-between;align-items:center;
   gap:8px;margin-bottom:10px;padding:8px;background:#ffebee;border-radius:8px;border-left:4px solid #E24B4A;
   box-shadow:0 2px 6px rgba(0,0,0,.10);}
+/* 入力待ちが0件になったら見出しも緑にする（赤い帯のまま緑の文字だと読みにくいため） */
+.qc-pending-hdr.is-clear{background:#ecfdf3;border-left-color:#16a34a;}
 .qc-refresh-note{font-size:11px;color:#64748b;text-align:right;padding:2px 2px 6px;}
 .qc-alloc-card{background:#fff;border-radius:12px;padding:14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,.08);border-top:3px solid #854F0B;}
 .qc-alloc-title{font-size:13px;font-weight:700;color:#854F0B;margin-bottom:10px;}
@@ -9665,6 +9671,11 @@ function qcMakeGroupCard(g){
               //   描き直しを見送る。するとボタンだけ「更新中...」のまま残る。
               //   ここで先に済んだ状態にしてから読み直す。
               btn.disabled = true; btn.textContent = '✓ 入力済みにしました';
+              btn.setAttribute('data-done','1');
+              // 手元の記録にも「済」を入れる。GASの反映を待たずに件数とバッジを正しくするため
+              kr.forEach(function(r){ r[12]='済'; });
+              qcUpdatePendingBadge();
+              qcPendingRemoveRow(btn);   // 結果を見せてから一覧から消す
               qcLoadRecords();
             }
           }
@@ -9761,6 +9772,51 @@ window.qcExecDelete = function(){
 };
 
 // ----- システム入力待ちバッジ -----
+// ★入力済みにした行は「システム入力待ち」ではなくなるので、一覧から消す。
+//   済んだものが残っていると、どれがまだ残っているのか分からなくなるため
+//   （不良品報告ペインと同じ扱い・v2026.09.06-2）。
+//   同じ製造番号にまだ入力待ちの工順が残っている場合は消さない。
+function qcPendingRemoveRow(btn){
+  var pair = btn;
+  while(pair && !(pair.classList && pair.classList.contains('qc-pair'))) pair = pair.parentNode;
+  if(!pair) return;
+  var marks = pair.querySelectorAll('.qc-mark-btn');
+  for(var i=0;i<marks.length;i++){
+    if(marks[i].getAttribute('data-done')!=='1') return;   // まだ残っている
+  }
+  var host = pair.parentNode;
+  setTimeout(function(){
+    pair.style.transition='opacity .45s';
+    pair.style.opacity='0';
+    setTimeout(function(){
+      if(pair.parentNode) pair.parentNode.removeChild(pair);
+      qcPendingRefreshHeader(host);
+    }, 470);
+  }, 1400);   // 結果を読む時間を置いてから消す
+}
+
+// 見出しの件数を、いま画面に残っている行の数に合わせる。
+// 全部片付いたときに空の一覧だけが残ると壊れたように見えるので、その旨を出す。
+function qcPendingRefreshHeader(host){
+  host = host || document.getElementById('qc-rec-list');
+  if(!host) return;
+  var n = host.querySelectorAll('.qc-pair').length;
+  var box = host.querySelector('.qc-pending-hdr');
+  if(box) box.classList[n>0 ? 'remove' : 'add']('is-clear');
+  var lbl = host.querySelector('.qc-pending-hdr span');
+  if(lbl){
+    var ver = lbl.querySelector('span');          // 版表示は消さずに付け直す
+    lbl.textContent = (n>0 ? '⚠️ システム入力待ち: '+n+'件' : '✓ システム入力待ちはありません');
+    lbl.style.color = (n>0 ? '#E24B4A' : '#15803d');
+    if(ver) lbl.appendChild(ver);
+  }
+  if(n===0 && !host.querySelector('.qc-pending-done')){
+    var d=document.createElement('div'); d.className='qc-pending-done';
+    d.textContent='✓ システム入力待ちはすべて片付きました。「✕ 閉じる」で記録一覧に戻れます。';
+    host.appendChild(d);
+  }
+}
+
 function qcUpdatePendingBadge(){
   var pending=QC_ALL_RECORDS.filter(function(r){ return (r[7]||'')==='完納'&&(r[12]||'未')==='未'; });
   var badge=document.getElementById('qc-pending-badge'), countEl=document.getElementById('qc-pending-count');
@@ -9827,7 +9883,7 @@ window.qcShowPendingList = function(){
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.06-5';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.06-6';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
