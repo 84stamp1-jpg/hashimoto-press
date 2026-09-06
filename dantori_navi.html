@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.06-7 : 「在庫投入中」も「完了」と同じく突合せの一覧から外すようにした（社長指示）。在庫投入中まで進んだものは品管の手を離れ、そこから先の「在庫投入 完」は製造が担当するため（v2026.09.05-13でボタン自体は外してあったが、一覧には残っていた）。★既定値を excludeStatus:「完了」→「完了,在庫投入中」に変更。★設定は端末のlocalStorageに保存されているので、既定値を変えるだけでは既存の端末に効かない。cfgVer を足し、保存済みの値が旧既定の「完了」ちょうどのときだけ1度だけ引き上げる（自分で「完了」だけに戻した人・別の値にしている人の設定は二度と書き換えない）。★画面に出すときは qcNgExcludedLabel() で「完了・在庫投入中」と中黒に直す（カンマのまま出すと設定値が漏れて見える）-->
 <!-- H-Hub v2026.09.06-6 : 「✓ 入力済みにしました」になった行を、システム入力待ちの一覧から消すようにした（社長要望）。済んだものが残っていると、どれがまだ残っているのか分からなくなるため。不良品報告ペインと同じ扱い（v2026.09.06-2）で、結果を1.4秒見せてから薄れて消える。qcPendingRemoveRow() と qcPendingRefreshHeader() を追加。★同じ製造番号に入力待ちの工順がまだ残っている場合は消さない（.qc-mark-btn を数えて data-done が全部立ってから消す）。★手元の記録にも r[12]=「済」を入れる。GASの反映を待たずに見出しの件数とバッジ(qcUpdatePendingBadge)を正しくするため。★0件になったら見出しを緑(.is-clear)にして「✓ システム入力待ちはありません」に変え、「すべて片付きました」の箱を出す（空の一覧だけが残ると壊れたように見えるため） -->
 <!-- H-Hub v2026.09.06-5 : 「✓ 入力済みにする」が成功しても「更新中...」から戻らない件（-4で直しきれていなかった経路）。★成功時はボタンを戻す役目を一覧の描き直しに任せていたのが原因。不良品報告ペインを一度でも操作すると QC_NG_INTERACTING が立ち（☑や結果表示が消えるのを防ぐため）、qcRenderCurrentList() が 「id===qc-screen-list && QC_PENDING_MODE && QC_NG_INTERACTING」で描き直しを見送る。そのためボタンだけ「更新中...」のまま残っていた。qcLoadRecords() を呼ぶ前に btn.textContent=「✓ 入力済みにしました」/disabled=true を先に置く。※教訓＝ボタンの状態を戻す処理を、別の関数の再描画に依存させないこと。その再描画は条件付きで見送られることがある -->
 <!-- H-Hub v2026.09.06-4 : kintoneへ書いた後の「読み直し」で止まる件を3点直した。(1)★qcNgReread に再試行を入れた（1.5秒後・3秒後の計3回）。書き込み直後はGASが詰まりやすく Failed to fetch になる。(2)★読み直しに失敗しただけのときに赤で止めるのをやめた。kintoneには入っているのに②在庫調整へ進めなくなっていたため。記入済みとして扱って先へ進めるようにし、黄色の断り＋「🔄 もう一度 kintone を確認する」ボタンを出す（verifyWrite/verifyStatus を関数に切り出して、そのボタンから同じ処理を呼ぶ）。本当に値が入っていなかったとき（読み直しは成功したが欄が空）は今までどおり赤。(3)★「✓ 入力済みにする」が「更新中...」から戻らない件。失敗側のコールバックが件数を数え直しておらず、最後の1件が失敗すると永久に戻らなかった。成功・失敗とも finish() で数え、失敗があればボタンを戻して件数付きで知らせる。対象0件のときも同様に固まっていたので先に弾く。(4)qcGasPostTo に90秒の上限（AbortController）。GASが返らないと fetch は永久に待つため「処理中…」から戻らなくなる。※JSに 
@@ -9883,7 +9884,7 @@ window.qcShowPendingList = function(){
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.06-6';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.06-7';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -9902,7 +9903,10 @@ function qcNgDefaultCfg(){
     token2:'',                  // ルックアップの参照先アプリ（社員マスタ等）のAPIトークン
     writeGas:'',                // 書き込み専用GASのデプロイURL（既存の品質チェックGASは触らない）
     user:'',                    // 在庫管理「入力者」に書く名前（ユーザー選択ならkintoneのログイン名）
-    excludeStatus:'完了',        // 突合せから外すステータス（カンマ区切り）
+    // 突合せから外すステータス（カンマ区切り）。★在庫投入中まで進んだものは品管の手を離れ、
+    //   そこから先の「在庫投入 完」は製造が担当するため、完了と同じく一覧から外す。
+    excludeStatus:'完了,在庫投入中',
+    cfgVer:2,                   // 既定値を変えたときに、保存済みの設定を1度だけ引き上げるための番号
     // ★プロセス管理の「アクション名」。左列のステータス名ではなく、右列のアクション名を入れる。
     //   ★不良品報告(App31)の実際の設定：
     //     品質確認中 →[品質処置済]→ 在庫調整中
@@ -9922,8 +9926,23 @@ function qcNgCfg(){
   try{
     var s=JSON.parse(localStorage.getItem(QC_NG_LS)||'null');
     if(s){ Object.keys(s).forEach(function(k){ if(k==='f') Object.assign(QC_NG_CFG.f, s.f||{}); else QC_NG_CFG[k]=s[k]; }); }
+    // ★既定値を「完了」→「完了,在庫投入中」に変えたので、端末に保存済みの設定も引き上げる。
+    //   前の既定値のままの人だけが対象。1度だけ（cfgVerで判定）なので、
+    //   あとで「完了」だけに戻した人の設定は二度と書き換えない。
+    if(s && !(s.cfgVer>=2)){
+      if(String(QC_NG_CFG.excludeStatus||'').trim()==='完了') QC_NG_CFG.excludeStatus='完了,在庫投入中';
+      QC_NG_CFG.cfgVer = 2;
+      try{ localStorage.setItem(QC_NG_LS, JSON.stringify(QC_NG_CFG)); }catch(e){}
+    }
   }catch(e){}
   return QC_NG_CFG;
+}
+
+// 外しているステータスを画面に出すときの書き方（「完了,在庫投入中」→「完了・在庫投入中」）
+function qcNgExcludedLabel(){
+  var v = String(qcNgCfg().excludeStatus||'').split(/[,、]/)
+          .map(function(x){ return x.trim(); }).filter(Boolean);
+  return v.length ? v.join('・') : '—';
 }
 function qcNgSaveCfg(){ try{ localStorage.setItem(QC_NG_LS, JSON.stringify(qcNgCfg())); }catch(e){} }
 
@@ -10188,7 +10207,7 @@ function qcNgMakeCompare(g, rec){
     // 報告はあるが全部「完了」の場合。ここで「差 +202個」と出すと、片付いているのに
     // 数が合っていないように見える。比べる相手が居ないことを言う
     diff.className='qc-ng-cmp-diff same';
-    diff.textContent='— この品番の報告は全て「'+(cfg.excludeStatus||'完了')+'」のため、比べる相手がありません';
+    diff.textContent='— この品番の報告は全て「'+qcNgExcludedLabel()+'」のため、比べる相手がありません';
   } else {
     diff.className='qc-ng-cmp-diff'+(d===0?' same':' gap');
     diff.textContent = (d===0) ? '✓ 一致' : ('差 '+(d>0?'+':'')+d+'個（'+(d>0?'記録':'kintone')+'が多い）');
@@ -10198,13 +10217,13 @@ function qcNgMakeCompare(g, rec){
   // 完了になった分を外した結果、数字が大きく違って見えることがある。
   // 「片付け済みだから0」なのか「本当に報告が無い」のかを取り違えないよう、含めた場合も添える
   if(kAll.ng!==k.ng || kAll.cases!==k.cases){
-    note('ステータス「'+(cfg.excludeStatus||'完了')+'」も含めると '+kAll.ng+'個（'+kAll.cases+'件）');
+    note('ステータス「'+qcNgExcludedLabel()+'」も含めると '+kAll.ng+'個（'+kAll.cases+'件）');
   }
   if(k.scrap) note('kintoneの廃棄数量 '+k.scrap+'個／合格数量 '+k.ok+'個');
   if(k.noQty) note('※ 不具合数量が空の報告が '+k.noQty+'件あります（0として足しています）');
   if(k.partial) note('※ 品番が完全一致でない報告 '+k.partial+'件 は合計に入れていません');
   note('記録は製造番号単位・kintoneは品番単位（他ロットの報告も含む）／ステータス「'
-       +(cfg.excludeStatus||'完了')+'」は除外');
+       +qcNgExcludedLabel()+'」は除外');
   return box;
 }
 
@@ -10345,14 +10364,14 @@ function qcNgRenderPane(pane, g){
     if(everAny.length){
       pane.classList.add('qc-ng-hit');
       line('✓ この品番の不良品報告 '+everAny.length+'件 は、すべて処理が終わっています','qc-ng-done-all');
-      line('（ステータスが「'+(cfg.excludeStatus||'完了')+'」のものは突合せから外しています）','qc-ng-muted');
+      line('（ステータスが「'+qcNgExcludedLabel()+'」のものは突合せから外しています）','qc-ng-muted');
       return;
     }
     if(rec.total>0){
       pane.classList.add('qc-ng-miss');
       line('⚠ この品番の不良品報告が見つかりません','qc-ng-warn');
       line('記録では 不良'+rec.ng+' / 保留'+rec.hokyu+' / その他'+rec.sonota+' が入っています。'
-           +'（ステータス「'+(cfg.excludeStatus||'—')+'」は突合せから外しています）','qc-ng-line');
+           +'（ステータス「'+qcNgExcludedLabel()+'」は突合せから外しています）','qc-ng-line');
       var a=document.createElement('a'); a.className='qc-ng-newbtn'; a.target='_blank'; a.rel='noopener';
       a.href='https://'+(config.domain||'hashimoto-kogyo')+'.cybozu.com/k/'+(cfg.appId||'31')+'/';
       a.textContent='＋ kintoneで不良品報告を開く'; pane.appendChild(a);
@@ -10867,7 +10886,7 @@ window.qcNgOpenConfig = function(){
       +     '（エラー <b>GAIA_LO04</b> が出たときはこれが原因です）'
       +   '</div></div>'
       + '<div class="qc-fld"><label>取得件数の上限</label><input type="text" id="qc-ng-limit" placeholder="500"></div>'
-      + '<div class="qc-fld"><label>突合せから外すステータス（カンマ区切り）</label><input type="text" id="qc-ng-exst" placeholder="完了"></div>'
+      + '<div class="qc-fld"><label>突合せから外すステータス（カンマ区切り）</label><input type="text" id="qc-ng-exst" placeholder="完了,在庫投入中"><div style="font-size:11px;color:#475569;margin-top:4px;line-height:1.6;">既定は「完了,在庫投入中」。在庫投入中まで進んだものは品管の手を離れ、そこから先の「在庫投入 完」は製造が担当するため、一覧から外しています。</div></div>'
       + '<div class="qc-fld"><label>入力者の名前（在庫管理「i-PRO W 入力者」へ書く値）</label>'
       +   '<input type="text" id="qc-ng-user" list="qc-ng-user-list" placeholder="深津健介">'
       +   '<datalist id="qc-ng-user-list"></datalist>'
