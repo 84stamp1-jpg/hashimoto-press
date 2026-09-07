@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型管理システム</title>
+<!-- 金型管理システム v2026.09.07-1 : 一時停止中のタスクが「作業中」と出る件。表示の判定が『実績の終了時刻があるか無いか』の2択しかなく、一時停止は終了時刻を入れないため、止めていても『まだ終わっていない＝作業中』に落ちていた。t.actual.pausedAt を誰も見ていなかったのが原因。(1)actState() を作り carried/done/paused/working/pending の5状態で判定する。(2)ガントの実績バーは停止中に『⏸ 停止中（HH:MM から）』を出し、バーも止めた時刻で切る（now まで伸ばすと止めている間も伸び続けるため）。(3)★実績時間の計算が2か所とも間違っていた。ガントと予実カードは pauses を一切引かず『今 − 開始』で出しており、calcWorkedH は閉じた停止区間しか引けず、停止したまま再開していない区間（to がまだ無い）を引けなかった。workedMin() を作って両方から使うようにした -->
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 <style>
@@ -569,7 +570,7 @@ tr.act-total td.act-name{background:#eef2f7}
 <body>
 
 <header>
-  <div class="logo">⚙ <span>金型</span>管理システム<span style="font-size:9px;color:#9aa3b2;font-weight:400;margin-left:6px">v2026.09.05-1</span></div>
+  <div class="logo">⚙ <span>金型</span>管理システム<span style="font-size:9px;color:#9aa3b2;font-weight:400;margin-left:6px">v2026.09.07-1</span></div>
   <div class="main-tab-bar">
     <button class="main-tab-btn active" id="mainTabRepair" onclick="switchMainTab('repair')">🔧 改修計画表</button>
     <button class="main-tab-btn" id="mainTabNew" onclick="switchMainTab('newmold')">🏗️ 新規製作 日程表</button>
@@ -2850,6 +2851,31 @@ function fillNullStartMins(ds){
 }
 
 // ===== 担当者の当日実働時間計算（並行作業対応） =====
+// ★一時停止を差し引いた実働の分数。ガントのバーと予実カードは
+//   これまで「今 − 開始」で出しており、停止した時間が丸ごと実績に入っていた。
+function workedMin(t){
+  const as=minToMs(t.actual?.start); if(as===null) return null;
+  const nowMin=new Date().getHours()*60+new Date().getMinutes();
+  let ae=minToMs(t.actual?.end);
+  if(ae===null) ae=minToMs(t.actual?.pausedAt)??nowMin;   // 停止中は止めた時刻まで
+  if(ae<=as) return 0;
+  let off=0;
+  (t.actual?.pauses||[]).forEach(p=>{
+    const f=minToMs(p.from), o=minToMs(p.to);
+    if(f===null||o===null||o<=f) return;
+    const b=Math.max(f,as), e=Math.min(o,ae);
+    if(e>b) off+=e-b;
+  });
+  return Math.max(0, ae-as-off);
+}
+// ★表示上の状態。終了時刻の有無だけで見ると、停止中でも「作業中」と出てしまう。
+function actState(t){
+  if(t.actual?.status==='carried') return 'carried';
+  if(!t.actual?.start) return 'pending';
+  if(t.actual?.end) return 'done';
+  if(t.actual?.pausedAt) return 'paused';
+  return 'working';
+}
 function calcWorkedH(tasks){
   // 各タスクの実働区間を収集（一時停止を除外した実働セグメント）
   const segs=[];
@@ -2857,7 +2883,9 @@ function calcWorkedH(tasks){
     const as=minToMs(t.actual?.start);
     if(as===null)return;
     const now=new Date().getHours()*60+new Date().getMinutes();
-    const ae=minToMs(t.actual?.end)??now; // 作業中は現在時刻まで
+    // ★停止したまま再開していない場合は「止めた時刻」まで。
+    //   ここを now にすると、止めている間も実働が増え続ける。
+    const ae=minToMs(t.actual?.end)??minToMs(t.actual?.pausedAt)??now;
     if(ae<=as)return;
     // 一時停止区間でセグメントを分割
     const pauses=(t.actual?.pauses||[])
@@ -3016,7 +3044,9 @@ function renderGantt(){
       const as=minToMs(t.actual.start),ae2=minToMs(t.actual.end);
       const planTotalMin=Math.round(t.hours*60);
       if(as!==null){
-        const dispEnd=ae2!==null?ae2:new Date().getHours()*60+new Date().getMinutes();
+        // ★停止中はバーを「止めた時刻」で切る。now まで伸ばすと止めている間も伸び続ける
+        const _pAt=minToMs(t.actual.pausedAt);
+        const dispEnd=ae2!==null?ae2:(_pAt??(new Date().getHours()*60+new Date().getMinutes()));
         const ox=mx(as),ow=Math.max(30,ae2!==null?mx(ae2)-mx(as):mx(dispEnd)-mx(as));
         const oc=isCarriedTask?'act-bar-carried':cfg.actCls;
         const planEndMin=addWork(t.startMin,planTotalMin);
@@ -3025,18 +3055,21 @@ function renderGantt(){
         const _cprevH=isCarriedTask?(t.actual._prevWorkedH||0):0;
         const _ctotalH=isCarriedTask?Math.round((_cprevH+_ctodayH)*10)/10:0;
         const _cremainH=isCarriedTask?Math.max(0,Math.round((t.hours-_ctotalH)*10)/10):0;
+        const _isPausedBar=!isCarriedTask&&!!t.actual.pausedAt&&ae2===null;
         const diffTxt=isCarriedTask
           ?`当日${_ctodayH}H / 残${_cremainH}H`
+          :_isPausedBar?`⏸ 停止中（${t.actual.pausedAt}から）`
           :diffMin===null?'作業中':diffMin===0?'±0':diffMin>0?'+'+diffMin+'分遅':diffMin+'分早';
-        const diffColor=isCarriedTask?'#92400e':diffMin===null?'#6b7394':diffMin>5?'var(--danger)':diffMin<-5?'var(--ok)':'var(--text2)';
+        const diffColor=isCarriedTask?'#92400e':_isPausedBar?'#c2410c':diffMin===null?'#6b7394':diffMin>5?'var(--danger)':diffMin<-5?'var(--ok)':'var(--text2)';
         const actBarDiv=document.createElement('div');
         actBarDiv.className=oc;
         actBarDiv.style.cssText=`position:absolute;left:${ox}px;width:${ow}px;top:${ACT_TOP}px;height:${ACT_H}px;border-radius:4px;cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;padding:2px 5px;overflow:hidden`;
         actBarDiv.dataset.tid=t.id;
         actBarDiv.title=t.name+(isCarriedTask?' [持越済]':' 実績: '+t.actual.start+'〜'+(t.actual.end||'進行中')+' ('+diffTxt+')');
-        const actTotalH=ae2!==null?Math.round((ae2-as)/60*10)/10:null;
+        // ★隣に出る「実績」と同じ数字になるよう、停止を引いた実働で出す（経過時間ではない）
+        const actTotalH=ae2!==null?Math.round((workedMin(t)??0)/60*10)/10:null;
         actBarDiv.innerHTML=`<span style="font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;width:100%;line-height:1.3">${isCarriedTask?'⏭ ':''}${t.name}</span>`
-          +`<span style="font-size:9px;color:var(--text2);line-height:1.2;white-space:nowrap;overflow:hidden;width:100%">${t.actual.start}〜${t.actual.end||'...'}${_subLine?' ／ '+_subLine:''}</span>`
+          +`<span style="font-size:9px;color:var(--text2);line-height:1.2;white-space:nowrap;overflow:hidden;width:100%">${t.actual.start}〜${t.actual.end||(_isPausedBar?t.actual.pausedAt+' ⏸':'...')}${_subLine?' ／ '+_subLine:''}</span>`
           +`<span style="font-size:10px;color:${diffColor};font-weight:700;line-height:1.3">${diffTxt}${!isCarriedTask&&actTotalH!==null?' ('+actTotalH+'H)':''}</span>`;
         actBarDiv.onclick=function(){openActModal(this.dataset.tid);};
         res.push(actBarDiv.outerHTML);
@@ -3070,22 +3103,22 @@ function renderGantt(){
         const planEndMin=t.startMin!=null?addWork(t.startMin,Math.round(t.hours*60),wEnd):null;
         const planStr=t.startMin!=null?fmtMin(t.startMin)+'〜'+fmtMin(planEndMin):'未配置';
         const as=minToMs(t.actual.start),ae=minToMs(t.actual.end);
-        const ds2=t.actual?.status==='carried'?'carried':(t.actual?.start&&t.actual?.end)?'done':(t.actual?.start&&!t.actual?.end)?'working':'pending';
-        const statusIcon=ds2==='carried'?'⏭':ds2==='done'?'✓':ds2==='working'?'▶':'○';
-        const statusColor=ds2==='carried'?'#92400e':ds2==='done'?'var(--ok)':ds2==='working'?'var(--danger)':'var(--text3)';
+        const ds2=actState(t);   // ★停止中を 'paused' として区別する
+        const statusIcon=ds2==='carried'?'⏭':ds2==='done'?'✓':ds2==='paused'?'⏸':ds2==='working'?'▶':'○';
+        const statusColor=ds2==='carried'?'#92400e':ds2==='done'?'var(--ok)':ds2==='paused'?'#c2410c':ds2==='working'?'var(--danger)':'var(--text3)';
         const overflowBadge=t.overflow?`<span style="font-size:8px;background:#fee2e2;color:#dc2626;border-radius:2px;padding:0 3px">翌日繰越</span>`:'';
         let yjHtml='';
         if(t.startMin!=null&&as!==null){
           const planMin=Math.round(t.hours*60);
-          const actMin=ae!==null?(ae-as):(new Date().getHours()*60+new Date().getMinutes()-as);
+          const actMin=workedMin(t)??0;   // ★一時停止した時間は差し引く
           const planH=t.hours;
           const actH=Math.round(actMin/60*10)/10;
           const diffH=Math.round((actH-planH)*10)/10;
           const pct=Math.min(120,Math.round(actMin/planMin*100));
           const over=ae!==null&&actMin>planMin;
           const barW=Math.min(100,pct);
-          const diffTxtH=ae!==null?(diffH>0?`+${diffH}H超`:`${diffH}H早`):'作業中';
-          const diffCol=ae===null?'var(--text3)':over?'var(--danger)':'var(--ok)';
+          const diffTxtH=ae!==null?(diffH>0?`+${diffH}H超`:`${diffH}H早`):(ds2==='paused'?'⏸ 停止中':'作業中');
+          const diffCol=ae===null?(ds2==='paused'?'#c2410c':'var(--text3)'):over?'var(--danger)':'var(--ok)';
           yjHtml=`<div style="margin-top:3px">
             <div style="display:flex;align-items:center;gap:3px;margin-bottom:2px">
               <div style="flex:1;height:4px;background:var(--border);border-radius:2px;overflow:hidden">
@@ -3135,7 +3168,8 @@ function renderGantt(){
               :`<span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;
                   background:var(--panel2);color:var(--text3);border:1px solid var(--border)">○ 未着手</span>`;
         // 操作ボタン（次のアクション）
-        const actH2=(as!==null&&ae!==null)?Math.round((ae-as)/60*10)/10:null;
+        // ★同上。完了カードの「(◯H)」も実働で出す
+        const actH2=(as!==null&&ae!==null)?Math.round((workedMin(t)??0)/60*10)/10:null;
         // 持越済で続きタスクがない場合、再作成ボタンを表示
         const _contExists=isCarried&&requests.some(r=>r.source==='continuation'&&r.originalTaskId===t.id);
         const actBtns=isCarried
