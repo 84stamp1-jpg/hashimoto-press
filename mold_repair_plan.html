@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型管理システム</title>
+<!-- 金型管理システム v2026.09.07-2 : 実績入力チェックの表で、基準以上/基準未満/入力なし の色分けがセルに出ず、3pxの帯だけが見えていた件。(1)★背景色が行全体の指定(tr.act-worker td)に打ち消されていた（指定の細かさで負けていた）ため、同じ細かさで指定し直して凡例どおりセル全体に色を付ける。(2)★色の帯をセルの左端から右端へ移した。数字は右寄せなので、左端に帯があると隣（前の日）の数字のすぐ横に出てしまい、どちらの日の色か読めなかった -->
 <!-- 金型管理システム v2026.09.07-1 : 一時停止中のタスクが「作業中」と出る件。表示の判定が『実績の終了時刻があるか無いか』の2択しかなく、一時停止は終了時刻を入れないため、止めていても『まだ終わっていない＝作業中』に落ちていた。t.actual.pausedAt を誰も見ていなかったのが原因。(1)actState() を作り carried/done/paused/working/pending の5状態で判定する。(2)ガントの実績バーは停止中に『⏸ 停止中（HH:MM から）』を出し、バーも止めた時刻で切る（now まで伸ばすと止めている間も伸び続けるため）。(3)★実績時間の計算が2か所とも間違っていた。ガントと予実カードは pauses を一切引かず『今 − 開始』で出しており、calcWorkedH は閉じた停止区間しか引けず、停止したまま再開していない区間（to がまだ無い）を引けなかった。workedMin() を作って両方から使うようにした -->
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
@@ -553,14 +554,23 @@ tr.act-work td{color:var(--text2)}
 tr.act-work td.act-name{padding-left:22px;font-size:11px;color:var(--text2)}
 tr.act-total td{font-weight:700;background:#eef2f7;border-top:2px solid var(--border)}
 tr.act-total td.act-name{background:#eef2f7}
-/* 一目で見分けられるよう、はっきり色を付ける */
+/* 一目で見分けられるよう、はっきり色を付ける
+   ★色の帯はセルの「右端」に置く。数字は右寄せなので、左端に置くと
+     隣（前の日）の数字のすぐ横に出てしまい、どちらの日の色か分からなくなる。 */
 .act-ok  {background:#bfe9cd;color:#0f5132;font-weight:700;
-          box-shadow:inset 3px 0 0 #2f9e5f}                    /* 基準を満たす */
+          box-shadow:inset -3px 0 0 #2f9e5f}                   /* 基準を満たす */
 .act-few {background:#ffe1a3;color:#7a4b00;font-weight:700;
-          box-shadow:inset 3px 0 0 #e8a33d}                    /* 基準に足りない */
+          box-shadow:inset -3px 0 0 #e8a33d}                   /* 基準に足りない */
 .act-zero{background:#ffc9c9;color:#a01c1c;font-weight:700;
-          box-shadow:inset 3px 0 0 #d94a4a}                    /* 入力なし */
+          box-shadow:inset -3px 0 0 #d94a4a}                   /* 入力なし */
 .act-holiday{background:#f5f6f8;color:#b8bfc9}
+/* ★上の背景色は、行全体の指定(tr.act-worker td)のほうが指定が細かいため
+   打ち消されていた。残るのは3pxの帯だけで、凡例の色分けが見えていなかった。
+   同じ細かさで指定し直して、凡例どおりセル全体に色が付くようにする。 */
+tr.act-worker td.act-ok     {background:#bfe9cd}
+tr.act-worker td.act-few    {background:#ffe1a3}
+tr.act-worker td.act-zero   {background:#ffc9c9}
+tr.act-worker td.act-holiday{background:#f5f6f8}
 .act-legend{display:flex;gap:12px;font-size:11px;align-items:center;color:var(--text2)}
 .act-legend i{display:inline-block;width:13px;height:13px;border-radius:2px;margin-right:4px;
   vertical-align:-2px;border:1px solid rgba(0,0,0,.12)}
@@ -570,7 +580,7 @@ tr.act-total td.act-name{background:#eef2f7}
 <body>
 
 <header>
-  <div class="logo">⚙ <span>金型</span>管理システム<span style="font-size:9px;color:#9aa3b2;font-weight:400;margin-left:6px">v2026.09.07-1</span></div>
+  <div class="logo">⚙ <span>金型</span>管理システム<span style="font-size:9px;color:#9aa3b2;font-weight:400;margin-left:6px">v2026.09.07-2</span></div>
   <div class="main-tab-bar">
     <button class="main-tab-btn active" id="mainTabRepair" onclick="switchMainTab('repair')">🔧 改修計画表</button>
     <button class="main-tab-btn" id="mainTabNew" onclick="switchMainTab('newmold')">🏗️ 新規製作 日程表</button>
