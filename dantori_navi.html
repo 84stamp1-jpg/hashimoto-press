@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.09-3 : ★「入力済みにする」を押して更新中になったのに、また未入力のボタンが出てくる件（v-1で直りきっていなかった本命）。原因は getRecords の結果で QC_ALL_RECORDS を配列ごと入れ替えていること。手元で立てた r[12]=「済」がそこで消え、スプレッドシートの反映が一拍遅れるとその行が「未」で返ってくるので、一覧が作り直されたときにまっさらな「✓ 入力済みにする」ボタンが復活していた（＝入力されていないように見えて二重押し）。(1)入力済みにした行番号を QC_MARKED_DONE に覚え、記録を取り直すたびにqcApplyMarkedDone() で「済」を貼り直す（キャッシュ読み込み・getRecords・一括モードの3か所）。(2)qcLoadRecords() の最初の描き直しを qcFilterRecords() から qcRenderCurrentList() へ。入力待ちの画面なのに日別一覧を描いており、一覧ごと作り替わっていた。(3)成功直後の読み直しを1.6秒待つ（行が消えるアニメとお知らせが飛ばされないように）。※覚えるのはメモリだけ。画面を読み込み直せば消えるので、ずっと隠し続けることはない -->
 <!-- H-Hub v2026.09.09-2 : 「システム入力の確認」の箱に、★工順が1つだけの品番にかぎり「✓ 入力済みにする」ボタンも入れた（社長要望）。確認するもの（製造番号・①〜⑥）と、確認し終えて押すものが同じ箱で完結する。ボタンは複製せず移動しているので、押したときの処理・行のロック・行を消す処理はそのまま働く。★工順が複数ある品番は移さない（どの工順のボタンか分からなくなるため、従来どおり工順ごとの位置に置く） -->
 <!-- H-Hub v2026.09.09-1 : システム入力待ちの2点（社長要望）。(1)★入力済みにした行が約1.9秒残り、その間に入力済みの製造番号をコピーしてしまう事故が起きていた。押した瞬間に qcPendingLock() で行を薄くし、中のコピーボタンを効かなくする（通信の返りを待たない）。失敗したときは qcPendingUnlock() で戻す。あわせて消えるまでを1.4秒→0.5秒に縮め、代わりに消えたあと「◯◯ を入力済みにしました」を一覧の上へ3.5秒出す。(2)★システム入力のときに見るものがカードのあちこちに散っていた（品番＝上／良品・不良累計＝中ほど／材料＝工順の中／最終加工日＝明細を開かないと見えない／kintoneの照合＝右のペイン）。入力待ちのときだけ「システム入力の確認」の箱を先頭に置き、製造番号（コピー元）＋①品番②最終加工日③良品累計④不良累計⑤材料⑥kintone照合 を1か所にまとめた。数字は qcMakeGroupCard が持たせた card.__qcStats を使う（同じ計算を2か所に書かない）。⑥は読み込みが終わってから qcChkRefreshAll() で書き直す -->
 <!-- H-Hub v2026.09.07-1 : ①在庫管理に記入が kintone 400 で止まったとき、原因の出し方を直した。kintoneは「record.<フィールドコード>.value」の形で止まった欄を必ず名指ししてくるのに、H-Hub側はそれを読まずに「入力者の名前が合っていないかも」とだけ出していた。実際には★こちらが書いていない別の欄（必須なのに空）で弾かれている場合があり、その案内に従っても直しようがなかった。(1)エラー文からフィールドコードを取り出し、止まった欄・その型・いまの値を必ず出す。(2)それが①で書きに行った欄（入力者/入力日）かどうかで説明を分ける。別の欄なら「kintoneは更新のときも必須欄が空だとレコードごと弾く」ことと、kintoneでその欄を埋めるか必須を外す、という直し方を出す。(3)書きに行った欄が「必須です」で返ったときは、ルックアップの引き当てが外れて空扱いになった状態なので、参照先アプリのAPIトークン→入力者の名前、の順で確かめるよう並べる。候補が0件のときはその意味も書く -->
@@ -8635,7 +8636,9 @@ function qcGasPost(action, payload, successCb, failCb){
 function qcBuildJobStatusMap(externalRecords){
   var map = {};
   var recs = externalRecords || QC_ALL_RECORDS || [];
-  if(externalRecords){ QC_ALL_RECORDS = externalRecords; }
+  // ★他のタブ（組立計画など）が取ってきた記録で入れ替わる経路。ここでも
+  //   入力済みの「済」を貼り直さないと、入力待ちのボタンが復活する
+  if(externalRecords){ QC_ALL_RECORDS = externalRecords; qcApplyMarkedDone(); }
   // 製造番号単位の集計（junjo未設定のQC_SAKUYOとのマッチング用）
   var seizoMap = {}; // seizoNo → { total:件数, kannoCount:完納件数 }
   recs.forEach(function(rec){
@@ -9409,6 +9412,29 @@ window.qcBuildJobStatusMap = qcBuildJobStatusMap;
 var QC_REC_INFLIGHT = null;      // 実行中のリクエストを待っているコールバック
 var QC_REC_CACHE_LOADED = false; // localStorageキャッシュを読んだか
 
+// ★入力済みにした行番号を、このセッションのあいだ覚えておく。
+//   getRecords は QC_ALL_RECORDS を配列ごと入れ替えるため、手元で立てた r[12]='済' が消える。
+//   シートへの反映が一拍遅れると、その行が「未」で返ってきて
+//   入力待ちの一覧にまっさらな「✓ 入力済みにする」ボタンが復活し、
+//   入力されていないように見えて二重に押してしまっていた。
+//   記録を取り直すたびに、ここに覚えた行へ「済」を貼り直す。
+//   （シートが追いついたあとは、済に済を上書きするだけなので害はない。
+//     画面を読み込み直せば消える＝ずっと隠し続けることはない）
+var QC_MARKED_DONE = {};         // { 行番号: true }
+
+function qcMarkDone(rowNum){
+  if(rowNum || rowNum===0) QC_MARKED_DONE[String(rowNum)] = true;
+}
+function qcApplyMarkedDone(){
+  var keys = Object.keys(QC_MARKED_DONE);
+  if(!keys.length || !QC_ALL_RECORDS || !QC_ALL_RECORDS.length) return;
+  QC_ALL_RECORDS.forEach(function(r){
+    // 行番号は数にそろえて突き合わせる（"012" と 12 で取り違えないため）
+    var rn = parseInt(r[r.length-1]);
+    if(!isNaN(rn) && QC_MARKED_DONE[String(rn)]) r[12] = '済';
+  });
+}
+
 function qcLoadCachedRecords(){
   if(QC_REC_CACHE_LOADED || QC_ALL_RECORDS.length) return;
   QC_REC_CACHE_LOADED = true;
@@ -9418,6 +9444,7 @@ function qcLoadCachedRecords(){
       var arr = JSON.parse(c);
       if(Array.isArray(arr) && arr.length){
         QC_ALL_RECORDS = arr;
+        qcApplyMarkedDone();
         qcUpdatePendingBadge();
         qcBuildJobStatusMap();
       }
@@ -9435,6 +9462,7 @@ function qcFetchRecords(cb){
   qcGasPost('getRecords', {}, function(res){
     if(res && res.ok){
       QC_ALL_RECORDS = res.records || [];
+      qcApplyMarkedDone();   // ★入れ替えで消えた「済」を貼り直す（これが無いとボタンが復活する）
       try{ localStorage.setItem('qcAllRecordsCache', JSON.stringify(QC_ALL_RECORDS)); }catch(e){}
       qcUpdatePendingBadge(); qcBuildJobStatusMap();
       finish(true);
@@ -9456,7 +9484,9 @@ function qcLoadRecords(){
   qcLoadCachedRecords();
   var el = document.getElementById('qc-rec-list');
   // 手元にデータがあれば先に描く。空のときだけ「読み込み中」を出す
-  if(QC_ALL_RECORDS.length){ qcFilterRecords(); qcSetRefreshNote('🔄 最新を確認中…'); }
+  // ★入力待ちの画面を開いているのに日別一覧を描いてしまい、一覧ごと作り替わっていた。
+  //   いま開いている画面のやり方で描き直す
+  if(QC_ALL_RECORDS.length){ qcRenderCurrentList(); qcSetRefreshNote('🔄 最新を確認中…'); }
   else el.innerHTML = '<div class="qc-loading">読み込み中...</div>';
   qcFetchRecords(function(ok){
     if(!ok && !QC_ALL_RECORDS.length){ el.innerHTML='<div class="qc-empty">読み込みエラー</div>'; return; }
@@ -9729,10 +9759,12 @@ function qcMakeGroupCard(g){
               btn.disabled = true; btn.textContent = '✓ 入力済みにしました';
               btn.setAttribute('data-done','1');
               // 手元の記録にも「済」を入れる。GASの反映を待たずに件数とバッジを正しくするため
-              kr.forEach(function(r){ r[12]='済'; });
+              kr.forEach(function(r){ r[12]='済'; qcMarkDone(parseInt(r[r.length-1])); });
               qcUpdatePendingBadge();
               qcPendingRemoveRow(btn);   // 結果を見せてから一覧から消す
-              qcLoadRecords();
+              // ★すぐ読み直すと、行が消えるアニメとお知らせが作り替えで飛ばされる。
+              //   「済」は qcApplyMarkedDone() が貼り直すので、少し待ってからで問題ない
+              setTimeout(qcLoadRecords, 1600);
             }
           }
           kr.forEach(function(r){
@@ -10092,7 +10124,7 @@ window.qcShowPendingList = function(){
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.09-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.09-3';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -11372,7 +11404,8 @@ window.qcOpenBulkMode = function(){
   qcRenderBulkProgress();
   // 既実績の取りこぼし防止：一括モードを開くとき記録を最新化し進捗/割当を再計算
   qcGasPost('getRecords',{}, function(res){
-    if(res&&res.ok){ QC_ALL_RECORDS=res.records||[]; try{ localStorage.setItem('qcAllRecordsCache', JSON.stringify(QC_ALL_RECORDS)); }catch(e){}
+    if(res&&res.ok){ QC_ALL_RECORDS=res.records||[]; qcApplyMarkedDone();
+      try{ localStorage.setItem('qcAllRecordsCache', JSON.stringify(QC_ALL_RECORDS)); }catch(e){}
       qcRenderBulkProgress();
       if(document.getElementById('qc-alloc-list-card').style.display!=='none') qcShowAllocList();
     }
