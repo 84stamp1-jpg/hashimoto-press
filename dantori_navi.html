@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.09-4 : 確認の箱の⑤材料が実態と食い違っていた件（社長指摘）。「途中の記録に材料残ありがあれば残あり」（allRecs.some）で出していたため、★完納した時点で使い切っていても「📦 残あり」と出ていた。工順のタグ（📦 材料残あり）は jt.hasZairyo＝「最新の記録が“なし”でない、かつ どこかで“あり”」という決め方で既に正しかったので、★同じ式を使い回す（別の式で書くと片方だけ直したとき食い違う）。あわせて、途中は残ありだったのに最後は無い場合は「途中は残ありでした」を小さく添える（「さっき残ありと見た」との食い違いに見えないように） -->
 <!-- H-Hub v2026.09.09-3 : ★「入力済みにする」を押して更新中になったのに、また未入力のボタンが出てくる件（v-1で直りきっていなかった本命）。原因は getRecords の結果で QC_ALL_RECORDS を配列ごと入れ替えていること。手元で立てた r[12]=「済」がそこで消え、スプレッドシートの反映が一拍遅れるとその行が「未」で返ってくるので、一覧が作り直されたときにまっさらな「✓ 入力済みにする」ボタンが復活していた（＝入力されていないように見えて二重押し）。(1)入力済みにした行番号を QC_MARKED_DONE に覚え、記録を取り直すたびにqcApplyMarkedDone() で「済」を貼り直す（キャッシュ読み込み・getRecords・一括モードの3か所）。(2)qcLoadRecords() の最初の描き直しを qcFilterRecords() から qcRenderCurrentList() へ。入力待ちの画面なのに日別一覧を描いており、一覧ごと作り替わっていた。(3)成功直後の読み直しを1.6秒待つ（行が消えるアニメとお知らせが飛ばされないように）。※覚えるのはメモリだけ。画面を読み込み直せば消えるので、ずっと隠し続けることはない -->
 <!-- H-Hub v2026.09.09-2 : 「システム入力の確認」の箱に、★工順が1つだけの品番にかぎり「✓ 入力済みにする」ボタンも入れた（社長要望）。確認するもの（製造番号・①〜⑥）と、確認し終えて押すものが同じ箱で完結する。ボタンは複製せず移動しているので、押したときの処理・行のロック・行を消す処理はそのまま働く。★工順が複数ある品番は移さない（どの工順のボタンか分からなくなるため、従来どおり工順ごとの位置に置く） -->
 <!-- H-Hub v2026.09.09-1 : システム入力待ちの2点（社長要望）。(1)★入力済みにした行が約1.9秒残り、その間に入力済みの製造番号をコピーしてしまう事故が起きていた。押した瞬間に qcPendingLock() で行を薄くし、中のコピーボタンを効かなくする（通信の返りを待たない）。失敗したときは qcPendingUnlock() で戻す。あわせて消えるまでを1.4秒→0.5秒に縮め、代わりに消えたあと「◯◯ を入力済みにしました」を一覧の上へ3.5秒出す。(2)★システム入力のときに見るものがカードのあちこちに散っていた（品番＝上／良品・不良累計＝中ほど／材料＝工順の中／最終加工日＝明細を開かないと見えない／kintoneの照合＝右のペイン）。入力待ちのときだけ「システム入力の確認」の箱を先頭に置き、製造番号（コピー元）＋①品番②最終加工日③良品累計④不良累計⑤材料⑥kintone照合 を1か所にまとめた。数字は qcMakeGroupCard が持たせた card.__qcStats を使う（同じ計算を2か所に書かない）。⑥は読み込みが終わってから qcChkRefreshAll() で書き直す -->
@@ -9670,7 +9671,13 @@ function qcMakeGroupCard(g){
   });
   div.__qcStats={ hinban:g.hinban, seizoNo:g.seizoNo, lastDate:lastDate,
                   ryohin:ryohinTotal, ng:ngAllTotal, shiji:shiji, pct:pct,
-                  zairyo:allRecs.some(function(r){ return r[8]==='あり'; }) };
+                  // ★材料は「最後の記録の状態」。途中で残っていても完納の時点で使い切って
+                  //   いれば「なし」が正しい。工順のタグ（📦 材料残あり）と同じ決め方
+                  //   （jt.hasZairyo＝最新の記録が「なし」でない、かつ どこかで「あり」）を
+                  //   使い回す。同じことを別の式で書くと、片方だけ直したとき食い違うため
+                  zairyo:junjoOrder.some(function(j){ return junjoTotals[j].hasZairyo; }),
+                  // 途中は残っていたのか（「なし」の理由が分かるように小さく添える）
+                  zairyoBefore:allRecs.some(function(r){ return r[8]==='あり'; }) };
   junjoOrder.forEach(function(j){
     var jt=junjoTotals[j];
     var sec=document.createElement('div'); sec.style.cssText='margin-top:8px;border-top:1px solid #e0e0e0;padding-top:6px;';
@@ -9928,7 +9935,8 @@ function qcMakeCheckStrip(g, st){
   cell('③ 良品累計', '', null, (st.ryohin||0)+'個', '',
        st.shiji ? '指示 '+st.shiji+'（'+st.pct+'%）' : '');
   cell('④ 不良累計', '', null, (st.ng||0)+'個', st.ng?'warn':'ok');
-  cell('⑤ 材料', '', null, st.zairyo?'📦 残あり':'なし', st.zairyo?'warn':'');
+  cell('⑤ 材料', '', null, st.zairyo?'📦 残あり':'なし', st.zairyo?'warn':'',
+       (!st.zairyo && st.zairyoBefore) ? '途中は残ありでした' : '');
   var ngv = cell('⑥ kintone 不良品報告の照合（記録 ↔ 不具合数量）', 'w3', null, '');
   box.appendChild(grid);          // ★これを忘れると6項目が丸ごと出ない
   box.__qcNgCell = ngv;
@@ -10124,7 +10132,7 @@ window.qcShowPendingList = function(){
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.09-3';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.09-4';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
