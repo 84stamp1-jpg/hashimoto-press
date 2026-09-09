@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.09-1 : システム入力待ちの2点（社長要望）。(1)★入力済みにした行が約1.9秒残り、その間に入力済みの製造番号をコピーしてしまう事故が起きていた。押した瞬間に qcPendingLock() で行を薄くし、中のコピーボタンを効かなくする（通信の返りを待たない）。失敗したときは qcPendingUnlock() で戻す。あわせて消えるまでを1.4秒→0.5秒に縮め、代わりに消えたあと「◯◯ を入力済みにしました」を一覧の上へ3.5秒出す。(2)★システム入力のときに見るものがカードのあちこちに散っていた（品番＝上／良品・不良累計＝中ほど／材料＝工順の中／最終加工日＝明細を開かないと見えない／kintoneの照合＝右のペイン）。入力待ちのときだけ「システム入力の確認」の箱を先頭に置き、製造番号（コピー元）＋①品番②最終加工日③良品累計④不良累計⑤材料⑥kintone照合 を1か所にまとめた。数字は qcMakeGroupCard が持たせた card.__qcStats を使う（同じ計算を2か所に書かない）。⑥は読み込みが終わってから qcChkRefreshAll() で書き直す -->
 <!-- H-Hub v2026.09.07-1 : ①在庫管理に記入が kintone 400 で止まったとき、原因の出し方を直した。kintoneは「record.<フィールドコード>.value」の形で止まった欄を必ず名指ししてくるのに、H-Hub側はそれを読まずに「入力者の名前が合っていないかも」とだけ出していた。実際には★こちらが書いていない別の欄（必須なのに空）で弾かれている場合があり、その案内に従っても直しようがなかった。(1)エラー文からフィールドコードを取り出し、止まった欄・その型・いまの値を必ず出す。(2)それが①で書きに行った欄（入力者/入力日）かどうかで説明を分ける。別の欄なら「kintoneは更新のときも必須欄が空だとレコードごと弾く」ことと、kintoneでその欄を埋めるか必須を外す、という直し方を出す。(3)書きに行った欄が「必須です」で返ったときは、ルックアップの引き当てが外れて空扱いになった状態なので、参照先アプリのAPIトークン→入力者の名前、の順で確かめるよう並べる。候補が0件のときはその意味も書く -->
 <!-- H-Hub v2026.09.06-12 : 不良品報告ペインの3点（社長指示）。(1)★「品質確認中」が1件でもあれば、ペインの先頭で黄色く知らせる（.qc-ng-hinshitsu）。品質確認中＝まだ品質管理の手を離れていない印。報告が4件あるとカードを1件ずつ開かないと気づけなかった。(2)「ステータス『完了・在庫投入中』も含めると◯個（◯件）」の行を削除。読む側の関心から外れるため。※kAll の計算自体は「全部片付いているのか、本当に報告が無いのか」の見分けに使うので残す。(3)★報告の入力者は、欄が割り当たっていて値が空のときも「入力者: （未入力）」と橙色で出す。何も出さないと「画面が壊れている」のか「kintone側が空」なのか区別がつかないため。欄そのものが未設定のときは従来どおり出さない（⚙設定→🧾列を確認 でコードを入れる）-->
 <!-- H-Hub v2026.09.06-11 : 発見者の横に出す「入力者」は“報告を打ち込んだ人”(f.reporter)であって、①で書き込む在庫管理の入力者(f.inpUser)ではない。自動判別が報告側の欄を見つけられなかったときに在庫管理側を拾う余地が残っていたので、★f.reporter === f.inpUser なら f.reporter を空にする保険を入れた（在庫管理へ書いた値を「報告の入力者」として見せると事実と違うため。出さないほうがまだ良い）。毎回見るので、前に取り違えて保存されていた端末もここで直る。※自動で見つからない場合は空欄になるので、⚙設定 →「🧾 列を確認」でフィールドコードを調べ、「入力者（報告書を打ち込んだ人）」の欄に手で入れること -->
@@ -564,6 +565,34 @@ html, body {
 .qc-rec-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
 .qc-rec-link{font-size:12px;color:#1F4E79;text-decoration:none;padding:5px 10px;border:1px solid #1F4E79;border-radius:6px;font-weight:600;}
 .qc-mark-btn{font-size:12px;padding:5px 10px;border:1px solid #27825a;border-radius:6px;background:#fff;color:#27825a;cursor:pointer;font-weight:600;}
+/* ★システム入力の確認をひとまとめにする箱（入力待ちのときだけ出す）。
+   見る項目がカードのあちこちに散っていて、目を6か所動かす必要があったため */
+.qc-chk{border:1px solid #cbd5e1;border-left:4px solid #1F4E79;border-radius:8px;
+        background:#f8fafc;padding:7px 9px 8px;margin-bottom:9px;}
+.qc-chk-hd{font-size:10px;font-weight:700;color:#1F4E79;letter-spacing:.04em;margin-bottom:5px;}
+.qc-chk-key{display:flex;align-items:center;gap:6px;margin-bottom:6px;
+            padding-bottom:6px;border-bottom:1px dashed #cbd5e1;}
+.qc-chk-key .qc-chk-l{font-size:10px;}
+.qc-chk-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 8px;}
+.qc-chk-i{min-width:0;}
+.qc-chk-i.w2{grid-column:span 2;}
+.qc-chk-i.w3{grid-column:1/-1;}
+.qc-chk-l{font-size:9.5px;color:#64748b;font-weight:700;white-space:nowrap;}
+.qc-chk-v{font-size:12px;font-weight:700;color:#1a1a1a;line-height:1.35;
+          word-break:normal;overflow-wrap:anywhere;}
+.qc-chk-s{font-size:9.5px;font-weight:600;color:#64748b;line-height:1.3;}
+.qc-chk-v.ok{color:#15803d;} .qc-chk-v.warn{color:#b45309;}
+.qc-chk-v.mute{color:#94a3b8;font-weight:600;}
+.qc-chk-v .qc-copy{font-size:11px;}
+/* ★入力済みにした行は、消えるまでの間もコピーできないようにする（取り違え防止） */
+.qc-pair.is-marking{opacity:.5;}
+.qc-pair.is-marking .qc-copy{pointer-events:none;filter:grayscale(1);}
+.qc-pair.is-marking .qc-chk{border-left-color:#94a3b8;background:#f1f5f9;}
+.qc-chk-hd.is-done{color:#15803d;}
+/* 消えたあとに「何を入力済みにしたか」を短く出す */
+.qc-toast{margin:6px 0 10px;padding:7px 12px;border-radius:8px;background:#eaf7f0;
+          border:1px solid #86efac;color:#15803d;font-size:12px;font-weight:700;
+          transition:opacity .45s;}
 .qc-edit-btn{font-size:12px;padding:5px 10px;border:1px solid #888;border-radius:6px;background:#fff;color:#555;cursor:pointer;font-weight:600;}
 .qc-del-btn{font-size:12px;padding:5px 10px;border:1px solid #E24B4A;border-radius:6px;background:#fff;color:#E24B4A;cursor:pointer;font-weight:600;}
 .qc-grp-detail{display:none;margin-top:6px;}.qc-grp-toggle{font-size:11px;color:#1F4E79;cursor:pointer;text-decoration:underline;margin:5px 0;display:block;}
@@ -9598,6 +9627,16 @@ function qcMakeGroupCard(g){
       div.appendChild(bn);
     }
   }
+  // ★システム入力の確認の箱（qcMakeCheckStrip）から使うので、数字をカードに持たせておく。
+  //   同じ計算をもう一度書くと、片方だけ直したときに食い違うため。
+  var lastDate='';
+  allRecs.forEach(function(r){
+    var v=String(r[1]||r[0]||'').replace(/-/g,'/').slice(0,10);
+    if(/^\d{4}\/\d{1,2}\/\d{1,2}$/.test(v) && v>lastDate) lastDate=v;
+  });
+  div.__qcStats={ hinban:g.hinban, seizoNo:g.seizoNo, lastDate:lastDate,
+                  ryohin:ryohinTotal, ng:ngAllTotal, shiji:shiji, pct:pct,
+                  zairyo:allRecs.some(function(r){ return r[8]==='あり'; }) };
   junjoOrder.forEach(function(j){
     var jt=junjoTotals[j];
     var sec=document.createElement('div'); sec.style.cssText='margin-top:8px;border-top:1px solid #e0e0e0;padding-top:6px;';
@@ -9662,8 +9701,11 @@ function qcMakeGroupCard(g){
           // ★対象が0件のときは何も起きず、ボタンが「更新中...」のまま戻らなかった
           if(!kr.length){ alert('入力済みにする対象がありません。'); return; }
           btn.disabled=true; btn.textContent='更新中...';
+          // ★押した瞬間にこの行のコピーを止める。通信の返りを待つ間に
+          //   入力済みの製造番号をコピーしてしまう事故があったため
+          qcPendingLock(btn);
           var done=0, errs=[];
-          function reset(){ btn.disabled=false; btn.textContent=LBL; }
+          function reset(){ btn.disabled=false; btn.textContent=LBL; qcPendingUnlock(btn); }
           function finish(){
             if(done<kr.length) return;
             if(errs.length){
@@ -9782,6 +9824,137 @@ window.qcExecDelete = function(){
 };
 
 // ----- システム入力待ちバッジ -----
+// ============================================================
+//  ★「システム入力の確認」の箱
+//  システム入力のときに見るものが、カードのあちこちに散っていた
+//  （品番＝上／良品・不良累計＝中ほど／材料＝工順の中／最終加工日＝明細を開かないと見えない／
+//    kintoneの照合＝右のペイン）。目を6か所動かすので見落とすし、
+//  入力済みの行と取り違えて製造番号をコピーしてしまう事故も起きていた。
+//  → 入力待ちのときだけ、確認するものを1つの箱にまとめてカードの先頭に置く。
+// ============================================================
+var QC_CHK_STRIPS = [];   // [{el,g}] kintoneの読み込みが終わったら⑥だけ書き直す
+
+// ⑥ kintoneとの照合の一言。右のペインと同じ数字から作る（別々に計算しない）
+function qcChkNgText(g){
+  if(QC_NG_STATE==='unset')   return ['⚙ 未設定', 'mute'];
+  if(QC_NG_STATE==='loading') return ['読込中…', 'mute'];
+  if(QC_NG_STATE==='error')   return ['取得できませんでした', 'warn'];
+  if(!QC_NG_RECORDS)          return ['—', 'mute'];
+  var rec = qcNgRecordedNg(g);
+  var k   = qcNgKintoneTotal(g.hinban);
+  var kAll= qcNgKintoneTotal(g.hinban, true);
+  if(k.cases===0 && kAll.cases>0)
+    return ['✓ 報告は全て処理済み（比べる相手なし）', 'ok'];
+  if(k.cases===0 && rec.total===0) return ['✓ どちらも0個', 'ok'];
+  var d = rec.total - k.ng;
+  if(d===0) return ['✓ 一致（'+rec.total+'個）', 'ok'];
+  return ['⚠ 差 '+(d>0?'+':'')+d+'個（記録 '+rec.total+' / kintone '+k.ng+'）', 'warn'];
+}
+
+function qcChkDateLabel(v){
+  if(!v) return '—';
+  var p=v.split('/'); if(p.length<3) return v;
+  var dt=new Date(+p[0], +p[1]-1, +p[2]);
+  if(isNaN(dt.getTime())) return v;
+  return (+p[1])+'/'+(+p[2])+'（'+'日月火水木金土'.charAt(dt.getDay())+'）';
+}
+
+function qcMakeCheckStrip(g, st){
+  st = st || {};
+  var box=document.createElement('div'); box.className='qc-chk';
+  var hd=document.createElement('div'); hd.className='qc-chk-hd';
+  hd.textContent='システム入力の確認';
+  box.appendChild(hd);
+
+  // 貼り付け元。ここからコピーして、他のシステムへ貼る
+  var key=document.createElement('div'); key.className='qc-chk-key';
+  var kl=document.createElement('span'); kl.className='qc-chk-l'; kl.textContent='製造番号';
+  key.appendChild(kl);
+  if(st.seizoNo) key.appendChild(qcCopyChip(st.seizoNo,{label:'製造番号'}));
+  else { var kv=document.createElement('span'); kv.className='qc-chk-v mute'; kv.textContent='—'; key.appendChild(kv); }
+  box.appendChild(key);
+
+  var grid=document.createElement('div'); grid.className='qc-chk-grid';
+  function cell(label, wide, node, txt, cls, sub){
+    var d=document.createElement('div'); d.className='qc-chk-i'+(wide?' '+wide:'');
+    var l=document.createElement('div'); l.className='qc-chk-l'; l.textContent=label;
+    var v=document.createElement('div'); v.className='qc-chk-v'+(cls?' '+cls:'');
+    if(node) v.appendChild(node); else v.textContent=txt;
+    d.appendChild(l); d.appendChild(v);
+    // 補足は小さく2行目へ。1行に詰め込むと数字の途中で折り返して読み違える
+    if(sub){ var sb=document.createElement('div'); sb.className='qc-chk-s'; sb.textContent=sub; d.appendChild(sb); }
+    grid.appendChild(d);
+    return v;
+  }
+  cell('① 品番', 'w2', st.hinban?qcCopyChip(st.hinban,{label:'品番'}):null,
+       st.hinban?'':'—', st.hinban?'':'mute');
+  cell('② 最終加工日', '', null, qcChkDateLabel(st.lastDate), st.lastDate?'':'mute');
+  cell('③ 良品累計', '', null, (st.ryohin||0)+'個', '',
+       st.shiji ? '指示 '+st.shiji+'（'+st.pct+'%）' : '');
+  cell('④ 不良累計', '', null, (st.ng||0)+'個', st.ng?'warn':'ok');
+  cell('⑤ 材料', '', null, st.zairyo?'📦 残あり':'なし', st.zairyo?'warn':'');
+  var ngv = cell('⑥ kintone 不良品報告の照合（記録 ↔ 不具合数量）', 'w3', null, '');
+  box.appendChild(grid);          // ★これを忘れると6項目が丸ごと出ない
+  box.__qcNgCell = ngv;
+  box.__qcG = g;
+  qcChkFillNg(box);
+  QC_CHK_STRIPS.push({el:box, g:g});
+  return box;
+}
+
+function qcChkFillNg(box){
+  if(!box || !box.__qcNgCell) return;
+  var r = qcChkNgText(box.__qcG);
+  box.__qcNgCell.textContent = r[0];
+  box.__qcNgCell.className = 'qc-chk-v' + (r[1] ? ' '+r[1] : '');
+}
+
+// kintoneの読み込みが終わったら⑥だけ書き直す（画面に残っている箱だけ）
+function qcChkRefreshAll(){
+  QC_CHK_STRIPS = QC_CHK_STRIPS.filter(function(p){ return p.el && p.el.isConnected; });
+  QC_CHK_STRIPS.forEach(function(p){ qcChkFillNg(p.el); });
+}
+
+// ★押した瞬間に、その行をコピーできない状態にする。
+//   消えるまでの1〜2秒のあいだに、入力済みの製造番号をコピーしてしまう事故があったため。
+//   （通信に失敗したときは qcPendingUnlock で元に戻す）
+function qcPendingPair(btn){
+  var p = btn;
+  while(p && !(p.classList && p.classList.contains('qc-pair'))) p = p.parentNode;
+  return p;
+}
+function qcPendingLock(btn){
+  var pair = qcPendingPair(btn); if(!pair) return;
+  pair.classList.add('is-marking');
+  var cps = pair.querySelectorAll('.qc-copy');
+  for(var i=0;i<cps.length;i++){ cps[i].disabled = true; cps[i].setAttribute('aria-disabled','true'); }
+  var hd = pair.querySelector('.qc-chk-hd');
+  if(hd){ hd.classList.add('is-done'); hd.textContent='✓ 入力済みにしました（この行は消えます）'; }
+}
+function qcPendingUnlock(btn){
+  var pair = qcPendingPair(btn); if(!pair) return;
+  pair.classList.remove('is-marking');
+  var cps = pair.querySelectorAll('.qc-copy');
+  for(var i=0;i<cps.length;i++){ cps[i].disabled = false; cps[i].removeAttribute('aria-disabled'); }
+  var hd = pair.querySelector('.qc-chk-hd');
+  if(hd){ hd.classList.remove('is-done'); hd.textContent='システム入力の確認'; }
+}
+
+// 行が消えたあと「何を入力済みにしたか」を短く出す。
+// 行をしばらく残して読ませる代わりなので、行は早く消せる。
+function qcPendingToast(host, text){
+  host = host || document.getElementById('qc-rec-list');
+  if(!host) return;
+  var hdr = host.querySelector('.qc-pending-hdr');
+  var t=document.createElement('div'); t.className='qc-toast';
+  t.textContent='✓ '+text+' を入力済みにしました';
+  if(hdr && hdr.nextSibling) host.insertBefore(t, hdr.nextSibling); else host.appendChild(t);
+  setTimeout(function(){
+    t.style.opacity='0';
+    setTimeout(function(){ if(t.parentNode) t.parentNode.removeChild(t); }, 470);
+  }, 3500);
+}
+
 // ★入力済みにした行は「システム入力待ち」ではなくなるので、一覧から消す。
 //   済んだものが残っていると、どれがまだ残っているのか分からなくなるため
 //   （不良品報告ペインと同じ扱い・v2026.09.06-2）。
@@ -9795,14 +9968,21 @@ function qcPendingRemoveRow(btn){
     if(marks[i].getAttribute('data-done')!=='1') return;   // まだ残っている
   }
   var host = pair.parentNode;
+  var st = (pair.querySelector('.qc-rec') || {}).__qcStats || {};
+  var name = (st.seizoNo || st.hinban || 'この記録');
+  // ★以前は結果を読ませるために1.4秒置いてから消していたが、その間に
+  //   入力済みの製造番号をコピーしてしまう事故が起きた。押した時点で
+  //   qcPendingLock がコピーを止めているので、ここは短くてよい。
+  //   何を入力済みにしたかは、消えたあとに上へ短く出す。
   setTimeout(function(){
-    pair.style.transition='opacity .45s';
+    pair.style.transition='opacity .4s';
     pair.style.opacity='0';
     setTimeout(function(){
       if(pair.parentNode) pair.parentNode.removeChild(pair);
       qcPendingRefreshHeader(host);
-    }, 470);
-  }, 1400);   // 結果を読む時間を置いてから消す
+      qcPendingToast(host, name);
+    }, 420);
+  }, 500);
 }
 
 // 見出しの件数を、いま画面に残っている行の数に合わせる。
@@ -9877,6 +10057,9 @@ window.qcShowPendingList = function(){
     var toggle=card.querySelector('.qc-grp-toggle'), detail=card.querySelector('.qc-grp-detail');
     if(toggle&&detail){ detail.style.display='block'; toggle.textContent=toggle.textContent.replace('▼','▲').replace('を表示（全日付）','（全日付）を非表示'); }
     // 左=記録カード / 右=kintone不良品報告の照合
+    // ★確認するものを1か所に集めた箱を、カードの先頭に差し込む
+    var strip=qcMakeCheckStrip(g, card.__qcStats);
+    card.insertBefore(strip, card.firstChild);
     var pair=document.createElement('div'); pair.className='qc-pair';
     pair.appendChild(card);
     pair.appendChild(qcNgMakePane(g));
@@ -9893,7 +10076,7 @@ window.qcShowPendingList = function(){
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.07-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.09-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -10260,6 +10443,7 @@ function qcNgMakePane(g){
 function qcNgRenderAll(){
   QC_NG_PANES = QC_NG_PANES.filter(function(p){ return p.el && p.el.isConnected; });
   QC_NG_PANES.forEach(function(p){ qcNgRenderPane(p.el, p.g); });
+  qcChkRefreshAll();   // 確認の箱の⑥（kintoneの照合）も一緒に書き直す
 }
 function qcNgKintoneUrl(id){
   return 'https://'+(config.domain||'hashimoto-kogyo')+'.cybozu.com/k/'+(qcNgCfg().appId||'31')+'/show#record='+id;
