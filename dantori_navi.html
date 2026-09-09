@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.09-7 : ★★入力済みにしたのにボタンが出続ける件の、本当の原因。実データで確かめたところ、画面の入力待ちは11件なのに、シート上で「未」の完納は8件だった。差の3件はシートでは既に「済」。つまり★片付いた行が、まっさらな「✓ 入力済みにする」ボタン付きで出続けていた。理由は、一覧は qcShowPendingList() を呼んだ時点の QC_ALL_RECORDS で作られるのに、★qcFetchRecords() は新しいデータを入れてもバッジ（件数）を直すだけで一覧を描き直さないこと。描き直すのは qcLoadRecords() 経由のときだけで、しかも qcRenderCurrentList() はQC_NG_INTERACTING が立っていると見送るため、一覧だけが古いまま残る（バッジ8件・一覧11件という食い違いが実際に出ていた）。→ qcPendingSyncIfChanged() を追加し、記録を取り直したときに★入力待ちの顔ぶれが変わっていたら一覧を作り直す。顔ぶれが同じなら触らない（☑や途中の表示を守る見送りは活かす）。0件になったときは行を消して見出しだけ直す（qcShowPendingList は0件だと何もしないため） -->
+<!-- H-Hub v2026.09.09-6 : (1)★入力済みにしたのに、またボタンが未入力の見た目に戻る件（2度目の指摘。v-3の「済」を貼り直す仕組みは★送信が成功したときしか働かない）。戻るということはH-Hubから見て送信が失敗している。ところがGASは遅いと90秒で打ち切るので、★シートには入っているのに通信だけ切れる形になりやすく、そこで未入力へ戻すと入っているのにもう一度押させてしまう。→ 失敗と決める前に qcVerifyMarked() で★シートを読み直し、本当に入っていないかを確かめる。入っていれば成功として扱う。本当に入っていなければ、alertではなく★箱の中に消えない赤い断り書き（.qc-chk-ng）を出す（alertは閉じると残らず、あとから理由が分からない）。(2)その他のメモ（📋 その他:）を、確認の箱の⑥の右の余白に出す。メモがあるときだけ⑥を2列にして3列目へ置き、無いときは⑥が3列いっぱいを使う -->
 <!-- H-Hub v2026.09.09-5 : kintoneに「品質確認中」の報告が残っているとき、★「システム入力の確認」の箱にも出すようにした（社長要望）。右のペインには前から出ていたが、確認は箱だけを見て済ませたいので箱にも要る。★数え方は qcNgHinshitsuCount() 1か所にまとめ、ペインと箱の両方から呼ぶ（同じことを2つの式で書くと片方だけ直したときに食い違う。⑤材料で実際に起きた）。文言も色も右のペインに揃えた。kintoneの読み込みが終わってから qcChkFillNg() で入る -->
 <!-- H-Hub v2026.09.09-4 : 確認の箱の⑤材料が実態と食い違っていた件（社長指摘）。「途中の記録に材料残ありがあれば残あり」（allRecs.some）で出していたため、★完納した時点で使い切っていても「📦 残あり」と出ていた。工順のタグ（📦 材料残あり）は jt.hasZairyo＝「最新の記録が“なし”でない、かつ どこかで“あり”」という決め方で既に正しかったので、★同じ式を使い回す（別の式で書くと片方だけ直したとき食い違う）。あわせて、途中は残ありだったのに最後は無い場合は「途中は残ありでした」を小さく添える（「さっき残ありと見た」との食い違いに見えないように） -->
 <!-- H-Hub v2026.09.09-3 : ★「入力済みにする」を押して更新中になったのに、また未入力のボタンが出てくる件（v-1で直りきっていなかった本命）。原因は getRecords の結果で QC_ALL_RECORDS を配列ごと入れ替えていること。手元で立てた r[12]=「済」がそこで消え、スプレッドシートの反映が一拍遅れるとその行が「未」で返ってくるので、一覧が作り直されたときにまっさらな「✓ 入力済みにする」ボタンが復活していた（＝入力されていないように見えて二重押し）。(1)入力済みにした行番号を QC_MARKED_DONE に覚え、記録を取り直すたびにqcApplyMarkedDone() で「済」を貼り直す（キャッシュ読み込み・getRecords・一括モードの3か所）。(2)qcLoadRecords() の最初の描き直しを qcFilterRecords() から qcRenderCurrentList() へ。入力待ちの画面なのに日別一覧を描いており、一覧ごと作り替わっていた。(3)成功直後の読み直しを1.6秒待つ（行が消えるアニメとお知らせが飛ばされないように）。※覚えるのはメモリだけ。画面を読み込み直せば消えるので、ずっと隠し続けることはない -->
@@ -587,6 +589,10 @@ html, body {
 .qc-chk-s{font-size:9.5px;font-weight:600;color:#64748b;line-height:1.3;}
 /* 工順が1つだけのときは「✓ 入力済みにする」もこの箱の中に置く */
 /* kintoneに「品質確認中」が残っているときの注意（右のペインと同じ色に揃える） */
+/* 入力済みにできなかったときの断り書き（alertと違って消えない） */
+.qc-chk-ng{margin-top:8px;padding:7px 9px;border-radius:6px;font-size:11.5px;
+           font-weight:700;color:#a01c1c;background:#ffecec;border:1px solid #f5a9a9;
+           white-space:pre-wrap;line-height:1.5;}
 .qc-chk-alert{margin-top:8px;padding:6px 8px;border-radius:6px;font-size:11.5px;
               font-weight:700;color:#8a6100;background:#fff4cc;border:1px solid #f0c96b;}
 .qc-chk-act{margin-top:9px;padding-top:8px;border-top:1px dashed #cbd5e1;}
@@ -9427,6 +9433,77 @@ var QC_REC_CACHE_LOADED = false; // localStorageキャッシュを読んだか
 //     画面を読み込み直せば消える＝ずっと隠し続けることはない）
 var QC_MARKED_DONE = {};         // { 行番号: true }
 
+// ★「入力済みにする」の送信が失敗したように見えたとき、本当に入っていないかを確かめる。
+//   GASが遅いと90秒で打ち切るので、シートには入っているのに通信だけ切れることがある。
+//   そこで未入力の見た目へ戻すと、入っているのにもう一度押させてしまう。
+function qcVerifyMarked(kr, cb){
+  var want = {};
+  kr.forEach(function(r){ want[String(parseInt(r[r.length-1]))] = true; });
+  qcGasPost('getRecords', {}, function(res){
+    if(!res || !res.ok || !res.records){ cb(false); return; }
+    QC_ALL_RECORDS = res.records;
+    qcApplyMarkedDone();
+    try{ localStorage.setItem('qcAllRecordsCache', JSON.stringify(QC_ALL_RECORDS)); }catch(e){}
+    var ng = 0;
+    QC_ALL_RECORDS.forEach(function(r){
+      if(want[String(parseInt(r[r.length-1]))] && (r[12]||'未')!=='済') ng++;
+    });
+    cb(ng===0);
+  }, function(){ cb(false); });
+}
+
+// 入力済みにできなかった理由を、箱の中に消えない形で出す。
+// alert は閉じると残らず、あとから何が起きたのか分からなくなるため。
+function qcMarkShowError(btn, errs, total){
+  var pair = qcPendingPair(btn);
+  var host = (pair && pair.querySelector('.qc-chk')) || (btn.parentNode);
+  if(!host) return;
+  var old = host.querySelector('.qc-chk-ng'); if(old) old.parentNode.removeChild(old);
+  var BR = String.fromCharCode(10);
+  var d = document.createElement('div'); d.className='qc-chk-ng';
+  d.textContent = '⚠ 入力済みにできませんでした（' + errs.length + '/' + total + '件）' + BR
+                + errs.join(BR) + BR
+                + 'シートを読み直しても入っていませんでした。もう一度押してください。';
+  var act = host.querySelector('.qc-chk-act');
+  if(act) host.insertBefore(d, act); else host.appendChild(d);
+}
+
+// ★いま「システム入力待ち」に出るべき行の顔ぶれ。並べ替えて文字列にし、前回と比べる。
+var QC_PENDING_KEY = null;
+
+function qcPendingRows(){
+  return QC_ALL_RECORDS.filter(function(r){
+    return (r[7]||'')==='完納' && (r[12]||'未')==='未';
+  });
+}
+function qcPendingKeyNow(){
+  return qcPendingRows().map(function(r){ return parseInt(r[r.length-1]); })
+         .sort(function(a,b){ return a-b; }).join(',');
+}
+
+// ★記録を取り直したあとに呼ぶ。顔ぶれが変わっていたら一覧を作り直す。
+//   qcFetchRecords() はバッジ（件数）しか直さないため、一覧だけが古いまま残り、
+//   ★シートでは既に「済」の行が、まっさらな「✓ 入力済みにする」ボタン付きで
+//   出続けていた（実データで11件表示／シートは8件だった）。
+//   顔ぶれが同じときは触らない＝☑や途中の表示を守るための見送りはそのまま活かす。
+function qcPendingSyncIfChanged(){
+  if(!QC_PENDING_MODE) return;
+  var key = qcPendingKeyNow();
+  if(key === QC_PENDING_KEY) return;
+  if(!key){
+    // 全部片付いた。行を消して見出しだけ直す（qcShowPendingList は0件だと何もしない）
+    var host = document.getElementById('qc-rec-list');
+    if(host){
+      var ps = host.querySelectorAll('.qc-pair');
+      for(var i=0;i<ps.length;i++) ps[i].parentNode.removeChild(ps[i]);
+      qcPendingRefreshHeader(host);
+    }
+    QC_PENDING_KEY = key;
+    return;
+  }
+  qcShowPendingList();
+}
+
 function qcMarkDone(rowNum){
   if(rowNum || rowNum===0) QC_MARKED_DONE[String(rowNum)] = true;
 }
@@ -9470,6 +9547,7 @@ function qcFetchRecords(cb){
       qcApplyMarkedDone();   // ★入れ替えで消えた「済」を貼り直す（これが無いとボタンが復活する）
       try{ localStorage.setItem('qcAllRecordsCache', JSON.stringify(QC_ALL_RECORDS)); }catch(e){}
       qcUpdatePendingBadge(); qcBuildJobStatusMap();
+      qcPendingSyncIfChanged();   // ★片付いた行が残り続けないよう、顔ぶれが変わったら作り直す
       finish(true);
     } else finish(false);
   }, function(){ finish(false); });
@@ -9681,7 +9759,10 @@ function qcMakeGroupCard(g){
                   //   使い回す。同じことを別の式で書くと、片方だけ直したとき食い違うため
                   zairyo:junjoOrder.some(function(j){ return junjoTotals[j].hasZairyo; }),
                   // 途中は残っていたのか（「なし」の理由が分かるように小さく添える）
-                  zairyoBefore:allRecs.some(function(r){ return r[8]==='あり'; }) };
+                  zairyoBefore:allRecs.some(function(r){ return r[8]==='あり'; }),
+                  // その他のメモ（カードの「📋 その他:」と同じもの）を確認の箱にも出す
+                  sonota:junjoOrder.reduce(function(a,j){ return a.concat(junjoTotals[j].sonotaMemos); }, [])
+                           .filter(function(v,i,a2){ return v && a2.indexOf(v)===i; }) };
   junjoOrder.forEach(function(j){
     var jt=junjoTotals[j];
     var sec=document.createElement('div'); sec.style.cssText='margin-top:8px;border-top:1px solid #e0e0e0;padding-top:6px;';
@@ -9751,32 +9832,34 @@ function qcMakeGroupCard(g){
           qcPendingLock(btn);
           var done=0, errs=[];
           function reset(){ btn.disabled=false; btn.textContent=LBL; qcPendingUnlock(btn); }
+          function succeed(){
+            // ★成功したときにボタンを戻す役目を、一覧の描き直しに任せてはいけない。
+            //   不良品報告ペインを一度でも操作すると QC_NG_INTERACTING が立ち
+            //   （☑や結果表示が消えるのを防ぐため）、qcRenderCurrentList() が
+            //   描き直しを見送る。するとボタンだけ「更新中...」のまま残る。
+            btn.disabled = true; btn.textContent = '✓ 入力済みにしました';
+            btn.setAttribute('data-done','1');
+            // 手元の記録にも「済」を入れる。GASの反映を待たずに件数とバッジを正しくするため
+            kr.forEach(function(r){ r[12]='済'; qcMarkDone(parseInt(r[r.length-1])); });
+            qcUpdatePendingBadge();
+            qcPendingRemoveRow(btn);   // 結果を見せてから一覧から消す
+            // ★すぐ読み直すと、行が消えるアニメとお知らせが作り替えで飛ばされる。
+            //   「済」は qcApplyMarkedDone() が貼り直すので、少し待ってからで問題ない
+            setTimeout(qcLoadRecords, 1600);
+          }
           function finish(){
             if(done<kr.length) return;
-            if(errs.length){
-              // ★失敗しても必ずボタンを戻す。以前は失敗側で件数を数え直しておらず、
-              //   最後の1件が失敗すると「更新中...」から永久に戻らなかった。
+            if(!errs.length){ succeed(); return; }
+            // ★ここが要点。GASが遅いと90秒で打ち切るので、
+            //   シートには入っているのに通信だけ切れることがある。
+            //   何も確かめずに未入力の見た目へ戻すと、入っているのにもう一度押させてしまう
+            //   （社長から2度の指摘）。戻す前に、シートを読み直して確かめる。
+            btn.textContent = '確認中...';
+            qcVerifyMarked(kr, function(okAll){
+              if(okAll){ succeed(); return; }   // 入っていた＝送信は通っていた
               reset();
-              var BR = String.fromCharCode(10);
-              alert('入力済みにできませんでした（'+errs.length+'/'+kr.length+'件）:' + BR
-                   + errs.join(BR) + BR + BR
-                   + '通信が切れただけのこともあります。もう一度押すか、🔄で読み直してください。');
-            } else {
-              // ★成功したときにボタンを戻す役目を、一覧の描き直しに任せてはいけない。
-              //   不良品報告ペインを一度でも操作すると QC_NG_INTERACTING が立ち
-              //   （☑や結果表示が消えるのを防ぐため）、qcRenderCurrentList() が
-              //   描き直しを見送る。するとボタンだけ「更新中...」のまま残る。
-              //   ここで先に済んだ状態にしてから読み直す。
-              btn.disabled = true; btn.textContent = '✓ 入力済みにしました';
-              btn.setAttribute('data-done','1');
-              // 手元の記録にも「済」を入れる。GASの反映を待たずに件数とバッジを正しくするため
-              kr.forEach(function(r){ r[12]='済'; qcMarkDone(parseInt(r[r.length-1])); });
-              qcUpdatePendingBadge();
-              qcPendingRemoveRow(btn);   // 結果を見せてから一覧から消す
-              // ★すぐ読み直すと、行が消えるアニメとお知らせが作り替えで飛ばされる。
-              //   「済」は qcApplyMarkedDone() が貼り直すので、少し待ってからで問題ない
-              setTimeout(qcLoadRecords, 1600);
-            }
+              qcMarkShowError(btn, errs, kr.length);
+            });
           }
           kr.forEach(function(r){
             qcGasPost('markAsInputted',{rowNum:parseInt(r[r.length-1])},function(res){
@@ -9941,7 +10024,12 @@ function qcMakeCheckStrip(g, st){
   cell('④ 不良累計', '', null, (st.ng||0)+'個', st.ng?'warn':'ok');
   cell('⑤ 材料', '', null, st.zairyo?'📦 残あり':'なし', st.zairyo?'warn':'',
        (!st.zairyo && st.zairyoBefore) ? '途中は残ありでした' : '');
-  var ngv = cell('⑥ kintone 不良品報告の照合（記録 ↔ 不具合数量）', 'w3', null, '');
+  // ★その他のメモがあるときは、⑥を2列にして右の余白へ出す（社長要望）。
+  //   メモが無いときは⑥を3列いっぱいに使う
+  var hasSonota = st.sonota && st.sonota.length;
+  var ngv = cell('⑥ kintone 不良品報告の照合（記録 ↔ 不具合数量）',
+                 hasSonota ? 'w2' : 'w3', null, '');
+  if(hasSonota) cell('📋 その他のメモ', '', null, st.sonota.join('／'), 'warn');
   box.appendChild(grid);          // ★これを忘れると6項目が丸ごと出ない
   // kintoneに「品質確認中」が残っているときだけ出す注意。読み込みが終わってから入る
   var alert=document.createElement('div'); alert.className='qc-chk-alert';
@@ -10075,7 +10163,8 @@ function qcUpdatePendingBadge(){
 window.qcShowPendingList = function(){
   qcShowScreen('list');
   qcLoadCachedRecords();
-  var pending=QC_ALL_RECORDS.filter(function(r){ return (r[7]||'')==='完納'&&(r[12]||'未')==='未'; });
+  var pending=qcPendingRows();
+  QC_PENDING_KEY = qcPendingKeyNow();   // いま出した顔ぶれを覚えておく
   if(!pending.length){ qcUpdatePendingBadge(); return; }
   QC_PENDING_MODE=true;
   document.getElementById('qc-date-nav').style.display='none';
@@ -10148,7 +10237,7 @@ window.qcShowPendingList = function(){
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.09-5';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.09-7';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
