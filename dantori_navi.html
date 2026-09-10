@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.10-2 : kintoneプロセス管理の「作業者」（いま誰の手にあるか）をステータスの隣に出すようにした。★社長の心配「作業者を選ばない形にすると、ステータスのところの担当が分からなくなる」への手当て。kintone側で在庫投入中の作業者を組織「製造」で固定すれば実行時に選ばなくて済みGAIA_SA01は出なくなるが、代わりに誰が持っているのかが見えにくくなる。H-Hubに出しておけばkintoneを開かずに分かる。qcNgAssigneeOf() は STATUS_ASSIGNEE 型の欄を探し、欄が無ければ何も出さない／欄はあるが空なら黄色で「作業者: 未設定」と出す（設定漏れがそのまま見える） -->
 <!-- H-Hub v2026.09.10-1 : (1)★③在庫投入で kintone 400「作業者を指定してください（GAIA_SA01）」。この番号だけ手当てが無く、生のメッセージが出ていた。進めた先（在庫投入中）が「実行時に作業者を選択する」設定なので、渡す相手を指定しないと通らない。★行き先ごとに渡す相手が違う（在庫投入中から先の「在庫投入 完」は製造の担当）ので、⚙設定の「次の作業者」を★②在庫調整 完 用と ②在庫投入 用の2つに分けた（cfg.assigneeInput を追加）。GAIA_SA01 の案内を足し、設定画面には qcNgKnownAssignees() でkintoneの記録に入っている作業者のログイン名を候補（datalist）として出す（表示名を入れると GAIA_IL26 になるため、ログイン名が分からないと入れようがなかった）。(2)★在庫調整と在庫投入は順番ではない（社長指摘）。どちらか一方を処理した時点で先へ進み、もう一方は選べなくなる。②③と番号を振っていたため「②のあとに③」と読めていたので、★どちらも「②」にして行き先（→完了／→在庫投入中）をボタンに書き、その下に「順番ではありません。どちらか一方です」の断り書きを常時出す。設定画面の説明も分岐の形に直した -->
 <!-- H-Hub v2026.09.09-7 : ★★入力済みにしたのにボタンが出続ける件の、本当の原因。実データで確かめたところ、画面の入力待ちは11件なのに、シート上で「未」の完納は8件だった。差の3件はシートでは既に「済」。つまり★片付いた行が、まっさらな「✓ 入力済みにする」ボタン付きで出続けていた。理由は、一覧は qcShowPendingList() を呼んだ時点の QC_ALL_RECORDS で作られるのに、★qcFetchRecords() は新しいデータを入れてもバッジ（件数）を直すだけで一覧を描き直さないこと。描き直すのは qcLoadRecords() 経由のときだけで、しかも qcRenderCurrentList() はQC_NG_INTERACTING が立っていると見送るため、一覧だけが古いまま残る（バッジ8件・一覧11件という食い違いが実際に出ていた）。→ qcPendingSyncIfChanged() を追加し、記録を取り直したときに★入力待ちの顔ぶれが変わっていたら一覧を作り直す。顔ぶれが同じなら触らない（☑や途中の表示を守る見送りは活かす）。0件になったときは行を消して見出しだけ直す（qcShowPendingList は0件だと何もしないため） -->
 <!-- H-Hub v2026.09.09-6 : (1)★入力済みにしたのに、またボタンが未入力の見た目に戻る件（2度目の指摘。v-3の「済」を貼り直す仕組みは★送信が成功したときしか働かない）。戻るということはH-Hubから見て送信が失敗している。ところがGASは遅いと90秒で打ち切るので、★シートには入っているのに通信だけ切れる形になりやすく、そこで未入力へ戻すと入っているのにもう一度押させてしまう。→ 失敗と決める前に qcVerifyMarked() で★シートを読み直し、本当に入っていないかを確かめる。入っていれば成功として扱う。本当に入っていなければ、alertではなく★箱の中に消えない赤い断り書き（.qc-chk-ng）を出す（alertは閉じると残らず、あとから理由が分からない）。(2)その他のメモ（📋 その他:）を、確認の箱の⑥の右の余白に出す。メモがあるときだけ⑥を2列にして3列目へ置き、無いときは⑥が3列いっぱいを使う -->
@@ -656,6 +657,10 @@ html, body {
 .qc-ng-item-top{display:flex;justify-content:space-between;gap:6px;align-items:baseline;margin-bottom:3px;}
 .qc-ng-date{font-weight:700;color:#1F4E79;font-size:12px;}
 .qc-ng-status{font-size:10px;padding:1px 6px;border-radius:10px;background:#e0e7ff;color:#3730a3;font-weight:700;white-space:nowrap;border:1px solid transparent;}
+/* いま誰の手にあるか（kintoneプロセス管理の作業者）。ステータスの隣に出す */
+.qc-ng-asg{font-size:10px;padding:1px 6px;border-radius:10px;background:#f1f5f9;
+           color:#475569;font-weight:700;white-space:nowrap;border:1px solid #dbe2ea;}
+.qc-ng-asg.none{background:#fff4cc;color:#8a6100;border-color:#f0c419;}
 /* 品質確認中は「まだ品管の手を離れていない」ので、目に留まるよう薄い黄色にする */
 .qc-ng-status.st-hinshitsu{background:#fff4cc;color:#8a6100;border-color:#f0c419;}
 /* 実績入力の有無 */
@@ -10241,7 +10246,7 @@ window.qcShowPendingList = function(){
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.10-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.10-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -10560,6 +10565,23 @@ function qcNgKintoneTotal(hinban, includeExcluded){
 
 // kintoneの記録に入っている「作業者」のログイン名を集める。
 // 「次の作業者」に何を入れればよいかの手がかりにする（表示名を入れると弾かれるため）。
+// いま誰の手にあるか（kintoneプロセス管理の作業者）。
+// ★作業者を固定にすると実行時に選ばなくて済むが、代わりに担当が見えにくくなる。
+//   ここに出しておけば、kintoneを開かなくても分かる。
+//   戻り値: null=この報告に作業者の欄そのものが無い ／ ''=欄はあるが空 ／ 文字列=作業者
+function qcNgAssigneeOf(rec){
+  var found=false, out=[];
+  Object.keys(rec||{}).forEach(function(k){
+    var fld=rec[k];
+    if(!fld || fld.type!=='STATUS_ASSIGNEE') return;
+    found=true;
+    (Array.isArray(fld.value)?fld.value:[]).forEach(function(u){
+      if(u) out.push(u.name || u.code);
+    });
+  });
+  return found ? out.join('・') : null;
+}
+
 function qcNgKnownAssignees(){
   var out=[], seen={};
   (QC_NG_RECORDS||[]).forEach(function(r){
@@ -10814,6 +10836,15 @@ function qcNgMakeItem(r, g){
     var st=document.createElement('span');
     st.className='qc-ng-status'+(stv.indexOf('品質確認')>=0?' st-hinshitsu':'');
     st.textContent=stv; top.appendChild(st);
+  }
+  // ★いま誰の手にあるか。ステータスの隣に置くと「どの状態を・誰が持っている」が一目で分かる
+  var asg = qcNgAssigneeOf(r);
+  if(asg !== null){
+    var aw=document.createElement('span');
+    aw.className='qc-ng-asg'+(asg?'':' none');
+    aw.textContent='作業者: '+(asg || '未設定');
+    aw.title = asg ? '' : 'kintoneのプロセス管理で、このステータスの作業者が設定されていません';
+    top.appendChild(aw);
   }
   it.appendChild(top);
 
