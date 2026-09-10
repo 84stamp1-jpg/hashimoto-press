@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.10-5 : ★品番が完全一致でない報告を、はっきり分かるようにした（社長要望）。これまでは報告の一番下に小さな灰色で「※ 品番が完全一致ではありません（参考表示）」と出るだけで、上を読んでいると気づけなかった（実例: 記録 64210-MLC-D900-21 に対し、報告は 64210-MLC-D900-21/22）。(1)報告の箱ごと橙色にし（.qc-ng-item.partial）、上の行に「品番ちがい」の札を出す。(2)品番のすぐ下に、★この記録の品番と この報告の品番を並べて出し、「この報告の数は合計に入れていません」と明記する（下の小さな注記は廃止）。(3)★品質確認中の件数には品番ちがいも入るのに合計には入らず、ちぐはぐに見えていたので、「※うち◯件は品番ちがい（合計には入れていません）」と内訳を書き添える（ペインと確認の箱の両方。文言は qcNgHinshitsuText() 1か所） -->
 <!-- H-Hub v2026.09.10-4 : ★★「安定しない・在庫投入まで終わっているはずのものが出てくる」の原因。qcNgFetch() の冒頭が「QC_NG_RECORDS が入っていれば二度と取りに行かない」作りで、しかも QC_NG_RECORDS は localStorage のキャッシュから読まれ、★そのキャッシュに期限が無かった。つまりH-Hubを開くと何日も前のkintoneがそのまま出て、在庫投入まで済ませた報告が手つかずのように見えていた。「🔄 不良品報告を再取得」を押したときだけ本当の姿になるので、押したかどうかで見え方が変わる＝安定しない。(1)キャッシュに取得時刻(ms)を持たせ、★3分より古ければ必ず取りに行く（取りに行くあいだは手元のものを見せるので画面は空にならない）。(2)★1件読み直したとき（記入・ステータス変更のあと）にキャッシュも書き直す。これが無いと次に開いたとき古い姿に戻る。(3)★いつ取ったkintoneなのかをペインに出す（10分より古ければ黄色で再取得を促す）。古いものを見ていることに気づけないのがいちばん困るため。(4)記録（スプレッドシート）側も、入力待ちを開いたときに3分より古ければ取り直す -->
 <!-- H-Hub v2026.09.10-3 : kintone側で「次のユーザーから選択」を変えられなかったため、★H-Hubが作業者を送る形で通す。そのために「何を入れればよいか」を設定画面と保存時に明示した。★assignee は“人のログイン名”しか受け付けない（組織やグループ＝製造 は指定できない）ので、その旨を説明に足し、保存時にkintoneの記録から集めた作業者と突き合わせて、一致しないときは黄色で知らせる（候補が古いだけのこともあるので、もう一度「保存して照合」を押せばそのまま通す） -->
 <!-- H-Hub v2026.09.10-2 : kintoneプロセス管理の「作業者」（いま誰の手にあるか）をステータスの隣に出すようにした。★社長の心配「作業者を選ばない形にすると、ステータスのところの担当が分からなくなる」への手当て。kintone側で在庫投入中の作業者を組織「製造」で固定すれば実行時に選ばなくて済みGAIA_SA01は出なくなるが、代わりに誰が持っているのかが見えにくくなる。H-Hubに出しておけばkintoneを開かずに分かる。qcNgAssigneeOf() は STATUS_ASSIGNEE 型の欄を探し、欄が無ければ何も出さない／欄はあるが空なら黄色で「作業者: 未設定」と出す（設定漏れがそのまま見える） -->
@@ -656,6 +657,13 @@ html, body {
 .qc-ng-cmp-diff.gap{color:#b45309;}
 .qc-ng-cmp-note{font-size:10px;color:#94a3b8;margin-top:3px;line-height:1.5;}
 .qc-ng-item{background:#f8fafc;border-radius:8px;padding:7px 9px;margin-bottom:6px;border:1px solid #e2e8f0;}
+/* ★品番が完全一致でない報告。合計には入れていないので、箱ごと見分けが付くようにする */
+.qc-ng-item.partial{background:#fffaf0;border-color:#f0c98a;border-left:4px solid #ea8c00;}
+.qc-ng-pbadge{font-size:10px;font-weight:700;white-space:nowrap;padding:1px 6px;
+              border-radius:10px;background:#ffe9c7;color:#8a4b00;border:1px solid #e8a33d;}
+.qc-ng-pcmp{font-size:11px;line-height:1.7;color:#8a4b00;background:#fff3e0;
+            border:1px dashed #e8a33d;border-radius:6px;padding:5px 8px;margin-top:4px;}
+.qc-ng-pcmp b{font-family:ui-monospace,Menlo,Consolas,monospace;}
 .qc-ng-item-top{display:flex;justify-content:space-between;gap:6px;align-items:baseline;margin-bottom:3px;}
 .qc-ng-date{font-weight:700;color:#1F4E79;font-size:12px;}
 .qc-ng-status{font-size:10px;padding:1px 6px;border-radius:10px;background:#e0e7ff;color:#3730a3;font-weight:700;white-space:nowrap;border:1px solid transparent;}
@@ -10068,8 +10076,7 @@ function qcChkFillNg(box){
   // 品質確認中が残っているときだけ注意を出す（右のペインと同じ数え方・同じ文言）
   if(box.__qcAlert){
     var h = qcNgHinshitsuCount(box.__qcG ? box.__qcG.hinban : '');
-    box.__qcAlert.textContent = h
-      ? ('⚠ 品質確認中が '+h+'件 あります（まだ品質管理の手を離れていません）') : '';
+    box.__qcAlert.textContent = h ? qcNgHinshitsuText(box.__qcG ? box.__qcG.hinban : '') : '';
     box.__qcAlert.style.display = h ? '' : 'none';
   }
 }
@@ -10258,7 +10265,7 @@ window.qcShowPendingList = function(){
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.10-4';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.10-5';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -10619,6 +10626,11 @@ function qcNgAssigneeOf(rec){
   return found ? out.join('・') : null;
 }
 
+// innerHTML に入れる文字を安全にする（品番に < > & が入っていても崩れないように）
+function qcNgEsc(v){
+  return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
 function qcNgKnownAssignees(){
   var out=[], seen={};
   (QC_NG_RECORDS||[]).forEach(function(r){
@@ -10637,13 +10649,23 @@ function qcNgKnownAssignees(){
 // 「品質確認中」＝まだ品質管理の手を離れていない報告の件数。
 // ★右のペインと「システム入力の確認」の箱の両方で使うので、数え方はここ1か所にまとめる。
 //   同じことを2つの式で書くと、片方だけ直したときに食い違う（⑤材料で実際に起きた）。
-function qcNgHinshitsuCount(hinban){
-  if(!(QC_NG_STATE==='ok'||QC_NG_STATE==='stale')) return 0;
+function qcNgHinshitsuList(hinban){
+  if(!(QC_NG_STATE==='ok'||QC_NG_STATE==='stale')) return [];
   var f=qcNgCfg().f;
-  if(!f.status || !f.hinban || !hinban) return 0;
+  if(!f.status || !f.hinban || !hinban) return [];
   return qcNgMatch(hinban).filter(function(x){
     return qcNgVal(x, f.status).indexOf('品質確認')>=0;
-  }).length;
+  });
+}
+function qcNgHinshitsuCount(hinban){ return qcNgHinshitsuList(hinban).length; }
+// ★品質確認中の中に「品番ちがい」が混じっていると、合計には入っていないのに
+//   件数にだけ出てきて、ちぐはぐに見える。内訳を書き添える
+function qcNgHinshitsuText(hinban){
+  var list = qcNgHinshitsuList(hinban);
+  if(!list.length) return '';
+  var p = list.filter(function(x){ return x.__qcExact === false; }).length;
+  return '⚠ 品質確認中が '+list.length+'件 あります（まだ品質管理の手を離れていません）'
+       + (p ? '　※うち '+p+'件 は品番ちがい（合計には入れていません）' : '');
 }
 
 // 「記録の不良 N個」の真下に、kintoneの合計を並べて出す。
@@ -10809,7 +10831,7 @@ function qcNgRenderPane(pane, g){
     var hinN = qcNgHinshitsuCount(g.hinban);
     if(hinN){
       var al=document.createElement('div'); al.className='qc-ng-hinshitsu';
-      al.textContent='⚠ 品質確認中が '+hinN+'件 あります（まだ品質管理の手を離れていません）';
+      al.textContent=qcNgHinshitsuText(g.hinban);
       pane.appendChild(al);
     }
     // 見出しの数字（記録の不良）の真下に、kintone側の合計を並べる。
@@ -10877,7 +10899,11 @@ function qcNgRenderPane(pane, g){
 function qcNgMakeItem(r, g){
   var cfg=qcNgCfg(), f=cfg.f;
   var id = r['$id'] ? r['$id'].value : '';
-  var it=document.createElement('div'); it.className='qc-ng-item';
+  var it=document.createElement('div');
+  // ★品番が完全一致でない報告は、箱ごと橙色にする。
+  //   小さな注記を下に出すだけでは気づけず、合計に入っていないことも伝わらなかった。
+  var exact = (r.__qcExact !== false);
+  it.className='qc-ng-item' + (exact?'':' partial');
 
   var top=document.createElement('div'); top.className='qc-ng-item-top';
   var dt=document.createElement('span'); dt.className='qc-ng-date';
@@ -10898,11 +10924,23 @@ function qcNgMakeItem(r, g){
     aw.title = asg ? '' : 'kintoneのプロセス管理で、このステータスの作業者が設定されていません';
     top.appendChild(aw);
   }
+  if(!exact){
+    var pb=document.createElement('span'); pb.className='qc-ng-pbadge';
+    pb.textContent='品番ちがい'; top.appendChild(pb);
+  }
   it.appendChild(top);
 
   var l1=document.createElement('div'); l1.className='qc-ng-line';
   l1.textContent=qcNgVal(r,f.hinban)+(f.hinmei&&qcNgVal(r,f.hinmei)?' / '+qcNgVal(r,f.hinmei):'');
   it.appendChild(l1);
+  // ★どこが違うのかを、記録の品番と並べて出す。品番のすぐ下に置く（下まで読ませない）
+  if(!exact){
+    var pc=document.createElement('div'); pc.className='qc-ng-pcmp';
+    pc.innerHTML = '★品番が完全には一致していません。<b>この報告の数は合計に入れていません</b>（参考表示）。'
+                 + '<br>この記録: <b>' + qcNgEsc(g.hinban||'—') + '</b>'
+                 + '<br>この報告: <b>' + qcNgEsc(qcNgVal(r,f.hinban)||'—') + '</b>';
+    it.appendChild(pc);
+  }
   if(f.worker && qcNgVal(r,f.worker)){ var l2=document.createElement('div'); l2.className='qc-ng-line'; l2.textContent='発見者: '+qcNgVal(r,f.worker); it.appendChild(l2); }
   // ★報告書の「入力者」は発見者とは別人のことがある（見つけた人と、kintoneに打ち込んだ人）。
   //   在庫管理の入力者(inpUser)とも別物なので、ここは reporter を見る。
@@ -10970,7 +11008,7 @@ function qcNgMakeItem(r, g){
   });
 
   if(f.memo && qcNgVal(r,f.memo)){ var l3=document.createElement('div'); l3.className='qc-ng-line'; l3.style.color='#7c5a12'; l3.textContent='📝 '+qcNgVal(r,f.memo); it.appendChild(l3); }
-  if(!r.__qcExact){ var pm=document.createElement('div'); pm.className='qc-ng-line'; pm.style.color='#b45309'; pm.textContent='※ 品番が完全一致ではありません（参考表示）'; it.appendChild(pm); }
+  // ※品番ちがいの断りは、下の小さな灰色ではなく品番のすぐ下（.qc-ng-pcmp）へ移した
 
   // ---- すでに在庫管理へ記入済みなら見せる ----
   var wroteUser = f.inpUser ? qcNgVal(r,f.inpUser) : '';
