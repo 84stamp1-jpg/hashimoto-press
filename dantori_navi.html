@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.10-4 : ★★「安定しない・在庫投入まで終わっているはずのものが出てくる」の原因。qcNgFetch() の冒頭が「QC_NG_RECORDS が入っていれば二度と取りに行かない」作りで、しかも QC_NG_RECORDS は localStorage のキャッシュから読まれ、★そのキャッシュに期限が無かった。つまりH-Hubを開くと何日も前のkintoneがそのまま出て、在庫投入まで済ませた報告が手つかずのように見えていた。「🔄 不良品報告を再取得」を押したときだけ本当の姿になるので、押したかどうかで見え方が変わる＝安定しない。(1)キャッシュに取得時刻(ms)を持たせ、★3分より古ければ必ず取りに行く（取りに行くあいだは手元のものを見せるので画面は空にならない）。(2)★1件読み直したとき（記入・ステータス変更のあと）にキャッシュも書き直す。これが無いと次に開いたとき古い姿に戻る。(3)★いつ取ったkintoneなのかをペインに出す（10分より古ければ黄色で再取得を促す）。古いものを見ていることに気づけないのがいちばん困るため。(4)記録（スプレッドシート）側も、入力待ちを開いたときに3分より古ければ取り直す -->
 <!-- H-Hub v2026.09.10-3 : kintone側で「次のユーザーから選択」を変えられなかったため、★H-Hubが作業者を送る形で通す。そのために「何を入れればよいか」を設定画面と保存時に明示した。★assignee は“人のログイン名”しか受け付けない（組織やグループ＝製造 は指定できない）ので、その旨を説明に足し、保存時にkintoneの記録から集めた作業者と突き合わせて、一致しないときは黄色で知らせる（候補が古いだけのこともあるので、もう一度「保存して照合」を押せばそのまま通す） -->
 <!-- H-Hub v2026.09.10-2 : kintoneプロセス管理の「作業者」（いま誰の手にあるか）をステータスの隣に出すようにした。★社長の心配「作業者を選ばない形にすると、ステータスのところの担当が分からなくなる」への手当て。kintone側で在庫投入中の作業者を組織「製造」で固定すれば実行時に選ばなくて済みGAIA_SA01は出なくなるが、代わりに誰が持っているのかが見えにくくなる。H-Hubに出しておけばkintoneを開かずに分かる。qcNgAssigneeOf() は STATUS_ASSIGNEE 型の欄を探し、欄が無ければ何も出さない／欄はあるが空なら黄色で「作業者: 未設定」と出す（設定漏れがそのまま見える） -->
 <!-- H-Hub v2026.09.10-1 : (1)★③在庫投入で kintone 400「作業者を指定してください（GAIA_SA01）」。この番号だけ手当てが無く、生のメッセージが出ていた。進めた先（在庫投入中）が「実行時に作業者を選択する」設定なので、渡す相手を指定しないと通らない。★行き先ごとに渡す相手が違う（在庫投入中から先の「在庫投入 完」は製造の担当）ので、⚙設定の「次の作業者」を★②在庫調整 完 用と ②在庫投入 用の2つに分けた（cfg.assigneeInput を追加）。GAIA_SA01 の案内を足し、設定画面には qcNgKnownAssignees() でkintoneの記録に入っている作業者のログイン名を候補（datalist）として出す（表示名を入れると GAIA_IL26 になるため、ログイン名が分からないと入れようがなかった）。(2)★在庫調整と在庫投入は順番ではない（社長指摘）。どちらか一方を処理した時点で先へ進み、もう一方は選べなくなる。②③と番号を振っていたため「②のあとに③」と読めていたので、★どちらも「②」にして行き先（→完了／→在庫投入中）をボタンに書き、その下に「順番ではありません。どちらか一方です」の断り書きを常時出す。設定画面の説明も分岐の形に直した -->
@@ -659,6 +660,10 @@ html, body {
 .qc-ng-date{font-weight:700;color:#1F4E79;font-size:12px;}
 .qc-ng-status{font-size:10px;padding:1px 6px;border-radius:10px;background:#e0e7ff;color:#3730a3;font-weight:700;white-space:nowrap;border:1px solid transparent;}
 /* いま誰の手にあるか（kintoneプロセス管理の作業者）。ステータスの隣に出す */
+/* いつ取ったデータかを出す。古ければ黄色 */
+.qc-ng-at{font-size:10px;color:#64748b;font-weight:600;white-space:nowrap;}
+.qc-ng-at.old{color:#8a6100;background:#fff4cc;border:1px solid #f0c419;
+              border-radius:10px;padding:1px 6px;}
 .qc-ng-asg{font-size:10px;padding:1px 6px;border-radius:10px;background:#f1f5f9;
            color:#475569;font-weight:700;white-space:nowrap;border:1px solid #dbe2ea;}
 .qc-ng-asg.none{background:#fff4cc;color:#8a6100;border-color:#f0c419;}
@@ -9432,6 +9437,7 @@ window.qcBuildJobStatusMap = qcBuildJobStatusMap;
 // 結果が返るまで何も出ない＝「反応が悪い」状態になっていた。
 var QC_REC_INFLIGHT = null;      // 実行中のリクエストを待っているコールバック
 var QC_REC_CACHE_LOADED = false; // localStorageキャッシュを読んだか
+var QC_REC_FETCHED_MS = 0;       // 記録を最後に取り直した時刻（古ければ取り直す）
 
 // ★入力済みにした行番号を、このセッションのあいだ覚えておく。
 //   getRecords は QC_ALL_RECORDS を配列ごと入れ替えるため、手元で立てた r[12]='済' が消える。
@@ -9554,6 +9560,7 @@ function qcFetchRecords(cb){
   qcGasPost('getRecords', {}, function(res){
     if(res && res.ok){
       QC_ALL_RECORDS = res.records || [];
+      QC_REC_FETCHED_MS = Date.now();
       qcApplyMarkedDone();   // ★入れ替えで消えた「済」を貼り直す（これが無いとボタンが復活する）
       try{ localStorage.setItem('qcAllRecordsCache', JSON.stringify(QC_ALL_RECORDS)); }catch(e){}
       qcUpdatePendingBadge(); qcBuildJobStatusMap();
@@ -10173,6 +10180,10 @@ function qcUpdatePendingBadge(){
 window.qcShowPendingList = function(){
   qcShowScreen('list');
   qcLoadCachedRecords();
+  // ★記録（スプレッドシート）側も、古ければ取り直す。
+  //   入力待ちを開いたのに何時間も前の記録で作っていると、
+  //   入力済みのものが出てくる。取りに行くあいだは手元のもので描く。
+  if(Date.now() - QC_REC_FETCHED_MS > 3*60*1000) qcFetchRecords();
   var pending=qcPendingRows();
   QC_PENDING_KEY = qcPendingKeyNow();   // いま出した顔ぶれを覚えておく
   if(!pending.length){ qcUpdatePendingBadge(); return; }
@@ -10247,7 +10258,7 @@ window.qcShowPendingList = function(){
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.10-3';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.10-4';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -10435,12 +10446,29 @@ function qcNgGuessFields(rec){
 // 毎回そのあいだ「照合中…」で待たせない。通信に失敗しても前回のデータは消さない。
 var QC_NG_CACHE_LS = 'qcNgRecordsCache';
 var QC_NG_FETCHED_AT = '';
+var QC_NG_FETCHED_MS = 0;          // いつ取ったか（ミリ秒）。古さの判定に使う
+var QC_NG_FRESH_MS   = 3*60*1000;  // これより古ければ必ず取り直す
+var QC_NG_OLD_MS     = 10*60*1000; // これより古ければ画面に黄色で断る
+
+function qcNgIsFresh(){
+  return QC_NG_FETCHED_MS > 0 && (Date.now() - QC_NG_FETCHED_MS) < QC_NG_FRESH_MS;
+}
+// 「いつ取ったか」を短く。古ければ old を付ける
+function qcNgAgeLabel(){
+  if(!QC_NG_FETCHED_MS) return ['', ''];
+  var m = Math.floor((Date.now() - QC_NG_FETCHED_MS)/60000);
+  var t = String(QC_NG_FETCHED_AT||'').replace(/^.*\s/, '');   // 時刻だけ
+  var txt = '取得 ' + (t || '?') + (m>=1 ? '（'+(m>=60 ? Math.floor(m/60)+'時間' : m+'分')+'前）' : '（さっき）');
+  return [txt, (Date.now()-QC_NG_FETCHED_MS) > QC_NG_OLD_MS ? 'old' : ''];
+}
+
 function qcNgLoadCache(){
   if(QC_NG_RECORDS) return false;
   try{
     var c = JSON.parse(localStorage.getItem(QC_NG_CACHE_LS)||'null');
     if(c && c.records && c.records.length){
       QC_NG_RECORDS = c.records; QC_NG_FETCHED_AT = c.at||'';
+      QC_NG_FETCHED_MS = c.ms || 0;   // 時刻が無い古いキャッシュは0＝必ず取り直す
       return true;
     }
   }catch(e){}
@@ -10448,10 +10476,11 @@ function qcNgLoadCache(){
 }
 function qcNgSaveCache(){
   try{
-    localStorage.setItem(QC_NG_CACHE_LS, JSON.stringify({
-      at:new Date().toLocaleString('ja-JP'), records:QC_NG_RECORDS
-    }));
     QC_NG_FETCHED_AT = new Date().toLocaleString('ja-JP');
+    QC_NG_FETCHED_MS = Date.now();
+    localStorage.setItem(QC_NG_CACHE_LS, JSON.stringify({
+      at:QC_NG_FETCHED_AT, ms:QC_NG_FETCHED_MS, records:QC_NG_RECORDS
+    }));
   }catch(e){}   // 容量超過などは無視（キャッシュが無いだけで動作はする）
 }
 
@@ -10460,7 +10489,14 @@ function qcNgFetch(force, _retry){
   if(!cfg.token || !cfg.appId){ QC_NG_STATE='unset'; qcNgRenderAll(); return; }
   // 取得に失敗して古いデータを見せている(stale)状態は、再描画で 'ok' に戻さない。
   // 戻すと「古い」という断りが消えてしまう
-  if(QC_NG_RECORDS && !force){ if(QC_NG_STATE!=='stale') QC_NG_STATE='ok'; qcNgRenderAll(); return; }
+  // ★ここが「安定しない」の正体だった。以前は QC_NG_RECORDS が入ってさえいれば
+  //   二度と取りに行かず、しかもキャッシュに期限が無かったため、
+  //   何日も前のkintoneがそのまま出て、在庫投入まで済ませた報告が手つかずのように見えていた。
+  //   古ければ取りに行く。取りに行くあいだは手元のものを見せる（画面は空にしない）。
+  if(QC_NG_RECORDS && !force && qcNgIsFresh()){
+    if(QC_NG_STATE!=='stale') QC_NG_STATE='ok';
+    qcNgRenderAll(); return;
+  }
   // 手元にキャッシュがあれば先に見せて、裏で最新に差し替える
   var hadCache = qcNgLoadCache();
   if(hadCache){ QC_NG_STATE='ok'; qcNgRenderAll(); }
@@ -10733,7 +10769,13 @@ function qcNgReread(id, cb, tries){
     if(rec && QC_NG_RECORDS){
       for(var i=0;i<QC_NG_RECORDS.length;i++){
         var old=QC_NG_RECORDS[i];
-        if(old['$id'] && String(old['$id'].value)===String(id)){ QC_NG_RECORDS[i]=rec; break; }
+        if(old['$id'] && String(old['$id'].value)===String(id)){
+          QC_NG_RECORDS[i]=rec;
+          // ★キャッシュも書き直す。これが無いと、次に開いたとき古い姿（記入前・
+          //   ステータス変更前）に戻り、済んだはずのものがまた出てくる
+          qcNgSaveCache();
+          break;
+        }
       }
     }
     if(!rec){ retryOr('そのレコードが読めませんでした'); return; }
@@ -10751,6 +10793,15 @@ function qcNgRenderPane(pane, g){
   var h2=document.createElement('span'); h2.className='qc-ng-muted';
   h2.textContent = rec.total>0 ? ('記録の不良 '+rec.total+'個') : '記録の不良 なし';
   hdr.appendChild(h1); hdr.appendChild(h2); pane.appendChild(hdr);
+  // ★いつ取ったkintoneなのかを必ず出す。古いものを見ていることに気づけないのが
+  //   いちばん困る（済ませた報告が手つかずに見えて、二度手間になる）
+  var age = qcNgAgeLabel();
+  if(age[0]){
+    var at=document.createElement('div'); at.className='qc-ng-at'+(age[1]?' '+age[1]:'');
+    at.style.marginBottom='4px';
+    at.textContent = age[0] + (age[1] ? '　🔄「不良品報告を再取得」で新しくできます' : '');
+    pane.appendChild(at);
+  }
 
   if((QC_NG_STATE==='ok'||QC_NG_STATE==='stale') && f.hinban && g.hinban){
     // ★「品質確認中」がまだ残っているかを、カードを1件ずつ開かなくても分かるようにする。
