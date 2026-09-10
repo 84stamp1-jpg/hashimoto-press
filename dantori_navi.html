@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.10-3 : kintone側で「次のユーザーから選択」を変えられなかったため、★H-Hubが作業者を送る形で通す。そのために「何を入れればよいか」を設定画面と保存時に明示した。★assignee は“人のログイン名”しか受け付けない（組織やグループ＝製造 は指定できない）ので、その旨を説明に足し、保存時にkintoneの記録から集めた作業者と突き合わせて、一致しないときは黄色で知らせる（候補が古いだけのこともあるので、もう一度「保存して照合」を押せばそのまま通す） -->
 <!-- H-Hub v2026.09.10-2 : kintoneプロセス管理の「作業者」（いま誰の手にあるか）をステータスの隣に出すようにした。★社長の心配「作業者を選ばない形にすると、ステータスのところの担当が分からなくなる」への手当て。kintone側で在庫投入中の作業者を組織「製造」で固定すれば実行時に選ばなくて済みGAIA_SA01は出なくなるが、代わりに誰が持っているのかが見えにくくなる。H-Hubに出しておけばkintoneを開かずに分かる。qcNgAssigneeOf() は STATUS_ASSIGNEE 型の欄を探し、欄が無ければ何も出さない／欄はあるが空なら黄色で「作業者: 未設定」と出す（設定漏れがそのまま見える） -->
 <!-- H-Hub v2026.09.10-1 : (1)★③在庫投入で kintone 400「作業者を指定してください（GAIA_SA01）」。この番号だけ手当てが無く、生のメッセージが出ていた。進めた先（在庫投入中）が「実行時に作業者を選択する」設定なので、渡す相手を指定しないと通らない。★行き先ごとに渡す相手が違う（在庫投入中から先の「在庫投入 完」は製造の担当）ので、⚙設定の「次の作業者」を★②在庫調整 完 用と ②在庫投入 用の2つに分けた（cfg.assigneeInput を追加）。GAIA_SA01 の案内を足し、設定画面には qcNgKnownAssignees() でkintoneの記録に入っている作業者のログイン名を候補（datalist）として出す（表示名を入れると GAIA_IL26 になるため、ログイン名が分からないと入れようがなかった）。(2)★在庫調整と在庫投入は順番ではない（社長指摘）。どちらか一方を処理した時点で先へ進み、もう一方は選べなくなる。②③と番号を振っていたため「②のあとに③」と読めていたので、★どちらも「②」にして行き先（→完了／→在庫投入中）をボタンに書き、その下に「順番ではありません。どちらか一方です」の断り書きを常時出す。設定画面の説明も分岐の形に直した -->
 <!-- H-Hub v2026.09.09-7 : ★★入力済みにしたのにボタンが出続ける件の、本当の原因。実データで確かめたところ、画面の入力待ちは11件なのに、シート上で「未」の完納は8件だった。差の3件はシートでは既に「済」。つまり★片付いた行が、まっさらな「✓ 入力済みにする」ボタン付きで出続けていた。理由は、一覧は qcShowPendingList() を呼んだ時点の QC_ALL_RECORDS で作られるのに、★qcFetchRecords() は新しいデータを入れてもバッジ（件数）を直すだけで一覧を描き直さないこと。描き直すのは qcLoadRecords() 経由のときだけで、しかも qcRenderCurrentList() はQC_NG_INTERACTING が立っていると見送るため、一覧だけが古いまま残る（バッジ8件・一覧11件という食い違いが実際に出ていた）。→ qcPendingSyncIfChanged() を追加し、記録を取り直したときに★入力待ちの顔ぶれが変わっていたら一覧を作り直す。顔ぶれが同じなら触らない（☑や途中の表示を守る見送りは活かす）。0件になったときは行を消して見出しだけ直す（qcShowPendingList は0件だと何もしないため） -->
@@ -10246,7 +10247,7 @@ window.qcShowPendingList = function(){
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.10-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.10-3';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -11466,11 +11467,14 @@ window.qcNgOpenConfig = function(){
       +   '<div class="qc-fld" style="flex:1"><label>② 在庫調整中 → 在庫投入中（合格数量があるとき）</label><input type="text" id="qc-ng-act2" placeholder="在庫投入"></div>'
       + '</div>'
       + '<div style="font-size:11px;color:#475569;line-height:1.7;margin:2px 0 6px;background:#f8fafc;padding:8px;border-radius:8px;">'
-      +   '次の作業者は、進めた先のステータスの作業者が<b>「実行時に選択」</b>になっている場合だけ要ります。'
-      +   'そうでなければ空欄のままにしてください。<br>'
+      +   '次の作業者は、進めた先のステータスの作業者が<b>「実行時に選択」（次のユーザーから選択）</b>'
+      +   'になっている場合に要ります。そうでなければ空欄のままにしてください。<br>'
       +   '★入れるのは<b>表示名ではなくログイン名</b>です（「深津健介」ではなく英字のIDなど）。'
       +   '表示名だと <b>GAIA_IL26「指定したユーザーが見つかりません」</b>、'
-      +   '空欄だと <b>GAIA_SA01「作業者を指定してください」</b>になります。'
+      +   '空欄だと <b>GAIA_SA01「作業者を指定してください」</b>になります。<br>'
+      +   '★★ここに入れられるのは<b>「人」のログイン名だけ</b>です。'
+      +   '<b>組織やグループ（例：製造）は指定できません。</b>'
+      +   'kintone側の候補が組織になっている場合は、<b>その中の誰か1人</b>を入れてください。'
       + '</div>'
       + '<div style="display:flex;gap:8px;">'
       +   '<div class="qc-fld" style="flex:1"><label>② 在庫調整 完 の次の作業者</label>'
@@ -11573,9 +11577,27 @@ window.qcNgSaveConfig = function(){
     qcNgFetch(true);
     return;   // モーダルは閉じずに気づいてもらう
   }
+  // 次の作業者が、いまkintoneの作業者に入っている人と違うなら知らせる。
+  // ★ここは「人のログイン名」しか通らない。組織やグループ（製造など）を入れると
+  //   GAIA_IL26「指定したユーザーが見つかりません」になる。
+  var asg = qcNgKnownAssignees().map(function(v){ return String(v).split('（')[0]; });
+  var wrong = [];
+  if(cfg.assignee && asg.length && asg.indexOf(cfg.assignee)<0) wrong.push('②在庫調整 完「'+cfg.assignee+'」');
+  if(cfg.assigneeInput && asg.length && asg.indexOf(cfg.assigneeInput)<0) wrong.push('②在庫投入「'+cfg.assigneeInput+'」');
+  if(wrong.length){
+    m0.style.color='#b45309';
+    m0.textContent='※ '+wrong.join('・')+' は、いまkintoneの作業者に入っている人（'+asg.join('／')+'）と一致しません。'
+      +'ここは「人のログイン名」だけが通ります（組織やグループは指定できません）。'
+      +'このまま保存する場合は、もう一度「保存して照合」を押してください。';
+    QC_NG_ASG_WARNED = true;
+    if(!QC_NG_ASG_WARNED_ONCE){ QC_NG_ASG_WARNED_ONCE = true; qcNgFetch(true); return; }
+  }
+  QC_NG_ASG_WARNED_ONCE = false;
   qcNgCloseConfig();
   QC_NG_RECORDS=null; qcNgFetch(true);
 };
+// 2度目の「保存して照合」でそのまま通すための印（候補が古いだけのこともあるため）
+var QC_NG_ASG_WARNED = false, QC_NG_ASG_WARNED_ONCE = false;
 // 列（フィールドコード）と中身のサンプルを出す。名前を当てずっぽうで書かなくて済むように。
 window.qcNgDetectFields = function(){
   var cfg=qcNgCfg();
