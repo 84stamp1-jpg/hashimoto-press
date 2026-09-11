@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.11-2 : ★新しい版が出ていることを知らせるようにした。ページそのものは自動で読み込み直されないので、直したはずのものが古いまま動いていて「直っていない」に見えることが何度も起きていた。先頭のコメントにある版だけを読みに行き（Rangeで先頭8KBだけ）、いま動いている版と違えば上に知らせを出す。押せば読み込み直し、開いていた画面へは自動で戻る（v-1の仕組み）。見に行くのは5分に1回まで、別の画面から戻ってきたときと自動更新のついで -->
+<!-- H-Hub v2026.09.11-1 : (1)★読み込み直すと必ず工場レイアウトへ飛んでいた（社長指摘）。開いていたタブ（switchTabで localStorage hhubTab）・品質チェックの中の画面（qcShowScreenで hhubQcScreen）・入力待ちを開いていたか（hhubQcPending）を覚え、qcRestoreView() で読み込み直したときに同じ画面へ戻す。読み込み直した直後は手元にデータが無くて開けないことがあるので、getRecords が取れた時点でもう一度開く（QC_WANT_PENDING）。(2)★データが自動で新しくならなかった。開いたときと押したときにしか取りに行かないので、入力待ちを見ながらkintoneを別画面で操作すると画面だけ古いまま残る。入力待ちを開いているあいだ★90秒ごとに見に行き、★別の画面から戻ってきたとき（visibilitychange）にも見に行く。どちらも「古ければ取りに行く」形なので無駄な通信は増えない -->
 <!-- H-Hub v2026.09.10-5 : ★品番が完全一致でない報告を、はっきり分かるようにした（社長要望）。これまでは報告の一番下に小さな灰色で「※ 品番が完全一致ではありません（参考表示）」と出るだけで、上を読んでいると気づけなかった（実例: 記録 64210-MLC-D900-21 に対し、報告は 64210-MLC-D900-21/22）。(1)報告の箱ごと橙色にし（.qc-ng-item.partial）、上の行に「品番ちがい」の札を出す。(2)品番のすぐ下に、★この記録の品番と この報告の品番を並べて出し、「この報告の数は合計に入れていません」と明記する（下の小さな注記は廃止）。(3)★品質確認中の件数には品番ちがいも入るのに合計には入らず、ちぐはぐに見えていたので、「※うち◯件は品番ちがい（合計には入れていません）」と内訳を書き添える（ペインと確認の箱の両方。文言は qcNgHinshitsuText() 1か所） -->
 <!-- H-Hub v2026.09.10-4 : ★★「安定しない・在庫投入まで終わっているはずのものが出てくる」の原因。qcNgFetch() の冒頭が「QC_NG_RECORDS が入っていれば二度と取りに行かない」作りで、しかも QC_NG_RECORDS は localStorage のキャッシュから読まれ、★そのキャッシュに期限が無かった。つまりH-Hubを開くと何日も前のkintoneがそのまま出て、在庫投入まで済ませた報告が手つかずのように見えていた。「🔄 不良品報告を再取得」を押したときだけ本当の姿になるので、押したかどうかで見え方が変わる＝安定しない。(1)キャッシュに取得時刻(ms)を持たせ、★3分より古ければ必ず取りに行く（取りに行くあいだは手元のものを見せるので画面は空にならない）。(2)★1件読み直したとき（記入・ステータス変更のあと）にキャッシュも書き直す。これが無いと次に開いたとき古い姿に戻る。(3)★いつ取ったkintoneなのかをペインに出す（10分より古ければ黄色で再取得を促す）。古いものを見ていることに気づけないのがいちばん困るため。(4)記録（スプレッドシート）側も、入力待ちを開いたときに3分より古ければ取り直す -->
 <!-- H-Hub v2026.09.10-3 : kintone側で「次のユーザーから選択」を変えられなかったため、★H-Hubが作業者を送る形で通す。そのために「何を入れればよいか」を設定画面と保存時に明示した。★assignee は“人のログイン名”しか受け付けない（組織やグループ＝製造 は指定できない）ので、その旨を説明に足し、保存時にkintoneの記録から集めた作業者と突き合わせて、一致しないときは黄色で知らせる（候補が古いだけのこともあるので、もう一度「保存して照合」を押せばそのまま通す） -->
@@ -669,6 +671,13 @@ html, body {
 .qc-ng-status{font-size:10px;padding:1px 6px;border-radius:10px;background:#e0e7ff;color:#3730a3;font-weight:700;white-space:nowrap;border:1px solid transparent;}
 /* いま誰の手にあるか（kintoneプロセス管理の作業者）。ステータスの隣に出す */
 /* いつ取ったデータかを出す。古ければ黄色 */
+/* 新しい版が出ていることの知らせ */
+.qc-newver{position:fixed;left:50%;transform:translateX(-50%);top:8px;z-index:99999;
+  background:#fff4cc;color:#7a4b00;border:1px solid #e8a33d;border-radius:10px;
+  padding:7px 14px;font-size:12px;font-weight:700;box-shadow:0 3px 10px rgba(0,0,0,.15);
+  display:flex;align-items:center;gap:10px;}
+.qc-newver button{padding:4px 12px;border:none;border-radius:6px;background:#1F4E79;
+  color:#fff;font-size:12px;font-weight:700;cursor:pointer;}
 .qc-ng-at{font-size:10px;color:#64748b;font-weight:600;white-space:nowrap;}
 .qc-ng-at.old{color:#8a6100;background:#fff4cc;border:1px solid #f0c419;
               border-radius:10px;padding:1px 6px;}
@@ -3621,6 +3630,9 @@ setInterval(wbRender, 60 * 1000);     // 1分ごとに経過時間と要測定�
 
 // ===== タブ切替 =====
 function switchTab(name){
+  // ★読み込み直したときに同じ画面へ戻せるよう、開いたタブを覚えておく。
+  //   これが無いと、再読み込みのたびに工場レイアウトへ飛んでしまう。
+  try{ localStorage.setItem('hhubTab', name); }catch(e){}
   document.querySelectorAll('.content').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
@@ -9106,6 +9118,10 @@ window.qcFromSearch = function(partNo){
 
 // ----- サブ画面切替 -----
 window.qcShowScreen = function(sc){
+  // 品質チェックの中のどの画面かも覚える（記録する／日別一覧／製造番号／予定更新）
+  if(['form','list','search','upload'].indexOf(sc)>=0){
+    try{ localStorage.setItem('hhubQcScreen', sc); }catch(e){}
+  }
   ['form','list','search','bulk','edit','upload'].forEach(function(s){
     var el = document.getElementById('qc-screen-'+s);
     if(el) el.className = 'qc-screen' + (s===sc?' qc-on':'');
@@ -9573,6 +9589,8 @@ function qcFetchRecords(cb){
       try{ localStorage.setItem('qcAllRecordsCache', JSON.stringify(QC_ALL_RECORDS)); }catch(e){}
       qcUpdatePendingBadge(); qcBuildJobStatusMap();
       qcPendingSyncIfChanged();   // ★片付いた行が残り続けないよう、顔ぶれが変わったら作り直す
+      // 読み込み直した直後は手元にデータが無くて開けないことがある。取れたら開く
+      if(QC_WANT_PENDING && !QC_PENDING_MODE){ QC_WANT_PENDING=false; qcShowPendingList(); }
       finish(true);
     } else finish(false);
   }, function(){ finish(false); });
@@ -10195,6 +10213,8 @@ window.qcShowPendingList = function(){
   QC_PENDING_KEY = qcPendingKeyNow();   // いま出した顔ぶれを覚えておく
   if(!pending.length){ qcUpdatePendingBadge(); return; }
   QC_PENDING_MODE=true;
+  try{ localStorage.setItem('hhubQcPending','1'); }catch(e){}
+  qcAutoRefreshStart();
   document.getElementById('qc-date-nav').style.display='none';
   document.getElementById('qc-list-filter-wrap').style.display='none';
   // 右にkintone不良品報告を並べるので、幅の上限(500px)を外す
@@ -10219,6 +10239,8 @@ window.qcShowPendingList = function(){
   var backBtn=document.createElement('button'); backBtn.textContent='✕ 閉じる'; backBtn.style.cssText='padding:4px 12px;background:#555;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;';
   backBtn.onclick=function(){
     QC_PENDING_MODE=false; QC_NG_INTERACTING=false;
+    try{ localStorage.removeItem('hhubQcPending'); }catch(e){}
+    qcAutoRefreshStop();
     document.getElementById('qc-date-nav').style.display='';
     document.getElementById('qc-list-filter-wrap').style.display='';
     if(cont) cont.classList.remove('qc-wide');
@@ -10258,6 +10280,99 @@ window.qcShowPendingList = function(){
 };
 
 // ============================================================
+//  ★自動で新しくする／読み込み直したとき元の画面へ戻す
+//  ・H-Hubは今まで、開いたときと押したときにしか取りに行かなかった。
+//    入力待ちを見ながらkintoneを別画面で操作すると、画面だけ古いまま残る。
+//  ・読み込み直すと必ず工場レイアウトへ飛んでいた（覚えていなかったため）。
+// ============================================================
+var QC_AUTO_TIMER = null;
+var QC_AUTO_MS = 90*1000;     // 入力待ちを開いているあいだ、この間隔で見に行く
+
+// 古ければ取り直す。新しければ何もしない（無駄な通信を増やさない）
+function qcAutoRefreshNow(){
+  qcCheckNewVersion();        // 5分に1回だけ実際に見に行く
+  if(!QC_PENDING_MODE) return;
+  if(Date.now() - QC_REC_FETCHED_MS > QC_AUTO_MS) qcFetchRecords();
+  qcNgFetch(false);           // 中で「3分より古ければ取り直す」を見ている
+}
+function qcAutoRefreshStart(){
+  if(QC_AUTO_TIMER) return;
+  QC_AUTO_TIMER = setInterval(qcAutoRefreshNow, QC_AUTO_MS);
+}
+function qcAutoRefreshStop(){
+  if(QC_AUTO_TIMER){ clearInterval(QC_AUTO_TIMER); QC_AUTO_TIMER = null; }
+}
+// ★kintoneなど別の画面から戻ってきたときにも取り直す。
+//   「向こうで進めてきたのに、こちらは古いまま」を防ぐ
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState === 'visible'){ qcAutoRefreshNow(); qcCheckNewVersion(); }
+});
+
+// ★新しい版が出ていることを知らせる。
+//   ページそのものは自動で読み込み直されないので、直したはずのものが古いまま動いていて
+//   「直っていない」に見えることが何度も起きた。
+//   先頭のコメントにある版だけを読みに行き、いま動いている版と違えば知らせる
+//   （押せば読み込み直す。開いていた画面へは自動で戻る）。
+var QC_VER_CHECKED_MS = 0;
+function qcCheckNewVersion(){
+  if(Date.now() - QC_VER_CHECKED_MS < 5*60*1000) return;   // 5分に1回まで
+  QC_VER_CHECKED_MS = Date.now();
+  var url = location.pathname + '?vcheck=' + Date.now();
+  fetch(url, {cache:'no-store', headers:{'Range':'bytes=0-8000'}})
+    .then(function(r){
+      // ★Rangeが効けば206で先頭8KBだけ返る。効かないサーバは200で全部返そうとするので、
+      //   その場合は先頭の一塊だけ読んで打ち切る（900KBを毎回落とさないため）
+      if(r.status === 206 || !r.body || !r.body.getReader) return r.text();
+      var reader = r.body.getReader();
+      return reader.read().then(function(res){
+        try{ reader.cancel(); }catch(e){}
+        return new TextDecoder('utf-8').decode(res.value || new Uint8Array());
+      });
+    })
+    .then(function(t){
+      // 先頭のコメントは新しい順に並んでいるので、最初に見つかったものが最新
+      var m = t.match(/H-Hub\s+(v\d{4}\.\d{2}\.\d{2}-\d+)/);
+      if(m && m[1] !== QC_UI_VERSION) qcShowNewVersion(m[1]);
+    })
+    .catch(function(){});   // 取れなければ黙って何もしない
+}
+function qcShowNewVersion(v){
+  if(document.getElementById('qc-newver')) return;
+  var d=document.createElement('div'); d.id='qc-newver'; d.className='qc-newver';
+  var t=document.createElement('span');
+  t.textContent='🆕 新しい版 '+v+' が出ています（いまは '+QC_UI_VERSION+'）';
+  var b=document.createElement('button'); b.textContent='読み込み直す';
+  b.onclick=function(){ location.reload(); };
+  var x=document.createElement('button');
+  x.textContent='あとで'; x.style.cssText='background:#e2e8f0;color:#334155';
+  x.onclick=function(){ d.parentNode.removeChild(d); };
+  d.appendChild(t); d.appendChild(b); d.appendChild(x);
+  document.body.appendChild(d);
+}
+
+// 読み込み直したとき、前に開いていた画面へ戻す
+var QC_WANT_PENDING = false;
+function qcRestoreView(){
+  var tab='', sc='', pend='';
+  try{
+    tab  = localStorage.getItem('hhubTab')||'';
+    sc   = localStorage.getItem('hhubQcScreen')||'';
+    pend = localStorage.getItem('hhubQcPending')||'';
+  }catch(e){}
+  if(!tab || tab==='factory') return;              // 工場レイアウトはそのまま
+  if(typeof window.switchTab !== 'function') return;
+  window.switchTab(tab);
+  if(tab!=='quality') return;
+  if(sc && sc!=='form') qcShowScreen(sc);
+  if(pend==='1' && sc==='list'){
+    QC_WANT_PENDING = true;
+    qcShowPendingList();          // 手元にデータがあればこの時点で開く
+  }
+}
+if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', qcRestoreView);
+else setTimeout(qcRestoreView, 0);
+
+// ============================================================
 //  kintone「★不良品報告」との照合（システム入力待ちの右ペイン）
 //  記録した不良が不良品報告に挙がっているかを、画面を行き来せずに確かめる。
 //  読み取りは品質チェックGASの汎用アクション getKintonePartData を流用（GASの変更不要）。
@@ -10265,7 +10380,7 @@ window.qcShowPendingList = function(){
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.10-5';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.11-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
