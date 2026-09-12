@@ -1390,15 +1390,28 @@ function fetchApp75Records(dateFrom, dateTo) {
         });
       }
 
-      // ② 指摘対応日が空 かつ 巡回日から3日超過 → 30pt（パターンB）
-      if (!respondDate && visitDate) {
-        var vd      = new Date(visitDate);
+      // ② 対応が済んでいない指摘 → 30pt（パターンB）
+      //    対応期限（テーブル内・フィールドコード「対応期限」）が入っていれば、その日を過ぎたら減点。
+      //    期限が空のときは、これまでどおり巡回日から3日超過で減点。
+      //    ★2026-09-13 追加。期限は指摘のたびに担当者と協議して決める運用に変えたため。
+      //      期限が空なら従来と同じ動きなので、これまでのレコードには影響しない。
+      var dueDate = (rv["対応期限"] && rv["対応期限"]["value"])
+                    ? rv["対応期限"]["value"] : "";
+      if (!respondDate && (dueDate || visitDate)) {
         var todayDt = new Date(Utilities.formatDate(new Date(), "Asia/Tokyo", "yyyy-MM-dd"));
-        var diffDays = Math.floor((todayDt - vd) / (1000 * 60 * 60 * 24));
-        if (diffDays > 3) {
+        var overdue, reason;
+        if (dueDate) {
+          overdue = todayDt > new Date(dueDate);
+          reason  = "5S指摘 対応期限超過(" + dueDate + "): " + item;
+        } else {
+          var diffDays = Math.floor((todayDt - new Date(visitDate)) / (1000 * 60 * 60 * 24));
+          overdue = diffDays > 3;
+          reason  = "5S指摘後3日以内未対応: " + item;
+        }
+        if (overdue) {
           result.push({
             area:      area,
-            item:      "5S指摘後3日以内未対応: " + item,
+            item:      reason,
             pt:        30,
             pattern:   "B",
             visitDate: visitDate,
