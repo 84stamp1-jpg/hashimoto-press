@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.14-2 : ★品質チェックの記録・削除が「GASがJSONではなくHTMLのページを返しました」で止まる端末があった（現場から報告）。既定のGASは正常（getRecordsで1944件返ることを確認）で、その端末の⚙設定に古いデプロイのURLが保存されていたのが原因。2026-07-07に gasUrl については旧デプロイ(AKfycbxfOZT1)を既定へ戻す移行を入れたが、qualityGasUrl には入れていなかった。同じ移行を追加して自動で直るようにした。★あわせて、エラー文に「送信先: …<デプロイID>…/exec」と、既定と違うURLならその旨＋直し方を添えるようにした。どのURLへ送ったのかが出ていなかったため、GASが壊れているのか端末の設定なのかを画面の写真から切り分けられなかった -->
 <!-- H-Hub v2026.09.14-1 : ★システム入力の確認「③良品累計」が工順をまたいで足し算されていた（社長指摘）。18120-6Y0 -0000 は 工順1 フート・油圧 1440個／工順2 検査 1440個 で、同じ1440個を2工程通しただけなのに 2880個（指示1440に対して200%）と出ていた。良品は工程を通っても増えないので、足してはいけない。できあがった数＝「いちばん後ろの工順の良品累計」に変更（工順2が途中なら、その途中の数が今できている数になる）。不良累計は工順ごとに別の品物が出るので、これまでどおり足す。★カードの良品累計タグは工順が1つのときしか出していなかったため見た目は変わらないが、確認の箱は工順の数に関係なく出るので、ここだけ間違った数字が出ていた -->
 <!-- H-Hub v2026.09.11-2 : ★新しい版が出ていることを知らせるようにした。ページそのものは自動で読み込み直されないので、直したはずのものが古いまま動いていて「直っていない」に見えることが何度も起きていた。先頭のコメントにある版だけを読みに行き（Rangeで先頭8KBだけ）、いま動いている版と違えば上に知らせを出す。押せば読み込み直し、開いていた画面へは自動で戻る（v-1の仕組み）。見に行くのは5分に1回まで、別の画面から戻ってきたときと自動更新のついで -->
 <!-- H-Hub v2026.09.11-1 : (1)★読み込み直すと必ず工場レイアウトへ飛んでいた（社長指摘）。開いていたタブ（switchTabで localStorage hhubTab）・品質チェックの中の画面（qcShowScreenで hhubQcScreen）・入力待ちを開いていたか（hhubQcPending）を覚え、qcRestoreView() で読み込み直したときに同じ画面へ戻す。読み込み直した直後は手元にデータが無くて開けないことがあるので、getRecords が取れた時点でもう一度開く（QC_WANT_PENDING）。(2)★データが自動で新しくならなかった。開いたときと押したときにしか取りに行かないので、入力待ちを見ながらkintoneを別画面で操作すると画面だけ古いまま残る。入力待ちを開いているあいだ★90秒ごとに見に行き、★別の画面から戻ってきたとき（visibilitychange）にも見に行く。どちらも「古ければ取りに行く」形なので無駄な通信は増えない -->
@@ -8561,6 +8562,14 @@ function postToSlack(){
     saved.gasUrl = DEFAULT_CONFIG.gasUrl;
     needSave = true;
   }
+  // 移行(2026-09-14): 品質チェックGASにも同じ旧デプロイが保存されている端末を戻す。
+  //   この旧デプロイは POST にもHTMLのUIを返すため、記録も削除も
+  //   「GASがJSONではなくHTMLのページを返しました」で必ず失敗する。
+  //   gasUrl は 2026-07-07 に直したが、qualityGasUrl は直していなかった。
+  if(saved.qualityGasUrl && saved.qualityGasUrl.includes('AKfycbxfOZT1')){
+    saved.qualityGasUrl = DEFAULT_CONFIG.qualityGasUrl;
+    needSave = true;
+  }
 
   // 基本設定の補完
   if(!saved.domain){ saved.domain = DEFAULT_CONFIG.domain; needSave = true; }
@@ -8637,7 +8646,7 @@ function QC_GAS_URL(){ return config.qualityGasUrl || FIXED_CONFIG.qualityGasUrl
 
 // GASがJSONではなくHTMLを返したとき、その中身から原因を推測して日本語にする。
 // 生のHTMLを80文字だけ出しても何も分からないため。
-function qcGasDiagnose(t){
+function qcGasDiagnose(t, url){
   var head = String(t||'').slice(0, 3000);
   if(!/^\s*</.test(head)) return '解析エラー: '+String(t).slice(0,120);
   var title=''; var m=head.match(/<title[^>]*>([^<]*)<\/title>/i); if(m) title=m[1].trim();
@@ -8652,7 +8661,19 @@ function qcGasDiagnose(t){
     why='そのURLのGASが見つかりません。デプロイし直してURLが変わっていないか確認してください。';
   else
     why='GASがJSONではなくHTMLのページを返しました。デプロイの設定（アクセスできるユーザー＝全員／新バージョンでデプロイ）を確認し、⚙設定の「🔌 接続テスト」で切り分けてください。';
-  return why + (title ? '（ページ名: '+title+'）' : '');
+  // ★どのURLへ送ってこうなったのかを必ず添える（2026-09-14）。
+  //   これが無いと、GASが壊れているのか、その端末の設定だけが古いのかを、
+  //   画面の写真から切り分けられない。実際、切り分けに往復1日かかった。
+  var tail = '';
+  if(url){
+    var id = (String(url).match(/\/macros\/s\/([^\/]+)/) || [])[1] || '';
+    tail = '\n\n送信先: …' + id.slice(0, 12) + '…/exec';
+    if(typeof FIXED_CONFIG !== 'undefined' && FIXED_CONFIG.qualityGasUrl && url !== FIXED_CONFIG.qualityGasUrl){
+      tail += '\n★この端末は、設定で既定と違うURLに変えられています。'
+            + '⚙設定を開き「品質チェックGAS」の欄を空にして保存すると、既定に戻ります。';
+    }
+  }
+  return why + (title ? '（ページ名: '+title+'）' : '') + tail;
 }
 
 // URLを指定してGASを叩く。ヘッダーを付けないこと（付けるとプリフライトが飛んでCORSで落ちる）
@@ -8667,7 +8688,7 @@ function qcGasPostTo(url, action, payload, successCb, failCb){
   if(ctl) opt.signal = ctl.signal;
   fetch(url, opt)
     .then(function(r){ return r.text(); })
-    .then(function(t){ try{return JSON.parse(t);}catch(e){throw new Error(qcGasDiagnose(t));} })
+    .then(function(t){ try{return JSON.parse(t);}catch(e){throw new Error(qcGasDiagnose(t, url));} })
     .then(function(res){ clearTimeout(timer); successCb(res); })
     .catch(function(e){
       clearTimeout(timer);
@@ -10387,7 +10408,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.14-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.14-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
