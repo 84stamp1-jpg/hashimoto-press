@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.14-3 : ★★「記録を入力してから反映されるまで時間がかかりすぎて、同じデータをいくつも入力してしまう」（現場・社長報告）。写真つきの保存はGASで10秒以上かかり、その間に回線が切れると fetch は Failed to fetch になる。ところが★GAS側の書き込みは終わっていることが多い。それなのに「通信エラー」とだけ出して入力画面へ戻していたため、もう一度押す→同じ記録が二重に入る、が繰り返されていた。(1)失敗と決める前に qcVerifySubmitted() でシートを読み直し、入っていれば成功として扱い「通信は切れましたが記録は入っていました。もう一度保存する必要はありません」と出す。判定は時刻ではなく★送る前の「同じ記録の数」と比べる（書式に頼ると黙って二重登録に戻る）。(2)シートを読めなかったときは「入っていない」と言い切らず、日別一覧で確かめるよう促す。(3)ボタンの文字を「保存中...（押さないでください）」にした。待ちきれずにもう一度押されるのが二重登録のいちばんの入口のため。※v2026.09.09-6で「入力済みにする」に入れた仕組みと同じ考え方 -->
 <!-- H-Hub v2026.09.14-2 : ★品質チェックの記録・削除が「GASがJSONではなくHTMLのページを返しました」で止まる端末があった（現場から報告）。既定のGASは正常（getRecordsで1944件返ることを確認）で、その端末の⚙設定に古いデプロイのURLが保存されていたのが原因。2026-07-07に gasUrl については旧デプロイ(AKfycbxfOZT1)を既定へ戻す移行を入れたが、qualityGasUrl には入れていなかった。同じ移行を追加して自動で直るようにした。★あわせて、エラー文に「送信先: …<デプロイID>…/exec」と、既定と違うURLならその旨＋直し方を添えるようにした。どのURLへ送ったのかが出ていなかったため、GASが壊れているのか端末の設定なのかを画面の写真から切り分けられなかった -->
 <!-- H-Hub v2026.09.14-1 : ★システム入力の確認「③良品累計」が工順をまたいで足し算されていた（社長指摘）。18120-6Y0 -0000 は 工順1 フート・油圧 1440個／工順2 検査 1440個 で、同じ1440個を2工程通しただけなのに 2880個（指示1440に対して200%）と出ていた。良品は工程を通っても増えないので、足してはいけない。できあがった数＝「いちばん後ろの工順の良品累計」に変更（工順2が途中なら、その途中の数が今できている数になる）。不良累計は工順ごとに別の品物が出るので、これまでどおり足す。★カードの良品累計タグは工順が1つのときしか出していなかったため見た目は変わらないが、確認の箱は工順の数に関係なく出るので、ここだけ間違った数字が出ていた -->
 <!-- H-Hub v2026.09.11-2 : ★新しい版が出ていることを知らせるようにした。ページそのものは自動で読み込み直されないので、直したはずのものが古いまま動いていて「直っていない」に見えることが何度も起きていた。先頭のコメントにある版だけを読みに行き（Rangeで先頭8KBだけ）、いま動いている版と違えば上に知らせを出す。押せば読み込み直し、開いていた画面へは自動で戻る（v-1の仕組み）。見に行くのは5分に1回まで、別の画面から戻ってきたときと自動更新のついで -->
@@ -9414,8 +9415,11 @@ window.qcGo = function(){
   if(!QC_SEL_SAKUYO){ alert('作業（品番）を選択してください'); return; }
   if(!document.getElementById('qc-op').value){ alert('作業者を選択してください'); return; }
   if(QC_PHOTOS.length===0){ alert('写真を1枚以上撮影してください'); return; }
-  var btn=document.getElementById('qc-sb'); btn.disabled=true; btn.textContent='保存中...';
-  qcGasPost('submitRecord', {data:{
+  var btn=document.getElementById('qc-sb'); btn.disabled=true;
+  // ★「押さないでください」まで書く。写真つきは10秒以上かかることがあり、
+  //   待ちきれずにもう一度押されるのが二重登録のいちばんの入口
+  btn.textContent='保存中...（押さないでください）';
+  var d={
     date:document.getElementById('qc-dt').value,
     partNo:QC_SEL_SAKUYO.hinban, partName:QC_SEL_SAKUYO.hinmei,
     operator:document.getElementById('qc-op').value,
@@ -9428,20 +9432,44 @@ window.qcGo = function(){
     memo:document.getElementById('qc-mo').value,
     seizoNo:QC_SEL_SAKUYO.seizoNo, junjo:QC_SEL_SAKUYO.junjo, kosei:QC_SEL_SAKUYO.kosei, shiji:QC_SEL_SAKUYO.shiji,
     images:QC_PHOTOS.map(function(p){ return p.data; })
-  }}, function(res){
-    if(res.ok){
-      var msg=res.fileNames||'';
-      if(QC_KANNO==='完納'&&QC_SEL_SAKUYO){
-        var total=QC_ALL_RECORDS.filter(function(r){ return r[13]===QC_SEL_SAKUYO.seizoNo&&r[14]==QC_SEL_SAKUYO.junjo; }).reduce(function(s,r){ return s+(parseInt(r[5]||0)||0); },0);
-        var newTotal=total+(parseInt(document.getElementById('qc-prod').value||0)||0);
-        msg+='\n\n✅ 完納　実績累計: '+newTotal+'個 / 指示数: '+(QC_SEL_SAKUYO.shiji||0)+'個';
+  };
+  // 送る前の「同じ記録」の数。通信が切れたとき、これと比べて入ったかどうかを決める
+  var base=qcSameRecordCount(d, QC_ALL_RECORDS);
+  var sel=QC_SEL_SAKUYO, prodNow=parseInt(document.getElementById('qc-prod').value||0)||0;
+  function showDone(msg){
+    if(QC_KANNO==='完納'&&sel){
+      var total=QC_ALL_RECORDS.filter(function(r){ return r[13]===sel.seizoNo&&r[14]==sel.junjo; }).reduce(function(s,r){ return s+(parseInt(r[5]||0)||0); },0);
+      msg+='\n\n✅ 完納　実績累計: '+(total+prodNow)+'個 / 指示数: '+(sel.shiji||0)+'個';
+    }
+    document.getElementById('qc-df').textContent=msg;
+    document.getElementById('qc-form-input').style.display='none';
+    document.getElementById('qc-form-done').style.display='block';
+    qcFetchRecords(function(){ qcRenderCurrentList(); });
+  }
+  function backToForm(){ btn.disabled=false; btn.textContent='記録を保存する'; }
+  qcGasPost('submitRecord', {data:d}, function(res){
+    if(res.ok){ showDone(res.fileNames||''); }
+    else { alert('エラー: '+res.err); backToForm(); }
+  }, function(e){
+    // ★ここで「もう一度」と言う前に、本当に入らなかったのかを確かめる
+    btn.textContent='通信が切れました。確認中...';
+    qcVerifySubmitted(d, base, function(saved){
+      if(saved===true){
+        showDone('⚠ 通信は切れましたが、記録はシートに入っていました。\n'
+               + 'もう一度保存する必要はありません（二重に入ります）。');
+      } else if(saved===false){
+        alert('通信エラー: '+e.message
+            + '\n\n記録はシートに入っていません。もう一度「記録を保存する」を押してください。');
+        backToForm();
+      } else {
+        alert('通信エラー: '+e.message
+            + '\n\n入ったかどうかを確かめられませんでした。\n'
+            + '★もう一度押す前に「日別一覧」でこの記録があるか見てください。\n'
+            + '　あれば入っています。押すと二重に入ります。');
+        backToForm();
       }
-      document.getElementById('qc-df').textContent=msg;
-      document.getElementById('qc-form-input').style.display='none';
-      document.getElementById('qc-form-done').style.display='block';
-      qcFetchRecords(function(){ qcRenderCurrentList(); });
-    } else { alert('エラー: '+res.err); btn.disabled=false; btn.textContent='記録を保存する'; }
-  }, function(e){ alert('通信エラー: '+e.message); btn.disabled=false; btn.textContent='記録を保存する'; });
+    });
+  });
 };
 
 window.qcResetForm = function(){
@@ -9512,6 +9540,43 @@ function qcVerifyMarked(kr, cb){
     });
     cb(ng===0);
   }, function(){ cb(false); });
+}
+
+// ----- 記録の保存が「本当に入らなかった」のかを確かめる -----
+// ★写真つきの保存はGASで10秒以上かかることがあり、そのあいだに回線が切れると
+//   fetch は Failed to fetch になる。だがGAS側の書き込みは終わっていることが多い。
+//   そこで「もう一度押してください」と言うと、同じ記録が二重に入る。
+//   現場で実際に起きた（2026-09-14。同じデータをいくつも入力してしまう）。
+//   → 失敗と決める前にシートを読み直し、入っていれば成功として扱う。
+//   数え方は時刻ではなく「送る前の同じ記録の数」と比べる。時刻の書式に頼ると、
+//   書式が変わったときに黙って二重登録に戻るため。
+function qcSameRecordCount(d, recs){
+  return (recs||[]).filter(function(r){
+    return String(r[13]||'')===String(d.seizoNo||'')
+        && String(r[14]||'')===String(d.junjo||'')
+        && String(r[4]||'') ===String(d.operator||'')
+        && String(r[5]||'') ===String(d.prod||'')
+        && String(r[6]||'') ===String(d.ng||'');
+  }).length;
+}
+// cb(true)=入っていた／cb(false)=入っていない／cb(null)=確かめられなかった
+function qcVerifySubmitted(d, base, cb, tries){
+  tries = tries || 0;
+  qcGasPost('getRecords', {}, function(res){
+    if(!res || !res.ok || !res.records){ next(false); return; }
+    QC_ALL_RECORDS = res.records;
+    qcApplyMarkedDone();
+    try{ localStorage.setItem('qcAllRecordsCache', JSON.stringify(QC_ALL_RECORDS)); }catch(e){}
+    if(qcSameRecordCount(d, QC_ALL_RECORDS) > base){ cb(true); return; }
+    next(true);
+  }, function(){ next(false); });
+  // read=シートを読めたかどうか。読めていないのに「入っていない」と言うと
+  // 二重登録に戻ってしまうので、読めなかったときは null（確かめられない）を返す
+  function next(read){
+    // シートへの反映が一拍遅れることがあるので、間をおいて数回みる
+    if(tries < 2){ setTimeout(function(){ qcVerifySubmitted(d, base, cb, tries+1); }, 2500); return; }
+    cb(read ? false : null);
+  }
 }
 
 // 入力済みにできなかった理由を、箱の中に消えない形で出す。
@@ -10408,7 +10473,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.14-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.14-3';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
