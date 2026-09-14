@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.15-3 : ★GASの詰まりを減らすため2点（社長指示）。(1)不良品報告の取得件数を★500→300件（既定値）。App31を全フィールドで引く重い呼び出しで、これを5台が繰り返していた。★端末に保存済みの設定も cfgVer=3 で1度だけ引き下げる（ちょうど500の人だけ。自分で別の数にした人は触らない）。(2)入力待ちを開いているあいだの自動更新を★90秒→3分。別の画面から戻ったときは間隔に関係なく見に行くので、手で切り替えて使う限り古いものは出ない。※もし古い報告が照合に出てこなくなったら、⚙設定の取得件数を戻せる -->
 <!-- H-Hub v2026.09.15-2 : ★「処理が遅く、1分経っても画面が変わらない」（現場報告）。固まっていたのではなく、入力済みにしたあとの「確認中...」が返りを待っていた。その通信の上限が90秒だったので、最悪90秒このまま。しかも秒数が出ないので固まって見える。(1)qcGasPostTo/qcGasPost に上限時間の引数を足し、人を待たせる確認の読み直し（qcVerifyMarked・qcVerifySubmitted）は★25秒で打ち切るようにした。(2)「確認中... ◯秒」と経過秒数を出す。動いていることが分かる。(3)★不良品報告の取り直しは、手元にキャッシュがあるときは再試行1回で止める。v2026.09.15-1で2回に増やしたが、混んでいるGASを何度も叩くと全体が遅くなるため。キャッシュが無く画面が空のときだけ2回試す -->
 <!-- H-Hub v2026.09.15-1 : ★不良品報告の取得が「GASがJSONではなくHTMLのページを返しました」で一度も再試行されずに終わっていた。qcNgFetch の fail() は Failed to fetch / NetworkError のときだけやり直す条件だったため、文言の違うHTML応答が素通りしていた。GASは混んでいるとエラーのHTMLを返すことがあり、これは回線の切断と同じく時間をおけば直る種類のもの。→ 条件に「JSONではなくHTML」と「応答がありません」を足し、★1回だけだった再試行を2回（1.5秒・3秒）にした。※App31を500件×全フィールドで引く重い呼び出しなので、混むと落ちやすい -->
 <!-- H-Hub v2026.09.14-4 : ★「この画面（システム入力待ち）が常に前に出てくる」（現場報告）。v2026.09.11-1 で入れた「読み込み直したら前と同じ画面へ戻す」仕組みの副作用。手元にデータが無いときのために QC_WANT_PENDING の旗を立て、getRecords が取れた時点で入力待ちを開く作りにしていたが、★期限も画面の確認も無かった。回線が遅い端末では取得に何十秒もかかり、その間に作業者は記録の入力を始めている。そこへ入力待ちが割り込んで書きかけの画面を横取りしていた。さらに取得に失敗すると旗が立ったまま残り、90秒ごとの自動更新や別画面から戻るたびに何度でも前に出ていた（＝常に前に出てくる）。→ 旗に20秒の期限を付け、いま一覧の画面にいるときだけ開くようにした。期限切れ・別画面なら旗を降ろすだけで何もしない -->
@@ -10402,7 +10403,10 @@ window.qcShowPendingList = function(){
 //  ・読み込み直すと必ず工場レイアウトへ飛んでいた（覚えていなかったため）。
 // ============================================================
 var QC_AUTO_TIMER = null;
-var QC_AUTO_MS = 90*1000;     // 入力待ちを開いているあいだ、この間隔で見に行く
+var QC_AUTO_MS = 180*1000;    // 入力待ちを開いているあいだ、この間隔で見に行く
+//   ★2026-09-15 90秒→3分。5台が同時に開いており、90秒ごとだとGASが詰まって
+//     全体が遅くなっていた。別の画面から戻ったときは間隔に関係なく見に行くので、
+//     手で切り替えて使っている限り、古いものを見せられることはほぼ無い
 
 // 古ければ取り直す。新しければ何もしない（無駄な通信を増やさない）
 function qcAutoRefreshNow(){
@@ -10501,7 +10505,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.15-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.15-3';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -10516,14 +10520,14 @@ var QC_NG_INTERACTING = false;
 
 function qcNgDefaultCfg(){
   return {
-    appId:'31', token:'', limit:500,
+    appId:'31', token:'', limit:300,   // ★2026-09-15 500→300（5台で90秒ごとに引くとGASが詰まるため）
     token2:'',                  // ルックアップの参照先アプリ（社員マスタ等）のAPIトークン
     writeGas:'',                // 書き込み専用GASのデプロイURL（既存の品質チェックGASは触らない）
     user:'',                    // 在庫管理「入力者」に書く名前（ユーザー選択ならkintoneのログイン名）
     // 突合せから外すステータス（カンマ区切り）。★在庫投入中まで進んだものは品管の手を離れ、
     //   そこから先の「在庫投入 完」は製造が担当するため、完了と同じく一覧から外す。
     excludeStatus:'完了,在庫投入中',
-    cfgVer:2,                   // 既定値を変えたときに、保存済みの設定を1度だけ引き上げるための番号
+    cfgVer:3,                   // 既定値を変えたときに、保存済みの設定を1度だけ引き上げるための番号
     // ★プロセス管理の「アクション名」。左列のステータス名ではなく、右列のアクション名を入れる。
     //   ★不良品報告(App31)の実際の設定：
     //     品質確認中 →[品質処置済]→ 在庫調整中
@@ -10554,6 +10558,13 @@ function qcNgCfg(){
     if(s && !(s.cfgVer>=2)){
       if(String(QC_NG_CFG.excludeStatus||'').trim()==='完了') QC_NG_CFG.excludeStatus='完了,在庫投入中';
       QC_NG_CFG.cfgVer = 2;
+      try{ localStorage.setItem(QC_NG_LS, JSON.stringify(QC_NG_CFG)); }catch(e){}
+    }
+    // ★2026-09-15 取得件数の既定を500→300に下げたので、端末に保存済みの設定も引き下げる。
+    //   ちょうど500（前の既定値のまま）の人だけが対象。自分で別の数にした人は触らない。
+    if(s && !(s.cfgVer>=3)){
+      if(parseInt(QC_NG_CFG.limit)===500) QC_NG_CFG.limit = 300;
+      QC_NG_CFG.cfgVer = 3;
       try{ localStorage.setItem(QC_NG_LS, JSON.stringify(QC_NG_CFG)); }catch(e){}
     }
   }catch(e){}
@@ -10749,7 +10760,7 @@ function qcNgFetch(force, _retry){
     domain: (config.domain || 'hashimoto-kogyo'),
     appId:  String(cfg.appId),
     token:  cfg.token,
-    query:  'order by $id desc limit ' + (parseInt(cfg.limit)||500),
+    query:  'order by $id desc limit ' + (parseInt(cfg.limit)||300),
     fields: []
   }, function(res){
     if(!res || !res.ok){ fail((res&&(res.err||res.error))||'取得に失敗しました'); return; }
@@ -11837,7 +11848,7 @@ window.qcNgOpenConfig = function(){
   document.getElementById('qc-ng-appid').value = cfg.appId||'';
   document.getElementById('qc-ng-token').value = cfg.token||'';
   document.getElementById('qc-ng-token2').value = cfg.token2||'';
-  document.getElementById('qc-ng-limit').value = cfg.limit||500;
+  document.getElementById('qc-ng-limit').value = cfg.limit||300;
   document.getElementById('qc-ng-exst').value  = cfg.excludeStatus||'';
   document.getElementById('qc-ng-user').value  = cfg.user||'';
   document.getElementById('qc-ng-wgas').value  = cfg.writeGas||'';
@@ -11877,7 +11888,7 @@ window.qcNgSaveConfig = function(){
   cfg.appId = document.getElementById('qc-ng-appid').value.trim() || '31';
   cfg.token = document.getElementById('qc-ng-token').value.trim();
   cfg.token2 = document.getElementById('qc-ng-token2').value.trim();
-  cfg.limit = parseInt(document.getElementById('qc-ng-limit').value)||500;
+  cfg.limit = parseInt(document.getElementById('qc-ng-limit').value)||300;
   cfg.excludeStatus = document.getElementById('qc-ng-exst').value.trim();
   cfg.user  = document.getElementById('qc-ng-user').value.trim();
   cfg.writeGas = document.getElementById('qc-ng-wgas').value.trim();
