@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.14-1 : ★システム入力の確認「③良品累計」が工順をまたいで足し算されていた（社長指摘）。18120-6Y0 -0000 は 工順1 フート・油圧 1440個／工順2 検査 1440個 で、同じ1440個を2工程通しただけなのに 2880個（指示1440に対して200%）と出ていた。良品は工程を通っても増えないので、足してはいけない。できあがった数＝「いちばん後ろの工順の良品累計」に変更（工順2が途中なら、その途中の数が今できている数になる）。不良累計は工順ごとに別の品物が出るので、これまでどおり足す。★カードの良品累計タグは工順が1つのときしか出していなかったため見た目は変わらないが、確認の箱は工順の数に関係なく出るので、ここだけ間違った数字が出ていた -->
 <!-- H-Hub v2026.09.11-2 : ★新しい版が出ていることを知らせるようにした。ページそのものは自動で読み込み直されないので、直したはずのものが古いまま動いていて「直っていない」に見えることが何度も起きていた。先頭のコメントにある版だけを読みに行き（Rangeで先頭8KBだけ）、いま動いている版と違えば上に知らせを出す。押せば読み込み直し、開いていた画面へは自動で戻る（v-1の仕組み）。見に行くのは5分に1回まで、別の画面から戻ってきたときと自動更新のついで -->
 <!-- H-Hub v2026.09.11-1 : (1)★読み込み直すと必ず工場レイアウトへ飛んでいた（社長指摘）。開いていたタブ（switchTabで localStorage hhubTab）・品質チェックの中の画面（qcShowScreenで hhubQcScreen）・入力待ちを開いていたか（hhubQcPending）を覚え、qcRestoreView() で読み込み直したときに同じ画面へ戻す。読み込み直した直後は手元にデータが無くて開けないことがあるので、getRecords が取れた時点でもう一度開く（QC_WANT_PENDING）。(2)★データが自動で新しくならなかった。開いたときと押したときにしか取りに行かないので、入力待ちを見ながらkintoneを別画面で操作すると画面だけ古いまま残る。入力待ちを開いているあいだ★90秒ごとに見に行き、★別の画面から戻ってきたとき（visibilitychange）にも見に行く。どちらも「古ければ取りに行く」形なので無駄な通信は増えない -->
 <!-- H-Hub v2026.09.10-5 : ★品番が完全一致でない報告を、はっきり分かるようにした（社長要望）。これまでは報告の一番下に小さな灰色で「※ 品番が完全一致ではありません（参考表示）」と出るだけで、上を読んでいると気づけなかった（実例: 記録 64210-MLC-D900-21 に対し、報告は 64210-MLC-D900-21/22）。(1)報告の箱ごと橙色にし（.qc-ng-item.partial）、上の行に「品番ちがい」の札を出す。(2)品番のすぐ下に、★この記録の品番と この報告の品番を並べて出し、「この報告の数は合計に入れていません」と明記する（下の小さな注記は廃止）。(3)★品質確認中の件数には品番ちがいも入るのに合計には入らず、ちぐはぐに見えていたので、「※うち◯件は品番ちがい（合計には入れていません）」と内訳を書き添える（ペインと確認の箱の両方。文言は qcNgHinshitsuText() 1か所） -->
@@ -9742,14 +9743,20 @@ function qcMakeGroupCard(g){
     var sonotaMemos=jrecs.map(function(r){ return r[19]||''; }).filter(function(m){ return m&&m.trim(); }).filter(function(v,i,a){ return a.indexOf(v)===i; });
     junjoTotals[j]={ryohin:ryohin,chukan:chukan,ng:ng,hokyu:hokyu,sonota:sonota,shiji:shiji,kosei:kosei,hasKanno:hasKanno,allDone:allDone,kannoRecs:kannoRecs,hasZairyo:hasZairyo,memos:memos,sonotaMemos:sonotaMemos,jrecs:jrecs};
   });
-  var ryohinTotal=junjoOrder.reduce(function(s,j){ return s+junjoTotals[j].ryohin; },0);
+  // ★良品累計は工順をまたいで足してはいけない（社長指摘 2026-09-14）。
+  //   工順1で1440個つくり、工順2でその1440個を検査した場合、できた良品は1440個。
+  //   足すと2880個になり、指示1440に対して200%という有り得ない数字が出る。
+  //   できあがった数は「いちばん後ろの工順の良品累計」で見る。
+  //   （工順2が途中なら、その途中の数がそのまま「今できている数」になる）
+  //   不良（ngAllTotal）は工順ごとに別の品物が出るので、足すのが正しい。
+  var ryohinFinal=junjoOrder.length?junjoTotals[junjoOrder[junjoOrder.length-1]].ryohin:0;
   var ngAllTotal=junjoOrder.reduce(function(s,j){ var jt=junjoTotals[j]; return s+jt.ng+jt.hokyu+jt.sonota; },0);
   var hasAnyKanno=junjoOrder.some(function(j){ return junjoTotals[j].hasKanno; });
   var allDoneAll=hasAnyKanno&&junjoOrder.every(function(j){ var jt=junjoTotals[j]; return !jt.hasKanno||jt.allDone; });
   var shiji=0;
   if(QC_SAKUYO) QC_SAKUYO.forEach(function(s){ if(s.seizoNo===g.seizoNo&&String(s.junjo)==='1') shiji=parseInt(s.shiji)||0; });
   if(!shiji&&junjoOrder.length>0) shiji=junjoTotals[junjoOrder[0]].shiji;
-  var pct=shiji>0?Math.min(100,Math.round(ryohinTotal/shiji*100)):0;
+  var pct=shiji>0?Math.min(100,Math.round(ryohinFinal/shiji*100)):0;
   var div=document.createElement('div');
   var isChukan=!hasAnyKanno&&allRecs.every(function(r){ return r[7]==='中間実績'; });
   div.className='qc-rec '+(allDoneAll?'done':(hasAnyKanno?'kanno-pending':(isChukan?'chukan':'pending')));
@@ -9775,7 +9782,7 @@ function qcMakeGroupCard(g){
   div.appendChild(meta);
   if(junjoOrder.length===1){
     var tags0=document.createElement('div'); tags0.className='qc-rec-tags'; tags0.style.marginTop='6px';
-    var t1=document.createElement('span'); t1.className='qc-tag qc-t-ryohin'; t1.textContent='良品累計: '+ryohinTotal+'個'; tags0.appendChild(t1);
+    var t1=document.createElement('span'); t1.className='qc-tag qc-t-ryohin'; t1.textContent='良品累計: '+ryohinFinal+'個'; tags0.appendChild(t1);
     if(ngAllTotal>0){ var t2=document.createElement('span'); t2.className='qc-tag qc-t-ng-cum'; t2.textContent='不良累計: '+ngAllTotal+'個'; tags0.appendChild(t2); }
     div.appendChild(tags0);
     if(shiji>0){
@@ -9783,7 +9790,7 @@ function qcMakeGroupCard(g){
       var bf=document.createElement('div'); bf.className='qc-cum-bar-fg'; bf.style.width=pct+'%';
       bw.appendChild(bf); div.appendChild(bw);
       var bn=document.createElement('div'); bn.className='qc-cum-nums';
-      bn.innerHTML='<span>良品累計 '+ryohinTotal+'個</span><span>指示 '+shiji+'個 ('+pct+'%)</span>';
+      bn.innerHTML='<span>良品累計 '+ryohinFinal+'個</span><span>指示 '+shiji+'個 ('+pct+'%)</span>';
       div.appendChild(bn);
     }
   }
@@ -9795,7 +9802,7 @@ function qcMakeGroupCard(g){
     if(/^\d{4}\/\d{1,2}\/\d{1,2}$/.test(v) && v>lastDate) lastDate=v;
   });
   div.__qcStats={ hinban:g.hinban, seizoNo:g.seizoNo, lastDate:lastDate,
-                  ryohin:ryohinTotal, ng:ngAllTotal, shiji:shiji, pct:pct,
+                  ryohin:ryohinFinal, ng:ngAllTotal, shiji:shiji, pct:pct,
                   // ★材料は「最後の記録の状態」。途中で残っていても完納の時点で使い切って
                   //   いれば「なし」が正しい。工順のタグ（📦 材料残あり）と同じ決め方
                   //   （jt.hasZairyo＝最新の記録が「なし」でない、かつ どこかで「あり」）を
@@ -10380,7 +10387,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.11-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.14-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
