@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.15-2 : ★「処理が遅く、1分経っても画面が変わらない」（現場報告）。固まっていたのではなく、入力済みにしたあとの「確認中...」が返りを待っていた。その通信の上限が90秒だったので、最悪90秒このまま。しかも秒数が出ないので固まって見える。(1)qcGasPostTo/qcGasPost に上限時間の引数を足し、人を待たせる確認の読み直し（qcVerifyMarked・qcVerifySubmitted）は★25秒で打ち切るようにした。(2)「確認中... ◯秒」と経過秒数を出す。動いていることが分かる。(3)★不良品報告の取り直しは、手元にキャッシュがあるときは再試行1回で止める。v2026.09.15-1で2回に増やしたが、混んでいるGASを何度も叩くと全体が遅くなるため。キャッシュが無く画面が空のときだけ2回試す -->
 <!-- H-Hub v2026.09.15-1 : ★不良品報告の取得が「GASがJSONではなくHTMLのページを返しました」で一度も再試行されずに終わっていた。qcNgFetch の fail() は Failed to fetch / NetworkError のときだけやり直す条件だったため、文言の違うHTML応答が素通りしていた。GASは混んでいるとエラーのHTMLを返すことがあり、これは回線の切断と同じく時間をおけば直る種類のもの。→ 条件に「JSONではなくHTML」と「応答がありません」を足し、★1回だけだった再試行を2回（1.5秒・3秒）にした。※App31を500件×全フィールドで引く重い呼び出しなので、混むと落ちやすい -->
 <!-- H-Hub v2026.09.14-4 : ★「この画面（システム入力待ち）が常に前に出てくる」（現場報告）。v2026.09.11-1 で入れた「読み込み直したら前と同じ画面へ戻す」仕組みの副作用。手元にデータが無いときのために QC_WANT_PENDING の旗を立て、getRecords が取れた時点で入力待ちを開く作りにしていたが、★期限も画面の確認も無かった。回線が遅い端末では取得に何十秒もかかり、その間に作業者は記録の入力を始めている。そこへ入力待ちが割り込んで書きかけの画面を横取りしていた。さらに取得に失敗すると旗が立ったまま残り、90秒ごとの自動更新や別画面から戻るたびに何度でも前に出ていた（＝常に前に出てくる）。→ 旗に20秒の期限を付け、いま一覧の画面にいるときだけ開くようにした。期限切れ・別画面なら旗を降ろすだけで何もしない -->
 <!-- H-Hub v2026.09.14-3 : ★★「記録を入力してから反映されるまで時間がかかりすぎて、同じデータをいくつも入力してしまう」（現場・社長報告）。写真つきの保存はGASで10秒以上かかり、その間に回線が切れると fetch は Failed to fetch になる。ところが★GAS側の書き込みは終わっていることが多い。それなのに「通信エラー」とだけ出して入力画面へ戻していたため、もう一度押す→同じ記録が二重に入る、が繰り返されていた。(1)失敗と決める前に qcVerifySubmitted() でシートを読み直し、入っていれば成功として扱い「通信は切れましたが記録は入っていました。もう一度保存する必要はありません」と出す。判定は時刻ではなく★送る前の「同じ記録の数」と比べる（書式に頼ると黙って二重登録に戻る）。(2)シートを読めなかったときは「入っていない」と言い切らず、日別一覧で確かめるよう促す。(3)ボタンの文字を「保存中...（押さないでください）」にした。待ちきれずにもう一度押されるのが二重登録のいちばんの入口のため。※v2026.09.09-6で「入力済みにする」に入れた仕組みと同じ考え方 -->
@@ -8680,13 +8681,15 @@ function qcGasDiagnose(t, url){
 }
 
 // URLを指定してGASを叩く。ヘッダーを付けないこと（付けるとプリフライトが飛んでCORSで落ちる）
-function qcGasPostTo(url, action, payload, successCb, failCb){
+function qcGasPostTo(url, action, payload, successCb, failCb, timeoutMs){
   var body = JSON.stringify(Object.assign({action: action}, payload||{}));
   // ★上限時間を付ける。GASが返ってこないと fetch は永久に待つため、
   //   「処理中…」「更新中...」のまま二度と戻らない画面になってしまう。
-  //   GASは遅いときで10秒以上かかるので、余裕をみて90秒。
+  //   GASは遅いときで10秒以上かかるので、既定は余裕をみて90秒。
+  //   ★ただし人を待たせる「確認中...」のような場面では90秒は長すぎる（2026-09-15）。
+  //   呼ぶ側が短い上限を渡せるようにした。
   var ctl = (typeof AbortController!=='undefined') ? new AbortController() : null;
-  var timer = setTimeout(function(){ if(ctl) ctl.abort(); }, 90000);
+  var timer = setTimeout(function(){ if(ctl) ctl.abort(); }, timeoutMs || 90000);
   var opt = {method:'POST', redirect:'follow', body:body};
   if(ctl) opt.signal = ctl.signal;
   fetch(url, opt)
@@ -8699,8 +8702,8 @@ function qcGasPostTo(url, action, payload, successCb, failCb){
       if(failCb) failCb(e); else alert('通信エラー: '+e.message);
     });
 }
-function qcGasPost(action, payload, successCb, failCb){
-  qcGasPostTo(QC_GAS_URL(), action, payload, successCb, failCb);
+function qcGasPost(action, payload, successCb, failCb, timeoutMs){
+  qcGasPostTo(QC_GAS_URL(), action, payload, successCb, failCb, timeoutMs);
 }
 
 // ----- QC実績マップ構築（組立計画タブで参照） -----
@@ -9531,6 +9534,7 @@ var QC_MARKED_DONE = {};         // { 行番号: true }
 function qcVerifyMarked(kr, cb){
   var want = {};
   kr.forEach(function(r){ want[String(parseInt(r[r.length-1]))] = true; });
+  // ★25秒で打ち切る。人がボタンの前で待っているので90秒は長すぎる
   qcGasPost('getRecords', {}, function(res){
     if(!res || !res.ok || !res.records){ cb(false); return; }
     QC_ALL_RECORDS = res.records;
@@ -9541,7 +9545,7 @@ function qcVerifyMarked(kr, cb){
       if(want[String(parseInt(r[r.length-1]))] && (r[12]||'未')!=='済') ng++;
     });
     cb(ng===0);
-  }, function(){ cb(false); });
+  }, function(){ cb(false); }, 25000);
 }
 
 // ----- 記録の保存が「本当に入らなかった」のかを確かめる -----
@@ -9571,7 +9575,7 @@ function qcVerifySubmitted(d, base, cb, tries){
     try{ localStorage.setItem('qcAllRecordsCache', JSON.stringify(QC_ALL_RECORDS)); }catch(e){}
     if(qcSameRecordCount(d, QC_ALL_RECORDS) > base){ cb(true); return; }
     next(true);
-  }, function(){ next(false); });
+  }, function(){ next(false); }, 25000);
   // read=シートを読めたかどうか。読めていないのに「入っていない」と言うと
   // 二重登録に戻ってしまうので、読めなかったときは null（確かめられない）を返す
   function next(read){
@@ -10002,8 +10006,15 @@ function qcMakeGroupCard(g){
             //   シートには入っているのに通信だけ切れることがある。
             //   何も確かめずに未入力の見た目へ戻すと、入っているのにもう一度押させてしまう
             //   （社長から2度の指摘）。戻す前に、シートを読み直して確かめる。
-            btn.textContent = '確認中...';
+            // ★経過秒数を出す。出さないと「1分経っても画面が変わらない」に見える
+            //   （現場報告 2026-09-15）。実際は確認の通信を待っているだけ
+            var _t0 = Date.now();
+            btn.textContent = '確認中... 0秒';
+            var _tick = setInterval(function(){
+              btn.textContent = '確認中... ' + Math.round((Date.now()-_t0)/1000) + '秒';
+            }, 1000);
             qcVerifyMarked(kr, function(okAll){
+              clearInterval(_tick);
               if(okAll){ succeed(); return; }   // 入っていた＝送信は通っていた
               reset();
               qcMarkShowError(btn, errs, kr.length);
@@ -10490,7 +10501,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.15-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.15-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -10756,7 +10767,10 @@ function qcNgFetch(force, _retry){
     //   「取得できませんでした」で終わっていた。
     var tmp = /Failed to fetch|NetworkError|通信エラー|JSONではなくHTML|応答がありません/i.test(String(msg));
     var n = (typeof _retry==='number') ? _retry : (_retry?1:0);
-    if(tmp && n < 2){
+    // ★手元にキャッシュがあるなら、やり直しは1回で止める。混んでいるGASを
+    //   何度も叩くと、かえって全体が遅くなる（2026-09-15「処理が遅くなってきた」）
+    var maxTry = (QC_NG_RECORDS && QC_NG_RECORDS.length) ? 1 : 2;
+    if(tmp && n < maxTry){
       // ★force=true で呼ぶこと。false のままだと、キャッシュから戻した QC_NG_RECORDS が
       //   あるために冒頭の早期returnで弾かれ、再試行が実際には走らない
       setTimeout(function(){ qcNgFetch(true, n+1); }, 1500 * (n+1));
