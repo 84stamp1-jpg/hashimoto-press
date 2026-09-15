@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.09.15-1 : (1)★材料費・購入品費・外注費のCSV出力を追加（社長要望）。生産管理システムへ取り込んでもらうため、1行＝1明細で★3費目の列をそろえた（費目/計上月/納入日/金型NO/品番/工程/品名・内容/材質/サイズ/仕上/重量kg/数量/単価/金額/手配先/備考/管理キー）。同じ意味の項目は同じ列に来るので、相手は1つの対応づけで3費目とも読める。無い項目は空欄。★列の並びは変えないこと（相手の設定が壊れる）。サイズは指定どおり XxYxZ（例 185x120x30）。UTF-8 BOM付き・CRLFなのでExcelでそのまま開ける。各タブに「⬇ CSV出力」、材料費タブに「⬇ 3費目まとめて」。(2)★タブ切替が遅くなっていた主因を直した。findMoldByNo() が1行ごとに Object.values(DB.molds) を作り直して全件走査し、さらに前方一致で filter+sort をもう1周していた。金型300件×明細3000行で200万回近い比較になる。索引(Map＋長い順リスト＋結果メモ)を1度作って使い回し、金型を保存したときだけ捨てる（writeToFirebaseで invalidateMoldIndex）。判定の順序は従来と同じ -->
 <!-- 金型原価 v2026.09.04-20 : App61の実際のフィールドコードを実データで確認し、既定値に入れた。作業明細の作業員は「ルックアップ_0」（ユーザー選択ではなくただの文字列）。親は 管理コード=文字列__1行__6／部品番号=ルックアップ／工程=文字列__1行__9／トライ状況=ラジオボタン_0／加工予算=budget／残予算=計算。これで「項目の対応づけ」をしなくても既定で正しく取り込める -->
 <!-- 金型原価 v2026.09.04-19 : 作業者が全て「（作業員なし）」になる件。ユーザー選択型だけを見ていたため取れていなかった。pickWorkerFromRow() に置き換え、コード名→型→値の形（配列や{name,code}）→コード名に「ユーザー/作業員/作業者/担当」を含むもの、の順で探すようにした。あわせて「取得できる項目を見る」でサブテーブル各列の型も表示するようにし、原因を追えるようにした -->
 <!-- 金型原価 v2026.09.04-18 : ①3段目を作業員にすると全部「（作業員なし）」になる問題を修正。サブテーブル内のフィールドコードが「作業員」ではないため名前で拾えていなかった。ユーザー選択型(USER_SELECT等)の列を型で探して表示名を取るようにした。②加工費はkintoneから過去の物件も全部来るので、「金型一覧にある品番だけ」のチェックを追加（金型NOか部品番号がDB.moldsに在るものだけ残す）。明細と集計の両方に効く -->
@@ -643,7 +644,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.04-20</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.15-1</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -1015,6 +1016,8 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
           </div>
           <button class="btn btn-secondary btn-sm" onclick="printMaterials()">🖨 印刷</button>
           <button class="btn btn-secondary btn-sm" onclick="copyTableToClipboard('matTableBody','材料費')">📋 全行コピー</button>
+          <button class="btn btn-secondary btn-sm" onclick="exportCostCsv('materials')" title="1行=1明細。3費目で列をそろえたCSV（全件）">⬇ CSV出力</button>
+          <button class="btn btn-secondary btn-sm" onclick="exportCostCsv('all')" title="材料費・購入品費・外注費を1つのCSVに（全件）">⬇ 3費目まとめて</button>
         </div>
       </div>
       <div id="matTableBody"><div class="loading"><div class="spin"></div></div></div>
@@ -1069,6 +1072,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
           </label>
           <button class="btn btn-danger btn-sm" id="outBulkDeleteBtn" style="display:none" onclick="outBulkDelete()">🗑 選択削除</button>
           <button class="btn btn-secondary btn-sm" onclick="copyTableToClipboard('outTableBody','外注費')">📋 全行コピー</button>
+          <button class="btn btn-secondary btn-sm" onclick="exportCostCsv('outsource')" title="1行=1明細。3費目で列をそろえたCSV（全件）">⬇ CSV出力</button>
         </div>
       </div>
       <div id="outTableBody"><div class="loading"><div class="spin"></div></div></div>
@@ -1125,6 +1129,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
           </label>
           <button class="btn btn-danger btn-sm" id="purBulkDeleteBtn" style="display:none" onclick="purBulkDelete()">🗑 選択削除</button>
           <button class="btn btn-secondary btn-sm" onclick="copyTableToClipboard('purTableBody','購入品費')">📋 全行コピー</button>
+          <button class="btn btn-secondary btn-sm" onclick="exportCostCsv('purchase')" title="1行=1明細。3費目で列をそろえたCSV（全件）">⬇ CSV出力</button>
         </div>
       </div>
       <div id="purTableBody"><div class="loading"><div class="spin"></div></div></div>
@@ -2234,6 +2239,8 @@ function saveLocal() {
 async function writeToFirebase(path, data) {
   // quoteRequests書込み時は正規化してから保存
   if (path === 'quoteRequests') normalizeQuoteRequests(data);
+  // ★金型が変わったら逆引きの索引を作り直す（NOを直しても件数が同じことがあるため）
+  if (path === 'molds') invalidateMoldIndex();
   // ローカルDBは常に最新を保持
   saveLocal();
   if (db) {
@@ -7627,16 +7634,109 @@ async function loadSharedConfig() {
 
 
 // 管理NOから金型データを取得
+// ═══════════════════════════════════════════════
+//  費目CSV出力（生産管理システムへの取り込み用）
+//  ★1行＝1明細。材料費・購入品費・外注費で列をそろえてある。
+//    同じ意味の項目は同じ列に来るので、取り込む側は1つの対応づけで済む。
+//    費目ごとに無い項目は空欄。列の並びは変えないこと（相手の設定が壊れるため）。
+// ═══════════════════════════════════════════════
+const COST_CSV_COLS = ['費目','計上月','納入日','金型NO','品番','工程','品名・内容',
+                       '材質','サイズ','仕上','重量kg','数量','単価','金額','手配先','備考','管理キー'];
+
+// サイズは XxYxZ の形にする（社長指定）。空の軸は詰める。「185x120x30」
+function csvSize(r){
+  const n = v => { const t = String(v==null?'':v).trim().replace(/\.0+$/,''); return t; };
+  return [n(r.sizeX), n(r.sizeY), n(r.sizeZ)].filter(Boolean).join('x');
+}
+function csvCell(v){
+  const t = (v==null ? '' : String(v));
+  return /[",\r\n]/.test(t) ? '"' + t.replace(/"/g,'""') + '"' : t;
+}
+// 1明細を、そろえた列の並びに落とす
+function costCsvRow(kind, key, r){
+  const g = (o,k) => (o && o[k] != null ? o[k] : '');
+  if (kind === 'materials'){
+    return ['材料費', g(r,'month'), g(r,'arrivalDate'), g(r,'moldNo'), g(r,'partNo'),
+            (matProcessOf(r)||{}).label || '', g(r,'name'),
+            g(r,'material'), csvSize(r), g(r,'finish'), g(r,'weight'),
+            (r.qty==null || r.qty==='' ? 1 : r.qty), '', g(r,'amount'),
+            g(r,'supplier'), g(r,'note'), key];
+  }
+  if (kind === 'purchase'){
+    return ['購入品費', g(r,'month'), '', g(r,'moldNo'), g(r,'partNo'),
+            '', g(r,'name'),
+            '', '', '', '',
+            (r.qty==null || r.qty==='' ? 1 : r.qty), g(r,'unit'), g(r,'total'),
+            g(r,'supplier'), g(r,'note'), key];
+  }
+  return ['外注費', g(r,'month'), '', g(r,'moldNo'), g(r,'partNo'),
+          g(r,'process'), g(r,'detail'),
+          '', '', '', '',
+          (r.qty==null || r.qty==='' ? 1 : r.qty), g(r,'unit'), g(r,'total'),
+          g(r,'supplier'), g(r,'note'), key];
+}
+// kind: 'materials' | 'purchase' | 'outsource' | 'all'
+function exportCostCsv(kind){
+  const src = { materials: DB.materials, purchase: DB.purchase, outsource: DB.outsource };
+  const kinds = (kind === 'all') ? ['materials','purchase','outsource'] : [kind];
+  const rows = [];
+  kinds.forEach(k => {
+    const o = src[k] || {};
+    Object.keys(o).sort().forEach(key => {
+      const r = o[key];
+      if (r && typeof r === 'object') rows.push(costCsvRow(k, key, r));
+    });
+  });
+  if (!rows.length){ toast('出力する明細がありません', 'warn'); return; }
+  // ★Excelで開けるように UTF-8 のBOM付き・改行はCRLF
+  const body = [COST_CSV_COLS].concat(rows)
+    .map(a => a.map(csvCell).join(',')).join('\r\n');
+  const blob = new Blob(['\ufeff' + body], {type:'text/csv;charset=utf-8'});
+  const d = new Date();
+  const stamp = d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
+  const label = { materials:'材料費', purchase:'購入品費', outsource:'外注費', all:'3費目' }[kind] || kind;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '金型原価_' + label + '_' + stamp + '.csv';
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  toast(label + ' ' + rows.length + '明細を書き出しました', 'success');
+}
+
+// ★金型の逆引きは1行ごとに呼ばれる（材料費だけで数千回）。
+//   以前は毎回 Object.values(DB.molds) を作り直して全件を走査し、さらに
+//   前方一致のために filter+sort をもう1周していた。金型300件×明細3000行なら
+//   200万回近い比較になり、これがタブ切替が重くなっていた主因（2026-09-15）。
+//   → 索引を1度だけ作って使い回す。金型を保存したら invalidateMoldIndex() で捨てる。
+let _moldIdx = null, _moldIdxRef = null, _moldIdxN = -1;
+function invalidateMoldIndex(){ _moldIdx = null; _moldIdxRef = null; _moldIdxN = -1; }
+function moldIndex(){
+  const src = DB.molds || {};
+  const keys = Object.keys(src);
+  if (_moldIdx && _moldIdxRef === src && _moldIdxN === keys.length) return _moldIdx;
+  const exact = new Map(); const list = [];
+  keys.forEach(k => {
+    const m = src[k];
+    if (m && m.no) { if (!exact.has(m.no)) exact.set(m.no, m); list.push(m); }
+  });
+  // 長いNOから先に見る＝前方一致でいちばん具体的なものが当たる（従来と同じ順序）
+  list.sort((a,b) => b.no.length - a.no.length);
+  _moldIdx = { exact, list, memo: new Map() };
+  _moldIdxRef = src; _moldIdxN = keys.length;
+  return _moldIdx;
+}
 function findMoldByNo(moldNo) {
   if (!moldNo) return null;
-  // 完全一致を試みる
-  let mold = Object.values(DB.molds||{}).find(m => m.no === moldNo);
-  if (mold) return mold;
-  // 前方一致（材料管理NOから金型NOを逆引き）
-  const sorted = Object.values(DB.molds||{})
-    .filter(m => m.no && moldNo.startsWith(m.no))
-    .sort((a,b) => b.no.length - a.no.length);
-  return sorted[0] || null;
+  const ix = moldIndex();
+  if (ix.memo.has(moldNo)) return ix.memo.get(moldNo);
+  let hit = ix.exact.get(moldNo) || null;
+  if (!hit) {
+    for (let i = 0; i < ix.list.length; i++) {
+      if (moldNo.startsWith(ix.list[i].no)) { hit = ix.list[i]; break; }
+    }
+  }
+  ix.memo.set(moldNo, hit);
+  return hit;
 }
 
 // モーダルフォームのリセット
