@@ -312,10 +312,10 @@ def make_styles():
     s['sec2'] = ParagraphStyle('sec2', fontSize=9, fontName='HeiseiKakuGo-W5', textColor=WHITE, backColor=colors.HexColor('#7f1d1d'), leftIndent=4, spaceBefore=4, spaceAfter=2, leading=13)
     s['note'] = ParagraphStyle('note', fontSize=7, fontName='HeiseiKakuGo-W5', textColor=colors.HexColor('#c0392b'), leading=10, leftIndent=4)
     s['label'] = ParagraphStyle('label', fontSize=6.5, fontName='HeiseiKakuGo-W5', textColor=colors.HexColor('#555555'), alignment=TA_CENTER, leading=9)
-    s['notice'] = ParagraphStyle('notice', fontSize=7.3, fontName='HeiseiKakuGo-W5', textColor=colors.HexColor('#1a1a2e'), leading=11.5, leftIndent=4, rightIndent=4,
+    s['notice'] = ParagraphStyle('notice', fontSize=7.3, fontName='HeiseiKakuGo-W5', textColor=colors.HexColor('#1a1a2e'), leading=11.0, leftIndent=4, rightIndent=4,
                                   backColor=colors.HexColor('#fef9e7'), borderColor=colors.HexColor('#e0c66b'), borderWidth=0.6, borderPadding=4, spaceAfter=4)
-    s['cell'] = ParagraphStyle('cell', fontSize=6.6, fontName='HeiseiKakuGo-W5', textColor=colors.HexColor('#222222'), leading=8.6)
-    s['cellc'] = ParagraphStyle('cellc', fontSize=6.8, fontName='HeiseiKakuGo-W5', textColor=colors.HexColor('#222222'), leading=8.6, alignment=TA_CENTER)
+    s['cell'] = ParagraphStyle('cell', fontSize=6.6, fontName='HeiseiKakuGo-W5', textColor=colors.HexColor('#222222'), leading=8.2)
+    s['cellc'] = ParagraphStyle('cellc', fontSize=6.8, fontName='HeiseiKakuGo-W5', textColor=colors.HexColor('#222222'), leading=8.2, alignment=TA_CENTER)
     s['cellc_ok'] = ParagraphStyle('cellc_ok', parent=s['cellc'], textColor=GREEN)
     s['cellc_warn'] = ParagraphStyle('cellc_warn', parent=s['cellc'], textColor=AMBER)
     s['cellc_bad'] = ParagraphStyle('cellc_bad', parent=s['cellc'], textColor=RED)
