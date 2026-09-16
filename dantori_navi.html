@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.16-2 : ★★シートを並べ替えると、入力済み・修正・削除が別のレコードに当たる問題。H-Hubは「取得した時点のシート行番号」でレコードを指していたが、Googleスプレッドシートを並べ替えたり行を消したりすると同じ番号が別の行を指す。GASのdeleteRecordは deleteRow で物理削除し行が繰り上がるため、行番号は常に詰まって連続する＝痕跡も残らない。実際に2026-09-16、シートが品番順に並べ替えられ、数分前に取得した行1924が別のレコードになっていた。この状態でH-Hubから操作すると★別の人の記録が黙って書き換わる・消える。→ 行番号に加えて「目印」（送信日時・製造番号・工順・良品数）を一緒に送り、GAS側 resolveRow_() で本当にその行かを確かめる。違えばシート全体から探し直し、見つからない／2件以上なら★何もせずエラーを返す。目印が無い古い呼び出しは従来どおり動く。※GASの貼り替えと再デプロイが必要（品質チェックシート/gas仕様/コード.gs） -->
 <!-- H-Hub v2026.09.16-1 : ★不良品報告が「読み込みばかりで長く待たされ、最後はHTMLが返る」件。GAS側は例外もJSONで返す作りなので、HTMLが返る＝処理そのものが重くて落ちている。原因は★App31を「全項目」で300件ぶん取っていたこと。1往復が数MBになり、5台が繰り返すとGASが処理しきれない。(1)★取りに行く列を必要なものだけに絞った。1回目は全項目で取り、その結果から必要な列（cfg.fで使っている列＋$id＋STATUS/STATUS_ASSIGNEE/RECORD_NUMBER型）を決めて覚える。★実際にデータの中で見えた列コードしか指定しない（存在しない列を指定するとkintoneが丸ごと弾くため）。絞った状態で失敗したら、列指定を捨てて全項目で1度だけやり直す。(2)取得件数の既定を300→120（cfgVer=4で保存済み端末も引き下げ）。(3)この呼び出しの上限を90秒→45秒。待たせるより早く諦めて前回のデータを見せる。(4)「🔄 読み込み中... ◯秒」を出す。20秒を超えたら混んでいる旨も添える。(5)自動更新を端末ごとに0〜25秒ずらす。5台が同じ秒に一斉に叩くのを避ける -->
 <!-- H-Hub v2026.09.15-3 : ★GASの詰まりを減らすため2点（社長指示）。(1)不良品報告の取得件数を★500→300件（既定値）。App31を全フィールドで引く重い呼び出しで、これを5台が繰り返していた。★端末に保存済みの設定も cfgVer=3 で1度だけ引き下げる（ちょうど500の人だけ。自分で別の数にした人は触らない）。(2)入力待ちを開いているあいだの自動更新を★90秒→3分。別の画面から戻ったときは間隔に関係なく見に行くので、手で切り替えて使う限り古いものは出ない。※もし古い報告が照合に出てこなくなったら、⚙設定の取得件数を戻せる -->
 <!-- H-Hub v2026.09.15-2 : ★「処理が遅く、1分経っても画面が変わらない」（現場報告）。固まっていたのではなく、入力済みにしたあとの「確認中...」が返りを待っていた。その通信の上限が90秒だったので、最悪90秒このまま。しかも秒数が出ないので固まって見える。(1)qcGasPostTo/qcGasPost に上限時間の引数を足し、人を待たせる確認の読み直し（qcVerifyMarked・qcVerifySubmitted）は★25秒で打ち切るようにした。(2)「確認中... ◯秒」と経過秒数を出す。動いていることが分かる。(3)★不良品報告の取り直しは、手元にキャッシュがあるときは再試行1回で止める。v2026.09.15-1で2回に増やしたが、混んでいるGASを何度も叩くと全体が遅くなるため。キャッシュが無く画面が空のときだけ2回試す -->
@@ -8748,6 +8749,17 @@ var QC_KANNO = '完納', QC_ZAIRYO = 'あり';
 var QC_VIEW_DATE = new Date();
 var QC_ALL_RECORDS = [];
 var QC_EDIT_ROW_NUM = null, QC_DEL_ROW_NUM = null, QC_VIEWER_INDEX = null;
+var QC_EDIT_KEY = null, QC_DEL_KEY = null;
+// ★行番号だけでレコードを指すのはやめる（2026-09-16）。
+//   シートを並べ替えたり行を消したりすると、同じ行番号が別のレコードを指すため、
+//   入力済み・修正・削除が★別の人の記録に当たってしまう（黙って上書きされる）。
+//   送信日時・製造番号・工順・良品数を「目印」として一緒に送り、
+//   GAS側で本当にその行かを確かめてもらう。違っていれば探し直し、
+//   見つからなければ何もせずエラーを返す。
+function qcRowKey(r){
+  if(!r) return null;
+  return { ts:String(r[0]||''), seizo:String(r[13]||''), junjo:String(r[14]||''), prod:String(r[5]||'') };
+}
 var QC_BULK_HINBAN = null, QC_BULK_JUNJO = null, QC_ALLOC_DATA = [];
 var QC_BULK_PHOTO = null;
 var QC_CAM_STREAM = null, QC_CAM_PHOTOS_TMP = [], QC_CAM_DEVICES = [], QC_CAM_DEVICE_IDX = 0, QC_CAM_TARGET = 'form';
@@ -10023,7 +10035,7 @@ function qcMakeGroupCard(g){
             });
           }
           kr.forEach(function(r){
-            qcGasPost('markAsInputted',{rowNum:parseInt(r[r.length-1])},function(res){
+            qcGasPost('markAsInputted',{rowNum:parseInt(r[r.length-1]),key:qcRowKey(r)},function(res){
               done++;
               if(!res || !res.ok) errs.push((res&&(res.err||res.error))||'GASがokを返しませんでした');
               finish();
@@ -10077,7 +10089,7 @@ function qcRunSeizoSearch(){
 
 // ----- 編集 -----
 function qcOpenEditModal(r){
-  QC_EDIT_ROW_NUM=r[r.length-1];
+  QC_EDIT_ROW_NUM=r[r.length-1]; QC_EDIT_KEY=qcRowKey(r);
   document.getElementById('qc-e-dt').value=(r[1]||'').replace(/\//g,'-').slice(0,10);
   document.getElementById('qc-e-op').value=r[4]||'';
   document.getElementById('qc-e-prod').value=r[5]||'0';
@@ -10092,26 +10104,26 @@ function qcOpenEditModal(r){
   qcShowScreen('edit');
   window.scrollTo(0,0);
 }
-window.qcBackFromEdit = function(){ QC_EDIT_ROW_NUM=null; qcShowScreen(QC_EDIT_FROM_SCREEN); };
+window.qcBackFromEdit = function(){ QC_EDIT_ROW_NUM=null; QC_EDIT_KEY=null; qcShowScreen(QC_EDIT_FROM_SCREEN); };
 window.qcSaveEdit = function(){
   if(!QC_EDIT_ROW_NUM){ qcBackFromEdit(); return; }
   var btn=document.getElementById('qc-e-save-btn'); btn.disabled=true; btn.textContent='保存中...';
-  qcGasPost('updateRecord',{rowNum:parseInt(QC_EDIT_ROW_NUM),data:{date:document.getElementById('qc-e-dt').value,operator:document.getElementById('qc-e-op').value,prod:document.getElementById('qc-e-prod').value,ng:document.getElementById('qc-e-ng').value,hokyu:document.getElementById('qc-e-hokyu').value||'0',sonota:document.getElementById('qc-e-sonota').value||'0',sonotaMemo:document.getElementById('qc-e-sonota-memo').value||'',kanno:document.getElementById('qc-e-kanno').value,zairyo:document.getElementById('qc-e-zairyo').value,memo:document.getElementById('qc-e-mo').value}},
+  qcGasPost('updateRecord',{rowNum:parseInt(QC_EDIT_ROW_NUM),key:QC_EDIT_KEY,data:{date:document.getElementById('qc-e-dt').value,operator:document.getElementById('qc-e-op').value,prod:document.getElementById('qc-e-prod').value,ng:document.getElementById('qc-e-ng').value,hokyu:document.getElementById('qc-e-hokyu').value||'0',sonota:document.getElementById('qc-e-sonota').value||'0',sonotaMemo:document.getElementById('qc-e-sonota-memo').value||'',kanno:document.getElementById('qc-e-kanno').value,zairyo:document.getElementById('qc-e-zairyo').value,memo:document.getElementById('qc-e-mo').value}},
   function(res){ btn.disabled=false; btn.textContent='保存する'; if(res.ok){ qcBackFromEdit(); qcLoadRecords(); } else alert('エラー: '+res.err); },
   function(e){ btn.disabled=false; btn.textContent='保存する'; alert('エラー: '+e.message); });
 };
 
 // ----- 削除 -----
 function qcOpenDelModal(r){
-  QC_DEL_ROW_NUM=r[r.length-1];
+  QC_DEL_ROW_NUM=r[r.length-1];  QC_DEL_KEY=qcRowKey(r);
   document.getElementById('qc-del-target').textContent=(r[2]||'部品番号なし')+' / '+(r[3]||'')+'\n生産日: '+(r[1]||'');
   document.getElementById('qc-modal-del').className='qc-modal-bg on';
 }
-window.qcCloseModal = function(){ document.getElementById('qc-modal-del').className='qc-modal-bg'; QC_DEL_ROW_NUM=null; };
+window.qcCloseModal = function(){ document.getElementById('qc-modal-del').className='qc-modal-bg'; QC_DEL_ROW_NUM=null; QC_DEL_KEY=null; };
 window.qcExecDelete = function(){
   if(!QC_DEL_ROW_NUM){ qcCloseModal(); return; }
   var btn=document.getElementById('qc-modal-del-btn'); btn.disabled=true; btn.textContent='削除中...';
-  qcGasPost('deleteRecord',{rowNum:parseInt(QC_DEL_ROW_NUM)},function(res){ btn.disabled=false; btn.textContent='削除する'; if(res.ok){ qcCloseModal(); qcLoadRecords(); } else alert('エラー: '+res.err); }, function(e){ btn.disabled=false; btn.textContent='削除する'; alert('エラー: '+e.message); });
+  qcGasPost('deleteRecord',{rowNum:parseInt(QC_DEL_ROW_NUM),key:QC_DEL_KEY},function(res){ btn.disabled=false; btn.textContent='削除する'; if(res.ok){ qcCloseModal(); qcLoadRecords(); } else alert('エラー: '+res.err); }, function(e){ btn.disabled=false; btn.textContent='削除する'; alert('エラー: '+e.message); });
 };
 
 // ----- システム入力待ちバッジ -----
@@ -10509,7 +10521,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.16-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.16-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）

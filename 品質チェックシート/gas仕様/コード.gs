@@ -15,9 +15,9 @@ function doPost(e) {
     var payload = JSON.parse(e.postData.contents);
     var action  = payload.action || '';
     if      (action === 'submitRecord')       { result = submitRecord(payload.data); }
-    else if (action === 'updateRecord')       { result = updateRecord(payload.rowNum, payload.data); }
-    else if (action === 'deleteRecord')       { result = deleteRecord(payload.rowNum); }
-    else if (action === 'markAsInputted')     { result = markAsInputted(payload.rowNum); }
+    else if (action === 'updateRecord')       { result = updateRecord(payload.rowNum, payload.data, payload.key); }
+    else if (action === 'deleteRecord')       { result = deleteRecord(payload.rowNum, payload.key); }
+    else if (action === 'markAsInputted')     { result = markAsInputted(payload.rowNum, payload.key); }
     else if (action === 'getSakuyoData')      { result = { ok: true, data: getSakuyoData() }; }
     else if (action === 'getRecords')         { result = { ok: true, records: getRecords() }; }
     else if (action === 'updateSakuyo')       { result = (typeof updateSakuyoFromXlsx === 'function') ? updateSakuyoFromXlsx() : { ok: false, err: 'updateSakuyoFromXlsx not defined' }; }
@@ -106,28 +106,78 @@ function getRecords() {
   });
 }
 
-function markAsInputted(rowNum) {
+
+// ═══════════════════════════════════════════════════════════
+//  ★行番号は当てにならない（2026-09-16）
+//  シートを並べ替えたり行を消したりすると、同じ行番号が別のレコードを指す。
+//  H-Hubは「取得した時点の行番号」で入力済み・修正・削除を投げてくるので、
+//  そのまま実行すると★別の人の記録を静かに書き換えてしまう。
+//  そこで、行番号に加えて「目印(key)」を受け取り、本当にその行かを確かめる。
+//  ・行番号の行が目印と一致 → そのまま使う（従来と同じ速さ）
+//  ・一致しない → シート全体から目印で探す（並べ替えられていても当たる）
+//  ・見つからない／2件以上 → ★何もせずエラーを返す（黙って別の行を触らない）
+//  key = { ts:送信日時(A), seizo:製造番号(N), junjo:工順(O), prod:良品数(F) }
+// ═══════════════════════════════════════════════════════════
+function rowKeyOf_(values, i) {
+  var r = values[i];
+  function t(v){
+    return (v instanceof Date)
+      ? Utilities.formatDate(v, 'Asia/Tokyo', 'yyyy/MM/dd HH:mm')
+      : String(v == null ? '' : v);
+  }
+  return [t(r[0]), t(r[13]), t(r[14]), t(r[5])].join('|');
+}
+function resolveRow_(sheet, rowNum, key) {
+  if (!key || !key.ts) return { ok: true, row: parseInt(rowNum) };   // 目印なし＝従来どおり
+  var want = [String(key.ts), String(key.seizo == null ? '' : key.seizo),
+              String(key.junjo == null ? '' : key.junjo),
+              String(key.prod  == null ? '' : key.prod)].join('|');
+  var values = sheet.getDataRange().getValues();
+  var n = parseInt(rowNum);
+  if (n >= 2 && n <= values.length && rowKeyOf_(values, n - 1) === want) {
+    return { ok: true, row: n };                                      // そのまま当たった
+  }
+  var hits = [];
+  for (var i = 1; i < values.length; i++) {
+    if (rowKeyOf_(values, i) === want) hits.push(i + 1);
+  }
+  if (hits.length === 1) return { ok: true, row: hits[0], moved: true };
+  if (hits.length === 0) {
+    return { ok: false, err: 'この記録が見つかりませんでした（すでに消されたか、内容が変わっています）。'
+                          + '画面を更新してからもう一度お願いします。' };
+  }
+  return { ok: false, err: '同じ内容の記録が' + hits.length + '件あり、どれか決められません。'
+                        + 'シートで直接直してください（行 ' + hits.join(',') + '）。' };
+}
+
+function markAsInputted(rowNum, key) {
   try {
     var sheet = getOrCreateSheet().getSheetByName(SHEET_NAME);
-    sheet.getRange(parseInt(rowNum), 13).setValue('済');
+    var f = resolveRow_(sheet, rowNum, key);
+    if (!f.ok) return f;
+    sheet.getRange(f.row, 13).setValue('済');
     SpreadsheetApp.flush();
-    return { ok: true };
+    return { ok: true, row: f.row, moved: !!f.moved };
   } catch(e) { return { ok: false, err: e.message }; }
 }
 
-function deleteRecord(rowNum) {
+function deleteRecord(rowNum, key) {
   try {
     var sheet = getOrCreateSheet().getSheetByName(SHEET_NAME);
-    sheet.deleteRow(parseInt(rowNum));
+    var f = resolveRow_(sheet, rowNum, key);
+    if (!f.ok) return f;
+    sheet.deleteRow(f.row);
     SpreadsheetApp.flush();
-    return { ok: true };
+    return { ok: true, row: f.row, moved: !!f.moved };
   } catch(e) { return { ok: false, err: e.message }; }
 }
 
-function updateRecord(rowNum, data) {
+function updateRecord(rowNum, data, key) {
   try {
     var sheet = getOrCreateSheet().getSheetByName(SHEET_NAME);
-    var n = parseInt(rowNum);
+    var f = resolveRow_(sheet, rowNum, key);
+    if (!f.ok) return f;
+    var n = f.row;
     sheet.getRange(n, 2).setValue(data.date);
     sheet.getRange(n, 5).setValue(data.operator);
     sheet.getRange(n, 6).setValue(data.prod);
