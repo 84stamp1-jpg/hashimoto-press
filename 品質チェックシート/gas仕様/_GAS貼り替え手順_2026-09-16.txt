@@ -1,0 +1,179 @@
+﻿品質チェックGASの貼り替え方（2026-09-16分）
+==========================================================
+対象      : 品質チェックシート記録 の GAS（H-Hubの実績入力・不良品報告が使う方）
+ファイル  : Desktop\橋本_作業データ\hashimoto-press\品質チェックシート\gas仕様\コード.gs
+デプロイURL: AKfycbw3zssfr-pWlRcgMT4fhQ40HoOUeJHz7-_yYIcA0b4hxh2BXdWAPe96D2kXPizLzsqI
+            ★変えないこと（H-Hubの qualityGasUrl がこのURLを指しています）
+
+----------------------------------------------------------
+なぜ直すのか
+----------------------------------------------------------
+H-Hubは「取得した時点のシート行番号」でレコードを指しています。
+ところがスプレッドシートを並べ替えたり行を消したりすると、
+同じ行番号が別のレコードを指します。
+2026-09-16に、シートが品番順に並べ替えられ、数分前に取得した
+行1924が別のレコードになっていることを実際に確認しました。
+
+この状態でH-Hubから「入力済みにする」「修正」「削除」を押すと、
+★別の人の記録が黙って書き換わる・消えます。
+しかもGASの削除は deleteRow で物理削除し行が繰り上がるため、
+行番号は常に詰まって連続します＝★痕跡が残りません。
+
+そこで、行番号に加えて「目印」（送信日時・製造番号・工順・良品数）を
+一緒に送り、GAS側で本当にその行かを確かめてから触るようにします。
+違えばシート全体から探し直し、見つからない／2件以上あるときは
+★何もせずエラーを返します。
+
+----------------------------------------------------------
+直すのは2か所だけ（全文の貼り替えはしないこと）
+----------------------------------------------------------
+★全文を貼り替えてはいけません。GAS側の getPartsData（品番リスト）が
+  こちらのファイルより新しい可能性があり、上書きすると品番が巻き戻ります。
+
+【A】doPost の中の3行
+【B】markAsInputted / deleteRecord / updateRecord の3つの関数（＋目印のしくみ）
+
+----------------------------------------------------------
+手順
+----------------------------------------------------------
+1. スプレッドシート「品質チェックシート記録」を開き、
+   拡張機能 → Apps Script でエディタを開く（コード.gs が開きます）
+
+2. 【A】Ctrl+F で   action === 'updateRecord'   と検索する
+   見つかった行とその下2行（deleteRecord・markAsInputted）の3行を、
+   下の【新しい中身A】の3行で置き換える
+   ※違いは末尾に , payload.key が付くだけです
+
+3. 【B】Ctrl+F で   function markAsInputted   と検索する
+   その行から、★function submitRecord(data) { の直前の行まで を
+   すべて選んで削除する（3つの関数がまとまって並んでいます）
+   ※function submitRecord の行は消さないこと
+
+4. 消したところに、下の【新しい中身B】をそのまま貼る
+
+5. 保存（Ctrl+S）
+
+6. デプロイ →「デプロイを管理」→ 鉛筆マーク →
+   バージョン「新バージョン」→ デプロイ
+   ★「新しいデプロイ」を選ぶとURLが変わり、H-Hubから繋がらなくなります。
+     必ず既存のものを鉛筆で編集すること
+
+----------------------------------------------------------
+貼り替えたあとの確認（3分）
+----------------------------------------------------------
+(1) H-Hubの品質チェック（入力待ち）を開き、1件「入力済みにする」を押す。
+    → これまでどおり消えれば正常。
+(2) 効いているかを確かめたいとき：
+    シートを開いてフィルタで並べ替える → H-Hubは更新せずそのまま
+    「入力済みにする」を押す。
+    → 正しい行に「済」が入れば成功（GASが探し直しています）。
+      直す前は別の行に入っていました。
+(3) 消された記録を押した場合は
+    「この記録が見つかりませんでした…画面を更新してからもう一度」
+    と出れば正常です。何も書き換えずに止まっています。
+
+※ 目印を送らない古い呼び出し（まだ古い版のH-Hubを開いているPC）は
+  従来どおり行番号で動きます。全PCを読み込み直せば目印付きになります。
+
+==========================================================
+【新しい中身A】ここから（doPost の中の3行）
+==========================================================
+    else if (action === 'updateRecord')       { result = updateRecord(payload.rowNum, payload.data, payload.key); }
+    else if (action === 'deleteRecord')       { result = deleteRecord(payload.rowNum, payload.key); }
+    else if (action === 'markAsInputted')     { result = markAsInputted(payload.rowNum, payload.key); }
+==========================================================
+【新しい中身A】ここまで
+==========================================================
+
+
+==========================================================
+【新しい中身B】ここから（function submitRecord の直前まで）
+==========================================================
+// ═══════════════════════════════════════════════════════════
+//  ★行番号は当てにならない（2026-09-16）
+//  シートを並べ替えたり行を消したりすると、同じ行番号が別のレコードを指す。
+//  H-Hubは「取得した時点の行番号」で入力済み・修正・削除を投げてくるので、
+//  そのまま実行すると★別の人の記録を静かに書き換えてしまう。
+//  そこで、行番号に加えて「目印(key)」を受け取り、本当にその行かを確かめる。
+//  ・行番号の行が目印と一致 → そのまま使う（従来と同じ速さ）
+//  ・一致しない → シート全体から目印で探す（並べ替えられていても当たる）
+//  ・見つからない／2件以上 → ★何もせずエラーを返す（黙って別の行を触らない）
+//  key = { ts:送信日時(A), seizo:製造番号(N), junjo:工順(O), prod:良品数(F) }
+// ═══════════════════════════════════════════════════════════
+function rowKeyOf_(values, i) {
+  var r = values[i];
+  function t(v){
+    return (v instanceof Date)
+      ? Utilities.formatDate(v, 'Asia/Tokyo', 'yyyy/MM/dd HH:mm')
+      : String(v == null ? '' : v);
+  }
+  return [t(r[0]), t(r[13]), t(r[14]), t(r[5])].join('|');
+}
+function resolveRow_(sheet, rowNum, key) {
+  if (!key || !key.ts) return { ok: true, row: parseInt(rowNum) };   // 目印なし＝従来どおり
+  var want = [String(key.ts), String(key.seizo == null ? '' : key.seizo),
+              String(key.junjo == null ? '' : key.junjo),
+              String(key.prod  == null ? '' : key.prod)].join('|');
+  var values = sheet.getDataRange().getValues();
+  var n = parseInt(rowNum);
+  if (n >= 2 && n <= values.length && rowKeyOf_(values, n - 1) === want) {
+    return { ok: true, row: n };                                      // そのまま当たった
+  }
+  var hits = [];
+  for (var i = 1; i < values.length; i++) {
+    if (rowKeyOf_(values, i) === want) hits.push(i + 1);
+  }
+  if (hits.length === 1) return { ok: true, row: hits[0], moved: true };
+  if (hits.length === 0) {
+    return { ok: false, err: 'この記録が見つかりませんでした（すでに消されたか、内容が変わっています）。'
+                          + '画面を更新してからもう一度お願いします。' };
+  }
+  return { ok: false, err: '同じ内容の記録が' + hits.length + '件あり、どれか決められません。'
+                        + 'シートで直接直してください（行 ' + hits.join(',') + '）。' };
+}
+
+function markAsInputted(rowNum, key) {
+  try {
+    var sheet = getOrCreateSheet().getSheetByName(SHEET_NAME);
+    var f = resolveRow_(sheet, rowNum, key);
+    if (!f.ok) return f;
+    sheet.getRange(f.row, 13).setValue('済');
+    SpreadsheetApp.flush();
+    return { ok: true, row: f.row, moved: !!f.moved };
+  } catch(e) { return { ok: false, err: e.message }; }
+}
+
+function deleteRecord(rowNum, key) {
+  try {
+    var sheet = getOrCreateSheet().getSheetByName(SHEET_NAME);
+    var f = resolveRow_(sheet, rowNum, key);
+    if (!f.ok) return f;
+    sheet.deleteRow(f.row);
+    SpreadsheetApp.flush();
+    return { ok: true, row: f.row, moved: !!f.moved };
+  } catch(e) { return { ok: false, err: e.message }; }
+}
+
+function updateRecord(rowNum, data, key) {
+  try {
+    var sheet = getOrCreateSheet().getSheetByName(SHEET_NAME);
+    var f = resolveRow_(sheet, rowNum, key);
+    if (!f.ok) return f;
+    var n = f.row;
+    sheet.getRange(n, 2).setValue(data.date);
+    sheet.getRange(n, 5).setValue(data.operator);
+    sheet.getRange(n, 6).setValue(data.prod);
+    sheet.getRange(n, 7).setValue(data.ng);
+    sheet.getRange(n, 8).setValue(data.kanno);
+    sheet.getRange(n, 9).setValue(data.zairyo);
+    sheet.getRange(n, 10).setValue(data.memo);
+    sheet.getRange(n, 18).setValue(data.hokyu || '0');
+    sheet.getRange(n, 19).setValue(data.sonota || '0');
+    sheet.getRange(n, 20).setValue(data.sonotaMemo || '');
+    SpreadsheetApp.flush();
+    return { ok: true };
+  } catch(e) { return { ok: false, err: e.message }; }
+}
+==========================================================
+【新しい中身B】ここまで
+==========================================================
