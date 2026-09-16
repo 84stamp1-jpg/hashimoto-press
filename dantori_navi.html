@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.17-1 : ★システム入力待ちで kintone の不具合数量が表示されなくなった件（表示できるPCもある＝古い版を読んでいる端末だけ出ていた）。原因は v2026.09.16-1 の「取りに行く列を絞る」。★不具合数量は「不具合一覧」、廃棄数量は「品質管理【処置結果】」というサブテーブルの中にあり、qcNgBuildFieldList() はレコードの最上位の列コードしか見ていなかったため、この2つが列表から丸ごと落ち、kintoneはサブテーブルを返さなくなっていた（＝三点が全部「—」。①在庫管理に記入 も「不具合数量が入っていません」で押せない）。(1)設定した欄がサブテーブルの中にあるときは、その★テーブル自身の列コードを列表に入れる（qcNgFindField を使う）。(2)作った列表で三点が読めなくなるなら、そもそも絞らない。(3)列表の保存キーを qcNgFieldList→qcNgFieldList2 に変え、端末に残っている壊れた列表は使わない。(4)取れたデータに数量が1件も無ければ列表を捨てて全項目で1度だけ取り直す（qcNgHasQty）。(5)数量の入っていないキャッシュは読まずに捨てる。→ 画面を読み込み直せば各PCが自分で直る -->
 <!-- H-Hub v2026.09.16-2 : ★★シートを並べ替えると、入力済み・修正・削除が別のレコードに当たる問題。H-Hubは「取得した時点のシート行番号」でレコードを指していたが、Googleスプレッドシートを並べ替えたり行を消したりすると同じ番号が別の行を指す。GASのdeleteRecordは deleteRow で物理削除し行が繰り上がるため、行番号は常に詰まって連続する＝痕跡も残らない。実際に2026-09-16、シートが品番順に並べ替えられ、数分前に取得した行1924が別のレコードになっていた。この状態でH-Hubから操作すると★別の人の記録が黙って書き換わる・消える。→ 行番号に加えて「目印」（送信日時・製造番号・工順・良品数）を一緒に送り、GAS側 resolveRow_() で本当にその行かを確かめる。違えばシート全体から探し直し、見つからない／2件以上なら★何もせずエラーを返す。目印が無い古い呼び出しは従来どおり動く。※GASの貼り替えと再デプロイが必要（品質チェックシート/gas仕様/コード.gs） -->
 <!-- H-Hub v2026.09.16-1 : ★不良品報告が「読み込みばかりで長く待たされ、最後はHTMLが返る」件。GAS側は例外もJSONで返す作りなので、HTMLが返る＝処理そのものが重くて落ちている。原因は★App31を「全項目」で300件ぶん取っていたこと。1往復が数MBになり、5台が繰り返すとGASが処理しきれない。(1)★取りに行く列を必要なものだけに絞った。1回目は全項目で取り、その結果から必要な列（cfg.fで使っている列＋$id＋STATUS/STATUS_ASSIGNEE/RECORD_NUMBER型）を決めて覚える。★実際にデータの中で見えた列コードしか指定しない（存在しない列を指定するとkintoneが丸ごと弾くため）。絞った状態で失敗したら、列指定を捨てて全項目で1度だけやり直す。(2)取得件数の既定を300→120（cfgVer=4で保存済み端末も引き下げ）。(3)この呼び出しの上限を90秒→45秒。待たせるより早く諦めて前回のデータを見せる。(4)「🔄 読み込み中... ◯秒」を出す。20秒を超えたら混んでいる旨も添える。(5)自動更新を端末ごとに0〜25秒ずらす。5台が同じ秒に一斉に叩くのを避ける -->
 <!-- H-Hub v2026.09.15-3 : ★GASの詰まりを減らすため2点（社長指示）。(1)不良品報告の取得件数を★500→300件（既定値）。App31を全フィールドで引く重い呼び出しで、これを5台が繰り返していた。★端末に保存済みの設定も cfgVer=3 で1度だけ引き下げる（ちょうど500の人だけ。自分で別の数にした人は触らない）。(2)入力待ちを開いているあいだの自動更新を★90秒→3分。別の画面から戻ったときは間隔に関係なく見に行くので、手で切り替えて使う限り古いものは出ない。※もし古い報告が照合に出てこなくなったら、⚙設定の取得件数を戻せる -->
@@ -10521,7 +10522,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.16-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.17-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -10686,12 +10687,25 @@ function qcNgSubRows(rec, hint){
 //   ★安全のため「実際にデータの中で見えた列コード」しか指定しない。
 //     存在しない列を指定するとkintoneが丸ごと弾くため。
 //   1回目は全項目で取り、その結果から必要な列を決めて覚える。
+// ★キー名に版番号を付ける（2026-09-17）。前の版は不具合数量・廃棄数量を
+//   取りに行かない列表を保存してしまうため、端末に残っていても使わない。
+var QC_NG_FIELDS_LS = 'qcNgFieldList2';
 var QC_NG_FIELDS = null;
-try{ QC_NG_FIELDS = JSON.parse(localStorage.getItem('qcNgFieldList')||'null'); }catch(e){}
+try{ QC_NG_FIELDS = JSON.parse(localStorage.getItem(QC_NG_FIELDS_LS)||'null'); }catch(e){}
+try{ localStorage.removeItem('qcNgFieldList'); }catch(e){}
 function qcNgBuildFieldList(rec){
   if(!rec) return null;
   var codes = Object.keys(rec), f = qcNgCfg().f, want = {};
-  Object.keys(f).forEach(function(k){ if(f[k] && codes.indexOf(f[k])>=0) want[f[k]] = 1; });
+  // ★設定した欄がサブテーブルの中にあるときは、その「テーブルの列コード」を入れる
+  //   （2026-09-17）。不具合数量は「不具合一覧」、廃棄数量は「品質管理【処置結果】」の
+  //   中にあり、中の名前をそのまま fields に渡しても kintone は返してくれない。
+  //   前の版はここで落としていたため、数量が全部「—」になっていた。
+  Object.keys(f).forEach(function(k){
+    if(!f[k]) return;
+    if(codes.indexOf(f[k])>=0){ want[f[k]] = 1; return; }
+    var loc = qcNgFindField(rec, f[k]);
+    if(loc) want[loc.sub || loc.code] = 1;
+  });
   // プロセス管理の作業者は型で探しているので、型から拾って必ず入れる
   codes.forEach(function(c){
     var t = rec[c] && rec[c].type;
@@ -10699,11 +10713,17 @@ function qcNgBuildFieldList(rec){
   });
   want['$id'] = 1;
   var list = Object.keys(want);
-  return list.length >= 3 ? list : null;   // 少なすぎるときは絞らない
+  if(list.length < 3) return null;         // 少なすぎるときは絞らない
+  // ★念のための確認。絞った列で三点が読めなくなるなら絞らない。
+  //   （欄の設定を変えたときに、また数量が消えるのを防ぐ）
+  var slim = {}; list.forEach(function(c){ if(rec[c]) slim[c] = rec[c]; });
+  if(f.qtyNg && qcNgFindField(rec, f.qtyNg) && !qcNgFindField(slim, f.qtyNg)) return null;
+  if(f.qtyScrap && qcNgFindField(rec, f.qtyScrap) && !qcNgFindField(slim, f.qtyScrap)) return null;
+  return list;
 }
 function qcNgSaveFieldList(list){
   QC_NG_FIELDS = list;
-  try{ localStorage.setItem('qcNgFieldList', JSON.stringify(list||null)); }catch(e){}
+  try{ localStorage.setItem(QC_NG_FIELDS_LS, JSON.stringify(list||null)); }catch(e){}
 }
 function qcNgGuessFields(rec){
   if(!rec) return;
@@ -10769,6 +10789,9 @@ function qcNgLoadCache(){
   try{
     var c = JSON.parse(localStorage.getItem(QC_NG_CACHE_LS)||'null');
     if(c && c.records && c.records.length){
+      // ★数量が入っていないキャッシュは使わない（2026-09-17）。前の版が
+      //   列を取りこぼしたまま保存したもので、見せると全部「—」になる。
+      if(!qcNgHasQty(c.records)){ localStorage.removeItem(QC_NG_CACHE_LS); return false; }
       QC_NG_RECORDS = c.records; QC_NG_FETCHED_AT = c.at||'';
       QC_NG_FETCHED_MS = c.ms || 0;   // 時刻が無い古いキャッシュは0＝必ず取り直す
       return true;
@@ -10805,7 +10828,17 @@ function qcNgSetLoadingNote(n){
                    + (n >= 20 ? '（混んでいます。下は前回のデータです）' : '');
   });
 }
-function qcNgFetch(force, _retry){
+// 取れたデータの中に不具合数量が入っているか。1件でも入っていればよい
+// （報告そのものに数量が無いことはあるので、全件空なら列の取りこぼしとみなす）
+function qcNgHasQty(recs){
+  var f = qcNgCfg().f;
+  if(!f.qtyNg) return true;
+  for(var i=0;i<recs.length && i<30;i++){
+    if(qcNgFindField(recs[i], f.qtyNg)) return true;
+  }
+  return false;
+}
+function qcNgFetch(force, _retry, _wide){
   var cfg = qcNgCfg();
   if(!cfg.token || !cfg.appId){ QC_NG_STATE='unset'; qcNgRenderAll(); return; }
   // 取得に失敗して古いデータを見せている(stale)状態は、再描画で 'ok' に戻さない。
@@ -10844,6 +10877,13 @@ function qcNgFetch(force, _retry){
     QC_NG_RECORDS = res.records || [];
     if(QC_NG_RECORDS.length){
       qcNgGuessFields(QC_NG_RECORDS[0]);
+      // ★絞った列で数量が読めなくなっていたら、列の指定をやめて取り直す（2026-09-17）。
+      //   端末に古い列表が残っていても、ここで自分で直る。
+      if(QC_NG_FIELDS && !_wide && !qcNgHasQty(QC_NG_RECORDS)){
+        qcNgSaveFieldList(null);
+        setTimeout(function(){ qcNgFetch(true, 0, true); }, 300);
+        return;
+      }
       if(!QC_NG_FIELDS) qcNgSaveFieldList(qcNgBuildFieldList(QC_NG_RECORDS[0]));
     }
     qcNgSaveCache();
