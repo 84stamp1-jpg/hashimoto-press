@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.16-1 : ★不良品報告が「読み込みばかりで長く待たされ、最後はHTMLが返る」件。GAS側は例外もJSONで返す作りなので、HTMLが返る＝処理そのものが重くて落ちている。原因は★App31を「全項目」で300件ぶん取っていたこと。1往復が数MBになり、5台が繰り返すとGASが処理しきれない。(1)★取りに行く列を必要なものだけに絞った。1回目は全項目で取り、その結果から必要な列（cfg.fで使っている列＋$id＋STATUS/STATUS_ASSIGNEE/RECORD_NUMBER型）を決めて覚える。★実際にデータの中で見えた列コードしか指定しない（存在しない列を指定するとkintoneが丸ごと弾くため）。絞った状態で失敗したら、列指定を捨てて全項目で1度だけやり直す。(2)取得件数の既定を300→120（cfgVer=4で保存済み端末も引き下げ）。(3)この呼び出しの上限を90秒→45秒。待たせるより早く諦めて前回のデータを見せる。(4)「🔄 読み込み中... ◯秒」を出す。20秒を超えたら混んでいる旨も添える。(5)自動更新を端末ごとに0〜25秒ずらす。5台が同じ秒に一斉に叩くのを避ける -->
 <!-- H-Hub v2026.09.15-3 : ★GASの詰まりを減らすため2点（社長指示）。(1)不良品報告の取得件数を★500→300件（既定値）。App31を全フィールドで引く重い呼び出しで、これを5台が繰り返していた。★端末に保存済みの設定も cfgVer=3 で1度だけ引き下げる（ちょうど500の人だけ。自分で別の数にした人は触らない）。(2)入力待ちを開いているあいだの自動更新を★90秒→3分。別の画面から戻ったときは間隔に関係なく見に行くので、手で切り替えて使う限り古いものは出ない。※もし古い報告が照合に出てこなくなったら、⚙設定の取得件数を戻せる -->
 <!-- H-Hub v2026.09.15-2 : ★「処理が遅く、1分経っても画面が変わらない」（現場報告）。固まっていたのではなく、入力済みにしたあとの「確認中...」が返りを待っていた。その通信の上限が90秒だったので、最悪90秒このまま。しかも秒数が出ないので固まって見える。(1)qcGasPostTo/qcGasPost に上限時間の引数を足し、人を待たせる確認の読み直し（qcVerifyMarked・qcVerifySubmitted）は★25秒で打ち切るようにした。(2)「確認中... ◯秒」と経過秒数を出す。動いていることが分かる。(3)★不良品報告の取り直しは、手元にキャッシュがあるときは再試行1回で止める。v2026.09.15-1で2回に増やしたが、混んでいるGASを何度も叩くと全体が遅くなるため。キャッシュが無く画面が空のときだけ2回試す -->
 <!-- H-Hub v2026.09.15-1 : ★不良品報告の取得が「GASがJSONではなくHTMLのページを返しました」で一度も再試行されずに終わっていた。qcNgFetch の fail() は Failed to fetch / NetworkError のときだけやり直す条件だったため、文言の違うHTML応答が素通りしていた。GASは混んでいるとエラーのHTMLを返すことがあり、これは回線の切断と同じく時間をおけば直る種類のもの。→ 条件に「JSONではなくHTML」と「応答がありません」を足し、★1回だけだった再試行を2回（1.5秒・3秒）にした。※App31を500件×全フィールドで引く重い呼び出しなので、混むと落ちやすい -->
@@ -10417,7 +10418,10 @@ function qcAutoRefreshNow(){
 }
 function qcAutoRefreshStart(){
   if(QC_AUTO_TIMER) return;
-  QC_AUTO_TIMER = setInterval(qcAutoRefreshNow, QC_AUTO_MS);
+  // ★端末ごとに0〜25秒ずらす。5台が同じ秒に一斉に取りに行くとGASが詰まるため
+  QC_AUTO_TIMER = setInterval(function(){
+    setTimeout(qcAutoRefreshNow, Math.floor(Math.random()*25000));
+  }, QC_AUTO_MS);
 }
 function qcAutoRefreshStop(){
   if(QC_AUTO_TIMER){ clearInterval(QC_AUTO_TIMER); QC_AUTO_TIMER = null; }
@@ -10505,7 +10509,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.15-3';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.16-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -10520,14 +10524,14 @@ var QC_NG_INTERACTING = false;
 
 function qcNgDefaultCfg(){
   return {
-    appId:'31', token:'', limit:300,   // ★2026-09-15 500→300（5台で90秒ごとに引くとGASが詰まるため）
+    appId:'31', token:'', limit:120,   // ★2026-09-16 300→120（全項目300件はGASが処理しきれずHTMLを返す）
     token2:'',                  // ルックアップの参照先アプリ（社員マスタ等）のAPIトークン
     writeGas:'',                // 書き込み専用GASのデプロイURL（既存の品質チェックGASは触らない）
     user:'',                    // 在庫管理「入力者」に書く名前（ユーザー選択ならkintoneのログイン名）
     // 突合せから外すステータス（カンマ区切り）。★在庫投入中まで進んだものは品管の手を離れ、
     //   そこから先の「在庫投入 完」は製造が担当するため、完了と同じく一覧から外す。
     excludeStatus:'完了,在庫投入中',
-    cfgVer:3,                   // 既定値を変えたときに、保存済みの設定を1度だけ引き上げるための番号
+    cfgVer:4,                   // 既定値を変えたときに、保存済みの設定を1度だけ引き上げるための番号
     // ★プロセス管理の「アクション名」。左列のステータス名ではなく、右列のアクション名を入れる。
     //   ★不良品報告(App31)の実際の設定：
     //     品質確認中 →[品質処置済]→ 在庫調整中
@@ -10565,6 +10569,12 @@ function qcNgCfg(){
     if(s && !(s.cfgVer>=3)){
       if(parseInt(QC_NG_CFG.limit)===500) QC_NG_CFG.limit = 300;
       QC_NG_CFG.cfgVer = 3;
+      try{ localStorage.setItem(QC_NG_LS, JSON.stringify(QC_NG_CFG)); }catch(e){}
+    }
+    // ★2026-09-16 さらに300→120へ。前の既定値のままの端末だけ引き下げる
+    if(s && !(s.cfgVer>=4)){
+      if(parseInt(QC_NG_CFG.limit)===300) QC_NG_CFG.limit = 120;
+      QC_NG_CFG.cfgVer = 4;
       try{ localStorage.setItem(QC_NG_LS, JSON.stringify(QC_NG_CFG)); }catch(e){}
     }
   }catch(e){}
@@ -10657,6 +10667,32 @@ function qcNgSubRows(rec, hint){
 }
 
 // フィールドコードが未設定なら、レコードの中身から推測する
+// ★取りに行く列を必要なものだけに絞る（2026-09-16）。
+//   これまで fields:[] で「全項目」を300件ぶん取っていた。App31は項目数が多く、
+//   1回の往復が数MBになる。5台が繰り返すとGASが処理しきれず、
+//   JSONではなくエラーのHTMLページが返ってくる。
+//   ★安全のため「実際にデータの中で見えた列コード」しか指定しない。
+//     存在しない列を指定するとkintoneが丸ごと弾くため。
+//   1回目は全項目で取り、その結果から必要な列を決めて覚える。
+var QC_NG_FIELDS = null;
+try{ QC_NG_FIELDS = JSON.parse(localStorage.getItem('qcNgFieldList')||'null'); }catch(e){}
+function qcNgBuildFieldList(rec){
+  if(!rec) return null;
+  var codes = Object.keys(rec), f = qcNgCfg().f, want = {};
+  Object.keys(f).forEach(function(k){ if(f[k] && codes.indexOf(f[k])>=0) want[f[k]] = 1; });
+  // プロセス管理の作業者は型で探しているので、型から拾って必ず入れる
+  codes.forEach(function(c){
+    var t = rec[c] && rec[c].type;
+    if(t==='STATUS_ASSIGNEE' || t==='STATUS' || t==='RECORD_NUMBER') want[c] = 1;
+  });
+  want['$id'] = 1;
+  var list = Object.keys(want);
+  return list.length >= 3 ? list : null;   // 少なすぎるときは絞らない
+}
+function qcNgSaveFieldList(list){
+  QC_NG_FIELDS = list;
+  try{ localStorage.setItem('qcNgFieldList', JSON.stringify(list||null)); }catch(e){}
+}
 function qcNgGuessFields(rec){
   if(!rec) return;
   var f = qcNgCfg().f, codes = Object.keys(rec);
@@ -10738,6 +10774,25 @@ function qcNgSaveCache(){
   }catch(e){}   // 容量超過などは無視（キャッシュが無いだけで動作はする）
 }
 
+// 「読み込み中... ◯秒」を出す。n が null なら消す
+function qcNgSetLoadingNote(n){
+  // ★出す先は「いま画面に出ている不良品報告のペイン」。QC_NG_PANES が持っている。
+  //   固定のidに書くと、ペインが無いときに出す場所が無くなる
+  (QC_NG_PANES||[]).forEach(function(p){
+    if(!p.el || !p.el.isConnected) return;
+    var el = p.el.querySelector('.qc-ng-loading-note');
+    if(n === null){ if(el) el.remove(); return; }
+    if(!el){
+      el = document.createElement('div');
+      el.className = 'qc-ng-loading-note';
+      el.style.cssText = 'font-size:11px;color:#8a6d3b;background:#fff8e1;border:1px solid #f0d9a0;'
+                       + 'border-radius:4px;padding:3px 6px;margin:4px 0;';
+      p.el.insertBefore(el, p.el.firstChild);
+    }
+    el.textContent = '🔄 kintoneの不良品報告を読み込み中... ' + n + '秒'
+                   + (n >= 20 ? '（混んでいます。下は前回のデータです）' : '');
+  });
+}
 function qcNgFetch(force, _retry){
   var cfg = qcNgCfg();
   if(!cfg.token || !cfg.appId){ QC_NG_STATE='unset'; qcNgRenderAll(); return; }
@@ -10756,19 +10811,32 @@ function qcNgFetch(force, _retry){
   if(hadCache){ QC_NG_STATE='ok'; qcNgRenderAll(); }
   else { QC_NG_STATE='loading'; QC_NG_ERR=''; qcNgRenderAll(); }
   // fields を空配列で渡すと全フィールド＋$id が返る（$id はkintoneを直接開くリンクと更新に使う）
+  // ★経過秒数を出す。出さないと「読み込みばかりで終わらない」に見える
+  var _t0 = Date.now(), _tick = setInterval(function(){
+    qcNgSetLoadingNote(Math.round((Date.now()-_t0)/1000));
+  }, 1000);
+  function done(){ clearInterval(_tick); qcNgSetLoadingNote(null); }
   qcGasPost('getKintonePartData', {
     domain: (config.domain || 'hashimoto-kogyo'),
     appId:  String(cfg.appId),
     token:  cfg.token,
-    query:  'order by $id desc limit ' + (parseInt(cfg.limit)||300),
-    fields: []
+    query:  'order by $id desc limit ' + (parseInt(cfg.limit)||120),
+    fields: QC_NG_FIELDS || []          // ★2回目からは必要な列だけ
   }, function(res){
-    if(!res || !res.ok){ fail((res&&(res.err||res.error))||'取得に失敗しました'); return; }
+    done();
+    if(!res || !res.ok){
+      // 絞った列で失敗したときは、列の指定をやめて一度だけやり直す
+      if(QC_NG_FIELDS){ qcNgSaveFieldList(null); setTimeout(function(){ qcNgFetch(true, 0); }, 300); return; }
+      fail((res&&(res.err||res.error))||'取得に失敗しました'); return;
+    }
     QC_NG_RECORDS = res.records || [];
-    if(QC_NG_RECORDS.length) qcNgGuessFields(QC_NG_RECORDS[0]);
+    if(QC_NG_RECORDS.length){
+      qcNgGuessFields(QC_NG_RECORDS[0]);
+      if(!QC_NG_FIELDS) qcNgSaveFieldList(qcNgBuildFieldList(QC_NG_RECORDS[0]));
+    }
     qcNgSaveCache();
     QC_NG_STATE='ok'; qcNgRenderAll(); qcNgRefreshUserHint();
-  }, function(e){ fail(e.message||'通信エラー'); });
+  }, function(e){ done(); fail(e.message||'通信エラー'); }, 45000);
 
   function fail(msg){
     // 一時的な失敗はやり直す。★「GASがJSONではなくHTMLを返した」もここに入れる
@@ -11848,7 +11916,7 @@ window.qcNgOpenConfig = function(){
   document.getElementById('qc-ng-appid').value = cfg.appId||'';
   document.getElementById('qc-ng-token').value = cfg.token||'';
   document.getElementById('qc-ng-token2').value = cfg.token2||'';
-  document.getElementById('qc-ng-limit').value = cfg.limit||300;
+  document.getElementById('qc-ng-limit').value = cfg.limit||120;
   document.getElementById('qc-ng-exst').value  = cfg.excludeStatus||'';
   document.getElementById('qc-ng-user').value  = cfg.user||'';
   document.getElementById('qc-ng-wgas').value  = cfg.writeGas||'';
@@ -11888,7 +11956,7 @@ window.qcNgSaveConfig = function(){
   cfg.appId = document.getElementById('qc-ng-appid').value.trim() || '31';
   cfg.token = document.getElementById('qc-ng-token').value.trim();
   cfg.token2 = document.getElementById('qc-ng-token2').value.trim();
-  cfg.limit = parseInt(document.getElementById('qc-ng-limit').value)||300;
+  cfg.limit = parseInt(document.getElementById('qc-ng-limit').value)||120;
   cfg.excludeStatus = document.getElementById('qc-ng-exst').value.trim();
   cfg.user  = document.getElementById('qc-ng-user').value.trim();
   cfg.writeGas = document.getElementById('qc-ng-wgas').value.trim();
@@ -11897,6 +11965,9 @@ window.qcNgSaveConfig = function(){
   cfg.assignee  = document.getElementById('qc-ng-assignee').value.trim();
   cfg.assigneeInput = document.getElementById('qc-ng-assignee2').value.trim();
   QC_NG_FIELD_ROWS.forEach(function(p){ cfg.f[p[0]] = document.getElementById('qc-ng-f-'+p[0]).value.trim(); });
+  // ★列のコードを変えたら、覚えている「取りに行く列」を捨てる。
+  //   捨てないと、新しく指定した列が取りに行く対象に入らず、いつまでも空のままになる
+  qcNgSaveFieldList(null);
   qcNgSaveCfg();
   var m0=document.getElementById('qc-ng-cfg-msg');
   // ★アクション名の欄にステータス名を入れる取り違えを止める。
