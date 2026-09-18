@@ -27,8 +27,8 @@ from reportlab.pdfgen import canvas as _canvas
 from reportlab.platypus import (BaseDocTemplate, Frame, PageBreak, PageTemplate,
                                 Paragraph, Spacer, Table, TableStyle)
 
-REV = "Rev.1.3"
-EFFECTIVE = {"ja": "2026年7月17日", "en": "July 17, 2026"}
+REV = "Rev.1.4"
+EFFECTIVE = {"ja": "2026年9月21日", "en": "September 21, 2026"}
 
 # ---------------------------------------------------------------- fonts
 FONT = FONT_B = None
@@ -162,9 +162,9 @@ COMMON = [
     I(4, "5s", "5S巡回チェックで指摘（2回目から）　※金型・工具以外",
       "Flagged in 5S inspection (2nd time onward) * Excluding molds/tools",
       20, "B", "team", "patrol", "sup"),
-    I(5, "5s", "指摘後3日以内に未対応",
-      "No corrective action within 3 days of being flagged",
-      30, "B", "team", "kintone", "sup"),
+    I(5, "5s", "指摘への未対応（対応期限までに未対応。期限を決めていない場合は指摘後3日以内）",
+      "No corrective action by the agreed due date (within 3 days if no due date is set)",
+      30, "B", "team", "kintone", "sup", new=True),
     I(6, "5s", "手順・ルール不遵守（報連相含む）",
       "Failure to follow procedures/rules (incl. reporting)",
       20, "B", "team", "witness", "sup"),
@@ -179,11 +179,17 @@ COMMON = [
       50, "A", "solo", "witness", "card"),
     I(10, "attend", "タイムカードの打刻忘れ　1回",
       "Failure to clock in/out, 1 occurrence",
-      5, "A", "solo", "witness", "card", new=True),
+      5, "A", "solo", "witness", "card"),
     I(11, "report", "不具合の隠蔽・意図的な遅延報告",
       "Concealing a defect / intentionally delaying a report",
       50, "C", "all", "witness", "sup"),
-    I(12, "response", "他部署からの要望放置（合意した期限を超えた場合）",
+    I(12, "records", "週次チェック・減点記録シートの未提出（金曜）　1件",
+      "Failure to submit the weekly check / deduction record sheet (Friday), 1 occurrence",
+      20, "A", "solo", "witness", "ga", new=True),
+    I(13, "records", "週次チェック・減点記録シートの記入漏れ・Kintone未入力　1件",
+      "Omission on the weekly check sheet / not entered in Kintone, 1 occurrence",
+      10, "A", "solo", "witness", "ga", new=True),
+    I(14, "response", "他部署からの要望放置（合意した期限を超えた場合）",
       "Ignoring a request from another department (beyond agreed deadline)",
       20, "A", "solo", "kintone", "sup"),
 ]
@@ -204,7 +210,7 @@ PRESS = [
       30, "B", "press", "board", "prod"),
     I(5, "quality", "品質チェックシートの誤記・未記入／システム入力間違い・未入力　1回",
       "Quality checklist error/omission, 1 occurrence (System input mistake/omission)",
-      10, "B", "press_qa", "witness", "prod"),
+      10, "A", "solo", "witness", "prod", new=True),
     I(6, "quality", "現品票の誤記（品名・数量等）・未添付",
       "Item tag error (product name, quantity, etc.) / not attached",
       10, "B", "press_qa", "witness", "sup"),
@@ -235,7 +241,7 @@ ENG = [
       30, "B", "eng", "kintone", "prod"),
     I(3, "quality", "新規金型製作ミス（ミスによる作り直し）　1件",
       "New mold manufacturing error (rework required), 1 occurrence",
-      30, "B", "solo_eng", "witness", "eng"),
+      30, "A", "solo", "witness", "eng", new=True),
     I(4, "quality", "メンテ後の金型不良（メンテ起因）　1件",
       "Mold defect after maintenance (caused by maintenance), 1 occurrence",
       30, "B", "solo_eng", "witness", "eng"),
@@ -275,7 +281,7 @@ GA = [
       20, "A", "solo", "witness", "sup"),
     I(6, "response", "電話着信への未応答（5コール以内に出ない）",
       "Failure to answer an incoming call (not answered within 5 rings)",
-      20, "B", "ga", "witness", "sup", new=True),
+      20, "B", "ga", "witness", "sup"),
     I(7, "mgmt", "システムなどへの入力ミス　1件",
       "Data entry error in system, 1 occurrence",
       10, "A", "solo", "witness", "sup"),
@@ -315,7 +321,7 @@ LOG = [
       10, "A", "solo", "witness", "sup"),
     I(7, "response", "電話着信への未応答（5コール以内に出ない）",
       "Failure to answer an incoming call (not answered within 5 rings)",
-      20, "B", "solo_log", "witness", "sup_ga", new=True),
+      20, "B", "solo_log", "witness", "sup_ga"),
     I(8, "storage", "倉庫・棚の整理整頓：巡回指摘",
       "Warehouse/shelf organization: flagged during inspection",
       20, "B", "log", "patrol", "sup"),
@@ -324,7 +330,7 @@ LOG = [
       20, "B", "log", "witness", "sup"),
     I(10, "records", "日常点検表の未提出（週末）　1件",
       "Daily inspection sheet not submitted (weekend), 1 occurrence",
-      10, "A", "solo", "witness", "sup", new=True),
+      10, "A", "solo", "witness", "sup"),
 ]
 
 # ---------------------------------------------------------------- 部門別 基準pt
