@@ -381,6 +381,13 @@ select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='ht
         </optgroup>
       </select>
     </div>
+    <div class="fld">
+      <label>材料残</label>
+      <div class="seg" id="bulk-seg-zairyo">
+        <button class="seg-btn active-green" onclick="setBulkZairyo('あり',this)">あり</button>
+        <button class="seg-btn" onclick="setBulkZairyo('なし',this)">なし</button>
+      </div>
+    </div>
   </div>
 
   <div class="card" id="bulk-photo-card">
@@ -1665,6 +1672,12 @@ var BULK_JUNJO = null;
 var BULK_SAKUYO_LIST = [];
 var ALLOC_DATA = [];
 
+var BULK_ZAIRYO = 'あり';
+function setBulkZairyo(v, btn){
+  BULK_ZAIRYO = v;
+  Array.from(document.getElementById('bulk-seg-zairyo').children).forEach(function(b){ b.className='seg-btn'; });
+  btn.className = 'seg-btn active-green';
+}
 function openBulkMode(){
   // 作業選択から品番を取得
   if(SEL_SAKUYO){
@@ -1680,6 +1693,8 @@ function openBulkMode(){
   // 品番全体の進捗を表示（showAllocList実行前なので後でrenderBulkProgress()で更新）
   document.getElementById('bulk-prod').value = '';
   document.getElementById('bulk-ng').value = '';
+  BULK_ZAIRYO = 'あり';
+  Array.from(document.getElementById('bulk-seg-zairyo').children).forEach(function(b,i){ b.className='seg-btn'+(i===0?' active-green':''); });
   document.getElementById('bulk-hokyu').value = '';
   document.getElementById('bulk-sonota').value = '';
   document.getElementById('bulk-sonota-memo').value = '';
@@ -2141,7 +2156,7 @@ function saveAlloc(){
         sonota: String(sonotaAlloc),
         sonotaMemo: sonotaMemoAlloc,
         kanno: d.kubun,
-        zairyo: 'なし',
+        zairyo: BULK_ZAIRYO,
         memo: '',
         seizoNo: d.seizoNo,
         junjo: d.junjo,
