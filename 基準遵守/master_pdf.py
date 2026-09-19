@@ -259,7 +259,7 @@ ENG = [
       15, "B", "eng", "patrol", "eng"),
     I(9, "safety", "機械操作ミス（設備への過負荷・損傷）",
       "Machine operation error (overload/damage to equipment)",
-      30, "B", "solo_eng", "witness", "eng"),
+      30, "A", "solo", "witness", "eng", new=True),
 ]
 
 # ---------------------------------------------------------------- ④総務
