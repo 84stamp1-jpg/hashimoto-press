@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型管理システム</title>
+<!-- 金型管理システム v2026.09.19-1 : 作業者選択の氏名「登崎　千春」を正しい字「登﨑　千春」に直した（社長指摘 2026-09-19）。画面に出る名前なので版を上げる -->
 <!-- 金型管理システム v2026.09.07-2 : 実績入力チェックの表で、基準以上/基準未満/入力なし の色分けがセルに出ず、3pxの帯だけが見えていた件。(1)★背景色が行全体の指定(tr.act-worker td)に打ち消されていた（指定の細かさで負けていた）ため、同じ細かさで指定し直して凡例どおりセル全体に色を付ける。(2)★色の帯をセルの左端から右端へ移した。数字は右寄せなので、左端に帯があると隣（前の日）の数字のすぐ横に出てしまい、どちらの日の色か読めなかった -->
 <!-- 金型管理システム v2026.09.07-1 : 一時停止中のタスクが「作業中」と出る件。表示の判定が『実績の終了時刻があるか無いか』の2択しかなく、一時停止は終了時刻を入れないため、止めていても『まだ終わっていない＝作業中』に落ちていた。t.actual.pausedAt を誰も見ていなかったのが原因。(1)actState() を作り carried/done/paused/working/pending の5状態で判定する。(2)ガントの実績バーは停止中に『⏸ 停止中（HH:MM から）』を出し、バーも止めた時刻で切る（now まで伸ばすと止めている間も伸び続けるため）。(3)★実績時間の計算が2か所とも間違っていた。ガントと予実カードは pauses を一切引かず『今 − 開始』で出しており、calcWorkedH は閉じた停止区間しか引けず、停止したまま再開していない区間（to がまだ無い）を引けなかった。workedMin() を作って両方から使うようにした -->
 <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
@@ -580,7 +581,7 @@ tr.act-worker td.act-holiday{background:#f5f6f8}
 <body>
 
 <header>
-  <div class="logo">⚙ <span>金型</span>管理システム<span style="font-size:9px;color:#9aa3b2;font-weight:400;margin-left:6px">v2026.09.07-2</span></div>
+  <div class="logo">⚙ <span>金型</span>管理システム<span style="font-size:9px;color:#9aa3b2;font-weight:400;margin-left:6px">v2026.09.19-1</span></div>
   <div class="main-tab-bar">
     <button class="main-tab-btn active" id="mainTabRepair" onclick="switchMainTab('repair')">🔧 改修計画表</button>
     <button class="main-tab-btn" id="mainTabNew" onclick="switchMainTab('newmold')">🏗️ 新規製作 日程表</button>
@@ -1240,7 +1241,7 @@ const WB_DEFAULT_CFG = {
     { name:'プレス作業',     n:28, a:26 },
     { name:'溶接',           n:28, a:26 },
   ],
-  people:  ['見原','八木','大石','遠藤','木村','杉山','登崎'],
+  people:  ['見原','八木','大石','遠藤','木村','杉山','登﨑'],
   actions: ['通常（対応なし）','休憩を増やした','重作業を涼しい時間帯へ変更','作業を中止・延期'],
   staleMin: 150,
 };
