@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.21-17 : ロス記録と朝礼まわり（社長指示）。(1)前の版で横いっぱいに広げたら今度は広がりすぎたので、表が収まる1120pxで中央寄せにした。(2)品番ごとの「数量平均」を外した（計画的に減らすこともあり、平均に意味が無いため）。(3)**毎朝の朝礼で見る「配置表」と「ロス記録」を、画面右上からひと押しで開けるようにした**。ロス記録は押すと前日の表示になる。アドレスの後ろに #配置表 / #ロス記録 を付けたものをブックマークやデスクトップのショートカットにすれば、開いた時点でその画面が出る。 -->
 <!-- H-Hub v2026.09.21-16 : **AラインのPCで表示が遅い**の原因を直した（社長指摘）。工場レイアウトの更新で `/.json`＝**Firebaseのデータベース全体（約5.4MB）を2秒ごとに**取っていた。使っているのは lines(約15KB) と beacons(約2KB) だけで、残り99.7%は読み捨て。1分で約160MB・1時間で約9.5GB を受信してJSONに直しており、非力なPCはそれだけで手いっぱいだった。（内訳 moldCostSystem 4.4MB=80% / dantori 1.0MB=19%。どちらも段取りナビでは使わない）必要な2か所だけ取るようにして、通信量を **1/340** にした。あわせて (1)Excel読み取りライブラリ(約880KB)に defer を付け、画面が出るのを待たせないようにした。(2)同じGoogle Fontsを2回読んでいたのを1回に。(3)品質チェックの作業者プルダウン3か所とチーム判定の並びも 仲田→見原 にそろえた。 -->
 <!-- H-Hub v2026.09.21-15 : 配置表の並びを 仲田→見原 に入れ替えた（社長指示。仲田がプレス主任になったため）。★実際に効いているのは Firebase settings/pressWorkerList のほうなので、そちらも入れ替えた。コード側の WORKER_MASTER は、その設定が無いときの既定値。 -->
 <!-- H-Hub v2026.09.21-14 : ロス記録の見た目を直した（社長指示）。(1)入力フォーム用の幅制限（.fc の 620px）がそのまま効いていて、左右に大きな余白が出たうえ品番やライン名が2〜3段に折り返していた。ロス記録だけ横いっぱいに使い、表のセルは折り返さないようにした。(2)**「数量未達」を原因のしるしから外した**。計画的に数量を減らすこともあるため、少ない＝問題とは限らない。数量の欄は残すが色は付けない。前に保存した記録に残っている分も表示しない。 -->
@@ -291,8 +292,8 @@ html, body {
 .pp-status-badge{font-size:9px;padding:1px 7px;border-radius:9px;font-weight:600;white-space:nowrap;flex-shrink:0;}
 
 /* ===== ロス記録 ===== */
-/* 入力フォームと違って表なので、.fc の 620px 制限を外して横いっぱいに使う */
-#tab-loss .fc{max-width:none;margin:0 0 10px;}
+/* 入力フォームの620pxでは品番が2段になり、横いっぱいでは広がりすぎた。表が収まる幅で中央に置く */
+#tab-loss .fc{max-width:1120px;margin:0 auto 10px;}
 #tab-loss .fi{min-width:0;}
 .lh-tag{display:inline-block;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:700;white-space:nowrap;}
 .lh-setup{background:#fef3c7;color:#92400e;}
@@ -1124,7 +1125,14 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
   <div class="tab" onclick="switchTab('asmplan')">🔧 組立計画</div>
   <div class="tab" onclick="switchTab('search')">🔍 品番検索</div>
   <div class="tab" onclick="window.open('camera_grid.html','_blank')" title="工場カメラ一覧を別タブで開く">📹 カメラ</div>
-  <div style="margin-left:auto;display:flex;align-items:center;gap:8px;padding:0 10px;flex-shrink:0;">
+  <div style="margin-left:auto;display:flex;align-items:center;gap:6px;padding:0 10px;flex-shrink:0;">
+    <!-- 毎朝の朝礼で見る2画面をひと押しで開く（2026-09-21 社長指示） -->
+    <span style="font-size:10px;color:#94a3b8;font-weight:700;">朝礼</span>
+    <button class="btn" style="padding:4px 9px;font-size:11px;" onclick="openMorning('roster')"
+      title="段取り指示の配置表を開きます（ブックマーク用: #配置表）">📍 配置表</button>
+    <button class="btn" style="padding:4px 9px;font-size:11px;" onclick="openMorning('loss')"
+      title="前日のロス記録を開きます（ブックマーク用: #ロス記録）">📉 ロス記録</button>
+    <span style="width:1px;height:16px;background:#ddd;"></span>
     <span class="clock" id="clockEl">--:--</span>
     <button class="btn" style="padding:4px 9px;font-size:11px;" onclick="showConfig()">⚙ 設定</button>
   </div>
@@ -10806,6 +10814,33 @@ function qcShowNewVersion(v){
   document.body.appendChild(d);
 }
 
+// ===== 朝礼の2画面（2026-09-21 社長指示）=====
+//   毎朝の朝礼で「配置表」と「前日のロス記録」を見るので、ひと押しで開けるようにした。
+//   アドレスの後ろに #配置表 / #ロス記録 を付けたものをブックマークすれば、開いた時点でその画面になる。
+window.openMorning = function(which){
+  if(which === 'roster'){
+    if(typeof switchTab === 'function') switchTab('dantori');
+    setTimeout(function(){ if(typeof switchKanbanPage === 'function') switchKanbanPage('kp4'); }, 0);
+    try{ history.replaceState(null, '', '#配置表'); }catch(e){}
+  } else {
+    if(typeof switchTab === 'function') switchTab('progress');
+    setTimeout(function(){
+      if(typeof window.sw === 'function') window.sw('loss');
+      if(typeof window.lhQuick === 'function') window.lhQuick('yst');   // 朝は前日を見る
+    }, 0);
+    try{ history.replaceState(null, '', '#ロス記録'); }catch(e){}
+  }
+};
+// ブックマークから開いたとき
+function openMorningFromHash(){
+  var h='';
+  try{ h=decodeURIComponent((location.hash||'').replace(/^#/,'')); }catch(e){ h=''; }
+  if(h==='配置表'||h==='roster'){ window.openMorning('roster'); return true; }
+  if(h==='ロス記録'||h==='loss'){ window.openMorning('loss');   return true; }
+  return false;
+}
+window.addEventListener('hashchange', openMorningFromHash);
+
 // 読み込み直したとき、前に開いていた画面へ戻す
 var QC_WANT_PENDING = false;
 // 入力待ちを開き直してよい期限。読み込み直した直後だけに限る（20秒）。
@@ -10813,6 +10848,8 @@ var QC_WANT_PENDING = false;
 // 別の画面で作業中の人の前へ割り込んでしまう
 var QC_WANT_PENDING_UNTIL = 0;
 function qcRestoreView(){
+  // アドレスに #配置表 / #ロス記録 が付いていれば、そちらを優先する
+  if(typeof openMorningFromHash === 'function' && openMorningFromHash()) return;
   var tab='', sc='', pend='';
   try{
     tab  = localStorage.getItem('hhubTab')||'';
@@ -10841,7 +10878,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.21-16';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.21-17';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -14148,12 +14185,11 @@ function _lhRenderPart(recs){
   const agg={};
   recs.forEach(function(r){ r.jobs.forEach(function(j){
     const k=j.part||'(品番なし)';
-    if(!agg[k]) agg[k]={part:k,days:{},n:0,ctSum:0,ctN:0,qtySum:0,qtyN:0,setup:0,stop:0,
-                        cSetup:0,cCT:0,cStop:0,lines:{}};
+    if(!agg[k]) agg[k]={part:k,days:{},n:0,ctSum:0,ctN:0,setup:0,stop:0,
+                        cSetup:0,cCT:0,cStop:0,lines:{}};   // 数量平均は出さない（社長指示）
     const a=agg[k];
     a.n++; a.days[r.date]=1; a.lines[r.lineName||r.lineId]=1;
     if(j.ctRate!=null){ a.ctSum+=j.ctRate; a.ctN++; }
-    if(j.qtyRate!=null&&j.done){ a.qtySum+=j.qtyRate; a.qtyN++; }
     a.setup+=j.setupOver||0; a.stop+=j.stopMin||0;
     (j.causes||[]).forEach(function(c){
       if(c==='段取り')a.cSetup++; else if(c==='サイクルタイム')a.cCT++;
@@ -14162,7 +14198,6 @@ function _lhRenderPart(recs){
   const rows=Object.keys(agg).map(function(k){
     const a=agg[k];
     a.ct=a.ctN?Math.round(a.ctSum/a.ctN):null;
-    a.qty=a.qtyN?Math.round(a.qtySum/a.qtyN):null;
     a.loss=a.setup+a.stop; a.dayN=Object.keys(a.days).length;
     return a;
   }).sort(function(x,y){ return (y.loss-x.loss)||(y.n-x.n); });
@@ -14170,7 +14205,7 @@ function _lhRenderPart(recs){
   if(!rows.length){ body.innerHTML='<div style="color:#bbb;font-size:12px;padding:10px 0;">その期間の記録はありません</div>'; return; }
   body.innerHTML='<table class="lh-tbl"><thead><tr>'
     +'<th>品番</th><th>ライン</th><th class="lh-num">回数</th><th class="lh-num">日数</th>'
-    +'<th class="lh-num">CT平均</th><th class="lh-num">数量平均</th>'
+    +'<th class="lh-num">CT平均</th>'
     +'<th class="lh-num">段取超過計</th><th class="lh-num">停止計</th><th class="lh-num">ロス計</th>'
     +'<th>出やすい原因（回数）</th></tr></thead><tbody>'
     +rows.map(function(a){
@@ -14181,7 +14216,7 @@ function _lhRenderPart(recs){
       return '<tr><td><b>'+_lhEsc(a.part)+'</b></td>'
         +'<td style="color:#888;">'+_lhEsc(Object.keys(a.lines).join('・'))+'</td>'
         +'<td class="lh-num">'+a.n+'</td><td class="lh-num">'+a.dayN+'</td>'
-        +'<td class="lh-num">'+_lhPct(a.ct)+'</td><td class="lh-num">'+_lhQty(a.qty)+'</td>'
+        +'<td class="lh-num">'+_lhPct(a.ct)+'</td>'
         +'<td class="lh-num">'+_lhMin(a.setup)+'</td><td class="lh-num">'+_lhMin(a.stop)+'</td>'
         +'<td class="lh-num">'+(a.loss>0?'<b class="lh-bad">+'+a.loss+'分</b>':'<span style="color:#ccc;">-</span>')+'</td>'
         +'<td>'+(cz.join(' ')||'<span style="color:#ccc;">-</span>')+'</td></tr>';
@@ -18611,7 +18646,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.21-16</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.21-17</div>
 </body>
 </html>
 
