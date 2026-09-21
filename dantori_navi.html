@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.21-10 : 遅れの出どころを出すようにした（社長指示）。「CT達成率は達成しているのに見込み完了が遅くなる」理由が分からなかったため、進捗ボードの**CT達成率と見込み完了時刻の間に「ロスタイム（段取超過・停止）」**を挟んだ。段取超過＝前の品番の実際の終わり→この品番の作業開始（休憩除く）− 標準段取り時間。★1本目は数えない（始業待ち・材料待ちと区別がつかないため）。停止＝トラブル・停止記録の合計。工場レイアウトのカードにも5行目に「⏱ 段取+63 停止+30」として出す。calcLineLoss() を追加し両方で共有。あわせて (1)**左右のグレーの余白を無くした**。高さで頭打ちになると箱は横いっぱいのまま中身だけ縮んでいたので、箱の幅を「その高さで描ける幅」に決め、余ったぶんは担当者パネルへ回すようにした。(2)**実績入力の「稼働状態」プルダウンを廃止**（社長指摘）。誰も動かさず常に「稼働中」のままで、実態と合っていなかった。送る中身そのものから lineAutoStatus() で決めて書き込み、画面には結果だけ出す。 -->
 <!-- H-Hub v2026.09.21-9 : 右端の列（組立・完成品置場）の文字が左に寄っていたので中心にそろえた。列を60幅に細くしたとき、ビーコンを置く場所を空けるつもりで文字を772（中心は786）に置いていたため。金型置場の縦書きも1pxずらして中心に。 -->
 <!-- H-Hub v2026.09.21-8 : 実績入力に「■ 停止する（トラブル記録）」「▶ 再開する」を足した（社長指示）。いままで停止の記録は進捗ボードのカード右上のボタンからしか入らず、実績を入れている画面からは入れられなかった。停止するを押すと、右上と同じトラブル・停止記録がそのラインで開く（開始時刻はいま）。再開するを押すと、終わっていない記録すべてに終了時刻（いま）が入り、稼働状況は自動で稼働中に戻る。ボタンの下に「⛔ 停止中：設備トラブル 15:40から 48分」と、いまの状態を出す。あわせて (1)工場レイアウトの稼働状況の「停止中」を、書かれることのなかった line.stopped ではなく**終わっていないトラブル記録**で判定するようにした。(2)停止中は見込み完了時刻を、止まっている時間分だけ丸ごと後ろへずらすようにした（社長指示）。 -->
 <!-- H-Hub v2026.09.21-7 : 工場レイアウトの作り直し（社長指示）。(1)列幅を組み替えた。左の事務所88→72・金型置場列148→116・右端列110→60まで細くし、そのぶんプレスA104／B148／C188を**すべて180**にそろえた。絵が横いっぱいに広がり、左右に出ていた灰色の余白も消えた。プレスCのカードは62→84に上げ、プレスD・溶接・組立SPを上へ詰めて高さを作った。ビーコンの表示位置13か所・暑さ指数の枠も合わせて直した。金型置場のビーコンは、左枠が暑さ指数に変わっていたため右の金型置場へ移した。(2)カードの中身を入れ替えた。**CT達成率と見込み完了時刻は進捗ボードと同じ calcLineRate() を使う**（window経由で共有）。並びは ライン名→CT達成率→（空き）→稼働状況。加工中の品番とその予定時間、見込み完了時刻と計画との差、次に流す品番、しばらく実績が入っていない場合の「⚠ 未報告（既定60分）」を出す。個数の%は出さない。 -->
@@ -209,7 +210,8 @@ html, body {
 .refresh-btn{padding:5px 10px;border:1px solid #ddd;border-radius:6px;font-size:11px;cursor:pointer;background:white;color:#666;}
 .refresh-btn:hover{background:#f5f5f3;}
 .fwrap{border:1px solid #d1d5db;border-radius:10px;overflow:hidden;background:#9ca3af;padding:2px;display:flex;gap:2px;align-items:stretch;}
-.factory-svg-wrap{flex:1;min-width:0;}
+/* 高さの上限で決まる「描ける幅」を箱の幅にする。余りは担当者パネルへ（2026-09-21） */
+.factory-svg-wrap{flex:0 1 calc((100vh - 115px) * 1.848);min-width:0;}
 .factory-svg-wrap svg{display:block;width:100%;height:auto;max-height:calc(100vh - 115px);}
 .firebase-status{margin-top:4px;font-size:11px;color:#888;display:flex;align-items:center;gap:5px;}
 .status-dot{width:7px;height:7px;border-radius:50%;background:#aaa;}
@@ -250,7 +252,7 @@ html, body {
 @media(max-width:1200px){.wb-spark{display:none;}}
 @media(max-width:900px){#wbgtBar{flex-direction:column;}.wb-val{font-size:34px;}.wb-jud{display:none;}}
 /* ===== 担当者パネル ===== */
-.person-panel{width:245px;flex-shrink:0;display:flex;flex-direction:column;gap:2px;}
+.person-panel{flex:1 1 245px;min-width:245px;max-width:720px;display:flex;flex-direction:column;gap:2px;}
 .pp-card{background:white;border-radius:6px;padding:7px 11px;display:flex;flex-direction:column;flex:1;min-height:0;overflow:hidden;}
 /* 名前行：左に名前、右端にバッジ */
 .pp-name{font-size:13px;font-weight:700;color:#1a1a1a;border-bottom:1px solid #f0f0f0;padding-bottom:4px;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;gap:4px;}
@@ -301,7 +303,9 @@ html, body {
 .slc-sched.on-time{color:#16a34a;}
 .slc-bar-wrap{height:3px;background:#f0f0f0;border-radius:2px;overflow:hidden;margin:1px 0;}
 .slc-bar{height:100%;border-radius:2px;transition:width 0.3s;background:#e0e0e0;width:0%;}
-.slc-time{font-size:7.5px;color:#555;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;}
+.slc-time{font-size:7.5px;color:#555;white-space:nowrap;overflow:hidden;margin-top:1px;display:flex;gap:5px;align-items:baseline;}
+.slc-loss{color:#dc2626;font-weight:700;flex-shrink:0;}
+.slc-next{overflow:hidden;text-overflow:ellipsis;}
 .slc-stop{font-size:8px;color:#94a3b8;font-style:italic;margin-top:2px;}
 
 /* ===== DANTORI TAB ===== */
@@ -2279,14 +2283,11 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
             <option value="">-- ライン選択 --</option>
           </select>
         </div>
+        <!-- 稼働状況は入力の中身から決める。手で選ぶプルダウンは廃止（2026-09-21 社長指摘） -->
         <div class="fi">
-          <label>稼働状態</label>
-          <select id="iStat">
-            <option value="running">稼働中</option>
-            <option value="setup">段取り中</option>
-            <option value="stop">停止</option>
-            <option value="waiting">待機中</option>
-          </select>
+          <label>稼働状況（自動）</label>
+          <div id="iAutoStat" style="padding:9px 12px;border:1px solid #ddd;border-radius:6px;background:#fafafa;font-size:13px;font-weight:700;color:#94a3b8;">—</div>
+          <div class="hint">段取り開始・作業開始・停止記録から決まります</div>
         </div>
       </div>
       <!-- 停止・再開（2026-09-21 社長指示：右上のトラブル・停止記録をここから入れられるようにした） -->
@@ -4723,16 +4724,30 @@ function _iSetHint(txt, color){
   const h = document.getElementById('iStopHint');
   if(h){ h.textContent = txt; h.style.color = color || '#888'; }
 }
+const I_STAT_LABEL = {
+  running:{t:'● 稼働中', c:'#1d4ed8'}, setup:{t:'● 段取り中', c:'#1a1a1a'},
+  stop:   {t:'■ 停止中', c:'#dc2626'}, waiting:{t:'○ 待機中', c:'#94a3b8'},
+};
+function _iRenderAutoStat(id){
+  const el = document.getElementById('iAutoStat');
+  if(!el) return;
+  const L = (window._pmLinesRealtime || {})[id];
+  if(!id || !L){ el.textContent = '—'; el.style.color = '#94a3b8'; return; }
+  const v = I_STAT_LABEL[lineAutoStatus(L)] || I_STAT_LABEL.waiting;
+  el.textContent = v.t; el.style.color = v.c;
+}
 window.updateInputStopUI = function(){
   const btnS = document.getElementById('iStopBtn'), btnR = document.getElementById('iResumeBtn');
   if(!btnS || !btnR) return;
   const id = _iLineId();
   if(!id){
     btnR.disabled = true; btnR.style.opacity = '0.4'; btnR.style.cursor = 'default';
+    _iRenderAutoStat('');
     _iSetHint('ラインを選ぶと、いまの停止の状態が出ます');
     return;
   }
   const on = _iOngoingTroubles(id);
+  _iRenderAutoStat(id);
   btnR.disabled = !on.length;
   btnR.style.opacity = on.length ? '1' : '0.4';
   btnR.style.cursor = on.length ? 'pointer' : 'default';
@@ -4753,8 +4768,6 @@ window.inputStopLine = function(){
   if(typeof window.openTroubleModal !== 'function'){
     _iSetHint('トラブル記録がまだ読み込まれていません', '#c0392b'); return;
   }
-  const st = document.getElementById('iStat');
-  if(st) st.value = 'stop';
   window.openTroubleModal(id);
 };
 window.inputResumeLine = function(){
@@ -4765,12 +4778,10 @@ window.inputResumeLine = function(){
   }
   const n = window.resumeLineTrouble(id);
   if(!n){ _iSetHint('いま続いている停止の記録はありません'); return; }
-  const st = document.getElementById('iStat');
-  if(st) st.value = 'running';
   _iSetHint(`▶ 再開しました（停止の記録${n}件に終了時刻を入れました）`, '#16a34a');
   setTimeout(window.updateInputStopUI, 1200);
 };
-setInterval(() => { try{ window.updateInputStopUI(); }catch(e){} }, 15000);
+setInterval(() => { try{ window.updateInputStopUI(); }catch(e){} }, 5000);
 
 // 未報告と見なすまでの分数（設定 settings/noRepMin で変えられる）
 const FACTORY_NOREP_MIN = 60;
@@ -4922,11 +4933,20 @@ function updateFactoryView(lines){
       alertEl.textContent = show ? `⚠ 未報告 ${mins}分` : '';
     }
 
-    // ⑥ 次に流す品番
+    // ⑥ 遅れの出どころ（段取超過・停止）と、次に流す品番
     const timeEl = document.getElementById(prefix + '-time');
     if(timeEl){
-      timeEl.textContent = (nextJob && nextJob.part)
+      let loss = null;
+      try{ if(L && typeof window._pmCalcLineLoss === 'function') loss = window._pmCalcLineLoss(L, lineId); }catch(e){ loss = null; }
+      const bits = [];
+      if(loss){
+        if(loss.setupOver > 0) bits.push(`段取+${loss.setupOver}`);
+        if(loss.stopMin   > 0) bits.push(`停止+${loss.stopMin}`);
+      }
+      const nx = (nextJob && nextJob.part)
         ? `次: ${nextJob.part}${nextJob.start ? `  ${nextJob.start}〜${nextJob.end||''}` : ''}` : '';
+      timeEl.innerHTML = (bits.length ? `<span class="slc-loss">⏱ ${esc2(bits.join(' '))}</span>` : '')
+                       + (nx ? `<span class="slc-next">${esc2(nx)}</span>` : '');
     }
   });
 
@@ -10754,7 +10774,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.21-9';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.21-10';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -12917,6 +12937,7 @@ onValue(ref(db,'lines'),s=>{
     // 工場レイアウト（非モジュール側）から同じ計算を使うために公開する（2026-09-21）
     window._pmCalcLineRate = calcLineRate;
     window._pmCurJobIndex  = curJobIndex;
+    window._pmCalcLineLoss = calcLineLoss;
     window._pmLineNoAlert  = lineNoAlertMap;
     if(typeof updateFactoryView === 'function') updateFactoryView(lines);
     // Firebase SDK をグローバル公開（非モジュールスクリプトから利用）
@@ -12987,6 +13008,41 @@ function lastCountMin(j, l){
 //   ・★残りの所要時間は「その品番自身の遅れ具合」で伸ばす。
 //     生産中の品番＝その品番の達成率で補正／未着手の品番＝標準どおり。
 //     終わった品番の遅れは、実績の終了時刻が次の品番の開始を押すことで効く
+// ラインの「ロスタイム」＝標準どおりなら要らなかった時間（2026-09-21 社長指示）
+//   段取超過 … 前の品番の実際の終わり→この品番の作業開始（休憩除く）− 標準段取り時間
+//               ★1本目は数えない。始業待ち・材料待ちと段取りの区別がつかないため
+//   停止     … トラブル・停止記録の合計（続いているものは今まで）
+//   CT達成率が良いのに見込み完了が遅れる理由は、たいていこのどちらか
+function calcLineLoss(l, id){
+  if(!l) return null;
+  const jobs=(l.jobs||[]).filter(j=>j&&j.plan>0&&!j.history);
+  const n=new Date(), nowMin=n.getHours()*60+n.getMinutes();
+  const ci=curJobIndex(l);
+  let setupOver=0;
+  jobs.forEach(function(j,ji){
+    if(ji===0||j.noSetup) return;
+    const pj=jobs[ji-1];
+    if(!pj||!pj.actualEnd||pj.actualEnd==='') return;   // 前の品番の実際の終わりが要る
+    const ws=(ji===ci?(l.workStart||j.actualStart):j.actualStart)||'';
+    if(!ws) return;
+    const pe=timeToMin(pj.actualEnd), st=timeToMin(ws);
+    if(pe===null||st===null||st<=pe) return;
+    const act=(j.setupActualMin>0)?j.setupActualMin:netMins(pe,st);
+    const std=calcSetupTime(id,j.kata,j.ninzu)||0;
+    const over=Math.round(act-std);
+    if(over>0) setupOver+=over;
+  });
+  let stopMin=0;
+  (l.troubles||[]).forEach(function(t){
+    if(!t||!t.start) return;
+    const ts=timeToMin(t.start);
+    const te=t.end?timeToMin(t.end):nowMin;
+    if(ts!==null&&te!==null&&te>ts) stopMin+=netMins(ts,te);
+  });
+  stopMin=Math.round(stopMin);
+  return {setupOver:setupOver, stopMin:stopMin, total:setupOver+stopMin};
+}
+
 function calcLineRate(l){
   const jobs=(l.jobs||[]).filter(j=>j.plan>0&&j.start&&j.end&&!j.history);
   if(!jobs.length) return null;
@@ -13578,8 +13634,26 @@ function renderBoard(){
             '</div>'+
           '</div>';
         }
+        // CT達成率と見込み完了時刻の間に、遅れの出どころを置く（2026-09-21 社長指示）
+        //   「CTは達成しているのに見込みが遅い」の理由がその場で分かるようにするため
+        function lossBox(){
+          var lo=calcLineLoss(l,id);
+          if(!lo) return '';
+          var has=lo.total>0;
+          var col=has?'#e74c3c':'#27ae60';
+          var parts=[];
+          if(lo.setupOver>0) parts.push('段取超過 +'+lo.setupOver+'分');
+          if(lo.stopMin>0)   parts.push('停止 +'+lo.stopMin+'分');
+          return '<div style="flex:1;background:'+(has?'rgba(231,76,60,0.07)':'rgba(0,0,0,0.04)')+';border-radius:6px;padding:6px 8px;">'+
+            '<div style="font-size:9px;color:#888;margin-bottom:2px;">ロスタイム（段取超過・停止）</div>'+
+            '<div style="font-size:18px;font-weight:700;color:'+col+';">'+(has?'+'+lo.total+'分':'なし')+'</div>'+
+            '<div style="height:4px;margin:3px 0;"></div>'+
+            '<div style="font-size:9px;color:#888;">'+(parts.length?parts.join('　'):'段取り・停止による遅れはありません')+'</div>'+
+          '</div>';
+        }
         return '<div style="display:flex;gap:6px;margin-bottom:8px;">'+
           rateBox('CT達成率（標準時間比）', ctR, '標準時間をどれだけ達成しているか')+
+          lossBox()+
           estBox(estF, planEnd)+
         '</div>';
       })()+
@@ -14181,6 +14255,7 @@ function restoreJobFields(lineId, partVal, startVal, seqVal){
   }
 }
 window.onLineSel=function(){
+  if(typeof window.updateInputStopUI === 'function') setTimeout(window.updateInputStopUI, 0);
   const id=document.getElementById('iLine').value;
   const jobs=(lines[id]?.jobs||[]).filter(j=>j.plan>0);
   const sel=document.getElementById('iPart');
@@ -14230,12 +14305,6 @@ window.onPartSel=function(){
     :startVal?(l?.jobs||[]).find(j=>j.part===partVal&&j.start===startVal)
     :(l?.jobs||[]).find(j=>j.part===partVal);
   if(typeof window.updateInputStopUI === 'function') window.updateInputStopUI();
-  const statSel=document.getElementById('iStat');
-  if(job){
-    if(job.status==='done') statSel.value='running'; // 終了済み品番も再入力可能
-    else if(job.status==='running') statSel.value='running';
-    else statSel.value=l?.status||'running';
-  }
   // 品番切替時のフォームタイトル更新（現在稼働中かどうか表示）
   const isCur=l?.part===partVal;
   const partNote=document.getElementById('part-note');
@@ -14261,7 +14330,6 @@ window.doSub=function(){
   m.style.color='#888'; m.textContent='送信中...';
   try{
     const id=document.getElementById('iLine').value;
-    const stat=document.getElementById('iStat').value;
     const part=document.getElementById('iPart').value;
     const plan=parseInt(document.getElementById('iPlan').value);
     const actual=parseInt(document.getElementById('iActual').value);
@@ -14387,7 +14455,7 @@ window.doSub=function(){
     }
 
     // lineレベルの更新
-    const upd={status:stat,note,updatedAt:Date.now(),jobs:curJobs};
+    const upd={status:'running',note,updatedAt:Date.now(),jobs:curJobs};
     // job更新で保存した値をupdに反映
     if(_syncActual!==null){upd.actual=_syncActual;upd.workStart=_syncWS;upd.workEnd=_syncWE;upd.setupStartTime=_syncSS;upd.setupEndTime=_syncSE;}
     // 作業終了取り消し：l.partをこのjobに戻す
@@ -14424,6 +14492,13 @@ window.doSub=function(){
         }
       }
     }
+
+    // ★稼働状況は、送る中身そのものから決める（プルダウン廃止・2026-09-21 社長指摘）
+    //   停止中＝終わっていない停止記録／稼働中＝始まって終わっていない品番／
+    //   段取中＝段取りだけ先 or 前が終わって次が未着手／待機中＝どちらも無し
+    try{
+      if(typeof lineAutoStatus==='function') upd.status=lineAutoStatus({...(lines[id]||{}),...upd});
+    }catch(e){}
 
     m.textContent='送信中...';
     update(ref(db,'lines/'+id),upd).then(()=>{
@@ -18181,7 +18256,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.21-9</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.21-10</div>
 </body>
 </html>
 
