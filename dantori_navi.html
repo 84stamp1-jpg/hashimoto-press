@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.21-7 : 工場レイアウトの作り直し（社長指示）。(1)列幅を組み替えた。左の事務所88→72・金型置場列148→116・右端列110→60まで細くし、そのぶんプレスA104／B148／C188を**すべて180**にそろえた。絵が横いっぱいに広がり、左右に出ていた灰色の余白も消えた。プレスCのカードは62→84に上げ、プレスD・溶接・組立SPを上へ詰めて高さを作った。ビーコンの表示位置13か所・暑さ指数の枠も合わせて直した。金型置場のビーコンは、左枠が暑さ指数に変わっていたため右の金型置場へ移した。(2)カードの中身を入れ替えた。**CT達成率と見込み完了時刻は進捗ボードと同じ calcLineRate() を使う**（window経由で共有）。並びは ライン名→CT達成率→（空き）→稼働状況。加工中の品番とその予定時間、見込み完了時刻と計画との差、次に流す品番、しばらく実績が入っていない場合の「⚠ 未報告（既定60分）」を出す。個数の%は出さない。 -->
 <!-- H-Hub v2026.09.21-6 : 暑さ指数に「測定が要る期間（月）」を足した（既定5〜9月・社長要望）。冬でも赤い「要測定」が出続けて、誰も測らない表示が常時出ている状態になっていたため。期間の外は灰色の『測定期間外』にして、押せば入力はできるままにした。12〜2月のように年をまたぐ指定も可。設定画面から変えられる。 -->
 <!-- H-Hub v2026.09.21-5 : 工場レイアウトの稼働状況を、プルダウンの値ではなく入力の中身から決めるようにした（社長指示）。停止中＝トラブル・停止記録が続いている／稼働中＝生産が始まって終わっていない品番がある／段取中＝①段取りだけ先にやっている（段取り開始だけ入っている）②前の品番が終わって次がまだ始まっていない／待機中＝どちらも始まっていない。lineAutoStatus() を追加。※line.status は進捗ボードの入力からは一度も書かれておらず、実質あてにならない値だった。 -->
 <!-- H-Hub v2026.09.21-4 : 進捗ボードと工場レイアウトの右下に、読み込まれている版を小さく出した（いままで版が見えるのは品質チェックの「システム入力待ち」だけだった）。★あわせて版の通知の誤作動を直した。今日足したコメントを先頭ではなく途中に差し込んでいたため、先頭に残っていた9/19のコメントを「最新」と読み、古い版を新しいと知らせていた。コメントを新しい順に並べ直し、比較も「文字が違えば通知」から「本当に新しいときだけ通知」に変えた。 -->
@@ -280,13 +281,19 @@ html, body {
 /* ===== SVG稼働カード（foreignObject用） ===== */
 .svg-line-card{font-family:'Hiragino Sans','Meiryo',sans-serif;font-size:9px;line-height:1.3;padding:3px 5px;width:100%;height:100%;display:flex;flex-direction:column;gap:1px;overflow:hidden;box-sizing:border-box;background:transparent;}
 .svg-line-card.slc-compact{padding:2px 4px;gap:0px;}
-.slc-head{display:flex;align-items:center;justify-content:space-between;gap:2px;margin-bottom:1px;}
+.slc-head{display:flex;align-items:center;gap:3px;margin-bottom:1px;}
 .slc-name{font-size:10px;font-weight:700;white-space:nowrap;flex-shrink:0;}
+/* CT達成率はライン名のすぐ右・稼働状況は右端（2026-09-21 社長指示） */
+.slc-ct{font-size:8px;font-weight:700;white-space:nowrap;flex-shrink:0;color:#94a3b8;}
+.slc-spacer{flex:1 1 auto;}
 .slc-badge{font-size:7px;padding:1px 5px;border-radius:6px;color:white;font-weight:700;white-space:nowrap;flex-shrink:0;background:#94a3b8;}
-.slc-part{font-size:8px;color:#374151;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:1px 0;}
-.slc-meta{display:flex;align-items:center;justify-content:space-between;gap:2px;margin:1px 0;}
-.slc-pct{font-size:8px;font-weight:700;white-space:nowrap;color:#94a3b8;}
-.slc-sched{font-size:8px;font-weight:700;white-space:nowrap;}
+.slc-part{font-size:8px;color:#374151;overflow:hidden;white-space:nowrap;margin:1px 0;display:flex;gap:4px;align-items:baseline;}
+.slc-pn{overflow:hidden;text-overflow:ellipsis;font-weight:700;}
+.slc-pt{color:#6b7280;flex-shrink:0;margin-left:auto;}
+.slc-meta{display:flex;align-items:center;gap:3px;margin:1px 0;}
+.slc-est{font-size:8px;font-weight:700;white-space:nowrap;color:#374151;flex-shrink:0;}
+.slc-alert{font-size:7.5px;font-weight:700;white-space:nowrap;color:#dc2626;margin-left:auto;flex-shrink:0;}
+.slc-sched{font-size:8px;font-weight:700;white-space:nowrap;flex-shrink:0;}
 .slc-sched.behind{color:#dc2626;}
 .slc-sched.ahead{color:#2563eb;}
 .slc-sched.on-time{color:#16a34a;}
@@ -1258,114 +1265,126 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
   <!-- 背景 -->
   <rect x="0" y="0" width="824" height="446" fill="#9ca3af" rx="6"/>
 
+  <!-- ===== 列の取り方（2026-09-21 改修）=====
+       左列72 / プレスA180 / プレスB180 / プレスC180 / 金型置場116 / 右端60　すき間は各4
+       x: 8+72=80 | 84+180=264 | 268+180=448 | 452+180=632 | 636+116=752 | 756+60=816
+       プレスA・B・Cは同じ幅（社長指示）。細くしたのは事務所・金型置場列・右端列。 -->
+
   <!-- ===== 左外：暑さ指数WBGT（旧・金型置場の枠を転用。ビーコン表示は無い場所） ===== -->
   <g id="wbgtBox" style="cursor:pointer" onclick="wbOpenDetail()"></g>
 
   <!-- ===== 左外：事務所 ===== -->
-  <rect x="8" y="132" width="88" height="226" rx="4" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
-  <text x="52" y="250" text-anchor="middle" font-size="10" fill="#334155">事務所</text>
+  <rect x="8" y="132" width="72" height="226" rx="4" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="44" y="250" text-anchor="middle" font-size="10" fill="#334155">事務所</text>
 
   <!-- ===== プレスA ===== -->
-  <rect x="100" y="8" width="104" height="238" rx="4" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
-  <text x="152" y="28" text-anchor="middle" font-size="11" font-weight="700" fill="#1e40af">プレスA</text>
+  <rect x="84" y="8" width="180" height="238" rx="4" fill="#eff6ff" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="174" y="28" text-anchor="middle" font-size="11" font-weight="700" fill="#1e40af">プレスA</text>
 
   <!-- ===== B1（緑背景・プレスB所属） ===== -->
-  <rect x="100" y="250" width="104" height="112" rx="4" fill="#f0fdf4" stroke="#22c55e" stroke-width="1.5"/>
+  <rect x="84" y="250" width="180" height="112" rx="4" fill="#f0fdf4" stroke="#22c55e" stroke-width="1.5"/>
 
   <!-- ===== プレスB L型緑枠 ===== -->
-  <rect x="208" y="8" width="148" height="354" rx="4" fill="#f0fdf4"/>
-  <path d="M 208,8 L 358,8 L 358,366 L 208,366 L 208,250 L 98,250 L 98,366 L 208,366"
+  <rect x="268" y="8" width="180" height="354" rx="4" fill="#f0fdf4"/>
+  <path d="M 268,8 L 448,8 L 448,366 L 268,366 L 268,250 L 82,250 L 82,366 L 268,366"
     fill="none" stroke="#22c55e" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
-  <line x1="98" y1="366" x2="358" y2="366" stroke="#22c55e" stroke-width="3"/>
-  <text x="282" y="28" text-anchor="middle" font-size="11" font-weight="700" fill="#15803d">プレスB</text>
+  <line x1="82" y1="366" x2="448" y2="366" stroke="#22c55e" stroke-width="3"/>
+  <text x="358" y="28" text-anchor="middle" font-size="11" font-weight="700" fill="#15803d">プレスB</text>
 
   <!-- ===== 技術 ===== -->
-  <rect x="98" y="370" width="260" height="68" rx="4" fill="#fafafa" stroke="#6b7280" stroke-width="1.5"/>
-  <text x="228" y="409" text-anchor="middle" font-size="10" font-weight="700" fill="#1f2937">技術</text>
+  <rect x="82" y="370" width="366" height="68" rx="4" fill="#fafafa" stroke="#6b7280" stroke-width="1.5"/>
+  <text x="265" y="409" text-anchor="middle" font-size="10" font-weight="700" fill="#1f2937">技術</text>
 
-  <!-- ===== プレスC（縦2段 h=160） ===== -->
-  <rect x="362" y="8" width="188" height="160" rx="4" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
-  <text x="456" y="26" text-anchor="middle" font-size="10" font-weight="700" fill="#92400e">プレスC　タンデムライン</text>
+  <!-- ===== プレスC（縦2段 h=200：カードを84に上げた） ===== -->
+  <rect x="452" y="8" width="180" height="200" rx="4" fill="#fffbeb" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="458" y="22" font-size="10" font-weight="700" fill="#92400e">プレスC　タンデムライン</text>
 
   <!-- ===== プレスD（ロボットライン） ===== -->
-  <rect x="362" y="172" width="188" height="92" rx="4" fill="#fefce8" stroke="#eab308" stroke-width="1.5"/>
-  <text x="456" y="189" text-anchor="middle" font-size="10" font-weight="700" fill="#713f12">プレスD　ロボットライン</text>
+  <rect x="452" y="212" width="180" height="88" rx="4" fill="#fefce8" stroke="#eab308" stroke-width="1.5"/>
+  <text x="458" y="228" font-size="10" font-weight="700" fill="#713f12">プレスD　ロボットライン</text>
 
-  <!-- ===== 溶接We（元のプレスD位置 y=268） ===== -->
-  <rect x="362" y="268" width="92" height="94" rx="4" fill="#fdf2f8" stroke="#ec4899" stroke-width="1.5"/>
-  <text x="408" y="308" text-anchor="middle" font-size="10" font-weight="700" fill="#9d174d">溶接</text>
-  <text x="408" y="323" text-anchor="middle" font-size="9" fill="#ec4899">（We）</text>
+  <!-- ===== 溶接We ===== -->
+  <rect x="452" y="304" width="88" height="58" rx="4" fill="#fdf2f8" stroke="#ec4899" stroke-width="1.5"/>
+  <text x="496" y="328" text-anchor="middle" font-size="10" font-weight="700" fill="#9d174d">溶接</text>
+  <text x="496" y="343" text-anchor="middle" font-size="9" fill="#ec4899">（We）</text>
 
   <!-- ===== 組立SP（溶接の右） ===== -->
-  <rect x="458" y="268" width="92" height="94" rx="4" fill="#fdf2f8" stroke="#ec4899" stroke-width="1.5"/>
-  <text x="504" y="308" text-anchor="middle" font-size="10" font-weight="700" fill="#9d174d">組立</text>
-  <text x="504" y="323" text-anchor="middle" font-size="9" fill="#ec4899">（SP）</text>
+  <rect x="544" y="304" width="88" height="58" rx="4" fill="#fdf2f8" stroke="#ec4899" stroke-width="1.5"/>
+  <text x="588" y="328" text-anchor="middle" font-size="10" font-weight="700" fill="#9d174d">組立</text>
+  <text x="588" y="343" text-anchor="middle" font-size="9" fill="#ec4899">（SP）</text>
 
-  <!-- ===== 金型置場L型（縦詰め h=260） ===== -->
-  <!-- 外枠全体 -->
-  <rect x="554" y="8" width="148" height="260" rx="5" fill="#fafafa" stroke="#6b7280" stroke-width="2"/>
-  <!-- 上部：金型置場テキスト（h=132） -->
-  <text x="628" y="76" text-anchor="middle" font-size="11" font-weight="700" fill="#1f2937">金型置場</text>
-  <!-- 仕切り線 -->
-  <line x1="558" y1="140" x2="698" y2="140" stroke="#d1d5db" stroke-width="1.5" stroke-dasharray="5,3"/>
+  <!-- ===== 金型置場L型（w=116に細くした） ===== -->
+  <rect x="636" y="8" width="116" height="260" rx="5" fill="#fafafa" stroke="#6b7280" stroke-width="2"/>
+  <text x="694" y="76" text-anchor="middle" font-size="11" font-weight="700" fill="#1f2937">金型置場</text>
+  <line x1="640" y1="140" x2="748" y2="140" stroke="#d1d5db" stroke-width="1.5" stroke-dasharray="5,3"/>
   <!-- 現場事務所（下部左） -->
-  <rect x="558" y="144" width="96" height="116" rx="4" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
-  <text x="606" y="208" text-anchor="middle" font-size="9" font-weight="700" fill="#334155">現場事務所</text>
+  <rect x="640" y="144" width="72" height="116" rx="4" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.5"/>
+  <text x="676" y="204" text-anchor="middle" font-size="8.5" font-weight="700" fill="#334155">現場</text>
+  <text x="676" y="216" text-anchor="middle" font-size="8.5" font-weight="700" fill="#334155">事務所</text>
   <!-- 金型置場右辺テキスト -->
-  <text x="672" y="204" text-anchor="middle" font-size="9" font-weight="700" fill="#1f2937">金型</text>
-  <text x="672" y="220" text-anchor="middle" font-size="9" font-weight="700" fill="#1f2937">置場</text>
+  <text x="731" y="204" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1f2937">金型</text>
+  <text x="731" y="218" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1f2937">置場</text>
 
   <!-- ===== 完成品置場（金型L型下） ===== -->
-  <rect x="554" y="272" width="148" height="90" rx="4" fill="#f0f9ff" stroke="#0ea5e9" stroke-width="1.5"/>
-  <text x="628" y="321" text-anchor="middle" font-size="10" font-weight="700" fill="#0c4a6e">完成品置場</text>
+  <rect x="636" y="272" width="116" height="90" rx="4" fill="#f0f9ff" stroke="#0ea5e9" stroke-width="1.5"/>
+  <text x="694" y="321" text-anchor="middle" font-size="10" font-weight="700" fill="#0c4a6e">完成品置場</text>
 
-  <!-- ===== 組立（右端・縦長 h=260） ===== -->
-  <rect x="706" y="8" width="110" height="260" rx="4" fill="#fdf2f8" stroke="#ec4899" stroke-width="1.5"/>
-  <text x="761" y="128" text-anchor="middle" font-size="13" font-weight="700" fill="#9d174d">組</text>
-  <text x="761" y="150" text-anchor="middle" font-size="13" font-weight="700" fill="#9d174d">　</text>
-  <text x="761" y="172" text-anchor="middle" font-size="13" font-weight="700" fill="#9d174d">立</text>
+  <!-- ===== 組立（右端・縦長 w=60） ===== -->
+  <rect x="756" y="8" width="60" height="260" rx="4" fill="#fdf2f8" stroke="#ec4899" stroke-width="1.5"/>
+  <text x="772" y="128" text-anchor="middle" font-size="13" font-weight="700" fill="#9d174d">組</text>
+  <text x="772" y="150" text-anchor="middle" font-size="13" font-weight="700" fill="#9d174d">　</text>
+  <text x="772" y="172" text-anchor="middle" font-size="13" font-weight="700" fill="#9d174d">立</text>
 
-  <!-- ===== 完成品置場（右端・組立下） ===== -->
-  <rect x="706" y="272" width="110" height="90" rx="4" fill="#f0f9ff" stroke="#0ea5e9" stroke-width="1.5"/>
-  <text x="761" y="321" text-anchor="middle" font-size="10" font-weight="700" fill="#0c4a6e">完成品置場</text>
+  <!-- ===== 完成品置場（右端・組立下）：幅60なので縦書き ===== -->
+  <rect x="756" y="272" width="60" height="90" rx="4" fill="#f0f9ff" stroke="#0ea5e9" stroke-width="1.5"/>
+  <text x="772" y="294" text-anchor="middle" font-size="9" font-weight="700" fill="#0c4a6e">完</text>
+  <text x="772" y="307" text-anchor="middle" font-size="9" font-weight="700" fill="#0c4a6e">成</text>
+  <text x="772" y="320" text-anchor="middle" font-size="9" font-weight="700" fill="#0c4a6e">品</text>
+  <text x="772" y="333" text-anchor="middle" font-size="9" font-weight="700" fill="#0c4a6e">置</text>
+  <text x="772" y="346" text-anchor="middle" font-size="9" font-weight="700" fill="#0c4a6e">場</text>
 
   <!-- ===== 凡例（横長・技術の右・溶接下 y=370） ===== -->
-  <rect x="362" y="370" width="454" height="68" rx="5" fill="white" stroke="#e2e8f0" stroke-width="1" opacity="0.95"/>
+  <rect x="452" y="370" width="364" height="68" rx="5" fill="white" stroke="#e2e8f0" stroke-width="1" opacity="0.95"/>
   <!-- 稼働状況 -->
-  <text x="372" y="385" font-size="9" font-weight="700" fill="#64748b">■ 稼働状況</text>
-  <rect x="372" y="390" width="30" height="11" rx="5" fill="#1d4ed8"/><text x="387" y="399" text-anchor="middle" font-size="7" fill="white">稼働中</text>
-  <rect x="408" y="390" width="30" height="11" rx="5" fill="#1a1a1a"/><text x="423" y="399" text-anchor="middle" font-size="7" fill="white">段取中</text>
-  <rect x="444" y="390" width="30" height="11" rx="5" fill="#dc2626"/><text x="459" y="399" text-anchor="middle" font-size="7" fill="white">停止中</text>
-  <rect x="480" y="390" width="30" height="11" rx="5" fill="#94a3b8"/><text x="495" y="399" text-anchor="middle" font-size="7" fill="white">待機中</text>
+  <text x="462" y="385" font-size="9" font-weight="700" fill="#64748b">■ 稼働状況</text>
+  <rect x="462" y="390" width="30" height="11" rx="5" fill="#1d4ed8"/><text x="477" y="399" text-anchor="middle" font-size="7" fill="white">稼働中</text>
+  <rect x="498" y="390" width="30" height="11" rx="5" fill="#1a1a1a"/><text x="513" y="399" text-anchor="middle" font-size="7" fill="white">段取中</text>
+  <rect x="534" y="390" width="30" height="11" rx="5" fill="#dc2626"/><text x="549" y="399" text-anchor="middle" font-size="7" fill="white">停止中</text>
+  <rect x="570" y="390" width="30" height="11" rx="5" fill="#94a3b8"/><text x="585" y="399" text-anchor="middle" font-size="7" fill="white">待機中</text>
+  <text x="462" y="416" font-size="7.5" fill="#64748b">CT＝標準どおりか（進捗ボードと同じ）</text>
+  <text x="462" y="430" font-size="7.5" fill="#64748b">見込＝完了予想　⚠＝実績が未入力</text>
   <!-- 区切り -->
-  <line x1="522" y1="374" x2="522" y2="432" stroke="#e2e8f0" stroke-width="1"/>
+  <line x1="612" y1="374" x2="612" y2="432" stroke="#e2e8f0" stroke-width="1"/>
   <!-- ビーコン -->
-  <text x="532" y="385" font-size="9" font-weight="700" fill="#64748b">● ビーコン位置</text>
-  <circle cx="538" cy="400" r="8" fill="#e11d48" opacity="0.9"/>
-  <text x="538" y="404" text-anchor="middle" font-size="6" font-weight="700" fill="white">見</text>
-  <text x="550" y="404" font-size="8" fill="#374151">リーダー（名前2文字）</text>
-  <circle cx="538" cy="420" r="8" fill="#d97706" opacity="0.9"/>
-  <text x="538" y="424" text-anchor="middle" font-size="6" font-weight="700" fill="white">リ</text>
-  <text x="550" y="424" font-size="8" fill="#374151">リフト　グレー=位置不明</text>
-  <text x="700" y="432" font-size="7" fill="#94a3b8">※5秒ごとに自動更新</text>
+  <text x="622" y="385" font-size="9" font-weight="700" fill="#64748b">● ビーコン位置</text>
+  <circle cx="628" cy="400" r="8" fill="#e11d48" opacity="0.9"/>
+  <text x="628" y="404" text-anchor="middle" font-size="6" font-weight="700" fill="white">見</text>
+  <text x="640" y="404" font-size="8" fill="#374151">リーダー（名前2文字）</text>
+  <circle cx="628" cy="420" r="8" fill="#d97706" opacity="0.9"/>
+  <text x="628" y="424" text-anchor="middle" font-size="6" font-weight="700" fill="white">リ</text>
+  <text x="640" y="424" font-size="8" fill="#374151">リフト　グレー=位置不明</text>
+  <text x="742" y="434" font-size="7" fill="#94a3b8">※5秒ごとに自動更新</text>
 
   <!-- ===== 稼働カード（foreignObject版） ===== -->
 
   <!-- A1カード -->
   <g id="press-A" onclick="clickLineId('A1')" style="cursor:pointer;">
-    <rect x="102" y="36" width="100" height="82" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
-    <foreignObject x="103" y="37" width="98" height="80">
+    <rect x="86" y="36" width="176" height="82" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+    <foreignObject x="87" y="37" width="174" height="80">
       <div xmlns="http://www.w3.org/1999/xhtml" class="svg-line-card">
         <div class="slc-head">
           <span class="slc-name" style="color:#1e40af;">A1</span>
+          <span class="slc-ct" id="lineA1-ct"></span>
+          <span class="slc-spacer"></span>
           <span class="slc-badge" id="lineA1-badge">待機中</span>
         </div>
         <div class="slc-part" id="lineA1-part">--</div>
-        <div class="slc-meta">
-          <span class="slc-pct" id="lineA1-pct">--</span>
-          <span class="slc-sched" id="lineA1-sched"></span>
-        </div>
         <div class="slc-bar-wrap"><div class="slc-bar" id="lineA1-bar"></div></div>
+        <div class="slc-meta">
+          <span class="slc-est" id="lineA1-est"></span>
+          <span class="slc-sched" id="lineA1-sched"></span>
+          <span class="slc-alert" id="lineA1-alert"></span>
+        </div>
         <div class="slc-time" id="lineA1-time"></div>
         <div class="slc-stop" id="lineA1-stop" style="display:none;">計画停止</div>
       </div>
@@ -1374,40 +1393,46 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 
   <!-- A2カード -->
   <g onclick="clickLineId('A2')" style="cursor:pointer;">
-    <rect x="102" y="122" width="100" height="82" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
-    <foreignObject x="103" y="123" width="98" height="80">
+    <rect x="86" y="122" width="176" height="82" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+    <foreignObject x="87" y="123" width="174" height="80">
       <div xmlns="http://www.w3.org/1999/xhtml" class="svg-line-card">
         <div class="slc-head">
           <span class="slc-name" style="color:#1e40af;">A2</span>
+          <span class="slc-ct" id="lineA2-ct"></span>
+          <span class="slc-spacer"></span>
           <span class="slc-badge" id="lineA2-badge">待機中</span>
         </div>
         <div class="slc-part" id="lineA2-part">--</div>
-        <div class="slc-meta">
-          <span class="slc-pct" id="lineA2-pct">--</span>
-          <span class="slc-sched" id="lineA2-sched"></span>
-        </div>
         <div class="slc-bar-wrap"><div class="slc-bar" id="lineA2-bar"></div></div>
+        <div class="slc-meta">
+          <span class="slc-est" id="lineA2-est"></span>
+          <span class="slc-sched" id="lineA2-sched"></span>
+          <span class="slc-alert" id="lineA2-alert"></span>
+        </div>
         <div class="slc-time" id="lineA2-time"></div>
         <div class="slc-stop" id="lineA2-stop" style="display:none;">計画停止</div>
       </div>
     </foreignObject>
   </g>
 
-  <!-- B1カード（緑） -->
+  <!-- B1カード -->
   <g id="press-B" onclick="clickLineId('B1')" style="cursor:pointer;">
-    <rect x="102" y="264" width="100" height="82" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
-    <foreignObject x="103" y="265" width="98" height="80">
+    <rect x="86" y="264" width="176" height="82" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+    <foreignObject x="87" y="265" width="174" height="80">
       <div xmlns="http://www.w3.org/1999/xhtml" class="svg-line-card">
         <div class="slc-head">
           <span class="slc-name" style="color:#15803d;">B1</span>
+          <span class="slc-ct" id="lineB1-ct"></span>
+          <span class="slc-spacer"></span>
           <span class="slc-badge" id="lineB1-badge">待機中</span>
         </div>
         <div class="slc-part" id="lineB1-part">--</div>
-        <div class="slc-meta">
-          <span class="slc-pct" id="lineB1-pct">--</span>
-          <span class="slc-sched" id="lineB1-sched"></span>
-        </div>
         <div class="slc-bar-wrap"><div class="slc-bar" id="lineB1-bar"></div></div>
+        <div class="slc-meta">
+          <span class="slc-est" id="lineB1-est"></span>
+          <span class="slc-sched" id="lineB1-sched"></span>
+          <span class="slc-alert" id="lineB1-alert"></span>
+        </div>
         <div class="slc-time" id="lineB1-time"></div>
         <div class="slc-stop" id="lineB1-stop" style="display:none;">計画停止</div>
       </div>
@@ -1416,103 +1441,118 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 
   <!-- B2カード -->
   <g onclick="clickLineId('B2')" style="cursor:pointer;">
-    <rect x="210" y="36" width="144" height="82" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
-    <foreignObject x="211" y="37" width="142" height="80">
+    <rect x="270" y="36" width="176" height="82" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+    <foreignObject x="271" y="37" width="174" height="80">
       <div xmlns="http://www.w3.org/1999/xhtml" class="svg-line-card">
         <div class="slc-head">
           <span class="slc-name" style="color:#15803d;">B2</span>
+          <span class="slc-ct" id="lineB2-ct"></span>
+          <span class="slc-spacer"></span>
           <span class="slc-badge" id="lineB2-badge">待機中</span>
         </div>
         <div class="slc-part" id="lineB2-part">--</div>
-        <div class="slc-meta">
-          <span class="slc-pct" id="lineB2-pct">--</span>
-          <span class="slc-sched" id="lineB2-sched"></span>
-        </div>
         <div class="slc-bar-wrap"><div class="slc-bar" id="lineB2-bar"></div></div>
+        <div class="slc-meta">
+          <span class="slc-est" id="lineB2-est"></span>
+          <span class="slc-sched" id="lineB2-sched"></span>
+          <span class="slc-alert" id="lineB2-alert"></span>
+        </div>
         <div class="slc-time" id="lineB2-time"></div>
         <div class="slc-stop" id="lineB2-stop" style="display:none;">計画停止</div>
       </div>
     </foreignObject>
   </g>
 
-  <!-- Bライン（BP2）カード -->
+  <!-- Bラインカード -->
   <g onclick="clickLineId('Bライン')" style="cursor:pointer;">
-    <rect x="210" y="148" width="144" height="82" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
-    <foreignObject x="211" y="149" width="142" height="80">
+    <rect x="270" y="148" width="176" height="82" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+    <foreignObject x="271" y="149" width="174" height="80">
       <div xmlns="http://www.w3.org/1999/xhtml" class="svg-line-card">
         <div class="slc-head">
           <span class="slc-name" style="color:#15803d;">Bライン</span>
+          <span class="slc-ct" id="lineBP2-ct"></span>
+          <span class="slc-spacer"></span>
           <span class="slc-badge" id="lineBP2-badge">待機中</span>
         </div>
         <div class="slc-part" id="lineBP2-part">--</div>
-        <div class="slc-meta">
-          <span class="slc-pct" id="lineBP2-pct">--</span>
-          <span class="slc-sched" id="lineBP2-sched"></span>
-        </div>
         <div class="slc-bar-wrap"><div class="slc-bar" id="lineBP2-bar"></div></div>
+        <div class="slc-meta">
+          <span class="slc-est" id="lineBP2-est"></span>
+          <span class="slc-sched" id="lineBP2-sched"></span>
+          <span class="slc-alert" id="lineBP2-alert"></span>
+        </div>
         <div class="slc-time" id="lineBP2-time"></div>
         <div class="slc-stop" id="lineBP2-stop" style="display:none;">計画停止</div>
       </div>
     </foreignObject>
   </g>
 
-  <!-- Cライン①カード（プレスC上段） -->
+  <!-- Cライン①カード -->
   <g id="press-C" onclick="clickLineId('Cライン①')" style="cursor:pointer;">
-    <rect x="364" y="36" width="184" height="62" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
-    <foreignObject x="365" y="37" width="182" height="60">
+    <rect x="454" y="28" width="176" height="84" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+    <foreignObject x="455" y="29" width="174" height="82">
       <div xmlns="http://www.w3.org/1999/xhtml" class="svg-line-card">
         <div class="slc-head">
           <span class="slc-name" style="color:#92400e;">Cライン①</span>
+          <span class="slc-ct" id="lineCP3-ct"></span>
+          <span class="slc-spacer"></span>
           <span class="slc-badge" id="lineCP3-badge">待機中</span>
         </div>
         <div class="slc-part" id="lineCP3-part">--</div>
-        <div class="slc-meta">
-          <span class="slc-pct" id="lineCP3-pct">--</span>
-          <span class="slc-sched" id="lineCP3-sched"></span>
-        </div>
         <div class="slc-bar-wrap"><div class="slc-bar" id="lineCP3-bar"></div></div>
+        <div class="slc-meta">
+          <span class="slc-est" id="lineCP3-est"></span>
+          <span class="slc-sched" id="lineCP3-sched"></span>
+          <span class="slc-alert" id="lineCP3-alert"></span>
+        </div>
         <div class="slc-time" id="lineCP3-time"></div>
         <div class="slc-stop" id="lineCP3-stop" style="display:none;">計画停止</div>
       </div>
     </foreignObject>
   </g>
 
-  <!-- Cライン②カード（プレスC下段） -->
+  <!-- Cライン②カード -->
   <g onclick="clickLineId('Cライン②')" style="cursor:pointer;">
-    <rect x="364" y="102" width="184" height="62" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
-    <foreignObject x="365" y="103" width="182" height="60">
+    <rect x="454" y="116" width="176" height="84" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+    <foreignObject x="455" y="117" width="174" height="82">
       <div xmlns="http://www.w3.org/1999/xhtml" class="svg-line-card">
         <div class="slc-head">
           <span class="slc-name" style="color:#92400e;">Cライン②</span>
+          <span class="slc-ct" id="lineCP3_2-ct"></span>
+          <span class="slc-spacer"></span>
           <span class="slc-badge" id="lineCP3_2-badge">待機中</span>
         </div>
         <div class="slc-part" id="lineCP3_2-part">--</div>
-        <div class="slc-meta">
-          <span class="slc-pct" id="lineCP3_2-pct">--</span>
-          <span class="slc-sched" id="lineCP3_2-sched"></span>
-        </div>
         <div class="slc-bar-wrap"><div class="slc-bar" id="lineCP3_2-bar"></div></div>
+        <div class="slc-meta">
+          <span class="slc-est" id="lineCP3_2-est"></span>
+          <span class="slc-sched" id="lineCP3_2-sched"></span>
+          <span class="slc-alert" id="lineCP3_2-alert"></span>
+        </div>
         <div class="slc-time" id="lineCP3_2-time"></div>
         <div class="slc-stop" id="lineCP3_2-stop" style="display:none;">計画停止</div>
       </div>
     </foreignObject>
   </g>
 
-  <!-- ロボットラインカード（プレスD） -->
+  <!-- ロボットラインカード -->
   <g id="press-D" onclick="clickLineId('ロボットライン')" style="cursor:pointer;">
-    <rect x="364" y="196" width="184" height="56" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
-    <foreignObject x="365" y="197" width="182" height="54">
+    <rect x="454" y="236" width="176" height="60" rx="4" fill="white" stroke="#e2e8f0" stroke-width="1"/>
+    <foreignObject x="455" y="237" width="174" height="58">
       <div xmlns="http://www.w3.org/1999/xhtml" class="svg-line-card slc-compact">
         <div class="slc-head">
           <span class="slc-name" style="color:#713f12;">ロボットライン</span>
+          <span class="slc-ct" id="lineRobot-ct"></span>
+          <span class="slc-spacer"></span>
           <span class="slc-badge" id="lineRobot-badge">待機中</span>
         </div>
         <div class="slc-part" id="lineRobot-part">--</div>
-        <div class="slc-meta">
-          <span class="slc-pct" id="lineRobot-pct">--</span>
-          <span class="slc-sched" id="lineRobot-sched"></span>
-        </div>
         <div class="slc-bar-wrap"><div class="slc-bar" id="lineRobot-bar"></div></div>
+        <div class="slc-meta">
+          <span class="slc-est" id="lineRobot-est"></span>
+          <span class="slc-sched" id="lineRobot-sched"></span>
+          <span class="slc-alert" id="lineRobot-alert"></span>
+        </div>
         <div class="slc-time" id="lineRobot-time"></div>
         <div class="slc-stop" id="lineRobot-stop" style="display:none;">計画停止</div>
       </div>
@@ -1531,32 +1571,32 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
     <!-- プレスA → cam2 -->
     <a href="http://192.168.30.9:8080/camera_grid.html?cams=cam2" target="_blank" rel="noopener" style="cursor:pointer">
       <title>プレスAライン カメラを開く</title>
-      <circle cx="194" cy="20" r="10" fill="#2563eb" stroke="#ffffff" stroke-width="1.5"/>
-      <rect x="189.3" y="17" width="9.4" height="6.4" rx="1.3" fill="#ffffff"/>
-      <circle cx="194" cy="20.2" r="1.9" fill="#2563eb"/>
+      <circle cx="254" cy="20" r="10" fill="#2563eb" stroke="#ffffff" stroke-width="1.5"/>
+      <rect x="249.3" y="17" width="9.4" height="6.4" rx="1.3" fill="#ffffff"/>
+      <circle cx="254" cy="20.2" r="1.9" fill="#2563eb"/>
     </a>
     <!-- プレスB → cam6（Bライン） -->
     <a href="http://192.168.30.9:8080/camera_grid.html?cams=cam6" target="_blank" rel="noopener" style="cursor:pointer">
       <title>Bライン カメラを開く</title>
-      <circle cx="346" cy="20" r="10" fill="#2563eb" stroke="#ffffff" stroke-width="1.5"/>
-      <rect x="341.3" y="17" width="9.4" height="6.4" rx="1.3" fill="#ffffff"/>
-      <circle cx="346" cy="20.2" r="1.9" fill="#2563eb"/>
+      <circle cx="438" cy="20" r="10" fill="#2563eb" stroke="#ffffff" stroke-width="1.5"/>
+      <rect x="433.3" y="17" width="9.4" height="6.4" rx="1.3" fill="#ffffff"/>
+      <circle cx="438" cy="20.2" r="1.9" fill="#2563eb"/>
     </a>
     <!-- プレスC → cam3（Cライン） -->
     <a href="http://192.168.30.9:8080/camera_grid.html?cams=cam3" target="_blank" rel="noopener" style="cursor:pointer">
       <title>Cライン カメラを開く</title>
-      <circle cx="540" cy="20" r="10" fill="#2563eb" stroke="#ffffff" stroke-width="1.5"/>
-      <rect x="535.3" y="17" width="9.4" height="6.4" rx="1.3" fill="#ffffff"/>
-      <circle cx="540" cy="20.2" r="1.9" fill="#2563eb"/>
+      <circle cx="622" cy="20" r="10" fill="#2563eb" stroke="#ffffff" stroke-width="1.5"/>
+      <rect x="617.3" y="17" width="9.4" height="6.4" rx="1.3" fill="#ffffff"/>
+      <circle cx="622" cy="20.2" r="1.9" fill="#2563eb"/>
     </a>
     <!-- 技術 → cam1(MILLAC)/cam4(MX55)/cam5(ワイヤー) の3台 -->
     <a href="http://192.168.30.9:8080/camera_grid.html?cams=cam1,cam4,cam5" target="_blank" rel="noopener" style="cursor:pointer">
       <title>技術（MILLAC・MX55・ワイヤー）カメラを開く</title>
-      <circle cx="344" cy="404" r="10" fill="#2563eb" stroke="#ffffff" stroke-width="1.5"/>
-      <rect x="339.3" y="401" width="9.4" height="6.4" rx="1.3" fill="#ffffff"/>
-      <circle cx="344" cy="404.2" r="1.9" fill="#2563eb"/>
-      <circle cx="351" cy="398" r="5.5" fill="#dc2626" stroke="#ffffff" stroke-width="1"/>
-      <text x="351" y="400.6" text-anchor="middle" font-size="7" font-weight="700" fill="#ffffff">3</text>
+      <circle cx="434" cy="404" r="10" fill="#2563eb" stroke="#ffffff" stroke-width="1.5"/>
+      <rect x="429.3" y="401" width="9.4" height="6.4" rx="1.3" fill="#ffffff"/>
+      <circle cx="434" cy="404.2" r="1.9" fill="#2563eb"/>
+      <circle cx="441" cy="398" r="5.5" fill="#dc2626" stroke="#ffffff" stroke-width="1"/>
+      <text x="441" y="400.6" text-anchor="middle" font-size="7" font-weight="700" fill="#ffffff">3</text>
     </a>
   </g>
 
@@ -3416,7 +3456,7 @@ function wbSpark(list){
     `${line}${list.length > 1 ? `<polyline points="${pts}" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>` : ''}${dots}${ticks}</svg></div>`;
 }
 // 工場レイアウト内（旧・金型置場の枠 x8 y8 w88 h120）に描画する
-const WB_BOX = { x:8, y:8, w:88, h:120 };
+const WB_BOX = { x:8, y:8, w:72, h:120 };   // 左列を88→72に細くした（2026-09-21）
 const WB_LV_COLOR = {
   1:{ bg:'#eff6ff', bd:'#3b82f6', chip:'#dbeafe', tx:'#1e40af' },
   2:{ bg:'#fefce8', bd:'#eab308', chip:'#fef9c3', tx:'#854d0e' },
@@ -3426,7 +3466,7 @@ const WB_LV_COLOR = {
 // 枠内のミニグラフ（目盛りラベルは入らないので基準線の色だけで示す）
 function wbMiniSpark(list){
   if(list.length < 1) return '';
-  const x0 = 20, x1 = 88, yb = 101, yt = 75;
+  const x0 = 14, x1 = 74, yb = 101, yt = 75;
   const y = v => yb - (Math.min(36, Math.max(20, v)) - 20) / 16 * (yb - yt);
   const t0 = new Date(list[0].ts).setHours(7,0,0,0);
   const x  = ts => x0 + Math.min(11, Math.max(0, (ts - t0) / 3600000)) / 11 * (x1 - x0);
@@ -3451,39 +3491,39 @@ function wbRender(){
   if(stale && !wbInSeason()){
     box.innerHTML =
       `<rect x="${B.x}" y="${B.y}" width="${B.w}" height="${B.h}" rx="4" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
-       <text x="52" y="20" text-anchor="middle" font-size="7.5" font-weight="700" fill="#94a3b8">${name}</text>
-       <text x="52" y="50" text-anchor="middle" font-size="13" font-weight="700" fill="#94a3b8">測定期間外</text>
-       <text x="52" y="68" text-anchor="middle" font-size="7" fill="#94a3b8">${(wbCfg.seasonFrom||5)}月〜${(wbCfg.seasonTo||9)}月に測定</text>
-       <text x="52" y="86" text-anchor="middle" font-size="7" fill="#cbd5e1">押せば入力できます</text>`;
+       <text x="44" y="20" text-anchor="middle" font-size="7.5" font-weight="700" fill="#94a3b8">${name}</text>
+       <text x="44" y="50" text-anchor="middle" font-size="13" font-weight="700" fill="#94a3b8">測定期間外</text>
+       <text x="44" y="68" text-anchor="middle" font-size="7" fill="#94a3b8">${(wbCfg.seasonFrom||5)}月〜${(wbCfg.seasonTo||9)}月に測定</text>
+       <text x="44" y="86" text-anchor="middle" font-size="7" fill="#cbd5e1">押せば入力できます</text>`;
     return;
   }
   if(stale){
     const last = d ? `最終 ${new Date(d.ts).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}` : '本日の記録なし';
     box.innerHTML =
       `<rect x="${B.x}" y="${B.y}" width="${B.w}" height="${B.h}" rx="4" fill="#fff" stroke="#dc2626" stroke-width="2" stroke-dasharray="5 3"/>
-       <text x="52" y="20" text-anchor="middle" font-size="7.5" font-weight="700" fill="#6b7280">${name}</text>
-       <text x="48" y="50" text-anchor="middle" font-size="26" font-weight="800" fill="#9ca3af">--</text>
-       <text x="78" y="50" text-anchor="middle" font-size="9" fill="#9ca3af">℃</text>
-       <rect x="22" y="56" width="60" height="14" rx="3" fill="#fee2e2"/>
-       <text x="52" y="66" text-anchor="middle" font-size="8" font-weight="800" fill="#991b1b">要測定</text>
-       <text x="52" y="88" text-anchor="middle" font-size="7" fill="#dc2626">${last}</text>
-       <text x="52" y="100" text-anchor="middle" font-size="7" font-weight="700" fill="#dc2626">測定してください</text>`;
+       <text x="44" y="20" text-anchor="middle" font-size="7.5" font-weight="700" fill="#6b7280">${name}</text>
+       <text x="41" y="50" text-anchor="middle" font-size="26" font-weight="800" fill="#9ca3af">--</text>
+       <text x="64" y="50" text-anchor="middle" font-size="9" fill="#9ca3af">℃</text>
+       <rect x="16" y="56" width="56" height="14" rx="3" fill="#fee2e2"/>
+       <text x="44" y="66" text-anchor="middle" font-size="8" font-weight="800" fill="#991b1b">要測定</text>
+       <text x="44" y="88" text-anchor="middle" font-size="7" fill="#dc2626">${last}</text>
+       <text x="44" y="100" text-anchor="middle" font-size="7" font-weight="700" fill="#dc2626">測定してください</text>`;
     return;
   }
   const lv = wbLevel(d.v), c = WB_LV_COLOR[lv.n];
   const danger = d.v >= WB_DANGER;
   box.innerHTML =
     `<rect x="${B.x}" y="${B.y}" width="${B.w}" height="${B.h}" rx="4" fill="${c.bg}" stroke="${c.bd}" stroke-width="${danger ? 2.5 : 2}"/>
-     <text x="52" y="20" text-anchor="middle" font-size="7.5" font-weight="700" fill="#6b7280">${name}</text>
-     <text x="48" y="50" text-anchor="middle" font-size="26" font-weight="800" fill="${danger ? '#dc2626' : '#111'}">${d.v.toFixed(1)}</text>
-     <text x="78" y="50" text-anchor="middle" font-size="9" fill="#6b7280">℃</text>
-     <rect x="22" y="56" width="60" height="14" rx="3" fill="${c.chip}"/>
-     <text x="52" y="66" text-anchor="middle" font-size="8" font-weight="800" fill="${c.tx}">${lv.label}</text>
+     <text x="44" y="20" text-anchor="middle" font-size="7.5" font-weight="700" fill="#6b7280">${name}</text>
+     <text x="41" y="50" text-anchor="middle" font-size="26" font-weight="800" fill="${danger ? '#dc2626' : '#111'}">${d.v.toFixed(1)}</text>
+     <text x="64" y="50" text-anchor="middle" font-size="9" fill="#6b7280">℃</text>
+     <rect x="16" y="56" width="56" height="14" rx="3" fill="${c.chip}"/>
+     <text x="44" y="66" text-anchor="middle" font-size="8" font-weight="800" fill="${c.tx}">${lv.label}</text>
      ${wbMiniSpark(list)}
      ${danger
-       ? `<rect x="14" y="112" width="76" height="12" rx="2" fill="#dc2626"/>
-          <text x="52" y="121" text-anchor="middle" font-size="7" font-weight="800" fill="#fff">全作業 中止・延期</text>`
-       : `<text x="52" y="118" text-anchor="middle" font-size="6.5" fill="#6b7280">${new Date(d.ts).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}（${wbAgo(d.ts)}）</text>`}`;
+       ? `<rect x="12" y="112" width="64" height="12" rx="2" fill="#dc2626"/>
+          <text x="44" y="121" text-anchor="middle" font-size="7" font-weight="800" fill="#fff">全作業 中止・延期</text>`
+       : `<text x="44" y="118" text-anchor="middle" font-size="6.5" fill="#6b7280">${new Date(d.ts).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}（${wbAgo(d.ts)}）</text>`}`;
 }
 // レイアウトの枠クリックで開く詳細パネル（判定表はここに置く。枠内には入らないため）
 function wbOpenDetail(){
@@ -4219,30 +4259,32 @@ const FIREBASE_URL = 'https://hashimoto-press-default-rtdb.asia-southeast1.fireb
 // 各エリアのテキストと干渉しない位置に設定
 // 複数人は右→下に折り返し
 const AREA_POSITIONS = {
-  // プレスA: rect(100,8,104,238) A1(y=36-118) A2(y=122-204) → 下余白y=215
-  'プレスA':    {x:135, y:215},
-  // プレスB: rect(208,8,148,354) B2(y=36-118) BP2(y=148-230) → 間の空きy=133
-  'プレスB':    {x:240, y:133},
-  // プレスC: rect(362,8,188,132) カード2枚 → 右端上部
-  'プレスC':    {x:520, y:25},
-  // プレスD: rect(362,172,188,92) テキストy=189 → カード上の空きy=186
-  'プレスD':    {x:520, y:186},
-  // 組立: rect(706,8,110,260) テキストなし → 左上
-  '組立':       {x:720, y:25},
-  // 完成品置場右端: rect(706,272,110,90)
-  '完成品置場': {x:720, y:288},
-  // 技術: rect(98,370,260,68)
-  '技術':       {x:150, y:390},
-  // 事務所: rect(8,132,88,226)
-  '事務所':     {x:25,  y:200},
-  // 溶接: rect(362,268,92,94)
-  '溶接':       {x:375, y:285},
-  // 組立SP: rect(458,268,92,94)
-  '組立SP':     {x:470, y:285},
-  // 金型置場左: rect(8,8,88,120)
-  '金型置場':   {x:25,  y:55},
-  // 現場事務所: rect(558,144,96,116) → 中央
-  '現場事務所': {x:572, y:165},
+  // ★2026-09-21 レイアウト改修で列幅を変えたため、全部置きなおした
+  // プレスA: rect(84,8,180,238) A1(36-118) A2(122-204) → 下の空き
+  'プレスA':    {x:120, y:225},
+  // プレスB: rect(268,8,180,354) B2(36-118) BP2(148-230) → 間の空き
+  'プレスB':    {x:300, y:133},
+  // プレスC: rect(452,8,180,200) 見出し行（カードの上）
+  'プレスC':    {x:596, y:20},
+  // プレスD: rect(452,212,180,88) 見出し行
+  'プレスD':    {x:596, y:226},
+  // 組立（右端）: rect(756,8,60,260) 幅60なので縦に折り返す
+  '組立':       {x:786, y:26},
+  // 完成品置場（右端）: rect(756,272,60,90)
+  '完成品置場': {x:786, y:292},
+  // 技術: rect(82,370,366,68)
+  '技術':       {x:110, y:392},
+  // 事務所: rect(8,132,72,226) 幅72なので縦に折り返す
+  '事務所':     {x:44,  y:180},
+  // 溶接: rect(452,304,88,58)
+  '溶接':       {x:474, y:328},
+  // 組立SP: rect(544,304,88,58)
+  '組立SP':     {x:566, y:328},
+  // 金型置場: 左の枠は暑さ指数に使っているので、右の金型置場L型の上部へ
+  '金型置場':   {x:660, y:40},
+  // 現場事務所: rect(640,144,72,116)
+  '現場事務所': {x:660, y:170},
+  // 通路: プレスBとプレスCの間
   '通路':       {x:450, y:195},
 };
 function getBeaconPos(area) {
@@ -4436,7 +4478,7 @@ function updateBeacons(beacons){
     const AREA_MAX_COL = {
       'プレスD': 3, 'プレスC': 4, 'プレスA': 2, 'プレスB': 3,
       '現場事務所': 2, '溶接': 1, '組立SP': 1, '技術': 4,
-      '組立': 2, '完成品置場': 2,
+      '組立': 1, '完成品置場': 1, '事務所': 1, '金型置場': 3,
     };
     const maxCol = AREA_MAX_COL[b.area] || 3;
     const cx = pos.x + (sameArea % maxCol) * 34 * dir;
@@ -4653,6 +4695,9 @@ function lineAutoStatus(line){
   return 'waiting';
 }
 
+// 未報告と見なすまでの分数（設定 settings/noRepMin で変えられる）
+const FACTORY_NOREP_MIN = 60;
+
 function updateFactoryView(lines){
   linesData = lines || {};
   // jobsデータに変化があれば自動同期をトリガー
@@ -4705,7 +4750,7 @@ function updateFactoryView(lines){
     if(!hasPlan){
       // 計画停止表示
       if(stopEl) stopEl.style.display = '';
-      ['part','pct','sched','time'].forEach(k => {
+      ['part','ct','est','sched','alert','time'].forEach(k => {
         const el = document.getElementById(prefix + '-' + k);
         if(el) el.style.display = 'none';
       });
@@ -4717,64 +4762,94 @@ function updateFactoryView(lines){
 
     // 通常表示
     if(stopEl) stopEl.style.display = 'none';
-    ['part','pct','sched','time'].forEach(k => {
+    ['part','ct','est','sched','alert','time'].forEach(k => {
       const el = document.getElementById(prefix + '-' + k);
       if(el) el.style.display = '';
     });
     const barWrapEl = document.getElementById(prefix + '-bar');
     if(barWrapEl) barWrapEl.parentElement.style.display = '';
 
-    // 品番
+    // ---- 進捗ボードと同じ計算を使う（2026-09-21 社長指示）----
+    //   CT達成率・見込み完了時刻は calcLineRate()、未報告は最終更新からの経過
+    const RT = window._pmLinesRealtime || {};
+    const L  = RT[lineId] || line;
+    let lr = null;
+    try{ if(L && typeof window._pmCalcLineRate === 'function') lr = window._pmCalcLineRate(L); }catch(e){ lr = null; }
+    const esc2 = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const t2m  = t => { if(!t||typeof t!=='string') return null;
+                        const p=t.split(':'); const h=+p[0], m=+p[1];
+                        return (isNaN(h)||isNaN(m)) ? null : h*60+m; };
+
+    // 加工中の品番（無ければ次に流す品番）
+    const jobsAll = (L && Array.isArray(L.jobs)) ? L.jobs : jobs;
+    let ci = -1;
+    try{ if(typeof window._pmCurJobIndex === 'function') ci = window._pmCurJobIndex(L||{}); }catch(e){ ci = -1; }
+    const isRunning = st === 'running';
+    const curJob  = (isRunning && ci >= 0) ? jobsAll[ci] : null;
+    const doneOf  = j => j && (j.status === 'done' || (j.actualEnd && j.actualEnd !== ''));
+    const notDone = j => j && (j.plan||0) > 0 && !j.history && !doneOf(j);
+    // ★計画の並び順（seq）で見る。時刻で並べ直すと、朝の流し忘れが「次」に出てしまう
+    const pending = (ci >= 0 ? jobsAll.slice(ci) : jobsAll).filter(notDone);
+    const showJob = curJob || pending[0] || null;
+    const nextJob = pending.filter(j => j !== showJob)[0] || null;
+
+    // ① 品番と、その予定時間
     const partEl = document.getElementById(prefix + '-part');
     if(partEl){
-      const partText = (line && line.part)
-        ? (line.part.length > 20 ? line.part.slice(0,19)+'…' : line.part) : '--';
-      partEl.textContent = partText;
+      const nm = (showJob && showJob.part) || (L && L.part) || '--';
+      const tm = showJob && showJob.start ? `${showJob.start}〜${showJob.end||''}` : '';
+      partEl.innerHTML = `<span class="slc-pn">${esc2(nm)}</span>` +
+                         (tm ? `<span class="slc-pt">${esc2(tm)}</span>` : '');
     }
 
-    // 達成率
-    const pct = plan > 0 ? Math.round(actual / plan * 100) : null;
-    const pctColor = pct === null ? '#94a3b8' : pct >= 100 ? '#16a34a' : pct >= 80 ? '#1d4ed8' : '#dc2626';
-    const pctEl = document.getElementById(prefix + '-pct');
-    if(pctEl){
-      pctEl.textContent = pct !== null
-        ? `${actual.toLocaleString()}/${plan.toLocaleString()}個 ${pct}%` : '--';
-      pctEl.style.color = pctColor;
+    // ② CT達成率（ラインの値。ライン名のすぐ右）
+    const ctEl = document.getElementById(prefix + '-ct');
+    const ct = lr && lr.ctRate !== null && lr.ctRate !== undefined ? lr.ctRate : null;
+    if(ctEl){
+      ctEl.textContent = ct !== null ? `CT ${ct}%` : '';
+      ctEl.style.color = ct === null ? '#94a3b8' : ct >= 95 ? '#16a34a' : ct >= 90 ? '#d97706' : '#dc2626';
     }
 
-    // スケジュール差分
-    const diff = getLineScheduleDiff(lineId);
-    const schedEl = document.getElementById(prefix + '-sched');
-    if(schedEl){
-      if(diff !== null){
-        const abs = Math.abs(Math.round(diff));
-        if(abs < 2){ schedEl.textContent = '計画通り'; schedEl.className = 'slc-sched on-time'; }
-        else if(diff > 0){ schedEl.textContent = `▼${abs}分遅れ`; schedEl.className = 'slc-sched behind'; }
-        else { schedEl.textContent = `▲${abs}分早い`; schedEl.className = 'slc-sched ahead'; }
-      } else {
-        schedEl.textContent = '';
-        schedEl.className = 'slc-sched';
-      }
-    }
-
-    // プログレスバー
+    // ③ 進み具合のバー（幅は個数、色はCT達成率）
     const barEl = document.getElementById(prefix + '-bar');
     if(barEl){
-      const barColor = pct === null ? '#e0e0e0' : pct >= 100 ? '#16a34a' : pct >= 80 ? '#3b82f6' : '#ef4444';
-      barEl.style.width = (pct !== null ? Math.min(pct,100) : 0) + '%';
-      barEl.style.background = barColor;
+      const p2 = plan > 0 ? Math.round(actual / plan * 100) : null;
+      barEl.style.width = (p2 !== null ? Math.min(p2, 100) : 0) + '%';
+      barEl.style.background = ct === null ? '#cbd5e1' : ct >= 95 ? '#16a34a' : ct >= 90 ? '#f59e0b' : '#ef4444';
     }
 
-    // 現在ジョブ時刻（compact以外）
-    if(!compact){
-      const timeEl = document.getElementById(prefix + '-time');
-      if(timeEl){
-        const runJob  = jobs.find(j => j.status === 'running');
-        const nextJob = !runJob ? jobs.find(j => j.status === 'waiting') : null;
-        const curJob  = runJob || nextJob;
-        timeEl.textContent = curJob && curJob.start
-          ? `${runJob ? '▶' : '次:'} ${curJob.start}〜${curJob.end||''}` : '';
-      }
+    // ④ 見込み完了時刻と、計画終了との差
+    const estEl   = document.getElementById(prefix + '-est');
+    const schedEl = document.getElementById(prefix + '-sched');
+    const est = lr && lr.estFinish ? lr.estFinish : null;
+    if(estEl) estEl.textContent = est ? (est === '完了' ? '完了' : `見込 ${est}`) : '';
+    if(schedEl){
+      const pe = lr && lr.planEndTime ? t2m(lr.planEndTime) : null;
+      const ef = (est && est !== '完了') ? t2m(est) : null;
+      if(pe !== null && ef !== null){
+        const d = ef - pe, abs = Math.abs(d);
+        if(abs < 2){ schedEl.textContent = '計画どおり'; schedEl.className = 'slc-sched on-time'; }
+        else if(d > 0){ schedEl.textContent = `▼${abs}分`; schedEl.className = 'slc-sched behind'; }
+        else { schedEl.textContent = `▲${abs}分`; schedEl.className = 'slc-sched ahead'; }
+      } else { schedEl.textContent = ''; schedEl.className = 'slc-sched'; }
+    }
+
+    // ⑤ 未報告（最後に実績を入れてから一定時間が経っている）
+    const alertEl = document.getElementById(prefix + '-alert');
+    if(alertEl){
+      const lim = Number(window._pmNoRepMin) > 0 ? Number(window._pmNoRepMin) : FACTORY_NOREP_MIN;
+      const noAlert = (window._pmLineNoAlert || {})[lineId];
+      const upd = (L && L.updatedAt > 0) ? L.updatedAt : 0;
+      const mins = upd ? Math.round((Date.now() - upd) / 60000) : null;
+      const show = isRunning && !noAlert && mins !== null && mins >= lim;
+      alertEl.textContent = show ? `⚠ 未報告 ${mins}分` : '';
+    }
+
+    // ⑥ 次に流す品番
+    const timeEl = document.getElementById(prefix + '-time');
+    if(timeEl){
+      timeEl.textContent = (nextJob && nextJob.part)
+        ? `次: ${nextJob.part}${nextJob.start ? `  ${nextJob.start}〜${nextJob.end||''}` : ''}` : '';
     }
   });
 
@@ -10602,7 +10677,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.21-6';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.21-7';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -12762,6 +12837,11 @@ onValue(ref(db,'lines'),s=>{
     Object.keys(lineNamesMap).forEach(id=>{if(lineNamesMap[id])lines[id]={...(lines[id]||{status:'waiting',plan:0,actual:0,updatedAt:0,jobs:[]}),name:lineNamesMap[id]};});
     // グローバルに公開（_autoSyncDantoriFromPlan で linesData より優先して使用）
     window._pmLinesRealtime = lines;
+    // 工場レイアウト（非モジュール側）から同じ計算を使うために公開する（2026-09-21）
+    window._pmCalcLineRate = calcLineRate;
+    window._pmCurJobIndex  = curJobIndex;
+    window._pmLineNoAlert  = lineNoAlertMap;
+    if(typeof updateFactoryView === 'function') updateFactoryView(lines);
     // Firebase SDK をグローバル公開（非モジュールスクリプトから利用）
     if(!window._fbSDK) window._fbSDK = { db, ref, update };
     updateLineSelects();
@@ -12790,7 +12870,8 @@ onValue(ref(db,'settings'),s=>{
   }
   // ライン名マップを更新し lines にも反映
   if(v.lineNames&&typeof v.lineNames==='object') lineNamesMap={...v.lineNames};
-  if(v.lineNoAlert&&typeof v.lineNoAlert==='object') lineNoAlertMap={...v.lineNoAlert};
+  if(v.lineNoAlert&&typeof v.lineNoAlert==='object'){ lineNoAlertMap={...v.lineNoAlert}; window._pmLineNoAlert=lineNoAlertMap; }
+  if(Number(v.noRepMin)>0) window._pmNoRepMin=Number(v.noRepMin);
   if(v.troubleThresh&&typeof v.troubleThresh==='object') troubleThresh={...troubleThresh,...v.troubleThresh};
   if(typeof v.troubleSlackUrl==='string') troubleSlackUrl=v.troubleSlackUrl;
   // しきい値UIに反映
@@ -18001,7 +18082,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.21-6</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.21-7</div>
 </body>
 </html>
 
