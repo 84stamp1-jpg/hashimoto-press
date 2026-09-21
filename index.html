@@ -580,9 +580,24 @@ const fmtTs=ts=>(!ts||ts===0)?'--:--':`${String(new Date(ts).getHours()).padStar
 const timeToH=t=>{if(!t)return null;const p=t.split(':');return +p[0]+ +p[1]/60;};
 const timeToMin=t=>{if(!t||t==='')return null;const p=t.split(':');return +p[0]*60+(+p[1]|0);};
 
+// 実績時間の「終わり」を決める
+//   ①実績終了時刻 ②無ければ、その品番に最後に実績を入れた時刻 ③それも無ければ最終更新時刻
+//   ★時計では伸ばさない。誰も触っていない品番の実績時間が勝手に増えないようにするため
+function lastCountMin(j, l){
+  const snap=(j&&j.snapHistory)||[];
+  for(let i=snap.length-1;i>=0;i--){
+    const t=timeToMin(snap[i].t);
+    if(t!==null) return t;
+  }
+  const u=(l&&l.updatedAt>0)?new Date(l.updatedAt):new Date();
+  return u.getHours()*60+u.getMinutes();
+}
+
 // ライン達成率計算
-// CT達成率 = 計画CT / 実績CT の加重平均（標準時間をどれだけ達成しているか）
-// 見込み完了時刻 = 現在時刻 + 残作業計画時間 ÷ CT達成率
+// CT達成率   = Σ(実績数×標準CT) ÷ Σ(実績時間)  … 工数で重みを付ける
+// 見込み完了 = 品番ごとに終わる時刻を出して、いちばん遅いもの
+//   ・開始は max(予定開始, 同じ機械の前の品番の終了, 最終更新時刻)
+//   ・予定の時間帯が重なっている品番は別の機械とみなし、前を待たない
 function calcLineRate(l){
   const jobs=(l.jobs||[]).filter(j=>j.plan>0&&j.start&&j.end&&!j.history);
   if(!jobs.length) return null;
@@ -592,9 +607,6 @@ function calcLineRate(l){
   const updT=l.updatedAt>0?new Date(l.updatedAt):now;
   const updMin=updT.getHours()*60+updT.getMinutes();
 
-  let ctRateSum=0, ctRateCnt=0;
-  let remainingPlanMin=0;
-
   // 現在稼働中jobを特定（関数外で一度だけ計算）
   const curActiveJob=(function(){
     let ci=jobs.findIndex(jj=>jj.part===l.part&&l.workStart&&jj.actualStart===l.workStart);
@@ -603,59 +615,68 @@ function calcLineRate(l){
     return ci>=0?jobs[ci]:null;
   })();
 
+  // ---- 品番ごとの下ごしらえ ----
+  const info=[];
   jobs.forEach(function(j){
-    const sm=timeToMin(j.start);
-    const em=timeToMin(j.end);
+    const sm=timeToMin(j.start), em=timeToMin(j.end);
     if(sm===null||em===null) return;
     const planNetJ=netMins(sm,em);
     if(planNetJ<=0) return;
     const planCT=planNetJ/j.plan;
-
     const jActCount=j.actualCount||0;
-    const isCurrentJob=curActiveJob&&(j.seq?j.seq===curActiveJob.seq:j===curActiveJob);
-    const jAct=isCurrentJob&&(l.actual||0)>jActCount?(l.actual||0):jActCount;
-
-    if(jAct>0){
-      const wsJ=timeToMin(isCurrentJob?(l.workStart||j.actualStart||j.start):(j.actualStart||j.start));
-      const weJ=isCurrentJob
-        ?(l.workEnd&&l.workEnd!==''?timeToMin(l.workEnd):updMin)
-        :(j.actualEnd&&j.actualEnd!==''?timeToMin(j.actualEnd):updMin);
-      const actualNetJ=wsJ&&weJ?netMins(wsJ,weJ):0;
-      if(actualNetJ>0){
-        ctRateSum+=jAct*planCT/actualNetJ;
-        ctRateCnt++;
-      }
-      // 未完了jobの残り作業時間を加算（修正計画数があればそちらを使用、標準CTは不変）
-      const isDone=j.status==='done'||(j.actualEnd&&j.actualEnd!=='');
-      if(!isDone){
-        const effectivePlan=j.revisedPlan||j.plan;
-        const rem=Math.max(0,effectivePlan-jAct);
-        remainingPlanMin+=rem*planCT;
-      }
-    } else {
-      // 未着手jobは修正計画数ベースの時間を残り時間に加算
-      const effectivePlan=j.revisedPlan||j.plan;
-      remainingPlanMin+=effectivePlan*planCT;
-    }
+    const isCur=curActiveJob&&(j.seq?j.seq===curActiveJob.seq:j===curActiveJob);
+    const jAct=isCur&&(l.actual||0)>jActCount?(l.actual||0):jActCount;
+    const wsJ=timeToMin(isCur?(l.workStart||j.actualStart||j.start):(j.actualStart||j.start));
+    const weRaw=isCur?(l.workEnd&&l.workEnd!==''?l.workEnd:''):(j.actualEnd||'');
+    const weJ=weRaw!==''?timeToMin(weRaw):lastCountMin(j,l);
+    const actualNetJ=(jAct>0&&wsJ&&weJ)?netMins(wsJ,weJ):0;
+    const isDone=j.status==='done'||(j.actualEnd&&j.actualEnd!=='');
+    const effectivePlan=j.revisedPlan||j.plan;
+    info.push({j:j, sm:sm, em:em, planCT:planCT, jAct:jAct,
+               actNet:actualNetJ, isDone:isDone,
+               rem:Math.max(0,effectivePlan-jAct)});
   });
+  if(!info.length) return null;
 
-  const ctRate=ctRateCnt>0?Math.round(ctRateSum/ctRateCnt*100):null;
+  // ---- CT達成率：工数で重みを付ける ----
+  let earnMin=0, spentMin=0;
+  info.forEach(function(x){
+    if(x.jAct>0&&x.actNet>0){ earnMin+=x.jAct*x.planCT; spentMin+=x.actNet; }
+  });
+  const ctRate=spentMin>0?Math.round(earnMin/spentMin*100):null;
 
-  // 見込み完了時刻：残り計画時間をCT達成率で補正して計算
-  let estFinish=null;
-  // ★品番の並び順は時間順とは限らないので、終了が最も遅いものを計画終了とする
+  // ---- 計画終了時刻：終了がいちばん遅い品番 ----
   let planEndTime=null, _pe=-1;
   jobs.forEach(function(j){
     const e=timeToMin(j.end);
     if(e!==null&&e>_pe){ _pe=e; planEndTime=j.end; }
   });
-  if(remainingPlanMin<=0&&ctRateCnt>0){
+
+  // ---- 見込み完了時刻 ----
+  const k=(ctRate&&ctRate>0)?100/ctRate:1;
+  const order=info.slice().sort(function(a,b){ return a.sm-b.sm; });
+  let prevEnd=null, prevEm=null, latest=null, anyRemain=false;
+  order.forEach(function(x){
+    const chained=(prevEm===null)||(x.sm>=prevEm);   // 予定が重なっていない＝同じ機械の順番待ち
+    if(x.isDone||x.rem<=0){
+      const e=(x.j.actualEnd&&x.j.actualEnd!=='')?timeToMin(x.j.actualEnd):x.em;
+      if(chained){ prevEnd=e; prevEm=x.em; }
+      return;
+    }
+    anyRemain=true;
+    let st=x.sm;                                     // 予定開始より前には始めない（材料・前工程の都合）
+    if(chained&&prevEnd!==null) st=Math.max(st,prevEnd);
+    st=Math.max(st,updMin);
+    const fin=addNetMins(st,Math.round(x.rem*x.planCT*k));
+    if(latest===null||fin>latest) latest=fin;
+    if(chained){ prevEnd=fin; prevEm=x.em; }
+  });
+
+  let estFinish=null;
+  if(!anyRemain&&spentMin>0){
     estFinish='完了';
-  } else if(remainingPlanMin>0&&ctRate&&ctRate>0){
-    const adjustedMin=remainingPlanMin*(100/ctRate);
-    // 正味分数→時計時刻に変換（途中の休憩時間を正確に加算）
-    const estM=addNetMins(updMin,Math.round(adjustedMin));
-    estFinish=String(Math.floor(estM/60)).padStart(2,'0')+':'+String(estM%60).padStart(2,'0');
+  } else if(latest!==null){
+    estFinish=String(Math.floor(latest/60)).padStart(2,'0')+':'+String(latest%60).padStart(2,'0');
   }
 
   if(ctRate===null&&estFinish===null) return null;
@@ -781,7 +802,7 @@ function getStatus(l){
     const planNetSt=netMins(timeToMin(cjSt.start),timeToMin(cjSt.end)); // net minutes
     const planCtSt=planNetSt>0?planNetSt/cjSt.plan:0;
     const wsStM=timeToMin(l.workStart||cjSt.start);
-    const weStM=l.workEnd&&l.workEnd!==''?timeToMin(l.workEnd):(new Date().getHours()*60+new Date().getMinutes());
+    const weStM=l.workEnd&&l.workEnd!==''?timeToMin(l.workEnd):lastCountMin(cjSt,l);
     const actMinSt=wsStM&&weStM?netMins(wsStM,weStM):0;
     const actCtSt=actMinSt>0&&l.actual>0?actMinSt/l.actual:0;
     if(planCtSt>0&&actCtSt>0) r=Math.round(planCtSt/actCtSt*100);
@@ -953,7 +974,8 @@ function renderBoard(){
           const jWS2=cur?(l.workStart||j.actualStart||j.start):(j.actualStart||j.start);
           const jWE2=cur?(l.workEnd&&l.workEnd!==''?l.workEnd:(j.actualEnd||'')):(j.actualEnd||'');
           const wsM2=timeToMin(jWS2);
-          const weM2=jWE2&&jWE2!==''?timeToMin(jWE2):(new Date().getHours()*60+new Date().getMinutes());
+          // 終了が空なら「最後に実績を入れた時刻」。時計では伸ばさない
+          const weM2=jWE2&&jWE2!==''?timeToMin(jWE2):lastCountMin(j,l);
           const actNetJ2=wsM2&&weM2?netMins(wsM2,weM2):0;
           // CT達成率 = (実績数×標準CT) ÷ 実績時間 × 100
           if(standardCT2>0&&actNetJ2>0){

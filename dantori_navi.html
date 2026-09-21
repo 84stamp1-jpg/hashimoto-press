@@ -49,6 +49,7 @@
 <!-- H-Hub v2026.09.05-11 : ①在庫管理に記入は通るようになった（ルックアップも解決）。②在庫調整で kintone が GAIA_IL03「ステータスの変更に失敗しました」を返す件への対応。この番号は原因が1つに定まらないので、確かめる場所を4つ並べて出すようにした（次のステータスの作業者が「実行時に選択」／アクション名の不一致／順番／同時編集）。あわせて、進めた先のステータスが作業者を要求する場合に備え、⚙設定に「次の作業者（kintoneのログイン名）」を追加し、指定があれば status.json の assignee として送る（GAS側は p.assignee をそのまま渡す作りなので変更不要）。GAIA_IL26・GAIA_IQ11 にも個別の案内を出す。また、GASがJSONではなくHTMLを返したとき「解析エラー: <!DOCTYPE html...」と生のHTMLを80文字出すだけで原因が読めなかったため、qcGasDiagnose() を追加してページの中身から判別する（ログイン画面／承認切れ／doPostなし／URL違い）。押し間違い防止に「kintoneで開く」と①②③の間へ区切りを入れた -->
 <!-- H-Hub v2026.09.05-10 : kintoneの GAIA_LO04（ルックアップの引き当て失敗）への対応。原因は2つあり、(a)値が参照先のキーと一致していない (b)★参照先アプリを読む権限がない。APIトークンは1アプリ分の権限しか持たないため、i_PRO_W_入力者 のようなルックアップ欄へ書くとき、kintoneは参照先（社員マスタ等）を読めず (b) で弾く。kintoneは X-Cybozu-API-Token にカンマ区切りで複数トークンを受け付けるので、⚙設定に「参照先アプリのAPIトークン」を追加し、cfg.token+','+cfg.token2 として送るようにした（GAS側は受け取ったトークンをそのままヘッダーに入れているので変更不要）。あわせて GAIA_LO04 のときは原因2つと、いま入っている値・kintoneに実在する値を並べて出す。設定保存時にも、入力者の名前が実在の値と一致しない場合はモーダルを閉じずに警告する。※結果表示に white-space:pre-wrap を付けて改行を効かせている -->
 <!-- H-Hub v2026.09.05-9 : 「①在庫管理に記入は押せるが何も起きない」の原因は2つあった。(1)★確認に window.confirm() を使っていた。Chromeは同じページが繰り返しダイアログを出すと「このページでこれ以上ダイアログを生成しない」を表示し、一度チェックされると以後 confirm() は何も表示せず false を返す。動作確認で何度も押した結果その状態になっており、押す→confirmがfalse→即return で本当に何も起きなかった。ブラウザのダイアログをやめ、カード内に確認の箱(askInline)を出す方式に変更。alert も既に赤枠表示へ置き換え済みなので、この画面はブラウザのダイアログを一切使わない。(2)★書き込みの直後に、裏で走っていた記録の再取得(getRecords)が終わると qcRenderCurrentList() が入力待ち一覧を丸ごと作り直しており、☑や確認の途中、結果の緑/赤の枠が消えていた。QC_NG_INTERACTING を追加し、一度でも操作を始めたら作り直さないようにした(🔄再取得／✕閉じる で解除)。confirmを常にfalseにした状態で①→②まで通ることを確認済み -->
+<!-- H-Hub v2026.09.21-2 : 進捗ボードの計算を作り直した。(1)実績時間の「終わり」を、終了時刻が空なら**その品番に最後に実績を入れた時刻**にした（従来は最終更新時刻や現在時刻で、触っていない品番の時間が勝手に伸びて達成率が落ちていた。Cラインで65%）。(2)CT達成率を品番ごとの単純平均から**工数加重 Σ(実績数×標準CT)÷Σ(実績時間)**へ。1ラインで2品番を並行して流すため。(3)見込み完了時刻を、残り時間の直列合計から**品番ごとに終わる時刻を出していちばん遅いもの**へ。開始は max(予定開始, 同じ機械の前の品番の終了, 最終更新時刻)。予定の時間帯が重なっている品番は別の機械とみなして前を待たない。予定開始より前には始めない（材料・前工程の都合があるため）。(4)行ごとの表示と右上の判定も同じ基準にそろえた（従来だけ現在時刻で、時計とともに悪化していた）。 -->
 <!-- H-Hub v2026.09.21-1 : 進捗ボードの2点。(1)カード右上の判定を 95%以上=正常 / 90%以上=注意 / それ未満=遅れ に（注意の下限を80→90へ・社長指示）。(2)「計画◯◯」に出す計画終了時刻を、品番の並びの最後ではなく**終了がいちばん遅い品番**から取るようにした。並び順は時間順とは限らず、Cラインでは最後の行が12:10だったため「+595分遅れ」と実態よりはるかに大きく出ていた。 -->
 <!-- H-Hub v2026.09.20-1 : 一括振り分けの材料残を「納期最遅の1件だけ選んだ値、それより前は必ずあり」に変更。途中の製造番号を作っている間は材料が残っていたはずで、全件を「なし」にするのは実態と違うため（社長の指摘）。 -->
 <!-- H-Hub v2026.09.19-2 : 一括振り分けモードで「材料残」を選べるようにした。保存処理に zairyo:'なし' が固定で埋め込まれていて、画面にも欄が無かったため、一括で入れた記録はすべて材料残なしになっていた。通常入力と同じ あり/なし の切替を作業者欄の下に置き、その値を振り分け先すべての記録に入れる（材料残は品番ごとの状態で、製造番号ごとではないため）。既定は「あり」。 -->
@@ -10533,7 +10534,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.21-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.21-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -12739,9 +12740,24 @@ const fmtTs=ts=>(!ts||ts===0)?'--:--':`${String(new Date(ts).getHours()).padStar
 const timeToH=t=>{if(!t)return null;const p=t.split(':');return +p[0]+ +p[1]/60;};
 const timeToMin=t=>{if(!t||t==='')return null;const p=t.split(':');return +p[0]*60+(+p[1]|0);};
 
+// 実績時間の「終わり」を決める
+//   ①実績終了時刻 ②無ければ、その品番に最後に実績を入れた時刻 ③それも無ければ最終更新時刻
+//   ★時計では伸ばさない。誰も触っていない品番の実績時間が勝手に増えないようにするため
+function lastCountMin(j, l){
+  const snap=(j&&j.snapHistory)||[];
+  for(let i=snap.length-1;i>=0;i--){
+    const t=timeToMin(snap[i].t);
+    if(t!==null) return t;
+  }
+  const u=(l&&l.updatedAt>0)?new Date(l.updatedAt):new Date();
+  return u.getHours()*60+u.getMinutes();
+}
+
 // ライン達成率計算
-// CT達成率 = 計画CT / 実績CT の加重平均（標準時間をどれだけ達成しているか）
-// 見込み完了時刻 = 現在時刻 + 残作業計画時間 ÷ CT達成率
+// CT達成率   = Σ(実績数×標準CT) ÷ Σ(実績時間)  … 工数で重みを付ける
+// 見込み完了 = 品番ごとに終わる時刻を出して、いちばん遅いもの
+//   ・開始は max(予定開始, 同じ機械の前の品番の終了, 最終更新時刻)
+//   ・予定の時間帯が重なっている品番は別の機械とみなし、前を待たない
 function calcLineRate(l){
   const jobs=(l.jobs||[]).filter(j=>j.plan>0&&j.start&&j.end&&!j.history);
   if(!jobs.length) return null;
@@ -12751,68 +12767,74 @@ function calcLineRate(l){
   const updT=l.updatedAt>0?new Date(l.updatedAt):now;
   const updMin=updT.getHours()*60+updT.getMinutes();
 
-  let ctRateSum=0, ctRateCnt=0;
-  let remainingPlanMin=0;
-
   // 現在稼働中jobを特定（関数外で一度だけ計算）
   const curActiveJob=(function(){
     const ci=curJobIndex({...l,jobs:jobs});
     return ci>=0?jobs[ci]:null;
   })();
 
+  // ---- 品番ごとの下ごしらえ ----
+  const info=[];
   jobs.forEach(function(j){
-    const sm=timeToMin(j.start);
-    const em=timeToMin(j.end);
+    const sm=timeToMin(j.start), em=timeToMin(j.end);
     if(sm===null||em===null) return;
     const planNetJ=netMins(sm,em);
     if(planNetJ<=0) return;
     const planCT=planNetJ/j.plan;
-
     const jActCount=j.actualCount||0;
-    const isCurrentJob=curActiveJob&&(j.seq?j.seq===curActiveJob.seq:j===curActiveJob);
-    const jAct=isCurrentJob&&(l.actual||0)>jActCount?(l.actual||0):jActCount;
-
-    if(jAct>0){
-      const wsJ=timeToMin(isCurrentJob?(l.workStart||j.actualStart||j.start):(j.actualStart||j.start));
-      const weJ=isCurrentJob
-        ?(l.workEnd&&l.workEnd!==''?timeToMin(l.workEnd):updMin)
-        :(j.actualEnd&&j.actualEnd!==''?timeToMin(j.actualEnd):updMin);
-      const actualNetJ=wsJ&&weJ?netMins(wsJ,weJ):0;
-      if(actualNetJ>0){
-        ctRateSum+=jAct*planCT/actualNetJ;
-        ctRateCnt++;
-      }
-      // 未完了jobの残り作業時間を加算（修正計画数があればそちらを使用、標準CTは不変）
-      const isDone=j.status==='done'||(j.actualEnd&&j.actualEnd!=='');
-      if(!isDone){
-        const effectivePlan=j.revisedPlan||j.plan;
-        const rem=Math.max(0,effectivePlan-jAct);
-        remainingPlanMin+=rem*planCT;
-      }
-    } else {
-      // 未着手jobは修正計画数ベースの時間を残り時間に加算
-      const effectivePlan=j.revisedPlan||j.plan;
-      remainingPlanMin+=effectivePlan*planCT;
-    }
+    const isCur=curActiveJob&&(j.seq?j.seq===curActiveJob.seq:j===curActiveJob);
+    const jAct=isCur&&(l.actual||0)>jActCount?(l.actual||0):jActCount;
+    const wsJ=timeToMin(isCur?(l.workStart||j.actualStart||j.start):(j.actualStart||j.start));
+    const weRaw=isCur?(l.workEnd&&l.workEnd!==''?l.workEnd:''):(j.actualEnd||'');
+    const weJ=weRaw!==''?timeToMin(weRaw):lastCountMin(j,l);
+    const actualNetJ=(jAct>0&&wsJ&&weJ)?netMins(wsJ,weJ):0;
+    const isDone=j.status==='done'||(j.actualEnd&&j.actualEnd!=='');
+    const effectivePlan=j.revisedPlan||j.plan;
+    info.push({j:j, sm:sm, em:em, planCT:planCT, jAct:jAct,
+               actNet:actualNetJ, isDone:isDone,
+               rem:Math.max(0,effectivePlan-jAct)});
   });
+  if(!info.length) return null;
 
-  const ctRate=ctRateCnt>0?Math.round(ctRateSum/ctRateCnt*100):null;
+  // ---- CT達成率：工数で重みを付ける ----
+  let earnMin=0, spentMin=0;
+  info.forEach(function(x){
+    if(x.jAct>0&&x.actNet>0){ earnMin+=x.jAct*x.planCT; spentMin+=x.actNet; }
+  });
+  const ctRate=spentMin>0?Math.round(earnMin/spentMin*100):null;
 
-  // 見込み完了時刻：残り計画時間をCT達成率で補正して計算
-  let estFinish=null;
-  // ★品番の並び順は時間順とは限らないので、終了が最も遅いものを計画終了とする
+  // ---- 計画終了時刻：終了がいちばん遅い品番 ----
   let planEndTime=null, _pe=-1;
   jobs.forEach(function(j){
     const e=timeToMin(j.end);
     if(e!==null&&e>_pe){ _pe=e; planEndTime=j.end; }
   });
-  if(remainingPlanMin<=0&&ctRateCnt>0){
+
+  // ---- 見込み完了時刻 ----
+  const k=(ctRate&&ctRate>0)?100/ctRate:1;
+  const order=info.slice().sort(function(a,b){ return a.sm-b.sm; });
+  let prevEnd=null, prevEm=null, latest=null, anyRemain=false;
+  order.forEach(function(x){
+    const chained=(prevEm===null)||(x.sm>=prevEm);   // 予定が重なっていない＝同じ機械の順番待ち
+    if(x.isDone||x.rem<=0){
+      const e=(x.j.actualEnd&&x.j.actualEnd!=='')?timeToMin(x.j.actualEnd):x.em;
+      if(chained){ prevEnd=e; prevEm=x.em; }
+      return;
+    }
+    anyRemain=true;
+    let st=x.sm;                                     // 予定開始より前には始めない（材料・前工程の都合）
+    if(chained&&prevEnd!==null) st=Math.max(st,prevEnd);
+    st=Math.max(st,updMin);
+    const fin=addNetMins(st,Math.round(x.rem*x.planCT*k));
+    if(latest===null||fin>latest) latest=fin;
+    if(chained){ prevEnd=fin; prevEm=x.em; }
+  });
+
+  let estFinish=null;
+  if(!anyRemain&&spentMin>0){
     estFinish='完了';
-  } else if(remainingPlanMin>0&&ctRate&&ctRate>0){
-    const adjustedMin=remainingPlanMin*(100/ctRate);
-    // 正味分数→時計時刻に変換（途中の休憩時間を正確に加算）
-    const estM=addNetMins(updMin,Math.round(adjustedMin));
-    estFinish=String(Math.floor(estM/60)).padStart(2,'0')+':'+String(estM%60).padStart(2,'0');
+  } else if(latest!==null){
+    estFinish=String(Math.floor(latest/60)).padStart(2,'0')+':'+String(latest%60).padStart(2,'0');
   }
 
   if(ctRate===null&&estFinish===null) return null;
@@ -12941,7 +12963,7 @@ function getStatus(l){
     const planNetSt=netMins(timeToMin(cjSt.start),timeToMin(cjSt.end)); // net minutes
     const planCtSt=planNetSt>0?planNetSt/cjSt.plan:0;
     const wsStM=timeToMin(l.workStart||cjSt.start);
-    const weStM=l.workEnd&&l.workEnd!==''?timeToMin(l.workEnd):(new Date().getHours()*60+new Date().getMinutes());
+    const weStM=l.workEnd&&l.workEnd!==''?timeToMin(l.workEnd):lastCountMin(cjSt,l);
     const actMinSt=wsStM&&weStM?netMins(wsStM,weStM):0;
     const actCtSt=actMinSt>0&&l.actual>0?actMinSt/l.actual:0;
     if(planCtSt>0&&actCtSt>0) r=Math.round(planCtSt/actCtSt*100);
@@ -13106,7 +13128,8 @@ function renderBoard(){
           const jWS2=cur?(l.workStart||j.actualStart||j.start):(j.actualStart||j.start);
           const jWE2=cur?(l.workEnd&&l.workEnd!==''?l.workEnd:(j.actualEnd||'')):(j.actualEnd||'');
           const wsM2=timeToMin(jWS2);
-          const weM2=jWE2&&jWE2!==''?timeToMin(jWE2):(new Date().getHours()*60+new Date().getMinutes());
+          // 終了が空なら「最後に実績を入れた時刻」。時計では伸ばさない
+          const weM2=jWE2&&jWE2!==''?timeToMin(jWE2):lastCountMin(j,l);
           const actNetJ2=wsM2&&weM2?netMins(wsM2,weM2):0;
           // CT達成率 = (実績数×標準CT) ÷ 実績時間 × 100
           if(standardCT2>0&&actNetJ2>0){
