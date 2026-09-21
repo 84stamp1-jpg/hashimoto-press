@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.21-6 : 暑さ指数に「測定が要る期間（月）」を足した（既定5〜9月・社長要望）。冬でも赤い「要測定」が出続けて、誰も測らない表示が常時出ている状態になっていたため。期間の外は灰色の『測定期間外』にして、押せば入力はできるままにした。12〜2月のように年をまたぐ指定も可。設定画面から変えられる。 -->
 <!-- H-Hub v2026.09.21-5 : 工場レイアウトの稼働状況を、プルダウンの値ではなく入力の中身から決めるようにした（社長指示）。停止中＝トラブル・停止記録が続いている／稼働中＝生産が始まって終わっていない品番がある／段取中＝①段取りだけ先にやっている（段取り開始だけ入っている）②前の品番が終わって次がまだ始まっていない／待機中＝どちらも始まっていない。lineAutoStatus() を追加。※line.status は進捗ボードの入力からは一度も書かれておらず、実質あてにならない値だった。 -->
 <!-- H-Hub v2026.09.21-4 : 進捗ボードと工場レイアウトの右下に、読み込まれている版を小さく出した（いままで版が見えるのは品質チェックの「システム入力待ち」だけだった）。★あわせて版の通知の誤作動を直した。今日足したコメントを先頭ではなく途中に差し込んでいたため、先頭に残っていた9/19のコメントを「最新」と読み、古い版を新しいと知らせていた。コメントを新しい順に並べ直し、比較も「文字が違えば通知」から「本当に新しいときだけ通知」に変えた。 -->
 <!-- H-Hub v2026.09.21-3 : 見込み完了時刻の遅れの見方を社長の考え方に合わせた。ラインのCT達成率を残り全部に掛けていたため、まだ始めてもいない品番まで遅れ扱いになっていた（Cラインで+27分）。残りの所要時間は【生産中の品番＝その品番自身の達成率で補正／未着手＝標準どおり】にし、終わった品番の遅れは実績の終了時刻が次の開始を押す形でだけ効くようにした。検算：Bライン19:10・Cライン19:10（ともに計画どおり）、1番が59%に落ちた場合は20:30（+80分）。 -->
@@ -1227,6 +1228,14 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
     </div>
 
     <div class="form-group">
+      <label>測定が要る期間（月）</label>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;">
+        <input type="number" id="wb-cfg-season-from" min="1" max="12" step="1" style="width:70px;font-family:inherit;"/>
+        <span style="font-size:12px;">月 　〜　</span>
+        <input type="number" id="wb-cfg-season-to" min="1" max="12" step="1" style="width:70px;font-family:inherit;"/>
+        <span style="font-size:12px;">月</span>
+      </div>
+      <div class="form-hint" style="margin-bottom:10px;">この期間の外では「要測定」を出しません（冬に赤枠が出続けないようにするため）。押せばいつでも入力できます</div>
       <label>「要測定」に切り替わるまでの時間（分）</label>
       <input type="number" id="wb-cfg-stale" min="30" max="720" step="10" style="font-family:inherit;"/>
       <div class="form-hint">最後の測定からこの時間を過ぎると、数値を消して「要測定」表示にします</div>
@@ -3324,7 +3333,16 @@ const WB_DEFAULT_CFG = {
   people:  ['見原','八木','大石','遠藤','木村','杉山','登﨑'],
   actions: ['通常（対応なし）','休憩を増やした','重作業を涼しい時間帯へ変更','作業を中止・延期'],
   staleMin: 150,
+  seasonFrom: 5,   // 測定が要る期間（月）。冬はそもそも測らないので「要測定」を出さない
+  seasonTo: 9,
 };
+// いまが測定の要る期間か（冬に「要測定」の赤枠を出し続けないため・2026-09-21 社長要望）
+//   12〜2月のように年をまたぐ指定もできるようにしてある
+function wbInSeason(){
+  const f = +(wbCfg.seasonFrom || 5), t = +(wbCfg.seasonTo || 9);
+  const m = new Date().getMonth() + 1;
+  return (f <= t) ? (m >= f && m <= t) : (m >= f || m <= t);
+}
 // 危険域。この値以上は基準温度の設定にかかわらず全作業を×にする（安全側に倒す固定ルール）
 const WB_DANGER = 31;
 let wbCfg  = JSON.parse(JSON.stringify(WB_DEFAULT_CFG));
@@ -3429,6 +3447,16 @@ function wbRender(){
   const stale = !d || (Date.now() - d.ts) > (wbCfg.staleMin || 150) * 60000;
   const B = WB_BOX;
   const name = wbEsc((wbCfg.places && wbCfg.places[key]) || '製造現場');
+  // 測定期間の外は、赤い「要測定」を出さない（押せば入力はできる）
+  if(stale && !wbInSeason()){
+    box.innerHTML =
+      `<rect x="${B.x}" y="${B.y}" width="${B.w}" height="${B.h}" rx="4" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.5"/>
+       <text x="52" y="20" text-anchor="middle" font-size="7.5" font-weight="700" fill="#94a3b8">${name}</text>
+       <text x="52" y="50" text-anchor="middle" font-size="13" font-weight="700" fill="#94a3b8">測定期間外</text>
+       <text x="52" y="68" text-anchor="middle" font-size="7" fill="#94a3b8">${(wbCfg.seasonFrom||5)}月〜${(wbCfg.seasonTo||9)}月に測定</text>
+       <text x="52" y="86" text-anchor="middle" font-size="7" fill="#cbd5e1">押せば入力できます</text>`;
+    return;
+  }
   if(stale){
     const last = d ? `最終 ${new Date(d.ts).toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})}` : '本日の記録なし';
     box.innerHTML =
@@ -3623,6 +3651,8 @@ async function wbOpenCfg(){
   document.getElementById('wb-cfg-actions').innerHTML = '';
   (wbCfg.actions || []).forEach(a => wbCfgAddAction(a));
   document.getElementById('wb-cfg-stale').value = wbCfg.staleMin || 150;
+  document.getElementById('wb-cfg-season-from').value = wbCfg.seasonFrom || 5;
+  document.getElementById('wb-cfg-season-to').value   = wbCfg.seasonTo   || 9;
   document.getElementById('wbgtCfgModal').style.display = 'flex';
 }
 async function wbSaveCfg(){
@@ -3640,7 +3670,11 @@ async function wbSaveCfg(){
   if(!works.length){ alert('作業項目を1つ以上入れてください'); return; }
   if(!people.length){ alert('入力者を1人以上入れてください'); return; }
   const stale = parseInt(document.getElementById('wb-cfg-stale').value, 10);
-  const cfg = { places, works, people, actions, staleMin: (isNaN(stale) ? 150 : stale) };
+  const sf = parseInt(document.getElementById('wb-cfg-season-from').value, 10);
+  const st2 = parseInt(document.getElementById('wb-cfg-season-to').value, 10);
+  const cfg = { places, works, people, actions, staleMin: (isNaN(stale) ? 150 : stale),
+                seasonFrom: (isNaN(sf) ? 5 : Math.min(12, Math.max(1, sf))),
+                seasonTo:   (isNaN(st2) ? 9 : Math.min(12, Math.max(1, st2))) };
   try {
     await fetch(`${wbFb()}/wbgt/config.json`,
       { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(cfg) });
@@ -10568,7 +10602,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.21-5';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.21-6';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -17967,7 +18001,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.21-5</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.21-6</div>
 </body>
 </html>
 
