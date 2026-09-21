@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.21-14 : ロス記録の見た目を直した（社長指示）。(1)入力フォーム用の幅制限（.fc の 620px）がそのまま効いていて、左右に大きな余白が出たうえ品番やライン名が2〜3段に折り返していた。ロス記録だけ横いっぱいに使い、表のセルは折り返さないようにした。(2)**「数量未達」を原因のしるしから外した**。計画的に数量を減らすこともあるため、少ない＝問題とは限らない。数量の欄は残すが色は付けない。前に保存した記録に残っている分も表示しない。 -->
 <!-- H-Hub v2026.09.21-13 : 進捗管理に「📉 ロス記録」タブを足した（社長指示：前日のロスの中身を翌日見たい／3か月ためて品番ごとに問題点を検討したい）。進捗ボードは日ごとに使い捨てだが、これは /lossHistory に残る（約100日で自動削除）。実績入力のたび・トラブルを入れたり終わらせたりするたびに、その日のラインの記録を上書き保存する。記録するのは品番ごとに 計画数/実績数・数量達成率・CT達成率・段取(実績/標準)・段取超過・停止(分と種類)・実績時間と計画時間・備考、そして**原因のしるし（段取り／サイクルタイム／数量未達／トラブル）**。画面は「日ごと」（既定は前日）と「品番ごと」（既定は3か月・ロスの大きい順）の2つ。CSV出力あり。あわせて品番ごとの計算を lossJobRows() に1本化し、ロスタイムの表示もここを通すようにした（数字が食い違わないようにするため）。 -->
 <!-- H-Hub v2026.09.21-12 : 段取り時間の出し方を直した（社長指示）。**段取り開始が入っていれば、そこを段取りの始まりにする。終わりは段取り終了、無ければ生産開始。**いままでは前の品番の終了（1本目は始業08:10）からの推定しか見ておらず、1本目で段取りがある場合に実態と合わなかった。段取り開始を入れるのはまさにこのためなので、入力があるときは必ずそちらを使う。行の表示・工程一覧・ロスタイムの3か所すべてで同じ出し方。 -->
 <!-- H-Hub v2026.09.21-11 : ロスタイムの段取超過が合っていなかった（社長指摘：Bラインは行を見れば +32分なのに +14分と出ていた）。前の品番の「実績の終了」が入っている行しか数えず、1本目も除いていたため、3行のうち1行しか拾えていなかった。**行ごとに出している「🔧 段取 ○分／標準○分」と、まったく同じ出し方に合わせた**（段取り実績の入力があればその値、無ければ推定）。1本目も数える（行の表示と同じく始業08:10からの推定）。画面の行を足せばそのまま合う。どの行で超えたかも「段取超過 +32分（1行目 +4分・2行目 +14分・3行目 +14分）」と添えた。 -->
@@ -286,14 +287,19 @@ html, body {
 .pp-status-badge{font-size:9px;padding:1px 7px;border-radius:9px;font-weight:600;white-space:nowrap;flex-shrink:0;}
 
 /* ===== ロス記録 ===== */
+/* 入力フォームと違って表なので、.fc の 620px 制限を外して横いっぱいに使う */
+#tab-loss .fc{max-width:none;margin:0 0 10px;}
+#tab-loss .fi{min-width:0;}
 .lh-tag{display:inline-block;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:700;white-space:nowrap;}
 .lh-setup{background:#fef3c7;color:#92400e;}
 .lh-ct{background:#dbeafe;color:#1e40af;}
 .lh-qty{background:#fee2e2;color:#b91c1c;}
 .lh-stop{background:#fce7f3;color:#9d174d;}
 .lh-tbl{width:100%;border-collapse:collapse;font-size:11px;}
-.lh-tbl th{background:#f1f5f9;padding:5px 7px;text-align:left;border-bottom:2px solid #e2e8f0;font-weight:700;white-space:nowrap;position:sticky;top:0;z-index:2;}
-.lh-tbl td{padding:5px 7px;border-bottom:1px solid #f1f5f9;vertical-align:top;}
+.lh-tbl th{background:#f1f5f9;padding:5px 8px;text-align:left;border-bottom:2px solid #e2e8f0;font-weight:700;white-space:nowrap;position:sticky;top:0;z-index:2;}
+/* 品番・ライン名で折り返さない（2段になって読みにくかったため） */
+.lh-tbl td{padding:5px 8px;border-bottom:1px solid #f1f5f9;vertical-align:top;white-space:nowrap;}
+.lh-tbl td.lh-wrap{white-space:normal;}
 .lh-tbl tr:hover td{background:#fafafa;}
 .lh-num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
 .lh-bad{color:#dc2626;font-weight:700;}
@@ -2506,10 +2512,9 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
         <span>原因のしるし：</span>
         <span class="lh-tag lh-setup">段取り</span>
         <span class="lh-tag lh-ct">サイクルタイム</span>
-        <span class="lh-tag lh-qty">数量未達</span>
         <span class="lh-tag lh-stop">トラブル</span>
       </div>
-      <div id="lhBody" style="max-height:calc(100vh - 300px);overflow:auto;"></div>
+      <div id="lhBody" style="max-height:calc(100vh - 290px);overflow:auto;"></div>
       <div style="border-top:1px solid #eee;padding-top:10px;margin-top:10px;display:flex;justify-content:space-between;align-items:center;">
         <span id="lhCount" style="font-size:11px;color:#888;"></span>
         <button class="bd" onclick="lhSaveToday()">いまの状態を今日の記録に保存</button>
@@ -10833,7 +10838,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.21-13';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.21-14';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -13127,7 +13132,7 @@ function lossJobRows(l,id){
     if(over>0) causes.push('段取り');
     if(stop>0) causes.push('トラブル');
     if(ct!==null&&ct<95) causes.push('サイクルタイム');
-    if(done&&qty!==null&&qty<95) causes.push('数量未達');
+    // ★数量未達は原因に入れない（計画的に減らすこともあるため・2026-09-21 社長指示）
     rows.push({seq:Number(j.seq)||(ji+1), row:ji+1, part:j.part||'', plan:effPlan, actual:jAct,
       planStart:j.start||'', planEnd:j.end||'', actStart:jWS||'', actEnd:jWE||'',
       setupMin:Math.round(disp), setupStd:std, setupOver:over, noSetup:!!j.noSetup,
@@ -14085,14 +14090,17 @@ window.lhLoad=async function(){
   (mode==='part'?_lhRenderPart:_lhRenderDay)(recs);
 };
 function _lhTags(causes){
-  const C={'段取り':'lh-setup','サイクルタイム':'lh-ct','数量未達':'lh-qty','トラブル':'lh-stop'};
-  return (causes||[]).map(c=>'<span class="lh-tag '+(C[c]||'')+'">'+_lhEsc(c)+'</span>').join(' ');
+  const C={'段取り':'lh-setup','サイクルタイム':'lh-ct','トラブル':'lh-stop'};
+  // 数量未達は出さない（前に保存した記録に残っていても無視する）
+  return (causes||[]).filter(c=>C[c]).map(c=>'<span class="lh-tag '+C[c]+'">'+_lhEsc(c)+'</span>').join(' ');
 }
 function _lhPct(v){
   if(v===null||v===undefined) return '<span style="color:#ccc;">--</span>';
   return '<span class="'+(v>=95?'lh-ok':'lh-bad')+'">'+v+'%</span>';
 }
 function _lhMin(v){ return v>0?'<span class="lh-bad">+'+v+'分</span>':'<span style="color:#ccc;">-</span>'; }
+// 数量は「低い＝悪い」とは限らない（計画的に減らすこともある）ので色を付けない
+function _lhQty(v){ return (v===null||v===undefined)?'<span style="color:#ccc;">--</span>':('<span style="color:#555;">'+v+'%</span>'); }
 function _lhRenderDay(recs){
   const body=document.getElementById('lhBody');
   const n=recs.reduce((a,r)=>a+r.jobs.length,0);
@@ -14111,9 +14119,9 @@ function _lhRenderDay(recs){
       const rows=r.jobs.map(function(j){
         return '<tr>'
         +'<td class="lh-num" style="color:#aaa;">'+j.row+'</td>'
-        +'<td>'+_lhEsc(j.part)+(j.note?'<div style="font-size:10px;color:#999;">📝 '+_lhEsc(j.note)+'</div>':'')+'</td>'
+        +'<td><b>'+_lhEsc(j.part)+'</b>'+(j.note?'<span style="font-size:10px;color:#999;margin-left:8px;">📝 '+_lhEsc(j.note)+'</span>':'')+'</td>'
         +'<td class="lh-num">'+(j.actual||0).toLocaleString()+' / '+(j.plan||0).toLocaleString()+'</td>'
-        +'<td class="lh-num">'+_lhPct(j.qtyRate)+'</td>'
+        +'<td class="lh-num">'+_lhQty(j.qtyRate)+'</td>'
         +'<td class="lh-num">'+_lhPct(j.ctRate)+'</td>'
         +'<td class="lh-num">'+(j.noSetup?'<span style="color:#ccc;">なし</span>'
             :(j.setupMin>0?j.setupMin+'/'+j.setupStd+'分':'<span style="color:#ccc;">--/'+j.setupStd+'分</span>'))+'</td>'
@@ -14138,7 +14146,7 @@ function _lhRenderPart(recs){
   recs.forEach(function(r){ r.jobs.forEach(function(j){
     const k=j.part||'(品番なし)';
     if(!agg[k]) agg[k]={part:k,days:{},n:0,ctSum:0,ctN:0,qtySum:0,qtyN:0,setup:0,stop:0,
-                        cSetup:0,cCT:0,cQty:0,cStop:0,lines:{}};
+                        cSetup:0,cCT:0,cStop:0,lines:{}};
     const a=agg[k];
     a.n++; a.days[r.date]=1; a.lines[r.lineName||r.lineId]=1;
     if(j.ctRate!=null){ a.ctSum+=j.ctRate; a.ctN++; }
@@ -14146,7 +14154,7 @@ function _lhRenderPart(recs){
     a.setup+=j.setupOver||0; a.stop+=j.stopMin||0;
     (j.causes||[]).forEach(function(c){
       if(c==='段取り')a.cSetup++; else if(c==='サイクルタイム')a.cCT++;
-      else if(c==='数量未達')a.cQty++; else if(c==='トラブル')a.cStop++; });
+      else if(c==='トラブル')a.cStop++; });
   });});
   const rows=Object.keys(agg).map(function(k){
     const a=agg[k];
@@ -14166,12 +14174,11 @@ function _lhRenderPart(recs){
       const cz=[];
       if(a.cSetup) cz.push('<span class="lh-tag lh-setup">段取り '+a.cSetup+'</span>');
       if(a.cCT)    cz.push('<span class="lh-tag lh-ct">サイクルタイム '+a.cCT+'</span>');
-      if(a.cQty)   cz.push('<span class="lh-tag lh-qty">数量未達 '+a.cQty+'</span>');
       if(a.cStop)  cz.push('<span class="lh-tag lh-stop">トラブル '+a.cStop+'</span>');
-      return '<tr><td>'+_lhEsc(a.part)+'</td>'
+      return '<tr><td><b>'+_lhEsc(a.part)+'</b></td>'
         +'<td style="color:#888;">'+_lhEsc(Object.keys(a.lines).join('・'))+'</td>'
         +'<td class="lh-num">'+a.n+'</td><td class="lh-num">'+a.dayN+'</td>'
-        +'<td class="lh-num">'+_lhPct(a.ct)+'</td><td class="lh-num">'+_lhPct(a.qty)+'</td>'
+        +'<td class="lh-num">'+_lhPct(a.ct)+'</td><td class="lh-num">'+_lhQty(a.qty)+'</td>'
         +'<td class="lh-num">'+_lhMin(a.setup)+'</td><td class="lh-num">'+_lhMin(a.stop)+'</td>'
         +'<td class="lh-num">'+(a.loss>0?'<b class="lh-bad">+'+a.loss+'分</b>':'<span style="color:#ccc;">-</span>')+'</td>'
         +'<td>'+(cz.join(' ')||'<span style="color:#ccc;">-</span>')+'</td></tr>';
@@ -18601,7 +18608,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.21-13</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.21-14</div>
 </body>
 </html>
 
