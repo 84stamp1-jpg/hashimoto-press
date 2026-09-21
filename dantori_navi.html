@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.21-5 : 工場レイアウトの稼働状況を、プルダウンの値ではなく入力の中身から決めるようにした（社長指示）。停止中＝トラブル・停止記録が続いている／稼働中＝生産が始まって終わっていない品番がある／段取中＝①段取りだけ先にやっている（段取り開始だけ入っている）②前の品番が終わって次がまだ始まっていない／待機中＝どちらも始まっていない。lineAutoStatus() を追加。※line.status は進捗ボードの入力からは一度も書かれておらず、実質あてにならない値だった。 -->
 <!-- H-Hub v2026.09.21-4 : 進捗ボードと工場レイアウトの右下に、読み込まれている版を小さく出した（いままで版が見えるのは品質チェックの「システム入力待ち」だけだった）。★あわせて版の通知の誤作動を直した。今日足したコメントを先頭ではなく途中に差し込んでいたため、先頭に残っていた9/19のコメントを「最新」と読み、古い版を新しいと知らせていた。コメントを新しい順に並べ直し、比較も「文字が違えば通知」から「本当に新しいときだけ通知」に変えた。 -->
 <!-- H-Hub v2026.09.21-3 : 見込み完了時刻の遅れの見方を社長の考え方に合わせた。ラインのCT達成率を残り全部に掛けていたため、まだ始めてもいない品番まで遅れ扱いになっていた（Cラインで+27分）。残りの所要時間は【生産中の品番＝その品番自身の達成率で補正／未着手＝標準どおり】にし、終わった品番の遅れは実績の終了時刻が次の開始を押す形でだけ効くようにした。検算：Bライン19:10・Cライン19:10（ともに計画どおり）、1番が59%に落ちた場合は20:30（+80分）。 -->
 <!-- H-Hub v2026.09.21-2 : 進捗ボードの計算を作り直した。(1)実績時間の「終わり」を、終了時刻が空なら**その品番に最後に実績を入れた時刻**にした（従来は最終更新時刻や現在時刻で、触っていない品番の時間が勝手に伸びて達成率が落ちていた。Cラインで65%）。(2)CT達成率を品番ごとの単純平均から**工数加重 Σ(実績数×標準CT)÷Σ(実績時間)**へ。1ラインで2品番を並行して流すため。(3)見込み完了時刻を、残り時間の直列合計から**品番ごとに終わる時刻を出していちばん遅いもの**へ。開始は max(予定開始, 同じ機械の前の品番の終了, 最終更新時刻)。予定の時間帯が重なっている品番は別の機械とみなして前を待たない。予定開始より前には始めない（材料・前工程の都合があるため）。(4)行ごとの表示と右上の判定も同じ基準にそろえた（従来だけ現在時刻で、時計とともに悪化していた）。 -->
@@ -4597,6 +4598,27 @@ function _linesJobsHash(lines){
   return JSON.stringify(rel);
 }
 
+// 工場レイアウトの稼働状況を、入力の中身から決める（プルダウンは使わない・2026-09-21 社長指示）
+//   停止中 … トラブル・停止記録が続いている
+//   稼働中 … 生産が始まっていて終わっていない品番がある
+//   段取中 … ①段取りだけ先にやっている（段取り開始が入って生産開始が無い）
+//            ②前の品番が終わっていて、次の品番がまだ始まっていない（その間が段取り）
+//   待機中 … どちらも始まっていない
+function lineAutoStatus(line){
+  if(!line) return 'waiting';
+  if(line.stopped === true) return 'stop';
+  const jobs = (Array.isArray(line.jobs) ? line.jobs : [])
+    .filter(j => j && !j.history && (j.plan||0) > 0);
+  if(!jobs.length) return 'waiting';
+  const started = j => !!(j.actualStart && j.actualStart !== '');
+  const ended   = j => !!(j.actualEnd   && j.actualEnd   !== '');
+  const setupOn = j => !!(j.setupStartTime && j.setupStartTime !== '');
+  if(jobs.some(j => started(j) && !ended(j))) return 'running';
+  if(jobs.some(j => setupOn(j) && !started(j) && !ended(j))) return 'setup';
+  if(jobs.some(ended) && jobs.some(j => !started(j) && !ended(j))) return 'setup';
+  return 'waiting';
+}
+
 function updateFactoryView(lines){
   linesData = lines || {};
   // jobsデータに変化があれば自動同期をトリガー
@@ -4633,7 +4655,7 @@ function updateFactoryView(lines){
       if(linesData[id]){ line = linesData[id]; lineId = id; break; }
     }
 
-    const st = (line && line.status) || 'waiting';
+    const st = lineAutoStatus(line);   // プルダウンではなく入力の中身から決める
     const bc = BADGE_COLORS[st] || BADGE_COLORS.waiting;
     const plan   = (line && line.plan)   || 0;
     const actual = (line && line.actual) || 0;
@@ -10546,7 +10568,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.21-4';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.21-5';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -17945,7 +17967,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.21-4</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.21-5</div>
 </body>
 </html>
 
