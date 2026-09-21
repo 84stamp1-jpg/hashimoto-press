@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.21-11 : ロスタイムの段取超過が合っていなかった（社長指摘：Bラインは行を見れば +32分なのに +14分と出ていた）。前の品番の「実績の終了」が入っている行しか数えず、1本目も除いていたため、3行のうち1行しか拾えていなかった。**行ごとに出している「🔧 段取 ○分／標準○分」と、まったく同じ出し方に合わせた**（段取り実績の入力があればその値、無ければ推定）。1本目も数える（行の表示と同じく始業08:10からの推定）。画面の行を足せばそのまま合う。どの行で超えたかも「段取超過 +32分（1行目 +4分・2行目 +14分・3行目 +14分）」と添えた。 -->
 <!-- H-Hub v2026.09.21-10 : 遅れの出どころを出すようにした（社長指示）。「CT達成率は達成しているのに見込み完了が遅くなる」理由が分からなかったため、進捗ボードの**CT達成率と見込み完了時刻の間に「ロスタイム（段取超過・停止）」**を挟んだ。段取超過＝前の品番の実際の終わり→この品番の作業開始（休憩除く）− 標準段取り時間。★1本目は数えない（始業待ち・材料待ちと区別がつかないため）。停止＝トラブル・停止記録の合計。工場レイアウトのカードにも5行目に「⏱ 段取+63 停止+30」として出す。calcLineLoss() を追加し両方で共有。あわせて (1)**左右のグレーの余白を無くした**。高さで頭打ちになると箱は横いっぱいのまま中身だけ縮んでいたので、箱の幅を「その高さで描ける幅」に決め、余ったぶんは担当者パネルへ回すようにした。(2)**実績入力の「稼働状態」プルダウンを廃止**（社長指摘）。誰も動かさず常に「稼働中」のままで、実態と合っていなかった。送る中身そのものから lineAutoStatus() で決めて書き込み、画面には結果だけ出す。 -->
 <!-- H-Hub v2026.09.21-9 : 右端の列（組立・完成品置場）の文字が左に寄っていたので中心にそろえた。列を60幅に細くしたとき、ビーコンを置く場所を空けるつもりで文字を772（中心は786）に置いていたため。金型置場の縦書きも1pxずらして中心に。 -->
 <!-- H-Hub v2026.09.21-8 : 実績入力に「■ 停止する（トラブル記録）」「▶ 再開する」を足した（社長指示）。いままで停止の記録は進捗ボードのカード右上のボタンからしか入らず、実績を入れている画面からは入れられなかった。停止するを押すと、右上と同じトラブル・停止記録がそのラインで開く（開始時刻はいま）。再開するを押すと、終わっていない記録すべてに終了時刻（いま）が入り、稼働状況は自動で稼働中に戻る。ボタンの下に「⛔ 停止中：設備トラブル 15:40から 48分」と、いまの状態を出す。あわせて (1)工場レイアウトの稼働状況の「停止中」を、書かれることのなかった line.stopped ではなく**終わっていないトラブル記録**で判定するようにした。(2)停止中は見込み完了時刻を、止まっている時間分だけ丸ごと後ろへずらすようにした（社長指示）。 -->
@@ -10774,7 +10775,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.21-10';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.21-11';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -13009,28 +13010,31 @@ function lastCountMin(j, l){
 //     生産中の品番＝その品番の達成率で補正／未着手の品番＝標準どおり。
 //     終わった品番の遅れは、実績の終了時刻が次の品番の開始を押すことで効く
 // ラインの「ロスタイム」＝標準どおりなら要らなかった時間（2026-09-21 社長指示）
-//   段取超過 … 前の品番の実際の終わり→この品番の作業開始（休憩除く）− 標準段取り時間
-//               ★1本目は数えない。始業待ち・材料待ちと段取りの区別がつかないため
+//   段取超過 … ★行ごとに出している「🔧 段取 ○分／標準○分」の、超えた分の合計。
+//               画面の行を足せばそのまま合うようにするため、行の表示とまったく同じ出し方をする
+//               （段取り実績の入力があればその値／無ければ推定 calcImpliedSetup）。
+//               1本目は始業 08:10 からの推定になる（行の表示と同じ）。
 //   停止     … トラブル・停止記録の合計（続いているものは今まで）
 //   CT達成率が良いのに見込み完了が遅れる理由は、たいていこのどちらか
 function calcLineLoss(l, id){
   if(!l) return null;
-  const jobs=(l.jobs||[]).filter(j=>j&&j.plan>0&&!j.history);
+  // ★renderBoard の行と同じ並び・同じ添字にする（curJobIndex も同じ配列で取る）
+  const jobs=(l.jobs||[]).filter(j=>j&&j.plan>0);
   const n=new Date(), nowMin=n.getHours()*60+n.getMinutes();
-  const ci=curJobIndex(l);
+  const ci=curJobIndex({...l,jobs:jobs});
   let setupOver=0;
+  const setupRows=[];
   jobs.forEach(function(j,ji){
-    if(ji===0||j.noSetup) return;
-    const pj=jobs[ji-1];
-    if(!pj||!pj.actualEnd||pj.actualEnd==='') return;   // 前の品番の実際の終わりが要る
-    const ws=(ji===ci?(l.workStart||j.actualStart):j.actualStart)||'';
-    if(!ws) return;
-    const pe=timeToMin(pj.actualEnd), st=timeToMin(ws);
-    if(pe===null||st===null||st<=pe) return;
-    const act=(j.setupActualMin>0)?j.setupActualMin:netMins(pe,st);
+    if(j.history||j.noSetup) return;
+    const cur=(ji===ci);
+    const jWS=cur?(l.workStart||j.actualStart||''):(j.actualStart||'');
+    const jSetupMin=cur?(l.setupMin||j.setupActualMin||0):(j.setupActualMin||0);
+    const implied=jWS?calcImpliedSetup(jobs,ji,jWS):null;
+    const disp=jSetupMin>0?jSetupMin:(implied||0);
+    if(disp<=0) return;
     const std=calcSetupTime(id,j.kata,j.ninzu)||0;
-    const over=Math.round(act-std);
-    if(over>0) setupOver+=over;
+    const over=Math.round(disp-std);
+    if(over>0){ setupOver+=over; setupRows.push((ji+1)+'行目 +'+over+'分'); }
   });
   let stopMin=0;
   (l.troubles||[]).forEach(function(t){
@@ -13040,7 +13044,7 @@ function calcLineLoss(l, id){
     if(ts!==null&&te!==null&&te>ts) stopMin+=netMins(ts,te);
   });
   stopMin=Math.round(stopMin);
-  return {setupOver:setupOver, stopMin:stopMin, total:setupOver+stopMin};
+  return {setupOver:setupOver, stopMin:stopMin, total:setupOver+stopMin, setupRows:setupRows};
 }
 
 function calcLineRate(l){
@@ -13642,7 +13646,8 @@ function renderBoard(){
           var has=lo.total>0;
           var col=has?'#e74c3c':'#27ae60';
           var parts=[];
-          if(lo.setupOver>0) parts.push('段取超過 +'+lo.setupOver+'分');
+          if(lo.setupOver>0) parts.push('段取超過 +'+lo.setupOver+'分'
+            +(lo.setupRows&&lo.setupRows.length?'<span style="color:#bbb;">（'+lo.setupRows.join('・')+'）</span>':''));
           if(lo.stopMin>0)   parts.push('停止 +'+lo.stopMin+'分');
           return '<div style="flex:1;background:'+(has?'rgba(231,76,60,0.07)':'rgba(0,0,0,0.04)')+';border-radius:6px;padding:6px 8px;">'+
             '<div style="font-size:9px;color:#888;margin-bottom:2px;">ロスタイム（段取超過・停止）</div>'+
@@ -18256,7 +18261,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.21-10</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.21-11</div>
 </body>
 </html>
 
