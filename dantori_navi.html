@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.21-13 : 進捗管理に「📉 ロス記録」タブを足した（社長指示：前日のロスの中身を翌日見たい／3か月ためて品番ごとに問題点を検討したい）。進捗ボードは日ごとに使い捨てだが、これは /lossHistory に残る（約100日で自動削除）。実績入力のたび・トラブルを入れたり終わらせたりするたびに、その日のラインの記録を上書き保存する。記録するのは品番ごとに 計画数/実績数・数量達成率・CT達成率・段取(実績/標準)・段取超過・停止(分と種類)・実績時間と計画時間・備考、そして**原因のしるし（段取り／サイクルタイム／数量未達／トラブル）**。画面は「日ごと」（既定は前日）と「品番ごと」（既定は3か月・ロスの大きい順）の2つ。CSV出力あり。あわせて品番ごとの計算を lossJobRows() に1本化し、ロスタイムの表示もここを通すようにした（数字が食い違わないようにするため）。 -->
 <!-- H-Hub v2026.09.21-12 : 段取り時間の出し方を直した（社長指示）。**段取り開始が入っていれば、そこを段取りの始まりにする。終わりは段取り終了、無ければ生産開始。**いままでは前の品番の終了（1本目は始業08:10）からの推定しか見ておらず、1本目で段取りがある場合に実態と合わなかった。段取り開始を入れるのはまさにこのためなので、入力があるときは必ずそちらを使う。行の表示・工程一覧・ロスタイムの3か所すべてで同じ出し方。 -->
 <!-- H-Hub v2026.09.21-11 : ロスタイムの段取超過が合っていなかった（社長指摘：Bラインは行を見れば +32分なのに +14分と出ていた）。前の品番の「実績の終了」が入っている行しか数えず、1本目も除いていたため、3行のうち1行しか拾えていなかった。**行ごとに出している「🔧 段取 ○分／標準○分」と、まったく同じ出し方に合わせた**（段取り実績の入力があればその値、無ければ推定）。1本目も数える（行の表示と同じく始業08:10からの推定）。画面の行を足せばそのまま合う。どの行で超えたかも「段取超過 +32分（1行目 +4分・2行目 +14分・3行目 +14分）」と添えた。 -->
 <!-- H-Hub v2026.09.21-10 : 遅れの出どころを出すようにした（社長指示）。「CT達成率は達成しているのに見込み完了が遅くなる」理由が分からなかったため、進捗ボードの**CT達成率と見込み完了時刻の間に「ロスタイム（段取超過・停止）」**を挟んだ。段取超過＝前の品番の実際の終わり→この品番の作業開始（休憩除く）− 標準段取り時間。★1本目は数えない（始業待ち・材料待ちと区別がつかないため）。停止＝トラブル・停止記録の合計。工場レイアウトのカードにも5行目に「⏱ 段取+63 停止+30」として出す。calcLineLoss() を追加し両方で共有。あわせて (1)**左右のグレーの余白を無くした**。高さで頭打ちになると箱は横いっぱいのまま中身だけ縮んでいたので、箱の幅を「その高さで描ける幅」に決め、余ったぶんは担当者パネルへ回すようにした。(2)**実績入力の「稼働状態」プルダウンを廃止**（社長指摘）。誰も動かさず常に「稼働中」のままで、実態と合っていなかった。送る中身そのものから lineAutoStatus() で決めて書き込み、画面には結果だけ出す。 -->
@@ -283,6 +284,21 @@ html, body {
 .pp-idle{font-size:10px;color:#bbb;font-style:italic;}
 .pp-divider{border-top:1px dashed #f0f0f0;margin:4px 0;}
 .pp-status-badge{font-size:9px;padding:1px 7px;border-radius:9px;font-weight:600;white-space:nowrap;flex-shrink:0;}
+
+/* ===== ロス記録 ===== */
+.lh-tag{display:inline-block;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:700;white-space:nowrap;}
+.lh-setup{background:#fef3c7;color:#92400e;}
+.lh-ct{background:#dbeafe;color:#1e40af;}
+.lh-qty{background:#fee2e2;color:#b91c1c;}
+.lh-stop{background:#fce7f3;color:#9d174d;}
+.lh-tbl{width:100%;border-collapse:collapse;font-size:11px;}
+.lh-tbl th{background:#f1f5f9;padding:5px 7px;text-align:left;border-bottom:2px solid #e2e8f0;font-weight:700;white-space:nowrap;position:sticky;top:0;z-index:2;}
+.lh-tbl td{padding:5px 7px;border-bottom:1px solid #f1f5f9;vertical-align:top;}
+.lh-tbl tr:hover td{background:#fafafa;}
+.lh-num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.lh-bad{color:#dc2626;font-weight:700;}
+.lh-ok{color:#16a34a;}
+.lh-day{font-weight:700;font-size:12px;color:#1F4E79;margin:12px 0 4px;}
 
 /* ===== SVG稼働カード（foreignObject用） ===== */
 .svg-line-card{font-family:'Hiragino Sans','Meiryo',sans-serif;font-size:9px;line-height:1.3;padding:3px 5px;width:100%;height:100%;display:flex;flex-direction:column;gap:1px;overflow:hidden;box-sizing:border-box;background:transparent;}
@@ -2245,6 +2261,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 <div class="tabs">
   <button class="tb active" onclick="sw('board')">📊 進捗ボード</button>
   <button class="tb" onclick="sw('input')">✏️ 実績入力</button>
+  <button class="tb" onclick="sw('loss')">📉 ロス記録</button>
   <button class="tb" onclick="sw('import')">📥 予定ｲﾝﾎﾟｰﾄ</button>
   <button class="tb" onclick="sw('settings')">⚙️ 設定</button>
 </div>
@@ -2457,6 +2474,46 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
         <button class="bp-sub" onclick="loadPlanEdit()" style="flex-shrink:0;height:34px;">読み込む</button>
       </div>
       <div id="peTable" style="display:none;"></div>
+    </div>
+  </div>
+
+  <!-- ===== ロス記録（前日のロスを翌日見る・品番別にためる）2026-09-21 ===== -->
+  <div id="tab-loss" style="display:none;">
+    <div class="fc">
+      <div class="ftitle">📉 ロス記録</div>
+      <div style="font-size:11px;color:#888;margin-bottom:10px;">
+        計画どおりに進まなかった分を、品番ごとに記録しています。進捗ボードは日ごとに使い捨てですが、ここは残ります（約3か月）。
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;">
+        <div class="fi"><label>表示</label>
+          <select id="lhMode" onchange="lhLoad()" style="padding:7px 9px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:inherit;">
+            <option value="day">日ごと（何があったか）</option>
+            <option value="part">品番ごと（ためて見る）</option>
+          </select></div>
+        <div class="fi"><label>ライン</label>
+          <select id="lhLine" onchange="lhLoad()" style="padding:7px 9px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:inherit;"></select></div>
+        <div class="fi"><label>開始日</label>
+          <input type="date" id="lhFrom" onchange="lhLoad()" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px;"></div>
+        <div class="fi"><label>終了日</label>
+          <input type="date" id="lhTo" onchange="lhLoad()" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px;"></div>
+        <button class="bp" onclick="lhLoad()">表示</button>
+        <button class="bd" onclick="lhQuick('yst')">前日</button>
+        <button class="bd" onclick="lhQuick('7d')">7日</button>
+        <button class="bd" onclick="lhQuick('3m')">3か月</button>
+        <button class="bp" style="margin-left:auto;" onclick="lhCsv()">⬇ CSV出力</button>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;font-size:11px;color:#888;">
+        <span>原因のしるし：</span>
+        <span class="lh-tag lh-setup">段取り</span>
+        <span class="lh-tag lh-ct">サイクルタイム</span>
+        <span class="lh-tag lh-qty">数量未達</span>
+        <span class="lh-tag lh-stop">トラブル</span>
+      </div>
+      <div id="lhBody" style="max-height:calc(100vh - 300px);overflow:auto;"></div>
+      <div style="border-top:1px solid #eee;padding-top:10px;margin-top:10px;display:flex;justify-content:space-between;align-items:center;">
+        <span id="lhCount" style="font-size:11px;color:#888;"></span>
+        <button class="bd" onclick="lhSaveToday()">いまの状態を今日の記録に保存</button>
+      </div>
     </div>
   </div>
 
@@ -10776,7 +10833,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.21-12';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.21-13';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -13017,26 +13074,76 @@ function lastCountMin(j, l){
 //               1本目は始業 08:10 からの推定になる（行の表示と同じ）。
 //   停止     … トラブル・停止記録の合計（続いているものは今まで）
 //   CT達成率が良いのに見込み完了が遅れる理由は、たいていこのどちらか
-function calcLineLoss(l, id){
-  if(!l) return null;
-  // ★renderBoard の行と同じ並び・同じ添字にする（curJobIndex も同じ配列で取る）
+// 品番ごとの「どうだったか」を1か所で作る。行の表示とまったく同じ出し方にすること
+//   （ロスタイム・ロス記録の両方がここを通る。数字が食い違わないようにするため）
+function lossJobRows(l,id){
+  if(!l) return [];
   const jobs=(l.jobs||[]).filter(j=>j&&j.plan>0);
-  const n=new Date(), nowMin=n.getHours()*60+n.getMinutes();
   const ci=curJobIndex({...l,jobs:jobs});
-  let setupOver=0;
-  const setupRows=[];
+  const trbs=(l.troubles||[]).filter(t=>t&&t.start);
+  const n=new Date(), nowMin=n.getHours()*60+n.getMinutes();
+  const rows=[];
   jobs.forEach(function(j,ji){
-    if(j.history||j.noSetup) return;
+    if(j.history) return;
     const cur=(ji===ci);
     const jWS=cur?(l.workStart||j.actualStart||''):(j.actualStart||'');
+    const jWE=cur?((l.workEnd&&l.workEnd!=='')?l.workEnd:(j.actualEnd||'')):(j.actualEnd||'');
     const jSetupMin=cur?(l.setupMin||j.setupActualMin||0):(j.setupActualMin||0);
-    const implied=jWS?calcImpliedSetup(jobs,ji,jWS,
-      cur?(l.setupStartTime||''):'', cur?(l.setupEndTime||''):''):null;
-    const disp=jSetupMin>0?jSetupMin:(implied||0);
-    if(disp<=0) return;
     const std=calcSetupTime(id,j.kata,j.ninzu)||0;
-    const over=Math.round(disp-std);
-    if(over>0){ setupOver+=over; setupRows.push((ji+1)+'行目 +'+over+'分'); }
+    let disp=0;
+    if(!j.noSetup){
+      const implied=jWS?calcImpliedSetup(jobs,ji,jWS,
+        cur?(l.setupStartTime||''):'', cur?(l.setupEndTime||''):''):null;
+      disp=jSetupMin>0?jSetupMin:(implied||0);
+    }
+    const over=(!j.noSetup&&disp>0)?Math.max(0,Math.round(disp-std)):0;
+    // CT達成率（行の表示と同じ式）
+    const sm=timeToMin(j.start), em=timeToMin(j.end);
+    const planNet=(sm!==null&&em!==null)?netMins(sm,em):0;
+    const stdCT=(planNet>0&&j.plan>0)?planNet/j.plan:0;
+    const jAct=j.actualCount||0;
+    const wsM=timeToMin(jWS||'');
+    const weM=(jWE&&jWE!=='')?timeToMin(jWE):(jAct>0?lastCountMin(j,l):null);
+    const actNet=(wsM!==null&&weM!==null)?netMins(wsM,weM):0;
+    const ct=(stdCT>0&&actNet>0&&jAct>0)?Math.round(jAct*stdCT/actNet*100):null;
+    const effPlan=j.revisedPlan||j.plan;
+    const started=!!(jWS||jAct>0);
+    // まだ始まっていない品番は 0% ではなく「--」（空欄）にする
+    const qty=(effPlan>0&&started)?Math.round(jAct/effPlan*100):null;
+    // その品番を流していた時間帯に重なった停止
+    let stop=0; const stopTypes=[];
+    if(wsM!==null){
+      const endForStop=(weM!==null?weM:nowMin);
+      trbs.forEach(function(t){
+        const ts=timeToMin(t.start), te=t.end?timeToMin(t.end):nowMin;
+        if(ts===null||te===null||te<=ts) return;
+        const os=Math.max(ts,wsM), oe=Math.min(te,endForStop);
+        if(oe>os){ stop+=netMins(os,oe); if(stopTypes.indexOf(t.type||'停止')<0) stopTypes.push(t.type||'停止'); }
+      });
+    }
+    stop=Math.round(stop);
+    const done=!!(j.status==='done'||(j.actualEnd&&j.actualEnd!==''));
+    const causes=[];
+    if(over>0) causes.push('段取り');
+    if(stop>0) causes.push('トラブル');
+    if(ct!==null&&ct<95) causes.push('サイクルタイム');
+    if(done&&qty!==null&&qty<95) causes.push('数量未達');
+    rows.push({seq:Number(j.seq)||(ji+1), row:ji+1, part:j.part||'', plan:effPlan, actual:jAct,
+      planStart:j.start||'', planEnd:j.end||'', actStart:jWS||'', actEnd:jWE||'',
+      setupMin:Math.round(disp), setupStd:std, setupOver:over, noSetup:!!j.noSetup,
+      ctRate:ct, qtyRate:qty, stopMin:stop, stopTypes:stopTypes, done:done,
+      started:started, note:j.note||'', causes:causes});
+  });
+  return rows;
+}
+
+function calcLineLoss(l, id){
+  if(!l) return null;
+  const n=new Date(), nowMin=n.getHours()*60+n.getMinutes();
+  let setupOver=0;
+  const setupRows=[];
+  lossJobRows(l,id).forEach(function(r){
+    if(r.setupOver>0){ setupOver+=r.setupOver; setupRows.push(r.row+'行目 +'+r.setupOver+'分'); }
   });
   let stopMin=0;
   (l.troubles||[]).forEach(function(t){
@@ -13872,10 +13979,222 @@ window.resumeLineTrouble=function(id){
   update(ref(db,'lines/'+id),{troubles});
   if(lines[id]) lines[id].troubles=troubles;
   syncCamTrouble(LINE_CAM_AREA[id]);       // 他に進行中が無ければカメラ点滅解除
+  try{ persistLossRecord(id); }catch(e){}
   closed.forEach(t=>_persistTroubleHist(id,t));
   if(_troubleLineId===id) _renderTroubleList();
   renderBoard();
   return closed.length;
+};
+
+// ===== ロス記録（/lossHistory は進捗の日次リセットの影響を受けない）=====
+//   前日のロスを翌日見たい／品番ごとに3か月ためて問題点を検討したい（2026-09-21 社長指示）
+const LH_KEEP_DAYS = 100;                 // これより古い日は消す（約3か月＋α）
+// esc() は別スクリプト側にあり、このモジュールからは見えない
+const _lhEsc = v => String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const _lhDay = d => (d||new Date()).toLocaleDateString('sv-SE');   // YYYY-MM-DD
+function buildLossRecord(l,id){
+  const rows=lossJobRows(l,id);
+  const lr=calcLineRate(l), lo=calcLineLoss(l,id);
+  const pe=(lr&&lr.planEndTime)?timeToMin(lr.planEndTime):null;
+  const ef=(lr&&lr.estFinish&&lr.estFinish!=='完了')?timeToMin(lr.estFinish):null;
+  return {
+    date:_lhDay(), lineId:id, lineName:getLineName(id),
+    ctRate:(lr&&lr.ctRate!=null)?lr.ctRate:null,
+    estFinish:(lr&&lr.estFinish)?lr.estFinish:null,
+    planEnd:(lr&&lr.planEndTime)?lr.planEndTime:null,
+    delayMin:(pe!==null&&ef!==null)?(ef-pe):null,
+    setupOver:lo?lo.setupOver:0, stopMin:lo?lo.stopMin:0,
+    troubles:(l.troubles||[]).filter(t=>t&&t.start)
+      .map(t=>({type:t.type||'', start:t.start, end:t.end||null, note:t.note||null})),
+    jobs:rows, ts:Date.now()
+  };
+}
+// その日のラインの記録を上書きする（1日1ライン1件）
+function persistLossRecord(id){
+  try{
+    const l=lines[id];
+    if(!l||!Array.isArray(l.jobs)||!l.jobs.some(j=>j&&j.plan>0)) return;
+    const rec=buildLossRecord(l,id);
+    if(!rec.jobs.length) return;
+    set(ref(db,'lossHistory/'+rec.date+'/'+id), rec);
+  }catch(e){ console.warn('ロス記録の保存に失敗', e); }
+}
+function persistLossAll(){ Object.keys(lines||{}).forEach(persistLossRecord); }
+
+let _lhData=[];   // 表示中の記録（CSV用）
+window.lhOpen=function(){
+  const sel=document.getElementById('lhLine');
+  if(sel&&!sel.options.length){
+    const ids=Object.keys(lines||{});
+    sel.innerHTML='<option value="">すべてのライン</option>'+
+      ids.map(id=>'<option value="'+_lhEsc(id)+'">'+_lhEsc(getLineName(id))+'</option>').join('');
+  }
+  if(!document.getElementById('lhFrom').value) lhQuick('yst');
+  else lhLoad();
+};
+window.lhQuick=function(kind){
+  const to=new Date(), from=new Date();
+  if(kind==='yst'){ from.setDate(from.getDate()-1); to.setDate(to.getDate()-1);
+                    document.getElementById('lhMode').value='day'; }
+  else if(kind==='7d'){ from.setDate(from.getDate()-6); document.getElementById('lhMode').value='day'; }
+  else { from.setMonth(from.getMonth()-3); document.getElementById('lhMode').value='part'; }
+  document.getElementById('lhFrom').value=_lhDay(from);
+  document.getElementById('lhTo').value=_lhDay(to);
+  lhLoad();
+};
+window.lhSaveToday=function(){
+  persistLossAll();
+  const b=document.getElementById('lhCount');
+  if(b) b.textContent='今日の分を保存しました（'+new Date().toLocaleTimeString('ja-JP')+'）';
+  setTimeout(lhLoad,700);
+};
+window.lhLoad=async function(){
+  const from=document.getElementById('lhFrom').value, to=document.getElementById('lhTo').value;
+  const lineId=document.getElementById('lhLine').value;
+  const mode=document.getElementById('lhMode').value;
+  const body=document.getElementById('lhBody');
+  body.innerHTML='<div style="color:#bbb;font-size:12px;padding:10px 0;">読み込み中...</div>';
+  let all={};
+  try{ const snap=await get(ref(db,'lossHistory')); all=snap.val()||{}; }
+  catch(e){ body.innerHTML='<div style="color:#c0392b;font-size:12px;">読み込めませんでした：'+_lhEsc(e.message)+'</div>'; return; }
+  // 古い日を掃除（約3か月）
+  const cut=new Date(); cut.setDate(cut.getDate()-LH_KEEP_DAYS); const cutS=_lhDay(cut);
+  Object.keys(all).forEach(d=>{ if(d<cutS){ set(ref(db,'lossHistory/'+d),null); delete all[d]; } });
+  // 当日は保存前でも、いまの状態を見せる（帰る前に確認できるように）
+  const today=_lhDay();
+  if((!from||today>=from)&&(!to||today<=to)){
+    all[today]=Object.assign({}, all[today]||{});
+    Object.keys(lines||{}).forEach(id=>{
+      const l=lines[id];
+      if(!l||!Array.isArray(l.jobs)||!l.jobs.some(j=>j&&j.plan>0)) return;
+      const rec=buildLossRecord(l,id);
+      if(rec.jobs.length) all[today][id]=rec;
+    });
+  }
+  const recs=[];
+  Object.keys(all).sort().reverse().forEach(d=>{
+    if(from&&d<from) return;
+    if(to&&d>to) return;
+    Object.keys(all[d]||{}).forEach(id=>{
+      if(lineId&&id!==lineId) return;
+      const r=all[d][id];
+      if(r&&Array.isArray(r.jobs)) recs.push(Object.assign({},r,{date:d,lineId:id}));
+    });
+  });
+  _lhData=recs;
+  (mode==='part'?_lhRenderPart:_lhRenderDay)(recs);
+};
+function _lhTags(causes){
+  const C={'段取り':'lh-setup','サイクルタイム':'lh-ct','数量未達':'lh-qty','トラブル':'lh-stop'};
+  return (causes||[]).map(c=>'<span class="lh-tag '+(C[c]||'')+'">'+_lhEsc(c)+'</span>').join(' ');
+}
+function _lhPct(v){
+  if(v===null||v===undefined) return '<span style="color:#ccc;">--</span>';
+  return '<span class="'+(v>=95?'lh-ok':'lh-bad')+'">'+v+'%</span>';
+}
+function _lhMin(v){ return v>0?'<span class="lh-bad">+'+v+'分</span>':'<span style="color:#ccc;">-</span>'; }
+function _lhRenderDay(recs){
+  const body=document.getElementById('lhBody');
+  const n=recs.reduce((a,r)=>a+r.jobs.length,0);
+  document.getElementById('lhCount').textContent=recs.length+'ライン・'+n+'品番';
+  if(!recs.length){ body.innerHTML='<div style="color:#bbb;font-size:12px;padding:10px 0;">その期間の記録はありません</div>'; return; }
+  const byDay={}; recs.forEach(r=>{(byDay[r.date]=byDay[r.date]||[]).push(r);});
+  body.innerHTML=Object.keys(byDay).sort().reverse().map(function(d){
+    const block=byDay[d].map(function(r){
+      const hdr='<div style="font-size:12px;font-weight:700;color:#1a1a1a;margin:8px 0 2px;">'+_lhEsc(r.lineName||r.lineId)
+        +'<span style="font-weight:400;color:#888;font-size:11px;margin-left:8px;">'
+        +'CT '+(r.ctRate!=null?r.ctRate+'%':'--')
+        +(r.setupOver>0?'　段取超過 +'+r.setupOver+'分':'')
+        +(r.stopMin>0?'　停止 +'+r.stopMin+'分':'')
+        +(r.delayMin!=null&&r.delayMin>0?'　計画より +'+r.delayMin+'分':'')
+        +'</span></div>';
+      const rows=r.jobs.map(function(j){
+        return '<tr>'
+        +'<td class="lh-num" style="color:#aaa;">'+j.row+'</td>'
+        +'<td>'+_lhEsc(j.part)+(j.note?'<div style="font-size:10px;color:#999;">📝 '+_lhEsc(j.note)+'</div>':'')+'</td>'
+        +'<td class="lh-num">'+(j.actual||0).toLocaleString()+' / '+(j.plan||0).toLocaleString()+'</td>'
+        +'<td class="lh-num">'+_lhPct(j.qtyRate)+'</td>'
+        +'<td class="lh-num">'+_lhPct(j.ctRate)+'</td>'
+        +'<td class="lh-num">'+(j.noSetup?'<span style="color:#ccc;">なし</span>'
+            :(j.setupMin>0?j.setupMin+'/'+j.setupStd+'分':'<span style="color:#ccc;">--/'+j.setupStd+'分</span>'))+'</td>'
+        +'<td class="lh-num">'+_lhMin(j.setupOver)+'</td>'
+        +'<td class="lh-num">'+_lhMin(j.stopMin)
+          +((j.stopTypes&&j.stopTypes.length)?'<div style="font-size:10px;color:#9d174d;">'+_lhEsc(j.stopTypes.join('・'))+'</div>':'')+'</td>'
+        +'<td style="color:#888;white-space:nowrap;">'+_lhEsc(j.actStart||'--')+'〜'+_lhEsc(j.actEnd||'')
+          +'<div style="font-size:10px;color:#bbb;">計画 '+_lhEsc(j.planStart)+'〜'+_lhEsc(j.planEnd)+'</div></td>'
+        +'<td>'+_lhTags(j.causes)+'</td></tr>';
+      }).join('');
+      return hdr+'<table class="lh-tbl"><thead><tr>'
+        +'<th>#</th><th>品番</th><th class="lh-num">実績/計画</th><th class="lh-num">数量</th>'
+        +'<th class="lh-num">CT</th><th class="lh-num">段取/標準</th><th class="lh-num">段取超過</th>'
+        +'<th class="lh-num">停止</th><th>実績時間</th><th>原因</th></tr></thead><tbody>'+rows+'</tbody></table>';
+    }).join('');
+    return '<div class="lh-day">'+d+'</div>'+block;
+  }).join('');
+}
+function _lhRenderPart(recs){
+  const body=document.getElementById('lhBody');
+  const agg={};
+  recs.forEach(function(r){ r.jobs.forEach(function(j){
+    const k=j.part||'(品番なし)';
+    if(!agg[k]) agg[k]={part:k,days:{},n:0,ctSum:0,ctN:0,qtySum:0,qtyN:0,setup:0,stop:0,
+                        cSetup:0,cCT:0,cQty:0,cStop:0,lines:{}};
+    const a=agg[k];
+    a.n++; a.days[r.date]=1; a.lines[r.lineName||r.lineId]=1;
+    if(j.ctRate!=null){ a.ctSum+=j.ctRate; a.ctN++; }
+    if(j.qtyRate!=null&&j.done){ a.qtySum+=j.qtyRate; a.qtyN++; }
+    a.setup+=j.setupOver||0; a.stop+=j.stopMin||0;
+    (j.causes||[]).forEach(function(c){
+      if(c==='段取り')a.cSetup++; else if(c==='サイクルタイム')a.cCT++;
+      else if(c==='数量未達')a.cQty++; else if(c==='トラブル')a.cStop++; });
+  });});
+  const rows=Object.keys(agg).map(function(k){
+    const a=agg[k];
+    a.ct=a.ctN?Math.round(a.ctSum/a.ctN):null;
+    a.qty=a.qtyN?Math.round(a.qtySum/a.qtyN):null;
+    a.loss=a.setup+a.stop; a.dayN=Object.keys(a.days).length;
+    return a;
+  }).sort(function(x,y){ return (y.loss-x.loss)||(y.n-x.n); });
+  document.getElementById('lhCount').textContent=rows.length+'品番';
+  if(!rows.length){ body.innerHTML='<div style="color:#bbb;font-size:12px;padding:10px 0;">その期間の記録はありません</div>'; return; }
+  body.innerHTML='<table class="lh-tbl"><thead><tr>'
+    +'<th>品番</th><th>ライン</th><th class="lh-num">回数</th><th class="lh-num">日数</th>'
+    +'<th class="lh-num">CT平均</th><th class="lh-num">数量平均</th>'
+    +'<th class="lh-num">段取超過計</th><th class="lh-num">停止計</th><th class="lh-num">ロス計</th>'
+    +'<th>出やすい原因（回数）</th></tr></thead><tbody>'
+    +rows.map(function(a){
+      const cz=[];
+      if(a.cSetup) cz.push('<span class="lh-tag lh-setup">段取り '+a.cSetup+'</span>');
+      if(a.cCT)    cz.push('<span class="lh-tag lh-ct">サイクルタイム '+a.cCT+'</span>');
+      if(a.cQty)   cz.push('<span class="lh-tag lh-qty">数量未達 '+a.cQty+'</span>');
+      if(a.cStop)  cz.push('<span class="lh-tag lh-stop">トラブル '+a.cStop+'</span>');
+      return '<tr><td>'+_lhEsc(a.part)+'</td>'
+        +'<td style="color:#888;">'+_lhEsc(Object.keys(a.lines).join('・'))+'</td>'
+        +'<td class="lh-num">'+a.n+'</td><td class="lh-num">'+a.dayN+'</td>'
+        +'<td class="lh-num">'+_lhPct(a.ct)+'</td><td class="lh-num">'+_lhPct(a.qty)+'</td>'
+        +'<td class="lh-num">'+_lhMin(a.setup)+'</td><td class="lh-num">'+_lhMin(a.stop)+'</td>'
+        +'<td class="lh-num">'+(a.loss>0?'<b class="lh-bad">+'+a.loss+'分</b>':'<span style="color:#ccc;">-</span>')+'</td>'
+        +'<td>'+(cz.join(' ')||'<span style="color:#ccc;">-</span>')+'</td></tr>';
+    }).join('')+'</tbody></table>';
+}
+window.lhCsv=function(){
+  if(!_lhData.length){ alert('出力する記録がありません'); return; }
+  const head=['日付','ライン','行','品番','計画数','実績数','数量達成率','CT達成率',
+              '段取(分)','標準段取(分)','段取超過(分)','停止(分)','停止の種類',
+              '実績開始','実績終了','計画開始','計画終了','原因','備考'];
+  const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+  const out=[head.join(',')];
+  _lhData.forEach(function(r){ r.jobs.forEach(function(j){
+    out.push([r.date,r.lineName||r.lineId,j.row,j.part,j.plan,j.actual,j.qtyRate,j.ctRate,
+      j.noSetup?'':j.setupMin, j.noSetup?'':j.setupStd, j.setupOver, j.stopMin,
+      (j.stopTypes||[]).join('・'), j.actStart, j.actEnd, j.planStart, j.planEnd,
+      (j.causes||[]).join('・'), j.note].map(q).join(','));
+  });});
+  const blob=new Blob(['\ufeff'+out.join('\r\n')],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='ロス記録_'+document.getElementById('lhFrom').value+'_'+document.getElementById('lhTo').value+'.csv';
+  a.click(); URL.revokeObjectURL(a.href);
 };
 
 window.openTroubleModal=function(id){
@@ -13923,6 +14242,7 @@ window.addTrouble=function(){
   if(lines[_troubleLineId]) lines[_troubleLineId].troubles=newTroubles;
   // カメラ点滅の同期＋（新規の進行中トラブルのみ）Slack通知＋履歴の永続化
   syncCamTrouble(LINE_CAM_AREA[_troubleLineId]);
+  try{ persistLossRecord(_troubleLineId); }catch(e){}
   if(!isEdit && !end) troubleSlackNotify(_troubleLineId, type, note);
   newTroubles.forEach(t=>_persistTroubleHist(_troubleLineId,t));
   document.getElementById('tEnd').value='';
@@ -13964,6 +14284,7 @@ window.endTrouble=function(idx){
   troubles[idx]={...troubles[idx],end:String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0')};
   update(ref(db,'lines/'+_troubleLineId),{troubles});
   if(lines[_troubleLineId]) lines[_troubleLineId].troubles=troubles;
+  try{ persistLossRecord(_troubleLineId); }catch(e){}
   syncCamTrouble(LINE_CAM_AREA[_troubleLineId]); // 終了→他に進行中が無ければカメラ点滅解除
   _persistTroubleHist(_troubleLineId, troubles[idx]); // 終了時刻を履歴にも反映
   _renderTroubleList();
@@ -14523,6 +14844,7 @@ window.doSub=function(){
 
     m.textContent='送信中...';
     update(ref(db,'lines/'+id),upd).then(()=>{
+      setTimeout(function(){ try{ persistLossRecord(id); }catch(e){} }, 400); // ロス記録に残す
       m.style.color='#27ae60';
       m.textContent='✓ 更新しました（'+new Date().toLocaleTimeString('ja-JP')+'）';
       setTimeout(()=>{m.textContent='';m.style.color='#27ae60';},4000);
@@ -15041,8 +15363,10 @@ window.onImpModeChange=function(gi){
 };
 let _swSkipLineSel=false;
 window.sw=function(tab){
-  ['board','input','import','settings'].forEach(t=>document.getElementById('tab-'+t).style.display=t===tab?'block':'none');
-  document.querySelectorAll('.tb').forEach((b,i)=>b.classList.toggle('active',['board','input','import','settings'][i]===tab));
+  const TABS=['board','input','loss','import','settings'];
+  TABS.forEach(t=>{const e=document.getElementById('tab-'+t); if(e) e.style.display=t===tab?'block':'none';});
+  document.querySelectorAll('.tb').forEach((b,i)=>b.classList.toggle('active',TABS[i]===tab));
+  if(tab==='loss'&&typeof window.lhOpen==='function') window.lhOpen();
   if(tab==='settings'){window.renderSR();window.renderGrpMgr();window.beaconMgrLoad();}
   if(tab==='import'){renderImpGrpSel();renderPeGrpSel();}
   if(tab==='input'&&!_swSkipLineSel) onLineSel();
@@ -18277,7 +18601,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.21-12</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.21-13</div>
 </body>
 </html>
 
