@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.21-19 : ロス記録の明細の文字を大きくした（社長指示。朝礼で見るため）。表11→13px・見出し12→14px・日付12→15px・原因のしるし10→11.5px・備考や計画時間などの小さい文字10→11.5px。行の高さも少し広げ、文字が大きくなったぶん枠を1120→1280pxにした。 -->
 <!-- H-Hub v2026.09.21-18 : **Cライン①だけ夜まで「稼働中」**の原因を直した（社長指摘：作業終了は入れてある）。原因は判定のほうで、行を1つでも「開始したまま終わっていない」と稼働中にしていた。Cライン①は朝8:30に始めた1行目（18120-6MA-DW+2工程・560個）に終了時刻が入っておらず、いま流している2行目は19:18で終わっているのに、1行目の取り残しで稼働中のままだった。**稼働中は「いま流している行（curSeq）」だけで決める**ようにし、それ以外の取り残しは lineOpenEnds() で「⚠ 終了未入力 1行目」として知らせる。工場レイアウトのカード（未報告より優先）と、進捗ボードの警告の両方に出す。 -->
 <!-- H-Hub v2026.09.21-17 : ロス記録と朝礼まわり（社長指示）。(1)前の版で横いっぱいに広げたら今度は広がりすぎたので、表が収まる1120pxで中央寄せにした。(2)品番ごとの「数量平均」を外した（計画的に減らすこともあり、平均に意味が無いため）。(3)**毎朝の朝礼で見る「配置表」と「ロス記録」を、画面右上からひと押しで開けるようにした**。ロス記録は押すと前日の表示になる。アドレスの後ろに #配置表 / #ロス記録 を付けたものをブックマークやデスクトップのショートカットにすれば、開いた時点でその画面が出る。 -->
 <!-- H-Hub v2026.09.21-16 : **AラインのPCで表示が遅い**の原因を直した（社長指摘）。工場レイアウトの更新で `/.json`＝**Firebaseのデータベース全体（約5.4MB）を2秒ごとに**取っていた。使っているのは lines(約15KB) と beacons(約2KB) だけで、残り99.7%は読み捨て。1分で約160MB・1時間で約9.5GB を受信してJSONに直しており、非力なPCはそれだけで手いっぱいだった。（内訳 moldCostSystem 4.4MB=80% / dantori 1.0MB=19%。どちらも段取りナビでは使わない）必要な2か所だけ取るようにして、通信量を **1/340** にした。あわせて (1)Excel読み取りライブラリ(約880KB)に defer を付け、画面が出るのを待たせないようにした。(2)同じGoogle Fontsを2回読んでいたのを1回に。(3)品質チェックの作業者プルダウン3か所とチーム判定の並びも 仲田→見原 にそろえた。 -->
@@ -294,23 +295,24 @@ html, body {
 
 /* ===== ロス記録 ===== */
 /* 入力フォームの620pxでは品番が2段になり、横いっぱいでは広がりすぎた。表が収まる幅で中央に置く */
-#tab-loss .fc{max-width:1120px;margin:0 auto 10px;}
+#tab-loss .fc{max-width:1280px;margin:0 auto 10px;}
 #tab-loss .fi{min-width:0;}
-.lh-tag{display:inline-block;padding:1px 7px;border-radius:9px;font-size:10px;font-weight:700;white-space:nowrap;}
+.lh-tag{display:inline-block;padding:2px 9px;border-radius:10px;font-size:11.5px;font-weight:700;white-space:nowrap;}
 .lh-setup{background:#fef3c7;color:#92400e;}
 .lh-ct{background:#dbeafe;color:#1e40af;}
 .lh-qty{background:#fee2e2;color:#b91c1c;}
 .lh-stop{background:#fce7f3;color:#9d174d;}
-.lh-tbl{width:100%;border-collapse:collapse;font-size:11px;}
-.lh-tbl th{background:#f1f5f9;padding:5px 8px;text-align:left;border-bottom:2px solid #e2e8f0;font-weight:700;white-space:nowrap;position:sticky;top:0;z-index:2;}
+/* 朝礼で見るので、明細は少し大きめに（2026-09-21 社長指示） */
+.lh-tbl{width:100%;border-collapse:collapse;font-size:13px;}
+.lh-tbl th{background:#f1f5f9;padding:7px 10px;font-size:12px;text-align:left;border-bottom:2px solid #e2e8f0;font-weight:700;white-space:nowrap;position:sticky;top:0;z-index:2;}
 /* 品番・ライン名で折り返さない（2段になって読みにくかったため） */
-.lh-tbl td{padding:5px 8px;border-bottom:1px solid #f1f5f9;vertical-align:top;white-space:nowrap;}
+.lh-tbl td{padding:7px 10px;border-bottom:1px solid #f1f5f9;vertical-align:middle;white-space:nowrap;}
 .lh-tbl td.lh-wrap{white-space:normal;}
 .lh-tbl tr:hover td{background:#fafafa;}
 .lh-num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
 .lh-bad{color:#dc2626;font-weight:700;}
 .lh-ok{color:#16a34a;}
-.lh-day{font-weight:700;font-size:12px;color:#1F4E79;margin:12px 0 4px;}
+.lh-day{font-weight:700;font-size:15px;color:#1F4E79;margin:14px 0 5px;}
 
 /* ===== SVG稼働カード（foreignObject用） ===== */
 .svg-line-card{font-family:'Hiragino Sans','Meiryo',sans-serif;font-size:9px;line-height:1.3;padding:3px 5px;width:100%;height:100%;display:flex;flex-direction:column;gap:1px;overflow:hidden;box-sizing:border-box;background:transparent;}
@@ -2521,7 +2523,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
         <button class="bd" onclick="lhQuick('3m')">3か月</button>
         <button class="bp" style="margin-left:auto;" onclick="lhCsv()">⬇ CSV出力</button>
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;font-size:11px;color:#888;">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;font-size:12.5px;color:#888;">
         <span>原因のしるし：</span>
         <span class="lh-tag lh-setup">段取り</span>
         <span class="lh-tag lh-ct">サイクルタイム</span>
@@ -2529,7 +2531,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
       </div>
       <div id="lhBody" style="max-height:calc(100vh - 290px);overflow:auto;"></div>
       <div style="border-top:1px solid #eee;padding-top:10px;margin-top:10px;display:flex;justify-content:space-between;align-items:center;">
-        <span id="lhCount" style="font-size:11px;color:#888;"></span>
+        <span id="lhCount" style="font-size:12.5px;color:#888;"></span>
         <button class="bd" onclick="lhSaveToday()">いまの状態を今日の記録に保存</button>
       </div>
     </div>
@@ -10915,7 +10917,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.21-18';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.21-19';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -14192,8 +14194,8 @@ function _lhRenderDay(recs){
   const byDay={}; recs.forEach(r=>{(byDay[r.date]=byDay[r.date]||[]).push(r);});
   body.innerHTML=Object.keys(byDay).sort().reverse().map(function(d){
     const block=byDay[d].map(function(r){
-      const hdr='<div style="font-size:12px;font-weight:700;color:#1a1a1a;margin:8px 0 2px;">'+_lhEsc(r.lineName||r.lineId)
-        +'<span style="font-weight:400;color:#888;font-size:11px;margin-left:8px;">'
+      const hdr='<div style="font-size:14px;font-weight:700;color:#1a1a1a;margin:10px 0 3px;">'+_lhEsc(r.lineName||r.lineId)
+        +'<span style="font-weight:400;color:#888;font-size:12.5px;margin-left:10px;">'
         +'CT '+(r.ctRate!=null?r.ctRate+'%':'--')
         +(r.setupOver>0?'　段取超過 +'+r.setupOver+'分':'')
         +(r.stopMin>0?'　停止 +'+r.stopMin+'分':'')
@@ -14202,7 +14204,7 @@ function _lhRenderDay(recs){
       const rows=r.jobs.map(function(j){
         return '<tr>'
         +'<td class="lh-num" style="color:#aaa;">'+j.row+'</td>'
-        +'<td><b>'+_lhEsc(j.part)+'</b>'+(j.note?'<span style="font-size:10px;color:#999;margin-left:8px;">📝 '+_lhEsc(j.note)+'</span>':'')+'</td>'
+        +'<td style="vertical-align:top;"><b>'+_lhEsc(j.part)+'</b>'+(j.note?'<span style="font-size:11.5px;color:#999;margin-left:10px;">📝 '+_lhEsc(j.note)+'</span>':'')+'</td>'
         +'<td class="lh-num">'+(j.actual||0).toLocaleString()+' / '+(j.plan||0).toLocaleString()+'</td>'
         +'<td class="lh-num">'+_lhQty(j.qtyRate)+'</td>'
         +'<td class="lh-num">'+_lhPct(j.ctRate)+'</td>'
@@ -14210,9 +14212,9 @@ function _lhRenderDay(recs){
             :(j.setupMin>0?j.setupMin+'/'+j.setupStd+'分':'<span style="color:#ccc;">--/'+j.setupStd+'分</span>'))+'</td>'
         +'<td class="lh-num">'+_lhMin(j.setupOver)+'</td>'
         +'<td class="lh-num">'+_lhMin(j.stopMin)
-          +((j.stopTypes&&j.stopTypes.length)?'<div style="font-size:10px;color:#9d174d;">'+_lhEsc(j.stopTypes.join('・'))+'</div>':'')+'</td>'
-        +'<td style="color:#888;white-space:nowrap;">'+_lhEsc(j.actStart||'--')+'〜'+_lhEsc(j.actEnd||'')
-          +'<div style="font-size:10px;color:#bbb;">計画 '+_lhEsc(j.planStart)+'〜'+_lhEsc(j.planEnd)+'</div></td>'
+          +((j.stopTypes&&j.stopTypes.length)?'<div style="font-size:11.5px;color:#9d174d;">'+_lhEsc(j.stopTypes.join('・'))+'</div>':'')+'</td>'
+        +'<td style="color:#888;white-space:nowrap;vertical-align:top;">'+_lhEsc(j.actStart||'--')+'〜'+_lhEsc(j.actEnd||'')
+          +'<div style="font-size:11.5px;color:#bbb;">計画 '+_lhEsc(j.planStart)+'〜'+_lhEsc(j.planEnd)+'</div></td>'
         +'<td>'+_lhTags(j.causes)+'</td></tr>';
       }).join('');
       return hdr+'<table class="lh-tbl"><thead><tr>'
@@ -18689,7 +18691,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.21-18</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.21-19</div>
 </body>
 </html>
 
