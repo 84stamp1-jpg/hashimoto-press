@@ -598,6 +598,9 @@ function lastCountMin(j, l){
 // 見込み完了 = 品番ごとに終わる時刻を出して、いちばん遅いもの
 //   ・開始は max(予定開始, 同じ機械の前の品番の終了, 最終更新時刻)
 //   ・予定の時間帯が重なっている品番は別の機械とみなし、前を待たない
+//   ・★残りの所要時間は「その品番自身の遅れ具合」で伸ばす。
+//     生産中の品番＝その品番の達成率で補正／未着手の品番＝標準どおり。
+//     終わった品番の遅れは、実績の終了時刻が次の品番の開始を押すことで効く
 function calcLineRate(l){
   const jobs=(l.jobs||[]).filter(j=>j.plan>0&&j.start&&j.end&&!j.history);
   if(!jobs.length) return null;
@@ -653,7 +656,6 @@ function calcLineRate(l){
   });
 
   // ---- 見込み完了時刻 ----
-  const k=(ctRate&&ctRate>0)?100/ctRate:1;
   const order=info.slice().sort(function(a,b){ return a.sm-b.sm; });
   let prevEnd=null, prevEm=null, latest=null, anyRemain=false;
   order.forEach(function(x){
@@ -667,7 +669,13 @@ function calcLineRate(l){
     let st=x.sm;                                     // 予定開始より前には始めない（材料・前工程の都合）
     if(chained&&prevEnd!==null) st=Math.max(st,prevEnd);
     st=Math.max(st,updMin);
-    const fin=addNetMins(st,Math.round(x.rem*x.planCT*k));
+    // 生産中なら その品番の達成率で補正、未着手なら標準どおり
+    let jk=1;
+    if(x.jAct>0&&x.actNet>0&&x.planCT>0){
+      const r=x.jAct*x.planCT/x.actNet;
+      if(r>0) jk=1/r;
+    }
+    const fin=addNetMins(st,Math.round(x.rem*x.planCT*jk));
     if(latest===null||fin>latest) latest=fin;
     if(chained){ prevEnd=fin; prevEm=x.em; }
   });
