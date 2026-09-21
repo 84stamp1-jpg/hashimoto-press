@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.21-16 : **AラインのPCで表示が遅い**の原因を直した（社長指摘）。工場レイアウトの更新で `/.json`＝**Firebaseのデータベース全体（約5.4MB）を2秒ごとに**取っていた。使っているのは lines(約15KB) と beacons(約2KB) だけで、残り99.7%は読み捨て。1分で約160MB・1時間で約9.5GB を受信してJSONに直しており、非力なPCはそれだけで手いっぱいだった。（内訳 moldCostSystem 4.4MB=80% / dantori 1.0MB=19%。どちらも段取りナビでは使わない）必要な2か所だけ取るようにして、通信量を **1/340** にした。あわせて (1)Excel読み取りライブラリ(約880KB)に defer を付け、画面が出るのを待たせないようにした。(2)同じGoogle Fontsを2回読んでいたのを1回に。(3)品質チェックの作業者プルダウン3か所とチーム判定の並びも 仲田→見原 にそろえた。 -->
 <!-- H-Hub v2026.09.21-15 : 配置表の並びを 仲田→見原 に入れ替えた（社長指示。仲田がプレス主任になったため）。★実際に効いているのは Firebase settings/pressWorkerList のほうなので、そちらも入れ替えた。コード側の WORKER_MASTER は、その設定が無いときの既定値。 -->
 <!-- H-Hub v2026.09.21-14 : ロス記録の見た目を直した（社長指示）。(1)入力フォーム用の幅制限（.fc の 620px）がそのまま効いていて、左右に大きな余白が出たうえ品番やライン名が2〜3段に折り返していた。ロス記録だけ横いっぱいに使い、表のセルは折り返さないようにした。(2)**「数量未達」を原因のしるしから外した**。計画的に数量を減らすこともあるため、少ない＝問題とは限らない。数量の欄は残すが色は付けない。前に保存した記録に残っている分も表示しない。 -->
 <!-- H-Hub v2026.09.21-13 : 進捗管理に「📉 ロス記録」タブを足した（社長指示：前日のロスの中身を翌日見たい／3か月ためて品番ごとに問題点を検討したい）。進捗ボードは日ごとに使い捨てだが、これは /lossHistory に残る（約100日で自動削除）。実績入力のたび・トラブルを入れたり終わらせたりするたびに、その日のラインの記録を上書き保存する。記録するのは品番ごとに 計画数/実績数・数量達成率・CT達成率・段取(実績/標準)・段取超過・停止(分と種類)・実績時間と計画時間・備考、そして**原因のしるし（段取り／サイクルタイム／数量未達／トラブル）**。画面は「日ごと」（既定は前日）と「品番ごと」（既定は3か月・ロスの大きい順）の2つ。CSV出力あり。あわせて品番ごとの計算を lossJobRows() に1本化し、ロスタイムの表示もここを通すようにした（数字が食い違わないようにするため）。 -->
@@ -91,7 +92,9 @@
 <!-- H-Hub v2026.09.02-2 : 「段取り計画だけ作る」でグループを切り替えて連続取込すると、先に取り込んだ他グループの計画が消えていた。_mergePlanEntries は「entriesが全ラインを網羅している」前提(linesからの同期用)で、entriesに無い計画エントリを落とす作りだったため。第4引数 scopeLineIds を追加し、指定されたラインだけを置き換え、対象外ラインの計画は残すようにした。インポートは選択中グループのラインのみをscopeとして渡す(同期側は従来どおり全置換) -->
 <!-- H-Hub v2026.09.02-1 : 段取り指示タブを日付切替に対応。(1)getDantoriDatePath()が今日決め打ちだったため段取り計画は当日分しか作れなかった。表示日(DANTORI_VIEW_DATE)を持たせ、日付入力＋「今日/明日」ボタンで切り替えられるようにした。(2)進捗管理ボード(lines)は日付を持たない当日の状態なので、linesからの同期(自動同期・今すぐ同期)は常に「今日」へ書くよう固定し、本日以外を表示中は「今すぐ同期」を無効化した(今日の計画を別日に書く事故の防止)。(3)生産予定インポートに「📅 段取り計画だけ作る(対象日指定)」を追加。Excelのパース結果から dantori/<日付> だけを作り、linesには書き込まないため当日の実績が壊れない。前日夕方に翌日分を仕込める。(4)段取り標準時間設定の計算式表記に括弧が抜けており「C×人数＋P×型数÷人数」と読めていた。実装は (C×人数＋P×型数)÷人数 ＝ C＋P×型数÷人数 なので表記を修正し、片付けは人数で短縮されない／準備は型数を人数で分担できる、という意味も添えた -->
 <!-- H-Hub v2026.08.26-1 : 進捗管理ボードの2件を修正。(1)「計画修正(実績を維持したまま変更)」が実績を actual という誤ったフィールド名で見ており、保存後にキャッシュから actualCount/status が欠落→2回目の保存で実績が消えていた。実績バッジが常に「未実施」表示・行削除の警告も出ない状態だった。(2)並行生産や同名品番で、別の行を完了しただけで他行まで完了扱いになる問題。ライン単位の part 一致で現在行を探していたのをやめ、lines/<id>/curSeq(行番号)を正として curJobIndex() 1か所で判定するようにした -->
-<script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<!-- Excelの読み取りに使う（約880KB）。defer を付けて、画面が出るのを待たせないようにした
+     （2026-09-21・AラインのPCが遅い件。使うのは予定インポートのときだけ） -->
+<script defer src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 /* ===== スクロールバー常時表示 ===== */
 #ap-spanel-assign div[style*="overflow-x:scroll"],
@@ -1967,7 +1970,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
           <select id="qc-op">
             <option value="">-- 選択してください --</option>
             <optgroup label="プレス">
-              <option>見原　一彦</option><option>仲田　涼真</option>
+              <option>仲田　涼真</option><option>見原　一彦</option>
               <option>長田　由香倫</option><option>大石　章宏</option>
               <option>松浦　広治</option><option>吉田　光好</option>
               <option>柴田　晃宏</option><option>横田川　延広</option>
@@ -2102,7 +2105,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
         <select id="qc-bulk-op">
           <option value="">-- 選択してください --</option>
           <optgroup label="プレス">
-            <option>見原　一彦</option><option>仲田　涼真</option>
+            <option>仲田　涼真</option><option>見原　一彦</option>
             <option>長田　由香倫</option><option>大石　章宏</option>
             <option>松浦　広治</option><option>吉田　光好</option>
             <option>柴田　晃宏</option><option>横田川　延広</option>
@@ -2154,7 +2157,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
     <div class="qc-fld"><label>作業者</label>
       <select id="qc-e-op">
         <option value="">-- 選択 --</option>
-        <optgroup label="プレス"><option>見原　一彦</option><option>仲田　涼真</option><option>長田　由香倫</option><option>大石　章宏</option><option>松浦　広治</option><option>吉田　光好</option><option>柴田　晃宏</option><option>横田川　延広</option></optgroup>
+        <optgroup label="プレス"><option>仲田　涼真</option><option>見原　一彦</option><option>長田　由香倫</option><option>大石　章宏</option><option>松浦　広治</option><option>吉田　光好</option><option>柴田　晃宏</option><option>横田川　延広</option></optgroup>
         <optgroup label="組立"><option>永丘　克也</option><option>近藤　満</option><option>大塚　圭汰</option><option>鈴木　里美</option><option>野口　敦子</option></optgroup>
         <optgroup label="品管・総務"><option>八木　貴志</option><option>杉山　好美</option><option>登﨑　千春</option></optgroup>
       </select>
@@ -5204,30 +5207,24 @@ function updatePersonPanel(){
   }).join('');
 }
 
-// Firebase REST APIでリアルタイムポーリング（10秒間隔）
+// Firebase REST APIで2秒ごとに取り直す（ビーコンの動きを追うため）
+//
+// ★2026-09-21 修正（社長指摘：AラインのPCで表示が遅い）
+//   ここで `/.json`（＝データベース**全体** 約5.4MB）を取っていた。使っているのは
+//   lines(約15KB) と beacons(約2KB) だけで、残り 99.7% は読み捨てていた。
+//   2秒ごとなので 1分で約160MB・1時間で約9.5GB。非力なPCでは受信とJSONの読み取りだけで
+//   手いっぱいになり、画面が動かなくなっていた。必要な2か所だけ取るようにした。
+//   （内訳：moldCostSystem 4.4MB=80% / dantori 1.0MB=19% …どれも段取りナビでは使わない）
 let fbInterval = null;
 async function fetchFirebaseLines(){
   const fbUrl = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/, '');
   try{
-    const res = await fetch(`${fbUrl}/.json?shallow=false`);
-    if(!res.ok) return;
-    const data = await res.json();
-    if(data && data.lines){
-      updateFactoryView(data.lines);
-      document.getElementById('fbDot').classList.add('connected');
-      document.getElementById('fbStatus').textContent =
-        `Firebase接続中（${new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})} 更新）`;
-      buildDantoriFromFirebase(data.lines);
-    }
-    if(data && data.beacons){
-      updateBeacons(data.beacons);
-    }
-  } catch(e){
-    // lines単体で再試行
-    try{
-      const res2 = await fetch(`${fbUrl}/lines.json`);
-      if(!res2.ok) return;
-      const lines = await res2.json();
+    const [lRes, bRes] = await Promise.all([
+      fetch(`${fbUrl}/lines.json`),
+      fetch(`${fbUrl}/beacons.json`).catch(() => null)
+    ]);
+    if(lRes && lRes.ok){
+      const lines = await lRes.json();
       if(lines){
         updateFactoryView(lines);
         document.getElementById('fbDot').classList.add('connected');
@@ -5235,9 +5232,13 @@ async function fetchFirebaseLines(){
           `Firebase接続中（${new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'})} 更新）`;
         buildDantoriFromFirebase(lines);
       }
-    } catch(e2){
-      document.getElementById('fbStatus').textContent = 'Firebase接続エラー';
     }
+    if(bRes && bRes.ok){
+      const beacons = await bRes.json();
+      if(beacons) updateBeacons(beacons);
+    }
+  } catch(e){
+    document.getElementById('fbStatus').textContent = 'Firebase接続エラー';
   }
 }
 
@@ -9077,7 +9078,7 @@ var QC_HINPYO_DATA = null; // 現品票用の部品マスタデータ（kintone�
 var QC_INITIALIZED = false;
 
 var QC_TEAM_MAP = {
-  'プレス':['見原　一彦','仲田　涼真','長田　由香倫','大石　章宏','松浦　広治','吉田　光好','柴田　晃宏','横田川　延広'],
+  'プレス':['仲田　涼真','見原　一彦','長田　由香倫','大石　章宏','松浦　広治','吉田　光好','柴田　晃宏','横田川　延広'],
   '組立':['永丘　克也','近藤　満','大塚　圭汰','鈴木　里美','野口　敦子'],
   '品管・総務':['八木　貴志','杉山　好美','登﨑　千春']
 };
@@ -10840,7 +10841,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.21-15';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.21-16';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -16131,7 +16132,7 @@ window.saveSnapshot=function(){
 <head>
 <meta charset="utf-8">
 <title>進捗スナップショット</title>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+<!-- Noto Sans JP は上で読み込み済み（二重読み込みをやめた 2026-09-21） -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Noto Sans JP',sans-serif;background:#f0efe8;padding:12px;}
@@ -18610,7 +18611,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.21-15</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.21-16</div>
 </body>
 </html>
 
