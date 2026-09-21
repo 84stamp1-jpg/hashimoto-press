@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.21-9 : 右端の列（組立・完成品置場）の文字が左に寄っていたので中心にそろえた。列を60幅に細くしたとき、ビーコンを置く場所を空けるつもりで文字を772（中心は786）に置いていたため。金型置場の縦書きも1pxずらして中心に。 -->
 <!-- H-Hub v2026.09.21-8 : 実績入力に「■ 停止する（トラブル記録）」「▶ 再開する」を足した（社長指示）。いままで停止の記録は進捗ボードのカード右上のボタンからしか入らず、実績を入れている画面からは入れられなかった。停止するを押すと、右上と同じトラブル・停止記録がそのラインで開く（開始時刻はいま）。再開するを押すと、終わっていない記録すべてに終了時刻（いま）が入り、稼働状況は自動で稼働中に戻る。ボタンの下に「⛔ 停止中：設備トラブル 15:40から 48分」と、いまの状態を出す。あわせて (1)工場レイアウトの稼働状況の「停止中」を、書かれることのなかった line.stopped ではなく**終わっていないトラブル記録**で判定するようにした。(2)停止中は見込み完了時刻を、止まっている時間分だけ丸ごと後ろへずらすようにした（社長指示）。 -->
 <!-- H-Hub v2026.09.21-7 : 工場レイアウトの作り直し（社長指示）。(1)列幅を組み替えた。左の事務所88→72・金型置場列148→116・右端列110→60まで細くし、そのぶんプレスA104／B148／C188を**すべて180**にそろえた。絵が横いっぱいに広がり、左右に出ていた灰色の余白も消えた。プレスCのカードは62→84に上げ、プレスD・溶接・組立SPを上へ詰めて高さを作った。ビーコンの表示位置13か所・暑さ指数の枠も合わせて直した。金型置場のビーコンは、左枠が暑さ指数に変わっていたため右の金型置場へ移した。(2)カードの中身を入れ替えた。**CT達成率と見込み完了時刻は進捗ボードと同じ calcLineRate() を使う**（window経由で共有）。並びは ライン名→CT達成率→（空き）→稼働状況。加工中の品番とその予定時間、見込み完了時刻と計画との差、次に流す品番、しばらく実績が入っていない場合の「⚠ 未報告（既定60分）」を出す。個数の%は出さない。 -->
 <!-- H-Hub v2026.09.21-6 : 暑さ指数に「測定が要る期間（月）」を足した（既定5〜9月・社長要望）。冬でも赤い「要測定」が出続けて、誰も測らない表示が常時出ている状態になっていたため。期間の外は灰色の『測定期間外』にして、押せば入力はできるままにした。12〜2月のように年をまたぐ指定も可。設定画面から変えられる。 -->
@@ -1323,8 +1324,8 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
   <text x="676" y="204" text-anchor="middle" font-size="8.5" font-weight="700" fill="#334155">現場</text>
   <text x="676" y="216" text-anchor="middle" font-size="8.5" font-weight="700" fill="#334155">事務所</text>
   <!-- 金型置場右辺テキスト -->
-  <text x="731" y="204" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1f2937">金型</text>
-  <text x="731" y="218" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1f2937">置場</text>
+  <text x="732" y="204" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1f2937">金型</text>
+  <text x="732" y="218" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1f2937">置場</text>
 
   <!-- ===== 完成品置場（金型L型下） ===== -->
   <rect x="636" y="272" width="116" height="90" rx="4" fill="#f0f9ff" stroke="#0ea5e9" stroke-width="1.5"/>
@@ -1332,17 +1333,17 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 
   <!-- ===== 組立（右端・縦長 w=60） ===== -->
   <rect x="756" y="8" width="60" height="260" rx="4" fill="#fdf2f8" stroke="#ec4899" stroke-width="1.5"/>
-  <text x="772" y="128" text-anchor="middle" font-size="13" font-weight="700" fill="#9d174d">組</text>
-  <text x="772" y="150" text-anchor="middle" font-size="13" font-weight="700" fill="#9d174d">　</text>
-  <text x="772" y="172" text-anchor="middle" font-size="13" font-weight="700" fill="#9d174d">立</text>
+  <text x="786" y="128" text-anchor="middle" font-size="13" font-weight="700" fill="#9d174d">組</text>
+  <text x="786" y="150" text-anchor="middle" font-size="13" font-weight="700" fill="#9d174d">　</text>
+  <text x="786" y="172" text-anchor="middle" font-size="13" font-weight="700" fill="#9d174d">立</text>
 
   <!-- ===== 完成品置場（右端・組立下）：幅60なので縦書き ===== -->
   <rect x="756" y="272" width="60" height="90" rx="4" fill="#f0f9ff" stroke="#0ea5e9" stroke-width="1.5"/>
-  <text x="772" y="294" text-anchor="middle" font-size="9" font-weight="700" fill="#0c4a6e">完</text>
-  <text x="772" y="307" text-anchor="middle" font-size="9" font-weight="700" fill="#0c4a6e">成</text>
-  <text x="772" y="320" text-anchor="middle" font-size="9" font-weight="700" fill="#0c4a6e">品</text>
-  <text x="772" y="333" text-anchor="middle" font-size="9" font-weight="700" fill="#0c4a6e">置</text>
-  <text x="772" y="346" text-anchor="middle" font-size="9" font-weight="700" fill="#0c4a6e">場</text>
+  <text x="786" y="294" text-anchor="middle" font-size="9" font-weight="700" fill="#0c4a6e">完</text>
+  <text x="786" y="307" text-anchor="middle" font-size="9" font-weight="700" fill="#0c4a6e">成</text>
+  <text x="786" y="320" text-anchor="middle" font-size="9" font-weight="700" fill="#0c4a6e">品</text>
+  <text x="786" y="333" text-anchor="middle" font-size="9" font-weight="700" fill="#0c4a6e">置</text>
+  <text x="786" y="346" text-anchor="middle" font-size="9" font-weight="700" fill="#0c4a6e">場</text>
 
   <!-- ===== 凡例（横長・技術の右・溶接下 y=370） ===== -->
   <rect x="452" y="370" width="364" height="68" rx="5" fill="white" stroke="#e2e8f0" stroke-width="1" opacity="0.95"/>
@@ -10753,7 +10754,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.21-8';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.21-9';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -18180,7 +18181,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.21-8</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.21-9</div>
 </body>
 </html>
 
