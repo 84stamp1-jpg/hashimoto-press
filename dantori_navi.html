@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.21-12 : 段取り時間の出し方を直した（社長指示）。**段取り開始が入っていれば、そこを段取りの始まりにする。終わりは段取り終了、無ければ生産開始。**いままでは前の品番の終了（1本目は始業08:10）からの推定しか見ておらず、1本目で段取りがある場合に実態と合わなかった。段取り開始を入れるのはまさにこのためなので、入力があるときは必ずそちらを使う。行の表示・工程一覧・ロスタイムの3か所すべてで同じ出し方。 -->
 <!-- H-Hub v2026.09.21-11 : ロスタイムの段取超過が合っていなかった（社長指摘：Bラインは行を見れば +32分なのに +14分と出ていた）。前の品番の「実績の終了」が入っている行しか数えず、1本目も除いていたため、3行のうち1行しか拾えていなかった。**行ごとに出している「🔧 段取 ○分／標準○分」と、まったく同じ出し方に合わせた**（段取り実績の入力があればその値、無ければ推定）。1本目も数える（行の表示と同じく始業08:10からの推定）。画面の行を足せばそのまま合う。どの行で超えたかも「段取超過 +32分（1行目 +4分・2行目 +14分・3行目 +14分）」と添えた。 -->
 <!-- H-Hub v2026.09.21-10 : 遅れの出どころを出すようにした（社長指示）。「CT達成率は達成しているのに見込み完了が遅くなる」理由が分からなかったため、進捗ボードの**CT達成率と見込み完了時刻の間に「ロスタイム（段取超過・停止）」**を挟んだ。段取超過＝前の品番の実際の終わり→この品番の作業開始（休憩除く）− 標準段取り時間。★1本目は数えない（始業待ち・材料待ちと区別がつかないため）。停止＝トラブル・停止記録の合計。工場レイアウトのカードにも5行目に「⏱ 段取+63 停止+30」として出す。calcLineLoss() を追加し両方で共有。あわせて (1)**左右のグレーの余白を無くした**。高さで頭打ちになると箱は横いっぱいのまま中身だけ縮んでいたので、箱の幅を「その高さで描ける幅」に決め、余ったぶんは担当者パネルへ回すようにした。(2)**実績入力の「稼働状態」プルダウンを廃止**（社長指摘）。誰も動かさず常に「稼働中」のままで、実態と合っていなかった。送る中身そのものから lineAutoStatus() で決めて書き込み、画面には結果だけ出す。 -->
 <!-- H-Hub v2026.09.21-9 : 右端の列（組立・完成品置場）の文字が左に寄っていたので中心にそろえた。列を60幅に細くしたとき、ビーコンを置く場所を空けるつもりで文字を772（中心は786）に置いていたため。金型置場の縦書きも1pxずらして中心に。 -->
@@ -10775,7 +10776,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.21-11';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.21-12';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -13029,7 +13030,8 @@ function calcLineLoss(l, id){
     const cur=(ji===ci);
     const jWS=cur?(l.workStart||j.actualStart||''):(j.actualStart||'');
     const jSetupMin=cur?(l.setupMin||j.setupActualMin||0):(j.setupActualMin||0);
-    const implied=jWS?calcImpliedSetup(jobs,ji,jWS):null;
+    const implied=jWS?calcImpliedSetup(jobs,ji,jWS,
+      cur?(l.setupStartTime||''):'', cur?(l.setupEndTime||''):''):null;
     const disp=jSetupMin>0?jSetupMin:(implied||0);
     if(disp<=0) return;
     const std=calcSetupTime(id,j.kata,j.ninzu)||0;
@@ -13169,10 +13171,22 @@ function addNetMins(startClockM,netToAdd){
 // actualWorkStart: 実際の作業開始時刻（"HH:MM" 形式）を渡す
 // 戻り値: null=段取りなし, 0以上=分数（休憩時間除く）
 const SETUP_BASE_MIN=8*60+10; // 08:10 始業基準
-function calcImpliedSetup(jobs,ji,actualWorkStart){
+function calcImpliedSetup(jobs,ji,actualWorkStart,ssIn,seIn){
   const j=jobs[ji];
   if(j.noSetup) return null;               // 段取りなしフラグ
   if((j.setupActualMin||0)>0) return j.setupActualMin; // 実績入力あり
+  // ★段取り開始が入っていれば、そこを段取りの始まりにする（2026-09-21 社長指示）
+  //   終わりは 段取り終了 → 無ければ 生産開始。
+  //   1本目は前の作業が無いので、この入力が唯一のよりどころ（始業08:10からの推定では実態と合わない）
+  {
+    const ssM=timeToMin(ssIn||j.setupStartTime||'');
+    if(ssM!==null){
+      const seM=timeToMin(seIn||j.setupEndTime||'');
+      const endM=(seM!==null)?seM:timeToMin(actualWorkStart||j.actualStart||'');
+      if(endM!==null&&endM>ssM) return Math.max(0,netMins(ssM,endM));
+      return 0;
+    }
+  }
   // 実際の作業開始時刻（引数優先→j.actualStart→j.start）
   const startM=timeToMin(actualWorkStart||j.actualStart||j.start);
   if(!startM) return 0;
@@ -13499,7 +13513,8 @@ function renderBoard(){
             if(j.noSetup){
               setupParts2.push('<span style="color:#aaa;font-size:9px;">✓ 段取りなし</span>');
             } else {
-              const implied=jWS?calcImpliedSetup(jobs,jIdx,jWS):null;
+              const implied=jWS?calcImpliedSetup(jobs,jIdx,jWS,
+                cur?(l.setupStartTime||''):'', cur?(l.setupEndTime||''):''):null;
               const dispMin=jSetupMin>0?jSetupMin:(implied||0);
               const isImplied=jSetupMin===0&&(implied||0)>0;
               if(dispMin>0){
@@ -14158,7 +14173,8 @@ window.openModal=function(id){
     const rc=r===null?'':r>=95?'c-ok':r>=80?'c-wn':'c-ng';
     // 段取り時間：実績 or 推定（作業開始済みの場合のみ推定計算）
     const actSU=j.setupActualMin||0;
-    const implSU=jWS2?calcImpliedSetup(jobs,ji,jWS2):null;
+    const implSU=jWS2?calcImpliedSetup(jobs,ji,jWS2,
+      isCur?(l.setupStartTime||''):'', isCur?(l.setupEndTime||''):''):null;
     const dispSU=actSU>0?actSU:(implSU||0);
     const isImpliedSU=actSU===0&&(implSU||0)>0;
     const suR=dispSU>0&&stdSetup>0?Math.round(dispSU/stdSetup*100):null;
@@ -18261,7 +18277,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.21-11</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.21-12</div>
 </body>
 </html>
 
