@@ -643,8 +643,12 @@ function calcLineRate(l){
 
   // 見込み完了時刻：残り計画時間をCT達成率で補正して計算
   let estFinish=null;
-  const lastJob=jobs[jobs.length-1];
-  const planEndTime=lastJob&&lastJob.end?lastJob.end:null;
+  // ★品番の並び順は時間順とは限らないので、終了が最も遅いものを計画終了とする
+  let planEndTime=null, _pe=-1;
+  jobs.forEach(function(j){
+    const e=timeToMin(j.end);
+    if(e!==null&&e>_pe){ _pe=e; planEndTime=j.end; }
+  });
   if(remainingPlanMin<=0&&ctRateCnt>0){
     estFinish='完了';
   } else if(remainingPlanMin>0&&ctRate&&ctRate>0){
@@ -786,7 +790,7 @@ function getStatus(l){
     r=l.actual!=null?Math.round(l.actual/pv*100):0;
   }
   if(r>=95)return{lbl:'正常',bdg:'ok',card:'s-ok',bar:'c-ok',pr};
-  if(r>=80)return{lbl:'注意',bdg:'wn',card:'s-wn',bar:'c-wn',pr};
+  if(r>=90)return{lbl:'注意',bdg:'wn',card:'s-wn',bar:'c-wn',pr};
   return{lbl:'遅れ',bdg:'ng',card:'s-ng',bar:'c-ng',pr};
 }
 
