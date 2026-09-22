@@ -10,6 +10,9 @@
  *   H-Hub の 品質チェック →「システム入力待ち」→ 右の不良品報告ペインから、
  *     ・在庫管理の「入力者」「入力日」を書き込む   （op:'record'）
  *     ・プロセス管理を進める（在庫調整／在庫投入） （op:'status'）
+ *   H-Hub の 品質チェック →「記録する」の保存完了の画面から（2026-09-22 追加）、
+ *     ・不良品報告を新しく作る                     （op:'add'）
+ *     ・そのための項目の定義（選択肢・参照先）を読む （op:'fields'）
  *
  * 安全のため:
  *   ・APIトークンはこのGASに保存しません。H-Hub側（各PCのlocalStorage）から毎回届きます
@@ -54,23 +57,50 @@ function doGet(e) {
  *   p.appId        '31'
  *   p.token        APIトークン（レコード編集／ステータス変更の権限つき）
  *   p.op           'record'（フィールドを更新） / 'status'（プロセス管理を進める）
- *   p.id           レコード番号
- *   p.record       op='record' のとき { フィールドコード: {value: ...}, ... }
+ *                  'add'（新しく作る・2026-09-22） / 'fields'（項目の定義を読む・2026-09-22）
+ *   p.id           レコード番号（op='record' / 'status' のとき）
+ *   p.record       op='record' / 'add' のとき { フィールドコード: {value: ...}, ... }
  *   p.statusAction op='status' のとき 実行するアクション名（例 '在庫調整'）
  *   p.assignee     op='status' で次の作業者を指定する場合のログイン名（任意）
  */
 function kintoneWrite_(p) {
-  if (!p.domain || !p.appId || !p.token || !p.id) {
-    return { ok: false, err: 'domain / appId / token / id が足りません' };
+  var needId = (p.op !== 'add' && p.op !== 'fields');
+  if (!p.domain || !p.appId || !p.token || (needId && !p.id)) {
+    return { ok: false, err: 'domain / appId / token' + (needId ? ' / id' : '') + ' が足りません' };
   }
   if (ALLOWED_APPS.indexOf(String(p.appId)) < 0) {
     return { ok: false, err: 'アプリID ' + p.appId + ' への書き込みは許可されていません（ALLOWED_APPSを確認）' };
   }
 
   var base = 'https://' + p.domain + '.cybozu.com/k/v1/';
-  var url, payload;
+  var url, payload, method = 'put';
 
-  if (p.op === 'status') {
+  // ★項目の定義を読む（選択肢・必須・ルックアップの参照先）。書き込みはしない
+  if (p.op === 'fields') {
+    var fr = UrlFetchApp.fetch(base + 'app/form/fields.json?app=' + encodeURIComponent(p.appId), {
+      method: 'get',
+      headers: { 'X-Cybozu-API-Token': p.token },
+      muteHttpExceptions: true
+    });
+    var fc = fr.getResponseCode(), ft = fr.getContentText();
+    if (fc >= 200 && fc < 300) {
+      var fb = {};
+      try { fb = JSON.parse(ft); } catch (e) {}
+      return { ok: true, properties: fb.properties || {} };
+    }
+    return { ok: false, err: 'kintone ' + fc + ': ' + ft.slice(0, 300) };
+  }
+
+  if (p.op === 'add') {
+    // ★新しく作る（不良品報告）。APIトークンに「レコード追加」の権限が要る
+    if (!p.record || !Object.keys(p.record).length) {
+      return { ok: false, err: 'record（作る内容）が空です' };
+    }
+    url = base + 'record.json';
+    payload = { app: p.appId, record: p.record };
+    method = 'post';
+
+  } else if (p.op === 'status') {
     if (!p.statusAction) return { ok: false, err: 'statusAction（アクション名）が指定されていません' };
     url = base + 'record/status.json';
     payload = { app: p.appId, id: p.id, action: p.statusAction };
@@ -85,7 +115,7 @@ function kintoneWrite_(p) {
   }
 
   var res = UrlFetchApp.fetch(url, {
-    method: 'put',
+    method: method,
     contentType: 'application/json',
     headers: { 'X-Cybozu-API-Token': p.token },
     payload: JSON.stringify(payload),
@@ -98,7 +128,7 @@ function kintoneWrite_(p) {
   if (code >= 200 && code < 300) {
     var body = {};
     try { body = JSON.parse(text); } catch (e) {}
-    return { ok: true, revision: body.revision || null };
+    return { ok: true, id: body.id || null, revision: body.revision || null };
   }
 
   // kintone側のエラーはそのまま返す。原因が画面で分かるようにする
@@ -121,6 +151,7 @@ function kintoneWrite_(p) {
  *
  *  403 / GAIA_NO01
  *      APIトークンに「レコード編集」（プロセスなら「ステータス変更」）の権限が無い。
+ *      ★新しく作る（op:'add'）ときは「レコード追加」の権限が要る。
  *      kintoneでアクセス権を足したあと、右上の「アプリを更新」を押し忘れていないか確認。
  *
  *  400 / GAIA_IL26

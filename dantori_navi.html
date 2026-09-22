@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.22-11 : 品質チェック「記録する」で**不良・保留が出たら、保存完了の画面からkintoneの不良品報告（App31）を作れる**ようにした（社長指示）。品番・日付・発見者・入力者・数量は記録から入れ、入れるのは発見場所・不具合内容・処置方法・メモだけ。勝手には作らず押したときだけ作る。作成済みなら「No.○ を開く」を出して二重作成を防ぐ。項目はApp31の定義を書き込み用GAS（op:fields）で読み、表示名で探す。部品番号の引き当てに失敗したら（W501）を外した書き方でもう一度。動かすには：書き込み用GASを新しいコード（op:add/fields）に入れ替え／App31のトークンに「レコード追加」。設定の無いPCでは「このPCでは作れません」と出す。 -->
 <!-- H-Hub v2026.09.22-10 : 品番検索を組み直した（社長指示）。(1)上の余白を詰め、左に帳票・右に改修履歴／工程内不良／苦情不適合を並べ、スクロールせずに全部見えるようにした。(2)ショット数は品番の横。(3)改修履歴に見出し（依頼日・完了日・分類・内容・状況）を付け、直近3件＋「すべて見る」。(4)「いま改修中」は依頼書発行・作業着手だけにした（製造確認中・品質確認中は改修後の確認待ちで、3月の分まで並んでいた）。(5)**読み込みを速く**：各欄を届いた順に出す／ページを開いて6秒後に先読み／10〜30分手元に置く（古くても先に出して裏で取り直す）。(6)**定期メンテはApp6（金型治具メンテ）で完了日が入れば自動で累計0から数え直す**（マスタの入力は不要）。(7)ショット数の元の記録は、品質チェックの画面が持っている分を使い回す（GASを二重に呼ばない）。 -->
 <!-- H-Hub v2026.09.22-9 : ショット数を「記録した直後」と「朝礼」にも出すようにした（社長指示。表示は記録直後・品番検索・朝礼の3か所）。記録直後：品質チェックの保存完了の画面に、その品番の累計・残り・判定（目安が登録されている品番だけ）。朝礼：ロス記録の上に「メンテが近い金型・ジグ」（赤＝要メンテ→橙＝メンテが近い、残りの少ない順）。品番を押すと品番検索へ。 -->
 <!-- H-Hub v2026.09.22-8 : 品番検索に**金型・ジグの情報**を出すようにした（社長指示）。(1)ショット数：工程ごとの品番それぞれで累計（-PR・-000・-BL…別々。溶接ジグも）。累計＝基準の累計＋基準日より後の品質チェックの記録の生産数÷取り数。**赤＝残りが直近3ロットの平均ショット数以下**（次の1ロットで目安を超える）／橙＝目安の90%以上。目安・取り数・基準日・基準の累計は kintone「マスタ_製品・金型」(App7)に持つ（項目は社長が作成）。(2)改修履歴：App6をその工程の品番で。いま対応中（完了以外）は赤で目立たせ、直近1年の回数を出す。(3)苦情・不適合（App45）・工程内不良（App31）：製品の品番（頭の2つ）で。GASへのトークン登録待ち。(4)使っていない製造条件（ダイハイト・クッションピン等）の欄を消した。 -->
@@ -232,6 +233,19 @@ html, body {
 .mold-morelink{display:inline-block;font-size:11.5px;color:#2563eb;cursor:pointer;margin-top:3px;}
 .mold-morelink:hover{text-decoration:underline;}
 .mold-morning{border:2px solid #fecaca;background:#fff;border-radius:8px;padding:10px 12px;margin:2px 0 12px;}
+/* 記録から不良品報告を作る（2026-09-22） */
+.qc-ngr{border:2px solid #fca5a5;background:#fff7f7;border-radius:10px;padding:10px 12px;}
+.qc-ngr-hd{font-size:14px;font-weight:800;color:#b91c1c;margin-bottom:4px;}
+.qc-ngr-note{font-size:12px;color:#666;margin-bottom:6px;}
+.qc-ngr-ok{font-size:13px;color:#15803d;font-weight:700;}
+.qc-ngr-tbl{width:100%;border-collapse:collapse;font-size:12.5px;margin:4px 0;}
+.qc-ngr-tbl th{font-size:11px;color:#888;font-weight:700;text-align:left;padding:3px 6px;white-space:nowrap;}
+.qc-ngr-tbl td{padding:3px 6px;}
+.qc-ngr-sel,.qc-ngr-in{width:100%;padding:5px 6px;border:1px solid #ddd;border-radius:5px;font-size:12.5px;font-family:inherit;background:#fff;}
+.qc-ngr-btns{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px;}
+.qc-ngr-go{padding:8px 16px;background:#dc2626;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
+.qc-ngr-go:disabled{opacity:.6;cursor:default;}
+.qc-ngr-msg{font-size:12px;color:#888;}
 .result-header{padding:13px 16px;background:#f9f9f7;border-bottom:1px solid #e5e5e5;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
 .result-partno{font-size:17px;font-weight:700;color:#1a1a1a;letter-spacing:0.03em;}
 .result-name{font-size:12px;color:#666;margin-top:3px;}
@@ -2123,6 +2137,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
           <div class="qc-done-t">保存完了</div>
           <div class="qc-done-f" id="qc-df"></div>
           <div id="qc-shot" style="margin:10px auto 6px;max-width:520px;text-align:left;"></div>
+          <div id="qc-ngrep" style="margin:10px auto 6px;max-width:620px;text-align:left;"></div>
           <p style="font-size:11px;color:#888">Google Drive に自動保存されました</p>
           <button class="qc-back" onclick="qcResetForm()">続けて記録する</button>
           <button class="qc-back qc-back2" onclick="qcShowScreen('list')">日別一覧を見る →</button>
@@ -10456,6 +10471,8 @@ window.qcGo = function(){
     document.getElementById('qc-form-done').style.display='block';
     // ショット数（この品番の累計と判定）を出す（2026-09-22）
     if(sel && typeof window.moldAfterRecord==='function') window.moldAfterRecord(sel.hinban, document.getElementById('qc-shot'), prodNow, moldT0);
+    // 不良・保留が出たら、そのまま不良品報告を作れるようにする（2026-09-22）
+    qcNgOfferReport(d, document.getElementById('qc-ngrep'));
     qcFetchRecords(function(){ qcRenderCurrentList(); });
   }
   function backToForm(){ btn.disabled=false; btn.textContent='記録を保存する'; }
@@ -11566,7 +11583,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.22-10';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.22-11';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -12169,6 +12186,197 @@ function qcNgWrite(op, payload, okCb, errCb){
     else errCb((res && (res.err||res.error)) || 'GASが kintoneWrite に応答しませんでした');
   }, function(e){ errCb(e.message||'通信エラー'); });
 }
+// ===== 記録から不良品報告（App31）を作る（2026-09-22 社長指示）=====
+//   「記録する」で不良・保留が出たら、保存完了の画面で不良品報告を作れるようにした。
+//   ・品番・日付・発見者・入力者・数量は記録から入れる。入れるのは 発見場所・不具合内容・処置方法・メモ だけ
+//   ・勝手には作らない。押したときだけ作る（中身が空の報告や二重作成を防ぐ）
+//   ・項目は App31 の定義を書き込み用GAS（op:'fields'）で読み、表示名で探す（コードに決め打ちしない）
+//   ・作るには：書き込み用GASが新しいコード（op:'add'）／トークンに「レコード追加」／参照先トークン
+var QC_NG_FORM = null;
+function qcNgLoadForm(cb){
+  if(QC_NG_FORM){ cb(QC_NG_FORM); return; }
+  try{
+    var c = JSON.parse(localStorage.getItem('qcNgFormCache') || 'null');
+    if(c && c.t && Date.now() - c.t < 3*86400000 && c.p){ QC_NG_FORM = c.p; cb(QC_NG_FORM); return; }
+  }catch(e){}
+  qcNgWrite('fields', {}, function(res){
+    if(!res || !res.properties){ cb(null, '項目の定義が返ってきませんでした'); return; }
+    QC_NG_FORM = res.properties;
+    try{ localStorage.setItem('qcNgFormCache', JSON.stringify({t:Date.now(), p:QC_NG_FORM})); }catch(e){}
+    cb(QC_NG_FORM);
+  }, function(err){ cb(null, err); });
+}
+function qcNgFormMap(props){
+  function byLabel(obj, labels){
+    for(var code in obj){ var f = obj[code]; if(f && labels.indexOf(f.label) >= 0) return f; }
+    return null;
+  }
+  var m = {
+    date:     byLabel(props, ['不具合発生日','発生日']),
+    place:    byLabel(props, ['発見場所']),
+    finder:   byLabel(props, ['発見者']),
+    part:     byLabel(props, ['部品番号']),
+    jisseki:  byLabel(props, ['実績入力']),
+    reporter: byLabel(props, ['入力者']),
+    table: null, t: {}
+  };
+  for(var c in props){
+    var f = props[c];
+    if(f && f.type === 'SUBTABLE' && f.fields){
+      var hasQty = Object.keys(f.fields).some(function(k){ return f.fields[k].label === '不具合数量'; });
+      if(f.label === '不具合一覧' || hasQty){ m.table = f; break; }
+    }
+  }
+  if(m.table){
+    var tf = m.table.fields;
+    m.t.qty  = byLabel(tf, ['不具合数量']);
+    m.t.kind = byLabel(tf, ['不具合内容']);
+    m.t.act  = byLabel(tf, ['処置方法']);
+    m.t.memo = byLabel(tf, ['メモ']);
+    m.t.no   = byLabel(tf, ['NO.','No.','NO','No']);
+  }
+  return m;
+}
+function qcNgOpts(f){
+  if(!f || !f.options) return [];
+  return Object.keys(f.options).map(function(k){ return f.options[k]; })
+    .sort(function(a,b){ return (+a.index) - (+b.index); }).map(function(o){ return o.label; });
+}
+function qcNgSelect(id, opts, pre){
+  return '<select id="'+id+'" class="qc-ngr-sel"><option value="">-----</option>'
+    + opts.map(function(o){ return '<option'+(o===pre?' selected':'')+'>'+String(o).replace(/</g,'&lt;')+'</option>'; }).join('')
+    + '</select>';
+}
+function qcNgSp(v){ return String(v||'').replace(/[\s　]+/g,''); }   // 空白を無視して比べる
+function qcNgGuess(opts, words){
+  for(var i=0;i<words.length;i++){
+    var w = qcNgSp(words[i]); if(!w) continue;
+    for(var j=0;j<opts.length;j++){ if(qcNgSp(opts[j]) === w) return opts[j]; }
+    for(var j2=0;j2<opts.length;j2++){ var o = qcNgSp(opts[j2]); if(o && (o.indexOf(w)>=0 || w.indexOf(o)>=0)) return opts[j2]; }
+  }
+  return '';
+}
+function qcNgDoneKey(d){ return 'qcNgMade:'+[d.date, d.partNo, d.seizoNo||'', d.ng||0, d.hokyu||0].join('|'); }
+
+function qcNgOfferReport(d, el){
+  if(!el) return;
+  el.innerHTML = '';
+  var ng = parseInt(d.ng||0)||0, hk = parseInt(d.hokyu||0)||0;
+  if(ng <= 0 && hk <= 0) return;
+  var head = '<div class="qc-ngr-hd">⚠ '+(ng?'不良 '+ng+'個':'')+(ng&&hk?'・':'')+(hk?'保留 '+hk+'個':'')+' があります</div>';
+  var cfg = qcNgCfg();
+  if(!cfg.token || !cfg.appId || !cfg.writeGas){
+    el.innerHTML = '<div class="qc-ngr">'+head+'<div class="qc-ngr-note">このPCでは不良品報告を作れません（「⚙ 不良品報告の設定」が未登録）。kintoneで作るか、設定の入ったPCで作ってください。</div></div>';
+    return;
+  }
+  // すでに作ってあれば、そう出す（二重作成を防ぐ）
+  var made = null; try{ made = localStorage.getItem(qcNgDoneKey(d)); }catch(e){}
+  if(made){
+    el.innerHTML = '<div class="qc-ngr">'+head+'<div class="qc-ngr-ok">✅ 不良品報告は作成済みです（<a href="'+qcNgKintoneUrl(made)+'" target="_blank" rel="noopener">No.'+made+' を開く</a>）</div></div>';
+    return;
+  }
+  el.innerHTML = '<div class="qc-ngr">'+head+'<div class="qc-ngr-note">不良品報告の項目を読み込み中…</div></div>';
+  qcNgLoadForm(function(props, err){
+    if(!el.isConnected) return;
+    if(!props){
+      var old = /id が足りません|知らないaction/.test(String(err||''));
+      el.innerHTML = '<div class="qc-ngr">'+head+'<div class="qc-ngr-note" style="color:#b91c1c;">'
+        + (old ? '書き込み用GASが古いままです。新しいコードに入れ替えると、ここから不良品報告を作れます。'
+               : '不良品報告の項目を読み込めませんでした：'+String(err||'').slice(0,120)) + '</div></div>';
+      return;
+    }
+    var m = qcNgFormMap(props);
+    if(!m.table || !m.t.qty || !m.reporter){
+      el.innerHTML = '<div class="qc-ngr">'+head+'<div class="qc-ngr-note" style="color:#b91c1c;">不良品報告の項目（不具合一覧・入力者）が見つかりませんでした。</div></div>';
+      return;
+    }
+    var places = qcNgOpts(m.place), kinds = qcNgOpts(m.t.kind), acts = qcNgOpts(m.t.act);
+    var placePre = qcNgGuess(places, [d.kosei, String(d.kosei||'').replace(/[\s　]+[A-ZＡ-Ｚ0-9０-９]+$/,'')]);
+    var rows = [];
+    if(ng > 0) rows.push({key:'ng', label:'不良', qty:ng, kind:'', act:''});
+    if(hk > 0) rows.push({key:'hk', label:'保留', qty:hk, kind:qcNgGuess(kinds,['保留']), act:qcNgGuess(acts,['保留','選別'])});
+    var html = '<div class="qc-ngr">'+head
+      + '<div class="qc-ngr-note">kintoneの不良品報告を作れます。品番・日付・発見者・数量は記録から入ります。</div>'
+      + '<table class="qc-ngr-tbl"><tr><th>品番</th><td>'+String(d.partNo||'').replace(/</g,'&lt;')+'</td>'
+      + '<th>発生日</th><td>'+String(d.date||'')+'</td></tr>'
+      + '<tr><th>発見者</th><td>'+String(d.operator||'').replace(/</g,'&lt;')+'</td>'
+      + '<th>発見場所</th><td>'+(m.place ? qcNgSelect('qc-ngr-place', places, placePre) : '—')+'</td></tr></table>'
+      + '<table class="qc-ngr-tbl qc-ngr-rows"><tr><th></th><th>数量</th><th>不具合内容</th><th>処置方法</th><th>メモ</th></tr>'
+      + rows.map(function(r){
+          return '<tr><td><b>'+r.label+'</b></td><td style="white-space:nowrap;"><b>'+r.qty+'</b> 個</td>'
+            + '<td>'+qcNgSelect('qc-ngr-kind-'+r.key, kinds, r.kind)+'</td>'
+            + '<td>'+qcNgSelect('qc-ngr-act-'+r.key, acts, r.act)+'</td>'
+            + '<td><input id="qc-ngr-memo-'+r.key+'" class="qc-ngr-in" placeholder="'+(r.key==='hk'?'保留の理由など':'例：LV工程 裏側に型あたり')+'"></td></tr>';
+        }).join('')
+      + '</table>'
+      + '<div class="qc-ngr-btns"><button type="button" class="qc-ngr-go" id="qc-ngr-go">kintoneの不良品報告を作る</button>'
+      + '<span class="qc-ngr-msg" id="qc-ngr-msg">作らない場合は、そのまま「続けて記録する」へ進んでください</span></div></div>';
+    el.innerHTML = html;
+    document.getElementById('qc-ngr-go').onclick = function(){ qcNgCreate(d, m, rows); };
+  });
+}
+
+window.qcNgOfferReport = qcNgOfferReport;   // 確認用に外からも呼べるようにしておく
+
+// 部品番号のルックアップに入れる値（参照先の品番の書き方に合わせる）
+function qcNgPartCandidates(hinban){
+  var a = String(hinban||'').trim(), list = [a];
+  var n = a.replace(/[（(]\s*W\d+\s*[)）]\s*$/,'').replace(/\s+/g,' ').trim();   // 末尾の（W501）を外す
+  if(n && list.indexOf(n) < 0) list.push(n);
+  var n2 = a.replace(/\s+/g,' ').trim();
+  if(n2 && list.indexOf(n2) < 0) list.push(n2);
+  return list;
+}
+function qcNgCreate(d, m, rows){
+  var btn = document.getElementById('qc-ngr-go'), msg = document.getElementById('qc-ngr-msg');
+  var val = function(id){ var e = document.getElementById(id); return e ? e.value : ''; };
+  btn.disabled = true; btn.textContent = '作成中…（押さないでください）';
+  msg.style.color = '#555'; msg.textContent = '';
+  var tbl = rows.map(function(r, i){
+    var v = {};
+    v[m.t.qty.code]  = {value: String(r.qty)};
+    if(m.t.kind) v[m.t.kind.code] = {value: val('qc-ngr-kind-'+r.key)};
+    if(m.t.act)  v[m.t.act.code]  = {value: val('qc-ngr-act-'+r.key)};
+    if(m.t.memo) v[m.t.memo.code] = {value: (r.key==='hk'?'保留品　':'') + val('qc-ngr-memo-'+r.key)
+                                          + (d.seizoNo ? '（製造番号 '+d.seizoNo+'）' : '')};
+    if(m.t.no)   v[m.t.no.code]   = {value: String(i+1)};
+    return {value: v};
+  });
+  var base = {};
+  if(m.date)     base[m.date.code]     = {value: String(d.date||'').slice(0,10).replace(/\//g,'-')};
+  if(m.place)    base[m.place.code]    = {value: val('qc-ngr-place')};
+  if(m.finder)   base[m.finder.code]   = {value: d.operator || ''};
+  if(m.jisseki)  base[m.jisseki.code]  = {value: qcNgGuess(qcNgOpts(m.jisseki), ['有']) || '有'};
+  if(m.reporter) base[m.reporter.code] = {value: d.operator || ''};
+  base[m.table.code] = {value: tbl};
+  var cands = m.part ? qcNgPartCandidates(d.partNo) : [null];
+  var tryAt = function(i){
+    var rec = JSON.parse(JSON.stringify(base));
+    if(m.part && cands[i] != null) rec[m.part.code] = {value: cands[i]};
+    qcNgWrite('add', {record: rec}, function(res){
+      var id = res && res.id;
+      try{ if(id) localStorage.setItem(qcNgDoneKey(d), String(id)); }catch(e){}
+      btn.style.display = 'none';
+      msg.style.color = '#15803d';
+      msg.innerHTML = '✅ 不良品報告を作りました'+(id ? '（<a href="'+qcNgKintoneUrl(id)+'" target="_blank" rel="noopener">No.'+id+' を開く</a>）' : '')
+        + (m.part && i > 0 ? '　※部品番号は「'+String(cands[i]).replace(/</g,'&lt;')+'」で引き当てました' : '');
+      try{ if(typeof qcNgFetch === 'function') qcNgFetch(true); }catch(e){}
+    }, function(err){
+      var e = String(err||'');
+      // 部品番号の引き当てに失敗したら、書き方を変えてもう一度
+      if(/GAIA_LO04/.test(e) && m.part && e.indexOf(m.part.code) >= 0 && i+1 < cands.length){ tryAt(i+1); return; }
+      btn.disabled = false; btn.textContent = 'kintoneの不良品報告を作る';
+      msg.style.color = '#b91c1c';
+      var hint = '';
+      if(/GAIA_NO01|権限/.test(e)) hint = '（App31のトークンに「レコード追加」の権限が要ります）';
+      else if(/GAIA_LO04/.test(e)) hint = '（ルックアップの引き当てに失敗。参照先アプリのトークンが「⚙ 不良品報告の設定」に入っているか確認してください）';
+      else if(/id が足りません|知らないaction/.test(e)) hint = '（書き込み用GASを新しいコードに入れ替えてください）';
+      msg.textContent = '作れませんでした：'+e.slice(0,200)+hint;
+    });
+  };
+  tryAt(0);
+}
+
 // 書き込み用GASが生きているか確かめる
 window.qcNgTestWrite = function(){
   var msg=document.getElementById('qc-ng-wgas-msg') || document.getElementById('qc-ng-cfg-msg');
@@ -19409,7 +19617,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.22-10</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.22-11</div>
 </body>
 </html>
 
