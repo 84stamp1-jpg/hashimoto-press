@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.22-2 : ロス記録の上段の一覧（CT 89%以下／段取率 150%以上）を、数字の悪い順ではなく**各ラインのCTと同じライン順**（A1→A2→B1→B2→Bライン→Cライン①…）にした（社長指示）。ラインの中は行の順。下の明細も同じ並びにそろえた。 -->
 <!-- H-Hub v2026.09.22-1 : ロス記録の2点（社長指示）。(1)**段取比が「--」になっていた**。9/21の記録は段取比の項目を足す前に保存されていたため、前日を開くと保存値に項目が無かった（当日だけはその場で計算するので出ていた）。段取(分)÷標準(分)をその場で計算し、保存値より優先するようにした。CSVも同じ。(2)日ごとの**上段に朝礼で話すところだけ**を出した。各ラインのCT／CT 89%以下の品番（悪い順）／段取率 150%以上の品番（大きい順）。その下にラインごとの明細。 -->
 <!-- H-Hub v2026.09.21-20 : ロス記録の「数量(%)」の列をやめ、代わりに**「段取比」**を出すようにした（社長指示）。段取比＝段取りが標準の何％かかったか（行の表示「段取 90分／標準27分 (333%)」の括弧の中と同じ）。100%以下=緑／125%以下=橙／それ超=赤。数量は実績/計画の数字がそのまま出ているので、％にしても計画的に減らした分と区別がつかず、見るところが増えるだけだった。CSVも同じ並びにした。 -->
 <!-- H-Hub v2026.09.21-19 : ロス記録の明細の文字を大きくした（社長指示。朝礼で見るため）。表11→13px・見出し12→14px・日付12→15px・原因のしるし10→11.5px・備考や計画時間などの小さい文字10→11.5px。行の高さも少し広げ、文字が大きくなったぶん枠を1120→1280pxにした。 -->
@@ -10929,7 +10930,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.22-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.22-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -14215,7 +14216,15 @@ function _lhSetupRate(v){
 //   各ラインのCT／CTが89%以下の品番／段取率が150%以上の品番
 const LH_CT_WARN    = 89;    // これ以下を挙げる
 const LH_SETUP_WARN = 150;   // これ以上を挙げる
+// ラインの並び（工場レイアウト・進捗ボードと同じ順）。ここに無いライン（組立の担当者など）は後ろに元の順で
+const LH_LINE_ORDER = ['A1','A2','B1','B2','Bライン','BP2','Cライン①','CP3','Cライン②','CP3_2','ロボットライン','robot'];
+function _lhSortLines(recs){
+  return recs.map(function(r,i){ const k=LH_LINE_ORDER.indexOf(r.lineId); return {r:r, k:(k>=0?k:100+i)}; })
+             .sort(function(a,b){ return a.k-b.k; }).map(function(x){ return x.r; });
+}
 function _lhDaySummary(dayRecs){
+  // ★一覧も「各ラインのCT」と同じライン順にする（2026-09-22 社長指示）。ライン内は行の順
+  dayRecs = _lhSortLines(dayRecs);
   const ctCol = v => v>=95?'#16a34a':v>=90?'#d97706':'#dc2626';
   // 各ラインのCT（まだ始まっていないラインは出さない）
   const chips = dayRecs.filter(r=>r.ctRate!=null).map(function(r){
@@ -14229,8 +14238,7 @@ function _lhDaySummary(dayRecs){
     const sr=_lhRate(j);
     if(sr!=null&&sr>=LH_SETUP_WARN) slow.push({ln:ln,j:j,v:sr});
   });});
-  lowCT.sort((a,b)=>a.v-b.v);      // 悪い順
-  slow.sort((a,b)=>b.v-a.v);
+  // 並べ替えない（ライン順→行の順のまま）
   const list = function(items, fmt){
     if(!items.length) return '<div style="color:#16a34a;font-size:13px;padding:6px 2px;">該当なし</div>';
     return '<table class="lh-sum">'+items.map(fmt).join('')+'</table>';
@@ -14259,7 +14267,7 @@ function _lhRenderDay(recs){
   if(!recs.length){ body.innerHTML='<div style="color:#bbb;font-size:12px;padding:10px 0;">その期間の記録はありません</div>'; return; }
   const byDay={}; recs.forEach(r=>{(byDay[r.date]=byDay[r.date]||[]).push(r);});
   body.innerHTML=Object.keys(byDay).sort().reverse().map(function(d){
-    const block=byDay[d].map(function(r){
+    const block=_lhSortLines(byDay[d]).map(function(r){
       const hdr='<div style="font-size:14px;font-weight:700;color:#1a1a1a;margin:10px 0 3px;">'+_lhEsc(r.lineName||r.lineId)
         +'<span style="font-weight:400;color:#888;font-size:12.5px;margin-left:10px;">'
         +'CT '+(r.ctRate!=null?r.ctRate+'%':'--')
@@ -18759,7 +18767,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.22-1</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.22-2</div>
 </body>
 </html>
 
