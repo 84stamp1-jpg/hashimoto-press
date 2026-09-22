@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.22-7 : 管理者PINを「うっかり防止」として効くようにした（社長指示）。以前は PIN画面に「初期PIN: 1234」と書いてあり、各PCのブラウザに保存するので誰も変えず全PC 1234 のままで、実質意味が無かった。(1)画面から番号の表示を消した。(2)**PINを会社で1つ**にした。Firebase settings/adminPinHash に、番号そのものではなく変換した形（SHA-256）で置く。(3)**PINの変更欄を画面から無くした**（誰かに変えられて社長が締め出される心配をなくすため）。変更は社長がClaudeに頼んでFirebaseに書く。adminPinHash を消せば以前の方式に戻るので、締め出されることはない。つながらないときはそのPCが最後に読んだ値で確かめる。 -->
 <!-- H-Hub v2026.09.22-6 : 進捗ボードの品番を押すと品番検索へ飛ぶようにした（社長指示。工場レイアウトと同じ動き）。ラインの見出しの品番と、品番の並び（いま流している行・ほかの行）の両方。工場レイアウトと同じ data-search-part の仕組みを使う。品番を押したときは工程詳細を開かない。 -->
 <!-- H-Hub v2026.09.22-5 : 設定画面の「このPCに保存している標準書PDF」を「保存しているPDF」に直した（社長指示）。作業標準書だけでなく品質チェックシートも同じ仕組みで保存しているため。説明文と消すときの確認も合わせた。 -->
 <!-- H-Hub v2026.09.22-4 : 標準書PDFを**このPCに保存**するようにした（社長指示）。前の版では「このページを開いているあいだ」だけ覚えていたが、ページを閉じる・翌日になると消えていた。ブラウザの保存領域（IndexedDB）に置き、各PCで最初の1回だけ待てば、翌日以降もすぐ開く。kintoneでファイルを差し替えると fileKey が変わるので、古いPDFを出すことはない。150MBを超えたら使っていない順に消す。設定画面に「このPCに保存している標準書PDF N件・xxMB ［消す］」を置いた。あわせて**PDFでないデータは開かない・保存しない**ようにした（先頭が %PDF か確かめる）。kintoneがエラーを返してもGASが「成功」で返していて、壊れたPDFが開いていたため。GAS側の修正も別途用意。 -->
@@ -2775,7 +2776,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
       <button onclick="checkPinSubmit()" class="save-btn" style="flex:1;padding:9px;border-radius:6px;font-size:13px;cursor:pointer;border:none;background:#1a1a1a;color:#fff;">確認</button>
     </div>
     <div style="margin-top:12px;font-size:11px;color:#aaa;">
-      初期PIN: <b>1234</b>（設定内で変更できます）
+      PINが分からないときは、社長または各リーダーに聞いてください
     </div>
   </div>
 </div>
@@ -2935,22 +2936,12 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
       <div class="msg" id="beacon-mgr-msg-m" style="margin-top:6px;"></div>
     </div>
 
-    <!-- PIN変更セクション -->
+    <!-- PIN（2026-09-22）：会社で1つ。変更欄は置かない（誰かに変えられて締め出されないように） -->
     <div style="border-top:1px solid #f0f0f0;margin-top:18px;padding-top:14px;">
-      <div style="font-size:12px;font-weight:600;color:#666;margin-bottom:10px;">🔒 管理者PIN変更</div>
-      <div class="form-group" style="margin-bottom:8px;">
-        <label>現在のPIN</label>
-        <input type="password" id="pin-current" maxlength="8" placeholder="現在のPIN"/>
+      <div style="font-size:12px;font-weight:600;color:#666;margin-bottom:6px;">🔒 管理者PIN</div>
+      <div style="font-size:11px;color:#888;line-height:1.7;">
+        PINは全PC共通です。変更は社長だけが行います（この画面からは変えられません）。
       </div>
-      <div class="form-group" style="margin-bottom:8px;">
-        <label>新しいPIN（4桁以上）</label>
-        <input type="password" id="pin-new" maxlength="8" placeholder="新しいPIN"/>
-      </div>
-      <div class="form-group" style="margin-bottom:10px;">
-        <label>新しいPIN（確認）</label>
-        <input type="password" id="pin-confirm" maxlength="8" placeholder="もう一度入力"/>
-      </div>
-      <button onclick="changeAdminPin()" style="padding:7px 16px;border:1px solid #1a1a1a;border-radius:6px;font-size:12px;cursor:pointer;background:#1a1a1a;color:#fff;">PINを変更する</button>
     </div>
   </div>
 </div>
@@ -3881,10 +3872,45 @@ function requirePin(callback){
   setTimeout(()=>{ if(el) el.focus(); }, 80);
 }
 
-function checkPinSubmit(){
+// ★2026-09-22：PINを会社で1つにした（社長指示）
+//   Firebase settings/adminPinHash に「hhub-admin:＋PIN」を SHA-256 にかけた値を置く（番号そのものは置かない）。
+//   ・変更欄は画面に無い。変えるのは社長だけ（Claude に頼んで Firebase に書く）
+//   ・settings/adminPinHash を消せば以前の方式（各PCの値、無ければ1234）に戻る → 社長が締め出されることはない
+//   ・つながらないときは、そのPCが最後に読んだ値で確かめる
+//   ※中身は「うっかり防止」。ブラウザの中だけの仕組みなので、泥棒よけにはならない
+const PIN_HASH_KEY = 'hhub_admin_pin_hash';
+async function _pinHash(pin){
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('hhub-admin:' + pin));
+  return Array.from(new Uint8Array(buf)).map(function(b){ return b.toString(16).padStart(2,'0'); }).join('');
+}
+async function _companyPinHash(){
+  try{
+    const base = ((config && config.firebaseUrl) || FIREBASE_URL).replace(/\/+$/, '');
+    const r = await fetch(base + '/settings/adminPinHash.json', {cache:'no-store'});
+    if(r.ok){
+      const v = await r.json();
+      if(typeof v === 'string' && /^[0-9a-f]{64}$/.test(v)){
+        try{ localStorage.setItem(PIN_HASH_KEY, v); }catch(e){}
+        return v;
+      }
+      if(v === null){ try{ localStorage.removeItem(PIN_HASH_KEY); }catch(e){} return null; }
+    }
+  }catch(e){}
+  try{ return localStorage.getItem(PIN_HASH_KEY) || null; }catch(e){ return null; }
+}
+async function checkPinSubmit(){
   const entered = (document.getElementById('pinInput').value||'').trim();
-  const stored  = localStorage.getItem(PIN_KEY) || '1234';
-  if(entered === stored){
+  let ok = false;
+  const h = await _companyPinHash();
+  if(h){
+    try{ ok = (await _pinHash(entered)) === h; }catch(e){ ok = false; }
+  } else {
+    // 会社のPINがまだ無いあいだだけ、以前の方式
+    let stored = '1234';
+    try{ stored = localStorage.getItem(PIN_KEY) || '1234'; }catch(e){}
+    ok = (entered === stored);
+  }
+  if(ok){
     _pinUnlocked = true;
     document.getElementById('pinModal').style.display = 'none';
     if(_pinCallback){ const cb = _pinCallback; _pinCallback = null; cb(); }
@@ -3906,6 +3932,9 @@ function pinModalBgClick(e){
 
 // PIN変更（設定画面から呼ぶ）
 function changeAdminPin(){
+  // 2026-09-22：PINは会社で1つ。画面からは変えない（社長だけが変える）
+  alert('PINの変更は社長に依頼してください。');
+  return;
   const cur  = (document.getElementById('pin-current')||{}).value || '';
   const next = (document.getElementById('pin-new')||{}).value || '';
   const conf = (document.getElementById('pin-confirm')||{}).value || '';
@@ -11112,7 +11141,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.22-6';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.22-7';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -18953,7 +18982,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.22-6</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.22-7</div>
 </body>
 </html>
 
