@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.22-4 : 標準書PDFを**このPCに保存**するようにした（社長指示）。前の版では「このページを開いているあいだ」だけ覚えていたが、ページを閉じる・翌日になると消えていた。ブラウザの保存領域（IndexedDB）に置き、各PCで最初の1回だけ待てば、翌日以降もすぐ開く。kintoneでファイルを差し替えると fileKey が変わるので、古いPDFを出すことはない。150MBを超えたら使っていない順に消す。設定画面に「このPCに保存している標準書PDF N件・xxMB ［消す］」を置いた。あわせて**PDFでないデータは開かない・保存しない**ようにした（先頭が %PDF か確かめる）。kintoneがエラーを返してもGASが「成功」で返していて、壊れたPDFが開いていたため。GAS側の修正も別途用意。 -->
 <!-- H-Hub v2026.09.22-3 : 標準書のPDFがなかなか表示されない件（社長指摘・1か所のPC）。実測でGASの往復だけで12〜22秒（PDFの無いダミーでも）かかり、そこへPDF本体が乗るので、以前の30秒の制限では少し遅いPCや回線ですぐ切れていた。しかも案内が「GASを再デプロイしてください」で的外れだった。(1)待ち時間を120秒にし、読み込み中に経過秒数と「取り消し」を出す。(2)案内を実態に合わせた（もう一度押す／続くなら版を確かめてCtrl+F5）。(3)**一度開いたPDFはページを開いているあいだ手元に置き、2回目からはすぐ開く**（kintoneでファイルを差し替えるとfileKeyが変わるので古いPDFは出ない）。(4)遅れて届いた返事でエラーにならないようにした。同じPDFを重ねて取りに行かないようにした。 -->
 <!-- H-Hub v2026.09.22-2 : ロス記録の上段の一覧（CT 89%以下／段取率 150%以上）を、数字の悪い順ではなく**各ラインのCTと同じライン順**（A1→A2→B1→B2→Bライン→Cライン①…）にした（社長指示）。ラインの中は行の順。下の明細も同じ並びにそろえた。 -->
 <!-- H-Hub v2026.09.22-1 : ロス記録の2点（社長指示）。(1)**段取比が「--」になっていた**。9/21の記録は段取比の項目を足す前に保存されていたため、前日を開くと保存値に項目が無かった（当日だけはその場で計算するので出ていた）。段取(分)÷標準(分)をその場で計算し、保存値より優先するようにした。CSVも同じ。(2)日ごとの**上段に朝礼で話すところだけ**を出した。各ラインのCT／CT 89%以下の品番（悪い順）／段取率 150%以上の品番（大きい順）。その下にラインごとの明細。 -->
@@ -2879,6 +2880,14 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
       <input type="text" id="cfg-proxy" placeholder="KintoneProxy.gsのデプロイURL"/>
       <div class="form-hint">KintoneProxy.gsのデプロイURL（PDFファイル表示用）</div>
     </div>
+    <div class="form-group">
+      <label>このPCに保存している標準書PDF</label>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span id="cfg-pdfcache" style="font-size:13px;color:#555;">--</span>
+        <button type="button" onclick="hhubPdfCacheClear()" style="padding:3px 12px;font-size:11px;border:1px solid #ddd;border-radius:5px;background:#fff;cursor:pointer;">消す</button>
+      </div>
+      <div class="form-hint">一度開いたPDFはこのPCに保存し、次からすぐ開きます。kintoneで差し替えたPDFは自動で取り直します。</div>
+    </div>
     <div class="modal-btns">
       <button onclick="closeConfig()">キャンセル</button>
       <button class="save-btn" onclick="saveConfig()">保存して接続</button>
@@ -3250,6 +3259,7 @@ let config = Object.assign({}, FIXED_CONFIG, {
 
 function showConfig(){ requirePin(_showConfigDirect); }
 function _showConfigDirect(){
+  if(typeof window.hhubPdfCacheInfo === 'function') window.hhubPdfCacheInfo();
   document.getElementById('cfg-domain').value   = config.domain || '';
   document.getElementById('cfg-appid').value    = config.appId  || '';
   document.getElementById('cfg-token').value    = config.token  || '';
@@ -4289,18 +4299,127 @@ function renderResult(part){
 //   (3)一度開いたPDFは、このページを開いているあいだ手元に置き、2回目からはすぐ開く
 //      （kintoneでファイルを差し替えると fileKey が変わるので、古いPDFを出すことはない）
 const PDF_TIMEOUT_MS = 120000;
-const _pdfCache = new Map();          // fileKey → blob URL
+const _pdfCache = new Map();          // fileKey → blob URL（このページを開いているあいだ）
 
-function openDoc(docName, fileKey, partNo){
+// ----- このPCに保存（IndexedDB）… ページを閉じても・翌日も残る（2026-09-22）-----
+//   標準書はめったに変わらないので、各PCで最初の1回だけ待てば、あとはすぐ開く。
+//   kintoneでファイルを差し替えると fileKey が変わるので、古いPDFを出すことはない。
+//   150MBを超えたら、使っていない順に消す（現場のPCはディスクが小さいことがあるため）。
+const PDF_DB_NAME = 'hhub-pdf', PDF_DB_STORE = 'files';
+const PDF_CACHE_MAX_BYTES = 150 * 1024 * 1024;
+let _pdfDbP = null;
+function _pdfDb(){
+  if(_pdfDbP) return _pdfDbP;
+  _pdfDbP = new Promise(function(res){
+    try{
+      if(!window.indexedDB){ res(null); return; }
+      const rq = indexedDB.open(PDF_DB_NAME, 1);
+      rq.onupgradeneeded = function(){
+        const db = rq.result;
+        if(!db.objectStoreNames.contains(PDF_DB_STORE)) db.createObjectStore(PDF_DB_STORE, {keyPath:'key'});
+      };
+      rq.onsuccess = function(){ res(rq.result); };
+      rq.onerror   = function(){ res(null); };
+      rq.onblocked = function(){ res(null); };
+    }catch(e){ res(null); }
+  });
+  return _pdfDbP;
+}
+async function _pdfGet(key){
+  const db = await _pdfDb(); if(!db) return null;
+  return new Promise(function(res){
+    try{
+      const tx = db.transaction(PDF_DB_STORE, 'readwrite');
+      const st = tx.objectStore(PDF_DB_STORE);
+      const rq = st.get(key);
+      rq.onsuccess = function(){
+        const v = rq.result;
+        if(v){ v.used = Date.now(); try{ st.put(v); }catch(e){} }   // 使った日時（消す順番に使う）
+        res(v || null);
+      };
+      rq.onerror = function(){ res(null); };
+    }catch(e){ res(null); }
+  });
+}
+async function _pdfAll(){
+  const db = await _pdfDb(); if(!db) return [];
+  return new Promise(function(res){
+    try{
+      const out = [];
+      const rq = db.transaction(PDF_DB_STORE, 'readonly').objectStore(PDF_DB_STORE).openCursor();
+      rq.onsuccess = function(){
+        const c = rq.result;
+        if(c){ out.push({key:c.value.key, size:c.value.size||0, used:c.value.used||0}); c.continue(); }
+        else res(out);
+      };
+      rq.onerror = function(){ res(out); };
+    }catch(e){ res([]); }
+  });
+}
+async function _pdfTrim(){
+  const all = await _pdfAll();
+  let total = all.reduce(function(a,x){ return a+x.size; }, 0);
+  if(total <= PDF_CACHE_MAX_BYTES) return;
+  const db = await _pdfDb(); if(!db) return;
+  all.sort(function(a,b){ return a.used-b.used; });
+  const st = db.transaction(PDF_DB_STORE, 'readwrite').objectStore(PDF_DB_STORE);
+  for(const x of all){ if(total <= PDF_CACHE_MAX_BYTES*0.8) break; st.delete(x.key); total -= x.size; }
+}
+async function _pdfPut(key, blob, name){
+  const db = await _pdfDb(); if(!db) return;
+  try{
+    await new Promise(function(res){
+      const tx = db.transaction(PDF_DB_STORE, 'readwrite');
+      tx.objectStore(PDF_DB_STORE).put({key:key, blob:blob, name:name, size:blob.size, saved:Date.now(), used:Date.now()});
+      tx.oncomplete = res; tx.onerror = res; tx.onabort = res;
+    });
+    await _pdfTrim();
+  }catch(e){}
+}
+// 設定画面：保存している件数と容量／消す
+window.hhubPdfCacheInfo = async function(){
+  const el = document.getElementById('cfg-pdfcache'); if(!el) return;
+  const all = await _pdfAll();
+  const mb = all.reduce(function(a,x){ return a+x.size; }, 0) / 1024 / 1024;
+  el.textContent = all.length ? (all.length + '件・' + mb.toFixed(1) + 'MB') : '保存なし';
+};
+window.hhubPdfCacheClear = async function(){
+  if(!confirm('このPCに保存している標準書PDFを消します。\n次に開くときは、また取りに行きます。')) return;
+  const db = await _pdfDb();
+  if(db){
+    await new Promise(function(res){
+      const tx = db.transaction(PDF_DB_STORE, 'readwrite');
+      tx.objectStore(PDF_DB_STORE).clear();
+      tx.oncomplete = res; tx.onerror = res;
+    });
+  }
+  _pdfCache.forEach(function(u){ try{ URL.revokeObjectURL(u); }catch(e){} });
+  _pdfCache.clear();
+  window.hhubPdfCacheInfo();
+};
+// 本当にPDFか（先頭が "%PDF"）。kintoneのエラー（JSON）がPDFとして返ってくることがあるため
+function _isPdfBytes(b){ return b.length > 4 && b[0]===0x25 && b[1]===0x50 && b[2]===0x44 && b[3]===0x46; }
+
+async function openDoc(docName, fileKey, partNo){
   if(!fileKey){
     alert(`【${partNo}】${docName}\nkintoneにPDFが登録されていません`);
     return;
   }
-  // 2回目からは手元の分をすぐ開く
+  // ① このページですでに開いたもの
   if(_pdfCache.has(fileKey)){
     window.open(_pdfCache.get(fileKey), '_blank');
     return;
   }
+  // ② このPCに保存してあるもの（翌日以降もここから開く）
+  try{
+    const hit = await _pdfGet(fileKey);
+    if(hit && hit.blob){
+      const u = URL.createObjectURL(hit.blob);
+      _pdfCache.set(fileKey, u);
+      window.open(u, '_blank');
+      return;
+    }
+  }catch(e){}
   const pdfGasUrl = config.proxyUrl || config.gasUrl;
   if(!pdfGasUrl){
     alert('設定画面でPDF表示用GAS URLを入力してください');
@@ -4316,7 +4435,7 @@ function openDoc(docName, fileKey, partNo){
   loadingDiv.innerHTML =
     `<div style="font-weight:700;margin-bottom:6px;"></div>`+
     `<div style="font-size:13px;color:#555;"><span class="pdf-sec">0</span>秒</div>`+
-    `<div style="font-size:11.5px;color:#999;margin:6px 0 10px;">PDFの取得には30秒ほどかかることがあります。<br>一度開いたPDFは、次からすぐ開きます。</div>`+
+    `<div style="font-size:11.5px;color:#999;margin:6px 0 10px;">PDFの取得には30秒ほどかかることがあります。<br>一度開いたPDFはこのPCに保存し、次からすぐ開きます。</div>`+
     `<button type="button" style="padding:5px 16px;border:1px solid #ddd;background:#fff;border-radius:6px;font-size:12px;cursor:pointer;">取り消し</button>`;
   loadingDiv.firstChild.textContent = `${docName} を読み込み中…`;
   document.body.appendChild(loadingDiv);
@@ -4366,9 +4485,20 @@ function openDoc(docName, fileKey, partNo){
         const binary = atob(b64);
         const bytes  = new Uint8Array(binary.length);
         for(let i=0; i<binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        // ★PDFでなければ開かない・保存しない（kintoneがエラーを返してもGASが「成功」で返していたため）
+        if(!_isPdfBytes(bytes)){
+          let msg = '';
+          try{
+            msg = new TextDecoder('utf-8').decode(bytes.slice(0, 600));
+            const j = JSON.parse(msg); msg = (j && (j.message || j.code)) || msg;
+          }catch(e){}
+          alert(`【${partNo}】${docName}\nPDFではないデータが返ってきました（kintone側のエラー）。\n${String(msg).slice(0,200)}`);
+          return;
+        }
         const blob   = new Blob([bytes], {type:'application/pdf'});
         const bUrl   = URL.createObjectURL(blob);
         _pdfCache.set(fileKey, bUrl);
+        _pdfPut(fileKey, blob, partNo + '_' + docName);   // このPCに保存（翌日以降すぐ開く）
         window.open(bUrl, '_blank');
       } catch(e){
         alert(`【${partNo}】${docName}\nPDF表示エラー: ${e.message}`);
@@ -10977,7 +11107,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.22-3';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.22-4';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -18814,7 +18944,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.22-3</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.22-4</div>
 </body>
 </html>
 
