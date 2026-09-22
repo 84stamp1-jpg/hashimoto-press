@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.22-9 : ショット数を「記録した直後」と「朝礼」にも出すようにした（社長指示。表示は記録直後・品番検索・朝礼の3か所）。記録直後：品質チェックの保存完了の画面に、その品番の累計・残り・判定（目安が登録されている品番だけ）。朝礼：ロス記録の上に「メンテが近い金型・ジグ」（赤＝要メンテ→橙＝メンテが近い、残りの少ない順）。品番を押すと品番検索へ。 -->
 <!-- H-Hub v2026.09.22-8 : 品番検索に**金型・ジグの情報**を出すようにした（社長指示）。(1)ショット数：工程ごとの品番それぞれで累計（-PR・-000・-BL…別々。溶接ジグも）。累計＝基準の累計＋基準日より後の品質チェックの記録の生産数÷取り数。**赤＝残りが直近3ロットの平均ショット数以下**（次の1ロットで目安を超える）／橙＝目安の90%以上。目安・取り数・基準日・基準の累計は kintone「マスタ_製品・金型」(App7)に持つ（項目は社長が作成）。(2)改修履歴：App6をその工程の品番で。いま対応中（完了以外）は赤で目立たせ、直近1年の回数を出す。(3)苦情・不適合（App45）・工程内不良（App31）：製品の品番（頭の2つ）で。GASへのトークン登録待ち。(4)使っていない製造条件（ダイハイト・クッションピン等）の欄を消した。 -->
 <!-- H-Hub v2026.09.22-7 : 管理者PINを「うっかり防止」として効くようにした（社長指示）。以前は PIN画面に「初期PIN: 1234」と書いてあり、各PCのブラウザに保存するので誰も変えず全PC 1234 のままで、実質意味が無かった。(1)画面から番号の表示を消した。(2)**PINを会社で1つ**にした。Firebase settings/adminPinHash に、番号そのものではなく変換した形（SHA-256）で置く。(3)**PINの変更欄を画面から無くした**（誰かに変えられて社長が締め出される心配をなくすため）。変更は社長がClaudeに頼んでFirebaseに書く。adminPinHash を消せば以前の方式に戻るので、締め出されることはない。つながらないときはそのPCが最後に読んだ値で確かめる。 -->
 <!-- H-Hub v2026.09.22-6 : 進捗ボードの品番を押すと品番検索へ飛ぶようにした（社長指示。工場レイアウトと同じ動き）。ラインの見出しの品番と、品番の並び（いま流している行・ほかの行）の両方。工場レイアウトと同じ data-search-part の仕組みを使う。品番を押したときは工程詳細を開かない。 -->
@@ -208,6 +209,7 @@ html, body {
 .mold-tbl td{padding:5px 8px;border-bottom:1px solid #f1f5f9;vertical-align:top;}
 .mold-tbl td.mn{white-space:nowrap;font-variant-numeric:tabular-nums;}
 .mold-tbl td.mw{width:60%;}
+.mold-morning{border:2px solid #fecaca;background:#fff;border-radius:8px;padding:10px 12px;margin:2px 0 12px;}
 .result-header{padding:13px 16px;background:#f9f9f7;border-bottom:1px solid #e5e5e5;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
 .result-partno{font-size:17px;font-weight:700;color:#1a1a1a;letter-spacing:0.03em;}
 .result-name{font-size:12px;color:#666;margin-top:3px;}
@@ -2098,6 +2100,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
           <div class="qc-done-ic">✅</div>
           <div class="qc-done-t">保存完了</div>
           <div class="qc-done-f" id="qc-df"></div>
+          <div id="qc-shot" style="margin:10px auto 6px;max-width:520px;text-align:left;"></div>
           <p style="font-size:11px;color:#888">Google Drive に自動保存されました</p>
           <button class="qc-back" onclick="qcResetForm()">続けて記録する</button>
           <button class="qc-back qc-back2" onclick="qcShowScreen('list')">日別一覧を見る →</button>
@@ -2565,6 +2568,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
         <button class="bd" onclick="lhQuick('3m')">3か月</button>
         <button class="bp" style="margin-left:auto;" onclick="lhCsv()">⬇ CSV出力</button>
       </div>
+      <div id="lhMold"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;font-size:12.5px;color:#888;">
         <span>原因のしるし：</span>
         <span class="lh-tag lh-setup">段取り</span>
@@ -4384,11 +4388,12 @@ function moldQcRecords(){
   if(_moldQc.rows && Date.now()-_moldQc.t < 5*60000) return Promise.resolve(_moldQc.rows);
   if(_moldQc.p) return _moldQc.p;
   _moldQc.p = new Promise(function(res){
-    if(typeof window.qcGasPost !== 'function'){ res([]); return; }
+    // ★読めなかったときは null（0件として判定しない。「1ロット約0」「累計が少ない」と誤って出るため）
+    if(typeof window.qcGasPost !== 'function'){ _moldQc.p = null; res(null); return; }
     window.qcGasPost('getRecords', {}, function(r){
-      const rows = (r && r.records) || [];
-      _moldQc = {t:Date.now(), rows:rows, p:null}; res(rows);
-    }, function(){ _moldQc.p = null; res(_moldQc.rows || []); }, 90000);
+      if(!r || !Array.isArray(r.records)){ _moldQc.p = null; res(_moldQc.rows || null); return; }
+      _moldQc = {t:Date.now(), rows:r.records, p:null}; res(r.records);
+    }, function(){ _moldQc.p = null; res(_moldQc.rows || null); }, 90000);
   });
   return _moldQc.p;
 }
@@ -4529,6 +4534,58 @@ function moldComplaintHtml(d, part){
   return _moldSec('📣 苦情・不適合', '<table class="mold-tbl">'+rows+'</table>', '製品 '+moldEsc(base)+' ・全'+recs.length+'件');
 }
 
+// ----- 記録した直後に、その品番のショット数を出す -----
+window.moldAfterRecord = async function(part, el){
+  if(!el) return;
+  el.innerHTML = '<div class="mold-loading">🔨 ショット数を確認中…</div>';
+  moldQcInvalidate();                                  // 今入れた記録を含めて数え直す
+  const [rows, mres] = await Promise.all([moldQcRecords(), moldGetMasters([part])]);
+  if(!el.isConnected) return;
+  if(mres && mres.error){ el.innerHTML = ''; return; }   // マスタに項目が無いうちは出さない
+  if(rows === null){ el.innerHTML = '<div class="mold-empty">品質チェックの記録を読み込めなかったため、ショット数は判定していません。少し待ってからもう一度開いてください。</div>'; return; }
+  const m = (mres.masters || {})[moldNorm(part)];
+  if(!m || !m.limit){ el.innerHTML = ''; return; }
+  el.innerHTML = moldShotHtml(moldShotStatus(part, rows, m));
+};
+
+// ----- 朝礼：メンテが近い金型・ジグ（ロス記録の上に出す）-----
+window.moldRenderMorning = async function(el){
+  if(!el) return;
+  el.innerHTML = '<div class="mold-loading">🔨 メンテが近い金型・ジグを確認中…</div>';
+  const [rows, mres] = await Promise.all([moldQcRecords(), moldGetMasters([])]);
+  if(!el.isConnected) return;
+  if(mres && mres.error){
+    el.innerHTML = /見つかりません/.test(mres.error)
+      ? '<div class="mold-empty" style="margin:2px 0 10px;">🔨 ショット数：kintone「マスタ_製品・金型」に項目ができると、ここにメンテが近い金型・ジグが出ます</div>'
+      : '';
+    return;
+  }
+  if(rows === null){ el.innerHTML = '<div style="margin:2px 0 10px;">'+'<div class="mold-empty">品質チェックの記録を読み込めなかったため、ショット数は判定していません。少し待ってからもう一度開いてください。</div>'+'</div>'; return; }
+  const list = Object.values(mres.masters || {}).filter(m=>m.limit>0)
+    .map(m=>moldShotStatus(m.part, rows, m))
+    .filter(st=>st.level==='red' || st.level==='orange')
+    .sort((a,b)=>(a.level===b.level ? a.remain-b.remain : (a.level==='red'?-1:1)));
+  const nR = list.filter(x=>x.level==='red').length, nO = list.length - nR;
+  if(!list.length){
+    el.innerHTML = '<div class="mold-morning" style="border-color:#bbf7d0;background:#f0fdf4;"><div class="lh-sumhd" style="margin:0;">🔨 メンテが近い金型・ジグ　<span style="color:#16a34a;">該当なし</span></div></div>';
+    return;
+  }
+  el.innerHTML = '<div class="mold-morning">'
+    + '<div class="lh-sumhd">🔨 メンテが近い金型・ジグ'
+    + (nR ? '<span class="lh-sumn">要メンテ '+nR+'件</span>' : '')
+    + (nO ? '<span class="lh-sumn" style="background:#d97706;">メンテが近い '+nO+'件</span>' : '')
+    + '</div><table class="lh-sum">'
+    + list.map(function(st){
+        const lv = MOLD_LV[st.level];
+        return '<tr><td><b data-search-part="'+moldEsc(st.part)+'" class="sp-link">'+moldEsc(st.part)+'</b></td>'
+          + '<td class="lh-num">'+st.shots.toLocaleString()+' ／ '+st.limit.toLocaleString()+'</td>'
+          + '<td class="lh-num">残り <b>'+Math.max(0,st.remain).toLocaleString()+'</b></td>'
+          + '<td class="lh-num" style="color:#888;">1ロット約 '+st.avg.toLocaleString()+'</td>'
+          + '<td style="color:'+lv.c+';font-weight:800;white-space:nowrap;">'+lv.t+'</td></tr>';
+      }).join('')
+    + '</table></div>';
+};
+
 // ----- 品番検索に並べる -----
 async function moldRenderInfo(part){
   const box = document.getElementById('moldInfo'); if(!box) return;
@@ -4544,7 +4601,9 @@ async function moldRenderInfo(part){
   ]);
   if(!alive()) return;
   let shotHtml;
-  if(mres && mres.error){
+  if(rows === null){
+    shotHtml = '<div class="mold-shot" style="border-color:#e2e8f0;background:#f8fafc;"><div class="mold-shot-hd">🔨 ショット数</div>'+'<div class="mold-empty">品質チェックの記録を読み込めなかったため、ショット数は判定していません。少し待ってからもう一度開いてください。</div>'+'</div>';
+  } else if(mres && mres.error){
     const miss = /見つかりません/.test(mres.error);
     shotHtml = '<div class="mold-shot" style="border-color:#e2e8f0;background:#f8fafc;"><div class="mold-shot-hd">🔨 ショット数</div>'
       + '<div class="mold-sub">' + (miss ? 'kintone「マスタ_製品・金型」にショット数の項目がまだありません（作ると、ここに出ます）'
@@ -10282,6 +10341,8 @@ window.qcGo = function(){
     document.getElementById('qc-df').textContent=msg;
     document.getElementById('qc-form-input').style.display='none';
     document.getElementById('qc-form-done').style.display='block';
+    // ショット数（この品番の累計と判定）を出す（2026-09-22）
+    if(sel && typeof window.moldAfterRecord==='function') window.moldAfterRecord(sel.hinban, document.getElementById('qc-shot'));
     qcFetchRecords(function(){ qcRenderCurrentList(); });
   }
   function backToForm(){ btn.disabled=false; btn.textContent='記録を保存する'; }
@@ -11379,7 +11440,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.22-8';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.22-9';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -14581,6 +14642,8 @@ function persistLossAll(){ Object.keys(lines||{}).forEach(persistLossRecord); }
 
 let _lhData=[];   // 表示中の記録（CSV用）
 window.lhOpen=function(){
+  // 朝礼で見るので、メンテが近い金型・ジグを上に出す（2026-09-22）
+  if(typeof window.moldRenderMorning==='function') window.moldRenderMorning(document.getElementById('lhMold'));
   const sel=document.getElementById('lhLine');
   if(sel&&!sel.options.length){
     const ids=Object.keys(lines||{});
@@ -19220,7 +19283,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.22-8</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.22-9</div>
 </body>
 </html>
 
