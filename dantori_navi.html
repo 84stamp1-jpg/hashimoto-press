@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.22-1 : ロス記録の2点（社長指示）。(1)**段取比が「--」になっていた**。9/21の記録は段取比の項目を足す前に保存されていたため、前日を開くと保存値に項目が無かった（当日だけはその場で計算するので出ていた）。段取(分)÷標準(分)をその場で計算し、保存値より優先するようにした。CSVも同じ。(2)日ごとの**上段に朝礼で話すところだけ**を出した。各ラインのCT／CT 89%以下の品番（悪い順）／段取率 150%以上の品番（大きい順）。その下にラインごとの明細。 -->
 <!-- H-Hub v2026.09.21-20 : ロス記録の「数量(%)」の列をやめ、代わりに**「段取比」**を出すようにした（社長指示）。段取比＝段取りが標準の何％かかったか（行の表示「段取 90分／標準27分 (333%)」の括弧の中と同じ）。100%以下=緑／125%以下=橙／それ超=赤。数量は実績/計画の数字がそのまま出ているので、％にしても計画的に減らした分と区別がつかず、見るところが増えるだけだった。CSVも同じ並びにした。 -->
 <!-- H-Hub v2026.09.21-19 : ロス記録の明細の文字を大きくした（社長指示。朝礼で見るため）。表11→13px・見出し12→14px・日付12→15px・原因のしるし10→11.5px・備考や計画時間などの小さい文字10→11.5px。行の高さも少し広げ、文字が大きくなったぶん枠を1120→1280pxにした。 -->
 <!-- H-Hub v2026.09.21-18 : **Cライン①だけ夜まで「稼働中」**の原因を直した（社長指摘：作業終了は入れてある）。原因は判定のほうで、行を1つでも「開始したまま終わっていない」と稼働中にしていた。Cライン①は朝8:30に始めた1行目（18120-6MA-DW+2工程・560個）に終了時刻が入っておらず、いま流している2行目は19:18で終わっているのに、1行目の取り残しで稼働中のままだった。**稼働中は「いま流している行（curSeq）」だけで決める**ようにし、それ以外の取り残しは lineOpenEnds() で「⚠ 終了未入力 1行目」として知らせる。工場レイアウトのカード（未報告より優先）と、進捗ボードの警告の両方に出す。 -->
@@ -314,6 +315,16 @@ html, body {
 .lh-bad{color:#dc2626;font-weight:700;}
 .lh-ok{color:#16a34a;}
 .lh-day{font-weight:700;font-size:15px;color:#1F4E79;margin:14px 0 5px;}
+/* 上段のまとめ（朝礼で話すところ） */
+.lh-sumwrap{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:6px 0 4px;}
+.lh-sumbox{border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;background:#fcfcfd;}
+.lh-sumhd{font-size:13px;font-weight:800;color:#334155;margin-bottom:8px;display:flex;align-items:center;gap:8px;}
+.lh-sumn{font-size:11.5px;font-weight:700;color:#fff;background:#dc2626;border-radius:9px;padding:1px 8px;}
+.lh-chip{display:inline-flex;align-items:center;border:1px solid #e2e8f0;background:#fff;border-radius:16px;padding:4px 12px;font-size:13.5px;}
+.lh-sum{width:100%;border-collapse:collapse;font-size:13.5px;}
+.lh-sum td{padding:5px 6px;border-bottom:1px solid #f1f5f9;white-space:nowrap;}
+.lh-sum tr:last-child td{border-bottom:none;}
+.lh-sum-ln{color:#64748b;width:1%;}
 
 /* ===== SVG稼働カード（foreignObject用） ===== */
 .svg-line-card{font-family:'Hiragino Sans','Meiryo',sans-serif;font-size:9px;line-height:1.3;padding:3px 5px;width:100%;height:100%;display:flex;flex-direction:column;gap:1px;overflow:hidden;box-sizing:border-box;background:transparent;}
@@ -10918,7 +10929,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.21-20';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.22-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -14187,12 +14198,60 @@ function _lhPct(v){
   return '<span class="'+(v>=95?'lh-ok':'lh-bad')+'">'+v+'%</span>';
 }
 function _lhMin(v){ return v>0?'<span class="lh-bad">+'+v+'分</span>':'<span style="color:#ccc;">-</span>'; }
-// 段取りが標準の何％かかったか（100%以下＝標準どおり）
+// 段取率＝段取りが標準の何％かかったか。
+// ★保存した記録には入っていないことがある（9/21の分は項目を足す前に保存された）ので、
+//   段取(分)と標準(分)からその場で出す。保存値より、この計算を正とする
+function _lhRate(j){
+  if(!j||j.noSetup) return null;
+  if(j.setupMin>0&&j.setupStd>0) return Math.round(j.setupMin/j.setupStd*100);
+  return (j.setupRate!=null)?j.setupRate:null;
+}
 function _lhSetupRate(v){
   if(v===null||v===undefined) return '<span style="color:#ccc;">--</span>';
   const c = v<=100?'#16a34a':v<=125?'#d97706':'#dc2626';
   return '<span style="color:'+c+';font-weight:700;">'+v+'%</span>';
 }
+// 朝礼で話すところだけ抜き出す（2026-09-22 社長指示）
+//   各ラインのCT／CTが89%以下の品番／段取率が150%以上の品番
+const LH_CT_WARN    = 89;    // これ以下を挙げる
+const LH_SETUP_WARN = 150;   // これ以上を挙げる
+function _lhDaySummary(dayRecs){
+  const ctCol = v => v>=95?'#16a34a':v>=90?'#d97706':'#dc2626';
+  // 各ラインのCT（まだ始まっていないラインは出さない）
+  const chips = dayRecs.filter(r=>r.ctRate!=null).map(function(r){
+    return '<span class="lh-chip"><b>'+_lhEsc(r.lineName||r.lineId)+'</b>'
+      +'<span style="color:'+ctCol(r.ctRate)+';font-weight:800;margin-left:6px;">'+r.ctRate+'%</span></span>';
+  }).join('');
+  const lowCT=[], slow=[];
+  dayRecs.forEach(function(r){ (r.jobs||[]).forEach(function(j){
+    const ln=r.lineName||r.lineId;
+    if(j.ctRate!=null&&j.ctRate<=LH_CT_WARN) lowCT.push({ln:ln,j:j,v:j.ctRate});
+    const sr=_lhRate(j);
+    if(sr!=null&&sr>=LH_SETUP_WARN) slow.push({ln:ln,j:j,v:sr});
+  });});
+  lowCT.sort((a,b)=>a.v-b.v);      // 悪い順
+  slow.sort((a,b)=>b.v-a.v);
+  const list = function(items, fmt){
+    if(!items.length) return '<div style="color:#16a34a;font-size:13px;padding:6px 2px;">該当なし</div>';
+    return '<table class="lh-sum">'+items.map(fmt).join('')+'</table>';
+  };
+  const ctList = list(lowCT, function(x){
+    return '<tr><td class="lh-sum-ln">'+_lhEsc(x.ln)+'</td><td><b>'+_lhEsc(x.j.part)+'</b></td>'
+      +'<td class="lh-num" style="color:#dc2626;font-weight:800;">'+x.v+'%</td></tr>';
+  });
+  const suList = list(slow, function(x){
+    return '<tr><td class="lh-sum-ln">'+_lhEsc(x.ln)+'</td><td><b>'+_lhEsc(x.j.part)+'</b></td>'
+      +'<td class="lh-num" style="color:#888;">'+x.j.setupMin+'/'+x.j.setupStd+'分</td>'
+      +'<td class="lh-num" style="color:#dc2626;font-weight:800;">'+x.v+'%</td></tr>';
+  });
+  return '<div class="lh-sumwrap">'
+    +'<div class="lh-sumbox" style="grid-column:1/-1;"><div class="lh-sumhd">各ラインのCT</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:6px;">'+(chips||'<span style="color:#bbb;">--</span>')+'</div></div>'
+    +'<div class="lh-sumbox"><div class="lh-sumhd">CT '+LH_CT_WARN+'%以下<span class="lh-sumn">'+lowCT.length+'件</span></div>'+ctList+'</div>'
+    +'<div class="lh-sumbox"><div class="lh-sumhd">段取率 '+LH_SETUP_WARN+'%以上<span class="lh-sumn">'+slow.length+'件</span></div>'+suList+'</div>'
+    +'</div>';
+}
+
 function _lhRenderDay(recs){
   const body=document.getElementById('lhBody');
   const n=recs.reduce((a,r)=>a+r.jobs.length,0);
@@ -14216,7 +14275,7 @@ function _lhRenderDay(recs){
         +'<td class="lh-num">'+_lhPct(j.ctRate)+'</td>'
         +'<td class="lh-num">'+(j.noSetup?'<span style="color:#ccc;">なし</span>'
             :(j.setupMin>0?j.setupMin+'/'+j.setupStd+'分':'<span style="color:#ccc;">--/'+j.setupStd+'分</span>'))+'</td>'
-        +'<td class="lh-num">'+_lhSetupRate(j.setupRate)+'</td>'
+        +'<td class="lh-num">'+_lhSetupRate(_lhRate(j))+'</td>'
         +'<td class="lh-num">'+_lhMin(j.setupOver)+'</td>'
         +'<td class="lh-num">'+_lhMin(j.stopMin)
           +((j.stopTypes&&j.stopTypes.length)?'<div style="font-size:11.5px;color:#9d174d;">'+_lhEsc(j.stopTypes.join('・'))+'</div>':'')+'</td>'
@@ -14230,7 +14289,8 @@ function _lhRenderDay(recs){
         +'<th class="lh-num">段取超過</th>'
         +'<th class="lh-num">停止</th><th>実績時間</th><th>原因</th></tr></thead><tbody>'+rows+'</tbody></table>';
     }).join('');
-    return '<div class="lh-day">'+d+'</div>'+block;
+    return '<div class="lh-day">'+d+'</div>'+_lhDaySummary(byDay[d])
+      +'<div style="font-size:12.5px;color:#888;font-weight:700;margin:14px 0 2px;">ラインごとの明細</div>'+block;
   }).join('');
 }
 function _lhRenderPart(recs){
@@ -14284,7 +14344,7 @@ window.lhCsv=function(){
   const out=[head.join(',')];
   _lhData.forEach(function(r){ r.jobs.forEach(function(j){
     out.push([r.date,r.lineName||r.lineId,j.row,j.part,j.plan,j.actual,j.ctRate,
-      j.noSetup?'':j.setupMin, j.noSetup?'':j.setupStd, j.setupRate, j.setupOver, j.stopMin,
+      j.noSetup?'':j.setupMin, j.noSetup?'':j.setupStd, _lhRate(j), j.setupOver, j.stopMin,
       (j.stopTypes||[]).join('・'), j.actStart, j.actEnd, j.planStart, j.planEnd,
       (j.causes||[]).join('・'), j.note].map(q).join(','));
   });});
@@ -18699,7 +18759,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.21-20</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.22-1</div>
 </body>
 </html>
 
