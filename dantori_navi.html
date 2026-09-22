@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.22-6 : 進捗ボードの品番を押すと品番検索へ飛ぶようにした（社長指示。工場レイアウトと同じ動き）。ラインの見出しの品番と、品番の並び（いま流している行・ほかの行）の両方。工場レイアウトと同じ data-search-part の仕組みを使う。品番を押したときは工程詳細を開かない。 -->
 <!-- H-Hub v2026.09.22-5 : 設定画面の「このPCに保存している標準書PDF」を「保存しているPDF」に直した（社長指示）。作業標準書だけでなく品質チェックシートも同じ仕組みで保存しているため。説明文と消すときの確認も合わせた。 -->
 <!-- H-Hub v2026.09.22-4 : 標準書PDFを**このPCに保存**するようにした（社長指示）。前の版では「このページを開いているあいだ」だけ覚えていたが、ページを閉じる・翌日になると消えていた。ブラウザの保存領域（IndexedDB）に置き、各PCで最初の1回だけ待てば、翌日以降もすぐ開く。kintoneでファイルを差し替えると fileKey が変わるので、古いPDFを出すことはない。150MBを超えたら使っていない順に消す。設定画面に「このPCに保存している標準書PDF N件・xxMB ［消す］」を置いた。あわせて**PDFでないデータは開かない・保存しない**ようにした（先頭が %PDF か確かめる）。kintoneがエラーを返してもGASが「成功」で返していて、壊れたPDFが開いていたため。GAS側の修正も別途用意。 -->
 <!-- H-Hub v2026.09.22-3 : 標準書のPDFがなかなか表示されない件（社長指摘・1か所のPC）。実測でGASの往復だけで12〜22秒（PDFの無いダミーでも）かかり、そこへPDF本体が乗るので、以前の30秒の制限では少し遅いPCや回線ですぐ切れていた。しかも案内が「GASを再デプロイしてください」で的外れだった。(1)待ち時間を120秒にし、読み込み中に経過秒数と「取り消し」を出す。(2)案内を実態に合わせた（もう一度押す／続くなら版を確かめてCtrl+F5）。(3)**一度開いたPDFはページを開いているあいだ手元に置き、2回目からはすぐ開く**（kintoneでファイルを差し替えるとfileKeyが変わるので古いPDFは出ない）。(4)遅れて届いた返事でエラーにならないようにした。同じPDFを重ねて取りに行かないようにした。 -->
@@ -280,6 +281,9 @@ html, body {
 /* 品番 */
 .pp-part{font-size:10px;color:#374151;margin:1px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .pp-part-link{cursor:pointer;}
+/* 進捗ボードの品番（押すと品番検索へ）2026-09-22 */
+.sp-link{cursor:pointer;}
+.sp-link:hover{color:#1e40af;text-decoration:underline;}
 .pp-part-link:hover{color:#1e40af;text-decoration:underline;}
 /* 進捗＋スケジュール差 横並び */
 .pp-meta{display:flex;align-items:center;justify-content:space-between;gap:4px;margin:2px 0;}
@@ -11108,7 +11112,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.22-5';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.22-6';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -13923,7 +13927,7 @@ function renderBoard(){
             : '';
           sched+='<div class="sr'+(cur?' cur':'')+'">'+
             '<span class="sn">'+(j.seq!=null?j.seq:jIdx+1)+'</span>'+
-            '<span class="sp">'+(cur?'▶ ':'')+j.part+'</span>'+
+            '<span class="sp sp-link" data-search-part="'+_thEsc(j.part)+'" title="品番検索で開く">'+(cur?'▶ ':'')+j.part+'</span>'+
             '<span style="display:flex;flex-wrap:wrap;align-items:baseline;gap:3px;min-width:0;">'+col3+'</span>'+
             (setupRow2?
               '<span></span>'+
@@ -13982,11 +13986,15 @@ function renderBoard(){
       d.style.background=maxElapsed>=troubleThresh.r?'rgba(231,76,60,0.20)':'rgba(255,193,7,0.22)';
     }
     if(hasOngoingTrouble&&oldestStart){d.dataset.troubleStart=oldestStart;d.dataset.troubleId=id;}
-    d.onclick=function(){openModal(id);};
+    d.onclick=function(e){
+      // 品番を押したときは品番検索へ飛ぶので、工程詳細は開かない（2026-09-22）
+      if(e&&e.target&&e.target.closest&&e.target.closest('[data-search-part]')) return;
+      openModal(id);
+    };
     d.innerHTML=
       '<div class="lhead">'+
         '<div style="flex:1;min-width:0;"><div class="lname">'+getLineName(id)+'</div>'+
-        ((pr&&(pr.phase==='before'||pr.phase==='done'))||(!l.workStart&&!l.actual)?'':'<div class="lpart">'+(l.part||'未設定')+(l.note?' / '+l.note:'')+'</div>')+
+        ((pr&&(pr.phase==='before'||pr.phase==='done'))||(!l.workStart&&!l.actual)?'':'<div class="lpart">'+(l.part?'<span class="sp-link" data-search-part="'+_thEsc(l.part)+'" title="品番検索で開く">'+l.part+'</span>':'未設定')+(l.note?' / '+l.note:'')+'</div>')+
         '</div>'+
         '<div style="display:flex;align-items:flex-start;gap:5px;flex-shrink:0;">'+
           '<span class="bdg '+s.bdg+'">'+s.lbl+'</span>'+
@@ -18945,7 +18953,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.22-5</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.22-6</div>
 </body>
 </html>
 
