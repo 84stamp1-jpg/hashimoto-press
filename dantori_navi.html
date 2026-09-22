@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.22-5 : 設定画面の「このPCに保存している標準書PDF」を「保存しているPDF」に直した（社長指示）。作業標準書だけでなく品質チェックシートも同じ仕組みで保存しているため。説明文と消すときの確認も合わせた。 -->
 <!-- H-Hub v2026.09.22-4 : 標準書PDFを**このPCに保存**するようにした（社長指示）。前の版では「このページを開いているあいだ」だけ覚えていたが、ページを閉じる・翌日になると消えていた。ブラウザの保存領域（IndexedDB）に置き、各PCで最初の1回だけ待てば、翌日以降もすぐ開く。kintoneでファイルを差し替えると fileKey が変わるので、古いPDFを出すことはない。150MBを超えたら使っていない順に消す。設定画面に「このPCに保存している標準書PDF N件・xxMB ［消す］」を置いた。あわせて**PDFでないデータは開かない・保存しない**ようにした（先頭が %PDF か確かめる）。kintoneがエラーを返してもGASが「成功」で返していて、壊れたPDFが開いていたため。GAS側の修正も別途用意。 -->
 <!-- H-Hub v2026.09.22-3 : 標準書のPDFがなかなか表示されない件（社長指摘・1か所のPC）。実測でGASの往復だけで12〜22秒（PDFの無いダミーでも）かかり、そこへPDF本体が乗るので、以前の30秒の制限では少し遅いPCや回線ですぐ切れていた。しかも案内が「GASを再デプロイしてください」で的外れだった。(1)待ち時間を120秒にし、読み込み中に経過秒数と「取り消し」を出す。(2)案内を実態に合わせた（もう一度押す／続くなら版を確かめてCtrl+F5）。(3)**一度開いたPDFはページを開いているあいだ手元に置き、2回目からはすぐ開く**（kintoneでファイルを差し替えるとfileKeyが変わるので古いPDFは出ない）。(4)遅れて届いた返事でエラーにならないようにした。同じPDFを重ねて取りに行かないようにした。 -->
 <!-- H-Hub v2026.09.22-2 : ロス記録の上段の一覧（CT 89%以下／段取率 150%以上）を、数字の悪い順ではなく**各ラインのCTと同じライン順**（A1→A2→B1→B2→Bライン→Cライン①…）にした（社長指示）。ラインの中は行の順。下の明細も同じ並びにそろえた。 -->
@@ -2881,12 +2882,12 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
       <div class="form-hint">KintoneProxy.gsのデプロイURL（PDFファイル表示用）</div>
     </div>
     <div class="form-group">
-      <label>このPCに保存している標準書PDF</label>
+      <label>保存しているPDF</label>
       <div style="display:flex;align-items:center;gap:10px;">
         <span id="cfg-pdfcache" style="font-size:13px;color:#555;">--</span>
         <button type="button" onclick="hhubPdfCacheClear()" style="padding:3px 12px;font-size:11px;border:1px solid #ddd;border-radius:5px;background:#fff;cursor:pointer;">消す</button>
       </div>
-      <div class="form-hint">一度開いたPDFはこのPCに保存し、次からすぐ開きます。kintoneで差し替えたPDFは自動で取り直します。</div>
+      <div class="form-hint">作業標準書・品質チェックシートは、一度開いたらこのPCに保存し、次からすぐ開きます。kintoneで差し替えたPDFは自動で取り直します。</div>
     </div>
     <div class="modal-btns">
       <button onclick="closeConfig()">キャンセル</button>
@@ -4384,7 +4385,7 @@ window.hhubPdfCacheInfo = async function(){
   el.textContent = all.length ? (all.length + '件・' + mb.toFixed(1) + 'MB') : '保存なし';
 };
 window.hhubPdfCacheClear = async function(){
-  if(!confirm('このPCに保存している標準書PDFを消します。\n次に開くときは、また取りに行きます。')) return;
+  if(!confirm('このPCに保存しているPDF（作業標準書・品質チェックシート）を消します。\n次に開くときは、また取りに行きます。')) return;
   const db = await _pdfDb();
   if(db){
     await new Promise(function(res){
@@ -11107,7 +11108,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.22-4';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.22-5';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -18944,7 +18945,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.22-4</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.22-5</div>
 </body>
 </html>
 
