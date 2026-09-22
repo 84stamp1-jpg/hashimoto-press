@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.23-3 : 書画カメラの撮影範囲を調整できるようにした（社長指摘「尺度が合わない」）。これまではカメラの映像をA4たてに決め打ちで中央だけ切り取っており、しかも画面にはその切り取った後しか映っていなかったため、シートが入りきらないときに直しようがなかった。**カメラの映像を全部映し、切り取る範囲を枠で重ねて見せる**ようにし、「切り取り（A4たて／A4よこ／カメラのまま）」「大きさ 50〜100%」「位置（←→↑↓）」「リセット」を撮影画面に置いた。設定はそのPCに残る（ラインごとにカメラの高さが違うため）。カメラへの要求もA4比率をやめ、広く受け取ってこちらで切るようにした。 -->
 <!-- H-Hub v2026.09.23-2 : 品番検索の「工程内不良」（kintone App31 ★不良品報告）を出すようにした（社長がGASにトークンを登録済み）。製品の品番（頭の2つ）で探し、発生日・数量・不具合内容・処置・品番・状況を直近3件＋「すべて見る」。見出しに直近1年の件数と個数。苦情・不適合（App45）も同時に出るようになった。 -->
 <!-- H-Hub v2026.09.23-1 : 配置表・段取り指示（社長指示）。(1)**ラインの固定**：段取り指示の列の見出し／配置表の「この日の計画」のライン名に 🔓/🔒 を置いた。固定したラインは「🤖 自動割り振り」をやり直しても今の担当のまま（実施中・完了と同じ扱い）。その日だけ有効。自動割り振りの横に「🔒 全部固定」「🔓 全部解除」。固定中でもバーや✏で手で直すことはできる。(2)**自動割り振りを「キャンセル」したら画面の計画を元に戻す**。以前は書き換わったまま残り、あとで配置表のバーを直して保存すると、キャンセルしたはずの割り振りまで一緒に保存されていた（作業者が変わってしまう一因）。(3)段取り指示の✏編集で**型数・段取り人数を変えられる**ようにした。変えると標準時間も計算し直し、今すぐ同期・予定インポートで取り込み直しても手で直した値を残す。 -->
 <!-- H-Hub v2026.09.22-12 : 不良品報告の作成で「部品番号」の引き当て（GAIA_LO04）に失敗したときの案内を直した。kintoneのメッセージに「閲覧権限」が含まれるため「レコード追加の権限が要ります」と取り違えて出していた。どの項目が、どのアプリ（App番号）を参照しているかを出す。あわせて書き込み用GASで、参照先アプリの閲覧用トークンをスクリプトプロパティ LOOKUP_TOKENS に1回入れれば足して送るようにした（各PCの設定を回らずに済む）。 -->
@@ -940,8 +941,15 @@ html, body {
 .qc-src-btn-file{background:#f0f6ff;color:#1F4E79;border:2px solid #bfdbfe;}
 .qc-src-btn-cancel{background:#f3f4f6;color:#555;margin-bottom:0;margin-top:4px;}
 .qc-cam-modal.on{display:flex;}
-.qc-cam-video-wrap{position:relative;width:min(60vh,560px);aspect-ratio:210/297;background:#000;border-radius:10px;overflow:hidden;}
-#qc-cam-video{width:100%;height:100%;display:block;object-fit:cover;}
+/* ★2026-09-23：カメラの映像を全部見せ、切り取る範囲を枠で重ねる（見たまま撮れるように） */
+.qc-cam-video-wrap{position:relative;width:min(78vh,720px);max-width:94vw;aspect-ratio:4/3;background:#000;border-radius:10px;overflow:hidden;}
+#qc-cam-video{width:100%;height:100%;display:block;object-fit:fill;}
+#qc-cam-guide{position:absolute;border:2px solid #7eb8f7;box-shadow:0 0 0 9999px rgba(0,0,0,.45);pointer-events:none;}
+#qc-cam-guide::after{content:'この中が保存されます';position:absolute;left:0;top:-20px;font-size:11px;color:#7eb8f7;white-space:nowrap;}
+.qc-cam-adj{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:8px;color:#cbd5e1;font-size:12px;}
+.qc-cam-adj select,.qc-cam-adj input[type=range]{font-family:inherit;}
+.qc-cam-adj select{padding:3px 6px;border-radius:6px;border:1px solid #475569;background:#1e293b;color:#e2e8f0;font-size:12px;}
+.qc-cam-adj button{padding:2px 8px;border-radius:6px;border:1px solid #475569;background:#1e293b;color:#e2e8f0;font-size:12px;cursor:pointer;font-family:inherit;}
 .qc-cam-preview-strip{display:flex;gap:6px;margin:8px 0;min-height:56px;flex-wrap:wrap;justify-content:center;}
 .qc-cam-preview-item{position:relative;}
 .qc-cam-preview-item img{height:56px;border-radius:6px;border:2px solid #7eb8f7;}
@@ -3247,6 +3255,25 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
   <button id="qc-cam-switch-btn" onclick="qcSwitchCamera()" style="display:none;padding:6px 12px;background:transparent;color:#7eb8f7;font-size:12px;border:1px solid #7eb8f7;border-radius:6px;cursor:pointer;margin-bottom:8px;">🔄 カメラを切り替え</button>
   <div class="qc-cam-video-wrap">
     <video id="qc-cam-video" autoplay playsinline muted></video>
+    <div id="qc-cam-guide"></div>
+  </div>
+  <!-- 撮影範囲の調整（2026-09-23 社長指摘：尺度が合わない） -->
+  <div class="qc-cam-adj">
+    <span>切り取り</span>
+    <select id="qc-cam-shape" onchange="qcCamCfgChange()">
+      <option value="a4p">A4 たて</option>
+      <option value="a4l">A4 よこ</option>
+      <option value="raw">カメラのまま</option>
+    </select>
+    <span>大きさ</span>
+    <input type="range" id="qc-cam-zoom" min="50" max="100" step="1" value="100" oninput="qcCamCfgChange()" style="width:150px;">
+    <span id="qc-cam-zoom-val">100%</span>
+    <span>位置</span>
+    <button onclick="qcCamNudge(-5,0)">←</button>
+    <button onclick="qcCamNudge(5,0)">→</button>
+    <button onclick="qcCamNudge(0,-5)">↑</button>
+    <button onclick="qcCamNudge(0,5)">↓</button>
+    <button onclick="qcCamReset()">リセット</button>
   </div>
   <div id="qc-cam-err" class="qc-cam-err"></div>
   <div class="qc-cam-preview-strip" id="qc-cam-preview-strip"></div>
@@ -11734,7 +11761,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.23-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.23-3';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -13687,17 +13714,84 @@ window.qcOpenCamModal = async function(){
   document.getElementById('qc-cam-modal').className='qc-cam-modal on';
   await qcStartCamera();
 };
+// ===== 書画カメラの撮影範囲（2026-09-23 社長指摘「尺度が合わない」）=====
+//   カメラの映像は全部見せて、その中の「切り取る枠」を調整する。保存されるのは枠の中だけ。
+//   設定はこのPCに残す（ラインごとにカメラの高さが違うため）
+var QC_CAM_CFG = null;
+function qcCamCfg(){
+  if(QC_CAM_CFG) return QC_CAM_CFG;
+  QC_CAM_CFG = {shape:'a4p', zoom:100, dx:0, dy:0};
+  try{ var v=JSON.parse(localStorage.getItem('qcCamCfg')||'null'); if(v) Object.assign(QC_CAM_CFG, v); }catch(e){}
+  return QC_CAM_CFG;
+}
+function qcCamCfgSave(){ try{ localStorage.setItem('qcCamCfg', JSON.stringify(qcCamCfg())); }catch(e){} }
+// 映像(vw×vh)の中で、実際に切り取る四角を返す
+function qcCamCropRect(vw, vh){
+  var c = qcCamCfg();
+  var r = c.shape==='a4l' ? 297/210 : (c.shape==='raw' ? (vw/vh) : 210/297);
+  var w, h;
+  if(vw/vh > r){ h = vh; w = h*r; } else { w = vw; h = w/r; }
+  var z = Math.min(100, Math.max(50, c.zoom||100))/100;
+  w = Math.round(w*z); h = Math.round(h*z);
+  var x = Math.round((vw-w)/2 + (c.dx||0)/100*vw);
+  var y = Math.round((vh-h)/2 + (c.dy||0)/100*vh);
+  x = Math.max(0, Math.min(vw-w, x));
+  y = Math.max(0, Math.min(vh-h, y));
+  return {x:x, y:y, w:w, h:h};
+}
+window.qcCamCropRect = function(vw,vh){ return qcCamCropRect(vw,vh); };   // 確認用
+function qcCamDrawGuide(){
+  var v = document.getElementById('qc-cam-video'), g = document.getElementById('qc-cam-guide');
+  if(!v || !g) return;
+  var vw = v.videoWidth, vh = v.videoHeight;
+  if(!vw || !vh){ g.style.display='none'; return; }
+  var wrap = v.parentElement;
+  if(wrap) wrap.style.aspectRatio = vw + '/' + vh;      // 枠を映像と同じ形にして、見たまま撮れるようにする
+  var r = qcCamCropRect(vw, vh);
+  g.style.display = '';
+  g.style.left   = (r.x/vw*100)+'%';
+  g.style.top    = (r.y/vh*100)+'%';
+  g.style.width  = (r.w/vw*100)+'%';
+  g.style.height = (r.h/vh*100)+'%';
+  var c = qcCamCfg();
+  var sh = document.getElementById('qc-cam-shape'); if(sh) sh.value = c.shape;
+  var zm = document.getElementById('qc-cam-zoom');  if(zm) zm.value = c.zoom;
+  var zv = document.getElementById('qc-cam-zoom-val'); if(zv) zv.textContent = c.zoom + '%';
+}
+window.qcCamCfgChange = function(){
+  var c = qcCamCfg();
+  var sh = document.getElementById('qc-cam-shape'), zm = document.getElementById('qc-cam-zoom');
+  if(sh) c.shape = sh.value;
+  if(zm) c.zoom = parseInt(zm.value) || 100;
+  qcCamCfgSave(); qcCamDrawGuide();
+};
+window.qcCamNudge = function(dx, dy){
+  var c = qcCamCfg();
+  c.dx = Math.max(-30, Math.min(30, (c.dx||0) + dx));
+  c.dy = Math.max(-30, Math.min(30, (c.dy||0) + dy));
+  qcCamCfgSave(); qcCamDrawGuide();
+};
+window.qcCamReset = function(){
+  QC_CAM_CFG = {shape:'a4p', zoom:100, dx:0, dy:0};
+  qcCamCfgSave(); qcCamDrawGuide();
+};
+
 async function qcStartCamera(){
   try{
     if(QC_CAM_STREAM){ QC_CAM_STREAM.getTracks().forEach(function(t){ t.stop(); }); QC_CAM_STREAM=null; }
     var devices=await navigator.mediaDevices.enumerateDevices();
     QC_CAM_DEVICES=devices.filter(function(d){ return d.kind==='videoinput'&&d.deviceId; });
     if(QC_CAM_DEVICE_IDX>=QC_CAM_DEVICES.length) QC_CAM_DEVICE_IDX=0;
-    // A4縦：210mm×297mm → 比率 1:1.4142
-    var stream=null, A4={width:{ideal:1240},height:{ideal:1754},aspectRatio:{ideal:210/297}};
+    // ★2026-09-23：A4の比率で要求するのをやめた。カメラが映せる範囲をそのまま受け取り、
+    //   切り取りはこちらで行う（A4で要求すると、カメラ側で先に切られて「入りきらない」原因になる）
+    var stream=null, A4={width:{ideal:1920},height:{ideal:1440}};
     if(QC_CAM_DEVICES.length>0){ try{ stream=await navigator.mediaDevices.getUserMedia({video:Object.assign({deviceId:{exact:QC_CAM_DEVICES[QC_CAM_DEVICE_IDX].deviceId}},A4)}); }catch(e1){ stream=await navigator.mediaDevices.getUserMedia({video:A4}); } }
     else{ stream=await navigator.mediaDevices.getUserMedia({video:A4}); }
-    QC_CAM_STREAM=stream; document.getElementById('qc-cam-video').srcObject=QC_CAM_STREAM; document.getElementById('qc-cam-err').textContent='';
+    QC_CAM_STREAM=stream;
+    var _v=document.getElementById('qc-cam-video');
+    _v.srcObject=QC_CAM_STREAM; document.getElementById('qc-cam-err').textContent='';
+    _v.onloadedmetadata = function(){ qcCamDrawGuide(); };
+    setTimeout(qcCamDrawGuide, 400);
     var devices2=await navigator.mediaDevices.enumerateDevices(); QC_CAM_DEVICES=devices2.filter(function(d){ return d.kind==='videoinput'&&d.deviceId; });
     document.getElementById('qc-cam-switch-btn').style.display=QC_CAM_DEVICES.length>1?'block':'none';
   }catch(e){
@@ -13713,10 +13807,9 @@ window.qcSwitchCamera = async function(){ QC_CAM_DEVICE_IDX=(QC_CAM_DEVICE_IDX+1
 window.qcCamShutter = function(){
   var video=document.getElementById('qc-cam-video'); if(!video.srcObject) return;
   var vw=video.videoWidth||1240, vh=video.videoHeight||1754;
-  // A4縦（210:297）にセンタークロップ
-  var a4r=210/297, cropW,cropH,cropX,cropY;
-  if(vw/vh > a4r){ cropH=vh; cropW=Math.round(vh*a4r); cropX=Math.round((vw-cropW)/2); cropY=0; }
-  else            { cropW=vw; cropH=Math.round(vw/a4r); cropX=0; cropY=Math.round((vh-cropH)/2); }
+  // ★画面の枠（qcCamCropRect）のとおりに切り取る＝見たまま保存される
+  var _r=qcCamCropRect(vw, vh);
+  var cropW=_r.w, cropH=_r.h, cropX=_r.x, cropY=_r.y;
   var c=document.createElement('canvas'); c.width=cropW; c.height=cropH;
   c.getContext('2d').drawImage(video,cropX,cropY,cropW,cropH,0,0,cropW,cropH);
   var dataUrl=c.toDataURL('image/jpeg',0.9);
@@ -19775,7 +19868,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.23-2</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.23-3</div>
 </body>
 </html>
 
