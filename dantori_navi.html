@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.22-10 : 品番検索を組み直した（社長指示）。(1)上の余白を詰め、左に帳票・右に改修履歴／工程内不良／苦情不適合を並べ、スクロールせずに全部見えるようにした。(2)ショット数は品番の横。(3)改修履歴に見出し（依頼日・完了日・分類・内容・状況）を付け、直近3件＋「すべて見る」。(4)「いま改修中」は依頼書発行・作業着手だけにした（製造確認中・品質確認中は改修後の確認待ちで、3月の分まで並んでいた）。(5)**読み込みを速く**：各欄を届いた順に出す／ページを開いて6秒後に先読み／10〜30分手元に置く（古くても先に出して裏で取り直す）。(6)**定期メンテはApp6（金型治具メンテ）で完了日が入れば自動で累計0から数え直す**（マスタの入力は不要）。(7)ショット数の元の記録は、品質チェックの画面が持っている分を使い回す（GASを二重に呼ばない）。 -->
 <!-- H-Hub v2026.09.22-9 : ショット数を「記録した直後」と「朝礼」にも出すようにした（社長指示。表示は記録直後・品番検索・朝礼の3か所）。記録直後：品質チェックの保存完了の画面に、その品番の累計・残り・判定（目安が登録されている品番だけ）。朝礼：ロス記録の上に「メンテが近い金型・ジグ」（赤＝要メンテ→橙＝メンテが近い、残りの少ない順）。品番を押すと品番検索へ。 -->
 <!-- H-Hub v2026.09.22-8 : 品番検索に**金型・ジグの情報**を出すようにした（社長指示）。(1)ショット数：工程ごとの品番それぞれで累計（-PR・-000・-BL…別々。溶接ジグも）。累計＝基準の累計＋基準日より後の品質チェックの記録の生産数÷取り数。**赤＝残りが直近3ロットの平均ショット数以下**（次の1ロットで目安を超える）／橙＝目安の90%以上。目安・取り数・基準日・基準の累計は kintone「マスタ_製品・金型」(App7)に持つ（項目は社長が作成）。(2)改修履歴：App6をその工程の品番で。いま対応中（完了以外）は赤で目立たせ、直近1年の回数を出す。(3)苦情・不適合（App45）・工程内不良（App31）：製品の品番（頭の2つ）で。GASへのトークン登録待ち。(4)使っていない製造条件（ダイハイト・クッションピン等）の欄を消した。 -->
 <!-- H-Hub v2026.09.22-7 : 管理者PINを「うっかり防止」として効くようにした（社長指示）。以前は PIN画面に「初期PIN: 1234」と書いてあり、各PCのブラウザに保存するので誰も変えず全PC 1234 のままで、実質意味が無かった。(1)画面から番号の表示を消した。(2)**PINを会社で1つ**にした。Firebase settings/adminPinHash に、番号そのものではなく変換した形（SHA-256）で置く。(3)**PINの変更欄を画面から無くした**（誰かに変えられて社長が締め出される心配をなくすため）。変更は社長がClaudeに頼んでFirebaseに書く。adminPinHash を消せば以前の方式に戻るので、締め出されることはない。つながらないときはそのPCが最後に読んだ値で確かめる。 -->
@@ -190,25 +191,46 @@ html, body {
 /* 結果カード */
 .result-card{background:white;border:1px solid #e5e5e5;border-radius:12px;overflow:hidden;}
 /* 金型・ジグの情報（2026-09-22） */
-.mold-info{border-top:1px solid #f0f0f0;padding:12px 16px;display:flex;flex-direction:column;gap:12px;}
-.mold-loading{font-size:12px;color:#94a3b8;padding:4px 0;}
+/* 品番検索の組み直し：左に帳票・右に履歴。ショット数は品番の横 */
+.rs-head{align-items:center;gap:16px;padding:10px 16px;}
+.rs-title{flex:0 1 auto;min-width:0;}
+.rs-shot{flex:1 1 auto;display:flex;justify-content:flex-end;min-width:0;}
+.rs-shot-unset{font-size:12px;color:#94a3b8;}
+.rs-shot-box{border:2px solid #e2e8f0;border-radius:10px;padding:6px 12px;min-width:360px;max-width:560px;width:100%;}
+.rs-shot-top{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:800;color:#334155;flex-wrap:wrap;}
+.rs-shot-num{font-weight:600;color:#555;margin-left:auto;font-size:13px;}
+.rs-shot-num b{font-size:17px;}
+.rs-shot-sub{font-size:11px;color:#64748b;}
+.rs-grid{display:grid;grid-template-columns:minmax(240px,300px) 1fr;}
+.rs-left{padding:12px 16px;border-right:1px solid #f0f0f0;}
+.rs-right{padding:10px 16px;display:flex;flex-direction:column;gap:10px;min-width:0;}
+.rs-docs{display:flex;flex-direction:column;gap:4px;}
+.rs-doc-lbl{font-size:11px;color:#94a3b8;font-weight:700;margin-top:4px;}
+.rs-doc-btns{display:flex;flex-direction:column;gap:4px;align-items:flex-start;}
+.rs-doc-btns .doc-btn{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+@media (max-width:900px){ .rs-grid{grid-template-columns:1fr;} .rs-left{border-right:none;border-bottom:1px solid #f0f0f0;} .rs-head{flex-wrap:wrap;} .rs-shot{justify-content:flex-start;} }
+.mold-sec + .mold-sec{border-top:1px dashed #eef2f7;padding-top:8px;}
+.mold-loading{font-size:12px;color:#94a3b8;padding:2px 0;}
 .mold-shot{border:2px solid #e2e8f0;border-radius:10px;padding:10px 14px;}
 .mold-shot-hd{font-size:13px;font-weight:800;color:#334155;display:flex;align-items:center;gap:8px;margin-bottom:6px;}
 .mold-chip{font-size:11px;font-weight:800;border-radius:10px;padding:2px 9px;}
 .mold-shot-main{font-size:15px;margin-bottom:6px;}
 .mold-shot-main b{font-size:22px;}
-.mold-bar{position:relative;height:8px;background:#e5e7eb;border-radius:4px;overflow:visible;margin:4px 0 6px;}
-.mold-bar div{height:100%;border-radius:4px;}
-.mold-bar i{position:absolute;top:-3px;width:2px;height:14px;background:#d97706;}
+.mold-bar{position:relative;height:6px;background:#e5e7eb;border-radius:3px;overflow:visible;margin:4px 0 3px;}
+.mold-bar div{height:100%;border-radius:3px;}
+.mold-bar i{position:absolute;top:-3px;width:2px;height:12px;background:#d97706;}
 .mold-sub{font-size:11.5px;color:#64748b;line-height:1.6;}
-.mold-sec-hd{font-size:13px;font-weight:800;color:#334155;margin-bottom:6px;display:flex;align-items:center;gap:10px;}
+.mold-sec-hd{font-size:13px;font-weight:800;color:#334155;margin-bottom:4px;display:flex;align-items:center;gap:10px;}
 .mold-note{font-size:11.5px;font-weight:600;color:#94a3b8;}
 .mold-empty{font-size:12px;color:#94a3b8;padding:2px 0;}
-.mold-warn{font-size:12.5px;font-weight:700;color:#dc2626;background:#fef2f2;border-radius:6px;padding:5px 10px;margin-bottom:6px;}
+.mold-warn{font-size:12.5px;font-weight:700;color:#dc2626;background:#fef2f2;border-radius:6px;padding:4px 10px;margin-bottom:4px;}
 .mold-tbl{width:100%;border-collapse:collapse;font-size:12.5px;}
-.mold-tbl td{padding:5px 8px;border-bottom:1px solid #f1f5f9;vertical-align:top;}
+.mold-tbl th{font-size:11px;color:#94a3b8;font-weight:700;text-align:left;padding:3px 8px;border-bottom:1px solid #e5e7eb;white-space:nowrap;}
+.mold-tbl td{padding:4px 8px;border-bottom:1px solid #f1f5f9;vertical-align:top;}
 .mold-tbl td.mn{white-space:nowrap;font-variant-numeric:tabular-nums;}
 .mold-tbl td.mw{width:60%;}
+.mold-morelink{display:inline-block;font-size:11.5px;color:#2563eb;cursor:pointer;margin-top:3px;}
+.mold-morelink:hover{text-decoration:underline;}
 .mold-morning{border:2px solid #fecaca;background:#fff;border-radius:8px;padding:10px 12px;margin:2px 0 12px;}
 .result-header{padding:13px 16px;background:#f9f9f7;border-bottom:1px solid #e5e5e5;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
 .result-partno{font-size:17px;font-weight:700;color:#1a1a1a;letter-spacing:0.03em;}
@@ -4304,21 +4326,20 @@ function renderResult(part){
       ? qsDocs.map(d=>makeBtn(d,'pdf')).join('')
       : '<span style="font-size:12px;color:#aaa;">未登録</span>';
     docSectionHtml = `
-    <div class="doc-section" style="flex-direction:column;gap:8px;">
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-        <span class="doc-section-label" style="width:100px;flex-shrink:0;">📋 作業標準書</span>
-        ${swHtml}
-      </div>
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;border-top:1px solid #f0f0f0;padding-top:8px;">
-        <span class="doc-section-label" style="width:100px;flex-shrink:0;">✅ 品質チェックシート</span>
-        ${qsHtml}
-      </div>
+    <div class="rs-docs">
+      <div class="rs-doc-lbl">📋 作業標準書</div>
+      <div class="rs-doc-btns">${swHtml}</div>
+      <div class="rs-doc-lbl">✅ 品質チェックシート</div>
+      <div class="rs-doc-btns">${qsHtml}</div>
     </div>`;
   }
 
   // ★製造条件（ダイハイト・クッションピン 等）の欄は、使っていないので出さない（2026-09-22 社長指示）
 
-  el.innerHTML = `
+  const recBtn = `<button class="doc-btn" style="font-size:12px;background:#f0fdf4;border-color:#86efac;color:#166534;" onclick="qcFromSearch('${part.partNo}')">✅ 品質チェック記録</button>`;
+  if(!part.fromKintone){
+    // デモデータは従来の並び
+    el.innerHTML = `
   <div class="result-card">
     <div class="result-header">
       <div>
@@ -4328,13 +4349,34 @@ function renderResult(part){
       <div class="line-badge">${part.line||'—'}</div>
     </div>
     ${docSectionHtml}
-    <div id="moldInfo" class="mold-info"></div>
-    <div style="padding:10px 14px;border-top:1px solid #f0f0f0;">
-      <button class="doc-btn" style="font-size:12px;background:#f0fdf4;border-color:#86efac;color:#166534;" onclick="qcFromSearch('${part.partNo}')">✅ 品質チェック記録</button>
+    <div style="padding:10px 14px;border-top:1px solid #f0f0f0;">${recBtn}</div>
+  </div>`;
+    return;
+  }
+  // ★2026-09-22 組み直し：ショット数は品番の横／左に帳票・右に改修・不良・苦情（スクロールせずに全部見える）
+  el.innerHTML = `
+  <div class="result-card">
+    <div class="result-header rs-head">
+      <div class="rs-title">
+        <div class="result-partno">${part.partNo}${source}</div>
+        <div class="result-name">${part.name||''}　${part.customer?`<span style="color:#888;">（${part.customer}）</span>`:''}</div>
+      </div>
+      <div id="moldShotHead" class="rs-shot"></div>
+      <div class="line-badge">${part.line||'—'}</div>
+    </div>
+    <div class="rs-grid">
+      <div class="rs-left">
+        ${docSectionHtml}
+        <div style="margin-top:10px;">${recBtn}</div>
+      </div>
+      <div class="rs-right">
+        <div id="moldRepair" class="mold-sec"></div>
+        <div id="moldNg" class="mold-sec"></div>
+        <div id="moldCmp" class="mold-sec"></div>
+      </div>
     </div>
   </div>`;
-  // 金型・ジグの情報（ショット数・改修・不良・苦情）は後から読み込んで埋める
-  if(part.fromKintone && typeof moldRenderInfo === 'function') moldRenderInfo(part.partNo);
+  if(typeof moldRenderInfo === 'function') moldRenderInfo(part.partNo);
 }
 
 // ===== 金型・ジグの情報（ショット数・改修履歴・工程内不良・苦情不適合）2026-09-22 社長指示 =====
@@ -4343,23 +4385,28 @@ function renderResult(part){
 //     いまの累計 ＝ 基準の累計 ＋ 基準日より後の品質チェックの記録の生産数 ÷ 取り数
 //     赤 … 残り（目安−累計）が、直近3ロットの平均ショット数以下（＝次の1ロットで目安を超える）
 //     橙 … 目安の90%以上
-//   目安・取り数・基準日・基準の累計は kintone「マスタ_製品・金型」（App7）に持つ。
-//   定期メンテをしたら、基準日＝メンテした日・基準の累計＝0 にする（累計が0に戻る）。
-// ・改修履歴は App6（★金型治具_メンテナンス管理）を**その工程の品番**で。
+//   目安・取り数（と最初の基準日・基準の累計）は kintone「マスタ_製品・金型」（App7）。
+//   ★定期メンテは App6（金型治具メンテ）に「定期メンテナンス」で入れて完了日が入れば、
+//     その日から自動で0から数え直す（マスタを直す必要はない）。
+// ・改修履歴は App6 を**その工程の品番**で。「いま改修中」は 依頼書発行・作業着手 だけ。
+//   品質確認中・製造確認中は「確認待ち」（改修自体は終わっている）。
 // ・工程内不良（App31）・苦情不適合（App45）は**製品の品番**（頭の2つ）で。
 // ・App6/31/45 は金型管理システムと同じGASで読む（トークンはGAS側 KT_TOKEN_<番号>）。
+// ・★速さ：GASは1回10〜20秒かかる。ページを開いたときに先読みし、手元に置き、各欄は届いた順に出す。
 const MOLD_GAS_URL = 'https://script.google.com/macros/s/AKfycbyVyBCDB--oV8YUQhBIM-PoS9MMkUheYinHAl_GXArNWyoe9JXJG8MR0XVdNrf7SvaPZQ/exec';
 const SHOT_F = { limit:'ショット数目安', cav:'取り数', baseDate:'ショット基準日', baseCount:'ショット基準累計' };
 const SHOT_ORANGE_RATE = 0.90;
 const SHOT_LOTS = 3;
 const MOLD_PART_FIELD = '文字列__1行__3';     // App7 の品番
+const MOLD_TEIKI = '定期メンテナンス';         // App6 の分類
+const MOLD_OPEN_ST = ['依頼書発行','作業着手'];              // 改修に出ている
+const MOLD_WAIT_ST = ['依頼作成中','品質確認中','製造確認中'];  // 依頼の準備中／改修後の確認待ち
+const MOLD_SHOW_ROWS = 3;                                    // 各履歴は直近3件（「すべて見る」で全部）
 
-// 品番のそろえ方：末尾の（W501）などを外し、空白をまとめる（中の空白は残す）
 function moldNorm(p){ return String(p||'').replace(/[（(]\s*W\d+\s*[)）]\s*$/,'').replace(/\s+/g,' ').trim(); }
-// 製品の品番（頭の2つ）… 46487-77R00-PR → 46487-77R00 ／ 18120-6Y0 -0000-PR → 18120-6Y0
 function moldBase(p){ const t=moldNorm(p).split('-').map(x=>x.trim()).filter(Boolean); return t.length>=2 ? t[0]+'-'+t[1] : moldNorm(p); }
 function moldEsc(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function moldKq(v){ return String(v||'').replace(/\\/g,'\\\\').replace(/"/g,'\\"'); }   // kintoneクエリの文字列
+function moldKq(v){ return String(v||'').replace(/\\/g,'\\\\').replace(/"/g,'\\"'); }
 
 function _moldJsonp(url, ms){
   return new Promise(function(res){
@@ -4382,70 +4429,106 @@ function _mv(r, k){ const f=r&&r[k]; if(!f) return ''; const v=f.value;
   if(v&&typeof v==='object') return v.name||'';
   return v==null?'':String(v); }
 
-// ----- 品質チェックの記録（5分だけ手元に置く）-----
-let _moldQc = {t:0, rows:null, p:null};
-function moldQcRecords(){
-  if(_moldQc.rows && Date.now()-_moldQc.t < 5*60000) return Promise.resolve(_moldQc.rows);
-  if(_moldQc.p) return _moldQc.p;
-  _moldQc.p = new Promise(function(res){
-    // ★読めなかったときは null（0件として判定しない。「1ロット約0」「累計が少ない」と誤って出るため）
-    if(typeof window.qcGasPost !== 'function'){ _moldQc.p = null; res(null); return; }
-    window.qcGasPost('getRecords', {}, function(r){
-      if(!r || !Array.isArray(r.records)){ _moldQc.p = null; res(_moldQc.rows || null); return; }
-      _moldQc = {t:Date.now(), rows:r.records, p:null}; res(r.records);
-    }, function(){ _moldQc.p = null; res(_moldQc.rows || null); }, 90000);
-  });
-  return _moldQc.p;
-}
-function moldQcInvalidate(){ _moldQc.t = 0; }
-
-// ----- マスタ（App7）の目安・取り数・基準 -----
-function moldGetMasters(parts){
-  // parts が空なら「目安が入っているもの全部」
-  const f = [MOLD_PART_FIELD, SHOT_F.limit, SHOT_F.cav, SHOT_F.baseDate, SHOT_F.baseCount].join(',');
-  let q;
-  if(parts && parts.length){
-    q = '(' + parts.map(p=>MOLD_PART_FIELD+' like "'+moldKq(moldNorm(p))+'"').join(' or ') + ') limit 100';
-  } else {
-    q = SHOT_F.limit + ' > 0 limit 500';
+// ----- 手元に置く（古くても先に返し、裏で取り直す）-----
+function _mcache(ttl){ return {t:0, v:null, p:null, ttl:ttl}; }
+function _swr(c, loader){
+  if(c.v !== null && Date.now()-c.t < c.ttl) return Promise.resolve(c.v);
+  if(!c.p){
+    c.p = Promise.resolve().then(loader).then(function(v){ if(v != null){ c.v = v; c.t = Date.now(); } c.p = null; return c.v; })
+                            .catch(function(){ c.p = null; return c.v; });
   }
-  const url = config.gasUrl + '?query=' + encodeURIComponent(q) + '&fields=' + encodeURIComponent(f);
+  return c.v !== null ? Promise.resolve(c.v) : c.p;
+}
+
+// 品質チェックの記録。★自前でGASに取りに行かず、品質チェックの画面が持っている分を使い回す
+//   （同時に取りに行かない仕組みつき。2026-09-22 検証中にGASが詰まったため）
+//   読めなかったときは null（0件として判定しない）
+function moldQcRecords(){
+  return new Promise(function(res){
+    if(typeof window.qcSharedRecords !== 'function'){ res(null); return; }
+    window.qcSharedRecords(10*60000, function(rows){ res(rows); });
+  });
+}
+function moldQcFetchedAt(){ return (typeof window.qcRecordsFetchedAt === 'function') ? window.qcRecordsFetchedAt() : 0; }
+function moldQcInvalidate(){ /* 取り直しは品質チェック側（保存のあと qcFetchRecords）に任せる */ }
+
+// マスタ（App7）：目安が入っているものをまとめて（30分）
+const _cMaster = _mcache(30*60000);
+function _masterLoad(){
+  const f = [MOLD_PART_FIELD, SHOT_F.limit, SHOT_F.cav, SHOT_F.baseDate, SHOT_F.baseCount].join(',');
+  const url = config.gasUrl + '?query=' + encodeURIComponent(SHOT_F.limit + ' > 0 limit 500') + '&fields=' + encodeURIComponent(f);
   return _moldJsonp(url, 60000).then(function(d){
+    if(d && d.error && /timeout|接続できませんでした/.test(String(d.error))) return null;   // 一時的な失敗は覚えない
     if(d && (d.message || d.error)) return {error: d.message || d.error};
     const out = {};
     ((d && d.records) || []).forEach(function(r){
       const pn = _mv(r, MOLD_PART_FIELD);
-      out[moldNorm(pn)] = {
-        part: pn,
-        limit: parseInt(_mv(r, SHOT_F.limit)) || 0,
-        cav: parseInt(_mv(r, SHOT_F.cav)) || 1,
-        baseDate: _mv(r, SHOT_F.baseDate) || '',
-        baseCount: parseInt(_mv(r, SHOT_F.baseCount)) || 0,
-      };
+      out[moldNorm(pn)] = { part:pn, limit:parseInt(_mv(r,SHOT_F.limit))||0, cav:parseInt(_mv(r,SHOT_F.cav))||1,
+                            baseDate:_mv(r,SHOT_F.baseDate)||'', baseCount:parseInt(_mv(r,SHOT_F.baseCount))||0 };
     });
     return {masters: out};
   });
 }
+async function moldGetMasters(parts){
+  const all = await _swr(_cMaster, _masterLoad);
+  if(!all) return {error:'マスタを読み込めませんでした'};
+  if(all.error || !parts || !parts.length) return all;
+  const out = {};
+  parts.forEach(function(p){ const k = moldNorm(p); if(all.masters && all.masters[k]) out[k] = all.masters[k]; });
+  return {masters: out};
+}
+
+// 定期メンテ（App6）：品番ごとの最後の完了日（30分）
+const _cReset = _mcache(30*60000);
+function _resetLoad(){
+  return moldFetchApp(6, '複数選択 in ("' + MOLD_TEIKI + '") order by 日付_1 desc limit 500').then(function(d){
+    if(!d || d.error || d.message || !Array.isArray(d.records)) return null;
+    const map = {};
+    d.records.forEach(function(r){
+      const k = moldNorm(_mv(r,'ルックアップ_1')), dt = _mv(r,'日付_1');
+      if(k && dt && (!map[k] || dt > map[k])) map[k] = dt;
+    });
+    return map;
+  });
+}
+function moldGetResets(){ return _swr(_cReset, _resetLoad); }
+
+// 品番ごとの履歴（10分）
+const _cHist = {};
+function _histCached(key, loader){
+  if(!_cHist[key]) _cHist[key] = _mcache(10*60000);
+  return _swr(_cHist[key], loader);
+}
+
+// ページを開いたら先読み（最初の検索・朝礼をすぐ出すため）
+//   ★品質チェックの記録は先読みしない（現場の記録と同じGASで、1回750KB・10秒以上かかるため）
+setTimeout(function(){
+  try{ moldGetMasters([]); moldGetResets(); }catch(e){}
+}, 8000);
 
 // ----- ショット数の判定 -----
 //   rows: 品質チェックの記録（[1]=生産日 [2]=品番 [5]=生産数 [13]=製造番号）
-//   extra: 記録した直後など、まだ一覧に入っていない生産数
-function moldShotStatus(part, rows, m, extra){
+//   opt.resetDate: App6の定期メンテの完了日（基準日より後なら、その日から0で数え直す）
+//   opt.extra: 記録した直後で、まだ一覧に入っていない生産数
+function moldShotStatus(part, rows, m, opt){
+  opt = opt || {};
   const key = moldNorm(part);
   const cav = (m && m.cav > 0) ? m.cav : 1;
-  const since = (m && m.baseDate) || '';
+  let base = (m && m.baseCount) || 0, since = (m && m.baseDate) || '', inclusive = false, byReset = false;
+  if(opt.resetDate && opt.resetDate > since){ base = 0; since = opt.resetDate; inclusive = true; byReset = true; }
   const d10 = r => String(r[1]||'').slice(0,10).replace(/\//g,'-');
   let add = 0; const lots = {};
   (rows||[]).forEach(function(r){
     if(moldNorm(r[2]) !== key) return;
     const dd = d10(r), n = parseInt(r[5]||0) || 0;
-    if(!since || dd > since) add += n;               // 基準日の生産は基準の累計に入っている
-    const lot = String(r[13]||'') || ('日:'+dd);      // ロット＝製造番号
+    // 基準日の生産は基準の累計に入っている／定期メンテの完了日の生産はメンテ後なので数える
+    if(!since || dd > since || (inclusive && dd === since)) add += n;
+    const lot = String(r[13]||'') || ('日:'+dd);
     if(!lots[lot]) lots[lot] = {n:0, last:''};
     lots[lot].n += n; if(dd > lots[lot].last) lots[lot].last = dd;
   });
-  add += (extra||0);
-  const shots = Math.round((m && m.baseCount || 0) + add / cav);
+  add += (opt.extra||0);
+  const shots = Math.round(base + add / cav);
   const recent = Object.values(lots).filter(x=>x.n>0).sort((a,b)=>a.last<b.last?1:-1).slice(0, SHOT_LOTS);
   const avg = recent.length ? Math.round(recent.reduce((a,x)=>a+x.n,0) / recent.length / cav) : 0;
   const limit = (m && m.limit) || 0;
@@ -4456,9 +4539,8 @@ function moldShotStatus(part, rows, m, extra){
     else if(shots >= limit * SHOT_ORANGE_RATE) level = 'orange';
     else level = 'ok';
   }
-  const rawAll = (rows||[]).filter(r=>moldNorm(r[2])===key).reduce((a,r)=>a+(parseInt(r[5]||0)||0),0);
   return {part:part, shots:shots, limit:limit, remain:remain, avg:avg, lots:recent.length, cav:cav,
-          baseDate:since, baseCount:(m&&m.baseCount)||0, added:Math.round(add/cav), level:level, rawAll:rawAll};
+          since:since, base:base, byReset:byReset, added:Math.round(add/cav), level:level};
 }
 const MOLD_LV = {
   red:    {c:'#dc2626', bg:'#fef2f2', t:'要メンテ'},
@@ -4466,14 +4548,29 @@ const MOLD_LV = {
   ok:     {c:'#16a34a', bg:'#f0fdf4', t:'正常'},
   unset:  {c:'#94a3b8', bg:'#f8fafc', t:'目安が未登録'},
 };
+function _moldShotDetail(st){
+  return '直近'+st.lots+'ロットの平均 '+st.avg.toLocaleString()+'ショット（残りがこれを切ったら赤・90%で橙）'
+    + (st.cav>1 ? '　取り数 '+st.cav : '')
+    + (st.byReset ? '　／ 定期メンテ '+st.since+' から '+st.added.toLocaleString()
+                  : (st.since ? '　／ 基準 '+st.since+' 時点 '+st.base.toLocaleString()+' ＋ その後 '+st.added.toLocaleString() : ''));
+}
+// 品番の横に出す小さい版
+function moldShotHeadHtml(st){
+  if(!st) return '';
+  if(st.level === 'unset') return '<span class="rs-shot-unset">🔨 ショット数：目安が未登録</span>';
+  const lv = MOLD_LV[st.level], pct = Math.min(100, Math.round(st.shots / st.limit * 100));
+  return '<div class="rs-shot-box" style="border-color:'+lv.c+';background:'+lv.bg+';" title="'+moldEsc(_moldShotDetail(st))+'">'
+    + '<div class="rs-shot-top">🔨 ショット数 <span class="mold-chip" style="background:'+lv.c+';color:#fff;">'+lv.t+'</span>'
+    + '<span class="rs-shot-num"><b style="color:'+lv.c+';">'+st.shots.toLocaleString()+'</b> ／ '+st.limit.toLocaleString()+'（'+pct+'%）'
+    + '　残り <b>'+Math.max(0,st.remain).toLocaleString()+'</b></span></div>'
+    + '<div class="mold-bar"><div style="width:'+pct+'%;background:'+lv.c+';"></div><i style="left:'+Math.round(SHOT_ORANGE_RATE*100)+'%;"></i></div>'
+    + '<div class="rs-shot-sub">1ロット約 '+st.avg.toLocaleString()+'ショット'
+    + (st.byReset ? '・定期メンテ '+st.since+' から' : (st.since ? '・基準 '+st.since : '')) + '</div></div>';
+}
+// 記録直後に出す大きい版
 function moldShotHtml(st){
   const lv = MOLD_LV[st.level] || MOLD_LV.unset;
-  if(st.level === 'unset'){
-    return '<div class="mold-shot" style="border-color:#e2e8f0;background:#f8fafc;">'
-      + '<div class="mold-shot-hd">🔨 ショット数 <span class="mold-chip" style="background:#e2e8f0;color:#64748b;">目安が未登録</span></div>'
-      + '<div class="mold-sub">kintone「マスタ_製品・金型」にショット数目安を入れると、ここに累計と判定が出ます。'
-      + (st.rawAll ? '（参考：品質チェックの記録 ' + st.rawAll.toLocaleString() + '個）' : '') + '</div></div>';
-  }
+  if(st.level === 'unset') return '';
   const pct = Math.min(100, Math.round(st.shots / st.limit * 100));
   return '<div class="mold-shot" style="border-color:'+lv.c+';background:'+lv.bg+';">'
     + '<div class="mold-shot-hd">🔨 ショット数 <span class="mold-chip" style="background:'+lv.c+';color:#fff;">'+lv.t+'</span></div>'
@@ -4482,87 +4579,101 @@ function moldShotHtml(st){
     + '<span style="margin-left:14px;">残り <b>'+Math.max(0,st.remain).toLocaleString()+'</b></span></div>'
     + '<div class="mold-bar"><div style="width:'+pct+'%;background:'+lv.c+';"></div>'
     + '<i style="left:'+Math.round(SHOT_ORANGE_RATE*100)+'%;"></i></div>'
-    + '<div class="mold-sub">直近'+st.lots+'ロットの平均 '+st.avg.toLocaleString()+'ショット（残りがこれを切ったら赤・90%で橙）'
-    + (st.cav>1 ? '　取り数 '+st.cav : '')
-    + (st.baseDate ? '　／ 基準 '+st.baseDate+' 時点 '+st.baseCount.toLocaleString()+' ＋ その後 '+st.added.toLocaleString() : '')
-    + '</div></div>';
+    + '<div class="mold-sub">'+_moldShotDetail(st)+'</div></div>';
 }
 
-// ----- 履歴 -----
-function _moldSec(title, body, note){
-  return '<div class="mold-sec"><div class="mold-sec-hd">'+title+(note?'<span class="mold-note">'+note+'</span>':'')+'</div>'+body+'</div>';
-}
+// ----- 履歴の欄 -----
 function _moldNotReady(d, app){
   const e = String((d && (d.error || d.message)) || '');
   if(/KT_TOKEN_\d+\s*未設定/.test(e)) return '<div class="mold-empty">読み取りの設定待ちです（kintone App'+app+' のトークンをGASに登録すると出ます）</div>';
   if(e) return '<div class="mold-empty">読み込めませんでした：'+moldEsc(e.slice(0,80))+'</div>';
   return '';
 }
+function _moldTable(head, rows, id){
+  const more = rows.length > MOLD_SHOW_ROWS;
+  const tr = rows.map(function(r,i){ return '<tr'+(i>=MOLD_SHOW_ROWS?' class="mold-more" style="display:none;"':'')+'>'+r+'</tr>'; }).join('');
+  return '<table class="mold-tbl" id="'+id+'"><thead><tr>'+head.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+tr+'</tbody></table>'
+    + (more ? '<a class="mold-morelink" onclick="moldToggleMore(\''+id+'\',this)">すべて見る（'+rows.length+'件）</a>' : '');
+}
+window.moldToggleMore = function(id, a){
+  const t = document.getElementById(id); if(!t) return;
+  const open = a.dataset.open === '1';
+  t.querySelectorAll('.mold-more').forEach(function(tr){ tr.style.display = open ? 'none' : ''; });
+  a.dataset.open = open ? '' : '1';
+  a.textContent = open ? ('すべて見る（'+t.querySelectorAll('tbody tr').length+'件）') : '閉じる';
+};
+function _stColor(st){ return MOLD_OPEN_ST.indexOf(st)>=0 ? '#dc2626' : (MOLD_WAIT_ST.indexOf(st)>=0 ? '#d97706' : '#16a34a'); }
 function moldRepairHtml(d, part){
-  const nr = _moldNotReady(d, 6); if(nr) return _moldSec('🔧 改修履歴', nr);
+  const hd = '<div class="mold-sec-hd">🔧 改修履歴</div>';
+  const nr = _moldNotReady(d, 6); if(nr) return hd + nr;
   const key = moldNorm(part);
   const recs = ((d && d.records) || []).filter(r=>moldNorm(_mv(r,'ルックアップ_1'))===key);
-  if(!recs.length) return _moldSec('🔧 改修履歴', '<div class="mold-empty">改修の記録はありません</div>');
+  if(!recs.length) return hd + '<div class="mold-empty">改修の記録はありません</div>';
   const y1 = new Date(); y1.setFullYear(y1.getFullYear()-1); const y1s = y1.toLocaleDateString('sv-SE');
   const n1 = recs.filter(r=>_mv(r,'日付') >= y1s).length;
-  const open = recs.filter(r=>_mv(r,'ステータス') && _mv(r,'ステータス') !== '完了');
-  const rows = recs.slice(0, 20).map(function(r){
+  const open = recs.filter(r=>MOLD_OPEN_ST.indexOf(_mv(r,'ステータス'))>=0);
+  const rows = recs.slice(0, 50).map(function(r){
     const st = _mv(r,'ステータス');
-    const c = st==='完了' ? '#16a34a' : '#dc2626';
-    return '<tr><td class="mn">'+moldEsc(_mv(r,'日付'))+'</td>'
-      + '<td class="mn" style="color:#888;">'+(_mv(r,'日付_1')?'→ '+moldEsc(_mv(r,'日付_1')):'')+'</td>'
-      + '<td>'+moldEsc(_mv(r,'複数選択'))+'</td>'
-      + '<td class="mw">'+moldEsc(_mv(r,'文字列__複数行__1').split('\n')[0].slice(0,70))+'</td>'
-      + '<td style="color:'+c+';font-weight:700;white-space:nowrap;">'+moldEsc(st)+'</td></tr>';
-  }).join('');
-  const warn = open.length ? '<div class="mold-warn">⚠ いま対応中：'+open.map(r=>moldEsc(_mv(r,'日付'))+' '+moldEsc(_mv(r,'複数選択'))+'（'+moldEsc(_mv(r,'ステータス'))+'）').join(' ／ ')+'</div>' : '';
-  return _moldSec('🔧 改修履歴', warn+'<table class="mold-tbl">'+rows+'</table>', '直近1年 '+n1+'回・全'+recs.length+'回');
+    return '<td class="mn">'+moldEsc(_mv(r,'日付'))+'</td>'
+      + '<td class="mn">'+moldEsc(_mv(r,'日付_1')||'—')+'</td>'
+      + '<td class="mn">'+moldEsc(_mv(r,'複数選択'))+'</td>'
+      + '<td class="mw">'+moldEsc(_mv(r,'文字列__複数行__1').split('\n')[0].slice(0,80))+'</td>'
+      + '<td class="mn" style="color:'+_stColor(st)+';font-weight:700;">'+moldEsc(st)+'</td>';
+  });
+  const warn = open.length ? '<div class="mold-warn">⚠ いま改修中：'+open.map(r=>moldEsc(_mv(r,'日付'))+' '+moldEsc(_mv(r,'複数選択'))+'（'+moldEsc(_mv(r,'ステータス'))+'）').join(' ／ ')+'</div>' : '';
+  return '<div class="mold-sec-hd">🔧 改修履歴<span class="mold-note">直近1年 '+n1+'回・全'+recs.length+'回</span></div>'
+    + warn + _moldTable(['依頼日','完了日','分類','内容','状況'], rows, 'moldRepTbl');
 }
 function moldComplaintHtml(d, part){
-  const nr = _moldNotReady(d, 45); if(nr) return _moldSec('📣 苦情・不適合', nr);
+  const hd = '<div class="mold-sec-hd">📣 苦情・不適合</div>';
+  const nr = _moldNotReady(d, 45); if(nr) return hd + nr;
   const base = moldBase(part);
   const recs = ((d && d.records) || []).filter(r=>moldBase(_mv(r,'ルックアップ_2'))===base);
-  if(!recs.length) return _moldSec('📣 苦情・不適合', '<div class="mold-empty">記録はありません</div>');
-  const rows = recs.slice(0, 20).map(function(r){
+  if(!recs.length) return hd + '<div class="mold-empty">記録はありません</div>';
+  const rows = recs.slice(0, 50).map(function(r){
     const done = !!_mv(r,'所属長_2');
-    return '<tr><td class="mn">'+moldEsc(_mv(r,'不具合発生日'))+'</td>'
-      + '<td>'+moldEsc(_mv(r,'ラジオボタン'))+'</td>'
-      + '<td style="color:#888;white-space:nowrap;">'+moldEsc(_mv(r,'ルックアップ_2'))+'</td>'
-      + '<td class="mw">'+moldEsc(_mv(r,'文字列__複数行_').split('\n')[0].slice(0,70))+'</td>'
-      + '<td style="white-space:nowrap;color:'+(done?'#16a34a':'#d97706')+';font-weight:700;">'+(done?'是正確認済':'是正確認待ち')+'</td></tr>';
-  }).join('');
-  return _moldSec('📣 苦情・不適合', '<table class="mold-tbl">'+rows+'</table>', '製品 '+moldEsc(base)+' ・全'+recs.length+'件');
+    return '<td class="mn">'+moldEsc(_mv(r,'不具合発生日'))+'</td>'
+      + '<td class="mn">'+moldEsc(_mv(r,'ラジオボタン'))+'</td>'
+      + '<td class="mn" style="color:#888;">'+moldEsc(_mv(r,'ルックアップ_2'))+'</td>'
+      + '<td class="mw">'+moldEsc(_mv(r,'文字列__複数行_').split('\n')[0].slice(0,80))+'</td>'
+      + '<td class="mn" style="color:'+(done?'#16a34a':'#d97706')+';font-weight:700;">'+(done?'是正確認済':'是正確認待ち')+'</td>';
+  });
+  return '<div class="mold-sec-hd">📣 苦情・不適合<span class="mold-note">製品 '+moldEsc(base)+'・全'+recs.length+'件</span></div>'
+    + _moldTable(['発生日','区分','品番','内容','是正'], rows, 'moldCmpTbl');
 }
 
 // ----- 記録した直後に、その品番のショット数を出す -----
-window.moldAfterRecord = async function(part, el){
+//   t0: 保存を押した時刻。それより前に読んだ記録なら、今入れた生産数（prod）を足して数える
+window.moldAfterRecord = async function(part, el, prod, t0){
   if(!el) return;
   el.innerHTML = '<div class="mold-loading">🔨 ショット数を確認中…</div>';
-  moldQcInvalidate();                                  // 今入れた記録を含めて数え直す
-  const [rows, mres] = await Promise.all([moldQcRecords(), moldGetMasters([part])]);
+  const [rows, mres, resets] = await Promise.all([moldQcRecords(), moldGetMasters([part]), moldGetResets()]);
   if(!el.isConnected) return;
-  if(mres && mres.error){ el.innerHTML = ''; return; }   // マスタに項目が無いうちは出さない
-  if(rows === null){ el.innerHTML = '<div class="mold-empty">品質チェックの記録を読み込めなかったため、ショット数は判定していません。少し待ってからもう一度開いてください。</div>'; return; }
+  if(!mres || mres.error){ el.innerHTML = ''; return; }
   const m = (mres.masters || {})[moldNorm(part)];
   if(!m || !m.limit){ el.innerHTML = ''; return; }
-  el.innerHTML = moldShotHtml(moldShotStatus(part, rows, m));
+  if(rows === null){ el.innerHTML = '<div class="mold-empty">品質チェックの記録を読み込めなかったため、ショット数は判定していません。</div>'; return; }
+  const fa = moldQcFetchedAt();
+  const extra = (t0 && fa && fa < t0) ? (parseInt(prod)||0) : 0;
+  el.innerHTML = moldShotHtml(moldShotStatus(part, rows, m, {resetDate:(resets||{})[moldNorm(part)], extra:extra}));
+  moldQcInvalidate();                                  // 次に使うときは今の記録を含めて取り直す
 };
 
 // ----- 朝礼：メンテが近い金型・ジグ（ロス記録の上に出す）-----
 window.moldRenderMorning = async function(el){
   if(!el) return;
   el.innerHTML = '<div class="mold-loading">🔨 メンテが近い金型・ジグを確認中…</div>';
-  const [rows, mres] = await Promise.all([moldQcRecords(), moldGetMasters([])]);
+  const [rows, mres, resets] = await Promise.all([moldQcRecords(), moldGetMasters([]), moldGetResets()]);
   if(!el.isConnected) return;
-  if(mres && mres.error){
-    el.innerHTML = /見つかりません/.test(mres.error)
+  if(!mres || mres.error){
+    el.innerHTML = (mres && /見つかりません/.test(mres.error))
       ? '<div class="mold-empty" style="margin:2px 0 10px;">🔨 ショット数：kintone「マスタ_製品・金型」に項目ができると、ここにメンテが近い金型・ジグが出ます</div>'
       : '';
     return;
   }
-  if(rows === null){ el.innerHTML = '<div style="margin:2px 0 10px;">'+'<div class="mold-empty">品質チェックの記録を読み込めなかったため、ショット数は判定していません。少し待ってからもう一度開いてください。</div>'+'</div>'; return; }
+  if(rows === null){ el.innerHTML = '<div class="mold-empty" style="margin:2px 0 10px;">🔨 品質チェックの記録を読み込めなかったため、ショット数は判定していません。</div>'; return; }
   const list = Object.values(mres.masters || {}).filter(m=>m.limit>0)
-    .map(m=>moldShotStatus(m.part, rows, m))
+    .map(m=>moldShotStatus(m.part, rows, m, {resetDate:(resets||{})[moldNorm(m.part)]}))
     .filter(st=>st.level==='red' || st.level==='orange')
     .sort((a,b)=>(a.level===b.level ? a.remain-b.remain : (a.level==='red'?-1:1)));
   const nR = list.filter(x=>x.level==='red').length, nO = list.length - nR;
@@ -4586,36 +4697,37 @@ window.moldRenderMorning = async function(el){
     + '</table></div>';
 };
 
-// ----- 品番検索に並べる -----
-async function moldRenderInfo(part){
-  const box = document.getElementById('moldInfo'); if(!box) return;
-  const token = Date.now(); box.dataset.token = token;
-  const alive = () => box.isConnected && box.dataset.token == token;
-  box.innerHTML = '<div class="mold-loading">🔨 ショット数・改修履歴などを読み込み中…（20秒ほどかかることがあります）</div>';
+// ----- 品番検索：各欄を、届いた順に埋める -----
+function moldRenderInfo(part){
+  const ids = ['moldShotHead','moldRepair','moldNg','moldCmp'];
+  const token = String(Date.now());
+  ids.forEach(function(id){ const e = document.getElementById(id); if(e) e.dataset.token = token; });
+  const put = function(id, html){ const e = document.getElementById(id); if(e && e.dataset.token === token) e.innerHTML = html; };
   const key = moldNorm(part), base = moldBase(part);
-  const [rows, mres, rep, cmp] = await Promise.all([
-    moldQcRecords(),
-    moldGetMasters([part]),
-    moldFetchApp(6,  'ルックアップ_1 like "'+moldKq(key)+'" order by 日付 desc limit 100'),
-    moldFetchApp(45, 'ルックアップ_2 like "'+moldKq(base)+'" order by 不具合発生日 desc limit 100'),
-  ]);
-  if(!alive()) return;
-  let shotHtml;
-  if(rows === null){
-    shotHtml = '<div class="mold-shot" style="border-color:#e2e8f0;background:#f8fafc;"><div class="mold-shot-hd">🔨 ショット数</div>'+'<div class="mold-empty">品質チェックの記録を読み込めなかったため、ショット数は判定していません。少し待ってからもう一度開いてください。</div>'+'</div>';
-  } else if(mres && mres.error){
-    const miss = /見つかりません/.test(mres.error);
-    shotHtml = '<div class="mold-shot" style="border-color:#e2e8f0;background:#f8fafc;"><div class="mold-shot-hd">🔨 ショット数</div>'
-      + '<div class="mold-sub">' + (miss ? 'kintone「マスタ_製品・金型」にショット数の項目がまだありません（作ると、ここに出ます）'
-                                          : 'マスタを読み込めませんでした：'+moldEsc(String(mres.error).slice(0,80))) + '</div></div>';
-  } else {
+  put('moldShotHead', '<span class="rs-shot-unset">🔨 ショット数を確認中…</span>');
+  put('moldRepair', '<div class="mold-sec-hd">🔧 改修履歴</div><div class="mold-loading">読み込み中…</div>');
+  put('moldNg', '<div class="mold-sec-hd">🧪 工程内不良</div><div class="mold-empty">読み取りの設定待ちです（kintone App31 のトークンをGASに登録すると出ます）</div>');
+  put('moldCmp', '<div class="mold-sec-hd">📣 苦情・不適合</div><div class="mold-loading">読み込み中…</div>');
+
+  // ショット数（品番の横）
+  Promise.all([moldQcRecords(), moldGetMasters([part]), moldGetResets()]).then(function(v){
+    const rows = v[0], mres = v[1], resets = v[2];
+    if(mres && mres.error){
+      put('moldShotHead', /見つかりません/.test(mres.error)
+        ? '<span class="rs-shot-unset">🔨 ショット数：マスタに項目がまだありません</span>'
+        : '<span class="rs-shot-unset">🔨 ショット数：マスタを読み込めませんでした</span>');
+      return;
+    }
+    if(rows === null){ put('moldShotHead', '<span class="rs-shot-unset">🔨 ショット数：記録を読み込めませんでした（少し待って開き直してください）</span>'); return; }
     const m = (mres && mres.masters && mres.masters[key]) || null;
-    shotHtml = moldShotHtml(moldShotStatus(part, rows, m));
-  }
-  box.innerHTML = shotHtml
-    + moldRepairHtml(rep, part)
-    + _moldSec('🧪 工程内不良', '<div class="mold-empty">読み取りの設定待ちです（kintone App31 のトークンをGASに登録すると出ます）</div>')
-    + moldComplaintHtml(cmp, part);
+    put('moldShotHead', moldShotHeadHtml(moldShotStatus(part, rows, m, {resetDate:(resets||{})[key]})));
+  });
+  // 改修履歴
+  _histCached('6:'+key, function(){ return moldFetchApp(6, 'ルックアップ_1 like "'+moldKq(key)+'" order by 日付 desc limit 100'); })
+    .then(function(d){ put('moldRepair', moldRepairHtml(d, part)); });
+  // 苦情・不適合
+  _histCached('45:'+base, function(){ return moldFetchApp(45, 'ルックアップ_2 like "'+moldKq(base)+'" order by 不具合発生日 desc limit 100'); })
+    .then(function(d){ put('moldCmp', moldComplaintHtml(d, part)); });
 }
 
 // ===== kintoneファイル表示（GASプロキシ経由） =====
@@ -10316,6 +10428,7 @@ window.qcGo = function(){
   // ★「押さないでください」まで書く。写真つきは10秒以上かかることがあり、
   //   待ちきれずにもう一度押されるのが二重登録のいちばんの入口
   btn.textContent='保存中...（押さないでください）';
+  var moldT0 = Date.now();   // ショット数：この時刻より前に読んだ記録なら、今の生産数を足す
   var d={
     date:document.getElementById('qc-dt').value,
     partNo:QC_SEL_SAKUYO.hinban, partName:QC_SEL_SAKUYO.hinmei,
@@ -10342,7 +10455,7 @@ window.qcGo = function(){
     document.getElementById('qc-form-input').style.display='none';
     document.getElementById('qc-form-done').style.display='block';
     // ショット数（この品番の累計と判定）を出す（2026-09-22）
-    if(sel && typeof window.moldAfterRecord==='function') window.moldAfterRecord(sel.hinban, document.getElementById('qc-shot'));
+    if(sel && typeof window.moldAfterRecord==='function') window.moldAfterRecord(sel.hinban, document.getElementById('qc-shot'), prodNow, moldT0);
     qcFetchRecords(function(){ qcRenderCurrentList(); });
   }
   function backToForm(){ btn.disabled=false; btn.textContent='記録を保存する'; }
@@ -10560,6 +10673,19 @@ function qcLoadCachedRecords(){
     }
   }catch(e){}
 }
+
+// ショット数（金型・ジグ）から使う。★同じ記録を二重に取りに行かないため（2026-09-22）
+//   maxAgeMs より新しければ手元の分をそのまま渡す。古ければ qcFetchRecords（重複防止つき）で取り直す。
+//   取り直しに失敗したら、手元（前回の分・ブラウザの保存分）を渡す。何も無ければ null。
+window.qcSharedRecords = function(maxAgeMs, cb){
+  var have = Array.isArray(QC_ALL_RECORDS) && QC_ALL_RECORDS.length > 0;
+  if(have && QC_REC_FETCHED_MS && Date.now() - QC_REC_FETCHED_MS < maxAgeMs){ cb(QC_ALL_RECORDS); return; }
+  qcFetchRecords(function(ok){
+    var ready = Array.isArray(QC_ALL_RECORDS) && QC_ALL_RECORDS.length > 0;
+    cb(ready ? QC_ALL_RECORDS : null);
+  });
+};
+window.qcRecordsFetchedAt = function(){ return QC_REC_FETCHED_MS || 0; };
 
 function qcFetchRecords(cb){
   if(QC_REC_INFLIGHT){ if(cb) QC_REC_INFLIGHT.push(cb); return; }
@@ -11440,7 +11566,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.22-9';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.22-10';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -19283,7 +19409,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.22-9</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.22-10</div>
 </body>
 </html>
 
