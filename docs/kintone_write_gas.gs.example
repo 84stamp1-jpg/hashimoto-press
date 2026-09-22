@@ -16,6 +16,9 @@
  *
  * 安全のため:
  *   ・APIトークンはこのGASに保存しません。H-Hub側（各PCのlocalStorage）から毎回届きます
+ *     ※例外：ルックアップの参照先（品番のマスタ・社員マスタ等）の「閲覧だけ」のトークンは、
+ *       スクリプトプロパティ LOOKUP_TOKENS にカンマ区切りで入れておけば、届いたトークンに足して送ります
+ *       （各PCの設定を回って足さずに済むように。2026-09-22）
  *   ・書き込みを許すアプリIDを下の ALLOWED_APPS で限定しています
  *   ・読み取り（照合）はこのGASを通りません。既存の品質チェックGASのままです
  */
@@ -23,6 +26,21 @@
 // 書き込みを許可するkintoneアプリID。★不良品報告=31。増やすときはカンマで足す
 var ALLOWED_APPS = ['31'];
 
+
+/**
+ * 届いたトークンに、スクリプトプロパティ LOOKUP_TOKENS（参照先アプリの閲覧用）を足す。
+ * 同じトークンが重なると kintone がエラーにするので、重複は1つにまとめる。
+ */
+function withLookupTokens_(token) {
+  var extra = '';
+  try { extra = PropertiesService.getScriptProperties().getProperty('LOOKUP_TOKENS') || ''; } catch (e) {}
+  var seen = {}, out = [];
+  (String(token || '') + ',' + extra).split(',').forEach(function (t) {
+    t = t.trim();
+    if (t && !seen[t]) { seen[t] = true; out.push(t); }
+  });
+  return out.join(',');
+}
 
 /** H-Hubからの受け口。ここが入口です */
 function doPost(e) {
@@ -117,7 +135,7 @@ function kintoneWrite_(p) {
   var res = UrlFetchApp.fetch(url, {
     method: method,
     contentType: 'application/json',
-    headers: { 'X-Cybozu-API-Token': p.token },
+    headers: { 'X-Cybozu-API-Token': withLookupTokens_(p.token) },   // ★参照先の閲覧用トークンも足す
     payload: JSON.stringify(payload),
     muteHttpExceptions: true
   });
@@ -182,6 +200,10 @@ function kintoneWrite_(p) {
  *
  *  400 / GAIA_LO04
  *      ルックアップの引き当てに失敗。原因は2つ。
+ *      ★いちばん手軽な直し方（2026-09-22）：参照先アプリで「レコード閲覧」だけのトークンを作り、
+ *        このGASの ⚙プロジェクトの設定 → スクリプト プロパティ に
+ *          プロパティ LOOKUP_TOKENS ／ 値 そのトークン（複数ならカンマ区切り）
+ *        を追加する。各PCの設定は触らなくてよい。プロパティは保存した時点で効く（デプロイ不要）。
  *      (a) 値が参照先アプリのキーと一致していない（全角/半角空白、氏名か社員コードか）
  *      (b) ★参照先アプリを読む権限がない。APIトークンは1アプリ分の権限しか持たないため、
  *          kintoneがルックアップを解決しようとしても参照先（社員マスタ等）を読めず弾かれる。

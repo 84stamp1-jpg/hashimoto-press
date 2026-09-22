@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.22-12 : 不良品報告の作成で「部品番号」の引き当て（GAIA_LO04）に失敗したときの案内を直した。kintoneのメッセージに「閲覧権限」が含まれるため「レコード追加の権限が要ります」と取り違えて出していた。どの項目が、どのアプリ（App番号）を参照しているかを出す。あわせて書き込み用GASで、参照先アプリの閲覧用トークンをスクリプトプロパティ LOOKUP_TOKENS に1回入れれば足して送るようにした（各PCの設定を回らずに済む）。 -->
 <!-- H-Hub v2026.09.22-11 : 品質チェック「記録する」で**不良・保留が出たら、保存完了の画面からkintoneの不良品報告（App31）を作れる**ようにした（社長指示）。品番・日付・発見者・入力者・数量は記録から入れ、入れるのは発見場所・不具合内容・処置方法・メモだけ。勝手には作らず押したときだけ作る。作成済みなら「No.○ を開く」を出して二重作成を防ぐ。項目はApp31の定義を書き込み用GAS（op:fields）で読み、表示名で探す。部品番号の引き当てに失敗したら（W501）を外した書き方でもう一度。動かすには：書き込み用GASを新しいコード（op:add/fields）に入れ替え／App31のトークンに「レコード追加」。設定の無いPCでは「このPCでは作れません」と出す。 -->
 <!-- H-Hub v2026.09.22-10 : 品番検索を組み直した（社長指示）。(1)上の余白を詰め、左に帳票・右に改修履歴／工程内不良／苦情不適合を並べ、スクロールせずに全部見えるようにした。(2)ショット数は品番の横。(3)改修履歴に見出し（依頼日・完了日・分類・内容・状況）を付け、直近3件＋「すべて見る」。(4)「いま改修中」は依頼書発行・作業着手だけにした（製造確認中・品質確認中は改修後の確認待ちで、3月の分まで並んでいた）。(5)**読み込みを速く**：各欄を届いた順に出す／ページを開いて6秒後に先読み／10〜30分手元に置く（古くても先に出して裏で取り直す）。(6)**定期メンテはApp6（金型治具メンテ）で完了日が入れば自動で累計0から数え直す**（マスタの入力は不要）。(7)ショット数の元の記録は、品質チェックの画面が持っている分を使い回す（GASを二重に呼ばない）。 -->
 <!-- H-Hub v2026.09.22-9 : ショット数を「記録した直後」と「朝礼」にも出すようにした（社長指示。表示は記録直後・品番検索・朝礼の3か所）。記録直後：品質チェックの保存完了の画面に、その品番の累計・残り・判定（目安が登録されている品番だけ）。朝礼：ロス記録の上に「メンテが近い金型・ジグ」（赤＝要メンテ→橙＝メンテが近い、残りの少ない順）。品番を押すと品番検索へ。 -->
@@ -11583,7 +11584,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.22-11';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.22-12';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -12368,8 +12369,15 @@ function qcNgCreate(d, m, rows){
       btn.disabled = false; btn.textContent = 'kintoneの不良品報告を作る';
       msg.style.color = '#b91c1c';
       var hint = '';
-      if(/GAIA_NO01|権限/.test(e)) hint = '（App31のトークンに「レコード追加」の権限が要ります）';
-      else if(/GAIA_LO04/.test(e)) hint = '（ルックアップの引き当てに失敗。参照先アプリのトークンが「⚙ 不良品報告の設定」に入っているか確認してください）';
+      // ★引き当て（GAIA_LO04）を先に見る。メッセージに「閲覧権限」を含むため、権限の案内と取り違えていた
+      if(/GAIA_LO04/.test(e)){
+        var lf = [m.part, m.finder, m.reporter].filter(Boolean).filter(function(f){ return e.indexOf(f.code) >= 0; })[0];
+        var ra = lf && lf.lookup && lf.lookup.relatedApp && lf.lookup.relatedApp.app;
+        hint = '（「'+(lf ? lf.label : 'ルックアップ')+'」の引き当てに失敗しました。'
+             + (ra ? '参照先は kintone App'+ra+' です。' : '')
+             + 'そのアプリの「レコード閲覧」トークンを、書き込み用GASのスクリプトプロパティ LOOKUP_TOKENS に入れてください）';
+      }
+      else if(/GAIA_NO01/.test(e)) hint = '（App31のトークンに「レコード追加」の権限が要ります）';
       else if(/id が足りません|知らないaction/.test(e)) hint = '（書き込み用GASを新しいコードに入れ替えてください）';
       msg.textContent = '作れませんでした：'+e.slice(0,200)+hint;
     });
@@ -19617,7 +19625,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.22-11</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.22-12</div>
 </body>
 </html>
 
