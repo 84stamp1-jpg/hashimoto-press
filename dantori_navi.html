@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.23-1 : 配置表・段取り指示（社長指示）。(1)**ラインの固定**：段取り指示の列の見出し／配置表の「この日の計画」のライン名に 🔓/🔒 を置いた。固定したラインは「🤖 自動割り振り」をやり直しても今の担当のまま（実施中・完了と同じ扱い）。その日だけ有効。自動割り振りの横に「🔒 全部固定」「🔓 全部解除」。固定中でもバーや✏で手で直すことはできる。(2)**自動割り振りを「キャンセル」したら画面の計画を元に戻す**。以前は書き換わったまま残り、あとで配置表のバーを直して保存すると、キャンセルしたはずの割り振りまで一緒に保存されていた（作業者が変わってしまう一因）。(3)段取り指示の✏編集で**型数・段取り人数を変えられる**ようにした。変えると標準時間も計算し直し、今すぐ同期・予定インポートで取り込み直しても手で直した値を残す。 -->
 <!-- H-Hub v2026.09.22-12 : 不良品報告の作成で「部品番号」の引き当て（GAIA_LO04）に失敗したときの案内を直した。kintoneのメッセージに「閲覧権限」が含まれるため「レコード追加の権限が要ります」と取り違えて出していた。どの項目が、どのアプリ（App番号）を参照しているかを出す。あわせて書き込み用GASで、参照先アプリの閲覧用トークンをスクリプトプロパティ LOOKUP_TOKENS に1回入れれば足して送るようにした（各PCの設定を回らずに済む）。 -->
 <!-- H-Hub v2026.09.22-11 : 品質チェック「記録する」で**不良・保留が出たら、保存完了の画面からkintoneの不良品報告（App31）を作れる**ようにした（社長指示）。品番・日付・発見者・入力者・数量は記録から入れ、入れるのは発見場所・不具合内容・処置方法・メモだけ。勝手には作らず押したときだけ作る。作成済みなら「No.○ を開く」を出して二重作成を防ぐ。項目はApp31の定義を書き込み用GAS（op:fields）で読み、表示名で探す。部品番号の引き当てに失敗したら（W501）を外した書き方でもう一度。動かすには：書き込み用GASを新しいコード（op:add/fields）に入れ替え／App31のトークンに「レコード追加」。設定の無いPCでは「このPCでは作れません」と出す。 -->
 <!-- H-Hub v2026.09.22-10 : 品番検索を組み直した（社長指示）。(1)上の余白を詰め、左に帳票・右に改修履歴／工程内不良／苦情不適合を並べ、スクロールせずに全部見えるようにした。(2)ショット数は品番の横。(3)改修履歴に見出し（依頼日・完了日・分類・内容・状況）を付け、直近3件＋「すべて見る」。(4)「いま改修中」は依頼書発行・作業着手だけにした（製造確認中・品質確認中は改修後の確認待ちで、3月の分まで並んでいた）。(5)**読み込みを速く**：各欄を届いた順に出す／ページを開いて6秒後に先読み／10〜30分手元に置く（古くても先に出して裏で取り直す）。(6)**定期メンテはApp6（金型治具メンテ）で完了日が入れば自動で累計0から数え直す**（マスタの入力は不要）。(7)ショット数の元の記録は、品質チェックの画面が持っている分を使い回す（GASを二重に呼ばない）。 -->
@@ -503,6 +504,10 @@ html, body {
 .kanban-board{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;min-height:calc(100vh - 190px);}
 .kanban-col{flex:1;min-width:140px;display:flex;flex-direction:column;gap:5px;}
 .kanban-col-hdr{padding:7px 8px;border-radius:7px;font-size:11px;font-weight:700;text-align:center;background:#f0f0f0;border:1px solid #e0e0e0;color:#1a1a1a;min-width:0;}
+.k-lock{font-size:10px;border:1px solid #d1d5db;background:#fff;color:#64748b;border-radius:10px;padding:0 7px;cursor:pointer;line-height:18px;font-family:inherit;}
+.kanban-col-hdr .k-lock{position:absolute;right:4px;top:5px;}
+.k-lock.on{background:#6d28d9;border-color:#6d28d9;color:#fff;font-weight:700;}
+.k-col-locked .kanban-col-hdr{outline:2px dashed #a78bfa;outline-offset:-2px;}
 .kanban-col-hdr .k-hdr-sub{font-size:9px;color:#888;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;}
 .k-col-running .kanban-col-hdr{background:#eff6ff;border-color:#93c5fd;color:#1d4ed8;}
 .k-col-setup   .kanban-col-hdr{background:#fffbeb;border-color:#fcd34d;color:#92400e;}
@@ -2007,6 +2012,8 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
     <button class="btn" style="padding:5px 10px;font-size:11px;" onclick="refreshDantori()">↻ 更新</button>
     <button class="add-btn-dt" id="dtSyncBtn" style="background:#0369a1;" onclick="importFromProductionPlan()">📥 今すぐ同期</button>
     <button class="add-btn-dt" style="background:#7c3aed;" onclick="autoAssignRoles()" title="PRESS_LINE_MASTERに基づき品質確認・初品出し・金型取付を自動割り振り">🤖 自動割り振り</button>
+    <button class="add-btn-dt" style="background:#6d28d9;" onclick="lockAllLines(true)" title="この日のラインを全部固定。自動割り振りをやり直しても担当を動かさない">🔒 全部固定</button>
+    <button class="add-btn-dt" style="background:#94a3b8;" onclick="lockAllLines(false)" title="この日の固定を全部解除">🔓 全部解除</button>
     <button class="add-btn-dt" style="background:#0f766e;" onclick="showWorkerRoleMaster()">👥 作業者マスタ</button>
     <button class="add-btn-dt" onclick="showAddDantori()">＋ 追加</button>
   </div>
@@ -3086,6 +3093,17 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
         <label>作業人数 <span style="font-size:10px;color:#94a3b8;font-weight:400;">（生産担当の人数）</span></label>
         <input type="number" id="dt-worker-count" min="0" max="99" value="0"
                style="width:80px;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-family:inherit;font-size:13px;"/>
+      </div>
+      <!-- 型数・段取り人数（2026-09-23 社長指示：Excelを取り込んだあとで変えられるように） -->
+      <div class="form-group" id="dt-setup-count-group" style="margin:0 0 10px;">
+        <label>型数・段取り人数 <span style="font-size:10px;color:#94a3b8;font-weight:400;">（段取りの標準時間と、金型取付に何人つけるかに使う）</span></label>
+        <div style="display:flex;align-items:center;gap:6px;font-size:13px;">
+          <input type="number" id="dt-mount-kata" min="1" max="20" placeholder="1"
+                 style="width:64px;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-family:inherit;font-size:13px;"/> 型
+          <input type="number" id="dt-mount-count" min="1" max="20" placeholder="1"
+                 style="width:64px;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-family:inherit;font-size:13px;margin-left:10px;"/> 人
+          <span id="dt-std-preview" style="font-size:11px;color:#94a3b8;margin-left:8px;"></span>
+        </div>
       </div>
     </div>
     <!-- プレス作業者 datalist（作業者マスタから自動生成） -->
@@ -6756,6 +6774,52 @@ function _applyDantoriDateUi(){
   }
 }
 
+// ===== ラインの固定（2026-09-23 社長指示）=====
+//   一度計画・配置したラインを固定すると、「🤖 自動割り振り」をやり直しても、そのラインの担当は動かさない。
+//   その日だけ有効。dantori/<日付>Locks に {ライン: true} で持つ（優先ラインの上書き dantori/<日付>Override と同じ形）。
+//   固定中でも、配置表のバーや ✏ 編集で手で直すことはできる。
+let DANTORI_LOCKS = {};
+async function _loadDantoriLocks(fbUrl, dateStr){
+  try{
+    const r = await fetch(`${fbUrl}/dantori/${dateStr}Locks.json`);
+    DANTORI_LOCKS = (r.ok ? (await r.json()) : null) || {};
+  }catch(e){ DANTORI_LOCKS = DANTORI_LOCKS || {}; }
+}
+function isLineLocked(lineId){ return !!DANTORI_LOCKS[canonLineKey(lineId)]; }
+function _dantoriLineKeys(){
+  const set = {};
+  (dantoriSchedule||[]).forEach(e => { if(e && e.lineId) set[canonLineKey(e.lineId)] = true; });
+  return Object.keys(set);
+}
+async function _saveDantoriLocks(){
+  const fbUrl = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
+  const dateStr = getDantoriDatePath();
+  const body = Object.keys(DANTORI_LOCKS).length ? DANTORI_LOCKS : null;
+  const r = await fetch(`${fbUrl}/dantori/${dateStr}Locks.json`,
+    {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+}
+window.toggleLineLock = async function(lineId, ev){
+  if(ev){ ev.stopPropagation(); ev.preventDefault(); }
+  const k = canonLineKey(lineId);
+  if(DANTORI_LOCKS[k]) delete DANTORI_LOCKS[k]; else DANTORI_LOCKS[k] = true;
+  try{ await _saveDantoriLocks(); }catch(e){ alert('固定の保存に失敗しました：'+e.message); }
+  renderDantori();
+};
+window.lockAllLines = async function(on){
+  const keys = _dantoriLineKeys();
+  if(!keys.length){ alert('この日の計画がありません'); return; }
+  if(on) keys.forEach(k => { DANTORI_LOCKS[k] = true; }); else DANTORI_LOCKS = {};
+  try{ await _saveDantoriLocks(); }catch(e){ alert('固定の保存に失敗しました：'+e.message); }
+  renderDantori();
+};
+function _lockBtnHtml(lineId){
+  const on = isLineLocked(lineId);
+  const lid = String(lineId).replace(/'/g,"\\'");
+  return `<button class="k-lock${on?' on':''}" onclick="toggleLineLock('${lid}',event)" `
+    + `title="${on?'固定中：自動割り振りで動かしません（押すと解除）':'押すと固定：自動割り振りで動かさなくなります'}">${on?'🔒 固定':'🔓'}</button>`;
+}
+
 async function loadDantoriSchedule(){
   const fbUrl   = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
   const dateStr = getDantoriDatePath();
@@ -6774,6 +6838,8 @@ async function loadDantoriSchedule(){
       const rOvr = await fetch(`${fbUrl}/dantori/${dateStr}Override.json`);
       if(rOvr.ok){ const ovr = await rOvr.json(); WORKER_PRIORITY_OVERRIDE = ovr || {}; }
     }catch(_){}
+    // 固定したライン（自動割り振りで動かさない）を読み込む
+    await _loadDantoriLocks(fbUrl, dateStr);
     renderDantori();
     updatePersonPanel();
   } catch(e){ console.warn('dantori load error:',e); }
@@ -6802,6 +6868,14 @@ async function saveDantoriEntry(){
 
   // 編集時は既存エントリのmountCount/mountKataを保持
   const existingEntry = editingDantoriId ? dantoriSchedule.find(e=>e._id===editingDantoriId) : null;
+  // ★型数・段取り人数（2026-09-23）。空欄なら今の値のまま。変えたら標準時間も計算し直し、
+  //   「今すぐ同期」「予定インポート」で取り込み直しても手で直した値を残す（setupEdited）
+  const _kIn = parseInt(document.getElementById('dt-mount-kata')?.value)  || 0;
+  const _nIn = parseInt(document.getElementById('dt-mount-count')?.value) || 0;
+  const _kOld = existingEntry ? (existingEntry.mountKata  || 0) : 0;
+  const _nOld = existingEntry ? (existingEntry.mountCount || 0) : 0;
+  const _k = _kIn || _kOld, _n = _nIn || _nOld;
+  const _setupChanged = !!existingEntry && ((_kIn && _kIn !== _kOld) || (_nIn && _nIn !== _nOld));
   const entry = {
     lineId, partNo,
     setupStart: noSetup ? '' : setupStart,
@@ -6811,10 +6885,14 @@ async function saveDantoriEntry(){
     note, updatedAt:Date.now(), isManual:true,
     ...(existingEntry ? {
       plan:       existingEntry.plan       || 0,
-      mountCount: existingEntry.mountCount || 0,
-      mountKata:  existingEntry.mountKata  || 1,
       fromPlan:   existingEntry.fromPlan   || false,
+      ...(existingEntry.stdSetupMin != null ? { stdSetupMin: existingEntry.stdSetupMin } : {}),
+      ...(existingEntry.setupEdited ? { setupEdited: true } : {}),
     } : {}),
+    mountCount: _n,
+    mountKata:  _k || 1,
+    ...(_setupChanged ? { setupEdited: true, stdSetupMin: calcDantoriSetupTime(lineId, _k || 1, _n || 1) } : {}),
+    ...(!existingEntry && (_kIn || _nIn) ? { stdSetupMin: calcDantoriSetupTime(lineId, _k || 1, _n || 1) } : {}),
   };
 
   const fbUrl   = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
@@ -6846,6 +6924,7 @@ async function deleteDantoriEntry(id){
 
 function showAddDantori(){
   editingDantoriId = null;
+  try{ document.getElementById('dt-mount-kata').value = ''; document.getElementById('dt-mount-count').value = ''; dtUpdateStdPreview(); }catch(e){}
   document.getElementById('dantoriModalTitle').textContent = '📋 段取り計画を追加';
   document.getElementById('dt-line').value        = 'A1';
   document.getElementById('dt-partno').value      = '';
@@ -6886,7 +6965,10 @@ function showEditDantori(id){
   document.getElementById('dt-no-setup').checked   = !!(entry.noSetup);
   document.getElementById('dt-no-worker').checked  = !!(entry.noWorker);
   document.getElementById('dt-worker-count').value = entry.workerCount  || 0;
-  
+  document.getElementById('dt-mount-kata').value   = entry.mountKata  > 0 ? entry.mountKata  : '';
+  document.getElementById('dt-mount-count').value  = entry.mountCount > 0 ? entry.mountCount : '';
+  dtUpdateStdPreview();
+
   onDtNoSetupChange();
   document.getElementById('dantoriModal').style.display = 'flex';
 }
@@ -6903,10 +6985,24 @@ function onDtLineChange(){
   }
 }
 
+// 型数・段取り人数から、段取りの標準時間を出して見せる
+function dtUpdateStdPreview(){
+  const el = document.getElementById('dt-std-preview'); if(!el) return;
+  const lineId = document.getElementById('dt-line')?.value;
+  const k = parseInt(document.getElementById('dt-mount-kata')?.value) || 1;
+  const n = parseInt(document.getElementById('dt-mount-count')?.value) || 1;
+  try{ el.textContent = lineId ? '→ 標準 ' + calcDantoriSetupTime(lineId, k, n) + '分' : ''; }catch(e){ el.textContent = ''; }
+}
+document.addEventListener('input', function(e){
+  if(e.target && (e.target.id === 'dt-mount-kata' || e.target.id === 'dt-mount-count')) dtUpdateStdPreview();
+});
+
 function onDtNoSetupChange(){
   const checked = document.getElementById('dt-no-setup').checked;
   const grp = document.getElementById('dt-setup-start-group');
   if(grp) grp.style.display = checked ? 'none' : '';
+  const cg = document.getElementById('dt-setup-count-group');
+  if(cg) cg.style.display = checked ? 'none' : '';
   if(checked) document.getElementById('dt-setup-start').value = '';
 }
 
@@ -7413,9 +7509,10 @@ function renderKanbanCol(colDef, allEntries){
     const cardsHtml = entries.length
       ? entries.map(renderKanbanCard).join('')
       : `<div class="k-empty">予定なし</div>`;
+    const locked = isLineLocked(lineId);
     return `
-    <div class="kanban-col ${colClass}">
-      <div class="kanban-col-hdr">${hdrLabel}${hdrSub}</div>
+    <div class="kanban-col ${colClass}${locked?' k-col-locked':''}">
+      <div class="kanban-col-hdr" style="position:relative;">${hdrLabel}${hdrSub}${entries.length?_lockBtnHtml(lineId):''}</div>
       ${cardsHtml}
     </div>`;
   } else {
@@ -8433,7 +8530,7 @@ function _rtBuildPlanList(allEntries){
     const jobs = byLine[lid].slice().sort((a,b) =>
       String(a.prodStart||a.setupStart||'').localeCompare(String(b.prodStart||b.setupStart||'')));
     html += `<div class="rt-plan-row">
-      <div class="rt-plan-line" style="border-left:4px solid ${LINE_COLORS_MAP[lid]||'#6b7280'};">${getLineDisplayName(lid)}</div>
+      <div class="rt-plan-line" style="border-left:4px solid ${LINE_COLORS_MAP[lid]||'#6b7280'};flex-direction:column;align-items:flex-start;gap:3px;${isLineLocked(lid)?'background:#f5f3ff;':''}">${getLineDisplayName(lid)}${_lockBtnHtml(lid)}</div>
       <div class="rt-plan-jobs">`;
     jobs.forEach(d => {
       const eid   = (d._id||'').replace(/'/g,"\\'");
@@ -8741,6 +8838,8 @@ function _mergePlanEntries(entries, existing, dateStr, scopeLineIds, protectAssi
       roles: hasRoles ? prevRoles : rest.roles,
       ...(keptShifts.length ? { shiftChanges: keptShifts } : {}),
       stdSetupMin,
+      // ★段取り指示で手で直した型数・段取り人数は、取り込み直しても残す（2026-09-23）
+      ...(prev?.entry?.setupEdited ? { mountCount: prev.entry.mountCount || 0, mountKata: prev.entry.mountKata || 1, setupEdited: true } : {}),
     };
   });
   return newData;
@@ -8783,7 +8882,9 @@ let _aarBusyMap       = {};
 let _aarConflicts     = [];
 let _aarShortages     = [];
 
+let _aarSaved = true;   // 自動割り振りの結果を保存したか（キャンセル時に画面の計画を元に戻すため）
 async function autoAssignRoles(){
+  _aarSaved = false;
   // プレスラインのみ対象（PRESS_LINE_MASTERに登録されているライン）
   // 組立・ロボットライン等は除く
   const pressLineIds = new Set(Object.keys(PRESS_LINE_MASTER));
@@ -9045,8 +9146,8 @@ async function autoAssignRoles(){
     const timeStr  = entry.setupStart||entry.prodStart||'';
     const ps       = toMin(entry.prodStart);
 
-    // ── 完了・実施中は既存割り当てを固定（busyMapに登録してスキップ） ──
-    if(entry.status === 'done' || entry.status === 'in_progress'){
+    // ── 完了・実施中・固定したラインは既存割り当てを固定（busyMapに登録してスキップ） ──
+    if(entry.status === 'done' || entry.status === 'in_progress' || isLineLocked(entry.lineId)){
       const r = entry.roles || {};
       const mountEnd = (ps !== null && s !== null && ps > s) ? ps : (s !== null ? s + 1 : null);
       if(r.品質確認 && s !== null) markBusy(r.品質確認, s, s + (QUALITY_BUSY_MIN||5), `品質確認（固定）`);
@@ -9230,7 +9331,7 @@ async function autoAssignRoles(){
   // Pass 1 で全ライン専任が busyMap に確定済みなので、isBusy のみで判定できる
   // → _isPriorityLineConflict 不要（B1が確定後ならジェン・アリの午前Cラインも通る）
   sorted.forEach(entry => {
-    if(entry.status === 'done' || entry.status === 'in_progress') return;
+    if(entry.status === 'done' || entry.status === 'in_progress' || isLineLocked(entry.lineId)) return;
     if(entry.noWorker) return;
     // prodStart が未設定の場合は setupStart を代替使用
     const ps2 = toMin(entry.prodStart) || toMin(entry.setupStart);
@@ -9374,6 +9475,9 @@ function aarSwitchTab(tab){
   if(!cont) return;
 
   if(tab === 'assign'){
+    const lockedNames = [...new Set(_aarSortedEntries.filter(d=>isLineLocked(d.lineId)).map(d=>getLineDisplayName(d.lineId)))];
+    const lockNote = lockedNames.length
+      ? `<div style="font-size:12px;color:#6d28d9;background:#f5f3ff;border-radius:6px;padding:6px 10px;margin-bottom:8px;">🔒 固定中のライン（${lockedNames.join('・')}）は、今の担当のまま変えていません</div>` : '';
     const rows = _aarSortedEntries.map(d => {
       const r = d.roles||{};
       const t = (d.setupStart||d.prodStart||'')+(d.prodEnd ? '〜'+d.prodEnd : '');
@@ -9426,7 +9530,7 @@ function aarSwitchTab(tab){
         <td style="line-height:1.8;">${wBadge}</td>
       </tr>`;
     }).join('');
-    cont.innerHTML = `
+    cont.innerHTML = lockNote + `
       <div style="font-size:10px;color:#64748b;margin-bottom:6px;padding-left:2px;">
         ◯凡例：<span style="color:#1d4ed8;">●</span>品質確認兼任　<span style="color:#7c3aed;">●</span>初品出し兼任　<span style="color:#94a3b8;">●</span>金型取付のみ
       </div>
@@ -9485,6 +9589,10 @@ function aarSwitchTab(tab){
 
 function closeAutoAssignModal(){
   document.getElementById('autoAssignModal').style.display = 'none';
+  // ★保存せずに閉じたら、画面の中の計画を読み込み直して元に戻す（2026-09-23）
+  //   自動割り振りは画面の計画を直接書き換えるため、キャンセルしてもそのまま残り、
+  //   あとで配置表のバーを直して保存すると、キャンセルしたはずの割り振りまで一緒に保存されていた。
+  if(!_aarSaved){ _aarSaved = true; loadDantoriSchedule(); }
 }
 
 // dantoriSchedule全体をFirebaseに保存する共通処理
@@ -9503,6 +9611,7 @@ async function saveDantoriToFirebase(){
 async function execAutoAssignSave(){
   try {
     await saveDantoriToFirebase();
+    _aarSaved = true;
     closeAutoAssignModal();
     await loadDantoriSchedule();
     renderKanban();
@@ -11584,7 +11693,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.22-12';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.23-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -19625,7 +19734,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.22-12</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.23-1</div>
 </body>
 </html>
 
