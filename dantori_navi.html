@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.23-2 : 品番検索の「工程内不良」（kintone App31 ★不良品報告）を出すようにした（社長がGASにトークンを登録済み）。製品の品番（頭の2つ）で探し、発生日・数量・不具合内容・処置・品番・状況を直近3件＋「すべて見る」。見出しに直近1年の件数と個数。苦情・不適合（App45）も同時に出るようになった。 -->
 <!-- H-Hub v2026.09.23-1 : 配置表・段取り指示（社長指示）。(1)**ラインの固定**：段取り指示の列の見出し／配置表の「この日の計画」のライン名に 🔓/🔒 を置いた。固定したラインは「🤖 自動割り振り」をやり直しても今の担当のまま（実施中・完了と同じ扱い）。その日だけ有効。自動割り振りの横に「🔒 全部固定」「🔓 全部解除」。固定中でもバーや✏で手で直すことはできる。(2)**自動割り振りを「キャンセル」したら画面の計画を元に戻す**。以前は書き換わったまま残り、あとで配置表のバーを直して保存すると、キャンセルしたはずの割り振りまで一緒に保存されていた（作業者が変わってしまう一因）。(3)段取り指示の✏編集で**型数・段取り人数を変えられる**ようにした。変えると標準時間も計算し直し、今すぐ同期・予定インポートで取り込み直しても手で直した値を残す。 -->
 <!-- H-Hub v2026.09.22-12 : 不良品報告の作成で「部品番号」の引き当て（GAIA_LO04）に失敗したときの案内を直した。kintoneのメッセージに「閲覧権限」が含まれるため「レコード追加の権限が要ります」と取り違えて出していた。どの項目が、どのアプリ（App番号）を参照しているかを出す。あわせて書き込み用GASで、参照先アプリの閲覧用トークンをスクリプトプロパティ LOOKUP_TOKENS に1回入れれば足して送るようにした（各PCの設定を回らずに済む）。 -->
 <!-- H-Hub v2026.09.22-11 : 品質チェック「記録する」で**不良・保留が出たら、保存完了の画面からkintoneの不良品報告（App31）を作れる**ようにした（社長指示）。品番・日付・発見者・入力者・数量は記録から入れ、入れるのは発見場所・不具合内容・処置方法・メモだけ。勝手には作らず押したときだけ作る。作成済みなら「No.○ を開く」を出して二重作成を防ぐ。項目はApp31の定義を書き込み用GAS（op:fields）で読み、表示名で探す。部品番号の引き当てに失敗したら（W501）を外した書き方でもう一度。動かすには：書き込み用GASを新しいコード（op:add/fields）に入れ替え／App31のトークンに「レコード追加」。設定の無いPCでは「このPCでは作れません」と出す。 -->
@@ -4658,6 +4659,43 @@ function moldRepairHtml(d, part){
   return '<div class="mold-sec-hd">🔧 改修履歴<span class="mold-note">直近1年 '+n1+'回・全'+recs.length+'回</span></div>'
     + warn + _moldTable(['依頼日','完了日','分類','内容','状況'], rows, 'moldRepTbl');
 }
+// 工程内不良（App31 ★不良品報告）。製品の品番（頭の2つ）で探す
+//   不具合一覧（サブテーブル）: 不具合数量 / ドロップダウン=不具合内容 / ドロップダウン_0=処置方法 / 文字列__1行__3=メモ
+//   ルックアップ_1=部品番号　日付=不具合発生日　ルックアップ=発見者　ステータス=状況
+function moldNgHtml(d, part){
+  const hd = '<div class="mold-sec-hd">🧪 工程内不良</div>';
+  const nr = _moldNotReady(d, 31); if(nr) return hd + nr;
+  const base = moldBase(part);
+  const recs = ((d && d.records) || []).filter(r=>moldBase(_mv(r,'ルックアップ_1'))===base);
+  if(!recs.length) return hd + '<div class="mold-empty">記録はありません</div>';
+  const y1 = new Date(); y1.setFullYear(y1.getFullYear()-1); const y1s = y1.toLocaleDateString('sv-SE');
+  let n1 = 0, qty1 = 0;
+  const rows = recs.map(function(r){
+    const tbl = (r['不具合一覧'] && r['不具合一覧'].value) || [];
+    let qty = 0; const kinds = [], acts = [];
+    tbl.forEach(function(x){
+      const v = x.value || {};
+      qty += parseInt((v['不具合数量']||{}).value || 0) || 0;
+      const k = (v['ドロップダウン']||{}).value;   if(k && kinds.indexOf(k)<0) kinds.push(k);
+      const a2 = (v['ドロップダウン_0']||{}).value; if(a2 && acts.indexOf(a2)<0) acts.push(a2);
+    });
+    const dt = _mv(r,'日付');
+    if(dt >= y1s){ n1++; qty1 += qty; }
+    const st = _mv(r,'ステータス');
+    return {dt:dt, qty:qty, kinds:kinds, acts:acts, st:st, who:_mv(r,'ルックアップ'), part:_mv(r,'ルックアップ_1')};
+  });
+  const trs = rows.slice(0, 50).map(function(x){
+    return '<td class="mn">'+moldEsc(x.dt)+'</td>'
+      + '<td class="mn">'+(x.qty ? x.qty.toLocaleString()+'個' : '—')+'</td>'
+      + '<td class="mw">'+moldEsc(x.kinds.join('・'))+'</td>'
+      + '<td class="mn">'+moldEsc(x.acts.join('・'))+'</td>'
+      + '<td class="mn" style="color:#888;">'+moldEsc(x.part)+'</td>'
+      + '<td class="mn" style="color:'+(x.st==='完了'?'#16a34a':'#d97706')+';font-weight:700;">'+moldEsc(x.st)+'</td>';
+  });
+  return '<div class="mold-sec-hd">🧪 工程内不良<span class="mold-note">直近1年 '+n1+'件・'+qty1.toLocaleString()+'個／全'+recs.length+'件</span></div>'
+    + _moldTable(['発生日','数量','不具合内容','処置','品番','状況'], trs, 'moldNgTbl');
+}
+
 function moldComplaintHtml(d, part){
   const hd = '<div class="mold-sec-hd">📣 苦情・不適合</div>';
   const nr = _moldNotReady(d, 45); if(nr) return hd + nr;
@@ -4740,7 +4778,7 @@ function moldRenderInfo(part){
   const key = moldNorm(part), base = moldBase(part);
   put('moldShotHead', '<span class="rs-shot-unset">🔨 ショット数を確認中…</span>');
   put('moldRepair', '<div class="mold-sec-hd">🔧 改修履歴</div><div class="mold-loading">読み込み中…</div>');
-  put('moldNg', '<div class="mold-sec-hd">🧪 工程内不良</div><div class="mold-empty">読み取りの設定待ちです（kintone App31 のトークンをGASに登録すると出ます）</div>');
+  put('moldNg', '<div class="mold-sec-hd">🧪 工程内不良</div><div class="mold-loading">読み込み中…</div>');
   put('moldCmp', '<div class="mold-sec-hd">📣 苦情・不適合</div><div class="mold-loading">読み込み中…</div>');
 
   // ショット数（品番の横）
@@ -4759,6 +4797,9 @@ function moldRenderInfo(part){
   // 改修履歴
   _histCached('6:'+key, function(){ return moldFetchApp(6, 'ルックアップ_1 like "'+moldKq(key)+'" order by 日付 desc limit 100'); })
     .then(function(d){ put('moldRepair', moldRepairHtml(d, part)); });
+  // 工程内不良
+  _histCached('31:'+base, function(){ return moldFetchApp(31, 'ルックアップ_1 like "'+moldKq(base)+'" order by 日付 desc limit 100'); })
+    .then(function(d){ put('moldNg', moldNgHtml(d, part)); });
   // 苦情・不適合
   _histCached('45:'+base, function(){ return moldFetchApp(45, 'ルックアップ_2 like "'+moldKq(base)+'" order by 不具合発生日 desc limit 100'); })
     .then(function(d){ put('moldCmp', moldComplaintHtml(d, part)); });
@@ -11693,7 +11734,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.23-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.23-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -19734,7 +19775,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.23-1</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.23-2</div>
 </body>
 </html>
 
