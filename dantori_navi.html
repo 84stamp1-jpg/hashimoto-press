@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.23-6 : 「記録する」の<b>作業者</b>欄を<b>入力者</b>に改めた（社長判断）。設計では「流した人（加工者）」のつもりで作っていたが、現場では記録を入力した人を選んでいたため、実態に名前を合わせた。記録する・一括振り分け・記録を修正の3か所と、未選択のときの案内。あわせて kintone不良品報告の<b>発見者には入れない</b>ようにした（見つけた人とは限らないため。kintoneで入れる）。不良品報告の「入力者」には今までどおり入る。チーム分け（プレス／組立／品管・総務）と二重登録の防止は、この名前を使う作りのまま＝入力者基準になる。 -->
 <!-- H-Hub v2026.09.23-5 : 不良品報告の設定を**ほかのPCへ丸ごと移せる**ようにした（社長依頼）。この設定はAPIトークンを含むためリポジトリに置けず、PCごとのlocalStorageにしか無い。そのため設定したPCでしか不良品報告を作れず、現場のPCで「作れません」と出ていた（1台ずつ手で入れ直すしかなかった）。⚙不良品報告の設定に「📋 この設定をコピー」「📥 取り込む（貼り付け）」を追加。HHUB-NG1: で始まる1本の文字列にして受け渡す。トークンが入るので社内のPCに貼るだけにする旨も画面に明記。「このPCでは不良品報告を作れません」の案内にも移し方を書いた。 -->
 <!-- H-Hub v2026.09.23-4 : 書画カメラの切り取り枠を**手で合わせられる**ようにした（社長「A4を縦に置いているのに枠に入りきらない」）。前版はA4の比率で枠を作っていたが、書画カメラの映る形は機種・高さ・ズームで変わるため、比率で当てにいくと合わないことがある。枠をつかんで移動、角の●を引っぱって大きさを変える方式に変更（映像に対する割合で保存するので解像度が変わっても同じ位置）。下のボタンは「全体／A4たて／A4よこ」の当たりを付けるだけで、そこから手で直せる。設定はそのPCに残る。 -->
 <!-- H-Hub v2026.09.23-3 : 書画カメラの撮影範囲を調整できるようにした（社長指摘「尺度が合わない」）。これまではカメラの映像をA4たてに決め打ちで中央だけ切り取っており、しかも画面にはその切り取った後しか映っていなかったため、シートが入りきらないときに直しようがなかった。**カメラの映像を全部映し、切り取る範囲を枠で重ねて見せる**ようにし、「切り取り（A4たて／A4よこ／カメラのまま）」「大きさ 50〜100%」「位置（←→↑↓）」「リセット」を撮影画面に置いた。設定はそのPCに残る（ラインごとにカメラの高さが違うため）。カメラへの要求もA4比率をやめ、広く受け取ってこちらで切るようにした。 -->
@@ -2082,7 +2083,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
         <div class="qc-card-title">基本情報</div>
         <div class="qc-fld"><label>生産日</label><input type="date" id="qc-dt"></div>
         <div class="qc-fld">
-          <label>作業者</label>
+          <label>入力者<span style="font-size:10px;font-weight:400;color:#888;margin-left:6px;">記録した人</span></label>
           <select id="qc-op">
             <option value="">-- 選択してください --</option>
             <optgroup label="プレス">
@@ -2219,7 +2220,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
         <input type="hidden" id="qc-bulk-sonota-memo">
         <datalist id="qc-sonota-list2"><option value="トライ用"><option value="トップ・エンド"><option value="破壊"></datalist>
       </div>
-      <div class="qc-fld"><label>作業者</label>
+      <div class="qc-fld"><label>入力者<span style="font-size:10px;font-weight:400;color:#888;margin-left:6px;">記録した人</span></label>
         <select id="qc-bulk-op">
           <option value="">-- 選択してください --</option>
           <optgroup label="プレス">
@@ -2272,7 +2273,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
   <div class="qc-cont"><div class="qc-card">
     <div class="qc-card-title">✏️ 記録を修正</div>
     <div class="qc-fld"><label>生産日</label><input type="date" id="qc-e-dt"></div>
-    <div class="qc-fld"><label>作業者</label>
+    <div class="qc-fld"><label>入力者<span style="font-size:10px;font-weight:400;color:#888;margin-left:6px;">記録した人</span></label>
       <select id="qc-e-op">
         <option value="">-- 選択 --</option>
         <optgroup label="プレス"><option>仲田　涼真</option><option>見原　一彦</option><option>長田　由香倫</option><option>大石　章宏</option><option>松浦　広治</option><option>吉田　光好</option><option>柴田　晃宏</option><option>横田川　延広</option></optgroup>
@@ -10614,7 +10615,7 @@ window.qcRetakePhoto = function(){ document.getElementById('qc-pi-retake').click
 // ----- 送信 -----
 window.qcGo = function(){
   if(!QC_SEL_SAKUYO){ alert('作業（品番）を選択してください'); return; }
-  if(!document.getElementById('qc-op').value){ alert('作業者を選択してください'); return; }
+  if(!document.getElementById('qc-op').value){ alert('入力者を選択してください'); return; }
   if(QC_PHOTOS.length===0){ alert('写真を1枚以上撮影してください'); return; }
   var btn=document.getElementById('qc-sb'); btn.disabled=true;
   // ★「押さないでください」まで書く。写真つきは10秒以上かかることがあり、
@@ -11760,7 +11761,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.23-5';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.23-6';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -12475,10 +12476,11 @@ function qcNgOfferReport(d, el){
     if(ng > 0) rows.push({key:'ng', label:'不良', qty:ng, kind:'', act:''});
     if(hk > 0) rows.push({key:'hk', label:'保留', qty:hk, kind:qcNgGuess(kinds,['保留']), act:qcNgGuess(acts,['保留','選別'])});
     var html = '<div class="qc-ngr">'+head
-      + '<div class="qc-ngr-note">kintoneの不良品報告を作れます。品番・日付・発見者・数量は記録から入ります。</div>'
+      + '<div class="qc-ngr-note">kintoneの不良品報告を作れます。品番・日付・数量は記録から入ります。'
+      + '<b>発見者は空欄</b>にしてありますので、kintoneで入れてください（H-Hubで選ぶのは記録した人＝入力者のため）。</div>'
       + '<table class="qc-ngr-tbl"><tr><th>品番</th><td>'+String(d.partNo||'').replace(/</g,'&lt;')+'</td>'
       + '<th>発生日</th><td>'+String(d.date||'')+'</td></tr>'
-      + '<tr><th>発見者</th><td>'+String(d.operator||'').replace(/</g,'&lt;')+'</td>'
+      + '<tr><th>入力者</th><td>'+String(d.operator||'').replace(/</g,'&lt;')+'<span style="color:#b45309;font-size:11px;margin-left:8px;">発見者は空欄</span></td>'
       + '<th>発見場所</th><td>'+(m.place ? qcNgSelect('qc-ngr-place', places, placePre) : '—')+'</td></tr></table>'
       + '<table class="qc-ngr-tbl qc-ngr-rows"><tr><th></th><th>数量</th><th>不具合内容</th><th>処置方法</th><th>メモ</th></tr>'
       + rows.map(function(r){
@@ -12524,9 +12526,11 @@ function qcNgCreate(d, m, rows){
   var base = {};
   if(m.date)     base[m.date.code]     = {value: String(d.date||'').slice(0,10).replace(/\//g,'-')};
   if(m.place)    base[m.place.code]    = {value: val('qc-ngr-place')};
-  if(m.finder)   base[m.finder.code]   = {value: d.operator || ''};
+  // ★2026-09-23 発見者には入れない。H-Hubで選んでいるのは「記録した人（入力者）」であって、
+  //   不良を見つけた人とは限らないため（社長判断）。発見者はkintoneで入れる。
+  // if(m.finder) base[m.finder.code] = {value: d.operator || ''};
   if(m.jisseki)  base[m.jisseki.code]  = {value: qcNgGuess(qcNgOpts(m.jisseki), ['有']) || '有'};
-  if(m.reporter) base[m.reporter.code] = {value: d.operator || ''};
+  if(m.reporter) base[m.reporter.code] = {value: d.operator || ''};   // 入力者＝H-Hubで選んだ人。ここは合っている
   base[m.table.code] = {value: tbl};
   var cands = m.part ? qcNgPartCandidates(d.partNo) : [null];
   var tryAt = function(i){
@@ -13678,7 +13682,7 @@ window.qcCalcAlloc = function(){ if(document.getElementById('qc-alloc-list-card'
 window.qcShowAllocList = function(){
   var prod=parseInt(document.getElementById('qc-bulk-prod').value||0)||0;
   if(!prod){ alert('良品数を入力してください'); return; }
-  if(!document.getElementById('qc-bulk-op').value){ alert('作業者を選択してください'); return; }
+  if(!document.getElementById('qc-bulk-op').value){ alert('入力者を選択してください'); return; }
   if(!QC_SAKUYO){ alert('作業予定データが読み込まれていません'); return; }
   var doneSeizoSet={};
   QC_ALL_RECORDS.forEach(function(r){ if(r[7]==='完納'||r[7]==='完了') doneSeizoSet[_qcNorm(r[13])+'_'+_qcNorm(r[14])]=true; });
@@ -19986,7 +19990,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.23-5</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.23-6</div>
 </body>
 </html>
 
