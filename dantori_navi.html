@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.23-12 : 「🔧 段取り超過」の出し方を直した（社長指摘：大塚は段取り超過していないのに「316分経過」と出る）。以前は「ラインの状態が段取り中」かつ「<b>最後の更新から</b>設定分数が経過」で出していた。大塚は段取り5分／標準6分で終わっているのに<b>生産開始の報告が無く</b>、状態だけ段取り中で残ったため、時間が経つほど大きな数字（316分）で出ていた。段取りの長さではなく放置時間を出していたことになる。段取り開始・終了の時刻を見て3つに書き分ける：①段取り終了は入っているのに生産開始が無い →「⏱ 生産開始が未報告」（段取りは何分で終わった・そのまま何分）②段取り開始だけ入っている →「🔧 段取り超過」（段取り開始から実際に何分。休憩は引く）③どちらも無い →「🔧 段取り中のまま更新がありません」。 -->
 <!-- H-Hub v2026.09.23-11 : 工順ごとの表に<b>最終加工日</b>と<b>材料の残り</b>も出すようにした（社長指示）。工順1と工順2で加工日が違うとき、②は全部の中でいちばん新しい日しか出ないため、工順ごとの日が分からなかった。各工順の下に小さく「最終加工日 9/21（日）／材料 なし（途中は残ありでした）」を添える。②は「（いちばん新しい工順）」、⑤は「（どこかに残あり）」と但し書きを付けて、全体の値だと分かるようにした。工順ごとの材料の決め方は、カードの工順タグ（📦 材料残あり）と同じ jt.hasZairyo を使い回している。 -->
 <!-- H-Hub v2026.09.23-10 : システム入力の確認に「<b>工順ごとの良品・不良累計</b>」を出すようにした（社長指示）。工順1と工順2は別々に入力するのに、箱には足した数しか出ていなかった。工順が2つ以上のときは③を横長にして 工順／工程／良品／不良／指示（％）を工順ごとに並べ、④は「不良の合計（⑥の照合に使う数）」に変える。工順が1つのときは今までどおり。数字はカードの工順見出しと同じ junjoTotals から渡すので、二重に計算していない。 -->
 <!-- H-Hub v2026.09.23-9 : 配置表のバーの文字を**白→黒**、**9px→12px**にした（社長指示）。黒字が読めるよう、ラインの色の上に白い膜（62%）をかけて明るくしている。色そのものは残るのでラインの見分けは付く。バーを薄くしていた opacity は、膜と二重になって色が分からなくなるため 0.8→1（交代分は 0.65→0.8）に戻した。段取りバー（取付・初品・品質）は幅が狭いので**品番を出さない**ようにした（マウスを乗せれば出る）。あわせて下の「この日の計画」の文字も 11px→13px に大きくした。突発作業のバーも黒字が読める薄紫にした。 -->
@@ -11998,7 +11999,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.23-11';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.23-12';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -15458,8 +15459,40 @@ function renderAlts(){
       if(oe.length) h+='<div class="al warn"><div class="al-txt w">⏱ 終了時刻が未入力：'+getLineName(id)+'</div>'
         +'<div class="al-sub">'+oe.map(x=>x.row+'行目 '+(x.j.part||'')+'（開始 '+x.j.actualStart+'）').join(' ／ ')+'</div></div>';
     }
-    if(l.status==='setup'&&el>=(sets[id]||60)&&l.updatedAt>0)
-      h+='<div class="al warn"><div class="al-txt w">🔧 段取り超過：'+getLineName(id)+'</div><div class="al-sub">'+el+'分経過（設定'+(sets[id]||60)+'分）</div></div>';
+    // ★2026-09-23 社長指摘：大塚は段取り超過していないのに「段取り超過 316分経過」と出ていた。
+    //   以前は「状態が段取り中」かつ「最後の更新から設定分数」で出していたため、
+    //   段取りは5分で終わっているのに生産開始の報告が無く、状態だけ段取り中で残った
+    //   ラインが、時間が経つほど大きな数字で出てしまっていた。
+    //   段取り開始・終了の時刻を見て、何が起きているのかを書き分ける。
+    if(l.status==='setup'&&l.updatedAt>0){
+      const lim5  = sets[id]||60;
+      const nowMin5 = nowH5*60+nowM5;
+      const ssM5  = timeToMin(l.setupStartTime||'');
+      const seM5  = timeToMin(l.setupEndTime||'');
+      const lname5 = getLineName(id);
+      if(seM5!==null){
+        // 段取りは終わっている。足りないのは「生産開始」の報告
+        const kept5 = nowMin5>seM5 ? nowMin5-seM5-breakMins(seM5,nowMin5) : 0;
+        // ★段取りの長さは、行に出ている数字（l.setupMin）をそのまま使う。
+        //   ここで引き算し直すと、12:13〜12:18 のように昼休憩に丸ごと入る段取りが
+        //   「0分」になり、画面の「段取 5分」と食い違う。
+        const done5 = (l.setupMin>0) ? l.setupMin
+                    : ((ssM5!==null&&seM5>ssM5) ? (seM5-ssM5-breakMins(ssM5,seM5)) : null);
+        h+='<div class="al warn"><div class="al-txt w">⏱ 生産開始が未報告：'+lname5+'</div>'
+          +'<div class="al-sub">段取りは'+(done5!==null?done5+'分で':'')+'終わっています（終了 '+l.setupEndTime+'）。'
+          +'そのまま'+kept5+'分</div></div>';
+      }else if(ssM5!==null){
+        // 段取りの最中。実際に始めてからの時間で見る（休憩は引く）
+        const run5 = nowMin5>ssM5 ? nowMin5-ssM5-breakMins(ssM5,nowMin5) : 0;
+        if(run5>=lim5)
+          h+='<div class="al warn"><div class="al-txt w">🔧 段取り超過：'+lname5+'</div>'
+            +'<div class="al-sub">段取り開始 '+l.setupStartTime+' から'+run5+'分（設定'+lim5+'分）</div></div>';
+      }else if(el>=lim5){
+        // 段取り開始の時刻すら入っていない。更新が止まっているだけ
+        h+='<div class="al warn"><div class="al-txt w">🔧 段取り中のまま更新がありません：'+lname5+'</div>'
+          +'<div class="al-sub">前回更新：'+fmtTs(l.updatedAt)+'（'+el+'分前）</div></div>';
+      }
+    }
     const pr5=getProRata(l);
     if(l.status==='running'&&l.plan>0&&l.actual>0&&l.updatedAt>0&&pr5&&pr5.proRata>0&&Math.round(l.actual/pr5.proRata*100)<80)
       h+='<div class="al"><div class="al-txt">🔴 遅れ：'+getLineName(id)+'（'+l.part+'）</div><div class="al-sub">達成率'+Math.round(l.actual/pr5.proRata*100)+'%</div></div>';
@@ -20227,7 +20260,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.23-11</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.23-12</div>
 </body>
 </html>
 
