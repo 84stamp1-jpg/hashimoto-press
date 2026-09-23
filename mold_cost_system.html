@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.09.23-1 : ★加工費などが二重に数えられていたのを直した（社長指摘：画面の加工費とPDFの加工費が倍違う）。Firebaseを読むときの merge() が「Firebaseを正とする」と書きながら Object.assign({}, ローカル, Firebase) になっており、Firebaseに無いローカルのキーを残していた。CSVを取り込み直すと明細は新しいキーで入るので、古いキーが消えず同じ明細が2つ残る。その状態で保存したスナップショットは金額が約2倍のまま固定されるため、PDFだけ倍になっていた（画面は読み直したあとなので正しい）。コメントどおり「Firebaseにデータがあればそれだけを使う」に修正し、捨てたローカル分の件数をコンソールに出す。★すでに保存済みのスナップショットは直らないので、保存し直すこと。 -->
 <!-- 金型原価 v2026.09.15-1 : (1)★材料費・購入品費・外注費のCSV出力を追加（社長要望）。生産管理システムへ取り込んでもらうため、1行＝1明細で★3費目の列をそろえた（費目/計上月/納入日/金型NO/品番/工程/品名・内容/材質/サイズ/仕上/重量kg/数量/単価/金額/手配先/備考/管理キー）。同じ意味の項目は同じ列に来るので、相手は1つの対応づけで3費目とも読める。無い項目は空欄。★列の並びは変えないこと（相手の設定が壊れる）。サイズは指定どおり XxYxZ（例 185x120x30）。UTF-8 BOM付き・CRLFなのでExcelでそのまま開ける。各タブに「⬇ CSV出力」、材料費タブに「⬇ 3費目まとめて」。(2)★タブ切替が遅くなっていた主因を直した。findMoldByNo() が1行ごとに Object.values(DB.molds) を作り直して全件走査し、さらに前方一致で filter+sort をもう1周していた。金型300件×明細3000行で200万回近い比較になる。索引(Map＋長い順リスト＋結果メモ)を1度作って使い回し、金型を保存したときだけ捨てる（writeToFirebaseで invalidateMoldIndex）。判定の順序は従来と同じ -->
 <!-- 金型原価 v2026.09.04-20 : App61の実際のフィールドコードを実データで確認し、既定値に入れた。作業明細の作業員は「ルックアップ_0」（ユーザー選択ではなくただの文字列）。親は 管理コード=文字列__1行__6／部品番号=ルックアップ／工程=文字列__1行__9／トライ状況=ラジオボタン_0／加工予算=budget／残予算=計算。これで「項目の対応づけ」をしなくても既定で正しく取り込める -->
 <!-- 金型原価 v2026.09.04-19 : 作業者が全て「（作業員なし）」になる件。ユーザー選択型だけを見ていたため取れていなかった。pickWorkerFromRow() に置き換え、コード名→型→値の形（配列や{name,code}）→コード名に「ユーザー/作業員/作業者/担当」を含むもの、の順で探すようにした。あわせて「取得できる項目を見る」でサブテーブル各列の型も表示するようにし、原因を追えるようにした -->
@@ -644,7 +645,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.15-1</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.23-1</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -2157,20 +2158,27 @@ function initFirebase() {
       const data = snap.val() || {};
 
       // Firebaseを正とする（Firebaseにデータがあればそれを使う）
-      const merge = (fbData, localData) => {
+      // ★2026-09-23 修正：以前は Object.assign({}, ローカル, Firebase) で、
+      //   Firebaseに無いローカルのキーをそのまま残していた。CSVを取り込み直すと
+      //   明細は新しいキーで入るため、古いキーが消えずに同じ明細が2つ残り、
+      //   加工費などが二重に数えられていた（社長指摘：画面とPDFの加工費が倍違う）。
+      //   コメントどおり「Firebaseにデータがあればそれだけを使う」に直す。
+      const merge = (fbData, localData, label) => {
         const fb = fbData || {};
         const lc = localData || {};
-        const fbCount = Object.keys(fb).length;
-        // Firebaseにデータがあればそれを使う。なければローカル
-        if (fbCount > 0) return Object.assign({}, lc, fb);
+        if (Object.keys(fb).length > 0) {
+          const ghosts = Object.keys(lc).filter(k => !(k in fb));
+          if (ghosts.length) console.warn('[mold] ' + (label||'') + '：このPCにだけ残っていた ' + ghosts.length + ' 件を捨てました（Firebaseを正とします）');
+          return fb;
+        }
         return lc;
       };
 
-      DB.molds         = merge(data.molds,         DB.molds);
-      DB.materials     = merge(data.materials,     DB.materials);
-      DB.outsource     = merge(data.outsource,     DB.outsource);
-      DB.purchase      = merge(data.purchase,      DB.purchase);
-      DB.labor         = merge(data.labor,         DB.labor);
+      DB.molds         = merge(data.molds,         DB.molds, '金型');
+      DB.materials     = merge(data.materials,     DB.materials, '材料費');
+      DB.outsource     = merge(data.outsource,     DB.outsource, '外注費');
+      DB.purchase      = merge(data.purchase,      DB.purchase, '購入品費');
+      DB.labor         = merge(data.labor,         DB.labor, '加工費');
       // quoteRequests: ローカル優先でマージ＋正規化（文字列→配列変換）
       if (data.quoteRequests) {
         const fbQR = data.quoteRequests;
