@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.23-13 : 書画カメラで<b>A4が映りきらない</b>件（社長は本体を上げて調整していた）。切り取り枠は手で直せるようにしたが、カメラの映像そのものにA4が入っていなければどうにもならないので、カメラ側でできることを3つ用意した。①<b>たてに広く（4:3）</b>：16:9のカメラはセンサーの上下を捨てて映すため、4:3に切り替えると たてに広くなりA4たてが入ることが多い。既定を4:3にした（以前は1920×1440を要求していたが、機種によって16:9で返ることがある）。②<b>よこに広く（16:9）</b>／<b>最大で映す</b>（4096を要求）。③カメラが<b>ズーム</b>に対応していればスライダーを出す（getCapabilities().zoom があるときだけ）。いま何で映っているか（1920×1080（16:9）など）も画面に出して、原因が見えるようにした。選んだ形はそのPCに残る。 -->
 <!-- H-Hub v2026.09.23-12 : 「🔧 段取り超過」の出し方を直した（社長指摘：大塚は段取り超過していないのに「316分経過」と出る）。以前は「ラインの状態が段取り中」かつ「<b>最後の更新から</b>設定分数が経過」で出していた。大塚は段取り5分／標準6分で終わっているのに<b>生産開始の報告が無く</b>、状態だけ段取り中で残ったため、時間が経つほど大きな数字（316分）で出ていた。段取りの長さではなく放置時間を出していたことになる。段取り開始・終了の時刻を見て3つに書き分ける：①段取り終了は入っているのに生産開始が無い →「⏱ 生産開始が未報告」（段取りは何分で終わった・そのまま何分）②段取り開始だけ入っている →「🔧 段取り超過」（段取り開始から実際に何分。休憩は引く）③どちらも無い →「🔧 段取り中のまま更新がありません」。 -->
 <!-- H-Hub v2026.09.23-11 : 工順ごとの表に<b>最終加工日</b>と<b>材料の残り</b>も出すようにした（社長指示）。工順1と工順2で加工日が違うとき、②は全部の中でいちばん新しい日しか出ないため、工順ごとの日が分からなかった。各工順の下に小さく「最終加工日 9/21（日）／材料 なし（途中は残ありでした）」を添える。②は「（いちばん新しい工順）」、⑤は「（どこかに残あり）」と但し書きを付けて、全体の値だと分かるようにした。工順ごとの材料の決め方は、カードの工順タグ（📦 材料残あり）と同じ jt.hasZairyo を使い回している。 -->
 <!-- H-Hub v2026.09.23-10 : システム入力の確認に「<b>工順ごとの良品・不良累計</b>」を出すようにした（社長指示）。工順1と工順2は別々に入力するのに、箱には足した数しか出ていなかった。工順が2つ以上のときは③を横長にして 工順／工程／良品／不良／指示（％）を工順ごとに並べ、④は「不良の合計（⑥の照合に使う数）」に変える。工順が1つのときは今までどおり。数字はカードの工順見出しと同じ junjoTotals から渡すので、二重に計算していない。 -->
@@ -3304,6 +3305,19 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
   <div class="qc-cam-video-wrap">
     <video id="qc-cam-video" autoplay playsinline muted></video>
     <div id="qc-cam-guide"><div class="qc-cam-h nw" data-h="nw"></div><div class="qc-cam-h ne" data-h="ne"></div><div class="qc-cam-h sw" data-h="sw"></div><div class="qc-cam-h se" data-h="se"></div></div>
+  </div>
+  <!-- カメラそのものの見え方（2026-09-23 社長：A4が映りきらないので本体を上げている） -->
+  <div class="qc-cam-adj">
+    <span>カメラ</span>
+    <span id="qc-cam-info" style="color:#94a3b8;">—</span>
+    <button onclick="qcCamShape('43')" title="16:9のカメラは上下を捨てています。4:3にすると たてに広くなり、A4たてが入ることがあります">たてに広く（4:3）</button>
+    <button onclick="qcCamShape('169')" title="よこに広く映します">よこに広く（16:9）</button>
+    <button onclick="qcCamShape('max')" title="このカメラで出せるいちばん大きい映像を要求します">最大で映す</button>
+    <span id="qc-cam-zoom-wrap" style="display:none;align-items:center;gap:6px;">
+      <span>ズーム</span>
+      <input type="range" id="qc-cam-optzoom" style="width:130px;" oninput="qcCamOptZoom(this.value)">
+      <span id="qc-cam-optzoom-val" style="color:#94a3b8;"></span>
+    </span>
   </div>
   <!-- 撮影範囲の調整（2026-09-23 社長指摘：A4が枠に入りきらない）→ 比率を決め打ちせず手で合わせる -->
   <div class="qc-cam-adj">
@@ -11999,7 +12013,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.23-12';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.23-13';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -14136,6 +14150,62 @@ function qcCamBindDrag(){
   g.addEventListener('pointercancel', end);
 }
 
+// ★2026-09-23 カメラに要求する映像の形。'43'=たてに広い / '169'=よこに広い / 'max'=最大
+//   16:9のカメラはセンサーの上下を捨てて映すため、A4たてが入りきらないことがある。
+//   4:3にすると たてに広くなるので、本体を上げなくても入ることが多い。
+var QC_CAM_SHAPE = (function(){ try{ return localStorage.getItem('qcCamShape') || '43'; }catch(e){ return '43'; } })();
+function qcCamWanted(){
+  if(QC_CAM_SHAPE === '169') return {width:{ideal:1920}, height:{ideal:1080}};
+  if(QC_CAM_SHAPE === 'max')  return {width:{ideal:4096}, height:{ideal:2160}};
+  return {width:{ideal:1600}, height:{ideal:1200}};     // 4:3（たてに広い）
+}
+window.qcCamShape = async function(kind){
+  QC_CAM_SHAPE = kind;
+  try{ localStorage.setItem('qcCamShape', kind); }catch(e){}
+  await qcStartCamera();
+};
+// いま何で映っているかを出す。ズームに対応していればスライダーも出す
+function qcCamShowInfo(){
+  var v = document.getElementById('qc-cam-video');
+  var info = document.getElementById('qc-cam-info');
+  if(!v || !info) return;
+  var vw = v.videoWidth, vh = v.videoHeight;
+  if(!vw || !vh){ info.textContent = '—'; return; }
+  var g = vw/vh;
+  var shape = Math.abs(g-4/3)<0.05 ? '4:3' : (Math.abs(g-16/9)<0.05 ? '16:9' : g.toFixed(2)+':1');
+  info.textContent = vw + '×' + vh + '（' + shape + '）';
+  // ズーム（対応しているカメラだけ）
+  var wrap = document.getElementById('qc-cam-zoom-wrap');
+  var sl   = document.getElementById('qc-cam-optzoom');
+  var lbl  = document.getElementById('qc-cam-optzoom-val');
+  if(!wrap || !sl) return;
+  var tr = QC_CAM_STREAM && QC_CAM_STREAM.getVideoTracks()[0];
+  var cap = null;
+  try{ cap = tr && tr.getCapabilities ? tr.getCapabilities() : null; }catch(e){}
+  if(cap && cap.zoom && cap.zoom.max > cap.zoom.min){
+    var cur = 1;
+    try{ cur = (tr.getSettings().zoom != null) ? tr.getSettings().zoom : cap.zoom.min; }catch(e){}
+    sl.min = cap.zoom.min; sl.max = cap.zoom.max;
+    sl.step = cap.zoom.step || ((cap.zoom.max-cap.zoom.min)/100);
+    sl.value = cur;
+    if(lbl) lbl.textContent = (+cur).toFixed(1) + '倍';
+    wrap.style.display = 'inline-flex';
+  }else{
+    wrap.style.display = 'none';
+  }
+}
+window.qcCamOptZoom = function(v){
+  var tr = QC_CAM_STREAM && QC_CAM_STREAM.getVideoTracks()[0];
+  if(!tr || !tr.applyConstraints) return;
+  tr.applyConstraints({advanced:[{zoom: parseFloat(v)}]})
+    .then(function(){
+      var lbl = document.getElementById('qc-cam-optzoom-val');
+      if(lbl) lbl.textContent = (+v).toFixed(1) + '倍';
+      setTimeout(qcCamDrawGuide, 200);
+    })
+    .catch(function(){});
+};
+
 async function qcStartCamera(){
   try{
     if(QC_CAM_STREAM){ QC_CAM_STREAM.getTracks().forEach(function(t){ t.stop(); }); QC_CAM_STREAM=null; }
@@ -14144,14 +14214,14 @@ async function qcStartCamera(){
     if(QC_CAM_DEVICE_IDX>=QC_CAM_DEVICES.length) QC_CAM_DEVICE_IDX=0;
     // ★2026-09-23：A4の比率で要求するのをやめた。カメラが映せる範囲をそのまま受け取り、
     //   切り取りはこちらで行う（A4で要求すると、カメラ側で先に切られて「入りきらない」原因になる）
-    var stream=null, A4={width:{ideal:1920},height:{ideal:1440}};
+    var stream=null, A4=qcCamWanted();
     if(QC_CAM_DEVICES.length>0){ try{ stream=await navigator.mediaDevices.getUserMedia({video:Object.assign({deviceId:{exact:QC_CAM_DEVICES[QC_CAM_DEVICE_IDX].deviceId}},A4)}); }catch(e1){ stream=await navigator.mediaDevices.getUserMedia({video:A4}); } }
     else{ stream=await navigator.mediaDevices.getUserMedia({video:A4}); }
     QC_CAM_STREAM=stream;
     var _v=document.getElementById('qc-cam-video');
     _v.srcObject=QC_CAM_STREAM; document.getElementById('qc-cam-err').textContent='';
-    _v.onloadedmetadata = function(){ qcCamDrawGuide(); qcCamBindDrag(); };
-    setTimeout(function(){ qcCamDrawGuide(); qcCamBindDrag(); }, 400);
+    _v.onloadedmetadata = function(){ qcCamDrawGuide(); qcCamBindDrag(); qcCamShowInfo(); };
+    setTimeout(function(){ qcCamDrawGuide(); qcCamBindDrag(); qcCamShowInfo(); }, 400);
     var devices2=await navigator.mediaDevices.enumerateDevices(); QC_CAM_DEVICES=devices2.filter(function(d){ return d.kind==='videoinput'&&d.deviceId; });
     document.getElementById('qc-cam-switch-btn').style.display=QC_CAM_DEVICES.length>1?'block':'none';
   }catch(e){
@@ -20260,7 +20330,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.23-12</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.23-13</div>
 </body>
 </html>
 
