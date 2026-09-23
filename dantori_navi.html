@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.23-7 : （1）入力者の名簿から5名を削除（松浦・吉田・柴田・横田川・八木）。プルダウン3か所とチーム分けの名簿の計4か所。（2）製造番号で検索したときは<b>直近に入力したものが上</b>になるようにした（記録の1列目＝入力日時の新しい順）。（3）日別一覧とシステム入力待ちの並びを、<b>入力者のチーム順をやめて品番の若い順→同じ品番の中は工順の順</b>にした。作業者欄が「入力者」になり、入力した人でまとめる意味が無くなったため。品番は数字を数として比べる（17551 と 9 の順が狂わないように）。 -->
 <!-- H-Hub v2026.09.23-6 : 「記録する」の<b>作業者</b>欄を<b>入力者</b>に改めた（社長判断）。設計では「流した人（加工者）」のつもりで作っていたが、現場では記録を入力した人を選んでいたため、実態に名前を合わせた。記録する・一括振り分け・記録を修正の3か所と、未選択のときの案内。あわせて kintone不良品報告の<b>発見者には入れない</b>ようにした（見つけた人とは限らないため。kintoneで入れる）。不良品報告の「入力者」には今までどおり入る。チーム分け（プレス／組立／品管・総務）と二重登録の防止は、この名前を使う作りのまま＝入力者基準になる。 -->
 <!-- H-Hub v2026.09.23-5 : 不良品報告の設定を**ほかのPCへ丸ごと移せる**ようにした（社長依頼）。この設定はAPIトークンを含むためリポジトリに置けず、PCごとのlocalStorageにしか無い。そのため設定したPCでしか不良品報告を作れず、現場のPCで「作れません」と出ていた（1台ずつ手で入れ直すしかなかった）。⚙不良品報告の設定に「📋 この設定をコピー」「📥 取り込む（貼り付け）」を追加。HHUB-NG1: で始まる1本の文字列にして受け渡す。トークンが入るので社内のPCに貼るだけにする旨も画面に明記。「このPCでは不良品報告を作れません」の案内にも移し方を書いた。 -->
 <!-- H-Hub v2026.09.23-4 : 書画カメラの切り取り枠を**手で合わせられる**ようにした（社長「A4を縦に置いているのに枠に入りきらない」）。前版はA4の比率で枠を作っていたが、書画カメラの映る形は機種・高さ・ズームで変わるため、比率で当てにいくと合わないことがある。枠をつかんで移動、角の●を引っぱって大きさを変える方式に変更（映像に対する割合で保存するので解像度が変わっても同じ位置）。下のボタンは「全体／A4たて／A4よこ」の当たりを付けるだけで、そこから手で直せる。設定はそのPCに残る。 -->
@@ -2089,15 +2090,15 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
             <optgroup label="プレス">
               <option>仲田　涼真</option><option>見原　一彦</option>
               <option>長田　由香倫</option><option>大石　章宏</option>
-              <option>松浦　広治</option><option>吉田　光好</option>
-              <option>柴田　晃宏</option><option>横田川　延広</option>
+              
+              
             </optgroup>
             <optgroup label="組立">
               <option>永丘　克也</option><option>近藤　満</option>
               <option>大塚　圭汰</option><option>鈴木　里美</option><option>野口　敦子</option>
             </optgroup>
             <optgroup label="品管・総務">
-              <option>八木　貴志</option><option>杉山　好美</option><option>登﨑　千春</option>
+              <option>杉山　好美</option><option>登﨑　千春</option>
             </optgroup>
           </select>
         </div>
@@ -2226,15 +2227,15 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
           <optgroup label="プレス">
             <option>仲田　涼真</option><option>見原　一彦</option>
             <option>長田　由香倫</option><option>大石　章宏</option>
-            <option>松浦　広治</option><option>吉田　光好</option>
-            <option>柴田　晃宏</option><option>横田川　延広</option>
+            
+            
           </optgroup>
           <optgroup label="組立">
             <option>永丘　克也</option><option>近藤　満</option>
             <option>大塚　圭汰</option><option>鈴木　里美</option><option>野口　敦子</option>
           </optgroup>
           <optgroup label="品管・総務">
-            <option>八木　貴志</option><option>杉山　好美</option><option>登﨑　千春</option>
+            <option>杉山　好美</option><option>登﨑　千春</option>
           </optgroup>
         </select>
       </div>
@@ -2276,9 +2277,9 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
     <div class="qc-fld"><label>入力者<span style="font-size:10px;font-weight:400;color:#888;margin-left:6px;">記録した人</span></label>
       <select id="qc-e-op">
         <option value="">-- 選択 --</option>
-        <optgroup label="プレス"><option>仲田　涼真</option><option>見原　一彦</option><option>長田　由香倫</option><option>大石　章宏</option><option>松浦　広治</option><option>吉田　光好</option><option>柴田　晃宏</option><option>横田川　延広</option></optgroup>
+        <optgroup label="プレス"><option>仲田　涼真</option><option>見原　一彦</option><option>長田　由香倫</option><option>大石　章宏</option></optgroup>
         <optgroup label="組立"><option>永丘　克也</option><option>近藤　満</option><option>大塚　圭汰</option><option>鈴木　里美</option><option>野口　敦子</option></optgroup>
-        <optgroup label="品管・総務"><option>八木　貴志</option><option>杉山　好美</option><option>登﨑　千春</option></optgroup>
+        <optgroup label="品管・総務"><option>杉山　好美</option><option>登﨑　千春</option></optgroup>
       </select>
     </div>
     <div class="qc-num-row">
@@ -9951,9 +9952,9 @@ var QC_HINPYO_DATA = null; // 現品票用の部品マスタデータ（kintone�
 var QC_INITIALIZED = false;
 
 var QC_TEAM_MAP = {
-  'プレス':['仲田　涼真','見原　一彦','長田　由香倫','大石　章宏','松浦　広治','吉田　光好','柴田　晃宏','横田川　延広'],
+  'プレス':['仲田　涼真','見原　一彦','長田　由香倫','大石　章宏'],
   '組立':['永丘　克也','近藤　満','大塚　圭汰','鈴木　里美','野口　敦子'],
-  '品管・総務':['八木　貴志','杉山　好美','登﨑　千春']
+  '品管・総務':['杉山　好美','登﨑　千春']
 };
 function qcGetTeam(n){ for(var t in QC_TEAM_MAP){ if(QC_TEAM_MAP[t].indexOf(n)>=0) return t; } return 'その他'; }
 
@@ -10969,19 +10970,36 @@ function qcRenderSummary(rows){
   });
   div.appendChild(row); sa.innerHTML=''; sa.appendChild(div);
 }
+// ===== 一覧の並び順（2026-09-23 社長指示）=====
+//   以前は「入力者のチーム」でまとめていたが、入力者は記録した人であって流した人とは限らないため、
+//   並びの意味が無くなった。→ 品番の若い順、同じ品番の中は加工工程（工順）の順にする。
+//   品番は 17551-E0310A-BL のように数字と英字が混ざるので、数字を数として比べる。
+function qcSortByPart(gmap, gorder){
+  return gorder.slice().sort(function(a, b){
+    var ga = gmap[a], gb = gmap[b];
+    var c = String(ga.hinban||'').localeCompare(String(gb.hinban||''), 'ja', {numeric:true, sensitivity:'base'});
+    if(c) return c;
+    var ja = parseInt(ga.junjo), jb = parseInt(gb.junjo);
+    if(isNaN(ja)) ja = 9999;
+    if(isNaN(jb)) jb = 9999;
+    if(ja !== jb) return ja - jb;
+    return String(ga.seizoNo||'').localeCompare(String(gb.seizoNo||''), 'ja', {numeric:true});
+  });
+}
+// 直近に入力したものが上（製造番号で探したとき用）。記録の1列目＝入力した日時
+function qcSortByRecent(gmap, gorder){
+  var last = {};
+  gorder.forEach(function(k){
+    last[k] = gmap[k].recs.reduce(function(m, r){ var t=String(r[0]||''); return t>m ? t : m; }, '');
+  });
+  return gorder.slice().sort(function(a, b){ return last[a] < last[b] ? 1 : (last[a] > last[b] ? -1 : 0); });
+}
 function qcRenderByTeam(rows){
   var el=document.getElementById('qc-rec-list'); el.innerHTML='';
   if(!rows||!rows.length){ el.innerHTML='<div class="qc-empty">この日の記録はありません</div>'; return; }
-  var teams=['プレス','組立','品管・総務','その他'];
   var gmap={}, gorder=[];
   rows.forEach(function(r){ var k=(r[13]||r[2]||''); if(!gmap[k]){ gmap[k]={recs:[],hinban:r[2],hinmei:r[3],seizoNo:r[13],junjo:r[14],kosei:r[15],shiji:r[16],team:qcGetTeam(r[4]||'')}; gorder.push(k); } gmap[k].recs.push(r); });
-  var byTeam={}; teams.forEach(function(t){ byTeam[t]=[]; });
-  gorder.forEach(function(k){ byTeam[gmap[k].team].push(k); });
-  teams.forEach(function(team){
-    var ks=byTeam[team]; if(!ks.length) return;
-    var hdr=document.createElement('div'); hdr.className='qc-team-hdr'; hdr.textContent=team+' ('+ks.length+'グループ)'; el.appendChild(hdr);
-    ks.forEach(function(k){ el.appendChild(qcMakeGroupCard(gmap[k])); });
-  });
+  qcSortByPart(gmap, gorder).forEach(function(k){ el.appendChild(qcMakeGroupCard(gmap[k])); });
 }
 
 // ----- 番号のワンタップコピー -----
@@ -11284,8 +11302,8 @@ function qcRunSeizoSearch(){
   el.innerHTML='';
   var gmap={}, gorder=[];
   matched.forEach(function(r){ var k=(r[13]||r[2]||''); if(!gmap[k]){ gmap[k]={recs:[],hinban:r[2],hinmei:r[3],seizoNo:r[13],junjo:r[14],kosei:r[15],shiji:r[16],team:qcGetTeam(r[4]||'')}; gorder.push(k); } gmap[k].recs.push(r); });
-  var lbl=document.createElement('div'); lbl.style.cssText='font-size:11px;color:#888;margin-bottom:8px'; lbl.textContent='検索結果: '+gorder.length+'グループ / '+matched.length+'件'; el.appendChild(lbl);
-  gorder.forEach(function(k){ el.appendChild(qcMakeGroupCard(gmap[k])); });
+  var lbl=document.createElement('div'); lbl.style.cssText='font-size:11px;color:#888;margin-bottom:8px'; lbl.textContent='検索結果: '+gorder.length+'グループ / '+matched.length+'件（直近に入力したものが上）'; el.appendChild(lbl);
+  qcSortByRecent(gmap, gorder).forEach(function(k){ el.appendChild(qcMakeGroupCard(gmap[k])); });
 }
 
 // ----- 編集 -----
@@ -11581,6 +11599,7 @@ window.qcShowPendingList = function(){
   hdr.appendChild(lbl); hdr.appendChild(btns); el.appendChild(hdr);
   var gmap={}, gorder=[];
   pending.forEach(function(r){ var k=(r[13]||r[2]||''); if(!gmap[k]){ gmap[k]={recs:[],hinban:r[2],hinmei:r[3],seizoNo:r[13],junjo:r[14],kosei:r[15],shiji:r[16],team:qcGetTeam(r[4]||'')}; gorder.push(k); } gmap[k].recs.push(r); });
+  gorder = qcSortByPart(gmap, gorder);     // ★品番の若い順→工順順（2026-09-23）
   gorder.forEach(function(k){
     var g=gmap[k];
     var card=qcMakeGroupCard(g);
@@ -11761,7 +11780,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.23-6';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.23-7';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -19990,7 +20009,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.23-6</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.23-7</div>
 </body>
 </html>
 
