@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.23-14 : ★カメラの映像が<b>細長く歪む</b>のを直した（社長「A4が細長くなったりしてよくありません」）。撮影画面は縦並びのflexで、映像の枠も その一員。枠の高さを aspect-ratio で決めていたが、flexは入りきらないときに高さを縮めるため、1440×2160（たて長）の映像では必要な高さが入らず、幅はそのまま高さだけ潰されて object-fit:fill の映像が縦に押し潰されていた（4:3の1440×1080では高さが足りたので歪まず、たて長のときだけ起きていた＝「最大で映す」を押したとき）。flex:0 0 auto を付けて縮められないようにし、枠の大きさを「入る範囲でいちばん大きい“映像と同じ形の四角”」としてpxで決めるようにした。画面の大きさが変わったら決め直す。これで たて長の映像（1440×2160）がそのまま使えるので、A4たては「最大で映す」がいちばん入る。 -->
 <!-- H-Hub v2026.09.23-13 : 書画カメラで<b>A4が映りきらない</b>件（社長は本体を上げて調整していた）。切り取り枠は手で直せるようにしたが、カメラの映像そのものにA4が入っていなければどうにもならないので、カメラ側でできることを3つ用意した。①<b>たてに広く（4:3）</b>：16:9のカメラはセンサーの上下を捨てて映すため、4:3に切り替えると たてに広くなりA4たてが入ることが多い。既定を4:3にした（以前は1920×1440を要求していたが、機種によって16:9で返ることがある）。②<b>よこに広く（16:9）</b>／<b>最大で映す</b>（4096を要求）。③カメラが<b>ズーム</b>に対応していればスライダーを出す（getCapabilities().zoom があるときだけ）。いま何で映っているか（1920×1080（16:9）など）も画面に出して、原因が見えるようにした。選んだ形はそのPCに残る。 -->
 <!-- H-Hub v2026.09.23-12 : 「🔧 段取り超過」の出し方を直した（社長指摘：大塚は段取り超過していないのに「316分経過」と出る）。以前は「ラインの状態が段取り中」かつ「<b>最後の更新から</b>設定分数が経過」で出していた。大塚は段取り5分／標準6分で終わっているのに<b>生産開始の報告が無く</b>、状態だけ段取り中で残ったため、時間が経つほど大きな数字（316分）で出ていた。段取りの長さではなく放置時間を出していたことになる。段取り開始・終了の時刻を見て3つに書き分ける：①段取り終了は入っているのに生産開始が無い →「⏱ 生産開始が未報告」（段取りは何分で終わった・そのまま何分）②段取り開始だけ入っている →「🔧 段取り超過」（段取り開始から実際に何分。休憩は引く）③どちらも無い →「🔧 段取り中のまま更新がありません」。 -->
 <!-- H-Hub v2026.09.23-11 : 工順ごとの表に<b>最終加工日</b>と<b>材料の残り</b>も出すようにした（社長指示）。工順1と工順2で加工日が違うとき、②は全部の中でいちばん新しい日しか出ないため、工順ごとの日が分からなかった。各工順の下に小さく「最終加工日 9/21（日）／材料 なし（途中は残ありでした）」を添える。②は「（いちばん新しい工順）」、⑤は「（どこかに残あり）」と但し書きを付けて、全体の値だと分かるようにした。工順ごとの材料の決め方は、カードの工順タグ（📦 材料残あり）と同じ jt.hasZairyo を使い回している。 -->
@@ -985,7 +986,9 @@ html, body {
 .qc-src-btn-cancel{background:#f3f4f6;color:#555;margin-bottom:0;margin-top:4px;}
 .qc-cam-modal.on{display:flex;}
 /* ★2026-09-23：カメラの映像を全部見せ、切り取る範囲を枠で重ねる（見たまま撮れるように） */
-.qc-cam-video-wrap{position:relative;width:min(78vh,720px);max-width:94vw;aspect-ratio:4/3;background:#000;border-radius:10px;overflow:hidden;}
+/* ★2026-09-23 大きさはJS（qcCamDrawGuide）が映像の形に合わせてpxで決める。
+   flex:0 0 auto を付けないと、たて長の映像のとき高さだけ縮められて映像が潰れる。 */
+.qc-cam-video-wrap{position:relative;flex:0 0 auto;width:min(78vh,720px);max-width:94vw;aspect-ratio:4/3;background:#000;border-radius:10px;overflow:hidden;}
 #qc-cam-video{width:100%;height:100%;display:block;object-fit:fill;}
 /* ★2026-09-23：枠は手で動かせる（つかんで移動・角を引っぱって大きさ）。A4の比率に縛らない */
 #qc-cam-guide{position:absolute;border:2px solid #7eb8f7;box-shadow:0 0 0 9999px rgba(0,0,0,.45);cursor:move;touch-action:none;}
@@ -12013,7 +12016,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.23-13';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.23-14';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -14088,8 +14091,19 @@ function qcCamDrawGuide(){
   if(!v || !g) return;
   var vw = v.videoWidth, vh = v.videoHeight;
   if(!vw || !vh){ g.style.display='none'; return; }
+  // ★枠を映像とぴったり同じ形にする。ここがずれると映像が伸び縮みして写真も歪む。
+  //   aspect-ratio だけに任せると、入りきらないときflexに高さを削られるので、
+  //   入る範囲でいちばん大きい「映像と同じ形の四角」を px で決める。
   var wrap = v.parentElement;
-  if(wrap) wrap.style.aspectRatio = vw + '/' + vh;      // 枠を映像と同じ形にして、見たまま撮れるようにする
+  if(wrap){
+    var availW = Math.min(760, window.innerWidth  * 0.94);
+    var availH = Math.max(240, window.innerHeight * 0.56);
+    var rr = vw / vh, ww = availW, hh = ww / rr;
+    if(hh > availH){ hh = availH; ww = hh * rr; }
+    wrap.style.aspectRatio = 'auto';
+    wrap.style.width  = Math.round(ww) + 'px';
+    wrap.style.height = Math.round(hh) + 'px';
+  }
   var c = _camClamp(qcCamCfg());
   g.style.display = '';
   g.style.left   = (c.x*100)+'%';
@@ -14114,6 +14128,11 @@ window.qcCamPreset = function(kind){
   _camClamp(c); qcCamCfgSave(); qcCamDrawGuide();
 };
 // 枠をつかんで移動・角の●で大きさ
+// 画面の大きさが変わったら枠を決め直す（映像の形は変わらないので歪まない）
+window.addEventListener('resize', function(){
+  if(document.getElementById('qc-cam-modal') &&
+     document.getElementById('qc-cam-modal').className.indexOf('on') >= 0) qcCamDrawGuide();
+});
 window.qcCamBindDrag = qcCamBindDrag;   // 動作確認用
 function qcCamBindDrag(){
   var g = document.getElementById('qc-cam-guide');
@@ -20330,7 +20349,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.23-13</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.23-14</div>
 </body>
 </html>
 
