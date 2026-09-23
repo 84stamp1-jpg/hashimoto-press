@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.23-5 : 不良品報告の設定を**ほかのPCへ丸ごと移せる**ようにした（社長依頼）。この設定はAPIトークンを含むためリポジトリに置けず、PCごとのlocalStorageにしか無い。そのため設定したPCでしか不良品報告を作れず、現場のPCで「作れません」と出ていた（1台ずつ手で入れ直すしかなかった）。⚙不良品報告の設定に「📋 この設定をコピー」「📥 取り込む（貼り付け）」を追加。HHUB-NG1: で始まる1本の文字列にして受け渡す。トークンが入るので社内のPCに貼るだけにする旨も画面に明記。「このPCでは不良品報告を作れません」の案内にも移し方を書いた。 -->
 <!-- H-Hub v2026.09.23-4 : 書画カメラの切り取り枠を**手で合わせられる**ようにした（社長「A4を縦に置いているのに枠に入りきらない」）。前版はA4の比率で枠を作っていたが、書画カメラの映る形は機種・高さ・ズームで変わるため、比率で当てにいくと合わないことがある。枠をつかんで移動、角の●を引っぱって大きさを変える方式に変更（映像に対する割合で保存するので解像度が変わっても同じ位置）。下のボタンは「全体／A4たて／A4よこ」の当たりを付けるだけで、そこから手で直せる。設定はそのPCに残る。 -->
 <!-- H-Hub v2026.09.23-3 : 書画カメラの撮影範囲を調整できるようにした（社長指摘「尺度が合わない」）。これまではカメラの映像をA4たてに決め打ちで中央だけ切り取っており、しかも画面にはその切り取った後しか映っていなかったため、シートが入りきらないときに直しようがなかった。**カメラの映像を全部映し、切り取る範囲を枠で重ねて見せる**ようにし、「切り取り（A4たて／A4よこ／カメラのまま）」「大きさ 50〜100%」「位置（←→↑↓）」「リセット」を撮影画面に置いた。設定はそのPCに残る（ラインごとにカメラの高さが違うため）。カメラへの要求もA4比率をやめ、広く受け取ってこちらで切るようにした。 -->
 <!-- H-Hub v2026.09.23-2 : 品番検索の「工程内不良」（kintone App31 ★不良品報告）を出すようにした（社長がGASにトークンを登録済み）。製品の品番（頭の2つ）で探し、発生日・数量・不具合内容・処置・品番・状況を直近3件＋「すべて見る」。見出しに直近1年の件数と個数。苦情・不適合（App45）も同時に出るようになった。 -->
@@ -11759,7 +11760,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.23-4';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.23-5';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -12442,7 +12443,9 @@ function qcNgOfferReport(d, el){
   var head = '<div class="qc-ngr-hd">⚠ '+(ng?'不良 '+ng+'個':'')+(ng&&hk?'・':'')+(hk?'保留 '+hk+'個':'')+' があります</div>';
   var cfg = qcNgCfg();
   if(!cfg.token || !cfg.appId || !cfg.writeGas){
-    el.innerHTML = '<div class="qc-ngr">'+head+'<div class="qc-ngr-note">このPCでは不良品報告を作れません（「⚙ 不良品報告の設定」が未登録）。kintoneで作るか、設定の入ったPCで作ってください。</div></div>';
+    el.innerHTML = '<div class="qc-ngr">'+head+'<div class="qc-ngr-note">このPCでは不良品報告を作れません（「⚙ 不良品報告の設定」が未登録）。<br>'
+      + '設定できているPCの「⚙ 不良品報告の設定」で <b>📋 この設定をコピー</b> → このPCの同じ画面で <b>📥 取り込む</b> に貼り付ければ使えるようになります。<br>'
+      + '急ぐときは kintone で作ってください。</div></div>';
     return;
   }
   // すでに作ってあれば、そう出す（二重作成を防ぐ）
@@ -13386,6 +13389,22 @@ window.qcNgOpenConfig = function(){
       + '<div id="qc-ng-asg-hint" style="font-size:11px;color:#475569;margin:-4px 0 8px;line-height:1.6;"></div>'
       + '<div style="font-size:12px;font-weight:700;color:#1F4E79;margin:14px 0 6px;">フィールドコード（空欄なら自動判別）</div>'
       + '<div id="qc-ng-fieldrows"></div>'
+      // ★2026-09-23 設定をほかのPCへ移す（この設定はPCごとに保存されるため、1台ずつ入れ直していた）
+      + '<div style="margin-top:14px;padding:10px;background:#f1f5f9;border-radius:8px;">'
+      +   '<div style="font-size:12px;font-weight:700;color:#1F4E79;margin-bottom:4px;">ほかのPCへ設定を移す</div>'
+      +   '<div style="font-size:11px;color:#475569;line-height:1.7;margin-bottom:6px;">'
+      +     'この設定は<b>PCごと</b>に保存されるため、設定していないPCでは不良品報告を作れません。'
+      +     '設定できているPCで<b>📋 コピー</b>→ 相手のPCの同じ画面で<b>📥 取り込む</b>に貼り付けてください。<br>'
+      +     '<span style="color:#b45309;">※この文字列にはAPIトークンが入っています。<b>社内のPCに貼るだけ</b>にして、メールやチャットには貼らないでください。</span>'
+      +   '</div>'
+      +   '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'
+      +     '<button class="qc-ng-btn" onclick="qcNgCopyCfg()">📋 この設定をコピー</button>'
+      +     '<button class="qc-ng-btn" onclick="qcNgPasteCfg()">📥 取り込む（貼り付け）</button>'
+      +     '<span id="qc-ng-xfer-msg" style="font-size:12px;font-weight:700;color:#64748b;"></span>'
+      +   '</div>'
+      +   '<textarea id="qc-ng-xfer-ta" style="display:none;width:100%;height:70px;margin-top:8px;font-size:11px;font-family:monospace;border:1px solid #cbd5e1;border-radius:6px;padding:6px;box-sizing:border-box;" placeholder="ここに貼り付けてください"></textarea>'
+      +   '<div id="qc-ng-xfer-go" style="display:none;margin-top:6px;"><button class="qc-ng-btn" style="background:#1F4E79;color:#fff;" onclick="qcNgPasteCfgGo()">この内容で設定する</button></div>'
+      + '</div>'
       + '<div id="qc-ng-cfg-msg" style="font-size:12px;margin-top:10px;"></div>'
       + '<div class="qc-modal-btn-row">'
       +   '<button class="qc-modal-btn qc-modal-cancel" onclick="qcNgCloseConfig()">閉じる</button>'
@@ -13437,6 +13456,71 @@ var QC_NG_FIELD_ROWS = [
   ['qtyNg','不具合数量（サブテーブル内でも可）'],['qtyScrap','廃棄数量（サブテーブル内でも可）'],['qtyOk','合格数量'],
   ['inpUser','在庫管理 入力者（①で書き込む先・i_PRO_W_入力者）'],['inpDate','在庫管理 入力日（①で書き込む先）']
 ];
+// ===== 設定の持ち運び（2026-09-23）=====
+//   設定＝APIトークン・書き込み用GASのURL・アクション名・フィールドコード一式。
+//   PCごとのlocalStorageにしか無いので、1本の文字列にして移せるようにする。
+function _ngB64(str){
+  try{
+    var u8 = new TextEncoder().encode(str), bin = '';
+    for(var i=0;i<u8.length;i++) bin += String.fromCharCode(u8[i]);
+    return btoa(bin);
+  }catch(e){ return btoa(unescape(encodeURIComponent(str))); }
+}
+function _ngUnB64(b64){
+  var bin = atob(b64);
+  try{
+    var u8 = new Uint8Array(bin.length);
+    for(var i=0;i<bin.length;i++) u8[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(u8);
+  }catch(e){ return decodeURIComponent(escape(bin)); }
+}
+function _ngXferMsg(t, color){
+  var m = document.getElementById('qc-ng-xfer-msg');
+  if(m){ m.textContent = t || ''; m.style.color = color || '#64748b'; }
+}
+window.qcNgCopyCfg = function(){
+  var payload = {v:1, at:new Date().toLocaleString('sv-SE').slice(0,16), cfg:qcNgCfg()};
+  var txt = 'HHUB-NG1:' + _ngB64(JSON.stringify(payload));
+  var ta = document.getElementById('qc-ng-xfer-ta');
+  var go = document.getElementById('qc-ng-xfer-go');
+  if(go) go.style.display = 'none';
+  if(ta){ ta.style.display=''; ta.value = txt; ta.readOnly = true; ta.focus(); ta.select(); }
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(
+      function(){ _ngXferMsg('✅ コピーしました。相手のPCで「📥 取り込む」に貼り付けてください', '#15803d'); },
+      function(){ _ngXferMsg('下の枠を選んで Ctrl+C でコピーしてください', '#b45309'); });
+  }else{
+    try{ document.execCommand('copy'); _ngXferMsg('✅ コピーしました', '#15803d'); }
+    catch(e){ _ngXferMsg('下の枠を選んで Ctrl+C でコピーしてください', '#b45309'); }
+  }
+};
+window.qcNgPasteCfg = function(){
+  var ta = document.getElementById('qc-ng-xfer-ta');
+  var go = document.getElementById('qc-ng-xfer-go');
+  if(ta){ ta.readOnly=false; ta.value=''; ta.style.display=''; ta.focus(); }
+  if(go) go.style.display = '';
+  _ngXferMsg('コピーした文字列を貼り付けて、下のボタンを押してください', '#1F4E79');
+};
+window.qcNgPasteCfgGo = function(){
+  var ta = document.getElementById('qc-ng-xfer-ta');
+  var raw = ((ta && ta.value) || '').replace(/\s+/g, '');
+  if(!raw){ _ngXferMsg('何も貼り付けられていません', '#b91c1c'); return; }
+  if(raw.indexOf('HHUB-NG1:') !== 0){ _ngXferMsg('これは設定の文字列ではありません（HHUB-NG1: で始まります）', '#b91c1c'); return; }
+  var p;
+  try{ p = JSON.parse(_ngUnB64(raw.slice(9))); }
+  catch(e){ _ngXferMsg('読み取れませんでした。途中で切れていないか確かめてください', '#b91c1c'); return; }
+  if(!p || !p.cfg || typeof p.cfg !== 'object'){ _ngXferMsg('中身が設定ではありません', '#b91c1c'); return; }
+  var c = qcNgDefaultCfg();
+  Object.keys(p.cfg).forEach(function(k){
+    if(k === 'f') Object.assign(c.f, p.cfg.f || {});
+    else c[k] = p.cfg[k];
+  });
+  QC_NG_CFG = c;
+  qcNgSaveCfg();
+  qcNgOpenConfig();                       // 入力欄に反映し直す
+  _ngXferMsg('✅ 取り込みました（' + (p.at || '') + ' の設定）。中身を確かめて「保存して照合」を押してください', '#15803d');
+};
+
 window.qcNgCloseConfig = function(){ var b=document.getElementById('qc-ng-cfg-bg'); if(b) b.className='qc-modal-bg'; };
 window.qcNgSaveConfig = function(){
   var cfg=qcNgCfg();
@@ -19902,7 +19986,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.23-4</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.23-5</div>
 </body>
 </html>
 
