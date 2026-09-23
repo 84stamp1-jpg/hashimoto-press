@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.23-11 : 工順ごとの表に<b>最終加工日</b>と<b>材料の残り</b>も出すようにした（社長指示）。工順1と工順2で加工日が違うとき、②は全部の中でいちばん新しい日しか出ないため、工順ごとの日が分からなかった。各工順の下に小さく「最終加工日 9/21（日）／材料 なし（途中は残ありでした）」を添える。②は「（いちばん新しい工順）」、⑤は「（どこかに残あり）」と但し書きを付けて、全体の値だと分かるようにした。工順ごとの材料の決め方は、カードの工順タグ（📦 材料残あり）と同じ jt.hasZairyo を使い回している。 -->
 <!-- H-Hub v2026.09.23-10 : システム入力の確認に「<b>工順ごとの良品・不良累計</b>」を出すようにした（社長指示）。工順1と工順2は別々に入力するのに、箱には足した数しか出ていなかった。工順が2つ以上のときは③を横長にして 工順／工程／良品／不良／指示（％）を工順ごとに並べ、④は「不良の合計（⑥の照合に使う数）」に変える。工順が1つのときは今までどおり。数字はカードの工順見出しと同じ junjoTotals から渡すので、二重に計算していない。 -->
 <!-- H-Hub v2026.09.23-9 : 配置表のバーの文字を**白→黒**、**9px→12px**にした（社長指示）。黒字が読めるよう、ラインの色の上に白い膜（62%）をかけて明るくしている。色そのものは残るのでラインの見分けは付く。バーを薄くしていた opacity は、膜と二重になって色が分からなくなるため 0.8→1（交代分は 0.65→0.8）に戻した。段取りバー（取付・初品・品質）は幅が狭いので**品番を出さない**ようにした（マウスを乗せれば出る）。あわせて下の「この日の計画」の文字も 11px→13px に大きくした。突発作業のバーも黒字が読める薄紫にした。 -->
 <!-- H-Hub v2026.09.23-8 : 配置表に<b>突発作業</b>を入れられるようにした（社長指示）。予定に無い修正・検査・手直しなどを、作業者の行の好きな時間帯に置ける。入れ方は2つ：行の空いているところをクリック（その人・その時刻で開く）／見出しの「＋ 突発作業」。内容は 修正・検査・手直し・選別・段取り応援・出荷・会議・清掃 から選ぶか、自由に書ける。品番などのメモも付く。バーは紫の斜線でラインの色と区別し、押すと直す・消すができる。印刷にもそのまま出る。★自動割り振りでは、その時間帯は<b>手が空かない扱い</b>にした（同じ時間に別の工程へ入れられない）。その日だけ有効で dantori/&lt;日付&gt;Spot に持つ（ラインの固定 …Locks と同じ形）。 -->
@@ -781,6 +782,11 @@ html, body {
 .qc-chk-jt .jt-n{text-align:right;color:#b45309;}
 .qc-chk-jt .jt-n.zero{color:#94a3b8;font-weight:600;}
 .qc-chk-jt .jt-s{text-align:right;font-size:10px;font-weight:600;color:#64748b;}
+.qc-chk-jt tr.jt-sub td{border-bottom:none;padding:0 4px 4px;font-size:10.5px;font-weight:600;color:#64748b;}
+.qc-chk-jt tr.jt-main td{border-bottom:none;padding-bottom:1px;}
+.qc-chk-jt tr.jt-sub.jt-last td{border-bottom:1px solid #e2e8f0;padding-bottom:5px;}
+.qc-chk-jt tr.jt-sub:last-child td{border-bottom:none;}
+.qc-chk-jt .jt-z{color:#b45309;font-weight:700;}
 /* 工順が1つだけのときは「✓ 入力済みにする」もこの箱の中に置く */
 /* kintoneに「品質確認中」が残っているときの注意（右のペインと同じ色に揃える） */
 /* 入力済みにできなかったときの断り書き（alertと違って消えない） */
@@ -11305,9 +11311,20 @@ function qcMakeGroupCard(g){
   //   合計だけでは使えない。カードの工順見出しと同じ数え方をそのまま渡す。
   var junjoStats = junjoOrder.map(function(j){
     var jt = junjoTotals[j];
+    // ★最終加工日は工順ごとに違う（工順1を先週、工順2を昨日ということがある）。
+    //   ②は全部の中でいちばん新しい日なので、工順ごとの日はここで出す。
+    var jLast = '';
+    (jt.jrecs||[]).forEach(function(r){
+      var v = String(r[1]||r[0]||'').replace(/-/g,'/').slice(0,10);
+      if(/^\d{4}\/\d{1,2}\/\d{1,2}$/.test(v) && v > jLast) jLast = v;
+    });
     return { j:j, kosei:jt.kosei||'', ryohin:jt.ryohin,
              ng:jt.ng + jt.hokyu + jt.sonota, shiji:jt.shiji,
-             pct: jt.shiji>0 ? Math.min(100, Math.round(jt.ryohin/jt.shiji*100)) : 0 };
+             pct: jt.shiji>0 ? Math.min(100, Math.round(jt.ryohin/jt.shiji*100)) : 0,
+             lastDate: jLast,
+             // 材料もカードの工順タグ（📦 材料残あり）と同じ決め方を使う
+             zairyo: jt.hasZairyo,
+             zairyoBefore: (jt.jrecs||[]).some(function(r){ return r[8]==='あり'; }) };
   });
   div.__qcStats={ hinban:g.hinban, seizoNo:g.seizoNo, lastDate:lastDate,
                   ryohin:ryohinFinal, ng:ngAllTotal, shiji:shiji, pct:pct,
@@ -11585,7 +11602,10 @@ function qcMakeCheckStrip(g, st){
   }
   cell('① 品番', 'w2', st.hinban?qcCopyChip(st.hinban,{label:'品番'}):null,
        st.hinban?'':'—', st.hinban?'':'mute');
-  cell('② 最終加工日', '', null, qcChkDateLabel(st.lastDate), st.lastDate?'':'mute');
+  // ★工順が2つ以上のときは、②⑤は全体の値（工順ごとの値は③の表に出る）
+  var _multi = (st.junjo||[]).length > 1;
+  cell('② 最終加工日'+(_multi?'（いちばん新しい工順）':''), '', null,
+       qcChkDateLabel(st.lastDate), st.lastDate?'':'mute');
   // ★工順が2つ以上のときは、工順ごとに分けて出す（2026-09-23 社長指示）。
   //   工順1と工順2は別々に入力するため、足した数だけ見せても使えない。
   var js = st.junjo || [];
@@ -11593,12 +11613,17 @@ function qcMakeCheckStrip(g, st){
   var _je = function(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
   if(js.length > 1){
     var tbl = document.createElement('table'); tbl.className='qc-chk-jt';
-    tbl.innerHTML = js.map(function(x){
-      return '<tr><td class="jt-j">工順'+_je(x.j)+'</td>'
+    tbl.innerHTML = js.map(function(x, i){
+      var zt = x.zairyo ? '📦 材料 残あり'
+             : ('材料 なし' + (x.zairyoBefore ? '（途中は残ありでした）' : ''));
+      return '<tr class="jt-main"><td class="jt-j">工順'+_je(x.j)+'</td>'
            + '<td class="jt-k">'+_je(x.kosei)+'</td>'
            + '<td class="jt-r">良品 '+(x.ryohin||0)+'個</td>'
            + '<td class="jt-n'+(x.ng?'':' zero')+'">不良 '+(x.ng||0)+'個</td>'
-           + '<td class="jt-s">'+(x.shiji ? '指示 '+x.shiji+'（'+x.pct+'%）' : '')+'</td></tr>';
+           + '<td class="jt-s">'+(x.shiji ? '指示 '+x.shiji+'（'+x.pct+'%）' : '')+'</td></tr>'
+           + '<tr class="jt-sub'+(i < js.length-1 ? ' jt-last' : '')+'"><td></td>'
+           + '<td colspan="4">最終加工日 '+qcChkDateLabel(x.lastDate)
+           + '　/　<span class="'+(x.zairyo?'jt-z':'')+'">'+zt+'</span></td></tr>';
     }).join('');
     cell('③ 工順ごとの累計（工順ごとに入力してください）', 'w3', tbl);
     cell('④ 不良の合計', '', null, (st.ng||0)+'個', st.ng?'warn':'ok', '⑥の照合に使う数');
@@ -11607,7 +11632,7 @@ function qcMakeCheckStrip(g, st){
          st.shiji ? '指示 '+st.shiji+'（'+st.pct+'%）' : '');
     cell('④ 不良累計', '', null, (st.ng||0)+'個', st.ng?'warn':'ok');
   }
-  cell('⑤ 材料', '', null, st.zairyo?'📦 残あり':'なし', st.zairyo?'warn':'',
+  cell('⑤ 材料'+(_multi?'（どこかに残あり）':''), '', null, st.zairyo?'📦 残あり':'なし', st.zairyo?'warn':'',
        (!st.zairyo && st.zairyoBefore) ? '途中は残ありでした' : '');
   // ★その他のメモがあるときは、⑥を2列にして右の余白へ出す（社長要望）。
   //   メモが無いときは⑥を3列いっぱいに使う
@@ -11973,7 +11998,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.23-10';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.23-11';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -20202,7 +20227,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.23-10</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.23-11</div>
 </body>
 </html>
 
