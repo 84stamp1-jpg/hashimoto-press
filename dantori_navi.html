@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.23-8 : 配置表に<b>突発作業</b>を入れられるようにした（社長指示）。予定に無い修正・検査・手直しなどを、作業者の行の好きな時間帯に置ける。入れ方は2つ：行の空いているところをクリック（その人・その時刻で開く）／見出しの「＋ 突発作業」。内容は 修正・検査・手直し・選別・段取り応援・出荷・会議・清掃 から選ぶか、自由に書ける。品番などのメモも付く。バーは紫の斜線でラインの色と区別し、押すと直す・消すができる。印刷にもそのまま出る。★自動割り振りでは、その時間帯は<b>手が空かない扱い</b>にした（同じ時間に別の工程へ入れられない）。その日だけ有効で dantori/&lt;日付&gt;Spot に持つ（ラインの固定 …Locks と同じ形）。 -->
 <!-- H-Hub v2026.09.23-7 : （1）入力者の名簿から5名を削除（松浦・吉田・柴田・横田川・八木）。プルダウン3か所とチーム分けの名簿の計4か所。（2）製造番号で検索したときは<b>直近に入力したものが上</b>になるようにした（記録の1列目＝入力日時の新しい順）。（3）日別一覧とシステム入力待ちの並びを、<b>入力者のチーム順をやめて品番の若い順→同じ品番の中は工順の順</b>にした。作業者欄が「入力者」になり、入力した人でまとめる意味が無くなったため。品番は数字を数として比べる（17551 と 9 の順が狂わないように）。 -->
 <!-- H-Hub v2026.09.23-6 : 「記録する」の<b>作業者</b>欄を<b>入力者</b>に改めた（社長判断）。設計では「流した人（加工者）」のつもりで作っていたが、現場では記録を入力した人を選んでいたため、実態に名前を合わせた。記録する・一括振り分け・記録を修正の3か所と、未選択のときの案内。あわせて kintone不良品報告の<b>発見者には入れない</b>ようにした（見つけた人とは限らないため。kintoneで入れる）。不良品報告の「入力者」には今までどおり入る。チーム分け（プレス／組立／品管・総務）と二重登録の防止は、この名前を使う作りのまま＝入力者基準になる。 -->
 <!-- H-Hub v2026.09.23-5 : 不良品報告の設定を**ほかのPCへ丸ごと移せる**ようにした（社長依頼）。この設定はAPIトークンを含むためリポジトリに置けず、PCごとのlocalStorageにしか無い。そのため設定したPCでしか不良品報告を作れず、現場のPCで「作れません」と出ていた（1台ずつ手で入れ直すしかなかった）。⚙不良品報告の設定に「📋 この設定をコピー」「📥 取り込む（貼り付け）」を追加。HHUB-NG1: で始まる1本の文字列にして受け渡す。トークンが入るので社内のPCに貼るだけにする旨も画面に明記。「このPCでは不良品報告を作れません」の案内にも移し方を書いた。 -->
@@ -577,7 +578,21 @@ html, body {
 .rt-row:hover{background:rgba(29,78,216,.04);}
 .rt-name{flex-shrink:0;width:110px;padding:4px 7px;font-size:11px;font-weight:600;color:#1a1a1a;border-right:1px solid #e8e8e8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:34px;display:flex;align-items:center;position:sticky;left:0;z-index:5;background:white;}
 .rt-row:hover .rt-name{background:#f5f9ff;}
-.rt-track{position:relative;flex-shrink:0;min-height:34px;overflow:visible;}
+.rt-track{position:relative;flex-shrink:0;min-height:34px;overflow:visible;cursor:crosshair;}
+/* ★2026-09-23 突発作業（予定に無い修正・検査など）。ラインの色と紛れないよう紫の斜線 */
+.rt-block.rt-spot{background:#7c3aed;background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.22),rgba(255,255,255,.22) 4px,transparent 4px,transparent 9px);border:1px solid #5b21b6;}
+#rt-spot-pop{position:fixed;z-index:10001;background:#fff;border:1px solid #7c3aed;border-radius:10px;box-shadow:0 6px 28px rgba(0,0,0,.18);padding:12px 14px;width:290px;display:none;font-size:12px;}
+#rt-spot-pop h4{margin:0 0 8px;font-size:13px;color:#5b21b6;}
+#rt-spot-pop label{display:block;font-size:10px;color:#64748b;margin:7px 0 2px;}
+#rt-spot-pop input,#rt-spot-pop select{width:100%;padding:5px 7px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;font-family:inherit;box-sizing:border-box;}
+#rt-spot-pop .sp-kinds{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;}
+#rt-spot-pop .sp-kind{padding:3px 9px;border:1px solid #cbd5e1;border-radius:12px;background:#fff;cursor:pointer;font-size:11px;}
+#rt-spot-pop .sp-kind:hover{border-color:#7c3aed;background:#faf5ff;}
+#rt-spot-pop .sp-row{display:flex;gap:8px;}
+#rt-spot-pop .sp-btns{display:flex;gap:6px;margin-top:12px;}
+#rt-spot-pop button{padding:5px 10px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;color:#475569;font-size:12px;cursor:pointer;font-family:inherit;}
+#rt-spot-pop button.pri{background:#7c3aed;color:#fff;border-color:#7c3aed;flex:1;font-weight:700;}
+#rt-spot-pop button.del{color:#b91c1c;border-color:#fca5a5;}
 /* 配置表の下：この日の計画（ライン別の品番リスト） */
 .rt-plan{margin-top:10px;border:1px solid #e2e8f0;border-radius:8px;background:#fcfcfd;overflow:hidden;}
 .rt-plan-hdr{padding:6px 10px;font-size:11px;font-weight:700;color:#334155;background:#f1f5f9;border-bottom:1px solid #e2e8f0;}
@@ -6855,6 +6870,118 @@ async function _loadDantoriLocks(fbUrl, dateStr){
   }catch(e){ DANTORI_LOCKS = DANTORI_LOCKS || {}; }
 }
 function isLineLocked(lineId){ return !!DANTORI_LOCKS[canonLineKey(lineId)]; }
+
+// ===== 突発作業（2026-09-23 社長指示）=====
+//   予定に無い修正・検査などを、配置表の好きな時間帯に置く。
+//   自動割り振りでは、その時間は手が空かない扱いにする（同じ時間に別の工程を入れない）。
+//   その日だけ有効。dantori/<日付>Spot に { id: {w:名前, s:開始, e:終了, t:内容, m:メモ} } で持つ。
+let DANTORI_SPOTS = {};
+const SPOT_KINDS = ['修正','検査','手直し','選別','段取り応援','出荷','会議','清掃'];
+async function _loadDantoriSpots(fbUrl, dateStr){
+  try{
+    const r = await fetch(`${fbUrl}/dantori/${dateStr}Spot.json`);
+    DANTORI_SPOTS = (r.ok ? (await r.json()) : null) || {};
+  }catch(e){ DANTORI_SPOTS = DANTORI_SPOTS || {}; }
+}
+async function _saveDantoriSpots(){
+  const fbUrl = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
+  const dateStr = getDantoriDatePath();
+  const body = Object.keys(DANTORI_SPOTS).length ? DANTORI_SPOTS : null;
+  const r = await fetch(`${fbUrl}/dantori/${dateStr}Spot.json`,
+    {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+}
+function spotsOf(name){
+  return Object.keys(DANTORI_SPOTS||{})
+    .map(id => Object.assign({id:id}, DANTORI_SPOTS[id]))
+    .filter(x => x && x.w === name);
+}
+// 分 → 'HH:MM'（10分単位に丸める）
+function _spotFmt(m){
+  m = Math.max(RT_START, Math.min(RT_END, Math.round(m/10)*10));
+  return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');
+}
+function _spotPop(){
+  let p = document.getElementById('rt-spot-pop');
+  if(p) return p;
+  p = document.createElement('div'); p.id = 'rt-spot-pop';
+  p.innerHTML =
+      '<h4 id="sp-title">＋ 突発作業</h4>'
+    + '<label>担当者</label><select id="sp-w"></select>'
+    + '<div class="sp-row"><div style="flex:1"><label>開始</label><input type="time" id="sp-s" step="600"></div>'
+    + '<div style="flex:1"><label>終了</label><input type="time" id="sp-e" step="600"></div></div>'
+    + '<label>内容</label><input type="text" id="sp-t" placeholder="例：修正／検査">'
+    + '<div class="sp-kinds" id="sp-kinds"></div>'
+    + '<label>メモ（品番など・任意）</label><input type="text" id="sp-m" placeholder="18120-6Y0 など">'
+    + '<div class="sp-btns"><button class="pri" onclick="rtSaveSpot()">保存</button>'
+    + '<button class="del" id="sp-del" onclick="rtDeleteSpot()">削除</button>'
+    + '<button onclick="rtCloseSpot()">閉じる</button></div>';
+  document.body.appendChild(p);
+  p.querySelector('#sp-kinds').innerHTML = SPOT_KINDS
+    .map(k => `<span class="sp-kind" onclick="document.getElementById('sp-t').value='${k}'">${k}</span>`).join('');
+  // 外を押したら閉じる
+  document.addEventListener('mousedown', function(ev){
+    if(p.style.display === 'none') return;
+    if(!p.contains(ev.target)) rtCloseSpot();
+  });
+  return p;
+}
+let _spotEditId = null;
+function _spotOpen(ev, id, name, startMin){
+  const p = _spotPop();
+  _spotEditId = id;
+  const sel = p.querySelector('#sp-w');
+  // ★配置表に出ているのはプレスの人だけ。他の人を選べると、保存しても表に出ず迷子になる
+  sel.innerHTML = getAllWorkerNames().filter(w => w.section === 'プレス')
+    .map(w => `<option>${w.name}</option>`).join('');
+  const d = id ? (DANTORI_SPOTS[id]||{}) : {};
+  p.querySelector('#sp-title').textContent = id ? '✏ 突発作業' : '＋ 突発作業';
+  sel.value = d.w || name || sel.options[0]?.value || '';
+  p.querySelector('#sp-s').value = d.s || _spotFmt(startMin);
+  p.querySelector('#sp-e').value = d.e || _spotFmt((startMin||RT_START) + 60);
+  p.querySelector('#sp-t').value = d.t || '';
+  p.querySelector('#sp-m').value = d.m || '';
+  p.querySelector('#sp-del').style.display = id ? '' : 'none';
+  p.style.display = 'block';
+  const x = ev ? Math.min(ev.clientX, window.innerWidth - 310) : 80;
+  const y = ev ? Math.min(ev.clientY, window.innerHeight - 380) : 80;
+  p.style.left = Math.max(8, x) + 'px';
+  p.style.top  = Math.max(8, y) + 'px';
+  setTimeout(() => { const t = p.querySelector('#sp-t'); if(t && !id) t.focus(); }, 30);
+}
+window.rtCloseSpot = function(){ const p = document.getElementById('rt-spot-pop'); if(p) p.style.display='none'; _spotEditId=null; };
+window.rtOpenSpotEdit = function(id, ev){ if(ev){ ev.stopPropagation(); } _spotOpen(ev, id); };
+window.rtOpenSpotNew = function(name, min, ev){ if(ev){ ev.stopPropagation(); } _spotOpen(ev, null, name, min); };
+// 行の空いているところを押したら、その人・その時刻で新規
+window.rtTrackClick = function(ev, name){
+  if(_rtSwapMode || _rtOverrideMode) return;              // 別のモード中は邪魔しない
+  if(ev.target && !ev.target.classList.contains('rt-track')) return;  // バーの上は従来どおり
+  const min = RT_START + (ev.offsetX / RT_PPM);
+  rtOpenSpotNew(name, min, ev);
+};
+window.rtSaveSpot = async function(){
+  const p = _spotPop();
+  const v = id => p.querySelector('#'+id).value.trim();
+  const w = v('sp-w'), st = v('sp-s'), en = v('sp-e'), t = v('sp-t');
+  if(!w){ alert('担当者を選んでください'); return; }
+  if(!st || !en){ alert('開始と終了の時刻を入れてください'); return; }
+  if(rt_toMin(en) <= rt_toMin(st)){ alert('終了は開始より後にしてください'); return; }
+  if(!t){ alert('内容を入れてください（修正・検査など）'); return; }
+  const id = _spotEditId || ('s' + Date.now().toString(36) + Math.random().toString(36).slice(2,5));
+  DANTORI_SPOTS[id] = {w:w, s:st, e:en, t:t, m:v('sp-m')};
+  try{ await _saveDantoriSpots(); }
+  catch(e){ alert('突発作業の保存に失敗しました：'+e.message); return; }
+  rtCloseSpot(); renderDantori();
+};
+window.rtDeleteSpot = async function(){
+  if(!_spotEditId) return;
+  const d = DANTORI_SPOTS[_spotEditId] || {};
+  if(!confirm(`「${d.t||'突発作業'}」（${d.w} ${d.s}〜${d.e}）を消します。よろしいですか？`)) return;
+  delete DANTORI_SPOTS[_spotEditId];
+  try{ await _saveDantoriSpots(); }
+  catch(e){ alert('削除の保存に失敗しました：'+e.message); return; }
+  rtCloseSpot(); renderDantori();
+};
 function _dantoriLineKeys(){
   const set = {};
   (dantoriSchedule||[]).forEach(e => { if(e && e.lineId) set[canonLineKey(e.lineId)] = true; });
@@ -6909,6 +7036,8 @@ async function loadDantoriSchedule(){
     }catch(_){}
     // 固定したライン（自動割り振りで動かさない）を読み込む
     await _loadDantoriLocks(fbUrl, dateStr);
+    // 突発作業（予定に無い修正・検査など）を読み込む
+    await _loadDantoriSpots(fbUrl, dateStr);
     renderDantori();
     updatePersonPanel();
   } catch(e){ console.warn('dantori load error:',e); }
@@ -8473,6 +8602,19 @@ function renderPressTimeline(allEntries){
         });
       }
     });
+    // ── 突発作業（予定に無い修正・検査など）──
+    spotsOf(name).forEach(sp => {
+      const ss = rt_toMin(sp.s), se = rt_toMin(sp.e);
+      if(ss === null) return;
+      const sx = rt_toX(ss);
+      const sw = Math.max((se !== null ? rt_toX(se) : rt_toX(ss + 60)) - sx, 8);
+      const sid = String(sp.id).replace(/'/g,"\\'");
+      const stip = `${sp.t||'突発作業'} ${sp.s}〜${sp.e}${sp.m ? '  '+sp.m : ''}（突発作業・押すと直せます）`;
+      const sinner = sp.m
+        ? `${sp.t}<span style="opacity:0.5;margin:0 2px;">｜</span><span style="font-size:0.85em;">${sp.m}</span>`
+        : sp.t;
+      pushBar(sx, sw, top => `<div class="rt-block rt-spot" style="left:${sx}px;top:${top}px;width:${sw}px;" title="${stip}" onclick="rtOpenSpotEdit('${sid}',event)">${sinner}</div>`);
+    });
     // ── 重なるバーを段違いに並べる（ダブルブッキングが隠れないように）──
     barDefs.sort((a, b) => a.x - b.x || a.w - b.w);
     const laneEnd = [];
@@ -8546,7 +8688,7 @@ function renderPressTimeline(allEntries){
       : `<div class="rt-name" title="${_rtSwapMode ? 'クリックして選択' : name}" data-name="${name}" style="${swapNameStyle}" ${swapClick}>${name}${attTag}${dupTag}${ovrHtml}${_rtSwapMode ? '<span style="font-size:9px;color:#7c3aed;margin-left:2px;">⇄</span>' : ''}</div>`;
     rowsHtml += `<div class="rt-row" style="${rowOpacity}">
       ${nameCell}
-      <div class="rt-track" style="width:${RT_W}px;height:${trackH}px;">${blk}${unavailOverlay}</div>
+      <div class="rt-track" style="width:${RT_W}px;height:${trackH}px;" onclick="rtTrackClick(event,'${name.replace(/'/g,"\\'")}')" title="空いているところを押すと、突発作業（修正・検査など）を入れられます">${blk}${unavailOverlay}</div>
     </div>`;
   });
 
@@ -8559,10 +8701,11 @@ function renderPressTimeline(allEntries){
   const ovrCount = Object.keys(WORKER_PRIORITY_OVERRIDE).length;
   return `<div style="overflow:hidden;" class="${_rtOverrideMode ? 'rt-ovr-mode' : ''}">
   <div class="rt-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px;">
-    <span>📍 作業者 ライン配置表 ── ${timeStr} 現在　<span style="font-size:10px;color:#aaa;">※ <b style="color:#0369a1;">バーをクリック</b>すると、その時間帯だけ担当者を変えられます／<b style="color:#0369a1;">🔀入れ替えモード</b>は名前を2人押すと1日まるごと交換／「🤖 自動割り振り」で一括設定</span></span>
+    <span>📍 作業者 ライン配置表 ── ${timeStr} 現在　<span style="font-size:10px;color:#aaa;">※ <b style="color:#0369a1;">バーをクリック</b>すると、その時間帯だけ担当者を変えられます／<b style="color:#0369a1;">🔀入れ替えモード</b>は名前を2人押すと1日まるごと交換／<b style="color:#7c3aed;">行の空いているところをクリック</b>すると突発作業（修正・検査）を入れられます</span></span>
     <div style="display:flex;gap:6px;flex-shrink:0;">
       <button onclick="rtToggleOverrideMode()" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid;border-radius:5px;cursor:pointer;white-space:nowrap;${ovrBtnStyle}">${_rtOverrideMode ? '✕ 優先ライン変更終了' : `📌 今日の優先ライン${ovrCount?'('+ovrCount+'件)':''}`}</button>
       <button onclick="rtToggleSwapMode()" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid;border-radius:5px;cursor:pointer;white-space:nowrap;${swapBtnStyle}">${_rtSwapMode ? '✕ 入れ替えモード終了' : '🔀 入れ替えモード'}</button>
+      <button onclick="rtOpenSpotNew('',12*60,event)" title="予定に無い修正・検査などを入れます" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid #7c3aed;border-radius:5px;cursor:pointer;white-space:nowrap;background:#fff;color:#7c3aed;">＋ 突発作業</button>
       <button onclick="rtPrintRoster()" title="表示中の日付の配置表を印刷します（A4横）" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid #cbd5e1;border-radius:5px;cursor:pointer;white-space:nowrap;background:#fff;color:#475569;">🖨 印刷</button>
     </div>
   </div>
@@ -9012,6 +9155,13 @@ async function autoAssignRoles(){
     if(!busyMap[w]) busyMap[w] = [];
     busyMap[w].push({ s, e:(e!==null)?e:s+60, label:label||'' });
   };
+  // ★突発作業（予定に無い修正・検査など）の時間は、はじめから手が空かない扱いにする（2026-09-23）
+  Object.keys(DANTORI_SPOTS||{}).forEach(id => {
+    const sp = DANTORI_SPOTS[id]; if(!sp || !sp.w) return;
+    const ss = toMin(sp.s), se = toMin(sp.e);
+    if(ss === null) return;
+    markBusy(sp.w, ss, (se !== null && se > ss) ? se : ss + 60, (sp.t || '突発作業'));
+  });
   // 誰がいつ busy か（競合表示用）
   const busySlotOf = (w, s, e) => {
     const effE = (e!==null) ? e : s+60;
@@ -11780,7 +11930,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.23-7';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.23-8';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -20009,7 +20159,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.23-7</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.23-8</div>
 </body>
 </html>
 
