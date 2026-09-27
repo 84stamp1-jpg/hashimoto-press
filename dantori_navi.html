@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.28-1 : 段取り超過の<b>原因</b>を残せるようにした（社長指示）。実データ（9/21〜25の5日・段取り49件）を見ると150%以上が22件あるが、標準6分の工程が実10分で167%になるものが含まれ、これを「超過」と数えると現場に通らない。そこで<b>段取り率150%以上かつ超過15分以上</b>（5日で14件・月56件相当）だけを拾い、実績入力でその条件に当たったときだけ<b>原因のプルダウン</b>を出す。選択肢は備考に実際に書かれていた言葉から作った（型・治具を探した／リフト待ち／型の不具合・修理／材料・部品待ち／設備の不調／条件出し・試し打ち／品質確認待ち／教育・不慣れ／<b>段取り以外の時間が入っている</b>／<b>標準時間が実態と合っていない</b>／その他）。後ろの2つを入れてあるのは、段取り時間に停止や検診が混ざっている記録（実240分／標準17分＝1412%）や、標準26分の工程が9件すべて超過している（＝標準の方が実態と合っていない疑い）ものを、現場のせいにしないため。未選択でも保存はできるが一度だけ確認が出る。ロス記録は「日ごと」に原因と<b>未記入</b>を出し、「品番ごと」の頭に<b>原因別の件数と超過分数（2,500円/hで金額換算）</b>を出す。CSVにも列を足した。 -->
 <!-- H-Hub v2026.09.24-1 : 突発作業の「内容」の選択肢を変えた（社長指示）。手直し→<b>ゲトバシ</b>（カタカナ）、<b>出荷</b>は削除。選択肢は 修正／検査／ゲトバシ／選別／段取り応援／会議／清掃 の7つ。選択肢はボタンを押すと内容欄に入るだけなので、手で書けば今までどおり何でも入る。既に保存してある「手直し」「出荷」の突発作業はそのまま残る。 -->
 <!-- H-Hub v2026.09.23-14 : ★カメラの映像が<b>細長く歪む</b>のを直した（社長「A4が細長くなったりしてよくありません」）。撮影画面は縦並びのflexで、映像の枠も その一員。枠の高さを aspect-ratio で決めていたが、flexは入りきらないときに高さを縮めるため、1440×2160（たて長）の映像では必要な高さが入らず、幅はそのまま高さだけ潰されて object-fit:fill の映像が縦に押し潰されていた（4:3の1440×1080では高さが足りたので歪まず、たて長のときだけ起きていた＝「最大で映す」を押したとき）。flex:0 0 auto を付けて縮められないようにし、枠の大きさを「入る範囲でいちばん大きい“映像と同じ形の四角”」としてpxで決めるようにした。画面の大きさが変わったら決め直す。これで たて長の映像（1440×2160）がそのまま使えるので、A4たては「最大で映す」がいちばん入る。 -->
 <!-- H-Hub v2026.09.23-13 : 書画カメラで<b>A4が映りきらない</b>件（社長は本体を上げて調整していた）。切り取り枠は手で直せるようにしたが、カメラの映像そのものにA4が入っていなければどうにもならないので、カメラ側でできることを3つ用意した。①<b>たてに広く（4:3）</b>：16:9のカメラはセンサーの上下を捨てて映すため、4:3に切り替えると たてに広くなりA4たてが入ることが多い。既定を4:3にした（以前は1920×1440を要求していたが、機種によって16:9で返ることがある）。②<b>よこに広く（16:9）</b>／<b>最大で映す</b>（4096を要求）。③カメラが<b>ズーム</b>に対応していればスライダーを出す（getCapabilities().zoom があるときだけ）。いま何で映っているか（1920×1080（16:9）など）も画面に出して、原因が見えるようにした。選んだ形はそのPCに残る。 -->
@@ -2530,15 +2531,21 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
       <div class="fg3">
         <div class="fi">
           <label>段取り開始</label>
-          <div class="tw"><input type="time" id="iSS"><button class="btn-now" onclick="setNow('iSS')">今</button></div>
+          <div class="tw"><input type="time" id="iSS" onchange="updSetupCauseBox()"><button class="btn-now" onclick="setNow('iSS');updSetupCauseBox()">今</button></div>
           <div class="hint">前工程終了〜段取開始</div>
         </div>
         <div class="fi">
           <label>段取り終了</label>
-          <div class="tw"><input type="time" id="iSE"><button class="btn-now" onclick="setNow('iSE')">今</button></div>
+          <div class="tw"><input type="time" id="iSE" onchange="updSetupCauseBox()"><button class="btn-now" onclick="setNow('iSE');updSetupCauseBox()">今</button></div>
           <div class="hint">段取り終了時刻</div>
         </div>
         <div class="fi"></div>
+      </div>
+      <!-- 段取り超過の原因（2026-09-28 社長指示）。条件を満たしたときだけ出す -->
+      <div class="fi" id="iCauseBox" style="display:none;margin:2px 0 9px;padding:8px 10px;border:2px solid #dc2626;border-radius:6px;background:#fff5f5;">
+        <label style="color:#dc2626;">段取りが標準より延びています　<span id="iCauseWhy" style="font-weight:400;color:#b91c1c;"></span></label>
+        <select id="iSetupCause"><option value="">-- 原因を選んでください --</option></select>
+        <div class="hint">選ぶだけで結構です。詳しいことは備考へ。月次会で原因ごとの件数を見ます</div>
       </div>
       </div><!-- /setupOnlyFields -->
       <!-- 作業時間フィールド：段取りなし時も常に有効 -->
@@ -12017,7 +12024,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.24-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.28-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -14718,6 +14725,18 @@ function lastCountMin(j, l){
 //   CT達成率が良いのに見込み完了が遅れる理由は、たいていこのどちらか
 // 品番ごとの「どうだったか」を1か所で作る。行の表示とまったく同じ出し方にすること
 //   （ロスタイム・ロス記録の両方がここを通る。数字が食い違わないようにするため）
+// ===== 段取り超過の原因（2026-09-28 社長指示）=====
+//   率だけで拾うと、標準6分の工程が実10分（167%）で挙がってしまう。
+//   超過の分数も条件に入れて、手を打つ値打ちのあるものだけ原因を聞く。
+const SETUP_ASK_RATE = 150;   // 段取り率がこれ以上
+const SETUP_ASK_OVER = 15;    // かつ 超過がこれ以上（分）
+const SETUP_CAUSES = ['型・治具を探した','リフト待ち','型の不具合・修理','材料・部品待ち',
+                      '設備の不調','条件出し・試し打ち','品質確認待ち','教育・不慣れ',
+                      '段取り以外の時間が入っている','標準時間が実態と合っていない','その他'];
+function setupNeedsCause(rate, over){
+  return (rate!=null && rate>=SETUP_ASK_RATE && (over||0)>=SETUP_ASK_OVER);
+}
+
 function lossJobRows(l,id){
   if(!l) return [];
   const jobs=(l.jobs||[]).filter(j=>j&&j.plan>0);
@@ -14775,6 +14794,7 @@ function lossJobRows(l,id){
     rows.push({seq:Number(j.seq)||(ji+1), row:ji+1, part:j.part||'', plan:effPlan, actual:jAct,
       planStart:j.start||'', planEnd:j.end||'', actStart:jWS||'', actEnd:jWE||'',
       setupMin:Math.round(disp), setupStd:std, setupOver:over, setupRate:setupRate, noSetup:!!j.noSetup,
+      setupCause:j.setupCause||'', needCause:setupNeedsCause(setupRate,over),
       ctRate:ct, qtyRate:qty, stopMin:stop, stopTypes:stopTypes, done:done,
       started:started, note:j.note||'', causes:causes});
   });
@@ -15831,15 +15851,22 @@ function _lhDaySummary(dayRecs){
       +'<td class="lh-num" style="color:#dc2626;font-weight:800;">'+x.v+'%</td></tr>';
   });
   const suList = list(slow, function(x){
+    const need=(x.j.needCause!==undefined)?x.j.needCause:setupNeedsCause(x.v,x.j.setupOver);
+    const cz=x.j.setupCause?('<span style="color:#1d4ed8;font-weight:700;">'+_lhEsc(x.j.setupCause)+'</span>')
+            :(need?'<span style="color:#dc2626;font-weight:700;">原因 未記入</span>':'<span style="color:#ccc;">-</span>');
     return '<tr><td class="lh-sum-ln">'+_lhEsc(x.ln)+'</td><td><b>'+_lhEsc(x.j.part)+'</b></td>'
       +'<td class="lh-num" style="color:#888;">'+x.j.setupMin+'/'+x.j.setupStd+'分</td>'
-      +'<td class="lh-num" style="color:#dc2626;font-weight:800;">'+x.v+'%</td></tr>';
+      +'<td class="lh-num" style="color:#dc2626;font-weight:800;">'+x.v+'%</td>'
+      +'<td style="font-size:11.5px;">'+cz+'</td></tr>';
   });
   return '<div class="lh-sumwrap">'
     +'<div class="lh-sumbox" style="grid-column:1/-1;"><div class="lh-sumhd">各ラインのCT</div>'
       +'<div style="display:flex;flex-wrap:wrap;gap:6px;">'+(chips||'<span style="color:#bbb;">--</span>')+'</div></div>'
     +'<div class="lh-sumbox"><div class="lh-sumhd">CT '+LH_CT_WARN+'%以下<span class="lh-sumn">'+lowCT.length+'件</span></div>'+ctList+'</div>'
-    +'<div class="lh-sumbox"><div class="lh-sumhd">段取率 '+LH_SETUP_WARN+'%以上<span class="lh-sumn">'+slow.length+'件</span></div>'+suList+'</div>'
+    +'<div class="lh-sumbox"><div class="lh-sumhd">段取率 '+LH_SETUP_WARN+'%以上'
+      +'<span class="lh-sumn">'+slow.length+'件（うち原因を聞くもの '
+      +slow.filter(function(x){return (x.j.needCause!==undefined)?x.j.needCause:setupNeedsCause(x.v,x.j.setupOver);}).length
+      +'件）</span></div>'+suList+'</div>'
     +'</div>';
 }
 
@@ -15872,7 +15899,10 @@ function _lhRenderDay(recs){
           +((j.stopTypes&&j.stopTypes.length)?'<div style="font-size:11.5px;color:#9d174d;">'+_lhEsc(j.stopTypes.join('・'))+'</div>':'')+'</td>'
         +'<td style="color:#888;white-space:nowrap;vertical-align:top;">'+_lhEsc(j.actStart||'--')+'〜'+_lhEsc(j.actEnd||'')
           +'<div style="font-size:11.5px;color:#bbb;">計画 '+_lhEsc(j.planStart)+'〜'+_lhEsc(j.planEnd)+'</div></td>'
-        +'<td>'+_lhTags(j.causes)+'</td></tr>';
+        +'<td>'+_lhTags(j.causes)
+          +(j.setupCause?'<div style="font-size:11px;color:#1d4ed8;font-weight:700;margin-top:2px;">🔧 '+_lhEsc(j.setupCause)+'</div>':'')
+          +((!j.setupCause&&j.needCause)?'<div style="font-size:11px;color:#dc2626;font-weight:700;margin-top:2px;">🔧 原因 未記入</div>':'')
+          +'</td></tr>';
       }).join('');
       return hdr+'<table class="lh-tbl"><thead><tr>'
         +'<th>#</th><th>品番</th><th class="lh-num">実績/計画</th>'
@@ -15907,7 +15937,7 @@ function _lhRenderPart(recs){
   }).sort(function(x,y){ return (y.loss-x.loss)||(y.n-x.n); });
   document.getElementById('lhCount').textContent=rows.length+'品番';
   if(!rows.length){ body.innerHTML='<div style="color:#bbb;font-size:12px;padding:10px 0;">その期間の記録はありません</div>'; return; }
-  body.innerHTML='<table class="lh-tbl"><thead><tr>'
+  body.innerHTML=_lhCauseSummary(recs)+'<table class="lh-tbl"><thead><tr>'
     +'<th>品番</th><th>ライン</th><th class="lh-num">回数</th><th class="lh-num">日数</th>'
     +'<th class="lh-num">CT平均</th>'
     +'<th class="lh-num">段取超過計</th><th class="lh-num">停止計</th><th class="lh-num">ロス計</th>'
@@ -15926,18 +15956,47 @@ function _lhRenderPart(recs){
         +'<td>'+(cz.join(' ')||'<span style="color:#ccc;">-</span>')+'</td></tr>';
     }).join('')+'</tbody></table>';
 }
+// 段取り超過の原因ごとの件数（期間まとめ）。72期の月次会はこの件数で見る
+function _lhCauseSummary(recs){
+  let need=0, done=0, over=0;
+  const cnt={}, mins={};
+  recs.forEach(function(r){ (r.jobs||[]).forEach(function(j){
+    const rate=_lhRate(j);
+    const nd=(j.needCause!==undefined)?j.needCause:setupNeedsCause(rate,j.setupOver);
+    if(!nd) return;
+    need++; over+=(j.setupOver||0);
+    const c=j.setupCause||'（未記入）';
+    if(j.setupCause) done++;
+    cnt[c]=(cnt[c]||0)+1; mins[c]=(mins[c]||0)+(j.setupOver||0);
+  });});
+  if(!need) return '';
+  const ks=Object.keys(cnt).sort(function(a,b){ return (mins[b]-mins[a])||(cnt[b]-cnt[a]); });
+  const cells=ks.map(function(k){
+    const red=(k==='（未記入）');
+    return '<tr><td style="'+(red?'color:#dc2626;font-weight:700;':'')+'">'+_lhEsc(k)+'</td>'
+      +'<td class="lh-num"><b>'+cnt[k]+'</b>件</td>'
+      +'<td class="lh-num" style="color:#888;">+'+mins[k]+'分</td></tr>';
+  }).join('');
+  const yen=Math.round(over/60*2500);
+  return '<div class="lh-sumwrap" style="margin-bottom:10px;">'
+    +'<div class="lh-sumbox" style="grid-column:1/-1;">'
+    +'<div class="lh-sumhd">段取り超過（'+SETUP_ASK_RATE+'%以上かつ +'+SETUP_ASK_OVER+'分以上）の原因'
+    +'<span class="lh-sumn">'+need+'件・計 +'+over+'分（約'+yen.toLocaleString()+'円）　原因の記入 '+done+'/'+need+'件</span></div>'
+    +'<table class="lh-sum">'+cells+'</table></div></div>';
+}
+
 window.lhCsv=function(){
   if(!_lhData.length){ alert('出力する記録がありません'); return; }
   const head=['日付','ライン','行','品番','計画数','実績数','CT達成率',
               '段取(分)','標準段取(分)','段取比(%)','段取超過(分)','停止(分)','停止の種類',
-              '実績開始','実績終了','計画開始','計画終了','原因','備考'];
+              '実績開始','実績終了','計画開始','計画終了','原因','段取り超過の原因','備考'];
   const q=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
   const out=[head.join(',')];
   _lhData.forEach(function(r){ r.jobs.forEach(function(j){
     out.push([r.date,r.lineName||r.lineId,j.row,j.part,j.plan,j.actual,j.ctRate,
       j.noSetup?'':j.setupMin, j.noSetup?'':j.setupStd, _lhRate(j), j.setupOver, j.stopMin,
       (j.stopTypes||[]).join('・'), j.actStart, j.actEnd, j.planStart, j.planEnd,
-      (j.causes||[]).join('・'), j.note].map(q).join(','));
+      (j.causes||[]).join('・'), j.setupCause||'', j.note].map(q).join(','));
   });});
   const blob=new Blob(['\ufeff'+out.join('\r\n')],{type:'text/csv;charset=utf-8;'});
   const a=document.createElement('a');
@@ -16334,6 +16393,9 @@ function restoreJobFields(lineId, partVal, startVal, seqVal){
   document.getElementById('iWE').value=weVal;
   const noSetupEl=document.getElementById('iNoSetup');
   if(noSetupEl){noSetupEl.checked=!!(job&&job.noSetup);window.onNoSetupChange();}
+  const causeEl=document.getElementById('iSetupCause');
+  if(causeEl){ causeEl.value=(job&&job.setupCause)||''; }
+  if(window.updSetupCauseBox) window.updSetupCauseBox();
   // 標準CT表示（計画数÷計画時間）
   const stdCtEl=document.getElementById('iStdCT');
   if(job&&job.plan>0&&job.start&&job.end){
@@ -16405,6 +16467,39 @@ window.onPartSel=function(){
   }
 };
 
+// 段取りが条件を満たしたときだけ「原因」の欄を出す
+window.updSetupCauseBox=function(){
+  const box=document.getElementById('iCauseBox');
+  const sel=document.getElementById('iSetupCause');
+  if(!box||!sel) return;
+  if(sel.options.length<=1){
+    sel.innerHTML='<option value="">-- 原因を選んでください --</option>'
+      +SETUP_CAUSES.map(function(c){return '<option value="'+c+'">'+c+'</option>';}).join('');
+  }
+  const lineId=document.getElementById('iLine').value;
+  const opt=document.getElementById('iPart').selectedOptions[0];
+  const noSetup=!!document.getElementById('iNoSetup')?.checked;
+  const ss=document.getElementById('iSS').value, se=document.getElementById('iSE').value;
+  let show=false, why='';
+  if(lineId&&opt&&opt.value&&!noSetup&&ss&&se){
+    const l=lines[lineId]||{};
+    const startVal=opt.dataset.start||'';
+    const job=(l.jobs||[]).find(function(j){return j.part===opt.value&&(!startVal||j.start===startVal);})
+           ||(l.jobs||[]).find(function(j){return j.part===opt.value;});
+    const std=calcSetupTime(lineId, job&&job.kata, job&&job.ninzu)||0;
+    const sh=timeToH(ss), eh=timeToH(se);
+    const mins=(sh&&eh&&eh>sh)?Math.round((eh-sh)*60):0;
+    if(std>0&&mins>0){
+      const rate=Math.round(mins/std*100), over=Math.max(0,Math.round(mins-std));
+      if(setupNeedsCause(rate,over)){
+        show=true; why='（'+mins+'分 ／ 標準'+std+'分 ＝ '+rate+'%　+'+over+'分）';
+      }
+    }
+  }
+  box.style.display=show?'':'none';
+  document.getElementById('iCauseWhy').textContent=why;
+};
+
 window.onNoSetupChange=function(){
   const checked=document.getElementById('iNoSetup')?.checked;
   // 段取り開始・終了フィールドのみグレーアウト（作業開始・終了は常に有効）
@@ -16431,6 +16526,15 @@ window.doSub=function(){
     const ws=document.getElementById('iWS').value;
     const we=document.getElementById('iWE').value;
     if(!part){m.style.color='#c0392b';m.textContent='品番を選択してください';return;}
+    // 段取り超過の原因（欄が出ているときだけ見る。空でも止めはしないが一度聞く）
+    const causeShown=(document.getElementById('iCauseBox')||{}).style
+                    ? document.getElementById('iCauseBox').style.display!=='none' : false;
+    const causeVal=(document.getElementById('iSetupCause')||{}).value||'';
+    if(causeShown&&!causeVal){
+      if(!confirm('段取り超過の原因が選ばれていません。\nこのまま保存しますか？')){
+        m.style.color='#c0392b'; m.textContent='原因を選んでください'; return;
+      }
+    }
 
     // 選択中の品番の開始時刻（同名品番の区別に使用）
     const selOpt=document.getElementById('iPart').selectedOptions[0];
@@ -16519,6 +16623,7 @@ window.doSub=function(){
         actualCount:actVal,
         revisedPlan:(!isNaN(revised)&&revised>0)?revised:(j.revisedPlan||null),
         noSetup:!!(document.getElementById('iNoSetup')?.checked),
+        setupCause:causeShown?causeVal:(j.setupCause||''),
         setupActualMin:setupMin!==null?setupMin:(j.setupActualMin||0),
         note:note,  // 備考を品番(job)単位で保存
         paceInfo,
@@ -20350,7 +20455,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.24-1</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.28-1</div>
 </body>
 </html>
 
