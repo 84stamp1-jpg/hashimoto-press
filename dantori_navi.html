@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.28-2 : ロス記録に<b>「月ごと（前の月と比べる）」</b>を足した（社長指摘：前期との比較はできなくても、前の月と当月なら比べられる）。月・段取り回数・該当件数（150%以上かつ+15分以上）・該当率・超過分の計・<b>1回あたり超過分</b>・<b>前月比</b>・金額（2,500円/h）・原因の記入率を並べる。前月比を件数ではなく<b>1回あたり超過分</b>で出すのは、生産の本数が増えれば件数は自然に増えるため。ロス記録の明細は約100日で消えるので、<b>終わった月のまとめを /lossMonthly に自動で残す</b>（月のあたまから記録がそろっている月だけ）。これで期を通して12か月の推移が追える。 -->
 <!-- H-Hub v2026.09.28-1 : 段取り超過の<b>原因</b>を残せるようにした（社長指示）。実データ（9/21〜25の5日・段取り49件）を見ると150%以上が22件あるが、標準6分の工程が実10分で167%になるものが含まれ、これを「超過」と数えると現場に通らない。そこで<b>段取り率150%以上かつ超過15分以上</b>（5日で14件・月56件相当）だけを拾い、実績入力でその条件に当たったときだけ<b>原因のプルダウン</b>を出す。選択肢は備考に実際に書かれていた言葉から作った（型・治具を探した／リフト待ち／型の不具合・修理／材料・部品待ち／設備の不調／条件出し・試し打ち／品質確認待ち／教育・不慣れ／<b>段取り以外の時間が入っている</b>／<b>標準時間が実態と合っていない</b>／その他）。後ろの2つを入れてあるのは、段取り時間に停止や検診が混ざっている記録（実240分／標準17分＝1412%）や、標準26分の工程が9件すべて超過している（＝標準の方が実態と合っていない疑い）ものを、現場のせいにしないため。未選択でも保存はできるが一度だけ確認が出る。ロス記録は「日ごと」に原因と<b>未記入</b>を出し、「品番ごと」の頭に<b>原因別の件数と超過分数（2,500円/hで金額換算）</b>を出す。CSVにも列を足した。 -->
 <!-- H-Hub v2026.09.24-1 : 突発作業の「内容」の選択肢を変えた（社長指示）。手直し→<b>ゲトバシ</b>（カタカナ）、<b>出荷</b>は削除。選択肢は 修正／検査／ゲトバシ／選別／段取り応援／会議／清掃 の7つ。選択肢はボタンを押すと内容欄に入るだけなので、手で書けば今までどおり何でも入る。既に保存してある「手直し」「出荷」の突発作業はそのまま残る。 -->
 <!-- H-Hub v2026.09.23-14 : ★カメラの映像が<b>細長く歪む</b>のを直した（社長「A4が細長くなったりしてよくありません」）。撮影画面は縦並びのflexで、映像の枠も その一員。枠の高さを aspect-ratio で決めていたが、flexは入りきらないときに高さを縮めるため、1440×2160（たて長）の映像では必要な高さが入らず、幅はそのまま高さだけ潰されて object-fit:fill の映像が縦に押し潰されていた（4:3の1440×1080では高さが足りたので歪まず、たて長のときだけ起きていた＝「最大で映す」を押したとき）。flex:0 0 auto を付けて縮められないようにし、枠の大きさを「入る範囲でいちばん大きい“映像と同じ形の四角”」としてpxで決めるようにした。画面の大きさが変わったら決め直す。これで たて長の映像（1440×2160）がそのまま使えるので、A4たては「最大で映す」がいちばん入る。 -->
@@ -2669,6 +2670,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
           <select id="lhMode" onchange="lhLoad()" style="padding:7px 9px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:inherit;">
             <option value="day">日ごと（何があったか）</option>
             <option value="part">品番ごと（ためて見る）</option>
+            <option value="month">月ごと（前の月と比べる）</option>
           </select></div>
         <div class="fi"><label>ライン</label>
           <select id="lhLine" onchange="lhLoad()" style="padding:7px 9px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:inherit;"></select></div>
@@ -12024,7 +12026,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.28-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.28-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -15780,9 +15782,10 @@ window.lhLoad=async function(){
     });
   }
   const recs=[];
+  const useAll=(mode==='month');   // 月ごとは期間で切らない（残っている分を全部使う）
   Object.keys(all).sort().reverse().forEach(d=>{
-    if(from&&d<from) return;
-    if(to&&d>to) return;
+    if(!useAll&&from&&d<from) return;
+    if(!useAll&&to&&d>to) return;
     Object.keys(all[d]||{}).forEach(id=>{
       if(lineId&&id!==lineId) return;
       const r=all[d][id];
@@ -15790,8 +15793,84 @@ window.lhLoad=async function(){
     });
   });
   _lhData=recs;
+  if(mode==='month'){ await _lhRenderMonth(recs, Object.keys(all).sort()[0]||''); return; }
   (mode==='part'?_lhRenderPart:_lhRenderDay)(recs);
 };
+
+// ===== 月ごと（前の月と比べる）2026-09-28 =====
+//   ロス記録は約100日で消えるので、終わった月は /lossMonthly に残す。期を通して比べられるようにするため
+function _lhMonthAgg(recs){
+  const m={};
+  recs.forEach(function(r){
+    const ym=String(r.date||'').slice(0,7);
+    if(!ym) return;
+    const a=m[ym]||(m[ym]={ym:ym, setupN:0, hitN:0, overMin:0, causeN:0});
+    (r.jobs||[]).forEach(function(j){
+      if(j.noSetup) return;
+      const rate=_lhRate(j);
+      if(rate==null) return;
+      a.setupN++;
+      const nd=(j.needCause!==undefined)?j.needCause:setupNeedsCause(rate,j.setupOver);
+      if(nd){ a.hitN++; a.overMin+=(j.setupOver||0); if(j.setupCause) a.causeN++; }
+    });
+  });
+  return m;
+}
+async function _lhRenderMonth(recs, minDay){
+  const body=document.getElementById('lhBody');
+  const cur=_lhMonthAgg(recs);
+  // 残してある月まとめを読む（消えた月のぶん）
+  let saved={};
+  try{ const sn=await get(ref(db,'lossMonthly')); saved=sn.val()||{}; }catch(e){}
+  // 終わった月で、その月のあたまから記録がそろっているものは残す
+  const nowYm=_lhDay().slice(0,7);
+  Object.keys(cur).forEach(function(ym){
+    if(ym>=nowYm) return;                       // 今月はまだ途中
+    if(minDay && minDay>ym+'-01') return;       // 月のあたまが消えている＝数えきれていない
+    const a=cur[ym];
+    try{ set(ref(db,'lossMonthly/'+ym), {ym:ym, setupN:a.setupN, hitN:a.hitN,
+         overMin:a.overMin, causeN:a.causeN, ts:Date.now()}); }catch(e){}
+  });
+  const all={};
+  Object.keys(saved).forEach(function(k){ all[k]=saved[k]; });
+  Object.keys(cur).forEach(function(k){ all[k]=cur[k]; });   // 手元の集計を優先
+  const ks=Object.keys(all).sort();
+  document.getElementById('lhCount').textContent=ks.length+'か月';
+  if(!ks.length){ body.innerHTML='<div style="color:#bbb;font-size:12px;padding:10px 0;">まだ記録がありません</div>'; return; }
+  const per=function(a){ return a.setupN? (a.overMin/a.setupN) : null; };   // 1回あたり超過分
+  const rows=ks.map(function(ym,i){
+    const a=all[ym], p=i>0?all[ks[i-1]]:null;
+    const pc=per(a), pp=p?per(p):null;
+    let cmp='<span style="color:#ccc;">--</span>';
+    if(pc!=null&&pp!=null&&pp>0){
+      const d=Math.round((pc-pp)/pp*100);
+      cmp = d<=0 ? '<span style="color:#16a34a;font-weight:800;">▲'+Math.abs(d)+'%</span>'
+                 : '<span style="color:#dc2626;font-weight:800;">+'+d+'%</span>';
+    }
+    const rt=a.setupN?Math.round(a.hitN/a.setupN*100):0;
+    const wr=a.hitN?Math.round(a.causeN/a.hitN*100):null;
+    return '<tr><td><b>'+_lhEsc(ym)+'</b></td>'
+      +'<td class="lh-num">'+a.setupN+'回</td>'
+      +'<td class="lh-num"><b>'+a.hitN+'件</b></td>'
+      +'<td class="lh-num">'+rt+'%</td>'
+      +'<td class="lh-num">+'+a.overMin+'分</td>'
+      +'<td class="lh-num">'+(pc!=null?pc.toFixed(1)+'分':'--')+'</td>'
+      +'<td class="lh-num">'+cmp+'</td>'
+      +'<td class="lh-num">'+Math.round(a.overMin/60*2500).toLocaleString()+'円</td>'
+      +'<td class="lh-num">'+(wr==null?'--':(wr<100?'<span style="color:#dc2626;font-weight:700;">'+wr+'%</span>':'<span style="color:#16a34a;font-weight:700;">100%</span>'))+'</td></tr>';
+  }).join('');
+  body.innerHTML='<div class="lh-sumwrap" style="margin-bottom:10px;"><div class="lh-sumbox" style="grid-column:1/-1;">'
+    +'<div class="lh-sumhd">見方</div>'
+    +'<div style="font-size:12px;color:#555;line-height:1.7;">'
+    +'「該当」＝段取り率'+SETUP_ASK_RATE+'%以上かつ超過'+SETUP_ASK_OVER+'分以上。'
+    +'<b>前月比は「1回あたり超過分」で見ます</b>（生産の本数が増えると件数は自然に増えるため）。'
+    +'▲が改善。金額は2,500円/hで換算。<br>'
+    +'終わった月は自動で残すので、日ごとの記録が消えたあとも比べられます。</div></div></div>'
+    +'<table class="lh-tbl"><thead><tr><th>月</th><th class="lh-num">段取り回数</th>'
+    +'<th class="lh-num">該当件数</th><th class="lh-num">該当率</th><th class="lh-num">超過計</th>'
+    +'<th class="lh-num">1回あたり</th><th class="lh-num">前月比</th><th class="lh-num">金額</th>'
+    +'<th class="lh-num">原因の記入</th></tr></thead><tbody>'+rows+'</tbody></table>';
+}
 function _lhTags(causes){
   const C={'段取り':'lh-setup','サイクルタイム':'lh-ct','トラブル':'lh-stop'};
   // 数量未達は出さない（前に保存した記録に残っていても無視する）
@@ -20455,7 +20534,7 @@ window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.28-1</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.28-2</div>
 </body>
 </html>
 
