@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.29-1 : <b>呼び出しボタン（試作）</b>を足した（社長指示）。現場の「リフト待ち」「技術を呼ぶ」を、口頭ではなく画面から呼ぶ。右下の赤い丸ボタン → ラインを選ぶ → 6つ（リフト／技術（設備）／技術（金型）／材料・部品／品質確認／応援）から押すだけ。押すと<b>全員の画面の上に赤い帯</b>が出て、経過分数が伸びる（3分で橙・5分で赤く点滅）。受けた人が「向かいます」を押し、終わったら「完了」。その端末のスピーカーから<b>チャイムと読み上げ</b>が出る（パーティーボックスにつなげば工場に流せる。端末ごとに消音可）。記録は /calls に残す（30日）。★呼ぶことと記録することが1回で済むので、72期11月の「段取超過の原因を全件記入」が押した時点で確定する。まだ試作なので、Slack通知・スマートウォッチ・Echoへのアナウンス・ロス記録への反映は入れていない。 -->
 <!-- H-Hub v2026.09.28-2 : ロス記録に<b>「月ごと（前の月と比べる）」</b>を足した（社長指摘：前期との比較はできなくても、前の月と当月なら比べられる）。月・段取り回数・該当件数（150%以上かつ+15分以上）・該当率・超過分の計・<b>1回あたり超過分</b>・<b>前月比</b>・金額（2,500円/h）・原因の記入率を並べる。前月比を件数ではなく<b>1回あたり超過分</b>で出すのは、生産の本数が増えれば件数は自然に増えるため。ロス記録の明細は約100日で消えるので、<b>終わった月のまとめを /lossMonthly に自動で残す</b>（月のあたまから記録がそろっている月だけ）。これで期を通して12か月の推移が追える。 -->
 <!-- H-Hub v2026.09.28-1 : 段取り超過の<b>原因</b>を残せるようにした（社長指示）。実データ（9/21〜25の5日・段取り49件）を見ると150%以上が22件あるが、標準6分の工程が実10分で167%になるものが含まれ、これを「超過」と数えると現場に通らない。そこで<b>段取り率150%以上かつ超過15分以上</b>（5日で14件・月56件相当）だけを拾い、実績入力でその条件に当たったときだけ<b>原因のプルダウン</b>を出す。選択肢は備考に実際に書かれていた言葉から作った（型・治具を探した／リフト待ち／型の不具合・修理／材料・部品待ち／設備の不調／条件出し・試し打ち／品質確認待ち／教育・不慣れ／<b>段取り以外の時間が入っている</b>／<b>標準時間が実態と合っていない</b>／その他）。後ろの2つを入れてあるのは、段取り時間に停止や検診が混ざっている記録（実240分／標準17分＝1412%）や、標準26分の工程が9件すべて超過している（＝標準の方が実態と合っていない疑い）ものを、現場のせいにしないため。未選択でも保存はできるが一度だけ確認が出る。ロス記録は「日ごと」に原因と<b>未記入</b>を出し、「品番ごと」の頭に<b>原因別の件数と超過分数（2,500円/hで金額換算）</b>を出す。CSVにも列を足した。 -->
 <!-- H-Hub v2026.09.24-1 : 突発作業の「内容」の選択肢を変えた（社長指示）。手直し→<b>ゲトバシ</b>（カタカナ）、<b>出荷</b>は削除。選択肢は 修正／検査／ゲトバシ／選別／段取り応援／会議／清掃 の7つ。選択肢はボタンを押すと内容欄に入るだけなので、手で書けば今までどおり何でも入る。既に保存してある「手直し」「出荷」の突発作業はそのまま残る。 -->
@@ -12026,7 +12027,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.28-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.29-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -20532,9 +20533,186 @@ window.apSaveSkill = async function() {
 
 window.apRenderSkillTable = apRenderSkillTable;
 window.apSaveSkill = apSaveSkill;
+
+// ══════════════════════════════════════════════════════════
+//  呼び出し（試作）2026-09-29 社長指示
+//   現場 → 「リフト待ち」「技術を呼ぶ」を押す → 全員の画面に出る → 向かう → 完了
+//   ★呼ぶことと記録することを1回で済ませる。押した種類がそのまま段取超過の原因になる
+// ══════════════════════════════════════════════════════════
+const CALL_KINDS = [
+  { k:'リフト',        icon:'🚜', c:'#b45309' },
+  { k:'技術（設備）',  icon:'🔧', c:'#1d4ed8' },
+  { k:'技術（金型）',  icon:'🧰', c:'#4338ca' },
+  { k:'材料・部品',    icon:'📦', c:'#047857' },
+  { k:'品質確認',      icon:'🔍', c:'#9d174d' },
+  { k:'応援',          icon:'🙋', c:'#c2410c' },
+];
+const CALL_WARN_MIN = 3;      // これを過ぎたら橙
+const CALL_BAD_MIN  = 5;      // これを過ぎたら赤で点滅
+const CALL_KEEP_DAYS = 30;
+let _calls = {}, _callLine = '', _callSeen = {};
+
+const _cEsc = v => String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+                    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const _cDay = () => new Date().toLocaleDateString('sv-SE');
+function _cMin(ts){ return Math.max(0, Math.floor((Date.now()-ts)/60000)); }
+
+window.callOpen = function(){
+  const wrap = document.getElementById('callLines');
+  // lines には updatedAt のような値も混ざるので、中身がオブジェクトのものだけ
+  const ids = Object.keys(lines||{}).filter(id => lines[id] && typeof lines[id]==='object');
+  if(!_callLine) _callLine = ids[0]||'';
+  wrap.innerHTML = ids.map(id =>
+    '<button onclick="callPickLine(\'' + _cEsc(id) + '\')" data-cl="' + _cEsc(id) + '" '
+    + 'style="padding:9px 13px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;'
+    + 'font-family:inherit;border:2px solid ' + (id===_callLine?'#111':'#d1d5db') + ';'
+    + 'background:' + (id===_callLine?'#111':'#fff') + ';color:' + (id===_callLine?'#fff':'#333') + ';">'
+    + _cEsc(getLineName(id)) + '</button>').join('');
+  document.getElementById('callKinds').innerHTML = CALL_KINDS.map(x =>
+    '<button onclick="callSend(\'' + _cEsc(x.k) + '\')" '
+    + 'style="padding:18px 8px;border-radius:10px;border:none;cursor:pointer;font-family:inherit;'
+    + 'background:' + x.c + ';color:#fff;font-size:15px;font-weight:800;line-height:1.5;">'
+    + x.icon + '<br>' + _cEsc(x.k) + '</button>').join('');
+  document.getElementById('callMsg').textContent = '';
+  const ov = document.getElementById('callOv');
+  ov.style.display = 'flex';
+};
+window.callPickLine = function(id){ _callLine = id; callOpen(); };
+window.callCloseD  = function(){ document.getElementById('callOv').style.display='none'; };
+window.callCloseBg = function(e){ if(e.target===document.getElementById('callOv')) callCloseD(); };
+
+window.callSend = function(kind){
+  if(!_callLine){ document.getElementById('callMsg').textContent='ラインを選んでください'; return; }
+  const key = _cDay().replace(/-/g,'') + '_' + Date.now() + '_' + Math.floor(Math.random()*1000);
+  const rec = { line:_callLine, lineName:getLineName(_callLine), kind:kind,
+                at:Date.now(), day:_cDay(), status:'open' };
+  set(ref(db,'calls/'+key), rec);
+  document.getElementById('callMsg').textContent = getLineName(_callLine)+'から「'+kind+'」を呼びました';
+  setTimeout(callCloseD, 900);
+};
+window.callAck = function(key){
+  update(ref(db,'calls/'+key), { status:'ack', ackAt:Date.now() });
+};
+window.callDone = function(key){
+  update(ref(db,'calls/'+key), { status:'done', doneAt:Date.now() });
+};
+window.callCancel = function(key){
+  if(!confirm('この呼び出しを取り消しますか？')) return;
+  set(ref(db,'calls/'+key), null);
+};
+
+// 鳴らす（チャイム＋読み上げ）。この端末のスピーカーから出る
+function _callChime(){
+  if(document.getElementById('callMute')?.checked) return;
+  try{
+    const C = new (window.AudioContext||window.webkitAudioContext)();
+    [880,1174].forEach(function(f,i){
+      const o=C.createOscillator(), g=C.createGain();
+      o.type='sine'; o.frequency.value=f;
+      g.gain.setValueAtTime(0.0001, C.currentTime+i*0.28);
+      g.gain.exponentialRampToValueAtTime(0.35, C.currentTime+i*0.28+0.03);
+      g.gain.exponentialRampToValueAtTime(0.0001, C.currentTime+i*0.28+0.26);
+      o.connect(g); g.connect(C.destination);
+      o.start(C.currentTime+i*0.28); o.stop(C.currentTime+i*0.28+0.3);
+    });
+  }catch(e){}
+}
+function _callSpeak(t){
+  if(document.getElementById('callMute')?.checked) return;
+  try{
+    const u = new SpeechSynthesisUtterance(t);
+    u.lang='ja-JP'; u.rate=0.95; u.volume=1;
+    setTimeout(function(){ speechSynthesis.speak(u); }, 700);   // チャイムの後
+  }catch(e){}
+}
+
+function _callRender(){
+  const b = document.getElementById('callBanner');
+  if(!b) return;
+  const open = Object.entries(_calls)
+    .filter(([,r]) => r && r.status !== 'done')
+    .sort((x,y) => x[1].at - y[1].at);
+  if(!open.length){ b.style.display='none'; b.innerHTML=''; return; }
+  b.style.display='';
+  b.innerHTML = open.map(function([key,r]){
+    const m = _cMin(r.at);
+    const col = m>=CALL_BAD_MIN ? '#b91c1c' : m>=CALL_WARN_MIN ? '#c2410c' : '#a16207';
+    const blink = (m>=CALL_BAD_MIN && r.status==='open') ? 'animation:callBlink 1s steps(1,end) infinite;' : '';
+    const ackTxt = (r.status==='ack')
+      ? '<span style="background:rgba(255,255,255,.22);border-radius:5px;padding:2px 8px;font-size:13px;">向かっています（'
+        + _cMin(r.ackAt||r.at) + '分）</span>'
+      : '';
+    return '<div style="background:'+col+';color:#fff;padding:9px 14px;display:flex;align-items:center;'
+      + 'gap:12px;border-bottom:1px solid rgba(255,255,255,.25);'+blink+'">'
+      + '<span style="font-size:19px;font-weight:900;">📣 '+_cEsc(r.lineName||r.line)+'</span>'
+      + '<span style="font-size:17px;font-weight:800;">'+_cEsc(r.kind)+'</span>'
+      + '<span style="font-size:15px;">'+m+'分経過</span>'
+      + ackTxt
+      + '<span style="margin-left:auto;display:flex;gap:7px;">'
+      + (r.status==='open'
+          ? '<button onclick="callAck(\''+key+'\')" style="border:none;border-radius:6px;padding:7px 15px;'
+            + 'font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;background:#fff;color:#111;">向かいます</button>'
+          : '')
+      + '<button onclick="callDone(\''+key+'\')" style="border:none;border-radius:6px;padding:7px 15px;'
+      + 'font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;background:#16a34a;color:#fff;">完了</button>'
+      + '<button onclick="callCancel(\''+key+'\')" title="取り消し" style="border:none;border-radius:6px;'
+      + 'padding:7px 10px;font-size:13px;cursor:pointer;font-family:inherit;background:rgba(255,255,255,.25);color:#fff;">✕</button>'
+      + '</span></div>';
+  }).join('');
+}
+
+onValue(ref(db,'calls'), function(snap){
+  const v = snap.val()||{};
+  // 新しく来た呼び出しだけ鳴らす
+  Object.keys(v).forEach(function(k){
+    const r = v[k];
+    if(!r || r.status==='done' || _callSeen[k]) return;
+    _callSeen[k] = 1;
+    if(Date.now() - (r.at||0) < 60000){          // 1分以内に作られたものだけ
+      _callChime();
+      _callSpeak((r.lineName||r.line) + 'から、' + r.kind + 'です');
+    }
+  });
+  Object.keys(_callSeen).forEach(function(k){ if(!v[k]) delete _callSeen[k]; });
+  _calls = v;
+  _callRender();
+  // 古い記録を掃除（30日）
+  const cut = new Date(); cut.setDate(cut.getDate()-CALL_KEEP_DAYS);
+  const cutS = cut.toLocaleDateString('sv-SE');
+  Object.keys(v).forEach(function(k){ if((v[k]||{}).day && v[k].day < cutS) set(ref(db,'calls/'+k), null); });
+});
+setInterval(_callRender, 10000);
+
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.28-2</div>
+
+<!-- ══ 呼び出し（試作）2026-09-29 ══ -->
+<style>@keyframes callBlink { 0%,60%{opacity:1} 61%,100%{opacity:.45} }</style>
+<div id="callBanner" style="display:none;position:fixed;left:0;right:0;top:0;z-index:10000;"></div>
+<button id="callFab" onclick="callOpen()" title="リフト・技術を呼ぶ"
+  style="position:fixed;right:14px;bottom:26px;z-index:9998;width:96px;height:96px;border-radius:50%;
+         border:none;cursor:pointer;background:#dc2626;color:#fff;font-size:15px;font-weight:800;
+         font-family:inherit;box-shadow:0 6px 18px rgba(0,0,0,.35);line-height:1.3;">📣<br>呼ぶ</button>
+<div id="callOv" onclick="callCloseBg(event)"
+  style="display:none;position:fixed;inset:0;z-index:10001;background:rgba(0,0,0,.55);
+         align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:14px;padding:18px 18px 14px;width:min(720px,94vw);max-height:92vh;overflow:auto;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <div style="font-size:19px;font-weight:800;">📣 呼ぶ</div>
+      <button onclick="callCloseD()" style="border:none;background:#e5e7eb;border-radius:6px;
+        padding:7px 14px;font-size:13px;cursor:pointer;font-family:inherit;">閉じる</button>
+    </div>
+    <div style="font-size:13px;color:#555;margin-bottom:6px;">どこから</div>
+    <div id="callLines" style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px;"></div>
+    <div style="font-size:13px;color:#555;margin-bottom:6px;">何を（押すとすぐ呼びます）</div>
+    <div id="callKinds" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:9px;"></div>
+    <div style="margin-top:12px;font-size:12px;color:#888;">
+      <label style="cursor:pointer;"><input type="checkbox" id="callMute"> この端末では音を鳴らさない</label>
+    </div>
+    <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
+  </div>
+</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.29-1</div>
 </body>
 </html>
 
