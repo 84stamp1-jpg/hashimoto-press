@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.09.28-1 : 材質のメーカー別読み替えに <b>GO5 ⇔ HMD5</b> を足した（社長指示）。GO5でもHMD5でも、大同への手配書は<b>GO5</b>、スチールポリッシュへの手配書は<b>HMD5</b>で出る。これまで DCMX/SLD-M の1組だけを if で書いていたので、<b>MATERIAL_ALIASES</b> という対応表にまとめ、次からは1行足すだけで増やせるようにした。表に載っていない材質、ネオスチール・グリーンスチールなど表に無い手配先は今までどおりそのまま出る。見積依頼書・材料依頼書・FAX・メール・CSVは同じ convertMaterial() を通っているので、すべてに効く。 -->
 <!-- 金型原価 v2026.09.23-1 : ★加工費などが二重に数えられていたのを直した（社長指摘：画面の加工費とPDFの加工費が倍違う）。Firebaseを読むときの merge() が「Firebaseを正とする」と書きながら Object.assign({}, ローカル, Firebase) になっており、Firebaseに無いローカルのキーを残していた。CSVを取り込み直すと明細は新しいキーで入るので、古いキーが消えず同じ明細が2つ残る。その状態で保存したスナップショットは金額が約2倍のまま固定されるため、PDFだけ倍になっていた（画面は読み直したあとなので正しい）。コメントどおり「Firebaseにデータがあればそれだけを使う」に修正し、捨てたローカル分の件数をコンソールに出す。★すでに保存済みのスナップショットは直らないので、保存し直すこと。 -->
 <!-- 金型原価 v2026.09.15-1 : (1)★材料費・購入品費・外注費のCSV出力を追加（社長要望）。生産管理システムへ取り込んでもらうため、1行＝1明細で★3費目の列をそろえた（費目/計上月/納入日/金型NO/品番/工程/品名・内容/材質/サイズ/仕上/重量kg/数量/単価/金額/手配先/備考/管理キー）。同じ意味の項目は同じ列に来るので、相手は1つの対応づけで3費目とも読める。無い項目は空欄。★列の並びは変えないこと（相手の設定が壊れる）。サイズは指定どおり XxYxZ（例 185x120x30）。UTF-8 BOM付き・CRLFなのでExcelでそのまま開ける。各タブに「⬇ CSV出力」、材料費タブに「⬇ 3費目まとめて」。(2)★タブ切替が遅くなっていた主因を直した。findMoldByNo() が1行ごとに Object.values(DB.molds) を作り直して全件走査し、さらに前方一致で filter+sort をもう1周していた。金型300件×明細3000行で200万回近い比較になる。索引(Map＋長い順リスト＋結果メモ)を1度作って使い回し、金型を保存したときだけ捨てる（writeToFirebaseで invalidateMoldIndex）。判定の順序は従来と同じ -->
 <!-- 金型原価 v2026.09.04-20 : App61の実際のフィールドコードを実データで確認し、既定値に入れた。作業明細の作業員は「ルックアップ_0」（ユーザー選択ではなくただの文字列）。親は 管理コード=文字列__1行__6／部品番号=ルックアップ／工程=文字列__1行__9／トライ状況=ラジオボタン_0／加工予算=budget／残予算=計算。これで「項目の対応づけ」をしなくても既定で正しく取り込める -->
@@ -645,7 +646,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.23-1</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.28-1</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -932,7 +933,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
             <div style="font-size:11px;color:var(--text3);margin-bottom:10px;">✅ チェックした会社へ依頼書を作成します</div>
             <div id="supplierChecks" style="margin-bottom:14px;"></div>
             <div class="form-group" style="margin-bottom:12px"><label class="form-label">自社担当者名</label><input class="form-input" id="qf_staff" placeholder="松本" style="width:120px"></div>
-            <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">※ DCMXはスチールポリッシュ向けにSLD-Mへ自動変換</div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">※ 手配先で材質名を自動で読み替え（大同 DCMX／GO5 ⇔ スチールポリッシュ SLD-M／HMD5）</div>
             <hr class="divider">
             <button class="btn btn-primary" style="width:100%;margin-bottom:8px" onclick="generateQuotePrint()">🖨 見積依頼書を印刷（各社ごと）</button>
             <button class="btn btn-secondary" style="width:100%" onclick="saveQuoteRequest()">💾 見積待ちとして保存</button>
@@ -4526,18 +4527,20 @@ function renderSupplierChecks() {
     </label>`).join('');
 }
 
-// ── DCMX / SLD-M 変換 ──
+// ── 材質のメーカー別読み替え ──
+// 同じ材料でもメーカーによって呼び名が違うので、手配先に合わせて書き換える。
+// 1行が1つの材料。増やすときはここに足すだけ（載っていない材質・手配先はそのまま）。
+const MATERIAL_ALIASES = [
+  { daido:'DCMX', polish:'SLD-M' },
+  { daido:'GO5',  polish:'HMD5'  },   // 2026-09-28 社長指示
+];
 function convertMaterial(material, supplierId) {
   if (!material) return material;
-  const m = material.trim().toUpperCase();
-  if (supplierId === 'polish') {
-    // スチールポリッシュへはDCMX→SLD-M
-    return m === 'DCMX' ? 'SLD-M' : material;
-  } else if (supplierId === 'daido') {
-    // 大同へはSLD-M→DCMX
-    return m === 'SLD-M' ? 'DCMX' : material;
-  }
-  return material;
+  const m = String(material).trim().toUpperCase();
+  const hit = MATERIAL_ALIASES.find(a =>
+    Object.keys(a).some(k => String(a[k]).toUpperCase() === m));
+  if (!hit) return material;
+  return hit[supplierId] || material;   // 表に無い手配先（ネオ・グリーン等）はそのまま
 }
 
 // 仕上げ記号（▽表示）
@@ -5920,8 +5923,9 @@ const _origShowPage = showPage;
 // ═══════════════════════════════════════════════
 // 材質変換ルール
 // ═══════════════════════════════════════════════
-// DCMX → ポリッシュ手配時はSLD-M表記
-// SLD-M → 大同手配時はDCMX表記
+// 対応表は MATERIAL_ALIASES（convertMaterial のところ）にまとめてある
+//   DCMX（大同） ⇔ SLD-M（スチールポリッシュ）
+//   GO5 （大同） ⇔ HMD5 （スチールポリッシュ）
 
 // ═══════════════════════════════════════════════
 // 仕上記号 自動計算
