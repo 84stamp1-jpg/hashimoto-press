@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.09.28-3 : 材料費一覧の並び順を <b>注文した日（仕入日）の新しい順 → 管理NO.の小さい順</b> にそろえた（社長指示）。これまでは3か所でばらばらだった。画面＝日付の新しい順のあと<b>登録した順</b>（管理NO.は関係なし）、印刷＝日付の新しい順のあと管理NO.順、<b>チェックを入れて印刷＝並べ替えなし</b>（画面の順のまま）。共通の並べ替え matSortCmp() を作って3か所とも通した。管理NO.は数字混じりでも自然な順に並ぶ。日付が空のもの（再注文の直後など）は今までどおり最上段。CSV出力は取り込み先の都合があるので触っていない。 -->
 <!-- 金型原価 v2026.09.28-2 : <b>見積依頼書・注文書が2ページになったとき、2ページ目に宛先とタイトルが出なかった</b>のを直した（社長指摘）。宛先・タイトル・あいさつが表の外の div に置かれていたため、表だけが次のページへ続き、頭が付かなかった。これらを表の <b>thead</b> の中（列いっぱいの1行）へ移した。thead はページをまたぐとブラウザが自動でくり返すので、3ページ以上になっても毎ページ頭が付く。見積依頼書は列見出しが thead の1行目でなくなるため、<b>colgroup</b> を足して列幅が変わらないようにした（注文書は元から colgroup あり）。 -->
 <!-- 金型原価 v2026.09.28-1 : 材質のメーカー別読み替えに <b>GO5 ⇔ HMD5</b> を足した（社長指示）。GO5でもHMD5でも、大同への手配書は<b>GO5</b>、スチールポリッシュへの手配書は<b>HMD5</b>で出る。これまで DCMX/SLD-M の1組だけを if で書いていたので、<b>MATERIAL_ALIASES</b> という対応表にまとめ、次からは1行足すだけで増やせるようにした。表に載っていない材質、ネオスチール・グリーンスチールなど表に無い手配先は今までどおりそのまま出る。見積依頼書・材料依頼書・FAX・メール・CSVは同じ convertMaterial() を通っているので、すべてに効く。 -->
 <!-- 金型原価 v2026.09.23-1 : ★加工費などが二重に数えられていたのを直した（社長指摘：画面の加工費とPDFの加工費が倍違う）。Firebaseを読むときの merge() が「Firebaseを正とする」と書きながら Object.assign({}, ローカル, Firebase) になっており、Firebaseに無いローカルのキーを残していた。CSVを取り込み直すと明細は新しいキーで入るので、古いキーが消えず同じ明細が2つ残る。その状態で保存したスナップショットは金額が約2倍のまま固定されるため、PDFだけ倍になっていた（画面は読み直したあとなので正しい）。コメントどおり「Firebaseにデータがあればそれだけを使う」に修正し、捨てたローカル分の件数をコンソールに出す。★すでに保存済みのスナップショットは直らないので、保存し直すこと。 -->
@@ -647,7 +648,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.28-2</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.28-3</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -2691,6 +2692,23 @@ function renderSupplierSummary(entries, elId, getAmt, monthLabel) {
 }
 // ──────────────────────────────────────────────────────────────────────
 
+// ── 材料費の並び順（画面・印刷で共通）2026-09-28 社長指示 ──
+//   注文した日（仕入日）の新しい順 → 管理NO.の小さい順
+//   日付が空のもの（再注文の直後など）は今までどおり最上段に出す
+function matNoCmp(a, b) {
+  return String(a.partNo || a.moldNo || '')
+    .localeCompare(String(b.partNo || b.moldNo || ''), 'ja', { numeric: true });
+}
+function matSortCmp([ka, a], [kb, b]) {
+  const da = a.confirmedAt || a.month || '', db = b.confirmedAt || b.month || '';
+  if (da !== db) {
+    if (!da) return -1;              // 日付なしは上
+    if (!db) return 1;
+    return db > da ? 1 : -1;         // 日付は新しい順
+  }
+  return matNoCmp(a, b) || (ka > kb ? 1 : ka < kb ? -1 : 0);   // 同じ日は管理NO.順
+}
+
 function renderMaterials() {
   if (!DB.materials) DB.materials = {};
   const search   = (document.getElementById('matSearch')?.value||'').toLowerCase();
@@ -2731,16 +2749,7 @@ function renderMaterials() {
   const sSel = document.getElementById('matSupplierFilter');
   if (sSel) { const c=sSel.value; sSel.innerHTML='<option value="">全手配先</option>'+matSups.map(s=>`<option value="${s}"${s===c?' selected':''}>${s}</option>`).join(''); }
   if (supFil) entries = entries.filter(([,r]) => r.supplier === supFil);
-  // 日付なし（再注文直後等）→ 最上段、その後は確定日降順、同日はキー降順（新しい順）
-  entries.sort(([ka,a], [kb,b]) => {
-    const da = a.confirmedAt || a.month || '', db = b.confirmedAt || b.month || '';
-    if (!da && !db) return kb > ka ? 1 : kb < ka ? -1 : 0;
-    if (!da) return -1;
-    if (!db) return 1;
-    if (db > da) return 1;
-    if (db < da) return -1;
-    return kb > ka ? 1 : kb < ka ? -1 : 0;
-  });
+  entries.sort(matSortCmp);
   const total = entries.reduce((s,[,r])=>s+(r.amount||0),0);
   document.getElementById('matCount').textContent = entries.length + '件 / ¥' + fmt(total);
   const _matMonthLabel = (() => { const v = document.getElementById('matDateFilter')?.value||''; if (!v) return '全期間'; if (v==='nodate') return '入荷予定日なし'; return v.replace(/^(\d{4})-(\d{2})$/,'$1年$2月'); })();
@@ -3089,12 +3098,8 @@ function printMaterials() {
     );
     if (moldFil) entries = entries.filter(([,r]) => r.moldNo === moldFil);
     if (dateFil) entries = entries.filter(([,r]) => (r.month||'').startsWith(dateFil));
-    entries.sort(([,a],[,b]) => {
-      const da = a.confirmedAt||a.month||'', db = b.confirmedAt||b.month||'';
-      if (db > da) return 1; if (db < da) return -1;
-      return (a.partNo||a.moldNo||'').localeCompare(b.partNo||b.moldNo||'', 'ja', {numeric:true});
-    });
   }
+  entries.sort(matSortCmp);   // 画面と同じ並びにする（選んで印刷したときも）
 
   if (!entries.length) { alert('印刷するデータがありません'); return; }
 
