@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.09.28-2 : <b>見積依頼書・注文書が2ページになったとき、2ページ目に宛先とタイトルが出なかった</b>のを直した（社長指摘）。宛先・タイトル・あいさつが表の外の div に置かれていたため、表だけが次のページへ続き、頭が付かなかった。これらを表の <b>thead</b> の中（列いっぱいの1行）へ移した。thead はページをまたぐとブラウザが自動でくり返すので、3ページ以上になっても毎ページ頭が付く。見積依頼書は列見出しが thead の1行目でなくなるため、<b>colgroup</b> を足して列幅が変わらないようにした（注文書は元から colgroup あり）。 -->
 <!-- 金型原価 v2026.09.28-1 : 材質のメーカー別読み替えに <b>GO5 ⇔ HMD5</b> を足した（社長指示）。GO5でもHMD5でも、大同への手配書は<b>GO5</b>、スチールポリッシュへの手配書は<b>HMD5</b>で出る。これまで DCMX/SLD-M の1組だけを if で書いていたので、<b>MATERIAL_ALIASES</b> という対応表にまとめ、次からは1行足すだけで増やせるようにした。表に載っていない材質、ネオスチール・グリーンスチールなど表に無い手配先は今までどおりそのまま出る。見積依頼書・材料依頼書・FAX・メール・CSVは同じ convertMaterial() を通っているので、すべてに効く。 -->
 <!-- 金型原価 v2026.09.23-1 : ★加工費などが二重に数えられていたのを直した（社長指摘：画面の加工費とPDFの加工費が倍違う）。Firebaseを読むときの merge() が「Firebaseを正とする」と書きながら Object.assign({}, ローカル, Firebase) になっており、Firebaseに無いローカルのキーを残していた。CSVを取り込み直すと明細は新しいキーで入るので、古いキーが消えず同じ明細が2つ残る。その状態で保存したスナップショットは金額が約2倍のまま固定されるため、PDFだけ倍になっていた（画面は読み直したあとなので正しい）。コメントどおり「Firebaseにデータがあればそれだけを使う」に修正し、捨てたローカル分の件数をコンソールに出す。★すでに保存済みのスナップショットは直らないので、保存し直すこと。 -->
 <!-- 金型原価 v2026.09.15-1 : (1)★材料費・購入品費・外注費のCSV出力を追加（社長要望）。生産管理システムへ取り込んでもらうため、1行＝1明細で★3費目の列をそろえた（費目/計上月/納入日/金型NO/品番/工程/品名・内容/材質/サイズ/仕上/重量kg/数量/単価/金額/手配先/備考/管理キー）。同じ意味の項目は同じ列に来るので、相手は1つの対応づけで3費目とも読める。無い項目は空欄。★列の並びは変えないこと（相手の設定が壊れる）。サイズは指定どおり XxYxZ（例 185x120x30）。UTF-8 BOM付き・CRLFなのでExcelでそのまま開ける。各タブに「⬇ CSV出力」、材料費タブに「⬇ 3費目まとめて」。(2)★タブ切替が遅くなっていた主因を直した。findMoldByNo() が1行ごとに Object.values(DB.molds) を作り直して全件走査し、さらに前方一致で filter+sort をもう1周していた。金型300件×明細3000行で200万回近い比較になる。索引(Map＋長い順リスト＋結果メモ)を1度作って使い回し、金型を保存したときだけ捨てる（writeToFirebaseで invalidateMoldIndex）。判定の順序は従来と同じ -->
@@ -646,7 +647,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.28-1</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.28-2</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -4891,7 +4892,8 @@ function generateQuotePrint() {
         '</tr>';
     }).filter(Boolean).join('');
 
-    return '<div class="page-break">' +
+    // ★宛先・タイトルは thead の中に置く。2ページ目以降にもブラウザがくり返してくれる
+    const headBlock =
       '<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:8px;">' +
         '<div style="font-size:15pt;line-height:1.7">' +
           '<div style="font-size:20pt;font-weight:normal">' + sup.name + '</div>' +
@@ -4905,9 +4907,18 @@ function generateQuotePrint() {
           '<div style="font-size:16pt">橋本工業㈱　' + staff + '</div>' +
         '</div>' +
       '</div>' +
-      '<div style="margin-bottom:10px;font-size:16pt;line-height:1.8">いつもお世話になります。<br>下記の見積りをお願い致します。</div>' +
+      '<div style="margin-bottom:10px;font-size:16pt;line-height:1.8">いつもお世話になります。<br>下記の見積りをお願い致します。</div>';
+
+    return '<div class="page-break">' +
       '<table style="width:100%;border-collapse:collapse;font-size:20pt;table-layout:fixed">' +
+        // 列幅は colgroup で決める（thead の1行目が見出しではなくなるため）
+        '<colgroup>' +
+          '<col style="width:30px"><col style="width:140px"><col style="width:140px">' +
+          '<col style="width:30px"><col style="width:85px"><col style="width:70px">' +
+          '<col style="width:70px"><col style="width:70px"><col style="width:30px"><col>' +
+        '</colgroup>' +
         '<thead>' +
+          '<tr class="doc-head"><td colspan="10" style="border:none;padding:0 0 2px;">' + headBlock + '</td></tr>' +
           '<tr style="background:#d0d0d0">' +
             '<th style="' + B + 'padding:4px 2px;text-align:center;width:30px">No.</th>' +
             '<th style="' + B + 'padding:4px 2px;text-align:center;width:140px">管理NO.</th>' +
@@ -4941,6 +4952,7 @@ function generateQuotePrint() {
       'th{background:#c8c8c8;font-weight:400;font-size:15pt!important;line-height:1.3;}' +
       'td{font-size:20pt;line-height:1.5;}' +
       'tr:nth-child(even) td{background:#f8f8f8;}' +
+      'tr.doc-head td{border:none!important;background:#fff!important;}' +
       '@media print{.no-print{display:none!important}@page{size:A4 portrait;margin:2mm 3mm}}' +
     '</style>' +
     '</head><body>' +
@@ -8491,6 +8503,7 @@ async function printOrder(reqKey, supId, indices) {
       .bp{background:#1d4ed8;color:#fff}.bc{background:#e5e7eb;color:#333}
       table{width:100%;border-collapse:collapse;table-layout:fixed}
       th{background:#c8c8c8;font-weight:500;font-size:14pt;border:1px solid #999;padding:5px 4px;text-align:center}
+      tr.doc-head td{border:none!important;background:#fff!important;padding:0!important}
       @media print{.no-print{display:none!important}@page{size:A4 portrait;margin:8mm 10mm}}
     </style></head><body>
     <div class="no-print">
@@ -8499,6 +8512,22 @@ async function printOrder(reqKey, supId, indices) {
     </div>
     <div style="padding:4mm 6mm">
 
+      <!-- 明細テーブル（ヘッダーは thead の中。2ページ目以降にもくり返される） -->
+      <table>
+        <colgroup>
+          <col style="width:10%">   <!-- 管理NO. -->
+          <col style="width:21%">   <!-- 名称 -->
+          <col style="width:7%">    <!-- X -->
+          <col style="width:7%">    <!-- Y -->
+          <col style="width:7%">    <!-- Z -->
+          <col style="width:5%">    <!-- 数量 -->
+          <col style="width:7%">    <!-- 材質 -->
+          <col style="width:5%">    <!-- 仕上 -->
+          <col style="width:19%">   <!-- 備考 -->
+          <col style="width:12%">   <!-- 単価/発注金額 -->
+        </colgroup>
+        <thead>
+        <tr class="doc-head"><td colspan="10" style="border:none;padding:0;background:#fff">
       <!-- ヘッダー：注文書タイトル + 右に宛先・発行情報 -->
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px">
         <!-- 左：タイトル 22pt -->
@@ -8531,22 +8560,7 @@ async function printOrder(reqKey, supId, indices) {
       </div>
 
       <div style="border-top:2px solid #000;margin-bottom:4px"></div>
-
-      <!-- 明細テーブル（11列・1行/品目） -->
-      <table>
-        <colgroup>
-          <col style="width:10%">   <!-- 管理NO. -->
-          <col style="width:21%">   <!-- 名称 -->
-          <col style="width:7%">    <!-- X -->
-          <col style="width:7%">    <!-- Y -->
-          <col style="width:7%">    <!-- Z -->
-          <col style="width:5%">    <!-- 数量 -->
-          <col style="width:7%">    <!-- 材質 -->
-          <col style="width:5%">    <!-- 仕上 -->
-          <col style="width:19%">   <!-- 備考 -->
-          <col style="width:12%">   <!-- 単価/発注金額 -->
-        </colgroup>
-        <thead>
+        </td></tr>
           <tr>
             <th rowspan="2">管理NO.</th>
             <th rowspan="2">名　称</th>
