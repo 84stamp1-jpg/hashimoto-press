@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.29-3 : 呼び出しの「この端末の置き場所」に<b>事務所・現場事務所・技術事務所・品質管理・納入出荷・倉庫・工場（共通）・休憩室</b>を足した（社長指摘：事務所や技術事務所が選べない）。ラインしか出していなかった。置き場所がラインのときだけ、呼ぶときのラインがそこで初期選択され、自分の場所からの呼び出しでは鳴らない。事務所などを選んだ端末は、呼ぶラインを毎回選ぶ形になり、すべての呼び出しが鳴る対象になる。 -->
 <!-- H-Hub v2026.09.29-2 : 呼び出しに<b>「この端末の設定」</b>を足した（社長指摘：どのPCがどこか決まっていないのに何で判断してどこが鳴るのか）。試作では場所を一切見ておらず、開いている全端末で鳴っていた。端末ごとに<b>置き場所</b>と<b>鳴らす種類</b>を1回決めると、その端末に保存される（localStorage）。置き場所を決めると呼ぶときのラインが最初から選ばれ、右下のボタンにも場所が出る。<b>自分の場所からの呼び出しでは鳴らない</b>（押した本人の横で鳴っても意味がないため）。例：事務所＝全部鳴らす／技術の部屋＝技術（設備）と技術（金型）だけ／各ライン＝自分以外のリフトだけ。 -->
 <!-- H-Hub v2026.09.29-1 : <b>呼び出しボタン（試作）</b>を足した（社長指示）。現場の「リフト待ち」「技術を呼ぶ」を、口頭ではなく画面から呼ぶ。右下の赤い丸ボタン → ラインを選ぶ → 6つ（リフト／技術（設備）／技術（金型）／材料・部品／品質確認／応援）から押すだけ。押すと<b>全員の画面の上に赤い帯</b>が出て、経過分数が伸びる（3分で橙・5分で赤く点滅）。受けた人が「向かいます」を押し、終わったら「完了」。その端末のスピーカーから<b>チャイムと読み上げ</b>が出る（パーティーボックスにつなげば工場に流せる。端末ごとに消音可）。記録は /calls に残す（30日）。★呼ぶことと記録することが1回で済むので、72期11月の「段取超過の原因を全件記入」が押した時点で確定する。まだ試作なので、Slack通知・スマートウォッチ・Echoへのアナウンス・ロス記録への反映は入れていない。 -->
 <!-- H-Hub v2026.09.28-2 : ロス記録に<b>「月ごと（前の月と比べる）」</b>を足した（社長指摘：前期との比較はできなくても、前の月と当月なら比べられる）。月・段取り回数・該当件数（150%以上かつ+15分以上）・該当率・超過分の計・<b>1回あたり超過分</b>・<b>前月比</b>・金額（2,500円/h）・原因の記入率を並べる。前月比を件数ではなく<b>1回あたり超過分</b>で出すのは、生産の本数が増えれば件数は自然に増えるため。ロス記録の明細は約100日で消えるので、<b>終わった月のまとめを /lossMonthly に自動で残す</b>（月のあたまから記録がそろっている月だけ）。これで期を通して12か月の推移が追える。 -->
@@ -12028,7 +12029,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.29-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.29-3';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -20548,6 +20549,8 @@ const CALL_KINDS = [
   { k:'品質確認',      icon:'🔍', c:'#9d174d' },
   { k:'応援',          icon:'🙋', c:'#c2410c' },
 ];
+// 端末の置き場所。ライン以外（事務所など）もここから選ぶ
+const CALL_PLACES = ['事務所','現場事務所','技術事務所','品質管理','納入・出荷','倉庫・材料置場','工場（共通）','休憩室'];
 const CALL_WARN_MIN = 3;      // これを過ぎたら橙
 const CALL_BAD_MIN  = 5;      // これを過ぎたら赤で点滅
 const CALL_KEEP_DAYS = 30;
@@ -20574,7 +20577,7 @@ function callFabLabel(){
 // この呼び出しでこの端末を鳴らすか
 function callShouldRing(r){
   if(_callCfg.mute) return false;
-  if(_callCfg.site && r.line === _callCfg.site) return false;   // 自分の場所からの呼びは鳴らさない
+  if(_callCfg.site && r.line === _callCfg.site) return false;   // 自分の場所からの呼びは鳴らさない（事務所なら該当しない）
   if(_callCfg.ring === null) return true;                        // 未設定なら全部鳴らす
   return _callCfg.ring.indexOf(r.kind) >= 0;
 }
@@ -20588,7 +20591,9 @@ window.callOpen = function(){
   const wrap = document.getElementById('callLines');
   // lines には updatedAt のような値も混ざるので、中身がオブジェクトのものだけ
   const ids = Object.keys(lines||{}).filter(id => lines[id] && typeof lines[id]==='object');
-  if(!_callLine) _callLine = _callCfg.site || ids[0] || '';
+  // 置き場所がラインなら、呼ぶラインもそこを初期値にする。事務所などのときは選ばせる
+  const siteIsLine = _callCfg.site && ids.indexOf(_callCfg.site) >= 0;
+  if(!_callLine) _callLine = siteIsLine ? _callCfg.site : (ids[0] || '');
   wrap.innerHTML = ids.map(id =>
     '<button onclick="callPickLine(\'' + _cEsc(id) + '\')" data-cl="' + _cEsc(id) + '" '
     + 'style="padding:9px 13px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;'
@@ -20601,8 +20606,10 @@ window.callOpen = function(){
     + 'background:' + x.c + ';color:#fff;font-size:15px;font-weight:800;line-height:1.5;">'
     + x.icon + '<br>' + _cEsc(x.k) + '</button>').join('');
   const site = document.getElementById('callSite');
-  site.innerHTML = '<option value="">（決めていない）</option>' + ids.map(id =>
-    '<option value="'+_cEsc(id)+'"'+(id===_callCfg.site?' selected':'')+'>'+_cEsc(getLineName(id))+'</option>').join('');
+  const opt = (v,label) => '<option value="'+_cEsc(v)+'"'+(v===_callCfg.site?' selected':'')+'>'+_cEsc(label)+'</option>';
+  site.innerHTML = '<option value="">（決めていない）</option>'
+    + '<optgroup label="ライン・担当">' + ids.map(id => opt(id, getLineName(id))).join('') + '</optgroup>'
+    + '<optgroup label="事務所など">' + CALL_PLACES.map(p => opt(p, p)).join('') + '</optgroup>';
   document.getElementById('callRing').innerHTML = CALL_KINDS.map(x =>
     '<label style="cursor:pointer;font-size:12.5px;"><input type="checkbox" class="call-ring" value="'+_cEsc(x.k)+'" '
     + 'onchange="callSaveCfg()"' + ((_callCfg.ring===null||_callCfg.ring.indexOf(x.k)>=0)?' checked':'') + '> '
@@ -20745,7 +20752,7 @@ setInterval(_callRender, 10000);
       <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:9px;">
         <span style="font-size:12px;color:#555;">置き場所</span>
         <select id="callSite" onchange="callSaveCfg()" style="padding:6px 9px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;font-family:inherit;"></select>
-        <span style="font-size:11px;color:#94a3b8;">決めておくと、次から自動でここが選ばれます</span>
+        <span style="font-size:11px;color:#94a3b8;">ラインを選ぶと、呼ぶときも最初からそこが選ばれます</span>
       </div>
       <div style="font-size:12px;color:#555;margin-bottom:5px;">この端末で音を鳴らす呼び出し</div>
       <div id="callRing" style="display:flex;flex-wrap:wrap;gap:10px;"></div>
@@ -20755,7 +20762,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.29-2</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.29-3</div>
 </body>
 </html>
 
