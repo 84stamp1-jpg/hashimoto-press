@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.30-1 : <b>書画カメラの写真の字が読めない</b>のを直した（社長指摘：生産実績の記録の写真）。撮ったあと<b>長辺1200pxまで縮小しJPEG品質0.7</b>で保存していた。A4だと約100dpi相当で、手書きの数字が潰れる。(1)カメラへの要求を 1600×1200 → <b>2560×1920</b> に上げた (2)縮小の上限を <b>長辺1800px</b>（A4で約150dpi相当）に (3)品質を <b>0.8</b> に (4)これまで「切り取り→JPEG0.9→読み直し→縮小→JPEG0.7」と<b>2回JPEGをかけていた</b>のを、切り取りと縮小をまとめて1回だけ書き出す形にした（にじみが減る）。1枚あたりの大きさは約3倍になる。 -->
 <!-- H-Hub v2026.09.29-4 : 呼び出しの時刻を<b>端末の時計からサーバーの時計に変えた</b>。本番に残った最初の1件（近藤・技術（金型））で、<b>完了時刻が呼び出し時刻より14秒前</b>になっていた。呼んだ端末と完了を押した端末で時計がずれているため。このままでは応答時間・対応時間が出せない。at／ackAt／doneAt を serverTimestamp() にし、経過分数の表示も .info/serverTimeOffset でこの端末の時計のずれを補正して数えるようにした。 -->
 <!-- H-Hub v2026.09.29-3 : 呼び出しの「この端末の置き場所」に<b>事務所・現場事務所・技術事務所・品質管理・納入出荷・倉庫・工場（共通）・休憩室</b>を足した（社長指摘：事務所や技術事務所が選べない）。ラインしか出していなかった。置き場所がラインのときだけ、呼ぶときのラインがそこで初期選択され、自分の場所からの呼び出しでは鳴らない。事務所などを選んだ端末は、呼ぶラインを毎回選ぶ形になり、すべての呼び出しが鳴る対象になる。 -->
 <!-- H-Hub v2026.09.29-2 : 呼び出しに<b>「この端末の設定」</b>を足した（社長指摘：どのPCがどこか決まっていないのに何で判断してどこが鳴るのか）。試作では場所を一切見ておらず、開いている全端末で鳴っていた。端末ごとに<b>置き場所</b>と<b>鳴らす種類</b>を1回決めると、その端末に保存される（localStorage）。置き場所を決めると呼ぶときのラインが最初から選ばれ、右下のボタンにも場所が出る。<b>自分の場所からの呼び出しでは鳴らない</b>（押した本人の横で鳴っても意味がないため）。例：事務所＝全部鳴らす／技術の部屋＝技術（設備）と技術（金型）だけ／各ライン＝自分以外のリフトだけ。 -->
@@ -12030,7 +12031,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.29-4';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.30-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -14190,7 +14191,7 @@ var QC_CAM_SHAPE = (function(){ try{ return localStorage.getItem('qcCamShape') |
 function qcCamWanted(){
   if(QC_CAM_SHAPE === '169') return {width:{ideal:1920}, height:{ideal:1080}};
   if(QC_CAM_SHAPE === 'max')  return {width:{ideal:4096}, height:{ideal:2160}};
-  return {width:{ideal:1600}, height:{ideal:1200}};     // 4:3（たてに広い）
+  return {width:{ideal:2560}, height:{ideal:1920}};     // 4:3（たてに広い）※文字を読めるよう高めに要求
 }
 window.qcCamShape = async function(kind){
   QC_CAM_SHAPE = kind;
@@ -14239,6 +14240,11 @@ window.qcCamOptZoom = function(v){
     .catch(function(){});
 };
 
+// 書画カメラの画質（2026-09-30 社長指摘：生産実績の記録の字が読めない）
+//   長辺1800px＝A4で約150dpi相当。1200pxだと100dpi相当で手書きの数字が潰れる
+var QC_CAM_MAXPX = 1800;
+var QC_CAM_QUALITY = 0.8;
+
 async function qcStartCamera(){
   try{
     if(QC_CAM_STREAM){ QC_CAM_STREAM.getTracks().forEach(function(t){ t.stop(); }); QC_CAM_STREAM=null; }
@@ -14273,14 +14279,16 @@ window.qcCamShutter = function(){
   // ★画面の枠（qcCamCropRect）のとおりに切り取る＝見たまま保存される
   var _r=qcCamCropRect(vw, vh);
   var cropW=_r.w, cropH=_r.h, cropX=_r.x, cropY=_r.y;
-  var c=document.createElement('canvas'); c.width=cropW; c.height=cropH;
-  c.getContext('2d').drawImage(video,cropX,cropY,cropW,cropH,0,0,cropW,cropH);
-  var dataUrl=c.toDataURL('image/jpeg',0.9);
-  var img2=new Image(); img2.onload=function(){
-    var w=img2.width,h=img2.height,mp=1200; if(w>mp||h>mp){ if(w>h){h=Math.round(h*mp/w);w=mp;}else{w=Math.round(w*mp/h);h=mp;} }
-    var c2=document.createElement('canvas'); c2.width=w; c2.height=h; c2.getContext('2d').drawImage(img2,0,0,w,h);
-    var compressed=c2.toDataURL('image/jpeg',0.7);
-    QC_CAM_PHOTOS_TMP.push({data:compressed,origKB:Math.round(dataUrl.length*0.75/1024),compKB:Math.round(compressed.length*0.75/1024)});
+  // ★JPEGを2回かけると字がにじむので、切り取りと縮小をまとめて1回だけ書き出す
+  var mp=QC_CAM_MAXPX, w=cropW, h=cropH;
+  if(w>mp||h>mp){ if(w>h){ h=Math.round(h*mp/w); w=mp; } else { w=Math.round(w*mp/h); h=mp; } }
+  var c=document.createElement('canvas'); c.width=w; c.height=h;
+  var cx=c.getContext('2d');
+  cx.imageSmoothingEnabled=true; cx.imageSmoothingQuality='high';
+  cx.drawImage(video,cropX,cropY,cropW,cropH,0,0,w,h);
+  var compressed=c.toDataURL('image/jpeg',QC_CAM_QUALITY);
+  (function(){
+    QC_CAM_PHOTOS_TMP.push({data:compressed,origKB:Math.round(compressed.length*0.75/1024),compKB:Math.round(compressed.length*0.75/1024)});
     qcUpdateCamCounter();
     var strip=document.getElementById('qc-cam-preview-strip');
     var item=document.createElement('div'); item.className='qc-cam-preview-item';
@@ -14290,8 +14298,7 @@ window.qcCamShutter = function(){
     del.addEventListener('click',function(){ QC_CAM_PHOTOS_TMP.splice(idx,1); strip.removeChild(item); qcUpdateCamCounter(); document.getElementById('qc-cam-shutter').disabled=false; });
     item.appendChild(img3); item.appendChild(del); strip.appendChild(item);
     if(QC_CAM_PHOTOS_TMP.length>=5) document.getElementById('qc-cam-shutter').disabled=true;
-  };
-  img2.src=dataUrl;
+  })();
 };
 function qcUpdateCamCounter(){
   var n=QC_CAM_PHOTOS_TMP.length;
@@ -20775,7 +20782,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.29-4</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.30-1</div>
 </body>
 </html>
 
