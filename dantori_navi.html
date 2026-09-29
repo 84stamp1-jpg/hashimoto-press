@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.09.29-4 : 呼び出しの時刻を<b>端末の時計からサーバーの時計に変えた</b>。本番に残った最初の1件（近藤・技術（金型））で、<b>完了時刻が呼び出し時刻より14秒前</b>になっていた。呼んだ端末と完了を押した端末で時計がずれているため。このままでは応答時間・対応時間が出せない。at／ackAt／doneAt を serverTimestamp() にし、経過分数の表示も .info/serverTimeOffset でこの端末の時計のずれを補正して数えるようにした。 -->
 <!-- H-Hub v2026.09.29-3 : 呼び出しの「この端末の置き場所」に<b>事務所・現場事務所・技術事務所・品質管理・納入出荷・倉庫・工場（共通）・休憩室</b>を足した（社長指摘：事務所や技術事務所が選べない）。ラインしか出していなかった。置き場所がラインのときだけ、呼ぶときのラインがそこで初期選択され、自分の場所からの呼び出しでは鳴らない。事務所などを選んだ端末は、呼ぶラインを毎回選ぶ形になり、すべての呼び出しが鳴る対象になる。 -->
 <!-- H-Hub v2026.09.29-2 : 呼び出しに<b>「この端末の設定」</b>を足した（社長指摘：どのPCがどこか決まっていないのに何で判断してどこが鳴るのか）。試作では場所を一切見ておらず、開いている全端末で鳴っていた。端末ごとに<b>置き場所</b>と<b>鳴らす種類</b>を1回決めると、その端末に保存される（localStorage）。置き場所を決めると呼ぶときのラインが最初から選ばれ、右下のボタンにも場所が出る。<b>自分の場所からの呼び出しでは鳴らない</b>（押した本人の横で鳴っても意味がないため）。例：事務所＝全部鳴らす／技術の部屋＝技術（設備）と技術（金型）だけ／各ライン＝自分以外のリフトだけ。 -->
 <!-- H-Hub v2026.09.29-1 : <b>呼び出しボタン（試作）</b>を足した（社長指示）。現場の「リフト待ち」「技術を呼ぶ」を、口頭ではなく画面から呼ぶ。右下の赤い丸ボタン → ラインを選ぶ → 6つ（リフト／技術（設備）／技術（金型）／材料・部品／品質確認／応援）から押すだけ。押すと<b>全員の画面の上に赤い帯</b>が出て、経過分数が伸びる（3分で橙・5分で赤く点滅）。受けた人が「向かいます」を押し、終わったら「完了」。その端末のスピーカーから<b>チャイムと読み上げ</b>が出る（パーティーボックスにつなげば工場に流せる。端末ごとに消音可）。記録は /calls に残す（30日）。★呼ぶことと記録することが1回で済むので、72期11月の「段取超過の原因を全件記入」が押した時点で確定する。まだ試作なので、Slack通知・スマートウォッチ・Echoへのアナウンス・ロス記録への反映は入れていない。 -->
@@ -12029,7 +12030,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.29-3';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.09.29-4';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -14563,7 +14564,7 @@ window.qcPrintHinpyo = function(){
 <!-- ===== 進捗管理ボード JS ===== -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, onValue, set, update, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getDatabase, ref, onValue, set, update, get, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
 const cfg={apiKey:"AIzaSyCvh4rDrk6ljWhNBJc-Kt_YFpvEevLxb6o",authDomain:"hashimoto-press.firebaseapp.com",databaseURL:"https://hashimoto-press-default-rtdb.asia-southeast1.firebasedatabase.app",projectId:"hashimoto-press",storageBucket:"hashimoto-press.firebasestorage.app",messagingSenderId:"508495109760",appId:"1:508495109760:web:53d266bb4483ab04a29065"};
 const app=initializeApp(cfg);
@@ -20585,7 +20586,12 @@ function callShouldRing(r){
 const _cEsc = v => String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;')
                     .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const _cDay = () => new Date().toLocaleDateString('sv-SE');
-function _cMin(ts){ return Math.max(0, Math.floor((Date.now()-ts)/60000)); }
+// サーバーの時計と、この端末の時計の差。onValue で入ってくる値から推定する
+let _callSkew = 0;
+function _cMin(ts){
+  if(!ts) return 0;
+  return Math.max(0, Math.floor((Date.now() + _callSkew - ts)/60000));
+}
 
 window.callOpen = function(){
   const wrap = document.getElementById('callLines');
@@ -20626,17 +20632,19 @@ window.callCloseBg = function(e){ if(e.target===document.getElementById('callOv'
 window.callSend = function(kind){
   if(!_callLine){ document.getElementById('callMsg').textContent='ラインを選んでください'; return; }
   const key = _cDay().replace(/-/g,'') + '_' + Date.now() + '_' + Math.floor(Math.random()*1000);
+  // ★時刻はサーバーの時計で入れる。端末ごとに時計がずれていると
+  //   「完了が呼び出しより前」になり、応答時間が出せなくなるため
   const rec = { line:_callLine, lineName:getLineName(_callLine), kind:kind,
-                at:Date.now(), day:_cDay(), status:'open' };
+                at:serverTimestamp(), day:_cDay(), status:'open' };
   set(ref(db,'calls/'+key), rec);
   document.getElementById('callMsg').textContent = getLineName(_callLine)+'から「'+kind+'」を呼びました';
   setTimeout(callCloseD, 900);
 };
 window.callAck = function(key){
-  update(ref(db,'calls/'+key), { status:'ack', ackAt:Date.now() });
+  update(ref(db,'calls/'+key), { status:'ack', ackAt:serverTimestamp() });
 };
 window.callDone = function(key){
-  update(ref(db,'calls/'+key), { status:'done', doneAt:Date.now() });
+  update(ref(db,'calls/'+key), { status:'done', doneAt:serverTimestamp() });
 };
 window.callCancel = function(key){
   if(!confirm('この呼び出しを取り消しますか？')) return;
@@ -20701,6 +20709,11 @@ function _callRender(){
   }).join('');
 }
 
+// サーバーの時計とのずれを1回測っておく（.info/serverTimeOffset はFirebaseが持っている）
+onValue(ref(db,'.info/serverTimeOffset'), function(sn){
+  const o = sn.val(); if(typeof o === 'number') _callSkew = o;
+});
+
 onValue(ref(db,'calls'), function(snap){
   const v = snap.val()||{};
   // 新しく来た呼び出しだけ鳴らす
@@ -20708,7 +20721,7 @@ onValue(ref(db,'calls'), function(snap){
     const r = v[k];
     if(!r || r.status==='done' || _callSeen[k]) return;
     _callSeen[k] = 1;
-    if(Date.now() - (r.at||0) < 60000 && callShouldRing(r)){   // 1分以内かつこの端末が鳴らす設定のもの
+    if((Date.now() + _callSkew) - (r.at||0) < 60000 && callShouldRing(r)){   // 1分以内かつこの端末が鳴らす設定のもの
       _callChime();
       _callSpeak((r.lineName||r.line) + 'から、' + r.kind + 'です');
     }
@@ -20762,7 +20775,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.29-3</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.29-4</div>
 </body>
 </html>
 
