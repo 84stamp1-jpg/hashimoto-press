@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.01-1 : <b>スマホで見にくい</b>のを直した（社長要望）。375pxで開くと、題名の「進捗管理ボード」が縦1文字になり、上の数字カード4枚も「稼働ライン」が縦1文字に潰れ、ラインカードは3列のままで品番が縦に割れていた。原因は<b>横に並べる箱に折り返しの指定が無く、幅が足りなくても縮むだけ</b>だったこと。幅760px以下のときだけ、数字カードを2×2、ラインカードを1列、タブを横スクロールにする。ロス記録のまとめは1列、明細は横スクロール。入力画面の2列・3列も1列に。<b>PCの見た目は一切変わらない</b>（@media で狭いときだけ効く）。段取り配置表とロス記録の明細は横長であること自体が中身なので、横スクロールのままにしてある。 -->
 <!-- H-Hub v2026.09.30-1 : <b>書画カメラの写真の字が読めない</b>のを直した（社長指摘：生産実績の記録の写真）。撮ったあと<b>長辺1200pxまで縮小しJPEG品質0.7</b>で保存していた。A4だと約100dpi相当で、手書きの数字が潰れる。(1)カメラへの要求を 1600×1200 → <b>2560×1920</b> に上げた (2)縮小の上限を <b>長辺1800px</b>（A4で約150dpi相当）に (3)品質を <b>0.8</b> に (4)これまで「切り取り→JPEG0.9→読み直し→縮小→JPEG0.7」と<b>2回JPEGをかけていた</b>のを、切り取りと縮小をまとめて1回だけ書き出す形にした（にじみが減る）。1枚あたりの大きさは約3倍になる。 -->
 <!-- H-Hub v2026.09.29-4 : 呼び出しの時刻を<b>端末の時計からサーバーの時計に変えた</b>。本番に残った最初の1件（近藤・技術（金型））で、<b>完了時刻が呼び出し時刻より14秒前</b>になっていた。呼んだ端末と完了を押した端末で時計がずれているため。このままでは応答時間・対応時間が出せない。at／ackAt／doneAt を serverTimestamp() にし、経過分数の表示も .info/serverTimeOffset でこの端末の時計のずれを補正して数えるようにした。 -->
 <!-- H-Hub v2026.09.29-3 : 呼び出しの「この端末の置き場所」に<b>事務所・現場事務所・技術事務所・品質管理・納入出荷・倉庫・工場（共通）・休憩室</b>を足した（社長指摘：事務所や技術事務所が選べない）。ラインしか出していなかった。置き場所がラインのときだけ、呼ぶときのラインがそこで初期選択され、自分の場所からの呼び出しでは鳴らない。事務所などを選んだ端末は、呼ぶラインを毎回選ぶ形になり、すべての呼び出しが鳴る対象になる。 -->
@@ -1072,6 +1073,7 @@ html, body {
   .hp-footer{text-align:right;font-size:7.5pt;font-weight:700;color:#BF360C;padding-top:1.5mm;border-top:0.5px solid #ddd;margin-top:auto;}
 }
 
+
 /* ===== 進捗管理ボード スコープCSS ===== */
 
 
@@ -1266,6 +1268,37 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 .btn-add-line{font-size:11px;padding:4px 10px;background:#f8f7f2;border:1px solid #ddd;border-radius:5px;cursor:pointer;font-family:inherit;}
 .btn-add-line:hover{background:#eceae3;}
 
+
+/* ===== スマホ幅（2026-10-01 社長要望：スマホで見やすく） =====
+   横に並べる箱が、幅が足りなくても折り返さず縮むだけだったので、
+   狭いときは縦に積む。PCの見た目はこれまでどおり変わらない。
+   段取り配置表とロス記録の明細は横長であること自体が中身なので、横スクロールにする */
+@media (max-width:760px){
+  /* 上の黒帯：題名を1行占有させる（縦1文字になるのを防ぐ） */
+  #tab-progress > div[style*="#1a1a1a"]{flex-wrap:wrap;row-gap:4px;}
+  #tab-progress > div[style*="#1a1a1a"] > span:first-child{flex:1 0 100%;white-space:nowrap;font-size:13px;}
+  /* 数字カードは2つずつ2段に */
+  #tab-progress .sum{flex-wrap:wrap;}
+  #tab-progress .sum .sc{flex:1 1 calc(50% - 6px);}
+  #tab-progress .sc-lbl,#tab-progress .sc-hint{white-space:nowrap;}
+  /* ラインカードは1列 */
+  #tab-progress .lines{grid-template-columns:1fr;}
+  #tab-progress .nums{grid-template-columns:repeat(2,1fr);}
+  #tab-progress .sr{grid-template-columns:18px minmax(0,1fr);}
+  #tab-progress .sp{width:auto;}
+  /* タブは横スクロール */
+  .tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .tab,.tb{white-space:nowrap;}
+  /* ロス記録：まとめは1列、明細は横スクロール */
+  .lh-sumwrap{grid-template-columns:1fr;}
+  #lhBody{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  /* 入力まわりの2列・3列は1列に */
+  .fg2,.fg3,.qc-num-row,.qc-alloc-inputs,.hp-row2,.cond-grid{grid-template-columns:1fr;}
+  .qc-photo-grid,.qc-chk-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .roster-grid{grid-template-columns:repeat(auto-fill,minmax(104px,1fr));}
+  /* 呼び出しボタンは少し小さく（画面を隠しすぎない） */
+  #callFab{width:82px;height:82px;font-size:13px;right:10px;bottom:16px;}
+}
 
 </style>
 </head>
@@ -12031,7 +12064,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.09.30-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.01-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -20782,7 +20815,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.30-1</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.01-1</div>
 </body>
 </html>
 
