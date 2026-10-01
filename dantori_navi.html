@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.01-2 : 呼び出しを<b>「向かいます」が押されるまで30秒おきに鳴らし続ける</b>ようにした（社長要望）。これまでは1回鳴って終わりで、工場では聞き逃す。端末ごとに入/切でき、既定は入。「向かいます」か「完了」が押された瞬間に止まる。鳴らす種類・置き場所の設定はこれまでどおり効く。 -->
 <!-- H-Hub v2026.10.01-1 : <b>スマホで見にくい</b>のを直した（社長要望）。375pxで開くと、題名の「進捗管理ボード」が縦1文字になり、上の数字カード4枚も「稼働ライン」が縦1文字に潰れ、ラインカードは3列のままで品番が縦に割れていた。原因は<b>横に並べる箱に折り返しの指定が無く、幅が足りなくても縮むだけ</b>だったこと。幅760px以下のときだけ、数字カードを2×2、ラインカードを1列、タブを横スクロールにする。ロス記録のまとめは1列、明細は横スクロール。入力画面の2列・3列も1列に。<b>PCの見た目は一切変わらない</b>（@media で狭いときだけ効く）。段取り配置表とロス記録の明細は横長であること自体が中身なので、横スクロールのままにしてある。 -->
 <!-- H-Hub v2026.09.30-1 : <b>書画カメラの写真の字が読めない</b>のを直した（社長指摘：生産実績の記録の写真）。撮ったあと<b>長辺1200pxまで縮小しJPEG品質0.7</b>で保存していた。A4だと約100dpi相当で、手書きの数字が潰れる。(1)カメラへの要求を 1600×1200 → <b>2560×1920</b> に上げた (2)縮小の上限を <b>長辺1800px</b>（A4で約150dpi相当）に (3)品質を <b>0.8</b> に (4)これまで「切り取り→JPEG0.9→読み直し→縮小→JPEG0.7」と<b>2回JPEGをかけていた</b>のを、切り取りと縮小をまとめて1回だけ書き出す形にした（にじみが減る）。1枚あたりの大きさは約3倍になる。 -->
 <!-- H-Hub v2026.09.29-4 : 呼び出しの時刻を<b>端末の時計からサーバーの時計に変えた</b>。本番に残った最初の1件（近藤・技術（金型））で、<b>完了時刻が呼び出し時刻より14秒前</b>になっていた。呼んだ端末と完了を押した端末で時計がずれているため。このままでは応答時間・対応時間が出せない。at／ackAt／doneAt を serverTimestamp() にし、経過分数の表示も .info/serverTimeOffset でこの端末の時計のずれを補正して数えるようにした。 -->
@@ -12064,7 +12065,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.01-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.01-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -20597,14 +20598,18 @@ const CALL_BAD_MIN  = 5;      // これを過ぎたら赤で点滅
 const CALL_KEEP_DAYS = 30;
 let _calls = {}, _callLine = '', _callSeen = {};
 // この端末の設定（置き場所・鳴らす種類）。端末ごとに違うので localStorage に持つ
-let _callCfg = { site:'', ring:null, mute:false };
+let _callCfg = { site:'', ring:null, mute:false, repeat:true };
+const CALL_REPEAT_SEC = 30;      // 鳴らし直す間隔
+let _callLastPlay = {};          // 呼び出しごとに最後に鳴らした時刻
 function callLoadCfg(){
   try{ const v=JSON.parse(localStorage.getItem('hhubCallCfg')||'{}');
-       _callCfg = { site:v.site||'', ring:Array.isArray(v.ring)?v.ring:null, mute:!!v.mute }; }catch(e){}
+       _callCfg = { site:v.site||'', ring:Array.isArray(v.ring)?v.ring:null, mute:!!v.mute,
+                    repeat:(v.repeat===undefined?true:!!v.repeat) }; }catch(e){}
 }
 window.callSaveCfg = function(){
   _callCfg.site = document.getElementById('callSite')?.value || '';
   _callCfg.mute = !!document.getElementById('callMute')?.checked;
+  _callCfg.repeat = !!document.getElementById('callRepeat')?.checked;
   _callCfg.ring = [...document.querySelectorAll('.call-ring:checked')].map(c=>c.value);
   try{ localStorage.setItem('hhubCallCfg', JSON.stringify(_callCfg)); }catch(e){}
   if(_callCfg.site) _callLine = _callCfg.site;
@@ -20661,6 +20666,7 @@ window.callOpen = function(){
     + 'onchange="callSaveCfg()"' + ((_callCfg.ring===null||_callCfg.ring.indexOf(x.k)>=0)?' checked':'') + '> '
     + x.icon + _cEsc(x.k) + '</label>').join('');
   document.getElementById('callMute').checked = !!_callCfg.mute;
+  document.getElementById('callRepeat').checked = !!_callCfg.repeat;
   document.getElementById('callMsg').textContent = '';
   const ov = document.getElementById('callOv');
   ov.style.display = 'flex';
@@ -20714,6 +20720,28 @@ function _callSpeak(t){
   }catch(e){}
 }
 
+// 呼び出し1件を鳴らす
+function _callPlay(r){
+  _callChime();
+  _callSpeak((r.lineName || r.line) + 'から、' + r.kind + 'です');
+}
+// 「向かいます」が押されるまで鳴らし直す。押されたら止まる
+function _callRepeatTick(){
+  if(!_callCfg.repeat) return;
+  const now = Date.now();
+  Object.keys(_calls).forEach(function(k){
+    const r = _calls[k];
+    if(!r || r.status !== 'open'){ delete _callLastPlay[k]; return; }   // 向かいます/完了で止まる
+    if(!callShouldRing(r)) return;
+    const last = _callLastPlay[k] || 0;
+    if(now - last >= CALL_REPEAT_SEC * 1000){
+      _callLastPlay[k] = now;
+      _callPlay(r);
+    }
+  });
+}
+setInterval(_callRepeatTick, 5000);
+
 function _callRender(){
   const b = document.getElementById('callBanner');
   if(!b) return;
@@ -20762,8 +20790,8 @@ onValue(ref(db,'calls'), function(snap){
     if(!r || r.status==='done' || _callSeen[k]) return;
     _callSeen[k] = 1;
     if((Date.now() + _callSkew) - (r.at||0) < 60000 && callShouldRing(r)){   // 1分以内かつこの端末が鳴らす設定のもの
-      _callChime();
-      _callSpeak((r.lineName||r.line) + 'から、' + r.kind + 'です');
+      _callLastPlay[k] = Date.now();
+      _callPlay(r);
     }
   });
   Object.keys(_callSeen).forEach(function(k){ if(!v[k]) delete _callSeen[k]; });
@@ -20809,13 +20837,15 @@ setInterval(_callRender, 10000);
       </div>
       <div style="font-size:12px;color:#555;margin-bottom:5px;">この端末で音を鳴らす呼び出し</div>
       <div id="callRing" style="display:flex;flex-wrap:wrap;gap:10px;"></div>
-      <label style="cursor:pointer;font-size:12px;color:#888;display:inline-block;margin-top:8px;">
+      <label style="cursor:pointer;font-size:12.5px;color:#334155;display:block;margin-top:8px;font-weight:700;">
+        <input type="checkbox" id="callRepeat" onchange="callSaveCfg()"> 「向かいます」が押されるまで鳴らし続ける（30秒おき）</label>
+      <label style="cursor:pointer;font-size:12px;color:#888;display:inline-block;margin-top:6px;">
         <input type="checkbox" id="callMute" onchange="callSaveCfg()"> この端末では一切鳴らさない</label>
     </div>
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.01-1</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.01-2</div>
 </body>
 </html>
 
