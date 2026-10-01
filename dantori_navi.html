@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.01-4 : 呼び出しを<b>スマホへ通知（ntfy）</b>できるようにした（社長指示）。既定は<b>5秒おきに5回</b>、「向かいます」が押された瞬間に止まる。ntfy.sh は CORS が開いているのでブラウザから直接送れる（GASを挟まない）。送るのは「📱この端末からスマホへ通知を送る」を入にした<b>1台だけ</b>（全端末が送ると人数分届く）。トピック名・回数・間隔は <b>Firebase の settings/callNtfy</b> に置き、呼び出し画面から変えられる＋テスト送信ボタン付き。★トピック名は公開リポジトリに書かないこと。乱用されたら名前を変えれば止まる。スマホは通知音と振動のみで読み上げはしない（H-Hub端末のスピーカーはこれまでどおり喋る）。 -->
 <!-- H-Hub v2026.10.01-3 : 呼び出しの<b>鳴らし直す間隔を選べる</b>ようにした（社長要望：急いでいるので5〜10秒おき）。端末ごとに 5秒／10秒／20秒／30秒／1分 から選ぶ。<b>既定は10秒</b>。急ぎの場所は短く、事務所は長めに、と置き場所ごとに変えられる。「向かいます」か「完了」で止まるのはこれまでどおり。 -->
 <!-- H-Hub v2026.10.01-2 : 呼び出しを<b>「向かいます」が押されるまで30秒おきに鳴らし続ける</b>ようにした（社長要望）。これまでは1回鳴って終わりで、工場では聞き逃す。端末ごとに入/切でき、既定は入。「向かいます」か「完了」が押された瞬間に止まる。鳴らす種類・置き場所の設定はこれまでどおり効く。 -->
 <!-- H-Hub v2026.10.01-1 : <b>スマホで見にくい</b>のを直した（社長要望）。375pxで開くと、題名の「進捗管理ボード」が縦1文字になり、上の数字カード4枚も「稼働ライン」が縦1文字に潰れ、ラインカードは3列のままで品番が縦に割れていた。原因は<b>横に並べる箱に折り返しの指定が無く、幅が足りなくても縮むだけ</b>だったこと。幅760px以下のときだけ、数字カードを2×2、ラインカードを1列、タブを横スクロールにする。ロス記録のまとめは1列、明細は横スクロール。入力画面の2列・3列も1列に。<b>PCの見た目は一切変わらない</b>（@media で狭いときだけ効く）。段取り配置表とロス記録の明細は横長であること自体が中身なので、横スクロールのままにしてある。 -->
@@ -12066,7 +12067,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.01-3';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.01-4';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -20599,20 +20600,25 @@ const CALL_BAD_MIN  = 5;      // これを過ぎたら赤で点滅
 const CALL_KEEP_DAYS = 30;
 let _calls = {}, _callLine = '', _callSeen = {};
 // この端末の設定（置き場所・鳴らす種類）。端末ごとに違うので localStorage に持つ
-let _callCfg = { site:'', ring:null, mute:false, repeat:true, repeatSec:10 };
+let _callCfg = { site:'', ring:null, mute:false, repeat:true, repeatSec:10, push:false };
+// スマホへの通知（ntfy）。トピック名は公開リポジトリに書けないので Firebase に置く
+let _ntfy = { topic:'', times:5, sec:5 };
+let _ntfySent = {};              // 呼び出しごとの送信回数と最後に送った時刻
 const CALL_REPEAT_DEF = 10;      // 鳴らし直す間隔の既定（秒）
 let _callLastPlay = {};          // 呼び出しごとに最後に鳴らした時刻
 function callLoadCfg(){
   try{ const v=JSON.parse(localStorage.getItem('hhubCallCfg')||'{}');
        _callCfg = { site:v.site||'', ring:Array.isArray(v.ring)?v.ring:null, mute:!!v.mute,
                     repeat:(v.repeat===undefined?true:!!v.repeat),
-                    repeatSec:(parseInt(v.repeatSec,10) || CALL_REPEAT_DEF) }; }catch(e){}
+                    repeatSec:(parseInt(v.repeatSec,10) || CALL_REPEAT_DEF),
+                    push:!!v.push }; }catch(e){}
 }
 window.callSaveCfg = function(){
   _callCfg.site = document.getElementById('callSite')?.value || '';
   _callCfg.mute = !!document.getElementById('callMute')?.checked;
   _callCfg.repeat = !!document.getElementById('callRepeat')?.checked;
   _callCfg.repeatSec = parseInt(document.getElementById('callRepeatSec')?.value, 10) || CALL_REPEAT_DEF;
+  _callCfg.push = !!document.getElementById('callPush')?.checked;
   _callCfg.ring = [...document.querySelectorAll('.call-ring:checked')].map(c=>c.value);
   try{ localStorage.setItem('hhubCallCfg', JSON.stringify(_callCfg)); }catch(e){}
   if(_callCfg.site) _callLine = _callCfg.site;
@@ -20671,6 +20677,10 @@ window.callOpen = function(){
   document.getElementById('callMute').checked = !!_callCfg.mute;
   document.getElementById('callRepeat').checked = !!_callCfg.repeat;
   document.getElementById('callRepeatSec').value = String(_callCfg.repeatSec || CALL_REPEAT_DEF);
+  document.getElementById('callPush').checked = !!_callCfg.push;
+  document.getElementById('ntfyTopic').value = _ntfy.topic || '';
+  document.getElementById('ntfyTimes').value = _ntfy.times || 5;
+  document.getElementById('ntfySec').value   = _ntfy.sec || 5;
   document.getElementById('callMsg').textContent = '';
   const ov = document.getElementById('callOv');
   ov.style.display = 'flex';
@@ -20723,6 +20733,54 @@ function _callSpeak(t){
     setTimeout(function(){ speechSynthesis.speak(u); }, 700);   // チャイムの後
   }catch(e){}
 }
+
+// ── スマホへの通知（ntfy）────────────────────────────
+onValue(ref(db,'settings/callNtfy'), function(sn){
+  const v = sn.val() || {};
+  _ntfy = { topic:v.topic||'', times:parseInt(v.times,10)||5, sec:parseInt(v.sec,10)||5 };
+});
+window.ntfySave = function(){
+  const t = (document.getElementById('ntfyTopic').value||'').trim();
+  const rec = { topic:t,
+                times:Math.min(20, Math.max(1, parseInt(document.getElementById('ntfyTimes').value,10)||5)),
+                sec:  Math.min(60, Math.max(2, parseInt(document.getElementById('ntfySec').value,10)||5)) };
+  set(ref(db,'settings/callNtfy'), rec);
+  document.getElementById('ntfyMsg').textContent = '保存しました（全端末に効きます）';
+};
+function ntfySend(title, msg){
+  if(!_ntfy.topic) return Promise.resolve(false);
+  const q = 'title=' + encodeURIComponent(title)
+          + '&message=' + encodeURIComponent(msg)
+          + '&priority=5&tags=rotating_light';
+  return fetch('https://ntfy.sh/' + encodeURIComponent(_ntfy.topic) + '/publish?' + q)
+         .then(function(r){ return r.ok; }).catch(function(){ return false; });
+}
+window.ntfyTest = function(){
+  const m = document.getElementById('ntfyMsg');
+  if(!(document.getElementById('ntfyTopic').value||'').trim()){ m.textContent='トピック名を入れてください'; return; }
+  ntfySave();
+  setTimeout(function(){
+    ntfySend('📣 テスト', 'H-Hubからのテスト送信です').then(function(ok){
+      m.textContent = ok ? '送りました。スマホを確認してください' : '送れませんでした（トピック名とネットを確認）';
+    });
+  }, 300);
+};
+// 「向かいます」が押されるまで、決めた回数だけ送る
+function _ntfyTick(){
+  if(!_callCfg.push || !_ntfy.topic) return;      // 送信担当の端末だけ
+  const now = Date.now();
+  Object.keys(_calls).forEach(function(k){
+    const r = _calls[k];
+    if(!r || r.status !== 'open'){ delete _ntfySent[k]; return; }
+    const st = _ntfySent[k] || { n:0, last:0 };
+    if(st.n >= _ntfy.times) return;
+    if(st.n > 0 && now - st.last < _ntfy.sec * 1000) return;
+    st.n += 1; st.last = now; _ntfySent[k] = st;
+    ntfySend('📣 ' + (r.lineName || r.line) + '　' + r.kind,
+             st.n + '/' + _ntfy.times + '　向かう人は「向かいます」を押してください');
+  });
+}
+setInterval(_ntfyTick, 1500);
 
 // 呼び出し1件を鳴らす
 function _callPlay(r){
@@ -20841,6 +20899,9 @@ setInterval(_callRender, 10000);
       </div>
       <div style="font-size:12px;color:#555;margin-bottom:5px;">この端末で音を鳴らす呼び出し</div>
       <div id="callRing" style="display:flex;flex-wrap:wrap;gap:10px;"></div>
+      <label style="cursor:pointer;font-size:12.5px;color:#1d4ed8;display:block;margin-top:10px;font-weight:700;">
+        <input type="checkbox" id="callPush" onchange="callSaveCfg()"> 📱 この端末からスマホへ通知を送る
+        <span style="font-weight:400;color:#94a3b8;font-size:11px;">（1台だけ入にしてください）</span></label>
       <label style="cursor:pointer;font-size:12.5px;color:#334155;display:block;margin-top:8px;font-weight:700;">
         <input type="checkbox" id="callRepeat" onchange="callSaveCfg()"> 「向かいます」が押されるまで鳴らし続ける</label>
       <div style="margin-top:5px;font-size:12px;color:#555;">
@@ -20854,10 +20915,24 @@ setInterval(_callRender, 10000);
       <label style="cursor:pointer;font-size:12px;color:#888;display:inline-block;margin-top:6px;">
         <input type="checkbox" id="callMute" onchange="callSaveCfg()"> この端末では一切鳴らさない</label>
     </div>
+    <div style="margin-top:12px;padding:11px 12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:9px;">
+      <div style="font-size:13px;font-weight:700;color:#1e3a8a;margin-bottom:7px;">📱 スマホへの通知（ntfy）※会社でひとつ・全端末に効きます</div>
+      <div style="display:flex;flex-wrap:wrap;gap:7px;align-items:center;font-size:12px;color:#555;">
+        <span>トピック名</span>
+        <input id="ntfyTopic" placeholder="例 hashimoto-call-xxxxxxxx" style="flex:1;min-width:220px;padding:5px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:12.5px;font-family:inherit;">
+        <span>回数</span>
+        <input id="ntfyTimes" type="number" min="1" max="20" style="width:60px;padding:5px 6px;border:1px solid #cbd5e1;border-radius:6px;font-size:12.5px;font-family:inherit;">
+        <span>間隔(秒)</span>
+        <input id="ntfySec" type="number" min="2" max="60" style="width:60px;padding:5px 6px;border:1px solid #cbd5e1;border-radius:6px;font-size:12.5px;font-family:inherit;">
+        <button onclick="ntfySave()" style="padding:6px 14px;border:none;border-radius:6px;background:#1d4ed8;color:#fff;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;">保存</button>
+        <button onclick="ntfyTest()" style="padding:6px 14px;border:none;border-radius:6px;background:#0f766e;color:#fff;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;">テスト送信</button>
+      </div>
+      <div id="ntfyMsg" style="font-size:12px;color:#1e3a8a;margin-top:6px;"></div>
+    </div>
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.01-3</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.01-4</div>
 </body>
 </html>
 
