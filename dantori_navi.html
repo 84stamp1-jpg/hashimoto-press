@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.02-1 : 呼び出しに<b>回転灯（SwitchBot）連携の雛形</b>を足した（社長指示：エコードットが日本では使えないと分かったため、タブレットを置けない場所向けの代案）。呼び出しが開いたら対象デバイスをON、「向かいます」か「完了」でOFFにする。SwitchBotの署名付きAPIはブラウザから直接呼べない（CORSと鍵の持ち方の都合）ため、呼び出し画面の⚙から<b>GASの中継URLと合言葉</b>・<b>デバイス一覧（名前・ID・反応する呼び出し種類）</b>を登録する作り。中継用のGASコードと設定手順は `呼び出し/switchbot_relay.gs`。★<b>実機・APIキーがまだ無いため動作未検証</b>。手元に届いたらデバイスIDを登録してテストボタンで確認すること。 -->
 <!-- H-Hub v2026.10.01-5 : スマホ通知の送信を<b>複数台で分担</b>できるようにした（社長の指摘：1台だけだとその端末が落ちていると誰にも届かない）。「何回目を送るか」を Firebase の calls/&lt;key&gt;/ntfy で<b>取り合う</b>形（runTransaction）にしたので、送信担当を何台入にしても<b>二重に届かない</b>。1台が落ちていても他の端末が代わりに送る。2〜3台を入にしておくのがよい。受け取る側（同じトピックを登録したスマホ）は元から何台でも可。 -->
 <!-- H-Hub v2026.10.01-4 : 呼び出しを<b>スマホへ通知（ntfy）</b>できるようにした（社長指示）。既定は<b>5秒おきに5回</b>、「向かいます」が押された瞬間に止まる。ntfy.sh は CORS が開いているのでブラウザから直接送れる（GASを挟まない）。送るのは「📱この端末からスマホへ通知を送る」を入にした<b>1台だけ</b>（全端末が送ると人数分届く）。トピック名・回数・間隔は <b>Firebase の settings/callNtfy</b> に置き、呼び出し画面から変えられる＋テスト送信ボタン付き。★トピック名は公開リポジトリに書かないこと。乱用されたら名前を変えれば止まる。スマホは通知音と振動のみで読み上げはしない（H-Hub端末のスピーカーはこれまでどおり喋る）。 -->
 <!-- H-Hub v2026.10.01-3 : 呼び出しの<b>鳴らし直す間隔を選べる</b>ようにした（社長要望：急いでいるので5〜10秒おき）。端末ごとに 5秒／10秒／20秒／30秒／1分 から選ぶ。<b>既定は10秒</b>。急ぎの場所は短く、事務所は長めに、と置き場所ごとに変えられる。「向かいます」か「完了」で止まるのはこれまでどおり。 -->
@@ -20612,7 +20613,7 @@ function callLoadCfg(){
        _callCfg = { site:v.site||'', ring:Array.isArray(v.ring)?v.ring:null, mute:!!v.mute,
                     repeat:(v.repeat===undefined?true:!!v.repeat),
                     repeatSec:(parseInt(v.repeatSec,10) || CALL_REPEAT_DEF),
-                    push:!!v.push }; }catch(e){}
+                    push:!!v.push, relay:!!v.relay }; }catch(e){}
 }
 window.callSaveCfg = function(){
   _callCfg.site = document.getElementById('callSite')?.value || '';
@@ -20620,6 +20621,7 @@ window.callSaveCfg = function(){
   _callCfg.repeat = !!document.getElementById('callRepeat')?.checked;
   _callCfg.repeatSec = parseInt(document.getElementById('callRepeatSec')?.value, 10) || CALL_REPEAT_DEF;
   _callCfg.push = !!document.getElementById('callPush')?.checked;
+  _callCfg.relay = !!document.getElementById('callRelay')?.checked;
   _callCfg.ring = [...document.querySelectorAll('.call-ring:checked')].map(c=>c.value);
   try{ localStorage.setItem('hhubCallCfg', JSON.stringify(_callCfg)); }catch(e){}
   if(_callCfg.site) _callLine = _callCfg.site;
@@ -20679,9 +20681,13 @@ window.callOpen = function(){
   document.getElementById('callRepeat').checked = !!_callCfg.repeat;
   document.getElementById('callRepeatSec').value = String(_callCfg.repeatSec || CALL_REPEAT_DEF);
   document.getElementById('callPush').checked = !!_callCfg.push;
+  document.getElementById('callRelay').checked = !!_callCfg.relay;
   document.getElementById('ntfyTopic').value = _ntfy.topic || '';
   document.getElementById('ntfyTimes').value = _ntfy.times || 5;
   document.getElementById('ntfySec').value   = _ntfy.sec || 5;
+  document.getElementById('relayUrl').value = _relayCfg.relayUrl || '';
+  document.getElementById('relayKey').value = _relayCfg.relayKey || '';
+  relayRenderDevices();
   document.getElementById('callMsg').textContent = '';
   const ov = document.getElementById('callOv');
   ov.style.display = 'flex';
@@ -20796,6 +20802,81 @@ function _ntfyTick(){
 }
 setInterval(_ntfyTick, 1500);
 
+// ── 回転灯（SwitchBot）連携 ────────────────────────────
+// ★実機・APIキーがまだ無いため未検証（2026-10-02時点）。詳細は 呼び出し/switchbot_relay.gs
+let _relayCfg = { relayUrl:'', relayKey:'', devices:{} };
+let _relaySeenOpen = {}, _relaySeenClosed = {};
+onValue(ref(db,'settings/callSwitchBot'), function(sn){
+  const v = sn.val() || {};
+  _relayCfg = { relayUrl:v.relayUrl||'', relayKey:v.relayKey||'', devices:v.devices||{} };
+});
+window.relaySave = function(){
+  const url = (document.getElementById('relayUrl').value||'').trim();
+  const key = (document.getElementById('relayKey').value||'').trim();
+  update(ref(db,'settings/callSwitchBot'), { relayUrl:url, relayKey:key });
+  const m = document.getElementById('relayMsg');
+  m.textContent = '保存しました（全端末に効きます）';
+  setTimeout(()=>{ m.textContent=''; }, 2000);
+};
+function switchbotSend(deviceId, action){
+  if(!_relayCfg.relayUrl || !deviceId) return Promise.resolve(false);
+  // text/plain にするとブラウザがpreflight(OPTIONS)を出さずGASへ届く
+  return fetch(_relayCfg.relayUrl, {
+    method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify({ key:_relayCfg.relayKey, deviceId:deviceId, action:action })
+  }).then(r=>r.ok).catch(()=>false);
+}
+function _relayDevicesFor(r){
+  return Object.values(_relayCfg.devices||{}).filter(function(d){
+    return d && d.deviceId && (!d.kinds || !d.kinds.length || d.kinds.indexOf(r.kind) >= 0);
+  });
+}
+function _relayFireForCall(r, action){
+  if(!_callCfg.relay) return;      // 中継担当の端末だけが送る（何台でも二重送信は害がないので厳密な取り合いはしない）
+  _relayDevicesFor(r).forEach(function(d){ switchbotSend(d.deviceId, action); });
+}
+window.relayDeviceAdd = function(){
+  const name = (document.getElementById('relayNewName').value||'').trim();
+  const id   = (document.getElementById('relayNewId').value||'').trim();
+  if(!name || !id){ alert('名前とデバイスIDを入れてください'); return; }
+  const kinds = [...document.querySelectorAll('.relay-new-kind:checked')].map(c=>c.value);
+  const key = 'd' + Date.now();
+  update(ref(db,'settings/callSwitchBot/devices'), { [key]: { name, deviceId:id, kinds } });
+  document.getElementById('relayNewName').value = '';
+  document.getElementById('relayNewId').value = '';
+  document.querySelectorAll('.relay-new-kind').forEach(c=>c.checked=false);
+};
+window.relayDeviceDelete = function(key){
+  if(!confirm('このデバイスを削除しますか？')) return;
+  update(ref(db,'settings/callSwitchBot/devices'), { [key]: null });
+};
+window.relayDeviceTest = function(key){
+  const d = (_relayCfg.devices||{})[key]; if(!d) return;
+  const m = document.getElementById('relayMsg');
+  m.textContent = d.name + ' をON… ';
+  switchbotSend(d.deviceId, 'on').then(function(ok){
+    m.textContent = d.name + (ok ? ' ON成功。3秒後にOFF' : ' ON失敗（中継URL・デバイスIDを確認）');
+    if(ok) setTimeout(()=>{ switchbotSend(d.deviceId, 'off').then(()=>{ m.textContent = d.name + ' OFFにしました'; }); }, 3000);
+  });
+};
+function relayRenderDevices(){
+  const el = document.getElementById('relayDevices'); if(!el) return;
+  const kindBoxes = (checked) => CALL_KINDS.map(x =>
+    '<label style="margin-right:6px;"><input type="checkbox" class="relay-new-kind" value="'+_cEsc(x.k)+'"'
+    + (checked.indexOf(x.k)>=0?' checked':'') + ' disabled> '+x.icon+'</label>').join('');
+  const entries = Object.entries(_relayCfg.devices||{});
+  el.innerHTML = (entries.length ? entries.map(([key,d]) =>
+    '<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #e2e8f0;font-size:12px;">'
+    + '<b>'+_cEsc(d.name)+'</b><span style="color:#94a3b8;font-family:monospace;">'+_cEsc(d.deviceId)+'</span>'
+    + '<span style="color:#555;">'+((d.kinds&&d.kinds.length)?d.kinds.map(_cEsc).join('・'):'すべての呼び出し')+'</span>'
+    + '<button onclick="relayDeviceTest(\''+key+'\')" style="margin-left:auto;border:none;border-radius:5px;padding:3px 9px;font-size:11px;cursor:pointer;background:#0f766e;color:#fff;">テスト</button>'
+    + '<button onclick="relayDeviceDelete(\''+key+'\')" style="border:none;border-radius:5px;padding:3px 9px;font-size:11px;cursor:pointer;background:#e5e7eb;">削除</button>'
+    + '</div>').join('') : '<div style="color:#94a3b8;font-size:12px;">登録済みデバイスはありません</div>');
+  const kindsWrap = document.getElementById('relayNewKinds');
+  if(kindsWrap) kindsWrap.innerHTML = CALL_KINDS.map(x =>
+    '<label style="margin-right:8px;font-size:12px;cursor:pointer;"><input type="checkbox" class="relay-new-kind" value="'+_cEsc(x.k)+'"> '+x.icon+_cEsc(x.k)+'</label>').join('');
+}
+
 // 呼び出し1件を鳴らす
 function _callPlay(r){
   _callChime();
@@ -20871,6 +20952,14 @@ onValue(ref(db,'calls'), function(snap){
     }
   });
   Object.keys(_callSeen).forEach(function(k){ if(!v[k]) delete _callSeen[k]; });
+  // 回転灯（SwitchBot）。開いた瞬間にON、向かいます/完了でOFF（この端末が中継担当のときだけ）
+  Object.keys(v).forEach(function(k){
+    const r = v[k]; if(!r) return;
+    if(r.status==='open' && !_relaySeenOpen[k]){ _relaySeenOpen[k]=1; _relayFireForCall(r,'on'); }
+    if((r.status==='ack'||r.status==='done') && !_relaySeenClosed[k]){ _relaySeenClosed[k]=1; _relayFireForCall(r,'off'); }
+  });
+  Object.keys(_relaySeenOpen).forEach(function(k){ if(!v[k]) delete _relaySeenOpen[k]; });
+  Object.keys(_relaySeenClosed).forEach(function(k){ if(!v[k]) delete _relaySeenClosed[k]; });
   _calls = v;
   _callRender();
   // 古い記録を掃除（30日）
@@ -20916,6 +21005,9 @@ setInterval(_callRender, 10000);
       <label style="cursor:pointer;font-size:12.5px;color:#1d4ed8;display:block;margin-top:10px;font-weight:700;">
         <input type="checkbox" id="callPush" onchange="callSaveCfg()"> 📱 この端末からスマホへ通知を送る
         <span style="font-weight:400;color:#94a3b8;font-size:11px;">（何台入にしても二重には届きません。2〜3台入にしておくと安心）</span></label>
+      <label style="cursor:pointer;font-size:12.5px;color:#b45309;display:block;margin-top:8px;font-weight:700;">
+        <input type="checkbox" id="callRelay" onchange="callSaveCfg()"> 💡 この端末からSwitchBot（回転灯）へON/OFFを送る
+        <span style="font-weight:400;color:#94a3b8;font-size:11px;">（何台入にしても害はありません。2〜3台入にしておくと安心）</span></label>
       <label style="cursor:pointer;font-size:12.5px;color:#334155;display:block;margin-top:8px;font-weight:700;">
         <input type="checkbox" id="callRepeat" onchange="callSaveCfg()"> 「向かいます」が押されるまで鳴らし続ける</label>
       <div style="margin-top:5px;font-size:12px;color:#555;">
@@ -20943,10 +21035,31 @@ setInterval(_callRender, 10000);
       </div>
       <div id="ntfyMsg" style="font-size:12px;color:#1e3a8a;margin-top:6px;"></div>
     </div>
+    <div style="margin-top:12px;padding:11px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:9px;">
+      <div style="font-size:13px;font-weight:700;color:#92400e;margin-bottom:7px;">💡 回転灯（SwitchBot）※タブレットを置けない場所向け・会社でひとつ</div>
+      <div style="font-size:11px;color:#92400e;margin-bottom:8px;">エコードットは日本では使えないため試作中。実機・APIキーが届くまでは未検証（手順は呼び出し/switchbot_relay.gs）</div>
+      <div style="display:flex;flex-wrap:wrap;gap:7px;align-items:center;font-size:12px;color:#555;">
+        <span>中継先URL</span>
+        <input id="relayUrl" placeholder="GASのウェブアプリURL" style="flex:1;min-width:220px;padding:5px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:12.5px;font-family:inherit;">
+        <span>合言葉</span>
+        <input id="relayKey" placeholder="RELAY_KEYと同じ値" style="width:140px;padding:5px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:12.5px;font-family:inherit;">
+        <button onclick="relaySave()" style="padding:6px 14px;border:none;border-radius:6px;background:#b45309;color:#fff;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;">保存</button>
+      </div>
+      <div id="relayMsg" style="font-size:12px;color:#92400e;margin-top:6px;"></div>
+      <div style="margin-top:10px;font-size:12px;color:#555;">デバイス一覧（呼び出しが開いたらON、「向かいます」か「完了」でOFF）</div>
+      <div id="relayDevices" style="margin:6px 0;"></div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:4px;">
+        <input id="relayNewName" placeholder="名前（例：リフト置場）" style="width:150px;padding:5px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:12.5px;font-family:inherit;">
+        <input id="relayNewId" placeholder="デバイスID" style="width:160px;padding:5px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:12.5px;font-family:inherit;">
+        <button onclick="relayDeviceAdd()" style="padding:6px 14px;border:none;border-radius:6px;background:#1d4ed8;color:#fff;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;">追加</button>
+      </div>
+      <div style="font-size:11px;color:#94a3b8;margin-top:4px;">反応する呼び出し（何も選ばなければ全種類に反応）</div>
+      <div id="relayNewKinds" style="margin-top:3px;"></div>
+    </div>
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.01-5</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.02-1</div>
 </body>
 </html>
 
