@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型管理システム</title>
+<!-- 金型管理システム v2026.10.04-1 : App Check の方式を <b>Fraud Defense（旧 reCAPTCHA Enterprise）</b> に変えた。Google が旧方式（reCAPTCHA v3 Classic）の新規登録を止めており、Firebase側で鍵を登録できなかったため。ページ側は鍵と provider の差し替えだけ。仕組みは同じで、現場には何も見えない。Firebase側はまだ「監視のみ」なので動きは変わらない。 -->
 <!-- 金型管理システム v2026.10.03-1 : App Check を仕込んだ（社長指示：外から読めなくする／第2段階）。ページを開くと Google が「本物のブラウザから開かれた本物のページ」という証明書を出し、Firebase はそれが付いた通信だけを受ける。現場には何も見えない（パズルは出ない）。Firebase側はまだ「監視のみ」なので動きは変わらない。サイトキーは公開前提のキーで、秘密の鍵はFirebase側にしか無い。 Firebaseの起動が databaseURL だけだったので設定をひとそろいにし、2か所の起動を fbEnsureApp() に寄せた。 -->
 <!-- 金型管理システム v2026.09.19-1 : 作業者選択の氏名「登崎　千春」を正しい字「登﨑　千春」に直した（社長指摘 2026-09-19）。画面に出る名前なので版を上げる -->
 <!-- 金型管理システム v2026.09.07-2 : 実績入力チェックの表で、基準以上/基準未満/入力なし の色分けがセルに出ず、3pxの帯だけが見えていた件。(1)★背景色が行全体の指定(tr.act-worker td)に打ち消されていた（指定の細かさで負けていた）ため、同じ細かさで指定し直して凡例どおりセル全体に色を付ける。(2)★色の帯をセルの左端から右端へ移した。数字は右寄せなので、左端に帯があると隣（前の日）の数字のすぐ横に出てしまい、どちらの日の色か読めなかった -->
@@ -583,7 +584,7 @@ tr.act-worker td.act-holiday{background:#f5f6f8}
 <body>
 
 <header>
-  <div class="logo">⚙ <span>金型</span>管理システム<span style="font-size:9px;color:#9aa3b2;font-weight:400;margin-left:6px">v2026.10.03-1</span></div>
+  <div class="logo">⚙ <span>金型</span>管理システム<span style="font-size:9px;color:#9aa3b2;font-weight:400;margin-left:6px">v2026.10.04-1</span></div>
   <div class="main-tab-bar">
     <button class="main-tab-btn active" id="mainTabRepair" onclick="switchMainTab('repair')">🔧 改修計画表</button>
     <button class="main-tab-btn" id="mainTabNew" onclick="switchMainTab('newmold')">🏗️ 新規製作 日程表</button>
@@ -1237,7 +1238,8 @@ function fbEnsureApp(){
   const app = firebase.apps.length ? firebase.apps[0] : firebase.initializeApp(FB_APP_CFG);
   if(!window._hkAppCheck){
     window._hkAppCheck = true;
-    try{ firebase.appCheck(app).activate('6Ld_Hd0tAAAAAGct9U6ZfOIBZLR0_znUkoTkXWO8', true); }
+    try{ firebase.appCheck(app).activate(
+           new firebase.appCheck.ReCaptchaEnterpriseProvider('6LduJt0tAAAAAH5mn50AC443BZg7R4Z1B50IDSsH'), true); }
     catch(e){ console.warn('App Check 初期化に失敗', e); }
   }
   return app;
