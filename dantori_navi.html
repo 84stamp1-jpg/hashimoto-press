@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.03-1 : 呼び出しの2点（社長指示）。(1)<b>読み上げの声が出ないPCがある</b>（チャイムは鳴る）。端末ごとに原因が違うので3つに手を当てた：<b>日本語の音声を名指しする</b>（getVoicesから ja を探す。onvoiceschanged で読み直す）、<b>speak前に cancel()</b>（前の読み上げが詰まると以後が出なくなるChromeの不具合）、<b>speak後に resume()</b>（止まったままになる不具合よけ）。あわせて設定に<b>「🔊 声のテスト」ボタンと、その端末の音声の状態</b>を出すようにした。日本語の音声が入っていないPCは「★日本語の音声がこのPCに入っていません」と赤で出る＝Windows側で音声の追加が要る。(2)<b>「どこから」「何を」を画面から変えられる</b>ようにした。Firebase settings/callLists に保存し全端末に効く。1行に1つ、先頭に絵文字を置ける。色は自動。「最初の状態に戻す」も付けた。ラインは進捗ボードのものがそのまま出る。 -->
 <!-- H-Hub v2026.10.02-1 : 呼び出しに<b>回転灯（SwitchBot）連携の雛形</b>を足した（社長指示：エコードットが日本では使えないと分かったため、タブレットを置けない場所向けの代案）。呼び出しが開いたら対象デバイスをON、「向かいます」か「完了」でOFFにする。SwitchBotの署名付きAPIはブラウザから直接呼べない（CORSと鍵の持ち方の都合）ため、呼び出し画面の⚙から<b>GASの中継URLと合言葉</b>・<b>デバイス一覧（名前・ID・反応する呼び出し種類）</b>を登録する作り。中継用のGASコードと設定手順は `呼び出し/switchbot_relay.gs`。★<b>実機・APIキーがまだ無いため動作未検証</b>。手元に届いたらデバイスIDを登録してテストボタンで確認すること。 -->
 <!-- H-Hub v2026.10.01-5 : スマホ通知の送信を<b>複数台で分担</b>できるようにした（社長の指摘：1台だけだとその端末が落ちていると誰にも届かない）。「何回目を送るか」を Firebase の calls/&lt;key&gt;/ntfy で<b>取り合う</b>形（runTransaction）にしたので、送信担当を何台入にしても<b>二重に届かない</b>。1台が落ちていても他の端末が代わりに送る。2〜3台を入にしておくのがよい。受け取る側（同じトピックを登録したスマホ）は元から何台でも可。 -->
 <!-- H-Hub v2026.10.01-4 : 呼び出しを<b>スマホへ通知（ntfy）</b>できるようにした（社長指示）。既定は<b>5秒おきに5回</b>、「向かいます」が押された瞬間に止まる。ntfy.sh は CORS が開いているのでブラウザから直接送れる（GASを挟まない）。送るのは「📱この端末からスマホへ通知を送る」を入にした<b>1台だけ</b>（全端末が送ると人数分届く）。トピック名・回数・間隔は <b>Firebase の settings/callNtfy</b> に置き、呼び出し画面から変えられる＋テスト送信ボタン付き。★トピック名は公開リポジトリに書かないこと。乱用されたら名前を変えれば止まる。スマホは通知音と振動のみで読み上げはしない（H-Hub端末のスピーカーはこれまでどおり喋る）。 -->
@@ -12069,7 +12070,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.01-5';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.03-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -20587,16 +20588,19 @@ window.apSaveSkill = apSaveSkill;
 //   現場 → 「リフト待ち」「技術を呼ぶ」を押す → 全員の画面に出る → 向かう → 完了
 //   ★呼ぶことと記録することを1回で済ませる。押した種類がそのまま段取超過の原因になる
 // ══════════════════════════════════════════════════════════
-const CALL_KINDS = [
-  { k:'リフト',        icon:'🚜', c:'#b45309' },
-  { k:'技術（設備）',  icon:'🔧', c:'#1d4ed8' },
-  { k:'技術（金型）',  icon:'🧰', c:'#4338ca' },
-  { k:'材料・部品',    icon:'📦', c:'#047857' },
-  { k:'品質確認',      icon:'🔍', c:'#9d174d' },
-  { k:'応援',          icon:'🙋', c:'#c2410c' },
+// ★2026-10-03：中身は画面から変えられる（Firebase settings/callLists に保存・全端末に効く）
+const CALL_KINDS_DEF = [
+  { k:'リフト',        icon:'🚜' },
+  { k:'技術（設備）',  icon:'🔧' },
+  { k:'技術（金型）',  icon:'🧰' },
+  { k:'材料・部品',    icon:'📦' },
+  { k:'品質確認',      icon:'🔍' },
+  { k:'応援',          icon:'🙋' },
 ];
-// 端末の置き場所。ライン以外（事務所など）もここから選ぶ
-const CALL_PLACES = ['事務所','現場事務所','技術事務所','品質管理','納入・出荷','倉庫・材料置場','工場（共通）','休憩室'];
+const CALL_PLACES_DEF = ['事務所','現場事務所','技術事務所','品質管理','納入・出荷','倉庫・材料置場','工場（共通）','休憩室'];
+const CALL_COLORS = ['#b45309','#1d4ed8','#4338ca','#047857','#9d174d','#c2410c','#0f766e','#7c2d12','#6d28d9','#be123c'];
+let CALL_KINDS  = CALL_KINDS_DEF.map(function(x,i){ return { k:x.k, icon:x.icon, c:CALL_COLORS[i%CALL_COLORS.length] }; });
+let CALL_PLACES = CALL_PLACES_DEF.slice();
 const CALL_WARN_MIN = 3;      // これを過ぎたら橙
 const CALL_BAD_MIN  = 5;      // これを過ぎたら赤で点滅
 const CALL_KEEP_DAYS = 30;
@@ -20682,6 +20686,12 @@ window.callOpen = function(){
   document.getElementById('callRepeatSec').value = String(_callCfg.repeatSec || CALL_REPEAT_DEF);
   document.getElementById('callPush').checked = !!_callCfg.push;
   document.getElementById('callRelay').checked = !!_callCfg.relay;
+  document.getElementById('callKindsEdit').value  = _listToText(CALL_KINDS, true);
+  document.getElementById('callPlacesEdit').value = _listToText(CALL_PLACES, false);
+  document.getElementById('callListsMsg').textContent = '';
+  const _vi = window.callVoiceInfo();
+  const _vm = document.getElementById('callVoiceMsg');
+  _vm.textContent = _vi.msg; _vm.style.color = _vi.ok ? '#64748b' : '#c0392b';
   document.getElementById('ntfyTopic').value = _ntfy.topic || '';
   document.getElementById('ntfyTimes').value = _ntfy.times || 5;
   document.getElementById('ntfySec').value   = _ntfy.sec || 5;
@@ -20691,6 +20701,14 @@ window.callOpen = function(){
   document.getElementById('callMsg').textContent = '';
   const ov = document.getElementById('callOv');
   ov.style.display = 'flex';
+};
+window.callVoiceTest = function(){
+  const el = document.getElementById('callVoiceMsg');
+  const info = window.callVoiceInfo();
+  el.textContent = info.msg;
+  el.style.color = info.ok ? '#16a34a' : '#c0392b';
+  _callChime();
+  _callSpeak('テストです。ビーワン から、リフト です');
 };
 window.callPickLine = function(id){ _callLine = id; callOpen(); };
 window.callCloseD  = function(){ document.getElementById('callOv').style.display='none'; };
@@ -20733,11 +20751,42 @@ function _callChime(){
     });
   }catch(e){}
 }
+// ── 読み上げ（2026-10-03 社長指摘：声が出ないPCがある。チャイムは鳴る）──
+//   原因は端末ごとに違う。(a)日本語の音声が入っていない (b)音声一覧の読み込みが間に合っていない
+//   (c)Chromeの不具合で読み上げが止まったままになる。この3つに手を当てる
+let _voices = [];
+function _loadVoices(){
+  try{ _voices = speechSynthesis.getVoices() || []; }catch(e){ _voices = []; }
+}
+_loadVoices();
+try{ speechSynthesis.onvoiceschanged = _loadVoices; }catch(e){}
+function _jaVoice(){
+  if(!_voices.length) _loadVoices();
+  return _voices.find(function(v){ return (v.lang||'').toLowerCase().indexOf('ja') === 0; }) || null;
+}
+// この端末が喋れるかどうか（設定画面に出す）
+window.callVoiceInfo = function(){
+  if(!('speechSynthesis' in window)) return { ok:false, msg:'このブラウザは読み上げに対応していません' };
+  if(!_voices.length) _loadVoices();
+  const ja = _jaVoice();
+  if(ja) return { ok:true, msg:'読み上げ：' + ja.name + '（' + ja.lang + '）' };
+  if(_voices.length) return { ok:false, msg:'★日本語の音声がこのPCに入っていません（音声は' + _voices.length + '種類）。Windowsの設定で日本語の音声を追加してください' };
+  return { ok:false, msg:'★音声が1つも見つかりません。ページを読み直すか、Windowsの設定で音声を追加してください' };
+};
 function _callSpeak(t){
   try{
-    const u = new SpeechSynthesisUtterance(t);
-    u.lang='ja-JP'; u.rate=0.95; u.volume=1;
-    setTimeout(function(){ speechSynthesis.speak(u); }, 700);   // チャイムの後
+    if(!('speechSynthesis' in window)) return;
+    setTimeout(function(){
+      try{
+        speechSynthesis.cancel();          // 前の読み上げが詰まっていると以後が出なくなる
+        const u = new SpeechSynthesisUtterance(t);
+        const ja = _jaVoice();
+        if(ja) u.voice = ja;               // 日本語の声を名指しする
+        u.lang = 'ja-JP'; u.rate = 0.95; u.volume = 1;
+        speechSynthesis.speak(u);
+        setTimeout(function(){ try{ speechSynthesis.resume(); }catch(e){} }, 120);  // 止まったままになる不具合よけ
+      }catch(e){}
+    }, 700);   // チャイムの後
   }catch(e){}
 }
 
@@ -20746,6 +20795,41 @@ onValue(ref(db,'settings/callNtfy'), function(sn){
   const v = sn.val() || {};
   _ntfy = { topic:v.topic||'', times:parseInt(v.times,10)||5, sec:parseInt(v.sec,10)||5 };
 });
+// ── 「どこから」「何を」の中身（会社でひとつ）──
+onValue(ref(db,'settings/callLists'), function(sn){
+  const v = sn.val() || {};
+  const ks = Array.isArray(v.kinds) && v.kinds.length ? v.kinds : CALL_KINDS_DEF;
+  CALL_KINDS = ks.map(function(x,i){
+    return { k:(x.k||x.name||String(x)), icon:(x.icon||'📣'), c:CALL_COLORS[i%CALL_COLORS.length] };
+  });
+  CALL_PLACES = (Array.isArray(v.places) && v.places.length) ? v.places.slice() : CALL_PLACES_DEF.slice();
+  const ov = document.getElementById('callOv');
+  if(ov && ov.style.display !== 'none') callOpen();     // 開いていれば描き直す
+});
+function _listToText(arr, withIcon){
+  return arr.map(function(x){ return withIcon ? ((x.icon||'') + ' ' + x.k).trim() : x; }).join('\n');
+}
+function _textToKinds(t){
+  return t.split('\n').map(function(l){ return l.trim(); }).filter(Boolean).map(function(l){
+    const i = l.indexOf(' ');
+    if(i > 0 && [...l.slice(0,i)].length <= 2) return { k:l.slice(i+1).trim(), icon:l.slice(0,i) };
+    return { k:l, icon:'📣' };
+  });
+}
+window.callListsSave = function(){
+  const kinds  = _textToKinds(document.getElementById('callKindsEdit').value);
+  const places = document.getElementById('callPlacesEdit').value.split('\n')
+                 .map(function(l){ return l.trim(); }).filter(Boolean);
+  if(!kinds.length){ document.getElementById('callListsMsg').textContent='「何を」が空です'; return; }
+  set(ref(db,'settings/callLists'), { kinds:kinds, places:places });
+  document.getElementById('callListsMsg').textContent = '保存しました（全端末に効きます）';
+};
+window.callListsReset = function(){
+  if(!confirm('「どこから」「何を」を最初の状態に戻しますか？')) return;
+  set(ref(db,'settings/callLists'), null);
+  setTimeout(callOpen, 400);
+};
+
 window.ntfySave = function(){
   const t = (document.getElementById('ntfyTopic').value||'').trim();
   const rec = { topic:t,
@@ -21020,6 +21104,29 @@ setInterval(_callRender, 10000);
       </div>
       <label style="cursor:pointer;font-size:12px;color:#888;display:inline-block;margin-top:6px;">
         <input type="checkbox" id="callMute" onchange="callSaveCfg()"> この端末では一切鳴らさない</label>
+      <div style="margin-top:7px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <button onclick="callVoiceTest()" style="padding:5px 12px;border:none;border-radius:6px;background:#475569;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">🔊 声のテスト</button>
+        <span id="callVoiceMsg" style="font-size:11.5px;color:#64748b;"></span>
+      </div>
+    </div>
+    <div style="margin-top:12px;padding:11px 12px;background:#fffbeb;border:1px solid #fde68a;border-radius:9px;">
+      <div style="font-size:13px;font-weight:700;color:#92400e;margin-bottom:7px;">✏️ 「どこから」「何を」の中身　※会社でひとつ・全端末に効きます</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:210px;">
+          <div style="font-size:11.5px;color:#666;margin-bottom:3px;">何を（1行に1つ。先頭に絵文字を置けます）</div>
+          <textarea id="callKindsEdit" rows="7" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:12.5px;font-family:inherit;line-height:1.6;"></textarea>
+        </div>
+        <div style="flex:1;min-width:210px;">
+          <div style="font-size:11.5px;color:#666;margin-bottom:3px;">どこから（ライン以外の置き場所。1行に1つ）</div>
+          <textarea id="callPlacesEdit" rows="7" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:12.5px;font-family:inherit;line-height:1.6;"></textarea>
+        </div>
+      </div>
+      <div style="margin-top:7px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button onclick="callListsSave()" style="padding:6px 14px;border:none;border-radius:6px;background:#b45309;color:#fff;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;">保存</button>
+        <button onclick="callListsReset()" style="padding:6px 12px;border:none;border-radius:6px;background:#e5e7eb;color:#444;font-size:12px;cursor:pointer;font-family:inherit;">最初の状態に戻す</button>
+        <span style="font-size:11px;color:#a16207;">※ラインは進捗ボードのラインがそのまま出ます</span>
+        <span id="callListsMsg" style="font-size:12px;color:#92400e;font-weight:700;"></span>
+      </div>
     </div>
     <div style="margin-top:12px;padding:11px 12px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:9px;">
       <div style="font-size:13px;font-weight:700;color:#1e3a8a;margin-bottom:7px;">📱 スマホへの通知（ntfy）※会社でひとつ・全端末に効きます</div>
@@ -21059,7 +21166,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.02-1</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.03-1</div>
 </body>
 </html>
 
