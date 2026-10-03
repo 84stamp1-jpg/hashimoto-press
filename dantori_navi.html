@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.03-2 : 呼び出しの<b>「どこから」を1つのリストにまとめた</b>（社長指摘：ラインが全部出て要らないものがある／保存したものが選べない）。前の版では、編集した「どこから」は<b>端末の置き場所にしか効かず</b>、呼ぶときのボタンは進捗ボードのラインをそのまま並べていた＝直しようがなかった。呼ぶときのボタンも端末の置き場所も、同じ <b>settings/callLists.origins</b> から作るようにした。初めは「ライン＋事務所など」が並ぶので、<b>要らない行を消すだけ</b>でよい。ラインでない名前（事務所など）からも呼べる。保存すると全端末に即反映。 -->
 <!-- H-Hub v2026.10.03-1 : 呼び出しの2点（社長指示）。(1)<b>読み上げの声が出ないPCがある</b>（チャイムは鳴る）。端末ごとに原因が違うので3つに手を当てた：<b>日本語の音声を名指しする</b>（getVoicesから ja を探す。onvoiceschanged で読み直す）、<b>speak前に cancel()</b>（前の読み上げが詰まると以後が出なくなるChromeの不具合）、<b>speak後に resume()</b>（止まったままになる不具合よけ）。あわせて設定に<b>「🔊 声のテスト」ボタンと、その端末の音声の状態</b>を出すようにした。日本語の音声が入っていないPCは「★日本語の音声がこのPCに入っていません」と赤で出る＝Windows側で音声の追加が要る。(2)<b>「どこから」「何を」を画面から変えられる</b>ようにした。Firebase settings/callLists に保存し全端末に効く。1行に1つ、先頭に絵文字を置ける。色は自動。「最初の状態に戻す」も付けた。ラインは進捗ボードのものがそのまま出る。 -->
 <!-- H-Hub v2026.10.02-1 : 呼び出しに<b>回転灯（SwitchBot）連携の雛形</b>を足した（社長指示：エコードットが日本では使えないと分かったため、タブレットを置けない場所向けの代案）。呼び出しが開いたら対象デバイスをON、「向かいます」か「完了」でOFFにする。SwitchBotの署名付きAPIはブラウザから直接呼べない（CORSと鍵の持ち方の都合）ため、呼び出し画面の⚙から<b>GASの中継URLと合言葉</b>・<b>デバイス一覧（名前・ID・反応する呼び出し種類）</b>を登録する作り。中継用のGASコードと設定手順は `呼び出し/switchbot_relay.gs`。★<b>実機・APIキーがまだ無いため動作未検証</b>。手元に届いたらデバイスIDを登録してテストボタンで確認すること。 -->
 <!-- H-Hub v2026.10.01-5 : スマホ通知の送信を<b>複数台で分担</b>できるようにした（社長の指摘：1台だけだとその端末が落ちていると誰にも届かない）。「何回目を送るか」を Firebase の calls/&lt;key&gt;/ntfy で<b>取り合う</b>形（runTransaction）にしたので、送信担当を何台入にしても<b>二重に届かない</b>。1台が落ちていても他の端末が代わりに送る。2〜3台を入にしておくのがよい。受け取る側（同じトピックを登録したスマホ）は元から何台でも可。 -->
@@ -12070,7 +12071,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.03-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.03-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -20600,7 +20601,14 @@ const CALL_KINDS_DEF = [
 const CALL_PLACES_DEF = ['事務所','現場事務所','技術事務所','品質管理','納入・出荷','倉庫・材料置場','工場（共通）','休憩室'];
 const CALL_COLORS = ['#b45309','#1d4ed8','#4338ca','#047857','#9d174d','#c2410c','#0f766e','#7c2d12','#6d28d9','#be123c'];
 let CALL_KINDS  = CALL_KINDS_DEF.map(function(x,i){ return { k:x.k, icon:x.icon, c:CALL_COLORS[i%CALL_COLORS.length] }; });
-let CALL_PLACES = CALL_PLACES_DEF.slice();
+let CALL_PLACES = CALL_PLACES_DEF.slice();     // 保存されていないときの事務所など
+// ★「どこから」は1つのリストにまとめる（呼ぶときのボタンも、端末の置き場所も、これを使う）
+let CALL_ORIGINS = null;                      // null＝未設定（ライン＋事務所などを既定で使う）
+function callOrigins(){
+  if(Array.isArray(CALL_ORIGINS) && CALL_ORIGINS.length) return CALL_ORIGINS.slice();
+  const ids = Object.keys(lines || {}).filter(function(id){ return lines[id] && typeof lines[id] === 'object'; });
+  return ids.concat(CALL_PLACES);
+}
 const CALL_WARN_MIN = 3;      // これを過ぎたら橙
 const CALL_BAD_MIN  = 5;      // これを過ぎたら赤で点滅
 const CALL_KEEP_DAYS = 30;
@@ -20656,11 +20664,10 @@ function _cMin(ts){
 
 window.callOpen = function(){
   const wrap = document.getElementById('callLines');
-  // lines には updatedAt のような値も混ざるので、中身がオブジェクトのものだけ
-  const ids = Object.keys(lines||{}).filter(id => lines[id] && typeof lines[id]==='object');
-  // 置き場所がラインなら、呼ぶラインもそこを初期値にする。事務所などのときは選ばせる
+  const ids = callOrigins();                 // ★「どこから」の一覧（画面から変えられる）
+  // 置き場所がこの一覧にあるなら、呼ぶときもそこを初期値にする
   const siteIsLine = _callCfg.site && ids.indexOf(_callCfg.site) >= 0;
-  if(!_callLine) _callLine = siteIsLine ? _callCfg.site : (ids[0] || '');
+  if(!_callLine || ids.indexOf(_callLine) < 0) _callLine = siteIsLine ? _callCfg.site : (ids[0] || '');
   wrap.innerHTML = ids.map(id =>
     '<button onclick="callPickLine(\'' + _cEsc(id) + '\')" data-cl="' + _cEsc(id) + '" '
     + 'style="padding:9px 13px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;'
@@ -20675,8 +20682,7 @@ window.callOpen = function(){
   const site = document.getElementById('callSite');
   const opt = (v,label) => '<option value="'+_cEsc(v)+'"'+(v===_callCfg.site?' selected':'')+'>'+_cEsc(label)+'</option>';
   site.innerHTML = '<option value="">（決めていない）</option>'
-    + '<optgroup label="ライン・担当">' + ids.map(id => opt(id, getLineName(id))).join('') + '</optgroup>'
-    + '<optgroup label="事務所など">' + CALL_PLACES.map(p => opt(p, p)).join('') + '</optgroup>';
+    + ids.map(id => opt(id, getLineName(id))).join('');
   document.getElementById('callRing').innerHTML = CALL_KINDS.map(x =>
     '<label style="cursor:pointer;font-size:12.5px;"><input type="checkbox" class="call-ring" value="'+_cEsc(x.k)+'" '
     + 'onchange="callSaveCfg()"' + ((_callCfg.ring===null||_callCfg.ring.indexOf(x.k)>=0)?' checked':'') + '> '
@@ -20687,7 +20693,7 @@ window.callOpen = function(){
   document.getElementById('callPush').checked = !!_callCfg.push;
   document.getElementById('callRelay').checked = !!_callCfg.relay;
   document.getElementById('callKindsEdit').value  = _listToText(CALL_KINDS, true);
-  document.getElementById('callPlacesEdit').value = _listToText(CALL_PLACES, false);
+  document.getElementById('callPlacesEdit').value = _listToText(callOrigins(), false);
   document.getElementById('callListsMsg').textContent = '';
   const _vi = window.callVoiceInfo();
   const _vm = document.getElementById('callVoiceMsg');
@@ -20802,7 +20808,8 @@ onValue(ref(db,'settings/callLists'), function(sn){
   CALL_KINDS = ks.map(function(x,i){
     return { k:(x.k||x.name||String(x)), icon:(x.icon||'📣'), c:CALL_COLORS[i%CALL_COLORS.length] };
   });
-  CALL_PLACES = (Array.isArray(v.places) && v.places.length) ? v.places.slice() : CALL_PLACES_DEF.slice();
+  CALL_PLACES  = (Array.isArray(v.places)  && v.places.length)  ? v.places.slice()  : CALL_PLACES_DEF.slice();
+  CALL_ORIGINS = (Array.isArray(v.origins) && v.origins.length) ? v.origins.slice() : null;
   const ov = document.getElementById('callOv');
   if(ov && ov.style.display !== 'none') callOpen();     // 開いていれば描き直す
 });
@@ -20818,10 +20825,11 @@ function _textToKinds(t){
 }
 window.callListsSave = function(){
   const kinds  = _textToKinds(document.getElementById('callKindsEdit').value);
-  const places = document.getElementById('callPlacesEdit').value.split('\n')
+  const origins = document.getElementById('callPlacesEdit').value.split('\n')
                  .map(function(l){ return l.trim(); }).filter(Boolean);
   if(!kinds.length){ document.getElementById('callListsMsg').textContent='「何を」が空です'; return; }
-  set(ref(db,'settings/callLists'), { kinds:kinds, places:places });
+  if(!origins.length){ document.getElementById('callListsMsg').textContent='「どこから」が空です'; return; }
+  set(ref(db,'settings/callLists'), { kinds:kinds, origins:origins });
   document.getElementById('callListsMsg').textContent = '保存しました（全端末に効きます）';
 };
 window.callListsReset = function(){
@@ -21117,14 +21125,14 @@ setInterval(_callRender, 10000);
           <textarea id="callKindsEdit" rows="7" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:12.5px;font-family:inherit;line-height:1.6;"></textarea>
         </div>
         <div style="flex:1;min-width:210px;">
-          <div style="font-size:11.5px;color:#666;margin-bottom:3px;">どこから（ライン以外の置き場所。1行に1つ）</div>
+          <div style="font-size:11.5px;color:#666;margin-bottom:3px;">どこから（1行に1つ。要らない行は消してください）</div>
           <textarea id="callPlacesEdit" rows="7" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:12.5px;font-family:inherit;line-height:1.6;"></textarea>
         </div>
       </div>
       <div style="margin-top:7px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <button onclick="callListsSave()" style="padding:6px 14px;border:none;border-radius:6px;background:#b45309;color:#fff;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;">保存</button>
         <button onclick="callListsReset()" style="padding:6px 12px;border:none;border-radius:6px;background:#e5e7eb;color:#444;font-size:12px;cursor:pointer;font-family:inherit;">最初の状態に戻す</button>
-        <span style="font-size:11px;color:#a16207;">※ラインは進捗ボードのラインがそのまま出ます</span>
+        <span style="font-size:11px;color:#a16207;">※初めは進捗ボードのライン＋事務所などが並びます</span>
         <span id="callListsMsg" style="font-size:12px;color:#92400e;font-weight:700;"></span>
       </div>
     </div>
@@ -21166,7 +21174,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.03-1</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.03-2</div>
 </body>
 </html>
 
