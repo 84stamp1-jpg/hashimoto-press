@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.03-3 : スマホ通知を<b>呼び出しの種類ごとに分けられる</b>ようにした（社長指示：人ごとに分けたい）。「何を」の行に <b>｜のうしろへトピック名</b>を書くと、その呼び出しだけその人のスマホへ届く（例：<code>🔧 技術（大石） ｜ hashimoto-gijutsu-oishi-xxxx</code>）。書かない行はこれまでどおり<b>既定のトピック（全員）</b>へ。既定が空でも、種類ごとに決めてあれば送る。保存すると送り先の一覧が画面に出る。受け取る側は自分のトピックだけをntfyに登録すればよい。 -->
 <!-- H-Hub v2026.10.03-2 : 呼び出しの<b>「どこから」を1つのリストにまとめた</b>（社長指摘：ラインが全部出て要らないものがある／保存したものが選べない）。前の版では、編集した「どこから」は<b>端末の置き場所にしか効かず</b>、呼ぶときのボタンは進捗ボードのラインをそのまま並べていた＝直しようがなかった。呼ぶときのボタンも端末の置き場所も、同じ <b>settings/callLists.origins</b> から作るようにした。初めは「ライン＋事務所など」が並ぶので、<b>要らない行を消すだけ</b>でよい。ラインでない名前（事務所など）からも呼べる。保存すると全端末に即反映。 -->
 <!-- H-Hub v2026.10.03-1 : 呼び出しの2点（社長指示）。(1)<b>読み上げの声が出ないPCがある</b>（チャイムは鳴る）。端末ごとに原因が違うので3つに手を当てた：<b>日本語の音声を名指しする</b>（getVoicesから ja を探す。onvoiceschanged で読み直す）、<b>speak前に cancel()</b>（前の読み上げが詰まると以後が出なくなるChromeの不具合）、<b>speak後に resume()</b>（止まったままになる不具合よけ）。あわせて設定に<b>「🔊 声のテスト」ボタンと、その端末の音声の状態</b>を出すようにした。日本語の音声が入っていないPCは「★日本語の音声がこのPCに入っていません」と赤で出る＝Windows側で音声の追加が要る。(2)<b>「どこから」「何を」を画面から変えられる</b>ようにした。Firebase settings/callLists に保存し全端末に効く。1行に1つ、先頭に絵文字を置ける。色は自動。「最初の状態に戻す」も付けた。ラインは進捗ボードのものがそのまま出る。 -->
 <!-- H-Hub v2026.10.02-1 : 呼び出しに<b>回転灯（SwitchBot）連携の雛形</b>を足した（社長指示：エコードットが日本では使えないと分かったため、タブレットを置けない場所向けの代案）。呼び出しが開いたら対象デバイスをON、「向かいます」か「完了」でOFFにする。SwitchBotの署名付きAPIはブラウザから直接呼べない（CORSと鍵の持ち方の都合）ため、呼び出し画面の⚙から<b>GASの中継URLと合言葉</b>・<b>デバイス一覧（名前・ID・反応する呼び出し種類）</b>を登録する作り。中継用のGASコードと設定手順は `呼び出し/switchbot_relay.gs`。★<b>実機・APIキーがまだ無いため動作未検証</b>。手元に届いたらデバイスIDを登録してテストボタンで確認すること。 -->
@@ -12071,7 +12072,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.03-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.03-3';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -20806,7 +20807,9 @@ onValue(ref(db,'settings/callLists'), function(sn){
   const v = sn.val() || {};
   const ks = Array.isArray(v.kinds) && v.kinds.length ? v.kinds : CALL_KINDS_DEF;
   CALL_KINDS = ks.map(function(x,i){
-    return { k:(x.k||x.name||String(x)), icon:(x.icon||'📣'), c:CALL_COLORS[i%CALL_COLORS.length] };
+    return { k:(x.k||x.name||String(x)), icon:(x.icon||'📣'),
+             topic:(x.topic||''),                      // ★その呼び出しの送り先（空なら既定）
+             c:CALL_COLORS[i%CALL_COLORS.length] };
   });
   CALL_PLACES  = (Array.isArray(v.places)  && v.places.length)  ? v.places.slice()  : CALL_PLACES_DEF.slice();
   CALL_ORIGINS = (Array.isArray(v.origins) && v.origins.length) ? v.origins.slice() : null;
@@ -20814,14 +20817,29 @@ onValue(ref(db,'settings/callLists'), function(sn){
   if(ov && ov.style.display !== 'none') callOpen();     // 開いていれば描き直す
 });
 function _listToText(arr, withIcon){
-  return arr.map(function(x){ return withIcon ? ((x.icon||'') + ' ' + x.k).trim() : x; }).join('\n');
+  return arr.map(function(x){
+    if(!withIcon) return x;
+    const base = ((x.icon||'') + ' ' + x.k).trim();
+    return x.topic ? (base + ' ｜ ' + x.topic) : base;
+  }).join('\n');
 }
 function _textToKinds(t){
   return t.split('\n').map(function(l){ return l.trim(); }).filter(Boolean).map(function(l){
+    let topic = '';
+    const b = l.search(/[|｜]/);                         // ｜のうしろは送り先
+    if(b >= 0){ topic = l.slice(b + 1).trim(); l = l.slice(0, b).trim(); }
     const i = l.indexOf(' ');
-    if(i > 0 && [...l.slice(0,i)].length <= 2) return { k:l.slice(i+1).trim(), icon:l.slice(0,i) };
-    return { k:l, icon:'📣' };
+    let o;
+    if(i > 0 && [...l.slice(0, i)].length <= 2) o = { k:l.slice(i+1).trim(), icon:l.slice(0, i) };
+    else o = { k:l, icon:'📣' };
+    if(topic) o.topic = topic;
+    return o;
   });
+}
+// その呼び出しの送り先（種類ごとに決めていなければ既定）
+function kindTopic(kind){
+  const x = CALL_KINDS.find(function(y){ return y.k === kind; });
+  return (x && x.topic) ? x.topic : _ntfy.topic;
 }
 window.callListsSave = function(){
   const kinds  = _textToKinds(document.getElementById('callKindsEdit').value);
@@ -20830,7 +20848,9 @@ window.callListsSave = function(){
   if(!kinds.length){ document.getElementById('callListsMsg').textContent='「何を」が空です'; return; }
   if(!origins.length){ document.getElementById('callListsMsg').textContent='「どこから」が空です'; return; }
   set(ref(db,'settings/callLists'), { kinds:kinds, origins:origins });
-  document.getElementById('callListsMsg').textContent = '保存しました（全端末に効きます）';
+  const tps = Array.from(new Set(kinds.map(function(x){ return x.topic || '（既定）'; })));
+  document.getElementById('callListsMsg').textContent =
+    '保存しました（全端末に効きます）／送り先 ' + tps.length + '種類：' + tps.join('、');
 };
 window.callListsReset = function(){
   if(!confirm('「どこから」「何を」を最初の状態に戻しますか？')) return;
@@ -20846,12 +20866,13 @@ window.ntfySave = function(){
   set(ref(db,'settings/callNtfy'), rec);
   document.getElementById('ntfyMsg').textContent = '保存しました（全端末に効きます）';
 };
-function ntfySend(title, msg){
-  if(!_ntfy.topic) return Promise.resolve(false);
+function ntfySend(title, msg, topic){
+  const tp = topic || _ntfy.topic;
+  if(!tp) return Promise.resolve(false);
   const q = 'title=' + encodeURIComponent(title)
           + '&message=' + encodeURIComponent(msg)
           + '&priority=5&tags=rotating_light';
-  return fetch('https://ntfy.sh/' + encodeURIComponent(_ntfy.topic) + '/publish?' + q)
+  return fetch('https://ntfy.sh/' + encodeURIComponent(tp) + '/publish?' + q)
          .then(function(r){ return r.ok; }).catch(function(){ return false; });
 }
 window.ntfyTest = function(){
@@ -20868,7 +20889,8 @@ window.ntfyTest = function(){
 // ★何台を送信担当にしても二重に届かないよう、「何回目を送るか」をFirebase上で取り合う。
 //   取れた端末だけが送る。1台が落ちていても、他の端末が代わりに送る
 function _ntfyTick(){
-  if(!_callCfg.push || !_ntfy.topic) return;
+  if(!_callCfg.push) return;
+  if(!_ntfy.topic && !CALL_KINDS.some(function(x){ return x.topic; })) return;
   const now = Date.now() + _callSkew;
   Object.keys(_calls).forEach(function(k){
     const r = _calls[k];
@@ -20888,7 +20910,8 @@ function _ntfyTick(){
       if(!res.committed) return;                              // 取れなかった＝他の端末が送る
       const v = res.snapshot.val() || {};
       ntfySend('📣 ' + (r.lineName || r.line) + '　' + r.kind,
-               v.n + '/' + _ntfy.times + '　向かう人は「向かいます」を押してください');
+               v.n + '/' + _ntfy.times + '　向かう人は「向かいます」を押してください',
+               kindTopic(r.kind));
     }).catch(function(){ delete _ntfySent[k]; });
   });
 }
@@ -21121,7 +21144,7 @@ setInterval(_callRender, 10000);
       <div style="font-size:13px;font-weight:700;color:#92400e;margin-bottom:7px;">✏️ 「どこから」「何を」の中身　※会社でひとつ・全端末に効きます</div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
         <div style="flex:1;min-width:210px;">
-          <div style="font-size:11.5px;color:#666;margin-bottom:3px;">何を（1行に1つ。先頭に絵文字を置けます）</div>
+          <div style="font-size:11.5px;color:#666;margin-bottom:3px;">何を（1行に1つ。先頭に絵文字／<b>｜のうしろに送り先</b>を書くとその人だけに届きます）</div>
           <textarea id="callKindsEdit" rows="7" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:12.5px;font-family:inherit;line-height:1.6;"></textarea>
         </div>
         <div style="flex:1;min-width:210px;">
@@ -21174,7 +21197,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.03-2</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.03-3</div>
 </body>
 </html>
 
