@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>進捗管理ボード｜橋本工業</title>
+<!-- 進捗管理ボード v2026.10.03-1 : App Check を仕込んだ（社長指示：外から読めなくする／第2段階）。ページを開くと Google が「本物のブラウザから開かれた本物のページ」という証明書を出し、Firebase はそれが付いた通信だけを受ける。現場には何も見えない（パズルは出ない）。Firebase側はまだ「監視のみ」なので動きは変わらない。サイトキーは公開前提のキーで、秘密の鍵はFirebase側にしか無い。 -->
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -498,9 +499,17 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getDatabase, ref, onValue, set, update } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check.js";
 
 const cfg={apiKey:"AIzaSyCvh4rDrk6ljWhNBJc-Kt_YFpvEevLxb6o",authDomain:"hashimoto-press.firebaseapp.com",databaseURL:"https://hashimoto-press-default-rtdb.asia-southeast1.firebasedatabase.app",projectId:"hashimoto-press",storageBucket:"hashimoto-press.firebasestorage.app",messagingSenderId:"508495109760",appId:"1:508495109760:web:53d266bb4483ab04a29065"};
 const app=initializeApp(cfg);
+/* ===== App Check（2026-10-03）===============================================
+   このページから開かれた本物の通信だけをFirebaseに通すための証明書を取る。
+   サイトキーはページに書く前提の公開キー（秘密の鍵はFirebase側にだけ置いてある）。
+   取れなくても画面は止めない。Firebase側を「適用」にするまでは今までどおり動く。 */
+const APPCHECK_SITE_KEY = "6Ld_Hd0tAAAAAGct9U6ZfOIBZLR0_znUkoTkXWO8";
+try{ initializeAppCheck(app, { provider:new ReCaptchaV3Provider(APPCHECK_SITE_KEY), isTokenAutoRefreshEnabled:true }); }
+catch(e){ console.warn('App Check 初期化に失敗', e); }
 const db=getDatabase(app);
 // ===== グループ・ライン管理 =====
 const DEFAULT_GRP=[
@@ -2731,6 +2740,6 @@ function tick(){
 tick();setInterval(tick,1000);setInterval(()=>{renderAlts();renderBoard();},60000);setInterval(updateTroubleColors,30000);
 </script>
 <!-- 読み込まれている版（GitHub Pagesのキャッシュで古い版を見ていないか、その場で確かめるため） -->
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.09.21-4</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.03-1</div>
 </body>
 </html>

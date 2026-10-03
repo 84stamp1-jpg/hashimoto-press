@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.10.03-1 : App Check を仕込んだ（社長指示：外から読めなくする／第2段階）。ページを開くと Google が「本物のブラウザから開かれた本物のページ」という証明書を出し、Firebase はそれが付いた通信だけを受ける。現場には何も見えない（パズルは出ない）。Firebase側はまだ「監視のみ」なので動きは変わらない。サイトキーは公開前提のキーで、秘密の鍵はFirebase側にしか無い。 Firebaseの設定にアプリIDが無かったので足した。 -->
 <!-- 金型原価 v2026.09.28-4 : 材料費一覧で<b>日付が空の行を最上段に固定するのをやめた</b>（社長指示）。他の行と同じ並べ方にしたので、空どうしがまとまって<b>最下段</b>に並び、その中は管理NO.の小さい順になる。 -->
 <!-- 金型原価 v2026.09.28-3 : 材料費一覧の並び順を <b>注文した日（仕入日）の新しい順 → 管理NO.の小さい順</b> にそろえた（社長指示）。これまでは3か所でばらばらだった。画面＝日付の新しい順のあと<b>登録した順</b>（管理NO.は関係なし）、印刷＝日付の新しい順のあと管理NO.順、<b>チェックを入れて印刷＝並べ替えなし</b>（画面の順のまま）。共通の並べ替え matSortCmp() を作って3か所とも通した。管理NO.は数字混じりでも自然な順に並ぶ。日付が空のもの（再注文の直後など）は今までどおり最上段。CSV出力は取り込み先の都合があるので触っていない。 -->
 <!-- 金型原価 v2026.09.28-2 : <b>見積依頼書・注文書が2ページになったとき、2ページ目に宛先とタイトルが出なかった</b>のを直した（社長指摘）。宛先・タイトル・あいさつが表の外の div に置かれていたため、表だけが次のページへ続き、頭が付かなかった。これらを表の <b>thead</b> の中（列いっぱいの1行）へ移した。thead はページをまたぐとブラウザが自動でくり返すので、3ページ以上になっても毎ページ頭が付く。見積依頼書は列見出しが thead の1行目でなくなるため、<b>colgroup</b> を足して列幅が変わらないようにした（注文書は元から colgroup あり）。 -->
@@ -35,6 +36,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 <style>
   :root {
     --bg: #f0f4f8;
@@ -649,7 +651,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.09.28-4</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.10.03-1</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -2150,10 +2152,22 @@ function initFirebase() {
       apiKey: cfg.apiKey,
       databaseURL: cfg.dbUrl,
       projectId: cfg.projectId,
+      authDomain: 'hashimoto-press.firebaseapp.com',
+      appId: '1:508495109760:web:53d266bb4483ab04a29065',   // App Check に要る（2026-10-03）
     };
     const app = firebase.apps.length
       ? firebase.app()
       : firebase.initializeApp(firebaseConfig);
+
+    /* ===== App Check（2026-10-03）=====
+       このページから開かれた本物の通信だけをFirebaseに通すための証明書を取る。
+       initFirebase() は設定を保存し直すと2回目が走るので、1回だけにする。 */
+    if (!window._hkAppCheck) {
+      window._hkAppCheck = true;
+      try { firebase.appCheck(app).activate('6Ld_Hd0tAAAAAGct9U6ZfOIBZLR0_znUkoTkXWO8', true); }
+      catch (e) { console.warn('App Check 初期化に失敗', e); }
+    }
+
     db = firebase.database(app);
 
     // Listen

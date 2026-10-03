@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <!--
   camera_grid.html — 工場カメラ一覧表示(HHub)
-  v2026.07.15-2
+  v2026.10.03-1
+  v2026.10.03-1: App Check を仕込んだ（社長指示：外から読めなくする／第2段階）。ページを開くと Google が「本物のブラウザから開かれた本物のページ」という証明書を出し、Firebase はそれが付いた通信だけを受ける。現場には何も見えない（パズルは出ない）。Firebase側はまだ「監視のみ」なので動きは変わらない。サイトキーは公開前提のキーで、秘密の鍵はFirebase側にしか無い。
   仕様書: docs/camera_system_spec.md (Phase 2)
   構成: Tapoカメラ(RTSP) → 中継サーバーPC(go2rtc) → 本ページ(iframe/WebRTC)
   トラブル発報: Firebase /trouble/<エリアID> を監視して該当カメラ枠を赤点滅
@@ -102,7 +103,7 @@
 <header>
   <div>
     <div class="logo-main">HASHIMOTO KOGYO</div>
-    <div class="logo-sub">工場カメラ一覧 <span class="ver">v2026.07.15-2</span></div>
+    <div class="logo-sub">工場カメラ一覧 <span class="ver">v2026.10.03-1</span></div>
   </div>
   <div class="spacer"></div>
   <span id="fbStatus" class="fb-status">● Firebase未接続</span>
@@ -163,6 +164,7 @@
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import { getDatabase, ref, onValue, update } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check.js";
 
 // ===== 設定(localStorage) =====
 const CFG_KEY = 'hk_camgrid_config';
@@ -317,13 +319,19 @@ window.saveCfg = () => {
 };
 
 // ===== Firebase トラブル監視(/trouble/<エリアID>) =====
-const firebaseConfig = {
-  apiKey: 'AIzaSyCvh4rDrk6ljWhNBJc-Kt_YFpvEevLxb6o',
-  databaseURL: 'https://hashimoto-press-default-rtdb.asia-southeast1.firebasedatabase.app',
-};
+// App Check にはアプリIDまで要るので、設定をひとそろいに（2026-10-03）
+const firebaseConfig = {apiKey:"AIzaSyCvh4rDrk6ljWhNBJc-Kt_YFpvEevLxb6o",authDomain:"hashimoto-press.firebaseapp.com",databaseURL:"https://hashimoto-press-default-rtdb.asia-southeast1.firebasedatabase.app",projectId:"hashimoto-press",storageBucket:"hashimoto-press.firebasestorage.app",messagingSenderId:"508495109760",appId:"1:508495109760:web:53d266bb4483ab04a29065"};
 let activeTroubles = {};  // {areaId: {status,ts,area}}
 try {
   const app = initializeApp(firebaseConfig);
+
+/* ===== App Check（2026-10-03）===============================================
+   このページから開かれた本物の通信だけをFirebaseに通すための証明書を取る。
+   サイトキーはページに書く前提の公開キー（秘密の鍵はFirebase側にだけ置いてある）。
+   取れなくても画面は止めない。Firebase側を「適用」にするまでは今までどおり動く。 */
+const APPCHECK_SITE_KEY = "6Ld_Hd0tAAAAAGct9U6ZfOIBZLR0_znUkoTkXWO8";
+try{ initializeAppCheck(app, { provider:new ReCaptchaV3Provider(APPCHECK_SITE_KEY), isTokenAutoRefreshEnabled:true }); }
+catch(e){ console.warn('App Check 初期化に失敗', e); }
   const db  = getDatabase(app);
   onValue(ref(db, 'trouble'), snap => {
     document.getElementById('fbStatus').textContent = '● Firebase接続中';
