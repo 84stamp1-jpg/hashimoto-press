@@ -3,7 +3,46 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>
+/* ===== Firebaseへ直接取りに行く通信にも証明書を付ける（2026-10-05）===========
+   Firebaseの公式部品（SDK）を通る通信には App Check の証明書が自動で付くが、
+   fetch で …firebasedatabase.app/xxx.json を直接叩いている処理には付かない。
+   App Check を「適用」にした途端、そちらが全部401ではじかれた（品番検索が止まった）。
+   ここで通信の入口をくるんで、Firebase宛てなら証明書を足してから送る。
+   証明書がまだ用意できていなければ少し待つ。取れなければ今までどおり素で送る
+   （「適用」していない間は素でも通る）。 */
+(function(){
+  var RE = /firebasedatabase\.app\//;
+  var orig = window.fetch.bind(window);
+  window._acToken = null;        // App Check の初期化が済んだら、下のほうで入る
+  function token(){
+    if (window._acToken) return window._acToken();
+    return new Promise(function(res){
+      var t0 = Date.now();
+      (function wait(){
+        if (window._acToken) return window._acToken().then(res, function(){ res(''); });
+        if (Date.now() - t0 > 8000) return res('');     // 待ちすぎない
+        setTimeout(wait, 100);
+      })();
+    });
+  }
+  window.fetch = function(input, init){
+    var url = (typeof input === 'string') ? input : ((input && input.url) || '');
+    if (!RE.test(url)) return orig(input, init);
+    return token().then(function(tk){
+      if (!tk) return orig(input, init);
+      var o = {};
+      for (var k in (init || {})) o[k] = init[k];
+      var h = new Headers((init && init.headers) || (typeof input !== 'string' && input.headers) || {});
+      h.set('X-Firebase-AppCheck', tk);
+      o.headers = h;
+      return orig(input, o);
+    });
+  };
+})();
+</script>
 <title>金型管理システム</title>
+<!-- 金型管理システム v2026.10.05-1 : ★<b>暑さ指数（WBGT）の通信にも証明書を付けた</b>（2026-10-05）。このページの暑さ指数は Firebaseの公式部品を通さず <code>fetch</code> で直接読み書きしている（6か所）ため、App Check を「適用」にすると記録が出なくなる。window.fetch をくるんで、Firebase宛てなら証明書を足してから送るようにした。 -->
 <!-- 金型管理システム v2026.10.04-1 : App Check の方式を <b>Fraud Defense（旧 reCAPTCHA Enterprise）</b> に変えた。Google が旧方式（reCAPTCHA v3 Classic）の新規登録を止めており、Firebase側で鍵を登録できなかったため。ページ側は鍵と provider の差し替えだけ。仕組みは同じで、現場には何も見えない。Firebase側はまだ「監視のみ」なので動きは変わらない。 -->
 <!-- 金型管理システム v2026.10.03-1 : App Check を仕込んだ（社長指示：外から読めなくする／第2段階）。ページを開くと Google が「本物のブラウザから開かれた本物のページ」という証明書を出し、Firebase はそれが付いた通信だけを受ける。現場には何も見えない（パズルは出ない）。Firebase側はまだ「監視のみ」なので動きは変わらない。サイトキーは公開前提のキーで、秘密の鍵はFirebase側にしか無い。 Firebaseの起動が databaseURL だけだったので設定をひとそろいにし、2か所の起動を fbEnsureApp() に寄せた。 -->
 <!-- 金型管理システム v2026.09.19-1 : 作業者選択の氏名「登崎　千春」を正しい字「登﨑　千春」に直した（社長指摘 2026-09-19）。画面に出る名前なので版を上げる -->
@@ -584,7 +623,7 @@ tr.act-worker td.act-holiday{background:#f5f6f8}
 <body>
 
 <header>
-  <div class="logo">⚙ <span>金型</span>管理システム<span style="font-size:9px;color:#9aa3b2;font-weight:400;margin-left:6px">v2026.10.04-1</span></div>
+  <div class="logo">⚙ <span>金型</span>管理システム<span style="font-size:9px;color:#9aa3b2;font-weight:400;margin-left:6px">v2026.10.05-1</span></div>
   <div class="main-tab-bar">
     <button class="main-tab-btn active" id="mainTabRepair" onclick="switchMainTab('repair')">🔧 改修計画表</button>
     <button class="main-tab-btn" id="mainTabNew" onclick="switchMainTab('newmold')">🏗️ 新規製作 日程表</button>
@@ -1238,9 +1277,14 @@ function fbEnsureApp(){
   const app = firebase.apps.length ? firebase.apps[0] : firebase.initializeApp(FB_APP_CFG);
   if(!window._hkAppCheck){
     window._hkAppCheck = true;
-    try{ firebase.appCheck(app).activate(
-           new firebase.appCheck.ReCaptchaEnterpriseProvider('6LduJt0tAAAAAH5mn50AC443BZg7R4Z1B50IDSsH'), true); }
-    catch(e){ console.warn('App Check 初期化に失敗', e); }
+    try{
+      const _ac = firebase.appCheck(app);
+      _ac.activate(new firebase.appCheck.ReCaptchaEnterpriseProvider('6LduJt0tAAAAAH5mn50AC443BZg7R4Z1B50IDSsH'), true);
+      // ★暑さ指数は fetch で直接取りに行っているので、そちらにも証明書を渡す
+      window._acToken = function(){
+        return _ac.getToken().then(function(t){ return t.token; }).catch(function(){ return ''; });
+      };
+    }catch(e){ console.warn('App Check 初期化に失敗', e); }
   }
   return app;
 }
