@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.10.05-1 : 金型編集の<b>工程リストを▲▼で並べ替えられる</b>ようにした（社長指示）。工程の順番は 管理NO.（金型NO＋工程番号＋連番）の工程番号に使うので、途中に1工程入れたいときに下を全部打ち直す必要があった。行ごと動かすので<b>入力済みの加工予算も一緒に移る</b>。左端に<b>工程番号</b>を出し、動かすたびに振り直す。先頭の▲と末尾の▼は押せない。保存は今までどおり画面の上から順に入る。 -->
 <!-- 金型原価 v2026.10.04-1 : App Check の方式を <b>Fraud Defense（旧 reCAPTCHA Enterprise）</b> に変えた。Google が旧方式（reCAPTCHA v3 Classic）の新規登録を止めており、Firebase側で鍵を登録できなかったため。ページ側は鍵と provider の差し替えだけ。仕組みは同じで、現場には何も見えない。Firebase側はまだ「監視のみ」なので動きは変わらない。 -->
 <!-- 金型原価 v2026.10.03-1 : App Check を仕込んだ（社長指示：外から読めなくする／第2段階）。ページを開くと Google が「本物のブラウザから開かれた本物のページ」という証明書を出し、Firebase はそれが付いた通信だけを受ける。現場には何も見えない（パズルは出ない）。Firebase側はまだ「監視のみ」なので動きは変わらない。サイトキーは公開前提のキーで、秘密の鍵はFirebase側にしか無い。 Firebaseの設定にアプリIDが無かったので足した。 -->
 <!-- 金型原価 v2026.09.28-4 : 材料費一覧で<b>日付が空の行を最上段に固定するのをやめた</b>（社長指示）。他の行と同じ並べ方にしたので、空どうしがまとまって<b>最下段</b>に並び、その中は管理NO.の小さい順になる。 -->
@@ -652,7 +653,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.10.04-1</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.10.05-1</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -1543,7 +1544,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
       <!-- 工程リスト -->
       <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border)">
         工程リスト
-        <span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:8px">加工費の集計に使います。kintoneの工程名と一致させてください</span>
+        <span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:8px">加工費の集計に使います。kintoneの工程名と一致させてください。<b>▲▼で順番を入れ替えられます</b>（左の番号が工程番号）</span>
       </div>
       <div id="mf_processWrap" style="margin-bottom:8px;"></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:4px;">
@@ -6409,13 +6410,56 @@ function addMfProcess(name) {
   const wrap = document.getElementById('mf_processWrap');
   if (!wrap) return;
   const div = document.createElement('div');
+  div.className = 'mf-proc-row';
   div.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:6px;';
-  div.innerHTML = `<input class="form-input mf-process-input" value="${name||''}"
+  div.innerHTML = `<span class="mf-proc-no" style="width:20px;text-align:right;font-size:11px;color:var(--text3);"></span>
+    <input class="form-input mf-process-input" value="${name||''}"
     placeholder="工程名 例: DR" style="width:160px;padding:5px 8px;">
     <input class="form-input" placeholder="加工予算(円)" style="width:120px;padding:5px 8px;"
       oninput="this.dataset.budget=this.value" data-budget="">
-    <button class="btn btn-danger btn-sm" style="padding:3px 8px" onclick="this.parentElement.remove()">×</button>`;
+    <button class="btn btn-secondary btn-sm" style="padding:3px 7px;line-height:1;" title="1つ上へ" onclick="mfMoveProcess(this,-1)">▲</button>
+    <button class="btn btn-secondary btn-sm" style="padding:3px 7px;line-height:1;" title="1つ下へ" onclick="mfMoveProcess(this,1)">▼</button>
+    <button class="btn btn-danger btn-sm" style="padding:3px 8px" onclick="mfDelProcess(this)">×</button>`;
   wrap.appendChild(div);
+  mfRenumberProcesses();
+}
+
+/* ===== 工程の並べ替え（2026-10-05 社長指示）=================================
+   工程の順番は 管理NO.（金型NO＋工程番号＋連番）の工程番号に使うので、
+   打ち直さずに入れ替えられるようにした。行ごと動かすので、
+   入力済みの加工予算も一緒に移る。保存すると画面の上から順に入る。 */
+function mfMoveProcess(btn, dir) {
+  const row  = btn.closest('.mf-proc-row');
+  const wrap = row && row.parentElement;
+  if (!wrap) return;
+  if (dir < 0) {
+    const prev = row.previousElementSibling;
+    if (prev) wrap.insertBefore(row, prev);
+  } else {
+    const next = row.nextElementSibling;
+    if (next) wrap.insertBefore(next, row);
+  }
+  mfRenumberProcesses();
+  row.querySelector('.mf-process-input').focus();   // 続けて動かせるように
+}
+
+function mfDelProcess(btn) {
+  const row = btn.closest('.mf-proc-row');
+  if (row) row.remove();
+  mfRenumberProcesses();
+}
+
+// 左端の番号を振り直す（これがそのまま工程番号になる）
+function mfRenumberProcesses() {
+  const wrap = document.getElementById('mf_processWrap');
+  if (!wrap) return;
+  [...wrap.querySelectorAll('.mf-proc-row')].forEach(function(r, i) {
+    const el = r.querySelector('.mf-proc-no');
+    if (el) el.textContent = (i + 1);
+    const up = r.querySelectorAll('button')[0], dn = r.querySelectorAll('button')[1];
+    if (up) up.disabled = (i === 0);
+    if (dn) dn.disabled = (i === wrap.querySelectorAll('.mf-proc-row').length - 1);
+  });
 }
 
 function addMfProcessName(name) {
