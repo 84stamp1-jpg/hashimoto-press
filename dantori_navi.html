@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.04-2 : 呼び出しの読み上げに<b>「読み方」の表</b>を足した（社長指示：漢字の読みが違う）。設定の「どこから・何を」の下に欄があり、<code>仲田=なかた</code> のように1行ずつ書くと、<b>声だけ</b>がその読みに変わる（画面の文字はそのまま）。Firebase settings/callLists.yomi に入り全端末に効く。長い言葉から先にあてはめるので、短い言葉に巻き込まれて取り違えることがない。「🔊 声のテスト」でも確かめられる。あわせて<b>読み上げの文面</b>を「○○から、△△を呼んでいます」に変え、<b>括弧つきの名前はさん付け</b>で読むようにした（「プレス(仲田)」→「プレスの仲田さん」）。括弧の無いもの（リフト・材料・部品・技術現場）はそのまま。声のテストも実際のリストの先頭で読む。 -->
 <!-- H-Hub v2026.10.04-1 : App Check の方式を <b>Fraud Defense（旧 reCAPTCHA Enterprise）</b> に変えた。Google が旧方式（reCAPTCHA v3 Classic）の新規登録を止めており、Firebase側で鍵を登録できなかったため。ページ側は鍵と provider の差し替えだけ。仕組みは同じで、現場には何も見えない。Firebase側はまだ「監視のみ」なので動きは変わらない。 -->
 <!-- H-Hub v2026.10.03-4 : App Check を仕込んだ（社長指示：外から読めなくする／第2段階）。ページを開くと Google が「本物のブラウザから開かれた本物のページ」という証明書を出し、Firebase はそれが付いた通信だけを受ける。現場には何も見えない（パズルは出ない）。Firebase側はまだ「監視のみ」なので動きは変わらない。サイトキーは公開前提のキーで、秘密の鍵はFirebase側にしか無い。 -->
 <!-- H-Hub v2026.10.03-3 : スマホ通知を<b>呼び出しの種類ごとに分けられる</b>ようにした（社長指示：人ごとに分けたい）。「何を」の行に <b>｜のうしろへトピック名</b>を書くと、その呼び出しだけその人のスマホへ届く（例：<code>🔧 技術（大石） ｜ hashimoto-gijutsu-oishi-xxxx</code>）。書かない行はこれまでどおり<b>既定のトピック（全員）</b>へ。既定が空でも、種類ごとに決めてあれば送る。保存すると送り先の一覧が画面に出る。受け取る側は自分のトピックだけをntfyに登録すればよい。 -->
@@ -12074,7 +12075,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.04-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.04-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -20706,6 +20707,7 @@ window.callOpen = function(){
   document.getElementById('callRelay').checked = !!_callCfg.relay;
   document.getElementById('callKindsEdit').value  = _listToText(CALL_KINDS, true);
   document.getElementById('callPlacesEdit').value = _listToText(callOrigins(), false);
+  document.getElementById('callYomiEdit').value  = CALL_YOMI.map(function(p){ return p[0] + '=' + p[1]; }).join('\n');
   document.getElementById('callListsMsg').textContent = '';
   const _vi = window.callVoiceInfo();
   const _vm = document.getElementById('callVoiceMsg');
@@ -20726,7 +20728,8 @@ window.callVoiceTest = function(){
   el.textContent = info.msg;
   el.style.color = info.ok ? '#16a34a' : '#c0392b';
   _callChime();
-  _callSpeak('テストです。ビーワン から、リフト です');
+  _callSpeak('テストです。' + (CALL_ORIGINS && CALL_ORIGINS[0] ? CALL_ORIGINS[0] : 'ビーワン')
+             + 'から、' + _speakKind(CALL_KINDS[0] ? CALL_KINDS[0].k : 'リフト') + 'を呼んでいます');
 };
 window.callPickLine = function(id){ _callLine = id; callOpen(); };
 window.callCloseD  = function(){ document.getElementById('callOv').style.display='none'; };
@@ -20791,13 +20794,43 @@ window.callVoiceInfo = function(){
   if(_voices.length) return { ok:false, msg:'★日本語の音声がこのPCに入っていません（音声は' + _voices.length + '種類）。Windowsの設定で日本語の音声を追加してください' };
   return { ok:false, msg:'★音声が1つも見つかりません。ページを読み直すか、Windowsの設定で音声を追加してください' };
 };
+/* ===== 読み方の表（2026-10-04 社長指示）===================================
+   読み上げが違う漢字を直す。画面の表示は変えず、声だけ変える。
+   設定の「読み方」に 仲田=なかた のように1行ずつ書く（＝は全角でもよい）。
+   長い言葉から先にあてはめる（「大石」より「大石田」を先に、のような取り違えよけ）。 */
+let CALL_YOMI = [];
+function _setYomi(lines){
+  CALL_YOMI = (Array.isArray(lines) ? lines : [])
+    .map(function(l){
+      const i = String(l).search(/[=＝]/);
+      if(i <= 0) return null;
+      const w = String(l).slice(0, i).trim(), y = String(l).slice(i + 1).trim();
+      return (w && y) ? [w, y] : null;
+    })
+    .filter(Boolean)
+    .sort(function(a, b){ return b[0].length - a[0].length; });
+}
+/* 「プレス(仲田)」のように括弧がついていたら、中は人の名前とみて
+   「プレスの仲田さん」と読む（社長指示：人の名前はさん付け）。
+   括弧の無いもの（リフト・材料・部品・技術現場など）はそのまま。
+   読みが気に入らないときは下の「読み方」の表で上書きできる。 */
+function _speakKind(k){
+  const m = String(k).match(/^(.*?)[（(]\s*([^（）()]+?)\s*[）)]\s*$/);
+  if(m && m[2]) return (m[1].trim() ? m[1].trim() + 'の' : '') + m[2] + 'さん';
+  return String(k);
+}
+function _applyYomi(t){
+  let x = String(t);
+  CALL_YOMI.forEach(function(p){ x = x.split(p[0]).join(p[1]); });
+  return x;
+}
 function _callSpeak(t){
   try{
     if(!('speechSynthesis' in window)) return;
     setTimeout(function(){
       try{
         speechSynthesis.cancel();          // 前の読み上げが詰まっていると以後が出なくなる
-        const u = new SpeechSynthesisUtterance(t);
+        const u = new SpeechSynthesisUtterance(_applyYomi(t));   // ★読み方の表をあてる
         const ja = _jaVoice();
         if(ja) u.voice = ja;               // 日本語の声を名指しする
         u.lang = 'ja-JP'; u.rate = 0.95; u.volume = 1;
@@ -20824,6 +20857,7 @@ onValue(ref(db,'settings/callLists'), function(sn){
   });
   CALL_PLACES  = (Array.isArray(v.places)  && v.places.length)  ? v.places.slice()  : CALL_PLACES_DEF.slice();
   CALL_ORIGINS = (Array.isArray(v.origins) && v.origins.length) ? v.origins.slice() : null;
+  _setYomi(v.yomi);
   const ov = document.getElementById('callOv');
   if(ov && ov.style.display !== 'none') callOpen();     // 開いていれば描き直す
 });
@@ -20858,10 +20892,14 @@ window.callListsSave = function(){
                  .map(function(l){ return l.trim(); }).filter(Boolean);
   if(!kinds.length){ document.getElementById('callListsMsg').textContent='「何を」が空です'; return; }
   if(!origins.length){ document.getElementById('callListsMsg').textContent='「どこから」が空です'; return; }
-  set(ref(db,'settings/callLists'), { kinds:kinds, origins:origins });
+  const yomi = document.getElementById('callYomiEdit').value.split('\n')
+               .map(function(l){ return l.trim(); })
+               .filter(function(l){ const i = l.search(/[=＝]/); return i > 0 && l.slice(i+1).trim(); });
+  set(ref(db,'settings/callLists'), { kinds:kinds, origins:origins, yomi:yomi });
   const tps = Array.from(new Set(kinds.map(function(x){ return x.topic || '（既定）'; })));
   document.getElementById('callListsMsg').textContent =
-    '保存しました（全端末に効きます）／送り先 ' + tps.length + '種類：' + tps.join('、');
+    '保存しました（全端末に効きます）／送り先 ' + tps.length + '種類：' + tps.join('、')
+    + (yomi.length ? '／読み方 ' + yomi.length + '件' : '');
 };
 window.callListsReset = function(){
   if(!confirm('「どこから」「何を」を最初の状態に戻しますか？')) return;
@@ -21006,7 +21044,7 @@ function relayRenderDevices(){
 // 呼び出し1件を鳴らす
 function _callPlay(r){
   _callChime();
-  _callSpeak((r.lineName || r.line) + 'から、' + r.kind + 'です');
+  _callSpeak((r.lineName || r.line) + 'から、' + _speakKind(r.kind) + 'を呼んでいます');
 }
 // 「向かいます」が押されるまで鳴らし直す。押されたら止まる
 function _callRepeatTick(){
@@ -21163,6 +21201,10 @@ setInterval(_callRender, 10000);
           <textarea id="callPlacesEdit" rows="7" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:12.5px;font-family:inherit;line-height:1.6;"></textarea>
         </div>
       </div>
+      <div style="margin-top:9px;">
+        <div style="font-size:11.5px;color:#666;margin-bottom:3px;">読み方（<b>読み上げの声が違うときだけ</b>。1行に1つ、<code>仲田=なかた</code> のように書きます。画面の文字は変わりません）</div>
+        <textarea id="callYomiEdit" rows="3" placeholder="仲田=なかた&#10;大石=おおいし" style="width:100%;box-sizing:border-box;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:12.5px;font-family:inherit;line-height:1.6;"></textarea>
+      </div>
       <div style="margin-top:7px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
         <button onclick="callListsSave()" style="padding:6px 14px;border:none;border-radius:6px;background:#b45309;color:#fff;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit;">保存</button>
         <button onclick="callListsReset()" style="padding:6px 12px;border:none;border-radius:6px;background:#e5e7eb;color:#444;font-size:12px;cursor:pointer;font-family:inherit;">最初の状態に戻す</button>
@@ -21208,7 +21250,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.04-1</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.04-2</div>
 </body>
 </html>
 
