@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>H-Hub｜橋本工業</title>
-<!-- H-Hub v2026.10.04-2 : 呼び出しの読み上げに<b>「読み方」の表</b>を足した（社長指示：漢字の読みが違う）。設定の「どこから・何を」の下に欄があり、<code>仲田=なかた</code> のように1行ずつ書くと、<b>声だけ</b>がその読みに変わる（画面の文字はそのまま）。Firebase settings/callLists.yomi に入り全端末に効く。長い言葉から先にあてはめるので、短い言葉に巻き込まれて取り違えることがない。「🔊 声のテスト」でも確かめられる。あわせて<b>読み上げの文面</b>を「○○から、△△を呼んでいます」に変え、<b>括弧つきの名前はさん付け</b>で読むようにした（「プレス(仲田)」→「プレスの仲田さん」）。括弧の無いもの（リフト・材料・部品・技術現場）はそのまま。声のテストも実際のリストの先頭で読む。 -->
+<!-- H-Hub v2026.10.04-3 : 呼び出しの読み上げに<b>「読み方」の表</b>を足した（社長指示：漢字の読みが違う）。設定の「どこから・何を」の下に欄があり、<code>仲田=なかた</code> のように1行ずつ書くと、<b>声だけ</b>がその読みに変わる（画面の文字はそのまま）。Firebase settings/callLists.yomi に入り全端末に効く。長い言葉から先にあてはめるので、短い言葉に巻き込まれて取り違えることがない。「🔊 声のテスト」でも確かめられる。あわせて<b>読み上げの文面</b>を「○○から、△△を呼んでいます」に変え、<b>括弧つきの名前はさん付け</b>で読むようにした（「プレス(仲田)」→「プレスの仲田さん」）。括弧の無いもの（リフト・材料・部品・技術現場）はそのまま。声のテストも実際のリストの先頭で読む。「どこから」側（事務所 (英介) など）にも同じさん付けが効く。 -->
 <!-- H-Hub v2026.10.04-1 : App Check の方式を <b>Fraud Defense（旧 reCAPTCHA Enterprise）</b> に変えた。Google が旧方式（reCAPTCHA v3 Classic）の新規登録を止めており、Firebase側で鍵を登録できなかったため。ページ側は鍵と provider の差し替えだけ。仕組みは同じで、現場には何も見えない。Firebase側はまだ「監視のみ」なので動きは変わらない。 -->
 <!-- H-Hub v2026.10.03-4 : App Check を仕込んだ（社長指示：外から読めなくする／第2段階）。ページを開くと Google が「本物のブラウザから開かれた本物のページ」という証明書を出し、Firebase はそれが付いた通信だけを受ける。現場には何も見えない（パズルは出ない）。Firebase側はまだ「監視のみ」なので動きは変わらない。サイトキーは公開前提のキーで、秘密の鍵はFirebase側にしか無い。 -->
 <!-- H-Hub v2026.10.03-3 : スマホ通知を<b>呼び出しの種類ごとに分けられる</b>ようにした（社長指示：人ごとに分けたい）。「何を」の行に <b>｜のうしろへトピック名</b>を書くと、その呼び出しだけその人のスマホへ届く（例：<code>🔧 技術（大石） ｜ hashimoto-gijutsu-oishi-xxxx</code>）。書かない行はこれまでどおり<b>既定のトピック（全員）</b>へ。既定が空でも、種類ごとに決めてあれば送る。保存すると送り先の一覧が画面に出る。受け取る側は自分のトピックだけをntfyに登録すればよい。 -->
@@ -12075,7 +12075,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.04-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.04-3';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -20728,7 +20728,7 @@ window.callVoiceTest = function(){
   el.textContent = info.msg;
   el.style.color = info.ok ? '#16a34a' : '#c0392b';
   _callChime();
-  _callSpeak('テストです。' + (CALL_ORIGINS && CALL_ORIGINS[0] ? CALL_ORIGINS[0] : 'ビーワン')
+  _callSpeak('テストです。' + _speakKind(CALL_ORIGINS && CALL_ORIGINS[0] ? CALL_ORIGINS[0] : 'ビーワン')
              + 'から、' + _speakKind(CALL_KINDS[0] ? CALL_KINDS[0].k : 'リフト') + 'を呼んでいます');
 };
 window.callPickLine = function(id){ _callLine = id; callOpen(); };
@@ -20810,7 +20810,7 @@ function _setYomi(lines){
     .filter(Boolean)
     .sort(function(a, b){ return b[0].length - a[0].length; });
 }
-/* 「プレス(仲田)」のように括弧がついていたら、中は人の名前とみて
+/* 「プレス(仲田)」「事務所 (英介)」のように括弧がついていたら、中は人の名前とみて
    「プレスの仲田さん」と読む（社長指示：人の名前はさん付け）。
    括弧の無いもの（リフト・材料・部品・技術現場など）はそのまま。
    読みが気に入らないときは下の「読み方」の表で上書きできる。 */
@@ -21044,7 +21044,7 @@ function relayRenderDevices(){
 // 呼び出し1件を鳴らす
 function _callPlay(r){
   _callChime();
-  _callSpeak((r.lineName || r.line) + 'から、' + _speakKind(r.kind) + 'を呼んでいます');
+  _callSpeak(_speakKind(r.lineName || r.line) + 'から、' + _speakKind(r.kind) + 'を呼んでいます');
 }
 // 「向かいます」が押されるまで鳴らし直す。押されたら止まる
 function _callRepeatTick(){
@@ -21250,7 +21250,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.04-2</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.04-3</div>
 </body>
 </html>
 
