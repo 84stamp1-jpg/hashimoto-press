@@ -42,6 +42,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.06-2 : ★<b>証明書が取れないまま固まったときに、自分で読み直す</b>ようにした。App Check は一度403を受けると、その画面では<b>24時間あきらめる</b>作りで、その間データを一切読めない（呼び出しのリストが既定に戻って見えた）。実際に1回起きたが、読み直すと直った（3回試して3回とも成功）。20秒たっても取れていなければ1回だけ読み直す。同じ画面で繰り返さないよう30分に1回まで。 -->
 <!-- H-Hub v2026.10.06-1 : 呼ぶ画面を<b>「どこから」「何を」だけ</b>にした（社長指摘：設定画面も一緒なので迷う）。端末の設定・リストの中身・スマホ通知・回転灯は、右下の小さな<b>⚙ 設定</b>の中にしまってある。呼ぶ画面を開くたびに閉じた状態に戻るので、現場では<b>押す場所だけ</b>が見える。設定の中身は今までと同じ（消していない）。 -->
 <!-- H-Hub v2026.10.05-2 : ★<b>直接取りに行っている通信にも証明書を付けた</b>（2026-10-05 品番検索が止まった件）。このページには Firebaseの公式部品（SDK）を通さず <code>fetch</code> で直接 …firebasedatabase.app/xxx.json を叩いている処理が<b>49か所</b>あった（品番検索・暑さ指数・作業者の設定・段取りの一部・管理PINの確認）。SDK経由には証明書が自動で付くが、これらには付かないため App Check を「適用」にした途端に全部401ではじかれた。<b>window.fetch をくるんで、Firebase宛てなら証明書を足してから送る</b>ようにしたので、今後 fetch を足しても自動で付く。 -->
 <!-- H-Hub v2026.10.05-1 : 品番検索で<b>記号のゆれを吸収</b>するようにした（社長指摘：18307-TTC-BD-BL で出てこない。登録は 18307-TTC-<b>B-D</b>-BL でハイフン1つ違い）。比べるときだけ 空白・ハイフンの類・全角半角を揃えるので、「18307-TTC -0030-4000」のような<b>途中に空白が入った品番</b>も空白なしで打って出る。画面に出る品番は登録どおりのまま。それでも無いときは<b>近い品番を12件まで出して、押せばそのまま開ける</b>。候補も無いときは「毎朝6:50に取り込んでいる＝今日登録したものはまだ無いかも」と出す（前の「GASで同期後に」は何をすればよいか分からなかった）。 -->
@@ -12167,7 +12168,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.06-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.06-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -14725,6 +14726,27 @@ try{
     return _acGetToken(_ac, false).then(function(t){ return t.token; }).catch(function(){ return ''; });
   };
 }catch(e){ console.warn('App Check 初期化に失敗', e); }
+
+/* 証明書が取れないまま固まったときの立ち直り（2026-10-06）
+   App Check は1度403を受けると、その画面では24時間あきらめてしまう
+   （実際に1回起きて、呼び出しのリストが既定に戻った）。読み直せばほぼ直るので、
+   20秒たっても取れていなければ1回だけ読み直す。
+   同じ画面で何度も読み直さないよう、30分に1回までにしてある。 */
+setTimeout(function(){
+  if(!window._acToken) return;
+  window._acToken().then(function(t){
+    if(t) return;                                   // 取れているなら何もしない
+    try{
+      const K = 'hhub_ac_reload';
+      const last = parseInt(sessionStorage.getItem(K) || '0', 10);
+      if(Date.now() - last < 1800000) return;       // 30分以内に読み直していたらやめる
+      sessionStorage.setItem(K, String(Date.now()));
+      console.warn('App Check の証明書が取れないため、画面を読み直します');
+      location.reload();
+    }catch(e){}
+  });
+}, 20000);
+
 const db=getDatabase(app);
 // ===== グループ・ライン管理 =====
 const DEFAULT_GRP=[
@@ -21368,7 +21390,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.06-1</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.06-2</div>
 </body>
 </html>
 
