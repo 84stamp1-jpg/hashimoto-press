@@ -42,6 +42,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.08-1 : <b>段取り指示を開いたら、まず配置表が出る</b>ようにした（社長指示）。朝礼でいちばん見る画面なので、毎回「📍 配置表」を押し直していた。読み込み直したときの初期値も配置表にしてある。A・Bラインなどは今までどおり上のタブで切り替えられる（他のタブへ行って段取り指示に戻ると、また配置表から始まる）。 -->
 <!-- H-Hub v2026.10.06-2 : ★<b>証明書が取れないまま固まったときに、自分で読み直す</b>ようにした。App Check は一度403を受けると、その画面では<b>24時間あきらめる</b>作りで、その間データを一切読めない（呼び出しのリストが既定に戻って見えた）。実際に1回起きたが、読み直すと直った（3回試して3回とも成功）。20秒たっても取れていなければ1回だけ読み直す。同じ画面で繰り返さないよう30分に1回まで。 -->
 <!-- H-Hub v2026.10.06-1 : 呼ぶ画面を<b>「どこから」「何を」だけ</b>にした（社長指摘：設定画面も一緒なので迷う）。端末の設定・リストの中身・スマホ通知・回転灯は、右下の小さな<b>⚙ 設定</b>の中にしまってある。呼ぶ画面を開くたびに閉じた状態に戻るので、現場では<b>押す場所だけ</b>が見える。設定の中身は今までと同じ（消していない）。 -->
 <!-- H-Hub v2026.10.05-2 : ★<b>直接取りに行っている通信にも証明書を付けた</b>（2026-10-05 品番検索が止まった件）。このページには Firebaseの公式部品（SDK）を通さず <code>fetch</code> で直接 …firebasedatabase.app/xxx.json を叩いている処理が<b>49か所</b>あった（品番検索・暑さ指数・作業者の設定・段取りの一部・管理PINの確認）。SDK経由には証明書が自動で付くが、これらには付かないため App Check を「適用」にした途端に全部401ではじかれた。<b>window.fetch をくるんで、Firebase宛てなら証明書を足してから送る</b>ようにしたので、今後 fetch を足しても自動で付く。 -->
@@ -2158,10 +2159,10 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
     </div>
     <div id="dtDateLabel" style="font-size:12px;color:#888;white-space:nowrap;">本日の段取り計画</div>
     <div class="kanban-tabs" id="kanbanTabs">
-      <button class="kanban-tab active" data-page="kp1" onclick="switchKanbanPage('kp1')">A・Bライン</button>
+      <button class="kanban-tab"        data-page="kp1" onclick="switchKanbanPage('kp1')">A・Bライン</button>
       <button class="kanban-tab"        data-page="kp2" onclick="switchKanbanPage('kp2')">C・Dライン</button>
       <button class="kanban-tab"        data-page="kp3" onclick="switchKanbanPage('kp3')">組立・検査</button>
-      <button class="kanban-tab"        data-page="kp4" onclick="switchKanbanPage('kp4')">📍 配置表</button>
+      <button class="kanban-tab active" data-page="kp4" onclick="switchKanbanPage('kp4')">📍 配置表</button>
     </div>
     <span id="dantoriSyncStatus" style="font-size:10px;color:#888;white-space:nowrap;"></span>
     <button class="btn" style="padding:5px 10px;font-size:11px;" onclick="refreshDantori()">↻ 更新</button>
@@ -4116,6 +4117,8 @@ function switchTab(name){
   document.getElementById('tab-'+name).classList.add('active');
   const tabs = ['factory','progress','quality','dantori','asmplan','search'];
   document.querySelectorAll('.tab')[tabs.indexOf(name)].classList.add('active');
+  // ★2026-10-08 社長指示：段取り指示を開いたら、まず配置表を出す（朝礼でいちばん見る画面）
+  if(name==='dantori' && typeof switchKanbanPage === 'function') switchKanbanPage('kp4');
   if(name==='quality')  qcOnTabActivated();
   if(name==='asmplan')  apInit();
   // 進捗管理はネイティブ実装
@@ -6478,7 +6481,7 @@ const KANBAN_PAGES = [
     id:'kp4', label:'配置表', type:'press'
   }
 ];
-let kanbanPage = 'kp1';
+let kanbanPage = 'kp4';   // ★2026-10-08：開いたらまず配置表
 
 // ===== 作業者ロールマスター =====
 // Firebase settings/workerRoles から読み込む。{フルネーム:[ロール配列]}
@@ -12168,7 +12171,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.06-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.08-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -21390,7 +21393,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.06-2</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.08-1</div>
 </body>
 </html>
 
