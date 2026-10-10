@@ -42,6 +42,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.10-6 : 段取りの担当入力を<b>「段取り作業者」1か所にまとめた</b>（社長指示）。これまで 品質確認・初品出し・金型取付 の3か所に同じ名前を入れていた。段取り作業者を選ぶと、その人ごとに<b>「品質」「初品」のチェック</b>が出る。チェックが無ければ<b>段取り作業者の誰かがやる</b>という意味（1人ならその人）。★<b>保存のしかたは今までどおり</b>：金型取付＝段取り作業者全員／品質確認・初品出し＝チェックした人、として裏の3つに書く。そのため<b>自動割り振り・人数不足チェック・過去日の表示・配置表は手を入れていない</b>。既存データを開くと、3つの名前を合わせて段取り作業者に組み立て直し、チェックも復元する。 -->
 <!-- H-Hub v2026.10.10-5 : 配置表で、<b>段取り開始時刻が空のときに担当者のバーが出なかった</b>のを直した（社長指摘：段取りに仲田さんの名前が入っているのに配置表に出てこない）。段取りバーは「段取り開始〜生産開始」に描くため、開始時刻が空だと描く場所が決まらず、担当を入れても何も出ていなかった。開始時刻が空でも、<b>生産開始から標準段取り時間を引いて仮の帯</b>を出すようにした。仮のものは<b>点線＋役割のうしろに「?」</b>を付けて区別する。押せばその場で時刻を入れられる。 -->
 <!-- H-Hub v2026.10.10-4 : カメラタブを<b>元の相対リンクに戻した</b>（社長指示）。社内アドレス固定にしたら<b>社外では何も開かなくなり</b>、壊れたのか社内専用なのか分からなかったため。カメラ一覧ページ側に、<b>社外から開いたときの案内</b>（理由と「社内のカメラ画面を開く」ボタン、社外ならTapoアプリ）を出すようにしたので、どちらで開いても迷わない。 -->
 <!-- H-Hub v2026.10.10-3 : カメラタブを<b>ふつうのリンク（aタグ）</b>に変えた。<code>window.open</code> で http のアドレスを開こうとすると、https のページからではブラウザに止められ、<b>about:blank のまま白紙</b>になる（社長報告：スマホで進まない）。工場レイアウトのカメラ印は最初からaタグで、そちらは動いていたので同じ形にそろえた。※社内ネットワーク（中継PCに届く場所）にいないと見られないのは変わらない。 -->
@@ -3282,6 +3283,26 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
         担当者
         <span style="font-size:10px;font-weight:400;color:#aaa;margin-left:6px;">（👥 作業者マスタの名前が候補として出ます）</span>
       </div>
+      <!-- ★2026-10-10 社長指示：段取りの担当は「段取り作業者」1か所にまとめる。
+           品質・初品は、その人がやるときだけチェックを入れる。
+           下の3つ（品質確認・初品出し・金型取付）は画面から隠し、裏で同じ内容を持たせている。
+           こうすることで自動割り振り・人数不足チェック・過去日の表示が今までどおり動く。 -->
+      <div class="form-group" style="margin:0 0 10px;">
+        <label style="font-size:10px;">段取り作業者<span style="color:#94a3b8;font-weight:400;margin-left:4px;">金型取付・品質確認・初品出しをまとめて</span></label>
+        <div id="chip-wrap-setup" class="chip-wrap" data-dlid="staffDatalist-press"
+             onmousedown="chipWrapMousedown(event,'chip-wrap-setup')">
+          <input class="chip-text-input" placeholder="名前を選択/入力" autocomplete="off"
+            oninput="chipOnInput('chip-wrap-setup')"
+            onkeydown="chipOnKeydown(event,'chip-wrap-setup')"
+            onblur="chipOnBlur('chip-wrap-setup')"/>
+        </div>
+        <div id="dt-setup-roles" style="margin-top:6px;"></div>
+        <div style="font-size:10px;color:#94a3b8;margin-top:4px;line-height:1.6;">
+          <b>品質・初品</b>は、その人がやるときだけチェックを入れてください。
+          チェックが無ければ<b>段取り作業者の誰かがやる</b>という意味になります（1人ならその人）。
+        </div>
+      </div>
+      <div id="dt-old-roles" style="display:none;">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
         <div class="form-group" style="margin:0;">
           <label style="font-size:10px;">品質確認</label>
@@ -3313,6 +3334,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
               onblur="chipOnBlur('chip-wrap-mount')"/>
           </div>
         </div>
+      </div><!-- /dt-old-roles -->
         <!-- 作業者（1人1行。途中で担当が変わる場合は時間を入れる） -->
         <div class="form-group" style="margin:0;grid-column:1/-1;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
@@ -6876,16 +6898,79 @@ function chipAdd(wid, name){
   chip.className='chip'; chip.dataset.n=name;
   chip.innerHTML=`${name}<span class="chip-del" onmousedown="event.preventDefault();chipRemove('${wid}','${CSS.escape(name)}')">×</span>`;
   w.insertBefore(chip, w.querySelector('.chip-text-input'));
+  if(wid === 'chip-wrap-setup'){ renderSetupRoleChecks(); setupRoleSync(); }
 }
 function chipRemove(wid, name){
   const w = document.getElementById(wid);
   if(!w) return;
   const chip = w.querySelector(`.chip[data-n="${name}"]`);
   if(chip) chip.remove();
+  if(wid === 'chip-wrap-setup'){ renderSetupRoleChecks(); setupRoleSync(); }
+}
+
+/* ===== 段取り作業者（2026-10-10 社長指示）=====================================
+   画面では「段取り作業者」1か所。品質・初品はその人がやるときだけチェック。
+   保存は今までどおり 金型取付／品質確認／初品出し の3つに書く（隠し欄に入れている）。
+     金型取付 ＝ 段取り作業者 全員
+     品質確認 ＝ 品質にチェックした人（無ければ空＝誰かがやる）
+     初品出し ＝ 初品にチェックした人（同上）                              */
+let _setupChk = {};          // { 名前: {q:品質, i:初品} }
+
+function setupRoleSync(){
+  const names = chipGetValues('chip-wrap-setup');
+  chipSet('chip-wrap-mount',   names.join('、'));
+  chipSet('chip-wrap-quality', names.filter(n => _setupChk[n] && _setupChk[n].q).join('、'));
+  chipSet('chip-wrap-lift',    names.filter(n => _setupChk[n] && _setupChk[n].i).join('、'));
+}
+
+function renderSetupRoleChecks(){
+  const wrap = document.getElementById('dt-setup-roles');
+  if(!wrap) return;
+  const names = chipGetValues('chip-wrap-setup');
+  if(!names.length){
+    wrap.innerHTML = '<div style="font-size:10.5px;color:#94a3b8;padding:2px;">'
+      + '上で段取り作業者を選ぶと、ここに「品質」「初品」のチェックが出ます</div>';
+    return;
+  }
+  wrap.innerHTML = names.map(function(nm){
+    const c = _setupChk[nm] || {};
+    return '<div style="display:flex;align-items:center;gap:14px;padding:3px 4px;border-bottom:1px dotted #eef2f7;">'
+      + '<span style="min-width:130px;font-size:12px;font-weight:600;">' + nm + '</span>'
+      + '<label style="font-size:11.5px;display:flex;align-items:center;gap:4px;cursor:pointer;">'
+      +   '<input type="checkbox" data-n="' + nm + '" data-k="q"' + (c.q ? ' checked' : '')
+      +   ' onchange="setupChkChange(this)"> 品質</label>'
+      + '<label style="font-size:11.5px;display:flex;align-items:center;gap:4px;cursor:pointer;">'
+      +   '<input type="checkbox" data-n="' + nm + '" data-k="i"' + (c.i ? ' checked' : '')
+      +   ' onchange="setupChkChange(this)"> 初品</label>'
+      + '</div>';
+  }).join('');
+}
+
+window.setupChkChange = function(el){
+  const nm = el.dataset.n, k = el.dataset.k;
+  if(!_setupChk[nm]) _setupChk[nm] = { q:false, i:false };
+  _setupChk[nm][k] = el.checked;
+  setupRoleSync();
+};
+
+/* 既存データ（3つに分かれている）から、段取り作業者とチェックを組み立てる */
+function setupRoleLoad(roles){
+  roles = roles || {};
+  const sp = v => String(v || '').split(/[,、]/).map(x => x.trim()).filter(Boolean);
+  const mount = sp(roles.金型取付), qual = sp(roles.品質確認), ippin = sp(roles.初品出し);
+  const names = [];
+  mount.concat(qual, ippin).forEach(function(nm){ if(names.indexOf(nm) < 0) names.push(nm); });
+  _setupChk = {};
+  names.forEach(function(nm){
+    _setupChk[nm] = { q: qual.indexOf(nm) >= 0, i: ippin.indexOf(nm) >= 0 };
+  });
+  chipSet('chip-wrap-setup', names.join('、'));
+  renderSetupRoleChecks();
+  setupRoleSync();
 }
 
 // 段取りモーダルのチップ追加時に重複チェックを行う
-const _DANTORI_CHIP_WIDS = ['chip-wrap-quality','chip-wrap-lift','chip-wrap-mount'];
+const _DANTORI_CHIP_WIDS = ['chip-wrap-setup','chip-wrap-quality','chip-wrap-lift','chip-wrap-mount'];
 function chipAddWithConflictCheck(wid, name){
   chipAdd(wid, name);
   const isDantoriChip = _DANTORI_CHIP_WIDS.includes(wid) || wid.startsWith('chip-wrap-shift-');
@@ -7335,6 +7420,9 @@ function showAddDantori(){
   chipSet('chip-wrap-mount',   '');
   chipSet('chip-wrap-lift',    '');
   chipSet('chip-wrap-quality', '');
+  _setupChk = {};
+  chipSet('chip-wrap-setup', '');
+  renderSetupRoleChecks();
   document.getElementById('dt-note').value         = '';
   document.getElementById('dt-no-setup').checked   = false;
   document.getElementById('dt-no-worker').checked  = false;
@@ -7356,9 +7444,7 @@ function showEditDantori(id){
   document.getElementById('dt-prod-start').value  = entry.prodStart   || '';
   document.getElementById('dt-prod-end').value    = entry.prodEnd     || '';
   document.getElementById('dt-status').value      = entry.status      || 'scheduled';
-  chipSet('chip-wrap-mount',   (entry.roles&&entry.roles.金型取付) || '');
-  chipSet('chip-wrap-lift',    (entry.roles&&entry.roles.初品出し)  || '');
-  chipSet('chip-wrap-quality', (entry.roles&&entry.roles.品質確認)  || '');
+  setupRoleLoad(entry.roles);   // ★段取り作業者＋チェックに組み立て直す（裏の3つも同時に入る）
   setWorkerRowsFromEntry(entry);
   document.getElementById('dt-note').value         = entry.note        || '';
   document.getElementById('dt-no-setup').checked   = !!(entry.noSetup);
@@ -12380,7 +12466,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.10-5';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.10-6';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -21602,7 +21688,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.10-5</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.10-6</div>
 </body>
 </html>
 
