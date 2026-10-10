@@ -42,6 +42,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.10-3 : カメラタブを<b>ふつうのリンク（aタグ）</b>に変えた。<code>window.open</code> で http のアドレスを開こうとすると、https のページからではブラウザに止められ、<b>about:blank のまま白紙</b>になる（社長報告：スマホで進まない）。工場レイアウトのカメラ印は最初からaタグで、そちらは動いていたので同じ形にそろえた。※社内ネットワーク（中継PCに届く場所）にいないと見られないのは変わらない。 -->
 <!-- H-Hub v2026.10.10-2 : ★<b>カメラが黒画面だったのを直した</b>（社長報告：他のPCで黒いまま）。H-Hubの「📹 カメラ」タブが<code>camera_grid.html</code>と<b>相対リンク</b>だったため、H-HubをGitHub Pages（https）から開いていると、カメラ一覧もhttpsで開いてしまい、映像の取り込み先 <code>http://192.168.30.9:1984</code> が<b>混在コンテンツとしてブラウザに遮断</b>され、枠だけ黒く出ていた。中継PC（http://192.168.30.9:8080）で開いたときだけ映っていたのはこのため。工場レイアウトのカメラ印と同じ<b>中継PCの絶対URL</b>に統一した。 -->
 <!-- H-Hub v2026.10.10-1 : <b>段取り準備チェック表をH-Hubから直接印刷</b>できるようにした（社長指示：batを使わずシステムから出したい）。配置表の右上「📋 段取り準備チェック表」を押すと、<b>表示中の日付</b>の段取りが入った状態でA4横1枚が出る。入るのは ライン・次の品番・準備開始・予定の段取り時間の帯。担当・①〜⑫・準備完了・❶〜❹・そろわなかったことは手書き（書くのはリフトマンの2人なので、H-Hubの段取り担当とは別人。自動では入れない）。<b>帯が縦に重なっている時間帯＝リフト待ち・人の取り合い</b>が朝の時点で見える。準備開始は帯の左端の30分前（8時より前になるものは「前日」と出す）。Excelの雛形とbatは今までどおり残してある。 -->
 <!-- H-Hub v2026.10.08-1 : <b>段取り指示を開いたら、まず配置表が出る</b>ようにした（社長指示）。朝礼でいちばん見る画面なので、毎回「📍 配置表」を押し直していた。読み込み直したときの初期値も配置表にしてある。A・Bラインなどは今までどおり上のタブで切り替えられる（他のタブへ行って段取り指示に戻ると、また配置表から始まる）。 -->
@@ -1371,7 +1372,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
   <div class="tab" onclick="switchTab('dantori')">📋 段取り指示</div>
   <div class="tab" onclick="switchTab('asmplan')">🔧 組立計画</div>
   <div class="tab" onclick="switchTab('search')">🔍 品番検索</div>
-  <div class="tab" onclick="window.open('http://192.168.30.9:8080/camera_grid.html','_blank')" title="工場カメラ一覧を別タブで開く（中継PCから配信）">📹 カメラ</div>
+  <a class="tab" href="http://192.168.30.9:8080/camera_grid.html" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;" title="工場カメラ一覧を別タブで開く（社内ネットワークに繋がっているときだけ見られます）">📹 カメラ</a>
   <div style="margin-left:auto;display:flex;align-items:center;gap:6px;padding:0 10px;flex-shrink:0;">
     <!-- 毎朝の朝礼で見る2画面をひと押しで開く（2026-09-21 社長指示） -->
     <span style="font-size:10px;color:#94a3b8;font-weight:700;">朝礼</span>
@@ -12349,7 +12350,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.10-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.10-3';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -21571,7 +21572,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.10-2</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.10-3</div>
 </body>
 </html>
 
