@@ -42,6 +42,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.10-10 : <b>仲田さん・見原さんを、予定の取り込みと同時に段取りへ入れる</b>ようにした（社長指示：2人は作業に就かないので、自動割り振りを待たずに先に決めたい）。「今すぐ同期」「段取り計画だけ作る」「自動同期」のどの取り込みでも効く。段取りのある工程を時間の早い順に見て、<b>2人の受け持ちが少ないほう</b>を入れ、同じ人の段取りが<b>時間で重ならない</b>ようにする。すでにどちらかが入っている工程はそのまま、他の人の名前も消さない。2人とも重なってしまう工程は空けておく（自動割り振りか手で埋める）。 -->
 <!-- H-Hub v2026.10.10-9 : (1)<b>伊藤をマスタから外した</b>（社長指摘：作業者マスタにいないのに出てくる）。コードの中の WORKER_MASTER と PRESS_LINE_MASTER の A1 に名前が残っていて、自動割り振りがA1の金型取付候補として使っていた。取り込んだ予定表が原因ではない。※すでに保存済みの計画に入っている「伊藤」は残るので、その日は自動割り振りをやり直すか手で直す。(2)<b>段取り作業者が「段取り人数」より多いときは標準時間を縮める</b>ようにした（例：B1 計画1人＝26分 → 2人入れたら 6+20÷2＝16分）。少ないときは縮めない。 -->
 <!-- H-Hub v2026.10.10-8 : (1)<b>自動割り振りで、段取りのある工程には必ず仲田さんか見原さんが1人入る</b>ようにした（社長指示）。2人のうちその日の受け持ちが少ないほうを選ぶので偏らない。2人とも出勤なし／他で埋まっているときは無理に入れず不足として出す。(2)配置表でも<b>品質か初品にチェックのある人の段取りバーを薄いピンク</b>にした。(3)カードの「⚠ 取付◯名不足」を<b>「⚠ 段取◯名不足」</b>に直した。 -->
 <!-- H-Hub v2026.10.10-7 : 段取り指示のカードを<b>すっきりさせた</b>（社長指示）。品質確認・初品出し・金型取付 の3行をやめ、<b>「段取」1行に横並び</b>で出す（作業者と同じ形）。<b>品質か初品にチェックのある人だけ、薄いピンクの背景と 品／初 の印</b>を付けて区別する。チェックの無い人は普通の色＝段取り作業者の誰かがやる、という意味。 -->
@@ -9595,8 +9596,56 @@ function _mergePlanEntries(entries, existing, dateStr, scopeLineIds, protectAssi
       ...(prev?.entry?.setupEdited ? { mountCount: prev.entry.mountCount || 0, mountKata: prev.entry.mountKata || 1, setupEdited: true } : {}),
     };
   });
-  return newData;
+  return _preassignSetupLeaders(newData);   // ★仲田・見原を先に段取りへ入れる
 }
+
+/* ★2026-10-10 社長指示：仲田さん・見原さんは作業に就かないので、
+   予定を取り込んだ時点で段取りに先に入れておく（自動割り振りを待たない）。
+   ・段取りのある工程を時間の早い順に見て、2人の受け持ちが少ないほうを入れる
+   ・同じ人の段取りが時間で重ならないようにする
+   ・すでにどちらかが入っている工程はそのまま。他の人の名前も消さない
+   ・2人とも時間が重なってしまう工程は空けておく（自動割り振り／手で埋める） */
+function _preassignSetupLeaders(data){
+  const KEYS = ['仲田', '見原'];
+  let leaders = [];
+  try { leaders = getPressWorkerList().filter(w => KEYS.some(k => String(w).indexOf(k) === 0)); }
+  catch(e) { leaders = []; }
+  if(!leaders.length) return data;
+
+  const toMin = t => { if(!t) return null; const a = String(t).split(':').map(Number);
+                       return isNaN(a[0]) ? null : a[0] * 60 + (a[1] || 0); };
+  const jobs = Object.keys(data).map(function(id){
+    const v = data[id];
+    if(!v || v.noSetup) return null;
+    const std = parseInt(v.stdSetupMin, 10) || 0;
+    let s = toMin(v.setupStart);
+    const p = toMin(v.prodStart);
+    if(s === null && p !== null && std) s = p - std;          // 段取り開始が空なら標準時間で逆算
+    if(s === null) return null;
+    const e = (p !== null && p > s) ? p : s + (std || 30);
+    return { v: v, s: s, e: e };
+  }).filter(Boolean).sort(function(a, b){ return a.s - b.s; });
+
+  const busy = {}, cnt = {};
+  leaders.forEach(function(nm){ busy[nm] = []; cnt[nm] = 0; });
+  const overlaps = (nm, s, e) => busy[nm].some(b => s < b.e && e > b.s);
+
+  jobs.forEach(function(j){
+    const cur = String((j.v.roles && j.v.roles.金型取付) || '')
+      .split(/[,、]/).map(x => x.trim()).filter(Boolean);
+    const already = cur.find(w => leaders.indexOf(w) >= 0);
+    if(already){ busy[already].push({ s:j.s, e:j.e }); cnt[already]++; return; }
+    const cand = leaders.filter(nm => !overlaps(nm, j.s, j.e))
+                        .sort(function(a, b){ return cnt[a] - cnt[b]; });
+    if(!cand.length) return;
+    const pick = cand[0];
+    cnt[pick]++; busy[pick].push({ s:j.s, e:j.e });
+    j.v.roles = j.v.roles || {};
+    j.v.roles.金型取付 = [pick].concat(cur).join('、');
+  });
+  return data;
+}
+
 
 async function _autoSyncDantoriFromPlan(){
   // リアルタイムESMデータ(window._pmLinesRealtime)を優先、なければRESTポーリングのlinesData
@@ -12540,7 +12589,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.10-9';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.10-10';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -21762,7 +21811,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.10-9</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.10-10</div>
 </body>
 </html>
 
