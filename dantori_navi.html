@@ -42,6 +42,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.11-2 : (1)<b>帯を実際の時刻どおりの幅で塗る</b>ようにした（社長指摘：70分の段取りが2時間に見える）。これまで30分のマス単位で、少しでもかかっていればマス全体を塗っていた。マスの中を部分的に塗るようにしたので、14:25〜15:35 はちょうどその幅で出る。(2)<b>8時より前は塗らない</b>（段取りできないため）。準備開始が「前日」になる行は<b>帯を薄い色</b>にして区別する。 -->
 <!-- H-Hub v2026.10.11-1 : (1)準備チェック表の<b>担当欄に、割り振られている段取り担当を上段に出す</b>ようにした（社長指示）。下の空きに実際の担当を書き足せる。(2)<b>ライン別の優先</b>：Bラインは仲田さん、A・Cラインは見原さん。優先のほうが時間で埋まっていればもう一方を入れる。取り込み時の先入れと自動割り振りの両方に効く。(3)<b>段取り開始時刻が無い工程</b>は、同じラインで先に終わる作業の終了時刻から段取りを始められるものとして推定する（そのラインに先の作業が無ければ始業から）。遅くとも「生産開始−標準時間」までには始める前提で、早いほうを採る。推定したものは品番の下に<b>（予想）</b>と出す。 -->
 <!-- H-Hub v2026.10.10-10 : <b>仲田さん・見原さんを、予定の取り込みと同時に段取りへ入れる</b>ようにした（社長指示：2人は作業に就かないので、自動割り振りを待たずに先に決めたい）。「今すぐ同期」「段取り計画だけ作る」「自動同期」のどの取り込みでも効く。段取りのある工程を時間の早い順に見て、<b>2人の受け持ちが少ないほう</b>を入れ、同じ人の段取りが<b>時間で重ならない</b>ようにする。すでにどちらかが入っている工程はそのまま、他の人の名前も消さない。2人とも重なってしまう工程は空けておく（自動割り振りか手で埋める）。 -->
 <!-- H-Hub v2026.10.10-9 : (1)<b>伊藤をマスタから外した</b>（社長指摘：作業者マスタにいないのに出てくる）。コードの中の WORKER_MASTER と PRESS_LINE_MASTER の A1 に名前が残っていて、自動割り振りがA1の金型取付候補として使っていた。取り込んだ予定表が原因ではない。※すでに保存済みの計画に入っている「伊藤」は残るので、その日は自動割り振りをやり直すか手で直す。(2)<b>段取り作業者が「段取り人数」より多いときは標準時間を縮める</b>ようにした（例：B1 計画1人＝26分 → 2人入れたら 6+20÷2＝16分）。少ないときは縮めない。 -->
@@ -8799,7 +8800,8 @@ function _ssRows(){
     const mount = String((d.roles || {}).金型取付 || '')
       .split(/[,、]/).map(x => x.trim()).filter(Boolean);
     out.push({ line:getLineDisplayName(d.lineId), part:d.partNo || '',
-               s:s, p:p, std:std, est:est, mount:mount });
+               s:s, p:p, std:std, est:est, mount:mount,
+               prevDay: (s - SETUP_LEAD_MIN) < SETUP_T0 * 60 });   // 準備が前日になる行
   });
   out.sort(function(a,b){ return a.s - b.s || String(a.line).localeCompare(b.line); });
   return out;
@@ -8830,10 +8832,24 @@ window.rtPrintSetupSheet = function(){
     }else{
       tds += '<td></td><td></td><td></td><td></td>';
     }
+    /* ★2026-10-11 社長指摘：30分のマス単位で塗っていたため、70分の段取りが4マス＝2時間に
+       見えていた。実際の時刻どおりの幅で塗る（マスの中を部分的に塗る）。
+       8時より前は段取りできないので塗らない。準備が前日になる行は薄い色で区別する。 */
+    const DAY0 = SETUP_T0 * 60;
     for(let k = 0; k < SETUP_T_SLOTS; k++){
-      const from = SETUP_T0*60 + k*30, to = from + 30;
-      const on = r && r.s < to && r.p > from;
-      tds += '<td class="t' + (k%2 ? ' h' : '') + (on ? ' bd' : '') + '"></td>';
+      const from = DAY0 + k*30, to = from + 30;
+      let st = '';
+      if(r){
+        const a = Math.max(r.s, from, DAY0), b = Math.min(r.p, to);
+        if(b > a){
+          const x1 = ((a - from) / 30 * 100).toFixed(1);
+          const x2 = ((b - from) / 30 * 100).toFixed(1);
+          const col = r.prevDay ? '#ccd7ea' : '#9bafd2';
+          st = ' style="background:linear-gradient(to right,transparent ' + x1 + '%,'
+             + col + ' ' + x1 + '%,' + col + ' ' + x2 + '%,transparent ' + x2 + '%)!important;"';
+        }
+      }
+      tds += '<td class="t' + (k%2 ? ' h' : '') + '"' + st + '></td>';
     }
     for(let k = 0; k < 12; k++) tds += '<td class="ck"></td>';
     tds += '<td class="dn"></td>';
@@ -8910,7 +8926,7 @@ window.rtPrintSetupSheet = function(){
 + '<div class="hd"><span class="ttl">当日の段取り計画 ＆ 準備チェック表</span>'
 + '<span class="box"><b>日付</b>' + dateStr + '</span>'
 + '<span class="stamp">印刷 ' + stamp + '</span></div>'
-+ '<div class="note">※ 帯＝機械を止めている時間（内段取り）。<b>準備開始</b>＝<b>段取り開始</b>の' + SETUP_LEAD_MIN + '分前（生産開始ではありません。段取りの時刻は品番の下に書いてあります）。帯が縦に重なっている時間帯は、リフト待ち・人の取り合いが起きます。<br>'
++ '<div class="note">※ 帯＝機械を止めている時間（内段取り）。<b>準備開始</b>＝<b>段取り開始</b>の' + SETUP_LEAD_MIN + '分前（生産開始ではありません。段取りの時刻は品番の下に書いてあります）。<b>準備開始が「前日」の行は帯を薄く</b>しています（8時前は段取りできないため、前日のうちに準備）。帯が縦に重なっている時間帯は、リフト待ち・人の取り合いが起きます。<br>'
 + '※ ①〜⑫は前の品番が流れている間にそろえ、そろったら ✓。そろわないものが出たら、すぐ H-Hub の「呼ぶ」で呼ぶこと（自分で探しに行かない）。❶〜❹は流れ始めてから。</div>'
 + '<table>' + (function(){
     /* ★列幅はここで決める。colspanの見出しがあるので th/td の width は効かない（2026-10-10）。
@@ -12642,7 +12658,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.11-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.11-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -21864,7 +21880,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.11-1</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.11-2</div>
 </body>
 </html>
 
