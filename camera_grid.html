@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   camera_grid.html — 工場カメラ一覧表示(HHub)
-  v2026.10.10-1
+  v2026.10.10-2
   v2026.10.03-1: App Check を仕込んだ（社長指示：外から読めなくする／第2段階）。ページを開くと Google が「本物のブラウザから開かれた本物のページ」という証明書を出し、Firebase はそれが付いた通信だけを受ける。現場には何も見えない（パズルは出ない）。Firebase側はまだ「監視のみ」なので動きは変わらない。サイトキーは公開前提のキーで、秘密の鍵はFirebase側にしか無い。
   仕様書: docs/camera_system_spec.md (Phase 2)
   構成: Tapoカメラ(RTSP) → 中継サーバーPC(go2rtc) → 本ページ(iframe/WebRTC)
@@ -103,7 +103,7 @@
 <header>
   <div>
     <div class="logo-main">HASHIMOTO KOGYO</div>
-    <div class="logo-sub">工場カメラ一覧 <span class="ver">v2026.10.10-1</span></div>
+    <div class="logo-sub">工場カメラ一覧 <span class="ver">v2026.10.10-2</span></div>
   </div>
   <div class="spacer"></div>
   <span id="fbStatus" class="fb-status">● Firebase未接続</span>
@@ -258,13 +258,32 @@ function setDept(d){
 window.setLayout = (l) => { config.layout = l; localStorage.setItem(CFG_KEY, JSON.stringify(config)); render(); };
 
 // ===== 混在コンテンツ警告(HTTPSページ内のHTTP iframe対策) =====
+/* 社外（インターネット側）から開かれたときの案内（2026-10-10 社長指示）
+   映像は社内の中継PCから出ているので、H-Hub（https）から開くとブラウザに遮断されて黒いまま。
+   黙って黒いと「壊れた」のか「社内専用」なのか分からないため、理由と行き先をはっきり出す。 */
 function checkMixedContent(){
   const bar = document.getElementById('warnBar');
   if(location.protocol === 'https:' && config.serverUrl.startsWith('http://')){
+    // 中継PCのカメラ画面（映像が見えるほう）のアドレスを、設定のサーバーURLから作る
+    const lan = config.serverUrl.replace(/:\d+\/?$/, ':8080') + '/camera_grid.html';
     bar.style.display = 'block';
-    bar.innerHTML = '⚠ このページはHTTPSで開かれているため、HTTPの中継サーバー映像はブラウザにブロックされます。'
-      + '対処: (a)go2rtcに自己署名証明書を設定してhttpsで配信 (b)このHTMLを社内サーバーやローカルから開く。'
-      + '詳細は docs/camera_setup_guide.md 参照。';
+    bar.style.background = '#fef3c7';
+    bar.style.borderBottom = '1px solid #f59e0b';
+    bar.style.padding = '12px 16px';
+    bar.innerHTML =
+      '<div style="font-size:15px;font-weight:800;color:#92400e;margin-bottom:4px;">📡 カメラ映像は社内ネットワークからだけ見られます</div>'
+      + '<div style="font-size:12.5px;color:#92400e;line-height:1.7;">'
+      + 'いま開いているのはインターネット側のページです。映像は工場の中継パソコンから出ているため、ここには映りません（枠が黒いのはそのためです）。<br>'
+      + '<b>会社のWi-Fi・社内LANにつながっている</b>ときは、下のボタンから開いてください。'
+      + '</div>'
+      + '<div style="margin-top:9px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">'
+      + '<a href="' + lan + '" style="display:inline-block;background:#b45309;color:#fff;text-decoration:none;'
+      + 'font-weight:700;font-size:14px;padding:9px 18px;border-radius:7px;">▶ 社内のカメラ画面を開く</a>'
+      + '<span style="font-size:11.5px;color:#92400e;">' + lan + '</span>'
+      + '</div>'
+      + '<div style="margin-top:7px;font-size:11.5px;color:#92400e;">'
+      + '※ 社外（携帯回線など）からご覧になりたいときは、スマホの <b>Tapoアプリ</b> をお使いください。'
+      + '</div>';
   } else { bar.style.display = 'none'; }
 }
 
