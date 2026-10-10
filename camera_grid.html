@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   camera_grid.html — 工場カメラ一覧表示(HHub)
-  v2026.10.04-1
+  v2026.10.10-1
   v2026.10.03-1: App Check を仕込んだ（社長指示：外から読めなくする／第2段階）。ページを開くと Google が「本物のブラウザから開かれた本物のページ」という証明書を出し、Firebase はそれが付いた通信だけを受ける。現場には何も見えない（パズルは出ない）。Firebase側はまだ「監視のみ」なので動きは変わらない。サイトキーは公開前提のキーで、秘密の鍵はFirebase側にしか無い。
   仕様書: docs/camera_system_spec.md (Phase 2)
   構成: Tapoカメラ(RTSP) → 中継サーバーPC(go2rtc) → 本ページ(iframe/WebRTC)
@@ -103,7 +103,7 @@
 <header>
   <div>
     <div class="logo-main">HASHIMOTO KOGYO</div>
-    <div class="logo-sub">工場カメラ一覧 <span class="ver">v2026.10.04-1</span></div>
+    <div class="logo-sub">工場カメラ一覧 <span class="ver">v2026.10.10-1</span></div>
   </div>
   <div class="spacer"></div>
   <span id="fbStatus" class="fb-status">● Firebase未接続</span>
@@ -143,7 +143,7 @@
       go2rtcを起動しているPCのIPアドレスとポート(既定1984)。
       設定手順は docs/camera_setup_guide.md 参照。
     </div>
-    <label>カメラ一覧</label>
+    <label>カメラ一覧　<span id="cfgShared" style="font-weight:400;font-size:11px;color:#0369a1;"></span></label>
     <table class="cams">
       <thead><tr><th>ストリーム名(go2rtcのキー)</th><th>表示名</th><th>部署(タブ)</th><th>エリアID(トラブル連携)</th><th></th></tr></thead>
       <tbody id="camRows"></tbody>
@@ -163,10 +163,13 @@
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import { getDatabase, ref, onValue, update } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+import { getDatabase, ref, onValue, update, set } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
 import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app-check.js";
 
-// ===== 設定(localStorage) =====
+/* ===== 設定（2026-10-10 社長指示：会社でひとつにする）=========================
+   これまではPCごと（localStorage）だったので、カメラを1台足すと、見るPC全部で
+   同じ設定をやり直す必要があった。Firebase settings/cameras に置いて全PC共通にする。
+   localStorage は「通信できないときの控え」として残す（Firebaseが読めなければ今までどおり動く）。 */
 const CFG_KEY = 'hk_camgrid_config';
 let config = { serverUrl:'', layout:'g2', cams:[], activeDept:'all' };
 try { config = Object.assign(config, JSON.parse(localStorage.getItem(CFG_KEY) || '{}')); } catch(e){}
@@ -313,9 +316,15 @@ window.saveCfg = () => {
     dept: tr.querySelector('.c-dept').value.trim(),
     area: tr.querySelector('.c-area').value.trim().toLowerCase(),
   })).filter(c => c.src || c.name);
-  localStorage.setItem(CFG_KEY, JSON.stringify(config));
+  localStorage.setItem(CFG_KEY, JSON.stringify(config));   // 控え
+  if(window._camSaveShared){                                // ★会社でひとつの設定へ
+    window._camSaveShared(config);
+  }else{
+    alert('Firebaseにつながっていないため、このPCにだけ保存しました。\nつながってからもう一度保存すると、全PCに反映されます。');
+  }
   closeCfg();
   render();
+  renderDeptTabs();
 };
 
 // ===== Firebase トラブル監視(/trouble/<エリアID>) =====
@@ -343,6 +352,28 @@ catch(e){ console.warn('App Check 初期化に失敗', e); }
     applyTroubles();
   }, err => { console.warn('Firebase trouble listener error:', err.message); });
   window._camDb = db;
+
+  /* ★カメラ一覧は会社でひとつ（2026-10-10）。
+     どのPCで直しても、開いている全部のPCにその場で反映される。 */
+  onValue(ref(db, 'settings/cameras'), snap => {
+    const v = snap.val();
+    if(!v || !Array.isArray(v.cams) || !v.cams.length) return;   // 未設定なら今までどおり
+    config.serverUrl = v.serverUrl || config.serverUrl;
+    config.cams = v.cams;
+    try{ localStorage.setItem(CFG_KEY, JSON.stringify(config)); }catch(e){}   // 控えを更新
+    render();
+    renderDeptTabs();
+    const note = document.getElementById('cfgShared');
+    if(note) note.textContent = 'この一覧は会社でひとつです（どのPCで直しても全PCに反映されます）';
+  }, err => console.warn('カメラ一覧の読み込みに失敗:', err.message));
+
+  window._camSaveShared = (cfg) => {
+    set(ref(db, 'settings/cameras'), {
+      serverUrl: cfg.serverUrl || '',
+      cams: cfg.cams || [],
+      updatedAt: Date.now()
+    }).catch(e => alert('全PCへの保存に失敗しました（このPCには保存されています）\n' + e.message));
+  };
 } catch(e){ console.warn('Firebase init error:', e.message); }
 
 function applyTroubles(){
