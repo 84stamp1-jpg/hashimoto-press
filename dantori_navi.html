@@ -720,6 +720,9 @@ html, body {
 .rt-block.rt-setup-est{border:1px dashed #b45309!important;opacity:.78;}
 /* 段取りの担当で、品質か初品にチェックのある人（2026-10-10 社長指示） */
 .ptag.ptag-setup-mark{background:#fde8ef!important;border-color:#f3b6cc!important;color:#9d174d!important;}
+.kc-setup{padding:0 2px;}
+.kc-setup-mark{background:#fde8ef;color:#9d174d;border:1px solid #f3b6cc;border-radius:3px;padding:0 4px;}
+.kc-mk{margin-left:3px;font-size:8.5px;font-weight:700;color:#be185d;background:#fff;border-radius:2px;padding:0 2px;}
 .ptag .ptag-mk{margin-left:4px;font-size:9px;font-weight:700;color:#be185d;background:#fff;border-radius:3px;padding:0 3px;}
 .rt-block.rt-setup{background-color:#fef9c3!important;color:#111!important;border:1px solid #d9a441!important;box-shadow:0 1px 2px rgba(0,0,0,.1)!important;background-image:repeating-linear-gradient(135deg,rgba(0,0,0,.06) 0,rgba(0,0,0,.06) 3px,transparent 3px,transparent 7px)!important;}
 .rt-overlay{position:absolute;top:0;left:110px;bottom:0;pointer-events:none;overflow:hidden;}
@@ -7868,11 +7871,25 @@ function renderKanbanCard(d){
     || (!d.noSetup && isPressLine && !roles.品質確認 && !roles.初品出し && !roles.金型取付))
     ? `<div class="kcard-role" style="color:#f59e0b;font-size:10px;padding:1px 0;">⚠ 品質・初品・取付 未定</div>` : '';
 
+  /* ★2026-10-10 社長指示：品質・初品・取付を「段取」1行にまとめる。
+     品質か初品にチェックのある人だけ、薄いピンクの背景と 品／初 の印で区別する。 */
+  const kcardSetupVal = (r) => {
+    const sp = v => String(v||'').split(/[,、]/).map(x=>x.trim()).filter(Boolean);
+    const mount = sp(r.金型取付), qual = sp(r.品質確認), ippin = sp(r.初品出し);
+    const names = [];
+    mount.concat(qual, ippin).forEach(nm => { if(names.indexOf(nm) < 0) names.push(nm); });
+    if(!names.length) return '<span style="color:#f59e0b;">未定</span>';
+    return names.map(nm => {
+      const q = qual.indexOf(nm) >= 0, i = ippin.indexOf(nm) >= 0;
+      const mk = [q?'品':'', i?'初':''].filter(Boolean).join('·');
+      return (q||i)
+        ? `<span class="kc-setup-mark">${nm}<span class="kc-mk">${mk}</span></span>`
+        : `<span class="kc-setup">${nm}</span>`;
+    }).join('<span style="color:#cbd5e1;">／</span>');
+  };
   const rolesHtml = (roles.金型取付||roles.初品出し||roles.品質確認||roles.作業者||(!d.noSetup&&isPressLine)) ? `
     <div class="kcard-roles">
-      ${(!d.noSetup)?`${roles.品質確認?`<div class="kcard-role"><span class="kcard-role-lbl">品質</span><span class="kcard-role-val">${roles.品質確認}</span></div>`:`<div class="kcard-role"><span class="kcard-role-lbl" style="color:#94a3b8;">品質</span><span class="kcard-role-val" style="color:#f59e0b;">未定</span></div>`}`:''}
-      ${(!d.noSetup)?`${roles.初品出し?`<div class="kcard-role"><span class="kcard-role-lbl">初品</span><span class="kcard-role-val">${roles.初品出し}</span></div>`:`<div class="kcard-role"><span class="kcard-role-lbl" style="color:#94a3b8;">初品</span><span class="kcard-role-val" style="color:#f59e0b;">未定</span></div>`}`:''}
-      ${(!d.noSetup)?`${roles.金型取付?`<div class="kcard-role"><span class="kcard-role-lbl">取付</span><span class="kcard-role-val">${roles.金型取付}</span></div>`:`<div class="kcard-role"><span class="kcard-role-lbl" style="color:#94a3b8;">取付</span><span class="kcard-role-val" style="color:#f59e0b;">未定</span></div>`}`:''}
+      ${(!d.noSetup)?`<div class="kcard-role"><span class="kcard-role-lbl">段取</span><span class="kcard-role-val">${kcardSetupVal(roles)}</span></div>`:''}
       ${roles.作業者?`<div class="kcard-role"><span class="kcard-role-lbl">作業</span><span class="kcard-role-val">${roles.作業者}</span></div>`:''}
       ${(d.shiftChanges||[]).map(c=>{
         const outTxt  = c.outWorker||'';
