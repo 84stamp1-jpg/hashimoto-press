@@ -42,6 +42,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.10-1 : <b>段取り準備チェック表をH-Hubから直接印刷</b>できるようにした（社長指示：batを使わずシステムから出したい）。配置表の右上「📋 段取り準備チェック表」を押すと、<b>表示中の日付</b>の段取りが入った状態でA4横1枚が出る。入るのは ライン・次の品番・準備開始・予定の段取り時間の帯。担当・①〜⑫・準備完了・❶〜❹・そろわなかったことは手書き（書くのはリフトマンの2人なので、H-Hubの段取り担当とは別人。自動では入れない）。<b>帯が縦に重なっている時間帯＝リフト待ち・人の取り合い</b>が朝の時点で見える。準備開始は帯の左端の30分前（8時より前になるものは「前日」と出す）。Excelの雛形とbatは今までどおり残してある。 -->
 <!-- H-Hub v2026.10.08-1 : <b>段取り指示を開いたら、まず配置表が出る</b>ようにした（社長指示）。朝礼でいちばん見る画面なので、毎回「📍 配置表」を押し直していた。読み込み直したときの初期値も配置表にしてある。A・Bラインなどは今までどおり上のタブで切り替えられる（他のタブへ行って段取り指示に戻ると、また配置表から始まる）。 -->
 <!-- H-Hub v2026.10.06-2 : ★<b>証明書が取れないまま固まったときに、自分で読み直す</b>ようにした。App Check は一度403を受けると、その画面では<b>24時間あきらめる</b>作りで、その間データを一切読めない（呼び出しのリストが既定に戻って見えた）。実際に1回起きたが、読み直すと直った（3回試して3回とも成功）。20秒たっても取れていなければ1回だけ読み直す。同じ画面で繰り返さないよう30分に1回まで。 -->
 <!-- H-Hub v2026.10.06-1 : 呼ぶ画面を<b>「どこから」「何を」だけ</b>にした（社長指摘：設定画面も一緒なので迷う）。端末の設定・リストの中身・スマホ通知・回転灯は、右下の小さな<b>⚙ 設定</b>の中にしまってある。呼ぶ画面を開くたびに閉じた状態に戻るので、現場では<b>押す場所だけ</b>が見える。設定の中身は今までと同じ（消していない）。 -->
@@ -8583,6 +8584,164 @@ function _stripPrintMedia(css){
   return out + css.slice(i);
 }
 
+
+/* ===== 段取り準備チェック表の印刷（2026-10-10 社長指示）=======================
+   これまでは Excel の雛形に bat で流し込んでいたが、どのPCからでも出せるように
+   H-Hub から直接印刷する。その日の段取り（ライン・品番・準備開始・帯）が入った
+   状態で出る。チェック欄・担当・準備完了は手書き（書くのはリフトマンの2人）。
+   帯＝内段取り（機械を止める時間）。準備開始＝外段取りを始める予定時刻。 */
+const SETUP_LEAD_MIN = 30;     // 準備開始＝段取り開始の何分前か
+const SETUP_SHEET_ROWS = 16;   // 用紙に載る行数
+const SETUP_T0 = 8, SETUP_T_SLOTS = 18;   // 8:00から30分きざみで18コマ（17:00まで）
+
+const SETUP_SOTO = [
+  ['①','次の金型','置場から出した／前回の不具合は改善(改修)されている'],
+  ['②','材料','材質・板厚・幅・所要量が合っている'],
+  ['③','空容器','種類と員数確認／パレット・仕切り／不適合品用の容器'],
+  ['④','スクラップ容器','空になっている／機械の定位置にある'],
+  ['⑤','コンベア・シュート','長さ・高さ・向き／動作確認'],
+  ['⑥','治工具','セット箱にそろっている（六角レンチ・トルクレンチ・ハンダ）'],
+  ['⑦','副資材','プレス油・防錆油・ウエス・マーカー・養生材'],
+  ['⑧','計測具','ノギス・ゲージ・限度見本・検査治具'],
+  ['⑨','標準書類','作業標準書・段取標準書（H-Hubから最新版を出す）'],
+  ['⑩','品質チェックシート','前回の注意点・過去トラを見た'],
+  ['⑪','現品ラベル','枚数・ロット番号（初品札）'],
+  ['⑫','担当と時刻','誰が何時から入るか(配置表)／応援・リフトの手配は済んだか']
+];
+const SETUP_ATO = [
+  ['❶','旧金型の手入れ','清掃・不具合あれば記録・改修'],
+  ['❷','旧金型を戻す','決められた置場へ戻した(出しっぱなしにしない)'],
+  ['❸','片付け','残材の識別・返却／旧容器・旧ラベルの片付け'],
+  ['❹','記録','段取り時間を入れた／超過したときは原因を選んだ（H-Hub）']
+];
+
+function _ssHHMM(m){ return String(Math.floor(m/60)) + ':' + String(m%60).padStart(2,'0'); }
+
+// その日の段取り（段取りなしの行は除く）を時間の早い順に
+function _ssRows(){
+  const out = [];
+  (dantoriSchedule || []).forEach(function(d){
+    if(d.noSetup) return;
+    let s = rt_toMin(d.setupStart), p = rt_toMin(d.prodStart);
+    const std = parseInt(d.stdSetupMin, 10) || 0;
+    if(s === null && p !== null && std) s = p - std;     // 段取り開始が空なら生産開始から逆算
+    if(s === null && p === null) return;
+    if(p === null) p = s + (std || 30);
+    out.push({ line:getLineName(d.lineId), part:d.partNo || '', s:s, p:p, std:std });
+  });
+  out.sort(function(a,b){ return a.s - b.s || String(a.line).localeCompare(b.line); });
+  return out;
+}
+
+window.rtPrintSetupSheet = function(){
+  const ymd = getDantoriDatePath();
+  const d   = _dtParse(ymd);
+  const wd  = ['日','月','火','水','木','金','土'][d.getDay()];
+  const dateStr = d.getFullYear() + '年' + (d.getMonth()+1) + '月' + d.getDate() + '日（' + wd + '）';
+  const rows = _ssRows();
+
+  const esc = function(t){ return String(t==null?'':t).replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); };
+
+  // 本体の行
+  let body = '';
+  for(let i = 0; i < SETUP_SHEET_ROWS; i++){
+    const r = rows[i];
+    let tds = '<td class="no">' + (i+1) + '</td>';
+    if(r){
+      const lead = r.s - SETUP_LEAD_MIN;
+      tds += '<td class="ln">' + esc(r.line) + '</td>'
+           + '<td class="pt">' + esc(r.part) + '</td><td></td>'
+           + '<td class="tm">' + (lead < SETUP_T0*60 ? '前日' : _ssHHMM(lead)) + '</td>';
+    }else{
+      tds += '<td></td><td></td><td></td><td></td>';
+    }
+    for(let k = 0; k < SETUP_T_SLOTS; k++){
+      const from = SETUP_T0*60 + k*30, to = from + 30;
+      const on = r && r.s < to && r.p > from;
+      tds += '<td class="t' + (k%2 ? ' h' : '') + (on ? ' bd' : '') + '"></td>';
+    }
+    for(let k = 0; k < 12; k++) tds += '<td class="ck"></td>';
+    tds += '<td class="dn"></td>';
+    for(let k = 0; k < 4; k++) tds += '<td class="ck2"></td>';
+    tds += '<td class="mm"></td>';
+    body += '<tr>' + tds + '</tr>';
+  }
+
+  // 時間の見出し
+  let h2 = '';
+  for(let k = 0; k < SETUP_T_SLOTS; k += 2) h2 += '<th colspan="2" class="t">' + (SETUP_T0 + k/2) + '</th>';
+  SETUP_SOTO.forEach(function(x){ h2 += '<th class="ck">' + x[0] + '</th>'; });
+  h2 += '<th class="dn"></th>';
+  SETUP_ATO.forEach(function(x){ h2 += '<th class="ck2">' + x[0] + '</th>'; });
+  h2 += '<th class="mm">（No.と、何を・何分待ったかを書く）</th>';
+
+  const leg = function(list){
+    return list.map(function(x){ return '<b>' + x[0] + ' ' + x[1] + '</b>＝' + x[2]; }).join('　　');
+  };
+  const now = new Date();
+  const stamp = now.getFullYear() + '/' + (now.getMonth()+1) + '/' + now.getDate() + ' '
+              + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+
+  const win = window.open('', '_blank');
+  if(!win){ alert('ポップアップがブロックされました。\nアドレスバー右側のアイコンから許可してください。'); return; }
+  win.document.write('<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">'
++ '<title>段取り準備チェック表 ' + ymd + '</title>'
++ '<style>'
++ '*{box-sizing:border-box;}'
++ 'body{font-family:"Meiryo UI","Noto Sans JP",sans-serif;margin:0;padding:7mm;background:#fff;color:#111;}'
++ '.ttl{font-size:17px;font-weight:800;letter-spacing:.06em;}'
++ '.hd{display:flex;align-items:center;gap:10px;margin-bottom:3px;}'
++ '.hd .box{border:1px solid #44506a;padding:2px 8px;font-size:12px;}'
++ '.hd .box b{font-weight:700;margin-right:10px;}'
++ '.hd .stamp{margin-left:auto;font-size:9px;color:#999;}'
++ '.note{font-size:9.5px;color:#555;line-height:1.5;margin-bottom:5px;}'
++ 'table{border-collapse:collapse;width:100%;table-layout:fixed;}'
++ 'th,td{border:1px solid #9aa3b2;font-size:9px;text-align:center;padding:0;height:19px;}'
++ 'thead th{background:#dde6f2;font-weight:700;}'
++ 'th.g1{background:#e4efdc;} th.g2{background:#dce7f5;} th.g0{background:#eaf0f8;}'
++ 'tbody tr:nth-child(even) td{background:#f7f9fc;}'
++ 'td.ck,th.ck{width:15px;} td.ck2,th.ck2{width:15px;} td.t,th.t{width:11px;}'
++ 'td.t.h{border-left:1px dotted #c9d0db;}'
++ 'td.bd{background:#9bafd2!important;}'
++ '.no{width:17px;} .ln{width:40px;font-size:8.5px;} .pt{width:95px;font-size:9px;}'
++ '.tm{width:32px;} .dn{width:34px;} .mm{width:150px;font-size:8px;color:#999;}'
++ 'col.sep{}'
++ 'td.ln,td.pt{white-space:nowrap;overflow:hidden;}'
++ '.lg{margin-top:5px;font-size:8.5px;line-height:1.6;}'
++ '.lg .cap{font-weight:700;font-size:9.5px;padding:1px 6px;margin-top:3px;}'
++ '.lg .c1{background:#e4efdc;} .lg .c2{background:#dce7f5;}'
++ '.btn{margin-bottom:6px;}'
++ '.btn button{background:#2980b9;color:#fff;border:none;border-radius:5px;padding:7px 16px;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;}'
++ '@page{size:A4 landscape;margin:5mm;}'
++ '@media print{.btn{display:none!important;}body{padding:6mm!important;}'
++ ' th,td,.lg .cap{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}'
++ '</style></head><body>'
++ '<div class="btn"><button onclick="window.print()">🖨 印刷する（Ctrl+P）</button>'
++ '<span style="font-size:11px;color:#888;margin-left:8px;">A4横1枚。用紙サイズ A4・横、倍率100でそのまま出ます。</span></div>'
++ '<div class="hd"><span class="ttl">当日の段取り計画 ＆ 準備チェック表</span>'
++ '<span class="box"><b>日付</b>' + dateStr + '</span>'
++ '<span class="box"><b>記入者</b>　　　　　　</span>'
++ '<span class="stamp">印刷 ' + stamp + '</span></div>'
++ '<div class="note">※ 帯＝機械を止めている時間（内段取り）。<b>準備開始</b>＝外段取りを始める予定時刻（帯の左端の' + SETUP_LEAD_MIN + '分前）。帯が縦に重なっている時間帯は、リフト待ち・人の取り合いが起きます。<br>'
++ '※ ①〜⑫は前の品番が流れている間にそろえ、そろったら ✓。そろわないものが出たら、すぐ H-Hub の「呼ぶ」で呼ぶこと（自分で探しに行かない）。❶〜❹は流れ始めてから。</div>'
++ '<table><thead><tr>'
++ '<th rowspan="2" class="no">No</th><th rowspan="2" class="ln">ライン</th>'
++ '<th rowspan="2" class="pt">次 の 品 番</th><th rowspan="2" style="width:40px">担当</th>'
++ '<th rowspan="2" class="tm">準備<br>開始</th>'
++ '<th colspan="' + SETUP_T_SLOTS + '" class="g0">予 定 の 段 取 り 時 間</th>'
++ '<th colspan="12" class="g1">外 段 取 り（止める前にそろえる）</th>'
++ '<th rowspan="2" class="dn">準備<br>完了</th>'
++ '<th colspan="4" class="g2">後 段 取 り</th>'
++ '<th rowspan="2" class="mm">そろわなかったもの・待たされたこと</th>'
++ '</tr><tr>' + h2.replace('<th class="dn"></th>','') + '</tr></thead><tbody>' + body + '</tbody></table>'
++ '<div class="lg"><div class="cap c1">外 段 取 り（機械を止める前にそろえる）</div>' + leg(SETUP_SOTO)
++ '<div class="cap c2">後 段 取 り（流れ始めてから。ここをやらないと次の段取りが遅れる）</div>' + leg(SETUP_ATO) + '</div>'
++ (rows.length ? '' : '<div style="margin-top:6px;font-size:10px;color:#b45309;">※ この日の段取りは H-Hub にまだ入っていません。手書きで使ってください。</div>')
++ '</body></html>');
+  win.document.close();
+  win.focus();
+};
+
 // ===== kp4：配置表の印刷 =====
 // position:fixed や sticky はChromeの印刷で崩れるため、別ウィンドウへ複製して印刷する
 // （進捗管理スナップショットと同じ方式）。表示中の日付を必ず見出しに入れる。
@@ -8900,6 +9059,7 @@ function renderPressTimeline(allEntries){
       <button onclick="rtToggleOverrideMode()" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid;border-radius:5px;cursor:pointer;white-space:nowrap;${ovrBtnStyle}">${_rtOverrideMode ? '✕ 優先ライン変更終了' : `📌 今日の優先ライン${ovrCount?'('+ovrCount+'件)':''}`}</button>
       <button onclick="rtToggleSwapMode()" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid;border-radius:5px;cursor:pointer;white-space:nowrap;${swapBtnStyle}">${_rtSwapMode ? '✕ 入れ替えモード終了' : '🔀 入れ替えモード'}</button>
       <button onclick="rtOpenSpotNew('',12*60,event)" title="予定に無い修正・検査などを入れます" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid #7c3aed;border-radius:5px;cursor:pointer;white-space:nowrap;background:#fff;color:#7c3aed;">＋ 突発作業</button>
+      <button onclick="rtPrintSetupSheet()" title="その日の段取りが入った『段取り準備チェック表』を印刷します（A4横1枚）" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid #b45309;border-radius:5px;cursor:pointer;white-space:nowrap;background:#fffbeb;color:#b45309;">📋 段取り準備チェック表</button>
       <button onclick="rtPrintRoster()" title="表示中の日付の配置表を印刷します（A4横）" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid #cbd5e1;border-radius:5px;cursor:pointer;white-space:nowrap;background:#fff;color:#475569;">🖨 印刷</button>
     </div>
   </div>
@@ -12171,7 +12331,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.08-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.10-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -21393,7 +21553,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.08-1</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.10-1</div>
 </body>
 </html>
 
