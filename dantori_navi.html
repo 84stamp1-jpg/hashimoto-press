@@ -42,6 +42,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.10-9 : (1)<b>伊藤をマスタから外した</b>（社長指摘：作業者マスタにいないのに出てくる）。コードの中の WORKER_MASTER と PRESS_LINE_MASTER の A1 に名前が残っていて、自動割り振りがA1の金型取付候補として使っていた。取り込んだ予定表が原因ではない。※すでに保存済みの計画に入っている「伊藤」は残るので、その日は自動割り振りをやり直すか手で直す。(2)<b>段取り作業者が「段取り人数」より多いときは標準時間を縮める</b>ようにした（例：B1 計画1人＝26分 → 2人入れたら 6+20÷2＝16分）。少ないときは縮めない。 -->
 <!-- H-Hub v2026.10.10-8 : (1)<b>自動割り振りで、段取りのある工程には必ず仲田さんか見原さんが1人入る</b>ようにした（社長指示）。2人のうちその日の受け持ちが少ないほうを選ぶので偏らない。2人とも出勤なし／他で埋まっているときは無理に入れず不足として出す。(2)配置表でも<b>品質か初品にチェックのある人の段取りバーを薄いピンク</b>にした。(3)カードの「⚠ 取付◯名不足」を<b>「⚠ 段取◯名不足」</b>に直した。 -->
 <!-- H-Hub v2026.10.10-7 : 段取り指示のカードを<b>すっきりさせた</b>（社長指示）。品質確認・初品出し・金型取付 の3行をやめ、<b>「段取」1行に横並び</b>で出す（作業者と同じ形）。<b>品質か初品にチェックのある人だけ、薄いピンクの背景と 品／初 の印</b>を付けて区別する。チェックの無い人は普通の色＝段取り作業者の誰かがやる、という意味。 -->
 <!-- H-Hub v2026.10.10-6 : 段取りの担当入力を<b>「段取り作業者」1か所にまとめた</b>（社長指示）。これまで 品質確認・初品出し・金型取付 の3か所に同じ名前を入れていた。段取り作業者を選ぶと、その人ごとに<b>「品質」「初品」のチェック</b>が出る。チェックが無ければ<b>段取り作業者の誰かがやる</b>という意味（1人ならその人）。★<b>保存のしかたは今までどおり</b>：金型取付＝段取り作業者全員／品質確認・初品出し＝チェックした人、として裏の3つに書く。そのため<b>自動割り振り・人数不足チェック・過去日の表示・配置表は手を入れていない</b>。既存データを開くと、3つの名前を合わせて段取り作業者に組み立て直し、チェックも復元する。 -->
@@ -6405,7 +6406,7 @@ function renderDantoriCard(d){
   const worker_  = d.workerCount != null ? d.workerCount : 0;
   const isDefault_ = (kata_ == null && ninzu_ == null);
   // stdSetupMin: 保存済み固定値を優先、なければ動的計算
-  const stdMin_  = d.stdSetupMin != null ? d.stdSetupMin : calcDantoriSetupTime(d.lineId, kata_ || 1, ninzu_ || 1);
+  const stdMin_  = effSetupStdMin(d);   // ★段取り作業者が増えていれば縮める
   const kataInfoHtml = d.noSetup
     ? `<div style="display:flex;gap:6px;align-items:center;padding:2px 14px 4px;font-size:10px;color:#64748b;flex-wrap:wrap;">
         <span style="background:#f0fdf4;color:#15803d;padding:1px 7px;border-radius:4px;font-weight:700;">段取りなし</span>
@@ -6813,6 +6814,19 @@ let dantoriSetupTimes  = {}; // Firebase settings/setupTimes  — ライン別�
 let dantoriSetupParams = {}; // Firebase settings/setupParams — ライン別{c:片付け, p:準備}
 
 // 段取り標準時間を動的計算: C×人数 + P×型数÷人数
+/* ★2026-10-10 社長指示：段取り作業者が「段取り人数」より多いときは標準時間を縮める。
+   （例：B1で計画1人＝26分でも、2人入れたら 6 + 20÷2 = 16分）
+   少ないときは縮めない（計画どおりの標準で測る）。 */
+function effSetupStdMin(d){
+  const saved = (d.stdSetupMin != null) ? d.stdSetupMin : null;
+  const kata    = (d.mountKata  != null && d.mountKata  > 0) ? d.mountKata  : 1;
+  const planned = (d.mountCount != null && d.mountCount > 0) ? d.mountCount : 1;
+  const assigned = String(((d.roles || {}).金型取付) || '')
+    .split(/[,、]/).map(x => x.trim()).filter(Boolean).length;
+  if(assigned > planned) return calcDantoriSetupTime(d.lineId, kata, assigned);
+  return (saved != null) ? saved : calcDantoriSetupTime(d.lineId, kata, planned);
+}
+
 function calcDantoriSetupTime(lineId, kata, ninzu){
   const base = dantoriSetupTimes[lineId] || 45;
   // 未設定時は 1型1人 として計算（結果は base と等しい）
@@ -7830,7 +7844,7 @@ function renderKanbanCard(d){
   const ninzu_  = (d.mountCount != null && d.mountCount > 0) ? d.mountCount : null;
   const worker__ = d.workerCount || 0;
   const isDefault = (kata_ == null && ninzu_ == null);
-  const stdMin_ = d.stdSetupMin != null ? d.stdSetupMin : calcDantoriSetupTime(d.lineId, kata_ || 1, ninzu_ || 1);
+  const stdMin_ = effSetupStdMin(d);    // ★段取り作業者が増えていれば縮める
   // 実配置作業者数・不足数（作業者）※noWorker=trueの場合は不足チェックしない
   const assignedWorkers = (roles.作業者||'').split(/[,、]/).map(s=>s.trim()).filter(Boolean);
   const wrkShortage = (!d.noWorker && worker__ > 0 && assignedWorkers.length < worker__) ? worker__ - assignedWorkers.length : 0;
@@ -8229,7 +8243,7 @@ const WORKER_MASTER = [
   // 仲田がプレス主任になったため、配置表の並びは仲田→見原（2026-09-21 社長指示）
   { section:'プレス', names:['仲田　涼真','見原　一彦','長田　由香倫','大石　章宏',
                               '松浦　広治','吉田　光好','柴田　晃宏','横田川　延広',
-                              '伊藤','ジュン','ノア','ダール','中野','アリ',
+                              'ジュン','ノア','ダール','中野','アリ',
                               'ジャン','マット','フン'] },
   { section:'組立',   names:['永丘　克也','近藤　満','大塚　圭汰','鈴木　里美','野口　敦子'] },
   { section:'品管・総務', names:['八木　貴志','杉山　好美','登﨑　千春'] },
@@ -8240,7 +8254,9 @@ const WORKER_MASTER = [
 // ippin:   リフト担当（初品確認）
 // workers: 金型取付候補（ライン作業者）
 const PRESS_LINE_MASTER = {
-  'A1':           { quality:'仲田',   ippin:'長田',  workers:['伊藤'] },
+  // 2026-10-10 社長指摘：伊藤は作業者マスタにいないので候補から外した。
+  // A1の金型取付は、作業者マスタの優先ライン設定と「仲田か見原を必ず1人」の決まりで埋まる。
+  'A1':           { quality:'仲田',   ippin:'長田',  workers:[] },
   'A2':           { quality:'仲田',   ippin:'長田',  workers:['長田'] },
   'Bライン':      { quality:'見原',   ippin:'吉田',  workers:['吉田','ジュン','ノア','中野','アリ','柴田'] },
   'B1':           { quality:'見原',   ippin:'吉田',  workers:['松浦'] },
@@ -12524,7 +12540,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.10-8';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.10-9';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -21746,7 +21762,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.10-8</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.10-9</div>
 </body>
 </html>
 
