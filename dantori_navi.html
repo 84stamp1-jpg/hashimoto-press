@@ -42,6 +42,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.10-5 : 配置表で、<b>段取り開始時刻が空のときに担当者のバーが出なかった</b>のを直した（社長指摘：段取りに仲田さんの名前が入っているのに配置表に出てこない）。段取りバーは「段取り開始〜生産開始」に描くため、開始時刻が空だと描く場所が決まらず、担当を入れても何も出ていなかった。開始時刻が空でも、<b>生産開始から標準段取り時間を引いて仮の帯</b>を出すようにした。仮のものは<b>点線＋役割のうしろに「?」</b>を付けて区別する。押せばその場で時刻を入れられる。 -->
 <!-- H-Hub v2026.10.10-4 : カメラタブを<b>元の相対リンクに戻した</b>（社長指示）。社内アドレス固定にしたら<b>社外では何も開かなくなり</b>、壊れたのか社内専用なのか分からなかったため。カメラ一覧ページ側に、<b>社外から開いたときの案内</b>（理由と「社内のカメラ画面を開く」ボタン、社外ならTapoアプリ）を出すようにしたので、どちらで開いても迷わない。 -->
 <!-- H-Hub v2026.10.10-3 : カメラタブを<b>ふつうのリンク（aタグ）</b>に変えた。<code>window.open</code> で http のアドレスを開こうとすると、https のページからではブラウザに止められ、<b>about:blank のまま白紙</b>になる（社長報告：スマホで進まない）。工場レイアウトのカメラ印は最初からaタグで、そちらは動いていたので同じ形にそろえた。※社内ネットワーク（中継PCに届く場所）にいないと見られないのは変わらない。 -->
 <!-- H-Hub v2026.10.10-2 : ★<b>カメラが黒画面だったのを直した</b>（社長報告：他のPCで黒いまま）。H-Hubの「📹 カメラ」タブが<code>camera_grid.html</code>と<b>相対リンク</b>だったため、H-HubをGitHub Pages（https）から開いていると、カメラ一覧もhttpsで開いてしまい、映像の取り込み先 <code>http://192.168.30.9:1984</code> が<b>混在コンテンツとしてブラウザに遮断</b>され、枠だけ黒く出ていた。中継PC（http://192.168.30.9:8080）で開いたときだけ映っていたのはこのため。工場レイアウトのカメラ印と同じ<b>中継PCの絶対URL</b>に統一した。 -->
@@ -714,6 +715,7 @@ html, body {
    背景色はインラインで付くので、膜は background-image 側に !important で重ねる。 */
 .rt-block{position:absolute;top:5px;height:25px;border-radius:3px;display:flex;align-items:center;padding:0 5px;font-size:12px;font-weight:700;color:#111;overflow:hidden;white-space:nowrap;cursor:pointer;min-width:4px;box-shadow:0 1px 3px rgba(0,0,0,.18);
   background-image:linear-gradient(rgba(255,255,255,.62),rgba(255,255,255,.62))!important;}
+.rt-block.rt-setup-est{border:1px dashed #b45309!important;opacity:.78;}
 .rt-block.rt-setup{background-color:#fef9c3!important;color:#111!important;border:1px solid #d9a441!important;box-shadow:0 1px 2px rgba(0,0,0,.1)!important;background-image:repeating-linear-gradient(135deg,rgba(0,0,0,.06) 0,rgba(0,0,0,.06) 3px,transparent 3px,transparent 7px)!important;}
 .rt-overlay{position:absolute;top:0;left:110px;bottom:0;pointer-events:none;overflow:hidden;}
 .rt-break-band{position:absolute;top:0;bottom:0;background:rgba(0,0,0,.07);}
@@ -8958,6 +8960,17 @@ function renderPressTimeline(allEntries){
         } else if(sm !== null && ps === null){
           const sx = rt_toX(sm), sw = 60 * RT_PPM;
           pushBar(sx, sw, top => `<div class="rt-block rt-setup" style="left:${sx}px;top:${top}px;width:${sw}px;background:${color};" title="${tip}" onclick="rtOpenEntryEdit('${eid}',event)">段取中</div>`);
+        } else if(sm === null && ps !== null){
+          /* ★2026-10-10：段取り開始時刻が空でも、担当が入っていれば標準時間で逆算して仮の帯を出す。
+             以前は何も描かず、担当を入れたのに配置表に出てこない状態だった（社長指摘）。
+             点線＝時刻が未入力。バーを押せばその場で入れられる。 */
+          const _std = parseInt(d.stdSetupMin, 10) || 0;
+          if(_std > 0){
+            const est = ps - _std;
+            const sx = rt_toX(est), sw = Math.max(rt_toX(ps) - sx, 8);
+            const tip2 = `${tip}　※段取り開始時刻が未入力。標準${_std}分で仮に表示しています`;
+            pushBar(sx, sw, top => `<div class="rt-block rt-setup rt-setup-est" style="left:${sx}px;top:${top}px;width:${sw}px;background:${color};" title="${tip2}" onclick="rtOpenEntryEdit('${eid}',event)">${setupBarInner}?</div>`);
+          }
         }
       }
       // 作業者バー描画：roles.作業者 または shiftChanges の inWorker
@@ -12367,7 +12380,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.10-4';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.10-5';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -21589,7 +21602,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.10-4</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.10-5</div>
 </body>
 </html>
 
