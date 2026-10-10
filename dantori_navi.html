@@ -42,6 +42,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.11-3 : チェック表の<b>ブロックの仕切り線を濃く</b>した（社長指示）。「予定の段取り時間」「外段取り」「準備完了」「後段取り」「そろわなかったもの」のそれぞれ左側を太い線で区切る。あわせて<b>「そろわなかったもの・待たされたこと」の文字を黒</b>にした。 -->
 <!-- H-Hub v2026.10.11-2 : (1)<b>帯を実際の時刻どおりの幅で塗る</b>ようにした（社長指摘：70分の段取りが2時間に見える）。これまで30分のマス単位で、少しでもかかっていればマス全体を塗っていた。マスの中を部分的に塗るようにしたので、14:25〜15:35 はちょうどその幅で出る。(2)<b>8時より前は塗らない</b>（段取りできないため）。準備開始が「前日」になる行は<b>帯を薄い色</b>にして区別する。 -->
 <!-- H-Hub v2026.10.11-1 : (1)準備チェック表の<b>担当欄に、割り振られている段取り担当を上段に出す</b>ようにした（社長指示）。下の空きに実際の担当を書き足せる。(2)<b>ライン別の優先</b>：Bラインは仲田さん、A・Cラインは見原さん。優先のほうが時間で埋まっていればもう一方を入れる。取り込み時の先入れと自動割り振りの両方に効く。(3)<b>段取り開始時刻が無い工程</b>は、同じラインで先に終わる作業の終了時刻から段取りを始められるものとして推定する（そのラインに先の作業が無ければ始業から）。遅くとも「生産開始−標準時間」までには始める前提で、早いほうを採る。推定したものは品番の下に<b>（予想）</b>と出す。 -->
 <!-- H-Hub v2026.10.10-10 : <b>仲田さん・見原さんを、予定の取り込みと同時に段取りへ入れる</b>ようにした（社長指示：2人は作業に就かないので、自動割り振りを待たずに先に決めたい）。「今すぐ同期」「段取り計画だけ作る」「自動同期」のどの取り込みでも効く。段取りのある工程を時間の早い順に見て、<b>2人の受け持ちが少ないほう</b>を入れ、同じ人の段取りが<b>時間で重ならない</b>ようにする。すでにどちらかが入っている工程はそのまま、他の人の名前も消さない。2人とも重なってしまう工程は空けておく（自動割り振りか手で埋める）。 -->
@@ -8849,21 +8850,21 @@ window.rtPrintSetupSheet = function(){
              + col + ' ' + x1 + '%,' + col + ' ' + x2 + '%,transparent ' + x2 + '%)!important;"';
         }
       }
-      tds += '<td class="t' + (k%2 ? ' h' : '') + '"' + st + '></td>';
+      tds += '<td class="t' + (k%2 ? ' h' : '') + (k===0 ? ' sep' : '') + '"' + st + '></td>';
     }
-    for(let k = 0; k < 12; k++) tds += '<td class="ck"></td>';
-    tds += '<td class="dn"></td>';
-    for(let k = 0; k < 4; k++) tds += '<td class="ck2"></td>';
-    tds += '<td class="mm"></td>';
+    for(let k = 0; k < 12; k++) tds += '<td class="ck' + (k===0?' sep':'') + '"></td>';
+    tds += '<td class="dn sep"></td>';
+    for(let k = 0; k < 4; k++) tds += '<td class="ck2' + (k===0?' sep':'') + '"></td>';
+    tds += '<td class="mm sep"></td>';
     body += '<tr>' + tds + '</tr>';
   }
 
   // 時間の見出し
   let h2 = '';
-  for(let k = 0; k < SETUP_T_SLOTS; k += 2) h2 += '<th colspan="2" class="t">' + (SETUP_T0 + k/2) + '</th>';
-  SETUP_SOTO.forEach(function(x){ h2 += '<th class="ck">' + x[0] + '</th>'; });
+  for(let k = 0; k < SETUP_T_SLOTS; k += 2) h2 += '<th colspan="2" class="t' + (k===0?' sep':'') + '">' + (SETUP_T0 + k/2) + '</th>';
+  SETUP_SOTO.forEach(function(x, i){ h2 += '<th class="ck' + (i===0?' sep':'') + '">' + x[0] + '</th>'; });
   h2 += '<th class="dn"></th>';
-  SETUP_ATO.forEach(function(x){ h2 += '<th class="ck2">' + x[0] + '</th>'; });
+  SETUP_ATO.forEach(function(x, i){ h2 += '<th class="ck2' + (i===0?' sep':'') + '">' + x[0] + '</th>'; });
   // ★そろわなかったもの欄は1行目で rowspan=2 にしてあるので、ここでは出さない（出すと列が1つ余分になって右端が潰れる）
 
   /* 凡例。brks に入れた位置の前で改行する（社長指示：⑤の前と⑩の前で折り返す） */
@@ -8905,7 +8906,8 @@ window.rtPrintSetupSheet = function(){
 + 'td.t.h{border-left:1px dotted #c9d0db;}'
 + 'td.t.h{border-left:1px dotted #c9d0db;}'
 + 'td.bd{background:#9bafd2!important;}'
-+ 'tbody td{font-size:12px;} .ln{font-size:10.5px;} .pt{font-size:11px;} .mm{font-size:8.5px;color:#999;}'
++ 'tbody td{font-size:12px;} .ln{font-size:10.5px;} .pt{font-size:11px;} .mm{font-size:8.5px;color:#111;}'
++ 'th.sep,td.sep{border-left:2px solid #44506a!important;}'   /* ブロックの仕切りを濃く */
 + 'col.sep{}'
 + 'td.ln{white-space:nowrap;overflow:hidden;}'
 + 'td.pt{word-break:break-all;line-height:1.15;}'   /* 長い品番は2行に折り返して切らさない */
@@ -8951,11 +8953,11 @@ window.rtPrintSetupSheet = function(){
 + '<th rowspan="2" class="no">No</th><th rowspan="2" class="ln">ライン</th>'
 + '<th rowspan="2" class="pt">次 の 品 番</th><th rowspan="2" style="width:40px">担当</th>'
 + '<th rowspan="2" class="tm">準備<br>開始</th>'
-+ '<th colspan="' + SETUP_T_SLOTS + '" class="g0">予 定 の 段 取 り 時 間</th>'
-+ '<th colspan="12" class="g1">外 段 取 り（止める前にそろえる）</th>'
-+ '<th rowspan="2" class="dn">準備<br>完了</th>'
-+ '<th colspan="4" class="g2">後 段 取 り</th>'
-+ '<th rowspan="2" class="mm">そろわなかったもの・待たされたこと<br><span style="font-weight:400;font-size:7.5px;color:#999;">（No.と、何を・何分待ったかを書く）</span></th>'
++ '<th colspan="' + SETUP_T_SLOTS + '" class="g0 sep">予 定 の 段 取 り 時 間</th>'
++ '<th colspan="12" class="g1 sep">外 段 取 り（止める前にそろえる）</th>'
++ '<th rowspan="2" class="dn sep">準備<br>完了</th>'
++ '<th colspan="4" class="g2 sep">後 段 取 り</th>'
++ '<th rowspan="2" class="mm sep">そろわなかったもの・待たされたこと<br><span style="font-weight:400;font-size:7.5px;color:#999;">（No.と、何を・何分待ったかを書く）</span></th>'
 + '</tr><tr>' + h2.replace('<th class="dn"></th>','') + '</tr></thead><tbody>' + body + '</tbody></table>'
 + '<div class="lg"><div class="cap c1">外 段 取 り（機械を止める前にそろえる）</div>' + leg(SETUP_SOTO, [4, 8])
 + '<div class="cap c2">後 段 取 り（流れ始めてから。ここをやらないと次の段取りが遅れる）</div>' + leg(SETUP_ATO) + '</div>'
@@ -12658,7 +12660,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.11-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.11-3';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -21880,7 +21882,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.11-2</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.11-3</div>
 </body>
 </html>
 
