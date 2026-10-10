@@ -42,6 +42,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.10-8 : (1)<b>自動割り振りで、段取りのある工程には必ず仲田さんか見原さんが1人入る</b>ようにした（社長指示）。2人のうちその日の受け持ちが少ないほうを選ぶので偏らない。2人とも出勤なし／他で埋まっているときは無理に入れず不足として出す。(2)配置表でも<b>品質か初品にチェックのある人の段取りバーを薄いピンク</b>にした。(3)カードの「⚠ 取付◯名不足」を<b>「⚠ 段取◯名不足」</b>に直した。 -->
 <!-- H-Hub v2026.10.10-7 : 段取り指示のカードを<b>すっきりさせた</b>（社長指示）。品質確認・初品出し・金型取付 の3行をやめ、<b>「段取」1行に横並び</b>で出す（作業者と同じ形）。<b>品質か初品にチェックのある人だけ、薄いピンクの背景と 品／初 の印</b>を付けて区別する。チェックの無い人は普通の色＝段取り作業者の誰かがやる、という意味。 -->
 <!-- H-Hub v2026.10.10-6 : 段取りの担当入力を<b>「段取り作業者」1か所にまとめた</b>（社長指示）。これまで 品質確認・初品出し・金型取付 の3か所に同じ名前を入れていた。段取り作業者を選ぶと、その人ごとに<b>「品質」「初品」のチェック</b>が出る。チェックが無ければ<b>段取り作業者の誰かがやる</b>という意味（1人ならその人）。★<b>保存のしかたは今までどおり</b>：金型取付＝段取り作業者全員／品質確認・初品出し＝チェックした人、として裏の3つに書く。そのため<b>自動割り振り・人数不足チェック・過去日の表示・配置表は手を入れていない</b>。既存データを開くと、3つの名前を合わせて段取り作業者に組み立て直し、チェックも復元する。 -->
 <!-- H-Hub v2026.10.10-5 : 配置表で、<b>段取り開始時刻が空のときに担当者のバーが出なかった</b>のを直した（社長指摘：段取りに仲田さんの名前が入っているのに配置表に出てこない）。段取りバーは「段取り開始〜生産開始」に描くため、開始時刻が空だと描く場所が決まらず、担当を入れても何も出ていなかった。開始時刻が空でも、<b>生産開始から標準段取り時間を引いて仮の帯</b>を出すようにした。仮のものは<b>点線＋役割のうしろに「?」</b>を付けて区別する。押せばその場で時刻を入れられる。 -->
@@ -720,6 +721,8 @@ html, body {
 .rt-block.rt-setup-est{border:1px dashed #b45309!important;opacity:.78;}
 /* 段取りの担当で、品質か初品にチェックのある人（2026-10-10 社長指示） */
 .ptag.ptag-setup-mark{background:#fde8ef!important;border-color:#f3b6cc!important;color:#9d174d!important;}
+/* 配置表：品質か初品にチェックのある人の段取りバー（2026-10-10 社長指示） */
+.rt-block.rt-setup-qi{background-color:#fbd5e4!important;border-color:#e38bb0!important;}
 .kc-setup{padding:0 2px;}
 .kc-setup-mark{background:#fde8ef;color:#9d174d;border:1px solid #f3b6cc;border-radius:3px;padding:0 4px;}
 .kc-mk{margin-left:3px;font-size:8.5px;font-weight:700;color:#be185d;background:#fff;border-radius:2px;padding:0 2px;}
@@ -7843,7 +7846,7 @@ function renderKanbanCard(d){
   const mountNeed = (!d.noSetup && ninzu_ != null) ? ninzu_ : 0;
   const mountShortage = (mountNeed > 0 && assignedMount < mountNeed) ? mountNeed - assignedMount : 0;
   const mountShortageHtml = mountShortage > 0
-    ? `<span style="color:#dc2626;font-weight:700;">⚠ 取付${mountShortage}名不足</span>` : '';
+    ? `<span style="color:#dc2626;font-weight:700;">⚠ 段取${mountShortage}名不足</span>` : '';
   // noSetupで作業者未設定
   const noSetupUnset = d.noSetup && worker__ > 0 && assignedWorkers.length === 0;
   const kataHtml = d.noSetup
@@ -9075,7 +9078,7 @@ function renderPressTimeline(allEntries){
         // 段取り担当（品質/初品/取付）: 段取り時間帯のみ（setupStart〜prodStart）
         if(sm !== null && ps !== null && ps > sm){
           const sx = rt_toX(sm), sw = Math.max(rt_toX(ps) - sx, 8);
-          pushBar(sx, sw, top => `<div class="rt-block rt-setup" style="left:${sx}px;top:${top}px;width:${sw}px;background:${color};" title="${tip}" onclick="rtOpenEntryEdit('${eid}',event)">${setupBarInner}</div>`);
+          pushBar(sx, sw, top => `<div class="rt-block rt-setup${(isQuality||isIppin)?' rt-setup-qi':''}" style="left:${sx}px;top:${top}px;width:${sw}px;background:${color};" title="${tip}" onclick="rtOpenEntryEdit('${eid}',event)">${setupBarInner}</div>`);
         } else if(sm !== null && ps === null){
           const sx = rt_toX(sm), sw = 60 * RT_PPM;
           pushBar(sx, sw, top => `<div class="rt-block rt-setup" style="left:${sx}px;top:${top}px;width:${sw}px;background:${color};" title="${tip}" onclick="rtOpenEntryEdit('${eid}',event)">段取中</div>`);
@@ -9088,7 +9091,7 @@ function renderPressTimeline(allEntries){
             const est = ps - _std;
             const sx = rt_toX(est), sw = Math.max(rt_toX(ps) - sx, 8);
             const tip2 = `${tip}　※段取り開始時刻が未入力。標準${_std}分で仮に表示しています`;
-            pushBar(sx, sw, top => `<div class="rt-block rt-setup rt-setup-est" style="left:${sx}px;top:${top}px;width:${sw}px;background:${color};" title="${tip2}" onclick="rtOpenEntryEdit('${eid}',event)">${setupBarInner}?</div>`);
+            pushBar(sx, sw, top => `<div class="rt-block rt-setup rt-setup-est${(isQuality||isIppin)?' rt-setup-qi':''}" style="left:${sx}px;top:${top}px;width:${sw}px;background:${color};" title="${tip2}" onclick="rtOpenEntryEdit('${eid}',event)">${setupBarInner}?</div>`);
           }
         }
       }
@@ -9628,6 +9631,24 @@ async function autoAssignRoles(){
     return;
   }
 
+  const SETUP_LEADER_KEYS = ['仲田', '見原'];     // 段取りに必ず1人入る人（姓で照合）
+  const _leaderCount = {};                       // その日の受け持ち数（バランス用）
+  const _isLeader = nm => SETUP_LEADER_KEYS.some(k => String(nm||'').indexOf(k) === 0);
+  function ensureSetupLeader(list, s2, e2, need){
+    list = list || [];
+    const already = list.find(_isLeader);
+    if(already){ _leaderCount[already] = (_leaderCount[already] || 0) + 1; return list; }
+    const cand = (typeof allPressWorkers !== 'undefined' ? allPressWorkers : [])
+      .filter(_isLeader)
+      .filter(w => !isUnavailableAt(w, s2, e2) && !isBusy(w, s2, e2))
+      .sort((a, b) => (_leaderCount[a] || 0) - (_leaderCount[b] || 0));
+    if(!cand.length) return list;                // 2人とも無理ならそのまま
+    const pick = cand[0];
+    _leaderCount[pick] = (_leaderCount[pick] || 0) + 1;
+    if(need > 0 && list.length >= need) list = list.slice(0, Math.max(0, need - 1));
+    return [pick].concat(list);
+  }
+
   const toMin = t => { if(!t)return null; const [h,m]=t.split(':').map(Number); return isNaN(h)?null:h*60+m; };
   const fmtMin = m => { const h=Math.floor(m/60); return `${String(h).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; };
 
@@ -9971,11 +9992,15 @@ async function autoAssignRoles(){
         }
       }
 
-      // ③ 金型取付（段取り専任: setupStart〜prodStart の間のみbusy）
+      /* ★2026-10-10 社長指示：段取りのある工程には、仲田さんか見原さんのどちらかが必ず入るようにする。
+     2人のうち、その日ここまでの受け持ちが少ないほうを選ぶ（偏らないように）。
+     2人とも出勤していない／他で埋まっているときは、無理に入れずそのまま（不足として出る）。 */
+  // ③ 金型取付（段取り専任: setupStart〜prodStart の間のみbusy）
       // 品質確認・初品出しと同じ人でもOK / ライン外(noLine)は除く
       const mountEnd = (ps && ps > s) ? ps : s + 1; // 段取り終了 = 生産開始
       const thisEntryAssigned = [qual, ippin].filter(Boolean);
       mountAvail = findMountWorkers(entry.lineId, thisEntryAssigned, s, mountEnd, entry.mountCount||0);
+      mountAvail = ensureSetupLeader(mountAvail, s, mountEnd, entry.mountCount||0);   // ★仲田か見原を必ず1人
       if(mountAvail.length){
         roles.金型取付 = mountAvail.join('、');
         // 金型取付はsetupStart〜prodStart(段取りフェーズ)だけbusy
@@ -12499,7 +12524,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.10-7';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.10-8';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -21721,7 +21746,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.10-7</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.10-8</div>
 </body>
 </html>
 
