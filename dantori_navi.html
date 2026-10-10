@@ -8593,6 +8593,7 @@ function _stripPrintMedia(css){
 const SETUP_LEAD_MIN = 30;     // 準備開始＝段取り開始の何分前か
 const SETUP_SHEET_ROWS = 16;   // 用紙に載る行数
 const SETUP_T0 = 8, SETUP_T_SLOTS = 18;   // 8:00から30分きざみで18コマ（17:00まで）
+const SETUP_LINE_RE = /^[ABC]/i;          // 対象はAライン〜Cラインだけ（永丘などは出さない。社長指示 2026-10-10）
 
 const SETUP_SOTO = [
   ['①','次の金型','置場から出した／前回の不具合は改善(改修)されている'],
@@ -8622,6 +8623,7 @@ function _ssRows(){
   const out = [];
   (dantoriSchedule || []).forEach(function(d){
     if(d.noSetup) return;
+    if(!SETUP_LINE_RE.test(String(d.lineId || ''))) return;   // A〜Cライン以外は出さない
     let s = rt_toMin(d.setupStart), p = rt_toMin(d.prodStart);
     const std = parseInt(d.stdSetupMin, 10) || 0;
     if(s === null && p !== null && std) s = p - std;     // 段取り開始が空なら生産開始から逆算
@@ -8696,15 +8698,17 @@ window.rtPrintSetupSheet = function(){
 + '.hd .stamp{margin-left:auto;font-size:9px;color:#999;}'
 + '.note{font-size:9.5px;color:#555;line-height:1.5;margin-bottom:5px;}'
 + 'table{border-collapse:collapse;width:100%;table-layout:fixed;}'
-+ 'th,td{border:1px solid #9aa3b2;font-size:9px;text-align:center;padding:0;height:19px;}'
++ 'th,td{border:1px solid #9aa3b2;font-size:9px;text-align:center;padding:0;height:17px;}'
++ 'tbody td{height:31px;}'
++ 'tbody td.tm{vertical-align:top;padding-top:2px;}'
 + 'thead th{background:#dde6f2;font-weight:700;}'
 + 'th.g1{background:#e4efdc;} th.g2{background:#dce7f5;} th.g0{background:#eaf0f8;}'
 + 'tbody tr:nth-child(even) td{background:#f7f9fc;}'
-+ 'td.ck,th.ck{width:15px;} td.ck2,th.ck2{width:15px;} td.t,th.t{width:11px;}'
++ 'td.ck,th.ck{width:11px;} td.ck2,th.ck2{width:11px;} td.t,th.t{width:7.5px;}'
 + 'td.t.h{border-left:1px dotted #c9d0db;}'
 + 'td.bd{background:#9bafd2!important;}'
-+ '.no{width:17px;} .ln{width:40px;font-size:8.5px;} .pt{width:95px;font-size:9px;}'
-+ '.tm{width:32px;} .dn{width:34px;} .mm{width:150px;font-size:8px;color:#999;}'
++ '.no{width:18px;} .ln{width:46px;font-size:9px;} .pt{width:115px;font-size:9.5px;}'
++ '.tm{width:38px;} .dn{width:38px;} .mm{width:175px;font-size:8px;color:#999;}'
 + 'col.sep{}'
 + 'td.ln,td.pt{white-space:nowrap;overflow:hidden;}'
 + '.lg{margin-top:5px;font-size:8.5px;line-height:1.6;}'
@@ -8720,7 +8724,6 @@ window.rtPrintSetupSheet = function(){
 + '<span style="font-size:11px;color:#888;margin-left:8px;">A4横1枚。用紙サイズ A4・横、倍率100でそのまま出ます。</span></div>'
 + '<div class="hd"><span class="ttl">当日の段取り計画 ＆ 準備チェック表</span>'
 + '<span class="box"><b>日付</b>' + dateStr + '</span>'
-+ '<span class="box"><b>記入者</b>　　　　　　</span>'
 + '<span class="stamp">印刷 ' + stamp + '</span></div>'
 + '<div class="note">※ 帯＝機械を止めている時間（内段取り）。<b>準備開始</b>＝外段取りを始める予定時刻（帯の左端の' + SETUP_LEAD_MIN + '分前）。帯が縦に重なっている時間帯は、リフト待ち・人の取り合いが起きます。<br>'
 + '※ ①〜⑫は前の品番が流れている間にそろえ、そろったら ✓。そろわないものが出たら、すぐ H-Hub の「呼ぶ」で呼ぶこと（自分で探しに行かない）。❶〜❹は流れ始めてから。</div>'
