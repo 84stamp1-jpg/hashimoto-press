@@ -42,6 +42,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.10-7 : 段取り指示のカードを<b>すっきりさせた</b>（社長指示）。品質確認・初品出し・金型取付 の3行をやめ、<b>「段取」1行に横並び</b>で出す（作業者と同じ形）。<b>品質か初品にチェックのある人だけ、薄いピンクの背景と 品／初 の印</b>を付けて区別する。チェックの無い人は普通の色＝段取り作業者の誰かがやる、という意味。 -->
 <!-- H-Hub v2026.10.10-6 : 段取りの担当入力を<b>「段取り作業者」1か所にまとめた</b>（社長指示）。これまで 品質確認・初品出し・金型取付 の3か所に同じ名前を入れていた。段取り作業者を選ぶと、その人ごとに<b>「品質」「初品」のチェック</b>が出る。チェックが無ければ<b>段取り作業者の誰かがやる</b>という意味（1人ならその人）。★<b>保存のしかたは今までどおり</b>：金型取付＝段取り作業者全員／品質確認・初品出し＝チェックした人、として裏の3つに書く。そのため<b>自動割り振り・人数不足チェック・過去日の表示・配置表は手を入れていない</b>。既存データを開くと、3つの名前を合わせて段取り作業者に組み立て直し、チェックも復元する。 -->
 <!-- H-Hub v2026.10.10-5 : 配置表で、<b>段取り開始時刻が空のときに担当者のバーが出なかった</b>のを直した（社長指摘：段取りに仲田さんの名前が入っているのに配置表に出てこない）。段取りバーは「段取り開始〜生産開始」に描くため、開始時刻が空だと描く場所が決まらず、担当を入れても何も出ていなかった。開始時刻が空でも、<b>生産開始から標準段取り時間を引いて仮の帯</b>を出すようにした。仮のものは<b>点線＋役割のうしろに「?」</b>を付けて区別する。押せばその場で時刻を入れられる。 -->
 <!-- H-Hub v2026.10.10-4 : カメラタブを<b>元の相対リンクに戻した</b>（社長指示）。社内アドレス固定にしたら<b>社外では何も開かなくなり</b>、壊れたのか社内専用なのか分からなかったため。カメラ一覧ページ側に、<b>社外から開いたときの案内</b>（理由と「社内のカメラ画面を開く」ボタン、社外ならTapoアプリ）を出すようにしたので、どちらで開いても迷わない。 -->
@@ -717,6 +718,9 @@ html, body {
 .rt-block{position:absolute;top:5px;height:25px;border-radius:3px;display:flex;align-items:center;padding:0 5px;font-size:12px;font-weight:700;color:#111;overflow:hidden;white-space:nowrap;cursor:pointer;min-width:4px;box-shadow:0 1px 3px rgba(0,0,0,.18);
   background-image:linear-gradient(rgba(255,255,255,.62),rgba(255,255,255,.62))!important;}
 .rt-block.rt-setup-est{border:1px dashed #b45309!important;opacity:.78;}
+/* 段取りの担当で、品質か初品にチェックのある人（2026-10-10 社長指示） */
+.ptag.ptag-setup-mark{background:#fde8ef!important;border-color:#f3b6cc!important;color:#9d174d!important;}
+.ptag .ptag-mk{margin-left:4px;font-size:9px;font-weight:700;color:#be185d;background:#fff;border-radius:3px;padding:0 3px;}
 .rt-block.rt-setup{background-color:#fef9c3!important;color:#111!important;border:1px solid #d9a441!important;box-shadow:0 1px 2px rgba(0,0,0,.1)!important;background-image:repeating-linear-gradient(135deg,rgba(0,0,0,.06) 0,rgba(0,0,0,.06) 3px,transparent 3px,transparent 7px)!important;}
 .rt-overlay{position:absolute;top:0;left:110px;bottom:0;pointer-events:none;overflow:hidden;}
 .rt-break-band{position:absolute;top:0;bottom:0;background:rgba(0,0,0,.07);}
@@ -6430,15 +6434,27 @@ function renderDantoriCard(d){
   const hasRoles = roles.金型取付 || roles.初品出し || roles.品質確認 || roles.作業者;
   const toTags = str => (str||'').split(/[,、]/).map(p=>p.trim()).filter(Boolean)
     .map(p=>`<span class="ptag">${p}</span>`).join('');
+  /* ★2026-10-10 社長指示：品質確認・初品出し・金型取付をまとめて「段取」1行にする。
+     品質か初品にチェックのある人だけ、薄いピンクの背景と 品/初 の印を付けて区別する。 */
+  const setupTags = (r) => {
+    const sp = v => String(v||'').split(/[,、]/).map(x=>x.trim()).filter(Boolean);
+    const mount = sp(r.金型取付), qual = sp(r.品質確認), ippin = sp(r.初品出し);
+    const names = [];
+    mount.concat(qual, ippin).forEach(nm => { if(names.indexOf(nm) < 0) names.push(nm); });
+    if(!names.length) return unset;
+    return names.map(nm => {
+      const q = qual.indexOf(nm) >= 0, i = ippin.indexOf(nm) >= 0;
+      const mk = [q?'品':'', i?'初':''].filter(Boolean).join('·');
+      return `<span class="ptag${(q||i)?' ptag-setup-mark':''}">${nm}${mk?`<span class="ptag-mk">${mk}</span>`:''}</span>`;
+    }).join('');
+  };
   // プレスラインのエントリかどうか（作業者行を表示するか判定）
   const isPressEntry = !!PRESS_LINE_MASTER[d.lineId];
   const unset = `<span class="ptag ptag-unset">未割当</span>`;
   // noSetup時は作業者のみ表示（品質確認・初品出し・金型取付は段取り不要のため非表示）
   const rolesHtml = (hasRoles || d.fromPlan || isPressEntry) ? `
     <div class="dc-roles">
-      ${(!d.noSetup&&(roles.品質確認||isPressEntry))?`<div class="role-row"><div class="role-label">品質確認</div><div class="person-tags">${roles.品質確認?toTags(roles.品質確認):unset}</div></div>`:''}
-      ${(!d.noSetup&&(roles.初品出し||isPressEntry))?`<div class="role-row"><div class="role-label">初品出し</div><div class="person-tags">${roles.初品出し?toTags(roles.初品出し):'<span style="color:#94a3b8;font-size:11px;">—</span>'}</div></div>`:''}
-      ${(!d.noSetup&&(roles.金型取付||isPressEntry))?`<div class="role-row"><div class="role-label" title="段取り専任">金型取付</div><div class="person-tags">${roles.金型取付?toTags(roles.金型取付):unset}</div></div>`:''}
+      ${(!d.noSetup&&(roles.金型取付||roles.品質確認||roles.初品出し||isPressEntry))?`<div class="role-row"><div class="role-label" title="段取り（品質・初品にチェックのある人は色が付きます）">段取</div><div class="person-tags">${setupTags(roles)}</div></div>`:''}
       ${(roles.作業者||isPressEntry)?`<div class="role-row"><div class="role-label" title="生産担当">作業者</div><div class="person-tags">${roles.作業者?toTags(roles.作業者):unset}</div></div>`:''}
     </div>`
   : '';
@@ -12466,7 +12482,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.10-6';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.10-7';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -21688,7 +21704,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.10-6</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.10-7</div>
 </body>
 </html>
 
