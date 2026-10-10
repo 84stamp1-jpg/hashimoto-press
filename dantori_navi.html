@@ -42,6 +42,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.11-1 : (1)準備チェック表の<b>担当欄に、割り振られている段取り担当を上段に出す</b>ようにした（社長指示）。下の空きに実際の担当を書き足せる。(2)<b>ライン別の優先</b>：Bラインは仲田さん、A・Cラインは見原さん。優先のほうが時間で埋まっていればもう一方を入れる。取り込み時の先入れと自動割り振りの両方に効く。(3)<b>段取り開始時刻が無い工程</b>は、同じラインで先に終わる作業の終了時刻から段取りを始められるものとして推定する（そのラインに先の作業が無ければ始業から）。遅くとも「生産開始−標準時間」までには始める前提で、早いほうを採る。推定したものは品番の下に<b>（予想）</b>と出す。 -->
 <!-- H-Hub v2026.10.10-10 : <b>仲田さん・見原さんを、予定の取り込みと同時に段取りへ入れる</b>ようにした（社長指示：2人は作業に就かないので、自動割り振りを待たずに先に決めたい）。「今すぐ同期」「段取り計画だけ作る」「自動同期」のどの取り込みでも効く。段取りのある工程を時間の早い順に見て、<b>2人の受け持ちが少ないほう</b>を入れ、同じ人の段取りが<b>時間で重ならない</b>ようにする。すでにどちらかが入っている工程はそのまま、他の人の名前も消さない。2人とも重なってしまう工程は空けておく（自動割り振りか手で埋める）。 -->
 <!-- H-Hub v2026.10.10-9 : (1)<b>伊藤をマスタから外した</b>（社長指摘：作業者マスタにいないのに出てくる）。コードの中の WORKER_MASTER と PRESS_LINE_MASTER の A1 に名前が残っていて、自動割り振りがA1の金型取付候補として使っていた。取り込んだ予定表が原因ではない。※すでに保存済みの計画に入っている「伊藤」は残るので、その日は自動割り振りをやり直すか手で直す。(2)<b>段取り作業者が「段取り人数」より多いときは標準時間を縮める</b>ようにした（例：B1 計画1人＝26分 → 2人入れたら 6+20÷2＝16分）。少ないときは縮めない。 -->
 <!-- H-Hub v2026.10.10-8 : (1)<b>自動割り振りで、段取りのある工程には必ず仲田さんか見原さんが1人入る</b>ようにした（社長指示）。2人のうちその日の受け持ちが少ないほうを選ぶので偏らない。2人とも出勤なし／他で埋まっているときは無理に入れず不足として出す。(2)配置表でも<b>品質か初品にチェックのある人の段取りバーを薄いピンク</b>にした。(3)カードの「⚠ 取付◯名不足」を<b>「⚠ 段取◯名不足」</b>に直した。 -->
@@ -8762,18 +8763,43 @@ const SETUP_ATO = [
 
 function _ssHHMM(m){ return String(Math.floor(m/60)) + ':' + String(m%60).padStart(2,'0'); }
 
+/* 段取り開始時刻が入っていない工程の「いつから段取りを始められるか」（2026-10-11 社長指示）
+   同じラインで先に終わる工程があれば、その終了時刻から始められる。
+   そのラインに先の作業が無ければ、始業（8:00）から始められる。 */
+function _ssEarliestStart(d, all){
+  const p = rt_toMin(d.prodStart);
+  let prevEnd = null;
+  (all || []).forEach(function(o){
+    if(o === d || o.lineId !== d.lineId) return;
+    const oe = rt_toMin(o.prodEnd);
+    if(oe === null || (p !== null && oe > p)) return;        // その工程より後に終わるものは関係ない
+    if(prevEnd === null || oe > prevEnd) prevEnd = oe;       // いちばん遅く終わる「前の作業」
+  });
+  return (prevEnd !== null) ? prevEnd : SETUP_T0 * 60;       // 前の作業が無ければ始業から
+}
+
 // その日の段取り（段取りなしの行は除く）を時間の早い順に
 function _ssRows(){
   const out = [];
-  (dantoriSchedule || []).forEach(function(d){
+  const all = (dantoriSchedule || []);
+  all.forEach(function(d){
     if(d.noSetup) return;
     if(!SETUP_LINE_RE.test(String(d.lineId || ''))) return;   // A〜Cライン以外は出さない
     let s = rt_toMin(d.setupStart), p = rt_toMin(d.prodStart);
     const std = parseInt(d.stdSetupMin, 10) || 0;
-    if(s === null && p !== null && std) s = p - std;     // 段取り開始が空なら生産開始から逆算
+    let est = false;
+    if(s === null){
+      est = true;
+      const early = _ssEarliestStart(d, all);                 // 前の作業が終わった時刻
+      const latest = (p !== null && std) ? p - std : null;    // 遅くともここまでに始める
+      s = (latest !== null) ? Math.min(early, latest) : early;
+    }
     if(s === null && p === null) return;
     if(p === null) p = s + (std || 30);
-    out.push({ line:getLineDisplayName(d.lineId), part:d.partNo || '', s:s, p:p, std:std });
+    const mount = String((d.roles || {}).金型取付 || '')
+      .split(/[,、]/).map(x => x.trim()).filter(Boolean);
+    out.push({ line:getLineDisplayName(d.lineId), part:d.partNo || '',
+               s:s, p:p, std:std, est:est, mount:mount });
   });
   out.sort(function(a,b){ return a.s - b.s || String(a.line).localeCompare(b.line); });
   return out;
@@ -8797,7 +8823,9 @@ window.rtPrintSetupSheet = function(){
       const lead = r.s - SETUP_LEAD_MIN;
       tds += '<td class="ln">' + esc(r.line) + '</td>'
            + '<td class="pt">' + esc(r.part)
-           + '<div class="sub">段取り ' + _ssHHMM(r.s) + '→' + _ssHHMM(r.p) + '</div></td><td></td>'
+           + '<div class="sub">段取り ' + _ssHHMM(r.s) + '→' + _ssHHMM(r.p)
+           + (r.est ? '<span class="est">（予想）</span>' : '') + '</div></td>'
+           + '<td class="tn">' + (r.mount.length ? esc(r.mount.join('／')) : '') + '</td>'
            + '<td class="tm">' + (lead < SETUP_T0*60 ? '前日' : _ssHHMM(lead)) + '</td>';
     }else{
       tds += '<td></td><td></td><td></td><td></td>';
@@ -8852,7 +8880,9 @@ window.rtPrintSetupSheet = function(){
 + 'table{border-collapse:collapse;width:100%;table-layout:fixed;}'
 + 'th,td{border:1px solid #9aa3b2;font-size:10.5px;text-align:center;padding:0;height:19px;}'
 + 'tbody td{height:44px;}'      /* A4横の下いっぱいまで使う（12行で残り余白ゼロ） */
-+ 'tbody td.tm{vertical-align:top;padding-top:2px;}'
++ 'tbody td.tm,tbody td.tn{vertical-align:top;padding-top:2px;}'   /* 上に予定、下の空きに実際を書く */
++ 'td.tn{font-size:9px;color:#1f2937;line-height:1.2;}'
++ 'td.pt .est{color:#b45309;font-weight:700;margin-left:2px;}'
 + 'thead th{background:#dde6f2;font-weight:700;}'
 + 'th.g1{background:#e4efdc;} th.g2{background:#dce7f5;} th.g0{background:#eaf0f8;}'
 + 'tbody tr:nth-child(even) td{background:#f7f9fc;}'
@@ -9605,6 +9635,15 @@ function _mergePlanEntries(entries, existing, dateStr, scopeLineIds, protectAssi
    ・同じ人の段取りが時間で重ならないようにする
    ・すでにどちらかが入っている工程はそのまま。他の人の名前も消さない
    ・2人とも時間が重なってしまう工程は空けておく（自動割り振り／手で埋める） */
+/* ライン別の優先（2026-10-11 社長指示）：Bラインは仲田さん、A・Cラインは見原さん。
+   優先のほうが埋まっていれば、もう一方を入れる。 */
+function _leaderPrefKey(lineId){
+  const id = String(lineId || '');
+  if(/^B/i.test(id)) return '仲田';
+  if(/^[AC]/i.test(id)) return '見原';
+  return null;
+}
+
 function _preassignSetupLeaders(data){
   const KEYS = ['仲田', '見原'];
   let leaders = [];
@@ -9635,8 +9674,15 @@ function _preassignSetupLeaders(data){
       .split(/[,、]/).map(x => x.trim()).filter(Boolean);
     const already = cur.find(w => leaders.indexOf(w) >= 0);
     if(already){ busy[already].push({ s:j.s, e:j.e }); cnt[already]++; return; }
+    const pref = _leaderPrefKey(j.v.lineId);
     const cand = leaders.filter(nm => !overlaps(nm, j.s, j.e))
-                        .sort(function(a, b){ return cnt[a] - cnt[b]; });
+      .sort(function(a, b){
+        if(pref){                                   // ★ラインの優先が先、同じなら受け持ちが少ないほう
+          const pa = (a.indexOf(pref) === 0) ? 0 : 1, pb = (b.indexOf(pref) === 0) ? 0 : 1;
+          if(pa !== pb) return pa - pb;
+        }
+        return cnt[a] - cnt[b];
+      });
     if(!cand.length) return;
     const pick = cand[0];
     cnt[pick]++; busy[pick].push({ s:j.s, e:j.e });
@@ -9699,14 +9745,21 @@ async function autoAssignRoles(){
   const SETUP_LEADER_KEYS = ['仲田', '見原'];     // 段取りに必ず1人入る人（姓で照合）
   const _leaderCount = {};                       // その日の受け持ち数（バランス用）
   const _isLeader = nm => SETUP_LEADER_KEYS.some(k => String(nm||'').indexOf(k) === 0);
-  function ensureSetupLeader(list, s2, e2, need){
+  function ensureSetupLeader(list, s2, e2, need, lineId){
     list = list || [];
     const already = list.find(_isLeader);
     if(already){ _leaderCount[already] = (_leaderCount[already] || 0) + 1; return list; }
     const cand = (typeof allPressWorkers !== 'undefined' ? allPressWorkers : [])
       .filter(_isLeader)
       .filter(w => !isUnavailableAt(w, s2, e2) && !isBusy(w, s2, e2))
-      .sort((a, b) => (_leaderCount[a] || 0) - (_leaderCount[b] || 0));
+      .sort((a, b) => {
+        const pref = (typeof _leaderPrefKey === 'function') ? _leaderPrefKey(lineId) : null;
+        if(pref){
+          const pa = (a.indexOf(pref) === 0) ? 0 : 1, pb = (b.indexOf(pref) === 0) ? 0 : 1;
+          if(pa !== pb) return pa - pb;
+        }
+        return (_leaderCount[a] || 0) - (_leaderCount[b] || 0);
+      });
     if(!cand.length) return list;                // 2人とも無理ならそのまま
     const pick = cand[0];
     _leaderCount[pick] = (_leaderCount[pick] || 0) + 1;
@@ -10065,7 +10118,7 @@ async function autoAssignRoles(){
       const mountEnd = (ps && ps > s) ? ps : s + 1; // 段取り終了 = 生産開始
       const thisEntryAssigned = [qual, ippin].filter(Boolean);
       mountAvail = findMountWorkers(entry.lineId, thisEntryAssigned, s, mountEnd, entry.mountCount||0);
-      mountAvail = ensureSetupLeader(mountAvail, s, mountEnd, entry.mountCount||0);   // ★仲田か見原を必ず1人
+      mountAvail = ensureSetupLeader(mountAvail, s, mountEnd, entry.mountCount||0, entry.lineId);   // ★仲田か見原を必ず1人（ライン優先）
       if(mountAvail.length){
         roles.金型取付 = mountAvail.join('、');
         // 金型取付はsetupStart〜prodStart(段取りフェーズ)だけbusy
@@ -12589,7 +12642,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.10-10';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.11-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -21811,7 +21864,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.10-10</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.11-1</div>
 </body>
 </html>
 
