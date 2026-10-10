@@ -8655,7 +8655,8 @@ window.rtPrintSetupSheet = function(){
     if(r){
       const lead = r.s - SETUP_LEAD_MIN;
       tds += '<td class="ln">' + esc(r.line) + '</td>'
-           + '<td class="pt">' + esc(r.part) + '</td><td></td>'
+           + '<td class="pt">' + esc(r.part)
+           + '<div class="sub">段取り ' + _ssHHMM(r.s) + '→' + _ssHHMM(r.p) + '</div></td><td></td>'
            + '<td class="tm">' + (lead < SETUP_T0*60 ? '前日' : _ssHHMM(lead)) + '</td>';
     }else{
       tds += '<td></td><td></td><td></td><td></td>';
@@ -8721,6 +8722,7 @@ window.rtPrintSetupSheet = function(){
 + 'col.sep{}'
 + 'td.ln{white-space:nowrap;overflow:hidden;}'
 + 'td.pt{word-break:break-all;line-height:1.15;}'   /* 長い品番は2行に折り返して切らさない */
++ 'td.pt .sub{font-size:8.5px;color:#475569;font-weight:400;margin-top:2px;white-space:nowrap;}'
 + '.lg{margin-top:4px;font-size:9px;line-height:1.42;}'
 + '.lg .cap{font-weight:700;font-size:9px;padding:0 6px;margin-top:2px;}'
 + '.lg .c1{background:#e4efdc;} .lg .c2{background:#dce7f5;}'
@@ -8737,7 +8739,7 @@ window.rtPrintSetupSheet = function(){
 + '<div class="hd"><span class="ttl">当日の段取り計画 ＆ 準備チェック表</span>'
 + '<span class="box"><b>日付</b>' + dateStr + '</span>'
 + '<span class="stamp">印刷 ' + stamp + '</span></div>'
-+ '<div class="note">※ 帯＝機械を止めている時間（内段取り）。<b>準備開始</b>＝外段取りを始める予定時刻（帯の左端の' + SETUP_LEAD_MIN + '分前）。帯が縦に重なっている時間帯は、リフト待ち・人の取り合いが起きます。<br>'
++ '<div class="note">※ 帯＝機械を止めている時間（内段取り）。<b>準備開始</b>＝<b>段取り開始</b>の' + SETUP_LEAD_MIN + '分前（生産開始ではありません。段取りの時刻は品番の下に書いてあります）。帯が縦に重なっている時間帯は、リフト待ち・人の取り合いが起きます。<br>'
 + '※ ①〜⑫は前の品番が流れている間にそろえ、そろったら ✓。そろわないものが出たら、すぐ H-Hub の「呼ぶ」で呼ぶこと（自分で探しに行かない）。❶〜❹は流れ始めてから。</div>'
 + '<table>' + (function(){
     /* ★列幅はここで決める。colspanの見出しがあるので th/td の width は効かない（2026-10-10）。
