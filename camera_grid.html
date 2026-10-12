@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!--
   camera_grid.html — 工場カメラ一覧表示(HHub)
-  v2026.10.10-2
+  v2026.10.12-1
   v2026.10.03-1: App Check を仕込んだ（社長指示：外から読めなくする／第2段階）。ページを開くと Google が「本物のブラウザから開かれた本物のページ」という証明書を出し、Firebase はそれが付いた通信だけを受ける。現場には何も見えない（パズルは出ない）。Firebase側はまだ「監視のみ」なので動きは変わらない。サイトキーは公開前提のキーで、秘密の鍵はFirebase側にしか無い。
   仕様書: docs/camera_system_spec.md (Phase 2)
   構成: Tapoカメラ(RTSP) → 中継サーバーPC(go2rtc) → 本ページ(iframe/WebRTC)
@@ -103,7 +103,7 @@
 <header>
   <div>
     <div class="logo-main">HASHIMOTO KOGYO</div>
-    <div class="logo-sub">工場カメラ一覧 <span class="ver">v2026.10.10-2</span></div>
+    <div class="logo-sub">工場カメラ一覧 <span class="ver">v2026.10.12-1</span></div>
   </div>
   <div class="spacer"></div>
   <span id="fbStatus" class="fb-status">● Firebase未接続</span>
@@ -263,7 +263,10 @@ window.setLayout = (l) => { config.layout = l; localStorage.setItem(CFG_KEY, JSO
    黙って黒いと「壊れた」のか「社内専用」なのか分からないため、理由と行き先をはっきり出す。 */
 function checkMixedContent(){
   const bar = document.getElementById('warnBar');
-  if(location.protocol === 'https:' && config.serverUrl.startsWith('http://')){
+  /* ★2026-10-12 社長指示：この案内は出さない。
+     https から開いても映像は実際に映っており（黒画面の原因はファイアウォールだった）、
+     黄色の帯が画面を狭めるだけになっていたため。戻すときは下の false を外す。 */
+  if(false && location.protocol === 'https:' && config.serverUrl.startsWith('http://')){
     // 中継PCのカメラ画面（映像が見えるほう）のアドレスを、設定のサーバーURLから作る
     const lan = config.serverUrl.replace(/:\d+\/?$/, ':8080') + '/camera_grid.html';
     bar.style.display = 'block';
