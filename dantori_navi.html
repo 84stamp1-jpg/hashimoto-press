@@ -42,6 +42,8 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.14-3 : <b>ボタンがまだ効かなかった</b>本当の原因（社長のコンソールに <code>Uncaught SyntaxError: Invalid or unexpected token  dantori_navi.html:1</code> が2つ）。このボタンのHTMLは<b>JSのテンプレート文字列の中</b>にある。v2026.10.14-1で onclick に直接JSを書いたとき、その中の <code>
+</code> が<b>画面に出る時点で本物の改行になり</b>、<code>alert(&#39;…</code> の文字列が途中で切れていた。属性に書いたJSの誤りは行番号が「:1」で出るだけで、どのボタンかも分からない。→ <b>属性には関数名だけ</b>書き（<code>rtPrintSetupSheetClick()</code>）、中身はスクリプト側に置いた。※テンプレート文字列の中の属性にJSを直接書かないこと。 -->
 <!-- H-Hub v2026.10.14-2 : <b>段取り準備チェック表のボタンが効かない</b>（社長報告）。原因は2つ。(1)<b>await をはさんでから window.open を呼んでいた</b>ため、ブラウザが「人が押した操作」と見なさず黙って窓を止めていた。警告も出ないので壊れたようにしか見えない。→<b>窓を先に開けて</b>「表を作っています…」を出し、できあがったら書き直す。(2)★の判定に使う moldQcRecords は <code>qcSharedRecords</code> の返事を待つだけの約束で、<b>返事が来ないと永久に片付かない</b>。→<b>待つのは3秒まで</b>。間に合わなければ★なしで表を出す（覚え込ませないので次に押せばまた取りに行く）。 -->
 <!-- H-Hub v2026.10.14-1 : 段取り開始が生産開始より<b>後ろ</b>になっている行への手当て（社長指摘）。18120-5Y3-TR/TOX が前の工程から続けて流れるので段取りが要らないのに「段取りなし」になっておらず、段取り開始に19:10が残っていた。準備チェック表では<b>帯が描けず空のまま・準備開始が18:40</b>という意味のない時刻になり、見ても誰も気づけなかった。(1)この形の行は帯を塗らず、品番の下に<b>⚠段取りなし？</b>、準備開始の欄に<b>⚠要確認</b>を赤で出す。(2)段取り計画の<b>保存時に一度止めて聞く</b>（続きの工程なら「段取りなし」にチェックを、そうでなければ時刻の入力違い）。データそのものは画面から直す。 -->
 <!-- H-Hub v2026.10.13-1 : 段取り準備チェック表に<b>終品チェックの時刻</b>を入れた（社長指示）。(1)「準備開始」の見出しを<b>「準備開始／終品チェック」</b>に変えた。段取り開始の30分前＝生産終了予定の30分前なので、<b>準備開始と終品チェックは同じ時刻になる</b>。列は増やしていない。(2)品番の横に<b>★</b>を出す。次の1ロットで定期メンテの目安を超える見込みの金型（判定は品番検索・朝礼と同じ moldShotStatus の red を使い回す。作り直していない）。(3)表の下に、終品で見る項目とトライ用（完成品10台分＋NG工程の工程サンプル）のメモを入れた。★なぜ終品を「終わってから」ではなく30分前に見るのか：生産が終わればすぐ段取りに入るので待たせると手待ちが出る。その場で改修もできない。改修ならトライ用サンプルが要るが、終えてからでは材料が残っていない（社長指摘）。 -->
@@ -8853,6 +8855,17 @@ function _ssMoldLevels(){
   return Promise.race([calc, new Promise(function(res){ setTimeout(function(){ res({}); }, 3000); })]);
 }
 
+/* ボタンはこれを呼ぶ（2026-10-14）。
+   ★このボタンのHTMLは<b>テンプレート文字列の中</b>にある。onclick に直接
+     JSを書くと、文字列の中の \n がHTMLに出るときに本物の改行になり、
+     '…' が途中で切れて SyntaxError（押しても何も起きない）。
+     属性には関数名だけ書き、中身はここに置くこと。 */
+window.rtPrintSetupSheetClick = function(){
+  Promise.resolve(window.rtPrintSetupSheet()).catch(function(e){
+    alert('段取り準備チェック表を作れませんでした。\n' + (e && e.message ? e.message : e));
+  });
+};
+
 window.rtPrintSetupSheet = async function(){
   /* ★窓は、押した流れのまま先に開けること（2026-10-14 社長報告「押しても反応しない」）。
      await をはさんだあとに window.open を呼ぶと、ブラウザは「人が押した操作」と
@@ -9365,7 +9378,7 @@ function renderPressTimeline(allEntries){
       <button onclick="rtToggleOverrideMode()" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid;border-radius:5px;cursor:pointer;white-space:nowrap;${ovrBtnStyle}">${_rtOverrideMode ? '✕ 優先ライン変更終了' : `📌 今日の優先ライン${ovrCount?'('+ovrCount+'件)':''}`}</button>
       <button onclick="rtToggleSwapMode()" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid;border-radius:5px;cursor:pointer;white-space:nowrap;${swapBtnStyle}">${_rtSwapMode ? '✕ 入れ替えモード終了' : '🔀 入れ替えモード'}</button>
       <button onclick="rtOpenSpotNew('',12*60,event)" title="予定に無い修正・検査などを入れます" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid #7c3aed;border-radius:5px;cursor:pointer;white-space:nowrap;background:#fff;color:#7c3aed;">＋ 突発作業</button>
-      <button onclick="Promise.resolve(rtPrintSetupSheet()).catch(function(e){alert('段取り準備チェック表を作れませんでした。\n'+(e&&e.message?e.message:e));})" title="その日の段取りが入った『段取り準備チェック表』を印刷します（A4横1枚）" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid #b45309;border-radius:5px;cursor:pointer;white-space:nowrap;background:#fffbeb;color:#b45309;">📋 段取り準備チェック表</button>
+      <button onclick="rtPrintSetupSheetClick()" title="その日の段取りが入った『段取り準備チェック表』を印刷します（A4横1枚）" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid #b45309;border-radius:5px;cursor:pointer;white-space:nowrap;background:#fffbeb;color:#b45309;">📋 段取り準備チェック表</button>
       <button onclick="rtPrintRoster()" title="表示中の日付の配置表を印刷します（A4横）" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid #cbd5e1;border-radius:5px;cursor:pointer;white-space:nowrap;background:#fff;color:#475569;">🖨 印刷</button>
     </div>
   </div>
@@ -12730,7 +12743,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.14-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.14-3';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -21952,7 +21965,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.14-2</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.14-3</div>
 </body>
 </html>
 
