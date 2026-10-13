@@ -42,6 +42,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.14-1 : 段取り開始が生産開始より<b>後ろ</b>になっている行への手当て（社長指摘）。18120-5Y3-TR/TOX が前の工程から続けて流れるので段取りが要らないのに「段取りなし」になっておらず、段取り開始に19:10が残っていた。準備チェック表では<b>帯が描けず空のまま・準備開始が18:40</b>という意味のない時刻になり、見ても誰も気づけなかった。(1)この形の行は帯を塗らず、品番の下に<b>⚠段取りなし？</b>、準備開始の欄に<b>⚠要確認</b>を赤で出す。(2)段取り計画の<b>保存時に一度止めて聞く</b>（続きの工程なら「段取りなし」にチェックを、そうでなければ時刻の入力違い）。データそのものは画面から直す。 -->
 <!-- H-Hub v2026.10.13-1 : 段取り準備チェック表に<b>終品チェックの時刻</b>を入れた（社長指示）。(1)「準備開始」の見出しを<b>「準備開始／終品チェック」</b>に変えた。段取り開始の30分前＝生産終了予定の30分前なので、<b>準備開始と終品チェックは同じ時刻になる</b>。列は増やしていない。(2)品番の横に<b>★</b>を出す。次の1ロットで定期メンテの目安を超える見込みの金型（判定は品番検索・朝礼と同じ moldShotStatus の red を使い回す。作り直していない）。(3)表の下に、終品で見る項目とトライ用（完成品10台分＋NG工程の工程サンプル）のメモを入れた。★なぜ終品を「終わってから」ではなく30分前に見るのか：生産が終わればすぐ段取りに入るので待たせると手待ちが出る。その場で改修もできない。改修ならトライ用サンプルが要るが、終えてからでは材料が残っていない（社長指摘）。 -->
 <!-- H-Hub v2026.10.11-3 : チェック表の<b>ブロックの仕切り線を濃く</b>した（社長指示）。「予定の段取り時間」「外段取り」「準備完了」「後段取り」「そろわなかったもの」のそれぞれ左側を太い線で区切る。あわせて<b>「そろわなかったもの・待たされたこと」の文字を黒</b>にした。 -->
 <!-- H-Hub v2026.10.11-2 : (1)<b>帯を実際の時刻どおりの幅で塗る</b>ようにした（社長指摘：70分の段取りが2時間に見える）。これまで30分のマス単位で、少しでもかかっていればマス全体を塗っていた。マスの中を部分的に塗るようにしたので、14:25〜15:35 はちょうどその幅で出る。(2)<b>8時より前は塗らない</b>（段取りできないため）。準備開始が「前日」になる行は<b>帯を薄い色</b>にして区別する。 -->
@@ -7391,6 +7392,17 @@ async function saveDantoriEntry(){
   if(!partNo){  alert('品番を入力してください'); return; }
   if(!prodStart){ alert('生産開始時刻を入力してください'); return; }
 
+  /* 段取り開始が生産開始より後ろ（2026-10-14 社長指摘）。
+     前の工程から続けて流れるので段取りが要らないのに「段取りなし」に
+     していない行が、この形で残る。準備チェック表では帯が描けず
+     準備開始もおかしな時刻になるので、保存する前に一度止めて聞く。 */
+  if(!noSetup && setupStart && prodStart && rt_toMin(setupStart) > rt_toMin(prodStart)){
+    if(!confirm('段取り開始（' + setupStart + '）が生産開始（' + prodStart + '）より後ろです。\n\n'
+      + '前の品番から続けて流れて段取りが要らないのなら、「段取りなし」にチェックを入れてください。\n'
+      + '前日から段取りを始めるのでなければ、時刻の入力違いの可能性があります。\n\n'
+      + 'このまま保存しますか？')) return;
+  }
+
   // 編集時は既存エントリのmountCount/mountKataを保持
   const existingEntry = editingDantoriId ? dantoriSchedule.find(e=>e._id===editingDantoriId) : null;
   // ★型数・段取り人数（2026-09-23）。空欄なら今の値のまま。変えたら標準時間も計算し直し、
@@ -8803,6 +8815,10 @@ function _ssRows(){
       .split(/[,、]/).map(x => x.trim()).filter(Boolean);
     out.push({ line:getLineDisplayName(d.lineId), part:d.partNo || '',
                s:s, p:p, std:std, est:est, mount:mount,
+               /* 段取り開始が生産開始より後ろ＝入力がおかしい（2026-10-14 社長指摘）。
+                  続きの工程で段取りが要らないのに「段取りなし」になっていない行が
+                  こうなる。黙って帯が空になると誰も気づけないので印を出す。 */
+               bad: (p !== null && s > p),
                prevDay: (s - SETUP_LEAD_MIN) < SETUP_T0 * 60 });   // 準備が前日になる行
   });
   out.sort(function(a,b){ return a.s - b.s || String(a.line).localeCompare(b.line); });
@@ -8850,9 +8866,12 @@ window.rtPrintSetupSheet = async function(){
            + (mlv[moldNorm(r.part)] === 'red' ? '<span class="star">★</span>' : '')
            + esc(r.part)
            + '<div class="sub">段取り ' + _ssHHMM(r.s) + '→' + _ssHHMM(r.p)
-           + (r.est ? '<span class="est">（予想）</span>' : '') + '</div></td>'
+           + (r.est ? '<span class="est">（予想）</span>' : '')
+           + (r.bad ? '<span class="bad">⚠ 段取りなし？</span>' : '') + '</div></td>'
            + '<td class="tn">' + (r.mount.length ? esc(r.mount.join('／')) : '') + '</td>'
-           + '<td class="tm">' + (lead < SETUP_T0*60 ? '前日' : _ssHHMM(lead)) + '</td>';
+           + '<td class="tm">'
+           + (r.bad ? '<span class="bad">⚠要確認</span>'
+                    : (lead < SETUP_T0*60 ? '前日' : _ssHHMM(lead))) + '</td>';
     }else{
       tds += '<td></td><td></td><td></td><td></td>';
     }
@@ -8863,7 +8882,7 @@ window.rtPrintSetupSheet = async function(){
     for(let k = 0; k < SETUP_T_SLOTS; k++){
       const from = DAY0 + k*30, to = from + 30;
       let st = '';
-      if(r){
+      if(r && !r.bad){
         const a = Math.max(r.s, from, DAY0), b = Math.min(r.p, to);
         if(b > a){
           const x1 = ((a - from) / 30 * 100).toFixed(1);
@@ -8924,6 +8943,7 @@ window.rtPrintSetupSheet = async function(){
 + 'td.tn{font-size:9px;color:#1f2937;line-height:1.2;}'
 + 'td.pt .est{color:#b45309;font-weight:700;margin-left:2px;}'
 + 'td.pt .star{color:#c00;font-weight:800;margin-right:1px;}'
++ 'td.pt .bad,td.tm .bad{color:#c0392b;font-weight:700;margin-left:2px;}'
 + 'thead th{background:#dde6f2;font-weight:700;}'
 + 'th.g1{background:#e4efdc;} th.g2{background:#dce7f5;} th.g0{background:#eaf0f8;}'
 + 'tbody tr:nth-child(even) td{background:#f7f9fc;}'
@@ -12692,7 +12712,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.13-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.14-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -21914,7 +21934,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.13-1</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.14-1</div>
 </body>
 </html>
 
