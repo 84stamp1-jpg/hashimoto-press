@@ -42,6 +42,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.13-1 : 段取り準備チェック表に<b>終品チェックの時刻</b>を入れた（社長指示）。(1)「準備開始」の見出しを<b>「準備開始／終品チェック」</b>に変えた。段取り開始の30分前＝生産終了予定の30分前なので、<b>準備開始と終品チェックは同じ時刻になる</b>。列は増やしていない。(2)品番の横に<b>★</b>を出す。次の1ロットで定期メンテの目安を超える見込みの金型（判定は品番検索・朝礼と同じ moldShotStatus の red を使い回す。作り直していない）。(3)表の下に、終品で見る項目とトライ用（完成品10台分＋NG工程の工程サンプル）のメモを入れた。★なぜ終品を「終わってから」ではなく30分前に見るのか：生産が終わればすぐ段取りに入るので待たせると手待ちが出る。その場で改修もできない。改修ならトライ用サンプルが要るが、終えてからでは材料が残っていない（社長指摘）。 -->
 <!-- H-Hub v2026.10.11-3 : チェック表の<b>ブロックの仕切り線を濃く</b>した（社長指示）。「予定の段取り時間」「外段取り」「準備完了」「後段取り」「そろわなかったもの」のそれぞれ左側を太い線で区切る。あわせて<b>「そろわなかったもの・待たされたこと」の文字を黒</b>にした。 -->
 <!-- H-Hub v2026.10.11-2 : (1)<b>帯を実際の時刻どおりの幅で塗る</b>ようにした（社長指摘：70分の段取りが2時間に見える）。これまで30分のマス単位で、少しでもかかっていればマス全体を塗っていた。マスの中を部分的に塗るようにしたので、14:25〜15:35 はちょうどその幅で出る。(2)<b>8時より前は塗らない</b>（段取りできないため）。準備開始が「前日」になる行は<b>帯を薄い色</b>にして区別する。 -->
 <!-- H-Hub v2026.10.11-1 : (1)準備チェック表の<b>担当欄に、割り振られている段取り担当を上段に出す</b>ようにした（社長指示）。下の空きに実際の担当を書き足せる。(2)<b>ライン別の優先</b>：Bラインは仲田さん、A・Cラインは見原さん。優先のほうが時間で埋まっていればもう一方を入れる。取り込み時の先入れと自動割り振りの両方に効く。(3)<b>段取り開始時刻が無い工程</b>は、同じラインで先に終わる作業の終了時刻から段取りを始められるものとして推定する（そのラインに先の作業が無ければ始業から）。遅くとも「生産開始−標準時間」までには始める前提で、早いほうを採る。推定したものは品番の下に<b>（予想）</b>と出す。 -->
@@ -8808,12 +8809,32 @@ function _ssRows(){
   return out;
 }
 
-window.rtPrintSetupSheet = function(){
+/* 金型のショット数の判定を、品番ごとに引けるようにする（2026-10-13 社長指示）
+   ★＝次の1ロットで定期メンテの目安を超える見込み（moldShotStatus の red）。
+   判定の中身は品番検索・朝礼と同じものを使い回す。作り直さない。 */
+let _ssMoldLv = null;
+async function _ssMoldLevels(){
+  if(_ssMoldLv) return _ssMoldLv;
+  try{
+    const [rows, mres, resets] = await Promise.all(
+      [moldQcRecords(), moldGetMasters([]), moldGetResets()]);
+    if(!rows || !mres || mres.error) return (_ssMoldLv = {});
+    const lv = {};
+    Object.values(mres.masters || {}).filter(m => m.limit > 0).forEach(function(m){
+      const st = moldShotStatus(m.part, rows, m, {resetDate:(resets||{})[moldNorm(m.part)]});
+      lv[moldNorm(m.part)] = st.level;
+    });
+    return (_ssMoldLv = lv);
+  }catch(e){ return (_ssMoldLv = {}); }   // 取れなくても表は出す（★が出ないだけ）
+}
+
+window.rtPrintSetupSheet = async function(){
   const ymd = getDantoriDatePath();
   const d   = _dtParse(ymd);
   const wd  = ['日','月','火','水','木','金','土'][d.getDay()];
   const dateStr = d.getFullYear() + '年' + (d.getMonth()+1) + '月' + d.getDate() + '日（' + wd + '）';
   const rows = _ssRows();
+  const mlv  = await _ssMoldLevels();   // ★を出すため（取れなければ空）
 
   const esc = function(t){ return String(t==null?'':t).replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); };
 
@@ -8825,7 +8846,9 @@ window.rtPrintSetupSheet = function(){
     if(r){
       const lead = r.s - SETUP_LEAD_MIN;
       tds += '<td class="ln">' + esc(r.line) + '</td>'
-           + '<td class="pt">' + esc(r.part)
+           + '<td class="pt">'
+           + (mlv[moldNorm(r.part)] === 'red' ? '<span class="star">★</span>' : '')
+           + esc(r.part)
            + '<div class="sub">段取り ' + _ssHHMM(r.s) + '→' + _ssHHMM(r.p)
            + (r.est ? '<span class="est">（予想）</span>' : '') + '</div></td>'
            + '<td class="tn">' + (r.mount.length ? esc(r.mount.join('／')) : '') + '</td>'
@@ -8900,6 +8923,7 @@ window.rtPrintSetupSheet = function(){
 + 'tbody td.tm,tbody td.tn{vertical-align:top;padding-top:2px;}'   /* 上に予定、下の空きに実際を書く */
 + 'td.tn{font-size:9px;color:#1f2937;line-height:1.2;}'
 + 'td.pt .est{color:#b45309;font-weight:700;margin-left:2px;}'
++ 'td.pt .star{color:#c00;font-weight:800;margin-right:1px;}'
 + 'thead th{background:#dde6f2;font-weight:700;}'
 + 'th.g1{background:#e4efdc;} th.g2{background:#dce7f5;} th.g0{background:#eaf0f8;}'
 + 'tbody tr:nth-child(even) td{background:#f7f9fc;}'
@@ -8937,7 +8961,7 @@ window.rtPrintSetupSheet = function(){
        Excel: No3.0 ライン4.9 品番16.3 担当6.3 準備開始5.3 時間軸1.9×18 外段取り2.6×12
               準備完了6.6 後段取り2.6×4 メモ39.3（合計157.3）
        No・ラインは文字が収まる幅まで詰め、準備開始・完了は少し広げてある。 */
-    const W = { no:1.3, ln:3.6, pt:10.5, tanto:4.0, tm:4.8, t:1.55, ck:1.85, dn:4.8, ck2:1.85 };
+    const W = { no:1.3, ln:3.6, pt:10.5, tanto:4.0, tm:5.6, t:1.55, ck:1.85, dn:4.8, ck2:1.85 };
     const used = W.no + W.ln + W.pt + W.tanto + W.tm + W.t*SETUP_T_SLOTS + W.ck*12 + W.dn + W.ck2*4;
     let g = '<colgroup>'
       + '<col style="width:' + W.no + '%">' + '<col style="width:' + W.ln + '%">'
@@ -8952,7 +8976,7 @@ window.rtPrintSetupSheet = function(){
   })() + '<thead><tr>'
 + '<th rowspan="2" class="no">No</th><th rowspan="2" class="ln">ライン</th>'
 + '<th rowspan="2" class="pt">次 の 品 番</th><th rowspan="2" style="width:40px">担当</th>'
-+ '<th rowspan="2" class="tm">準備<br>開始</th>'
++ '<th rowspan="2" class="tm">準備開始<br>／終品<br>チェック</th>'
 + '<th colspan="' + SETUP_T_SLOTS + '" class="g0 sep">予 定 の 段 取 り 時 間</th>'
 + '<th colspan="12" class="g1 sep">外 段 取 り（止める前にそろえる）</th>'
 + '<th rowspan="2" class="dn sep">準備<br>完了</th>'
@@ -8961,6 +8985,14 @@ window.rtPrintSetupSheet = function(){
 + '</tr><tr>' + h2.replace('<th class="dn"></th>','') + '</tr></thead><tbody>' + body + '</tbody></table>'
 + '<div class="lg"><div class="cap c1">外 段 取 り（機械を止める前にそろえる）</div>' + leg(SETUP_SOTO, [4, 8])
 + '<div class="cap c2">後 段 取 り（流れ始めてから。ここをやらないと次の段取りが遅れる）</div>' + leg(SETUP_ATO) + '</div>'
++ '<div style="margin-top:4px;font-size:9px;color:#555;line-height:1.5;">'
++ '<b>準備開始／終品チェック</b>＝段取り開始の30分前。この時刻に、'
++ '前の品の<b>終品を測り</b>（板厚減少・板減・板厚・孔径・バリ高さ）、同時に外段取りを始める。'
++ '△・×なら止めずに段取り者と保全へ伝え、トライ用（完成品10台分＋NG工程の工程サンプル）を確保する。'
++ '<br><span style="color:#c00;font-weight:800;">★</span>'
++ '＝次の1ロットで定期メンテの目安を超える見込みの金型。改修になる可能性があるので、'
++ 'トライ用の材料を前もって手配しておく。'
++ '</div>'
 + (rows.length ? '' : '<div style="margin-top:6px;font-size:10px;color:#b45309;">※ この日の段取りは H-Hub にまだ入っていません。手書きで使ってください。</div>')
 + '</body></html>');
   win.document.close();
@@ -9295,7 +9327,7 @@ function renderPressTimeline(allEntries){
       <button onclick="rtToggleOverrideMode()" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid;border-radius:5px;cursor:pointer;white-space:nowrap;${ovrBtnStyle}">${_rtOverrideMode ? '✕ 優先ライン変更終了' : `📌 今日の優先ライン${ovrCount?'('+ovrCount+'件)':''}`}</button>
       <button onclick="rtToggleSwapMode()" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid;border-radius:5px;cursor:pointer;white-space:nowrap;${swapBtnStyle}">${_rtSwapMode ? '✕ 入れ替えモード終了' : '🔀 入れ替えモード'}</button>
       <button onclick="rtOpenSpotNew('',12*60,event)" title="予定に無い修正・検査などを入れます" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid #7c3aed;border-radius:5px;cursor:pointer;white-space:nowrap;background:#fff;color:#7c3aed;">＋ 突発作業</button>
-      <button onclick="rtPrintSetupSheet()" title="その日の段取りが入った『段取り準備チェック表』を印刷します（A4横1枚）" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid #b45309;border-radius:5px;cursor:pointer;white-space:nowrap;background:#fffbeb;color:#b45309;">📋 段取り準備チェック表</button>
+      <button onclick="Promise.resolve(rtPrintSetupSheet()).catch(function(e){alert('段取り準備チェック表を作れませんでした。\n'+(e&&e.message?e.message:e));})" title="その日の段取りが入った『段取り準備チェック表』を印刷します（A4横1枚）" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid #b45309;border-radius:5px;cursor:pointer;white-space:nowrap;background:#fffbeb;color:#b45309;">📋 段取り準備チェック表</button>
       <button onclick="rtPrintRoster()" title="表示中の日付の配置表を印刷します（A4横）" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid #cbd5e1;border-radius:5px;cursor:pointer;white-space:nowrap;background:#fff;color:#475569;">🖨 印刷</button>
     </div>
   </div>
@@ -12660,7 +12692,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.11-3';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.13-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -21882,7 +21914,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.11-3</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.13-1</div>
 </body>
 </html>
 
