@@ -42,6 +42,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.14-6 : v2026.10.14-5 で<b>これから書き込む値</b>は直ったが、<b>すでにFirebaseに入っている 19:10 はそのまま</b>だった（社長報告「変わっていません」）。自動同期は<b>担当者が入っている行には手を触れない</b>作りで、しかも取り込み時に仲田さん・見原さんを先に段取りへ入れているため、ほぼ全部の行が「担当あり」になり、いつまでも直らない。→ 担当済みの行でも<b>段取り開始が生産開始より後ろのものだけは空にする</b>（担当は消さない）。進捗ボードが動けば自動で直る。すぐ直したいときは「📥 今すぐ同期」。 -->
 <!-- H-Hub v2026.10.14-5 : <b>段取り開始が生産開始より後ろになる</b>本当の原因（社長指摘：Bライン BLW-22133 が「段取り 19:10→17:40」。進捗ボードは 17:40〜18:10）。人の入力ミスではなく<b>「今すぐ同期」の作り</b>だった。段取り開始を<b>「ひとつ前の品番が終わった時刻」</b>として入れているが、進捗ボードの並び順は<b>時刻順とはかぎらず</b>、重なっている工程もある（18224-T6C 17:10〜19:10 と BLW 17:40〜18:10）。そのため「ひとつ前の終わり 19:10」を段取り開始にしていた。→(1)<b>時刻の早い順に並べ直して</b>から「ひとつ前」を見る (2)それでも生産開始より後ろなら<b>空にする</b>（準備チェック表が「予想」を出す。でたらめな時刻より良い）。手動の同期と自動同期の<b>両方</b>を直した。 -->
 <!-- H-Hub v2026.10.14-4 : 段取り準備チェック表の見出しを<b>「準備開始／終品チェック」→2行（スラッシュなし）</b>に（社長指示）。「終品チェック」6文字が1行に収まるよう、時刻の列を 5.6%→6.4%（増やした分は右端のメモ欄から）。<code>white-space:nowrap</code> で途中折り返しも止め、ちょうど2行にした。 -->
 <!-- H-Hub v2026.10.14-3 : <b>ボタンがまだ効かなかった</b>本当の原因（社長のコンソールに <code>Uncaught SyntaxError: Invalid or unexpected token  dantori_navi.html:1</code> が2つ）。このボタンのHTMLは<b>JSのテンプレート文字列の中</b>にある。v2026.10.14-1で onclick に直接JSを書いたとき、その中の <code>
@@ -9689,7 +9690,16 @@ function _mergePlanEntries(entries, existing, dateStr, scopeLineIds, protectAssi
       if(!v || v.isManual === true) return;
       const r = v.roles || {};
       const assigned = Object.values(r).some(x => x) || (v.shiftChanges || []).length > 0;
-      if(assigned){ newData[id] = v; protectedIds.add(id); }
+      if(assigned){
+        /* ★担当が入っていても、段取り開始が生産開始より後ろの行だけは直す
+           （2026-10-14 社長報告「変わっていません」。古いやり方で入った 19:10 が、
+            担当済みの行は自動同期が触らないため、そのまま残っていた）。
+           空にすれば、準備チェック表が「予想」を出す。担当は消さない。 */
+        const _ss = rt_toMin(v.setupStart), _ps = rt_toMin(v.prodStart);
+        newData[id] = (_ss !== null && _ps !== null && _ss >= _ps)
+          ? Object.assign({}, v, {setupStart: ''}) : v;
+        protectedIds.add(id);
+      }
     });
   }
 
@@ -12756,7 +12766,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.14-5';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.14-6';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -21978,7 +21988,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.14-5</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.14-6</div>
 </body>
 </html>
 
