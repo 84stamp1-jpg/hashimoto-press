@@ -42,6 +42,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.14-7 : 段取り準備チェック表に<b>「終品：前の品番」</b>を出した（社長指摘：<b>終品を測るのは前の品だが、前の品が何か分からない</b>）。表に出ていたのは「次の品番」だけだった。→ 品番の下に <b>終品：18120-6Y0（〜17:00）</b> のように、同じラインでその工程の生産が始まる前に終わる工程のうち<b>いちばん遅く終わるもの</b>を出す（段取りなしの工程も相手になるので、絞り込む前の全部から探す）。茶色の太字。前の品が計画に無ければ「終品：—」（前日から流れている）。表の下の説明にも<b>測るのは「終品：」の品番、大きい品番は次に載せる品</b>と書いた。 -->
 <!-- H-Hub v2026.10.14-6 : v2026.10.14-5 で<b>これから書き込む値</b>は直ったが、<b>すでにFirebaseに入っている 19:10 はそのまま</b>だった（社長報告「変わっていません」）。自動同期は<b>担当者が入っている行には手を触れない</b>作りで、しかも取り込み時に仲田さん・見原さんを先に段取りへ入れているため、ほぼ全部の行が「担当あり」になり、いつまでも直らない。→ 担当済みの行でも<b>段取り開始が生産開始より後ろのものだけは空にする</b>（担当は消さない）。進捗ボードが動けば自動で直る。すぐ直したいときは「📥 今すぐ同期」。 -->
 <!-- H-Hub v2026.10.14-5 : <b>段取り開始が生産開始より後ろになる</b>本当の原因（社長指摘：Bライン BLW-22133 が「段取り 19:10→17:40」。進捗ボードは 17:40〜18:10）。人の入力ミスではなく<b>「今すぐ同期」の作り</b>だった。段取り開始を<b>「ひとつ前の品番が終わった時刻」</b>として入れているが、進捗ボードの並び順は<b>時刻順とはかぎらず</b>、重なっている工程もある（18224-T6C 17:10〜19:10 と BLW 17:40〜18:10）。そのため「ひとつ前の終わり 19:10」を段取り開始にしていた。→(1)<b>時刻の早い順に並べ直して</b>から「ひとつ前」を見る (2)それでも生産開始より後ろなら<b>空にする</b>（準備チェック表が「予想」を出す。でたらめな時刻より良い）。手動の同期と自動同期の<b>両方</b>を直した。 -->
 <!-- H-Hub v2026.10.14-4 : 段取り準備チェック表の見出しを<b>「準備開始／終品チェック」→2行（スラッシュなし）</b>に（社長指示）。「終品チェック」6文字が1行に収まるよう、時刻の列を 5.6%→6.4%（増やした分は右端のメモ欄から）。<code>white-space:nowrap</code> で途中折り返しも止め、ちょうど2行にした。 -->
@@ -8819,7 +8820,19 @@ function _ssRows(){
     if(p === null) p = s + (std || 30);
     const mount = String((d.roles || {}).金型取付 || '')
       .split(/[,、]/).map(x => x.trim()).filter(Boolean);
+    /* ★終品を測るのは「次の品番」ではなく、いま流れている<b>前の品番</b>（2026-10-14 社長指摘：
+       「前の品が何かはわかりません」）。同じラインで、この工程の生産が始まる前に
+       終わる工程のうち、いちばん遅く終わるものを前の品番とする。
+       段取りなしの工程も相手になるので、絞り込む前の全部（all）から探すこと。 */
+    let prevPart = '', prevEnd = null;
+    (all || []).forEach(function(o){
+      if(o === d || o.lineId !== d.lineId) return;
+      const oe = rt_toMin(o.prodEnd);
+      if(oe === null || oe > p) return;
+      if(prevEnd === null || oe > prevEnd){ prevEnd = oe; prevPart = o.partNo || ''; }
+    });
     out.push({ line:getLineDisplayName(d.lineId), part:d.partNo || '',
+               prevPart:prevPart, prevEnd:prevEnd,
                s:s, p:p, std:std, est:est, mount:mount,
                /* 段取り開始が生産開始より後ろ＝入力がおかしい（2026-10-14 社長指摘）。
                   続きの工程で段取りが要らないのに「段取りなし」になっていない行が
@@ -8902,7 +8915,11 @@ window.rtPrintSetupSheet = async function(){
            + esc(r.part)
            + '<div class="sub">段取り ' + _ssHHMM(r.s) + '→' + _ssHHMM(r.p)
            + (r.est ? '<span class="est">（予想）</span>' : '')
-           + (r.bad ? '<span class="bad">⚠ 段取りなし？</span>' : '') + '</div></td>'
+           + (r.bad ? '<span class="bad">⚠ 段取りなし？</span>' : '') + '</div>'
+           /* ★終品チェックで測るのは「前の品番」。何を測るのか分かるように出す
+              （2026-10-14 社長指摘） */
+           + '<div class="sub prev">終品：'
+           + (r.prevPart ? esc(r.prevPart) : '—') + '</div></td>'
            + '<td class="tn">' + (r.mount.length ? esc(r.mount.join('／')) : '') + '</td>'
            + '<td class="tm">'
            + (r.bad ? '<span class="bad">⚠要確認</span>'
@@ -8991,6 +9008,7 @@ window.rtPrintSetupSheet = async function(){
 + 'td.ln{white-space:nowrap;overflow:hidden;}'
 + 'td.pt{word-break:break-all;line-height:1.15;}'   /* 長い品番は2行に折り返して切らさない */
 + 'td.pt .sub{font-size:8.5px;color:#475569;font-weight:400;margin-top:2px;white-space:nowrap;}'
++ 'td.pt .prev{color:#8a4b00;font-weight:700;white-space:normal;line-height:1.25;}'   /* 終品チェックで測る＝前の品番。長い品番ははみ出すので折り返す */
 + '.lg{margin-top:4px;font-size:9px;line-height:1.42;}'
 + '.lg .cap{font-weight:700;font-size:9px;padding:0 6px;margin-top:2px;}'
 + '.lg .c1{background:#e4efdc;} .lg .c2{background:#dce7f5;}'
@@ -9042,7 +9060,10 @@ window.rtPrintSetupSheet = async function(){
 + '<div class="cap c2">後 段 取 り（流れ始めてから。ここをやらないと次の段取りが遅れる）</div>' + leg(SETUP_ATO) + '</div>'
 + '<div style="margin-top:4px;font-size:9px;color:#555;line-height:1.5;">'
 + '<b>準備開始／終品チェック</b>＝段取り開始の30分前。この時刻に、'
-+ '前の品の<b>終品を測り</b>（板厚減少・板減・板厚・孔径・バリ高さ）、同時に外段取りを始める。'
++ 'いま流れている品の<b>終品を測り</b>（板厚減少・板減・板厚・孔径・バリ高さ）、同時に外段取りを始める。'
++ '<b>測るのは品番の下の「終品：」に書いてある品番</b>（＝前の品）。'
++ 'その行の大きい品番は<b>次に載せる品</b>なので、間違えないこと。'
++ '「終品：—」は、この日の計画に前の品が無い（前日から流れている）という意味。'
 + '△・×なら止めずに段取り者と保全へ伝え、トライ用（完成品10台分＋NG工程の工程サンプル）を確保する。'
 + '<br><span style="color:#c00;font-weight:800;">★</span>'
 + '＝次の1ロットで定期メンテの目安を超える見込みの金型。改修になる可能性があるので、'
@@ -12766,7 +12787,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.14-6';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.14-7';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -21988,7 +22009,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.14-6</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.14-7</div>
 </body>
 </html>
 
