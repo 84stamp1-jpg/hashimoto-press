@@ -42,6 +42,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.14-5 : <b>段取り開始が生産開始より後ろになる</b>本当の原因（社長指摘：Bライン BLW-22133 が「段取り 19:10→17:40」。進捗ボードは 17:40〜18:10）。人の入力ミスではなく<b>「今すぐ同期」の作り</b>だった。段取り開始を<b>「ひとつ前の品番が終わった時刻」</b>として入れているが、進捗ボードの並び順は<b>時刻順とはかぎらず</b>、重なっている工程もある（18224-T6C 17:10〜19:10 と BLW 17:40〜18:10）。そのため「ひとつ前の終わり 19:10」を段取り開始にしていた。→(1)<b>時刻の早い順に並べ直して</b>から「ひとつ前」を見る (2)それでも生産開始より後ろなら<b>空にする</b>（準備チェック表が「予想」を出す。でたらめな時刻より良い）。手動の同期と自動同期の<b>両方</b>を直した。 -->
 <!-- H-Hub v2026.10.14-4 : 段取り準備チェック表の見出しを<b>「準備開始／終品チェック」→2行（スラッシュなし）</b>に（社長指示）。「終品チェック」6文字が1行に収まるよう、時刻の列を 5.6%→6.4%（増やした分は右端のメモ欄から）。<code>white-space:nowrap</code> で途中折り返しも止め、ちょうど2行にした。 -->
 <!-- H-Hub v2026.10.14-3 : <b>ボタンがまだ効かなかった</b>本当の原因（社長のコンソールに <code>Uncaught SyntaxError: Invalid or unexpected token  dantori_navi.html:1</code> が2つ）。このボタンのHTMLは<b>JSのテンプレート文字列の中</b>にある。v2026.10.14-1で onclick に直接JSを書いたとき、その中の <code>
 </code> が<b>画面に出る時点で本物の改行になり</b>、<code>alert(&#39;…</code> の文字列が途中で切れていた。属性に書いたJSの誤りは行番号が「:1」で出るだけで、どのボタンかも分からない。→ <b>属性には関数名だけ</b>書き（<code>rtPrintSetupSheetClick()</code>）、中身はスクリプト側に置いた。※テンプレート文字列の中の属性にJSを直接書かないこと。 -->
@@ -9439,6 +9440,28 @@ function _rtBuildPlanList(allEntries){
   return html;
 }
 
+/* 段取り開始は「ひとつ前の品番が終わった時刻」から決めている。
+   ★ただし進捗ボードの並び順は時刻順とはかぎらず、重なっている工程もある
+     （2026-10-14 社長指摘：Bライン BLW-22133 が「段取り 19:10→17:40」になっていた。
+      18224-T6C が 17:10〜19:10、BLW が 17:40〜18:10 で重なっており、
+      ひとつ前の終わり 19:10 を段取り開始にしてしまっていた）。
+   (1) 時刻の早い順に並べ直してから「ひとつ前」を見る
+   (2) それでも生産開始より後ろになるなら、分からないものとして空にする
+       （空なら段取り準備チェック表が「予想」を出す。でたらめな時刻より良い） */
+function _dtSortJobs(jobs){
+  return jobs.slice().sort(function(a, b){
+    return String(a.start || '').localeCompare(String(b.start || ''));
+  });
+}
+function _dtSetupStart(jobs, ji, j, isNoSetup){
+  if(isNoSetup) return j.start || '';
+  const prev = (ji > 0 && jobs[ji-1]) ? (jobs[ji-1].end || '') : '';
+  if(!prev) return '';
+  const ps = rt_toMin(j.start), pe = rt_toMin(prev);
+  if(ps !== null && pe !== null && pe >= ps) return '';   // 重なっている＝前の終わりは使えない
+  return prev;
+}
+
 // ===== 生産計画から段取り計画を取り込む =====
 async function importFromProductionPlan(){
   // linesは「当日の状態」しか持たない。本日以外を表示中に実行すると、
@@ -9482,21 +9505,14 @@ async function importFromProductionPlan(){
     const jobsRaw = Array.isArray(line.jobs) ? line.jobs : (line.jobs && typeof line.jobs==='object' ? Object.values(line.jobs) : null);
     if(!jobsRaw) return;
     // history=trueやpart/start/end未入力は除外
-    const jobs = jobsRaw.filter(j => j && j.part && j.start && j.end && !j.history);
+    const jobs = _dtSortJobs(jobsRaw.filter(j => j && j.part && j.start && j.end && !j.history));
 
     jobs.forEach((j, ji) => {
       // kata=0かつninzu=0の場合もnoSetup扱い（Excelインポート時に型数/人数列が空の場合）
       const isNoSetup = !!(j.noSetup || (j.kata === 0 && j.ninzu === 0));
 
       // 段取り開始：前ジョブの終了時刻（noSetupなら生産開始と同じ）
-      let setupStart = '';
-      if(!isNoSetup){
-        if(ji > 0 && jobs[ji-1] && jobs[ji-1].end){
-          setupStart = jobs[ji-1].end;
-        }
-      } else {
-        setupStart = j.start;
-      }
+      const setupStart = _dtSetupStart(jobs, ji, j, isNoSetup);
 
       const status = j.status==='done'    ? 'done'
                    : j.status==='running' ? 'in_progress'
@@ -9585,15 +9601,10 @@ function _buildDantoriEntriesFromLines(lines){
     // Firebase REST APIは配列をオブジェクト{0:{...},1:{...}}で返す場合があるため両対応
     const jobsRaw = Array.isArray(line.jobs) ? line.jobs : (line.jobs && typeof line.jobs==='object' ? Object.values(line.jobs) : null);
     if(!jobsRaw) return;
-    const jobs = jobsRaw.filter(j => j && j.part && j.start && j.end && !j.history);
+    const jobs = _dtSortJobs(jobsRaw.filter(j => j && j.part && j.start && j.end && !j.history));
     jobs.forEach((j, ji) => {
       const isNoSetup = !!(j.noSetup || (j.kata === 0 && j.ninzu === 0));
-      let setupStart = '';
-      if(!isNoSetup){
-        if(ji > 0 && jobs[ji-1] && jobs[ji-1].end) setupStart = jobs[ji-1].end;
-      } else {
-        setupStart = j.start;
-      }
+      const setupStart = _dtSetupStart(jobs, ji, j, isNoSetup);
       const status = j.status==='done'    ? 'done'
                    : j.status==='running' ? 'in_progress'
                    : 'scheduled';
@@ -12745,7 +12756,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.14-4';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.14-5';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -21967,7 +21978,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.14-4</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.14-5</div>
 </body>
 </html>
 
