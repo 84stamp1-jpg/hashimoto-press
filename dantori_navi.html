@@ -42,6 +42,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.15-1 : 配置表の印刷に<b>「この日の計画」</b>を戻した（社長指示：下に余白があるので載せたい）。2026-09-03 に「2枚目になる」として外していたが、1枚に収まる。<b>ロボットライン以降は出さない</b>＝A〜Cラインだけ（準備チェック表と同じ <code>SETUP_LINE_RE</code> の決まり）。紙では意味のない<b>鍵ボタン・押したときの動き・「品番を押すと…」の案内</b>は外す。改ページで途中で割れないようにもした。 -->
 <!-- H-Hub v2026.10.14-7 : 段取り準備チェック表に<b>「終品：前の品番」</b>を出した（社長指摘：<b>終品を測るのは前の品だが、前の品が何か分からない</b>）。表に出ていたのは「次の品番」だけだった。→ 品番の下に <b>終品：18120-6Y0（〜17:00）</b> のように、同じラインでその工程の生産が始まる前に終わる工程のうち<b>いちばん遅く終わるもの</b>を出す（段取りなしの工程も相手になるので、絞り込む前の全部から探す）。茶色の太字。前の品が計画に無ければ「終品：—」（前日から流れている）。表の下の説明にも<b>測るのは「終品：」の品番、大きい品番は次に載せる品</b>と書いた。 -->
 <!-- H-Hub v2026.10.14-6 : v2026.10.14-5 で<b>これから書き込む値</b>は直ったが、<b>すでにFirebaseに入っている 19:10 はそのまま</b>だった（社長報告「変わっていません」）。自動同期は<b>担当者が入っている行には手を触れない</b>作りで、しかも取り込み時に仲田さん・見原さんを先に段取りへ入れているため、ほぼ全部の行が「担当あり」になり、いつまでも直らない。→ 担当済みの行でも<b>段取り開始が生産開始より後ろのものだけは空にする</b>（担当は消さない）。進捗ボードが動けば自動で直る。すぐ直したいときは「📥 今すぐ同期」。 -->
 <!-- H-Hub v2026.10.14-5 : <b>段取り開始が生産開始より後ろになる</b>本当の原因（社長指摘：Bライン BLW-22133 が「段取り 19:10→17:40」。進捗ボードは 17:40〜18:10）。人の入力ミスではなく<b>「今すぐ同期」の作り</b>だった。段取り開始を<b>「ひとつ前の品番が終わった時刻」</b>として入れているが、進捗ボードの並び順は<b>時刻順とはかぎらず</b>、重なっている工程もある（18224-T6C 17:10〜19:10 と BLW 17:40〜18:10）。そのため「ひとつ前の終わり 19:10」を段取り開始にしていた。→(1)<b>時刻の早い順に並べ直して</b>から「ひとつ前」を見る (2)それでも生産開始より後ろなら<b>空にする</b>（準備チェック表が「予想」を出す。でたらめな時刻より良い）。手動の同期と自動同期の<b>両方</b>を直した。 -->
@@ -9095,7 +9096,25 @@ window.rtPrintRoster = function(){
     clone.querySelectorAll('.rt-now-line').forEach(el => el.remove());  // 別の日に「現在時刻」は紛らわしい
   }
   clone.querySelectorAll('.rt-ovr-trigger').forEach(el => el.remove());
-  // ★「この日の計画」は印刷しない（2枚目になるため。2026-09-03 社長より）
+
+  /* ★配置表の下の余白に「この日の計画」も載せる（2026-10-15 社長指示）。
+     2026-09-03 にいったん外したが、余白が空くので戻した。
+     ロボットライン以降は出さない＝A〜Cラインだけ（準備チェック表と同じ決まり）。 */
+  let planHtml = '';
+  const planEl = document.querySelector('.rt-plan');
+  if(planEl){
+    const pc = planEl.cloneNode(true);
+    pc.querySelectorAll('.rt-plan-row').forEach(row => {
+      const el = row.querySelector('.rt-plan-line');
+      const nm = (el ? el.textContent : '').trim();
+      if(!SETUP_LINE_RE.test(nm)) row.remove();
+    });
+    pc.querySelectorAll('.k-lock').forEach(el => el.remove());   // 鍵ボタンは紙では意味がない
+    pc.querySelectorAll('[onclick]').forEach(el => el.removeAttribute('onclick'));
+    const hint = pc.querySelector('.rt-plan-hdr span');
+    if(hint) hint.remove();                 // 「品番を押すと…」は紙では意味がない
+    if(pc.querySelectorAll('.rt-plan-row').length) planHtml = pc.outerHTML;
+  }
 
   // ★予定の終わりに合わせて時間軸を切り詰め、空いた分だけ拡大して印刷する。
   //   17時までしか予定がない日に20時まで描くと、右の3時間が白紙で無駄になるため。
@@ -9152,6 +9171,9 @@ body{font-family:'Noto Sans JP',sans-serif;background:#fff;margin:0;padding:8px;
 /* 画面の制約を外す（印刷では全行を出す） */
 .rt-outer{overflow:visible!important;max-height:none!important;}
 .rt-name{position:static!important;}
+/* この日の計画（配置表の下） */
+.rt-plan{overflow:visible!important;max-height:none!important;margin-top:10px;}
+.rt-plan-job{cursor:default!important;}
 @page{size:A4 landscape;margin:6mm;}
 @media print{
   .pr-btn{display:none!important;}
@@ -9163,6 +9185,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#fff;margin:0;padding:8px;
   .rt-block,.rt-break-band,.rt-plan-job,.rt-plan-cnt,.rt-plan-line,.rt-hdr,.rt-row,.rt-name{
     -webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .rt-row{break-inside:avoid;}
+  .rt-plan,.rt-plan-row{break-inside:avoid;}
 }
 </style></head>
 <body>
@@ -9176,6 +9199,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#fff;margin:0;padding:8px;
     <span class="pr-stamp">印刷 ${stamp}</span>
   </div>
   ${clone.outerHTML}
+  ${planHtml}
 </div>
 </body></html>`);
   win.document.close();
@@ -12787,7 +12811,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.14-7';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.15-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -22009,7 +22033,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.14-7</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.15-1</div>
 </body>
 </html>
 
