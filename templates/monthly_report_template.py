@@ -396,7 +396,7 @@ def build_pdf(data, out_path):
         story.append(Paragraph(q['note'], S['note']))
 
     m = data['mfg']
-    story.append(Paragraph(f'■ {month} 製造実績（見原）', S['sec']))
+    story.append(Paragraph(f'■ {month} 製造実績（製造T）', S['sec']))
     story.append(make_table(S, m['header'], m['rows'], [34 * mm, 132 * mm, 14 * mm], [('VALIGN', (0, 0), (-1, -1), 'TOP')]))
 
     a = data['asm']
