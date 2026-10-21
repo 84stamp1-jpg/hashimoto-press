@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.10.21-1 : <b>あるPCで「読み込み中」のまま止まる</b>のを直した（社長報告・コンソールに <code>appCheck/recaptcha-error</code> と <code>Invalid appcheck token</code>）。原因は<b>App Checkの証明書がそのPCで取れていない</b>こと。(1)段取りナビに2026-10-06で入れた<b>「20秒たっても証明書が取れなければ1回だけ読み直す」</b>がこのページには入っていなかった（最終更新10/5で対策より前）ので移植した。(2)Firebaseのリアルタイムデータベースは<b>つながらないときエラーを返さない</b>ため、読み込みの処理も失敗の処理も動かず永久に固まっていた。<b>10秒待ってデータが来なければ、このPCの控えを表示</b>するようにした。サイトキー・設定は段取りナビ／カメラと同じ。 -->
 <!-- 金型原価 v2026.10.05-1 : 金型編集の<b>工程リストを▲▼で並べ替えられる</b>ようにした（社長指示）。工程の順番は 管理NO.（金型NO＋工程番号＋連番）の工程番号に使うので、途中に1工程入れたいときに下を全部打ち直す必要があった。行ごと動かすので<b>入力済みの加工予算も一緒に移る</b>。左端に<b>工程番号</b>を出し、動かすたびに振り直す。先頭の▲と末尾の▼は押せない。保存は今までどおり画面の上から順に入る。 -->
 <!-- 金型原価 v2026.10.04-1 : App Check の方式を <b>Fraud Defense（旧 reCAPTCHA Enterprise）</b> に変えた。Google が旧方式（reCAPTCHA v3 Classic）の新規登録を止めており、Firebase側で鍵を登録できなかったため。ページ側は鍵と provider の差し替えだけ。仕組みは同じで、現場には何も見えない。Firebase側はまだ「監視のみ」なので動きは変わらない。 -->
 <!-- 金型原価 v2026.10.03-1 : App Check を仕込んだ（社長指示：外から読めなくする／第2段階）。ページを開くと Google が「本物のブラウザから開かれた本物のページ」という証明書を出し、Firebase はそれが付いた通信だけを受ける。現場には何も見えない（パズルは出ない）。Firebase側はまだ「監視のみ」なので動きは変わらない。サイトキーは公開前提のキーで、秘密の鍵はFirebase側にしか無い。 Firebaseの設定にアプリIDが無かったので足した。 -->
@@ -653,7 +654,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.10.05-1</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.10.21-1</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -2166,15 +2167,57 @@ function initFirebase() {
        initFirebase() は設定を保存し直すと2回目が走るので、1回だけにする。 */
     if (!window._hkAppCheck) {
       window._hkAppCheck = true;
-      try { firebase.appCheck(app).activate(
-              new firebase.appCheck.ReCaptchaEnterpriseProvider('6LduJt0tAAAAAH5mn50AC443BZg7R4Z1B50IDSsH'), true); }
+      try {
+        const _ac = firebase.appCheck(app);
+        _ac.activate(new firebase.appCheck.ReCaptchaEnterpriseProvider(
+          '6LduJt0tAAAAAH5mn50AC443BZg7R4Z1B50IDSsH'), true);
+        window._acToken = function(){
+          return _ac.getToken(false).then(function(t){ return t && t.token; })
+                    .catch(function(){ return ''; });
+        };
+      }
       catch (e) { console.warn('App Check 初期化に失敗', e); }
+
+      /* 証明書が取れないまま固まったときの立ち直り（2026-10-21）
+         段取りナビに2026-10-06で入れたものと同じ。App Checkは1度403を受けると
+         その画面では24時間あきらめるため、読み直すとほぼ直る。
+         20秒たっても取れていなければ1回だけ読み直す（30分に1回まで）。
+         ★このページには入っていなかった（最終更新が10/5で、対策より前）。
+           社長報告：あるPCで「読み込み中」のまま止まる。コンソールは
+           appCheck/recaptcha-error と Invalid appcheck token だった。 */
+      setTimeout(function(){
+        if (!window._acToken) return;
+        window._acToken().then(function(t){
+          if (t) return;
+          try {
+            const K = 'mold_ac_reload';
+            const last = parseInt(sessionStorage.getItem(K) || '0', 10);
+            if (Date.now() - last < 1800000) return;
+            sessionStorage.setItem(K, String(Date.now()));
+            console.warn('App Check の証明書が取れないため、画面を読み直します');
+            location.reload();
+          } catch (e) {}
+        });
+      }, 20000);
     }
 
     db = firebase.database(app);
 
+    /* ★つながらないときに固まらないようにする（2026-10-21 社長報告）
+       Firebaseのリアルタイムデータベースは「つながらない」ときエラーを返さず、
+       黙って再接続を試み続ける。そのため下の on('value') はどちらの処理も動かず、
+       画面は「接続中...」のまま、表はくるくる回ったままになっていた。
+       10秒待っても1度もデータが来なければ、このPCに残っている控えを出す。 */
+    window._fbGotData = false;
+    setTimeout(function(){
+      if (window._fbGotData) return;
+      setStatus(false, 'つながりません（このPCの控えを表示）');
+      loadLocalData();
+    }, 10000);
+
     // Listen
     db.ref('/moldCostSystem').on('value', snap => {
+      window._fbGotData = true;
       if (window._fbWriting) return;  // 書き込み中は上書きしない
       const data = snap.val() || {};
 
