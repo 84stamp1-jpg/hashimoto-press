@@ -42,6 +42,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.21-2 : <b>呼び出しの音が出ないときがある</b>（社長報告・技術現場のPC）。作りの問題が1つ。<b>呼び出しのたびに音の装置（AudioContext）を新しく作り、閉じていなかった</b>。ブラウザは同時に持てる数に上限があり（Chromeは6つほど）、<b>数回鳴らすと作れなくなって以後ずっと無音</b>になる。→ 1つだけ作って使い回し、鳴らす前に resume() する。あわせて<b>最初のクリック／キー操作でも resume</b>しておく（ページを開いて一度も触っていないと、自動再生の制限で音が止められるため）。失敗したらコンソールに出す（無言で消さない）。※<b>最小化・別タブでChromeがタブを凍結すると、呼び出し自体を受け取らない</b>。これはブラウザ側の設定なのでコードでは直せない。 -->
 <!-- H-Hub v2026.10.21-1 : 品番検索に<b>「🔄 kintoneから取り直す」</b>を付けた（社長報告：kintoneで品質チェックシートを差し替えたのに古いものが開く）。原因は<b>2段階で古くなる</b>こと。(1)品番の情報（PDFの在りか＝fileKey）は<b>毎朝6:50にkintoneから取り込んだFirebaseの写し</b>を見ており、差し替えても翌朝まで古いfileKeyのまま。(2)その古いfileKeyのPDFは<b>このPCに保存</b>してあるので、ネットにも行かず古い中身が開く。→ 押した品番だけ、その場で kintone（App7・<code>文字列__1行__3</code>で検索）から添付を取り直し、新しいfileKeyに差し替える。fileKeyが変われば保存分は別物になるので、PDFは自動で取り直しになる。取り直した分は <code>_freshDocs</code> に持ち、5分ごとの写しの入れ替えでも消えない。 -->
 <!-- H-Hub v2026.10.15-1 : 配置表の印刷に<b>「この日の計画」</b>を戻した（社長指示：下に余白があるので載せたい）。2026-09-03 に「2枚目になる」として外していたが、1枚に収まる。<b>ロボットライン以降は出さない</b>＝A〜Cラインだけ（準備チェック表と同じ <code>SETUP_LINE_RE</code> の決まり）。紙では意味のない<b>鍵ボタン・押したときの動き・「品番を押すと…」の案内</b>は外す。改ページで途中で割れないようにもした。 -->
 <!-- H-Hub v2026.10.14-7 : 段取り準備チェック表に<b>「終品：前の品番」</b>を出した（社長指摘：<b>終品を測るのは前の品だが、前の品が何か分からない</b>）。表に出ていたのは「次の品番」だけだった。→ 品番の下に <b>終品：18120-6Y0（〜17:00）</b> のように、同じラインでその工程の生産が始まる前に終わる工程のうち<b>いちばん遅く終わるもの</b>を出す（段取りなしの工程も相手になるので、絞り込む前の全部から探す）。茶色の太字。前の品が計画に無ければ「終品：—」（前日から流れている）。表の下の説明にも<b>測るのは「終品：」の品番、大きい品番は次に載せる品</b>と書いた。 -->
@@ -12871,7 +12872,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.21-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.21-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -21592,10 +21593,37 @@ window.callCancel = function(key){
   set(ref(db,'calls/'+key), null);
 };
 
-// 鳴らす（チャイム＋読み上げ）。この端末のスピーカーから出る
+/* 鳴らす（チャイム＋読み上げ）。この端末のスピーカーから出る
+   ★2026-10-21 社長報告「技術現場のPCで音が出ないときがある」。原因は3つ。
+     (a) 呼び出しのたびに AudioContext を新しく作り、閉じていなかった。
+         ブラウザは同時に持てる数に上限があり（Chromeは6つほど）、
+         数回鳴らすと作れなくなって、以後ずっと無音になる。
+         → 1つだけ作って使い回す。
+     (b) ページを開いてから一度もクリックしていないと、ブラウザが音を止める
+         （自動再生の制限）。AudioContext は suspended のまま。
+         → 鳴らす前に resume() し、最初のクリックでも resume しておく。
+     (c) 最小化・別タブだとChromeがタブを凍結し、呼び出し自体を受け取らないことがある。
+         これはブラウザ側の設定なので、コードでは直せない（社長へ案内）。 */
+let _callAC = null;
+function _callAudioCtx(){
+  try{
+    if(!_callAC){
+      const K = window.AudioContext || window.webkitAudioContext;
+      if(!K) return null;
+      _callAC = new K();
+    }
+    if(_callAC.state === 'suspended'){ _callAC.resume(); }
+    return _callAC;
+  }catch(e){ return null; }
+}
+// 最初のクリック／キー操作で音を使えるようにしておく（自動再生の制限をはずす）
+['click','keydown','touchstart'].forEach(function(ev){
+  window.addEventListener(ev, function(){ _callAudioCtx(); }, {once:false, passive:true});
+});
 function _callChime(){
   try{
-    const C = new (window.AudioContext||window.webkitAudioContext)();
+    const C = _callAudioCtx();
+    if(!C){ console.warn('呼び出しの音が出せません（音の装置を作れませんでした）'); return; }
     [880,1174].forEach(function(f,i){
       const o=C.createOscillator(), g=C.createGain();
       o.type='sine'; o.frequency.value=f;
@@ -22093,7 +22121,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.21-1</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.21-2</div>
 </body>
 </html>
 
