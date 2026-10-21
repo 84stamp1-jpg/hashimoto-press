@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.10.21-2 : <b>1台だけ「読み込み中」で止まる本当の原因</b>。Firebaseのウェブ設定（apiKey・projectId・dbUrl）を<b>PCごとの設定画面</b>から取っていた（初期値は空）。そのPCに違う値が入っていると App Check の証明書要求が弾かれ <code>recaptcha-error</code>→<code>Invalid appcheck token</code> になる。段取りナビ・カメラ一覧は<b>固定で書いてあるので動く</b>。同じ固定値にそろえた（秘密の値ではなく、他の2ページにも同じものがある）。kintoneの設定は今までどおりPCごと。 -->
 <!-- 金型原価 v2026.10.21-1 : <b>あるPCで「読み込み中」のまま止まる</b>のを直した（社長報告・コンソールに <code>appCheck/recaptcha-error</code> と <code>Invalid appcheck token</code>）。原因は<b>App Checkの証明書がそのPCで取れていない</b>こと。(1)段取りナビに2026-10-06で入れた<b>「20秒たっても証明書が取れなければ1回だけ読み直す」</b>がこのページには入っていなかった（最終更新10/5で対策より前）ので移植した。(2)Firebaseのリアルタイムデータベースは<b>つながらないときエラーを返さない</b>ため、読み込みの処理も失敗の処理も動かず永久に固まっていた。<b>10秒待ってデータが来なければ、このPCの控えを表示</b>するようにした。サイトキー・設定は段取りナビ／カメラと同じ。 -->
 <!-- 金型原価 v2026.10.05-1 : 金型編集の<b>工程リストを▲▼で並べ替えられる</b>ようにした（社長指示）。工程の順番は 管理NO.（金型NO＋工程番号＋連番）の工程番号に使うので、途中に1工程入れたいときに下を全部打ち直す必要があった。行ごと動かすので<b>入力済みの加工予算も一緒に移る</b>。左端に<b>工程番号</b>を出し、動かすたびに振り直す。先頭の▲と末尾の▼は押せない。保存は今までどおり画面の上から順に入る。 -->
 <!-- 金型原価 v2026.10.04-1 : App Check の方式を <b>Fraud Defense（旧 reCAPTCHA Enterprise）</b> に変えた。Google が旧方式（reCAPTCHA v3 Classic）の新規登録を止めており、Firebase側で鍵を登録できなかったため。ページ側は鍵と provider の差し替えだけ。仕組みは同じで、現場には何も見えない。Firebase側はまだ「監視のみ」なので動きは変わらない。 -->
@@ -654,7 +655,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.10.21-1</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.10.21-2</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -2145,16 +2146,19 @@ function normalizeQuoteRequests(qr) {
 
 
 function initFirebase() {
-  if (!cfg.dbUrl || !cfg.apiKey) {
-    setStatus(false, 'Firebase未設定');
-    loadLocalData();
-    return;
-  }
   try {
+    /* ★Firebaseのウェブ設定は、段取りナビ・カメラ一覧と同じ固定値を使う（2026-10-21）
+       これまでは apiKey・projectId・dbUrl を「PCごとの設定画面」から取っていた
+       （初期値は空）。そのPCに違う値が入っていると、App Checkの証明書要求が弾かれ
+       appCheck/recaptcha-error → Invalid appcheck token となり、Firebaseを読めない。
+       1台だけ「読み込み中」のまま止まる、という症状の正体（社長報告 2026-10-21）。
+       この3つは秘密の値ではなく、他の2ページにも同じものが書いてある。
+       PCごとに変える必要がないので、取り違えが起きない固定値にそろえる。
+       ※kintoneの設定（ドメイン・アプリ・トークン）は今までどおりPCごと。 */
     const firebaseConfig = {
-      apiKey: cfg.apiKey,
-      databaseURL: cfg.dbUrl,
-      projectId: cfg.projectId,
+      apiKey: 'AIzaSyCvh4rDrk6ljWhNBJc-Kt_YFpvEevLxb6o',
+      databaseURL: 'https://hashimoto-press-default-rtdb.asia-southeast1.firebasedatabase.app',
+      projectId: 'hashimoto-press',
       authDomain: 'hashimoto-press.firebaseapp.com',
       appId: '1:508495109760:web:53d266bb4483ab04a29065',   // App Check に要る（2026-10-03）
     };
