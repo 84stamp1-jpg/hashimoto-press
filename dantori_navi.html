@@ -42,6 +42,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.21-3 : 「kintoneから取り直す」を<b>全品番まとめて</b>に変えた（社長「品番毎にやらなければいけませんか？」）。App7は857件で、添付3種だけなら<b>500件ずつ2回・約5秒・約260KB</b>で全部取れる（実測）。1回押せば、その画面を開いているあいだはどの品番も新しいPDFを開く。 -->
 <!-- H-Hub v2026.10.21-2 : <b>呼び出しの音が出ないときがある</b>（社長報告・技術現場のPC）。作りの問題が1つ。<b>呼び出しのたびに音の装置（AudioContext）を新しく作り、閉じていなかった</b>。ブラウザは同時に持てる数に上限があり（Chromeは6つほど）、<b>数回鳴らすと作れなくなって以後ずっと無音</b>になる。→ 1つだけ作って使い回し、鳴らす前に resume() する。あわせて<b>最初のクリック／キー操作でも resume</b>しておく（ページを開いて一度も触っていないと、自動再生の制限で音が止められるため）。失敗したらコンソールに出す（無言で消さない）。※<b>最小化・別タブでChromeがタブを凍結すると、呼び出し自体を受け取らない</b>。これはブラウザ側の設定なのでコードでは直せない。 -->
 <!-- H-Hub v2026.10.21-1 : 品番検索に<b>「🔄 kintoneから取り直す」</b>を付けた（社長報告：kintoneで品質チェックシートを差し替えたのに古いものが開く）。原因は<b>2段階で古くなる</b>こと。(1)品番の情報（PDFの在りか＝fileKey）は<b>毎朝6:50にkintoneから取り込んだFirebaseの写し</b>を見ており、差し替えても翌朝まで古いfileKeyのまま。(2)その古いfileKeyのPDFは<b>このPCに保存</b>してあるので、ネットにも行かず古い中身が開く。→ 押した品番だけ、その場で kintone（App7・<code>文字列__1行__3</code>で検索）から添付を取り直し、新しいfileKeyに差し替える。fileKeyが変われば保存分は別物になるので、PDFは自動で取り直しになる。取り直した分は <code>_freshDocs</code> に持ち、5分ごとの写しの入れ替えでも消えない。 -->
 <!-- H-Hub v2026.10.15-1 : 配置表の印刷に<b>「この日の計画」</b>を戻した（社長指示：下に余白があるので載せたい）。2026-09-03 に「2枚目になる」として外していたが、1枚に収まる。<b>ロボットライン以降は出さない</b>＝A〜Cラインだけ（準備チェック表と同じ <code>SETUP_LINE_RE</code> の決まり）。紙では意味のない<b>鍵ボタン・押したときの動き・「品番を押すと…」の案内</b>は外す。改ページで途中で割れないようにもした。 -->
@@ -4626,9 +4627,9 @@ function renderResult(part){
     ? '<span style="font-size:11px;color:#16a34a;background:#dcfce7;padding:2px 7px;border-radius:10px;margin-left:8px;">kintone連携</span>'
       /* ★PDFの在りかは毎朝6:50の写し。差し替えた直後はここを押す（2026-10-21 社長指示） */
       + '<button type="button" id="btnRefreshPart" onclick="hhubRefreshPart(\'' + String(part.partNo).replace(/'/g, "\\'") + '\')"'
-      + ' title="kintoneでPDFを差し替えた直後は、ここを押すと新しいものに入れ替わります（ふだんは押さなくて結構です）"'
+      + ' title="kintoneでPDFを差し替えた直後に1回押してください。全品番を取り直します（約5秒）。ふだんは押さなくて結構です"'
       + ' style="margin-left:8px;padding:2px 9px;font-size:11px;border:1px solid #cbd5e1;border-radius:10px;'
-      + 'background:#fff;color:#334155;cursor:pointer;font-family:inherit;">🔄 kintoneから取り直す</button>'
+      + 'background:#fff;color:#334155;cursor:pointer;font-family:inherit;">🔄 kintoneから取り直す（全品番）</button>'
       + (part.refreshed
           ? '<span style="font-size:11px;color:#b45309;margin-left:6px;">取り直し済</span>' : '')
     : '<span style="font-size:11px;color:#888;background:#f3f4f6;padding:2px 7px;border-radius:10px;margin-left:8px;">デモデータ</span>';
@@ -5238,36 +5239,50 @@ const KT_DOC_FIELDS = { '作業標準書':'standardWork', '品質チェックシ
                         '段取標準書':'dantoStandard' };
 const _freshDocs = {};   // 正規化した品番 → 取り直した添付（写しが入れ替わっても残す）
 
+/* ★品番ごとではなく、1回で全部取り直す（2026-10-21 社長「品番毎にやらなければいけませんか？」）
+   実測：App7は857件。添付3種だけなら500件ずつ2回・約5秒・約260KB で全部取れる。
+   取った分は _freshDocs に入れ、この画面を開いているあいだ全品番で効く。 */
 window.hhubRefreshPart = async function(partNo){
   const gas = config.proxyUrl || config.gasUrl;
   if(!gas){ alert('設定画面でGAS URLを入力してください'); return; }
   const btn = document.getElementById('btnRefreshPart');
   const moto = btn ? btn.textContent : '';
-  if(btn){ btn.disabled = true; btn.textContent = '取り直しています…'; }
-  const q = KT_PART_FIELD + ' = "' + String(partNo).replace(/"/g, '') + '" limit 1';
-  const d = await _moldJsonp(gas + '?query=' + encodeURIComponent(q), 60000);
-  if(btn){ btn.disabled = false; btn.textContent = moto; }
-  if(!d || d.error || !d.records || !d.records.length){
-    alert('kintoneから取り直せませんでした。\n'
-        + (d && d.error ? '（' + d.error + '）'
-                        : 'この品番がkintoneに無いか、通信に失敗しました。'));
-    return;
-  }
-  const rec = d.records[0];
-  const box = {};
-  let kazu = 0;
-  Object.keys(KT_DOC_FIELDS).forEach(function(fld){
-    const f = rec[fld];
-    if(!f || !Array.isArray(f.value)) return;
-    box[KT_DOC_FIELDS[fld]] = f.value.map(function(x){
-      return { name: x.name, fileKey: x.fileKey };
+  const flds = [KT_PART_FIELD].concat(Object.keys(KT_DOC_FIELDS)).join(',');
+  let hinban = 0, pdf = 0;
+  for(let page = 0; page < 6; page++){            // 念のため6回（3000件）まで
+    if(btn){ btn.textContent = '取り直しています… ' + hinban + '品番'; btn.disabled = true; }
+    const q = 'order by レコード番号 asc limit 500 offset ' + (page * 500);
+    const d = await _moldJsonp(gas + '?query=' + encodeURIComponent(q)
+                             + '&fields=' + encodeURIComponent(flds), 120000);
+    if(!d || d.error){
+      if(btn){ btn.disabled = false; btn.textContent = moto; }
+      alert('kintoneから取り直せませんでした。\n（' + ((d && d.error) || '通信に失敗しました') + '）');
+      return;
+    }
+    const recs = d.records || [];
+    recs.forEach(function(rec){
+      const pn = rec[KT_PART_FIELD] && rec[KT_PART_FIELD].value;
+      if(!pn) return;
+      const box = {};
+      let n = 0;
+      Object.keys(KT_DOC_FIELDS).forEach(function(fld){
+        const f = rec[fld];
+        if(!f || !Array.isArray(f.value) || !f.value.length) return;
+        box[KT_DOC_FIELDS[fld]] = f.value.map(function(x){
+          return { name: x.name, fileKey: x.fileKey };
+        });
+        n += f.value.length;
+      });
+      if(n){ _freshDocs[_pnNorm(pn)] = box; pdf += n; }
+      hinban++;
     });
-    kazu += f.value.length;
-  });
-  _freshDocs[_pnNorm(partNo)] = box;
-  selectPart(partNo);
-  alert('kintoneから取り直しました（PDF ' + kazu + '件）。\n'
-      + 'そのまま開けば、新しいPDFを取りに行きます。');
+    if(recs.length < 500) break;
+  }
+  if(btn){ btn.disabled = false; btn.textContent = moto; }
+  if(partNo) selectPart(partNo);
+  alert('kintoneから取り直しました。\n'
+      + '品番 ' + hinban + '件 ／ PDF ' + pdf + '件\n\n'
+      + 'この画面を開いているあいだは、どの品番も新しいPDFを開きます。');
 };
 
 async function openDoc(docName, fileKey, partNo){
@@ -12872,7 +12887,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.21-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.21-3';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -22121,7 +22136,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.21-2</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.21-3</div>
 </body>
 </html>
 
