@@ -42,6 +42,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.21-1 : 品番検索に<b>「🔄 kintoneから取り直す」</b>を付けた（社長報告：kintoneで品質チェックシートを差し替えたのに古いものが開く）。原因は<b>2段階で古くなる</b>こと。(1)品番の情報（PDFの在りか＝fileKey）は<b>毎朝6:50にkintoneから取り込んだFirebaseの写し</b>を見ており、差し替えても翌朝まで古いfileKeyのまま。(2)その古いfileKeyのPDFは<b>このPCに保存</b>してあるので、ネットにも行かず古い中身が開く。→ 押した品番だけ、その場で kintone（App7・<code>文字列__1行__3</code>で検索）から添付を取り直し、新しいfileKeyに差し替える。fileKeyが変われば保存分は別物になるので、PDFは自動で取り直しになる。取り直した分は <code>_freshDocs</code> に持ち、5分ごとの写しの入れ替えでも消えない。 -->
 <!-- H-Hub v2026.10.15-1 : 配置表の印刷に<b>「この日の計画」</b>を戻した（社長指示：下に余白があるので載せたい）。2026-09-03 に「2枚目になる」として外していたが、1枚に収まる。<b>ロボットライン以降は出さない</b>＝A〜Cラインだけ（準備チェック表と同じ <code>SETUP_LINE_RE</code> の決まり）。紙では意味のない<b>鍵ボタン・押したときの動き・「品番を押すと…」の案内</b>は外す。改ページで途中で割れないようにもした。 -->
 <!-- H-Hub v2026.10.14-7 : 段取り準備チェック表に<b>「終品：前の品番」</b>を出した（社長指摘：<b>終品を測るのは前の品だが、前の品が何か分からない</b>）。表に出ていたのは「次の品番」だけだった。→ 品番の下に <b>終品：18120-6Y0（〜17:00）</b> のように、同じラインでその工程の生産が始まる前に終わる工程のうち<b>いちばん遅く終わるもの</b>を出す（段取りなしの工程も相手になるので、絞り込む前の全部から探す）。茶色の太字。前の品が計画に無ければ「終品：—」（前日から流れている）。表の下の説明にも<b>測るのは「終品：」の品番、大きい品番は次に載せる品</b>と書いた。 -->
 <!-- H-Hub v2026.10.14-6 : v2026.10.14-5 で<b>これから書き込む値</b>は直ったが、<b>すでにFirebaseに入っている 19:10 はそのまま</b>だった（社長報告「変わっていません」）。自動同期は<b>担当者が入っている行には手を触れない</b>作りで、しかも取り込み時に仲田さん・見原さんを先に段取りへ入れているため、ほぼ全部の行が「担当あり」になり、いつまでも直らない。→ 担当済みの行でも<b>段取り開始が生産開始より後ろのものだけは空にする</b>（担当は消さない）。進捗ボードが動けば自動で直る。すぐ直したいときは「📥 今すぐ同期」。 -->
@@ -4607,6 +4608,14 @@ async function doSearch(){
     dantoStandard: Array.isArray(part.dantoStandard) ? part.dantoStandard.map(f=>({name:f.name,key:f.fileKey,type:'段取標準書'})) : [],
     fromKintone:  true,
   };
+  // ★kintoneから取り直した分があれば、そちらを使う（毎朝6:50の写しより新しい）
+  const fresh = _freshDocs[_pnNorm(part.partNo)];
+  if(fresh){
+    if(fresh.standardWork)  renderPart.standardWork  = fresh.standardWork.map(f=>({name:f.name,key:f.fileKey,type:'作業標準書'}));
+    if(fresh.qualitySheet)  renderPart.qualitySheet  = fresh.qualitySheet.map(f=>({name:f.name,key:f.fileKey,type:'品質チェックシート'}));
+    if(fresh.dantoStandard) renderPart.dantoStandard = fresh.dantoStandard.map(f=>({name:f.name,key:f.fileKey,type:'段取標準書'}));
+    renderPart.refreshed = true;
+  }
   renderResult(renderPart);
 }
 
@@ -4614,6 +4623,13 @@ function renderResult(part){
   const el = document.getElementById('searchResult');
   const source = part.fromKintone
     ? '<span style="font-size:11px;color:#16a34a;background:#dcfce7;padding:2px 7px;border-radius:10px;margin-left:8px;">kintone連携</span>'
+      /* ★PDFの在りかは毎朝6:50の写し。差し替えた直後はここを押す（2026-10-21 社長指示） */
+      + '<button type="button" id="btnRefreshPart" onclick="hhubRefreshPart(\'' + String(part.partNo).replace(/'/g, "\\'") + '\')"'
+      + ' title="kintoneでPDFを差し替えた直後は、ここを押すと新しいものに入れ替わります（ふだんは押さなくて結構です）"'
+      + ' style="margin-left:8px;padding:2px 9px;font-size:11px;border:1px solid #cbd5e1;border-radius:10px;'
+      + 'background:#fff;color:#334155;cursor:pointer;font-family:inherit;">🔄 kintoneから取り直す</button>'
+      + (part.refreshed
+          ? '<span style="font-size:11px;color:#b45309;margin-left:6px;">取り直し済</span>' : '')
     : '<span style="font-size:11px;color:#888;background:#f3f4f6;padding:2px 7px;border-radius:10px;margin-left:8px;">デモデータ</span>';
 
   // 作業標準書ボタン群
@@ -5208,6 +5224,50 @@ window.hhubPdfCacheClear = async function(){
 };
 // 本当にPDFか（先頭が "%PDF"）。kintoneのエラー（JSON）がPDFとして返ってくることがあるため
 function _isPdfBytes(b){ return b.length > 4 && b[0]===0x25 && b[1]===0x50 && b[2]===0x44 && b[3]===0x46; }
+
+/* ===== kintoneから取り直す（2026-10-21 社長指示）=========================
+   品番の情報（PDFの在りか＝fileKey）は、毎朝6:50にkintoneから取り込んだ
+   Firebaseの写しを見ている。kintoneでPDFを差し替えても、写しは翌朝まで
+   古いfileKeyのまま。しかも古いfileKeyのPDFはこのPCに保存してあるので、
+   ネットにも行かず古い中身がそのまま開く（社長報告：更新したのに古いものが出る）。
+   → 押した品番だけ、その場でkintoneから取り直して新しいfileKeyに差し替える。
+   fileKeyが変われば保存分は別物になるので、PDFは自動で取り直しになる。 */
+const KT_PART_FIELD = '文字列__1行__3';     // App7 の品番
+const KT_DOC_FIELDS = { '作業標準書':'standardWork', '品質チェックシート':'qualitySheet',
+                        '段取標準書':'dantoStandard' };
+const _freshDocs = {};   // 正規化した品番 → 取り直した添付（写しが入れ替わっても残す）
+
+window.hhubRefreshPart = async function(partNo){
+  const gas = config.proxyUrl || config.gasUrl;
+  if(!gas){ alert('設定画面でGAS URLを入力してください'); return; }
+  const btn = document.getElementById('btnRefreshPart');
+  const moto = btn ? btn.textContent : '';
+  if(btn){ btn.disabled = true; btn.textContent = '取り直しています…'; }
+  const q = KT_PART_FIELD + ' = "' + String(partNo).replace(/"/g, '') + '" limit 1';
+  const d = await _moldJsonp(gas + '?query=' + encodeURIComponent(q), 60000);
+  if(btn){ btn.disabled = false; btn.textContent = moto; }
+  if(!d || d.error || !d.records || !d.records.length){
+    alert('kintoneから取り直せませんでした。\n'
+        + (d && d.error ? '（' + d.error + '）'
+                        : 'この品番がkintoneに無いか、通信に失敗しました。'));
+    return;
+  }
+  const rec = d.records[0];
+  const box = {};
+  let kazu = 0;
+  Object.keys(KT_DOC_FIELDS).forEach(function(fld){
+    const f = rec[fld];
+    if(!f || !Array.isArray(f.value)) return;
+    box[KT_DOC_FIELDS[fld]] = f.value.map(function(x){
+      return { name: x.name, fileKey: x.fileKey };
+    });
+    kazu += f.value.length;
+  });
+  _freshDocs[_pnNorm(partNo)] = box;
+  selectPart(partNo);
+  alert('kintoneから取り直しました（PDF ' + kazu + '件）。\n'
+      + 'そのまま開けば、新しいPDFを取りに行きます。');
+};
 
 async function openDoc(docName, fileKey, partNo){
   if(!fileKey){
@@ -12811,7 +12871,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.15-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.21-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -22033,7 +22093,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.15-1</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.21-1</div>
 </body>
 </html>
 
