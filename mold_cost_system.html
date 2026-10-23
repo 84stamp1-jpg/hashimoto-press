@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.10.24-2 : 材料費の工程を<b>列ではなく管理NO.の下</b>に出すようにした（社長指示：列は増やさないでよい）。画面・印刷とも。 -->
 <!-- 金型原価 v2026.10.24-1 : 材料費の<b>明細に「工程」の列</b>を足した（社長指示）。管理NO.の右。集計（品番×工程×材質）で使っている <code>matProcessOf()</code> をそのまま使っているので、集計と同じ工程名が出る（作り直していない）。工程が分からない行は「—」。<b>印刷にも同じ列</b>を入れた。 -->
 <!-- 金型原価 v2026.10.21-2 : <b>1台だけ「読み込み中」で止まる本当の原因</b>。Firebaseのウェブ設定（apiKey・projectId・dbUrl）を<b>PCごとの設定画面</b>から取っていた（初期値は空）。そのPCに違う値が入っていると App Check の証明書要求が弾かれ <code>recaptcha-error</code>→<code>Invalid appcheck token</code> になる。段取りナビ・カメラ一覧は<b>固定で書いてあるので動く</b>。同じ固定値にそろえた（秘密の値ではなく、他の2ページにも同じものがある）。kintoneの設定は今までどおりPCごと。 -->
 <!-- 金型原価 v2026.10.21-1 : <b>あるPCで「読み込み中」のまま止まる</b>のを直した（社長報告・コンソールに <code>appCheck/recaptcha-error</code> と <code>Invalid appcheck token</code>）。原因は<b>App Checkの証明書がそのPCで取れていない</b>こと。(1)段取りナビに2026-10-06で入れた<b>「20秒たっても証明書が取れなければ1回だけ読み直す」</b>がこのページには入っていなかった（最終更新10/5で対策より前）ので移植した。(2)Firebaseのリアルタイムデータベースは<b>つながらないときエラーを返さない</b>ため、読み込みの処理も失敗の処理も動かず永久に固まっていた。<b>10秒待ってデータが来なければ、このPCの控えを表示</b>するようにした。サイトキー・設定は段取りナビ／カメラと同じ。 -->
@@ -656,7 +657,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.10.24-1</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.10.24-2</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -2822,7 +2823,7 @@ function renderMaterials() {
     <table>
       <thead><tr>
         <th style="width:120px"></th>
-        <th>仕入日</th><th>入荷予定日</th><th>管理NO.</th><th>工程</th><th>品番 / 品名</th>
+        <th>仕入日</th><th>入荷予定日</th><th>管理NO.</th><th>品番 / 品名</th>
         <th>材質</th><th style="text-align:center">X(長)</th><th style="text-align:center">Y(幅)</th><th style="text-align:center">Z(厚)</th><th style="text-align:center">仕上</th><th>重量(kg)</th><th>仕入金額</th><th>手配先</th><th>備考</th>
       </tr></thead>
       <tbody>${entries.map(([k,r])=>`
@@ -2837,15 +2838,16 @@ function renderMaterials() {
           </td>
           <td class="mono" style="font-size:15px;color:${(r.month||'').length>=8?'inherit':'var(--text3)'}">${(r.month||'').length>=8?r.month:'—'}</td>
           <td class="mono" style="font-size:13px;color:${r.arrivalDate?'var(--accent)':'var(--text3)'}">${r.arrivalDate||'—'}</td>
-          <td class="mono" style="font-size:15px;font-weight:600;color:var(--accent)">${r.partNo||r.moldNo||''}</td>
-          <!-- ★工程（2026-10-24 社長指示：明細でも工程名が分かるように）。
+          <!-- ★工程は管理NO.の下に出す（2026-10-24 社長指示：列は増やさない）。
                集計で使っている matProcessOf() をそのまま使う。作り直していない -->
-          <td style="font-size:12px;white-space:nowrap">${(() => {
-            const p = matProcessOf(r);
-            return p.key === 'Z'
-              ? '<span style="color:var(--text3)">—</span>'
-              : '<span style="color:var(--text)">' + p.label + '</span>';
-          })()}</td>
+          <td class="mono" style="font-size:15px;font-weight:600;color:var(--accent)">${r.partNo||r.moldNo||''}
+            ${(() => {
+              const p = matProcessOf(r);
+              return p.key === 'Z' ? ''
+                : '<div style="font-size:10px;font-weight:400;color:var(--text2);white-space:nowrap">'
+                  + p.label + '</div>';
+            })()}
+          </td>
           <td>
             ${matPartNoCell(r.moldNo, r.partNo)}
             ${r.name ? '<div style="font-size:10px;color:var(--text2);margin-top:1px">' + r.name + '</div>' : ''}
@@ -3218,8 +3220,10 @@ function printMaterials() {
 
     return `<tr>
       <td>${r.confirmedAt||'—'}</td>
-      <td class="mono bold accent">${r.partNo||r.moldNo||''}</td>
-      <td class="small">${(() => { const p = matProcessOf(r); return p.key === 'Z' ? '—' : p.label; })()}</td>
+      <td class="mono bold accent">${r.partNo||r.moldNo||''}${(() => {
+        const p = matProcessOf(r);
+        return p.key === 'Z' ? '' : '<div class="small2">' + p.label + '</div>';
+      })()}</td>
       <td><div class="mono bold accent">${partNo}</div>${partName ? '<div class="small2">' + partName + '</div>' : ''}${r.name ? '<div class="small2">' + r.name + '</div>' : ''}</td>
       <td class="mono">${r.material||''}</td>
       <td class="mono">${sizeStr}</td>
@@ -3266,7 +3270,6 @@ tfoot td{ font-weight:700; border-top:2px solid #1e293b; background:#f0f4f8 !imp
   <thead><tr>
     <th>発注日</th>
     <th>管理NO.</th>
-    <th>工程</th>
     <th>品番 / 品名</th>
     <th>材質</th>
     <th style="text-align:center">サイズ (mm)</th>
