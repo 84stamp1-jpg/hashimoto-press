@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.10.24-7 : 社長指摘3点。(1)<b>購入品一覧</b>と(2)<b>外注費一覧</b>が仕入日の古い順だったので、<b>新しい順</b>に直した（<code>shiiredDescCmp()</code>）。日付が空の行（システム開始時の一括計上など）は材料費と同じく<b>最下段</b>にまとめる。(3)<b>加工費「作業員で見る」に ◀▶ の月送りボタン</b>を付けた。手配先別合計と同じ形で、先月・先々月へ1か月ずつ行き来できる。上の絞り込みで月を選んだときはそちらが優先。 -->
 <!-- 金型原価 v2026.10.24-6 : 手配先別合計の推移の出し方を変えた（社長指示）。縦＝手配先・横＝月の<b>表はやめて</b>、<b>手配先ごとのカードの中に直近3か月の棒グラフ</b>を入れた。「表よりも棒のほうがぱっと見で分かる」「カードの横幅のまま、メーカーの下に出してほしい」との指示。棒の高さはカードごとに目いっぱい使う（手配先どうしの大小は金額の数字で見る）。3か月／6か月／12か月の切り替えボタンは不要になったので外した。◀▶の月送りはそのまま。 -->
 <!-- 金型原価 v2026.10.24-5 : 社長の4点。(1)手配先別合計に<b>◀▶の月送りボタン</b>を付けた（上の絞り込みと別に、月を1つずつ行き来できる）。(2)下のグラフを<b>「手配先ごとの月の推移」</b>に作り替えた。縦＝手配先・横＝月の表で、セルは千円と棒。<b>3か月／6か月／12か月</b>をボタンで切り替え（既定6か月）。(3)<b>今月ゼロでも直前3か月に手配があった手配先は、点線の灰色カードで「今月なし・前回○月」と出す</b>。(4)<b>取込で日付（日）を捨てていたのを直した</b>。kintoneの作業明細には日付が入っているのにmonth（YYYY-MM）しか残しておらず、日ごとに見られなかった。kintone直取り・CSV取込の両方で<code>date</code>（YYYY-MM-DD）を持たせ、明細の「月」の列を「日付」に変えた。<b>※すでに入っている13,955行に日付を入れるには、一度取り込み直しが要る</b>。(5)<b>加工費タブが遅かったのを直した</b>。全月のまま明細を全部描くと13,955行＝251,207要素・HTML18.6MBになり、開くのに約1秒かかっていた（実測。集計ビュー77ms・作業員ビュー8msなので、重いのは明細表）。新しい順に<b>500件だけ</b>描き、残りは月の絞り込みか検索で出す。件数と合計は全件ぶんのまま。 -->
 <!-- 金型原価 v2026.10.24-4 : 加工費に<b>「👤 作業員で見る」</b>を足した（社長の問い「月ごとで作業者別・何をどのくらい（何時間）やっているか」）。kintoneの作業明細は1行＝1作業で<b>月・作業員・作業内容・時間・金額が全13,955行に入っている</b>ので、縦＝作業員／横＝作業内容（M/C自動・M/C段取・W/C自動・W/C段取・レーザー・ﾗｼﾞｱﾙ等・組付・TRY・データ）の<b>クロス表</b>にできる。セルは時間、濃さで多寡が見える。右端に 計(h)／前月差／加工費。下に<b>この月にだれがどの金型を手がけたか</b>（時間の多い順）と、<b>直近12か月の総時間</b>の棒グラフ。月は上の絞り込みで選ぶ（全月のときは最新の月）。印刷とコピーも付けた。★日付は月までしか入っていないので日ごとには割れない。 -->
@@ -661,7 +662,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.10.24-6</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.10.24-7</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -1197,7 +1198,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
         <div class="table-title">作業員ごと　何を何時間</div>
         <div class="table-count" id="laborWorkerCount"></div>
         <div class="table-actions">
-          <span style="font-size:11px;color:var(--text3)">月は上の絞り込みで選びます（全月のときは最新の月）</span>
+          <span style="font-size:11px;color:var(--text3)">月は ◀▶ か上の絞り込みで選べます</span>
           <button class="btn btn-secondary btn-sm" onclick="copyTableToClipboard('laborWorkerBody','作業員別')">📋 全行コピー</button>
           <button class="btn btn-secondary btn-sm" onclick="printLaborWorker()">🖨 印刷</button>
         </div>
@@ -3291,6 +3292,16 @@ const LABOR_WORK_ORDER = ['M/C (自動)', 'M/C (段取)', 'W/C (自動)', 'W/C (
                           'ﾗｼﾞｱﾙ・ﾌﾗｲｽ・研磨・旋盤', '組付', 'TRY・調整・溶接', 'データ'];
 let LABOR_WORKER_PRINT = null;   // 印刷が使う
 
+// ◀▶で選んだ月をおぼえておく（手配先別合計と同じ形）
+let LW_STATE = null;
+function lwShiftMonth(d) {
+  if (!LW_STATE) return;
+  const i = LW_STATE.months.indexOf(LW_STATE.cur) + d;
+  if (i < 0 || i >= LW_STATE.months.length) return;
+  LW_STATE.pin = LW_STATE.months[i];
+  LW_STATE.render();
+}
+
 function renderLaborWorker(entries, month) {
   const el = document.getElementById('laborWorkerBody');
   if (!el) return;
@@ -3300,13 +3311,19 @@ function renderLaborWorker(entries, month) {
   if (!months.length) {
     el.innerHTML = '<div class="empty"><div class="empty-icon">👤</div>データなし</div>';
     if (cnt) cnt.textContent = '';
-    LABOR_WORKER_PRINT = null;
+    LABOR_WORKER_PRINT = null; LW_STATE = null;
     return;
   }
+  // 見る月：上の絞り込みで月を選べばそれ、無ければ◀▶で選んだ月、それも無ければ最新の月
+  const pin = LW_STATE && LW_STATE.pin;
   let cur = months[months.length - 1];
+  if (pin && months.includes(pin)) cur = pin;
   if (month && months.includes(month)) cur = month;
-  const prev = months[months.indexOf(cur) - 1] || '';
+  const idx  = months.indexOf(cur);
+  const prev = months[idx - 1] || '';
   const nen = m => m.slice(0, 4) + '年' + parseInt(m.slice(5), 10) + '月';
+  LW_STATE = { months, cur, pin: month ? '' : (pin || ''),
+               render: () => renderLaborWorker(entries, month) };
 
   // 作業員ごとに、作業内容別の時間・金額と、手がけた金型を集める
   const tally = m => {
@@ -3405,9 +3422,16 @@ function renderLaborWorker(entries, month) {
   if (cnt) cnt.textContent = nen(cur) + '　' + names.length + '人　'
                            + numFmt1(totH) + 'h　¥' + fmt(Math.round(totY));
 
+  const nav = (d, mk) => `<button onclick="lwShiftMonth(${d})" ${mk ? '' : 'disabled'}
+      style="border:1px solid var(--border2);background:var(--bg2);color:${mk ? 'var(--accent)' : 'var(--text3)'};
+             border-radius:5px;font-size:12px;padding:0 7px;cursor:${mk ? 'pointer' : 'default'};line-height:19px;
+             vertical-align:middle" title="${mk ? nen(mk) : ''}">${d < 0 ? '◀' : '▶'}</button>`;
+
   el.innerHTML = `
     <div style="padding:10px 12px 0;font-size:12px;color:var(--text2)">
-      <b style="color:var(--text);font-size:13px">${nen(cur)}</b>
+      ${nav(-1, months[idx - 1])}
+      <b style="color:var(--text);font-size:13px;display:inline-block;min-width:76px;text-align:center">${nen(cur)}</b>
+      ${nav(1, months[idx + 1])}
       　合計 <b style="font-family:var(--mono)">${numFmt1(totH)}h</b>
       　加工費 <b style="font-family:var(--mono)">¥${fmt(Math.round(totY))}</b>
       ${prev ? '　<span style="font-size:11px">前月（' + nen(prev) + '） ' + numFmt1(pH) + 'h　' + sa(totH, pH) + 'h</span>' : ''}
@@ -3654,6 +3678,18 @@ tfoot td{ font-weight:700; border-top:2px solid #1e293b; background:#f0f4f8 !imp
 // ═══════════════════════════════════════════════
 // OUTSOURCE
 // ═══════════════════════════════════════════════
+// 仕入日（month）の新しい順。日付が空の行は最下段にまとめる。
+// 材料費の matSortCmp と同じ考え方で、外注費・購入品費にも効かせる。
+// ★2026-10-24 社長指摘：購入品・外注の一覧が古い順になっていた。
+function shiiredDescCmp([ka, a], [kb, b]) {
+  const n = v => String(v || '').replace(/\//g, '-');
+  const da = n(a.month), db = n(b.month);
+  const ea = da.length < 8, eb = db.length < 8;          // 日付なしは最後
+  if (ea !== eb) return ea ? 1 : -1;
+  if (da !== db) return db > da ? 1 : -1;
+  return ka > kb ? 1 : ka < kb ? -1 : 0;
+}
+
 function renderOutsource() {
   const search  = (document.getElementById('outSearch')?.value||'').toLowerCase();
   const month   = document.getElementById('outMonthFilter')?.value || '';
@@ -3685,6 +3721,7 @@ function renderOutsource() {
   renderSupplierSummary(entries.filter(([,r]) => (r.month||'').length >= 8), 'outSupplierSummary', r => r.total||0, _outMonthLabel);
   renderOutSummary(entries);   // ★品番×工程×外注先の集計
   if (!entries.length) { document.getElementById('outTableBody').innerHTML = '<div class="empty"><div class="empty-icon">🏭</div>データなし</div>'; return; }
+  entries = entries.slice().sort(shiiredDescCmp);   // ★仕入日の新しい順
   document.getElementById('outTableBody').innerHTML = `
     <table>
       <thead><tr>
@@ -3758,6 +3795,7 @@ function renderPurchase() {
   renderSupplierSummary(entries.filter(([,r]) => (r.month||'').length >= 8), 'purSupplierSummary', r => r.total||0, _purMonthLabel);
   renderPurSummary(entries);   // ★品番×工程×品名の集計
   if (!entries.length) { document.getElementById('purTableBody').innerHTML = '<div class="empty"><div class="empty-icon">🛒</div>データなし</div>'; return; }
+  entries = entries.slice().sort(shiiredDescCmp);   // ★仕入日の新しい順
   document.getElementById('purTableBody').innerHTML = `
     <table>
       <thead><tr>
