@@ -42,6 +42,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.24-1 : <b>進捗ボードに「📍 いまの位置」の帯</b>を足した（社長依頼）。工場レイアウトを開かなくても、進捗ボードのまま誰がどこにいるかが分かる。サマリー行のすぐ下に、リーダーとリフトを<b>名前＋エリアの丸チップ</b>で並べる。色・ロスト（電波が届いていない＝薄い表示）の扱いは<b>工場レイアウトと同じ</b>（<code>updateBeacons()</code> が作る displayData をそのまま使い、<code>renderBoardBeacons()</code> に渡している）ので、2つの画面で食い違わない。2秒ごとの取り直しに相乗りしているため、通信は増えていない。ビーコンが1つも無いときは帯ごと隠す。 -->
 <!-- H-Hub v2026.10.21-3 : 「kintoneから取り直す」を<b>全品番まとめて</b>に変えた（社長「品番毎にやらなければいけませんか？」）。App7は857件で、添付3種だけなら<b>500件ずつ2回・約5秒・約260KB</b>で全部取れる（実測）。1回押せば、その画面を開いているあいだはどの品番も新しいPDFを開く。 -->
 <!-- H-Hub v2026.10.21-2 : <b>呼び出しの音が出ないときがある</b>（社長報告・技術現場のPC）。作りの問題が1つ。<b>呼び出しのたびに音の装置（AudioContext）を新しく作り、閉じていなかった</b>。ブラウザは同時に持てる数に上限があり（Chromeは6つほど）、<b>数回鳴らすと作れなくなって以後ずっと無音</b>になる。→ 1つだけ作って使い回し、鳴らす前に resume() する。あわせて<b>最初のクリック／キー操作でも resume</b>しておく（ページを開いて一度も触っていないと、自動再生の制限で音が止められるため）。失敗したらコンソールに出す（無言で消さない）。※<b>最小化・別タブでChromeがタブを凍結すると、呼び出し自体を受け取らない</b>。これはブラウザ側の設定なのでコードでは直せない。 -->
 <!-- H-Hub v2026.10.21-1 : 品番検索に<b>「🔄 kintoneから取り直す」</b>を付けた（社長報告：kintoneで品質チェックシートを差し替えたのに古いものが開く）。原因は<b>2段階で古くなる</b>こと。(1)品番の情報（PDFの在りか＝fileKey）は<b>毎朝6:50にkintoneから取り込んだFirebaseの写し</b>を見ており、差し替えても翌朝まで古いfileKeyのまま。(2)その古いfileKeyのPDFは<b>このPCに保存</b>してあるので、ネットにも行かず古い中身が開く。→ 押した品番だけ、その場で kintone（App7・<code>文字列__1行__3</code>で検索）から添付を取り直し、新しいfileKeyに差し替える。fileKeyが変われば保存分は別物になるので、PDFは自動で取り直しになる。取り直した分は <code>_freshDocs</code> に持ち、5分ごとの写しの入れ替えでも消えない。 -->
@@ -2589,6 +2590,11 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
         <div class="sc-vals"><span class="sc-val" id="s3">-</span><span class="sc-vsep">/</span><span class="sc-vsub" id="sg3">-</span></div>
       </div>
     </div>
+    <!-- ★いまの位置（ビーコン）。工場レイアウトを見に行かなくても
+         進捗ボードのまま、誰がどこにいるか分かるようにする -->
+    <div id="boardBeacons" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;
+         background:#fff;border:1px solid #e2e8f0;border-radius:8px;
+         padding:5px 10px;margin-bottom:8px;"></div>
     <div class="alts" id="alts"></div>
     <div id="grpTabs" style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;"></div>
     <div class="lines" id="lview"><div style="padding:20px;color:#888;font-size:12px;">読み込み中...</div></div>
@@ -5789,6 +5795,47 @@ function updateBeacons(beacons){
 
     if(liftGroup) liftGroup.appendChild(g);
   });
+
+  renderBoardBeacons(leaders, lifts);   // ★進捗ボードの帯にも同じ中身を出す
+}
+
+// ★2026-10-24 社長依頼：工場レイアウトを開かなくても、進捗ボードのまま
+//   「誰がどこにいるか」が分かるようにする。レイアウトと同じ displayData から
+//   作るので、中身・色・ロストの扱いはレイアウトとそろう。
+function renderBoardBeacons(leaders, lifts) {
+  const box = document.getElementById('boardBeacons');
+  if (!box) return;
+  const all = [
+    ...leaders.map(([id, b], i) => ({ id, b, color: PERSON_COLORS[i % PERSON_COLORS.length] })),
+    ...lifts.map(([id, b]) => ({ id, b, color: '#d97706' })),
+  ];
+  if (!all.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+
+  const chip = ({ id, b, color }) => {
+    const lost = b.isLost === true;
+    const moving = !lost && (b.moving === true || b.status === '移動中');
+    const c = lost ? '#94a3b8' : color;
+    const area = lost ? '位置不明' : (b.area || '不明');
+    return '<span title="' + (b.name || id) + '（' + area + '）'
+      + (lost ? '／電波が届いていません' : moving ? '／移動中' : '')
+      + '" style="display:inline-flex;align-items:center;gap:5px;border:1px solid '
+      + (lost ? '#e2e8f0' : c) + ';border-radius:13px;padding:1px 9px 1px 3px;'
+      + (lost ? 'opacity:.6;' : '') + '">'
+      + '<span style="width:19px;height:19px;border-radius:50%;background:' + c + ';'
+      + 'display:inline-block;flex:0 0 auto;"></span>'
+      + '<span style="font-size:12px;font-weight:700;color:#1e293b;white-space:nowrap">'
+      + (b.name || id) + '</span>'
+      + '<span style="font-size:11px;color:' + (lost ? '#94a3b8' : '#475569')
+      + ';white-space:nowrap">' + area + (moving ? ' 動' : '') + '</span>'
+      + '</span>';
+  };
+
+  box.innerHTML =
+    '<span style="font-size:11px;font-weight:700;color:#64748b;white-space:nowrap">📍 いまの位置</span>'
+    + all.map(chip).join('')
+    + '<span style="font-size:10px;color:#94a3b8;margin-left:auto;white-space:nowrap">'
+    + '薄いもの＝電波が届いていません</span>';
+  box.style.display = 'flex';
 }
 
 // Firebaseから取得したlinesデータを保持
@@ -12887,7 +12934,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.21-3';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.24-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -22136,7 +22183,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.21-3</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.24-1</div>
 </body>
 </html>
 
