@@ -42,6 +42,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.24-3 : ミニ工場地図を<b>浮かせるのをやめて、進捗ボードの中に1枠として置いた</b>（社長「進捗ボードと被ってしまいそう／畳むと見えなくなる」）。ラインのカードと同じ並び（3列のグリッド）の<b>いちばん最後に1枠</b>として入る。カードの上に重ならないので<b>何も隠さず、いつも見えている</b>。畳むボタンは要らなくなったので外した。枠は作り直さず使い回し、<code>renderBoard()</code> がカードを作り直すたびに置き直す。ビーコンが1つも無いときは枠ごと出さない（ボードの場所を取らない）。 -->
 <!-- H-Hub v2026.10.24-2 : 「いまの位置」を<b>名前の札の並び→ミニ工場地図</b>に作り替えた（社長「見にくい」）。進捗ボードの<b>左下に小さな工場の絵を浮かせ</b>、そこにビーコンを描く。下地は<b>本物の工場レイアウト(#factorySvg)を複製</b>して作るので座標が食い違わない。ラインのカード・カメラ・暑さ指数・凡例は外して、<b>枠と場所の名前だけ</b>残している。ビーコンは縮めても読めるよう<b>大きめの丸＋名前2文字</b>で描き直す（リフトは4文字）。帯の見出しには「仲田＝プレスB　八木＝現場事務所…」と一列でも出すので、小さい画面でも読める。<b>✕（▾）で畳める</b>。畳んだかどうかはそのPCに覚えさせる。呼び出しボタンとぶつからないよう左下に置いた。 -->
 <!-- H-Hub v2026.10.24-1 : <b>進捗ボードに「📍 いまの位置」の帯</b>を足した（社長依頼）。工場レイアウトを開かなくても、進捗ボードのまま誰がどこにいるかが分かる。サマリー行のすぐ下に、リーダーとリフトを<b>名前＋エリアの丸チップ</b>で並べる。色・ロスト（電波が届いていない＝薄い表示）の扱いは<b>工場レイアウトと同じ</b>（<code>updateBeacons()</code> が作る displayData をそのまま使い、<code>renderBoardBeacons()</code> に渡している）ので、2つの画面で食い違わない。2秒ごとの取り直しに相乗りしているため、通信は増えていない。ビーコンが1つも無いときは帯ごと隠す。 -->
 <!-- H-Hub v2026.10.21-3 : 「kintoneから取り直す」を<b>全品番まとめて</b>に変えた（社長「品番毎にやらなければいけませんか？」）。App7は857件で、添付3種だけなら<b>500件ずつ2回・約5秒・約260KB</b>で全部取れる（実測）。1回押せば、その画面を開いているあいだはどの品番も新しいPDFを開く。 -->
@@ -5805,18 +5806,12 @@ function updateBeacons(beacons){
 //     縮小しても読めるよう大きめの丸で描き直す。
 //   ・中身は updateBeacons() が作る displayData をそのまま使うので、
 //     2つの画面で食い違わない。
-const MINI_LS = 'hhub_minimap_closed';
-let _miniBase = null;        // 下地（1回だけ作る）
-
-function miniMapToggle() {
-  const body = document.getElementById('miniMapBody');
-  const btn  = document.getElementById('miniMapBtn');
-  if (!body) return;
-  const closed = body.style.display !== 'none';
-  body.style.display = closed ? 'none' : '';
-  if (btn) btn.textContent = closed ? '▸' : '▾';
-  try { localStorage.setItem(MINI_LS, closed ? '1' : ''); } catch (_) {}
-}
+// 地図の枠。進捗ボードのカードと同じ並びの中に入れる（浮かせない）。
+// ★2026-10-24 はじめは左下に浮かせたが、社長から「進捗ボードと被る／
+//   畳むと見えなくなる」との指摘。カードの列の最後に1枠として置けば、
+//   何も隠さず、いつも見えている。
+let _miniBox  = null;        // 枠（作り直さず使い回す）
+let _miniBase = null;        // 地図の下地（1回だけ作る）
 
 function miniMapBase() {
   if (_miniBase) return _miniBase;
@@ -5825,14 +5820,14 @@ function miniMapBase() {
   const m = src.cloneNode(true);
   m.removeAttribute('id');
   m.setAttribute('width', '100%');
-  m.setAttribute('height', 'auto');
+  m.setAttribute('preserveAspectRatio', 'xMidYMid meet');
   m.style.display = 'block';
   // 動くもの・細かすぎるものは外す
   m.querySelectorAll('[onclick^="clickLineId"]').forEach(el => el.remove());
   ['beaconGroup', 'cameraMarks', 'wbgtBox'].forEach(id => {
     const el = m.querySelector('#' + id); if (el) el.remove();
   });
-  // 凡例（右下 x>=452 y>=370 の枠と文字）は小さすぎて読めないので外す
+  // 凡例（右下 x>=452 y>=368 の枠と文字）は小さすぎて読めないので外す
   [...m.children].forEach(el => {
     const x = parseFloat(el.getAttribute('x')), y = parseFloat(el.getAttribute('y'));
     if (!isNaN(x) && !isNaN(y) && x >= 452 && y >= 368) el.remove();
@@ -5844,22 +5839,48 @@ function miniMapBase() {
   return m;
 }
 
+function miniMapTile() {
+  if (_miniBox) return _miniBox;
+  const base = miniMapBase();
+  if (!base) return null;
+  const d = document.createElement('div');
+  d.id = 'miniMapBox';
+  d.style.cssText = 'background:#fff;border:1px solid #cbd5e1;border-radius:8px;'
+                  + 'overflow:hidden;display:flex;flex-direction:column;min-width:0;';
+  const hd = document.createElement('div');
+  hd.style.cssText = 'display:flex;align-items:center;gap:6px;padding:3px 8px;background:#1e293b;';
+  hd.innerHTML = '<span style="font-size:11px;font-weight:700;color:#fff;white-space:nowrap">📍 いまの位置</span>'
+               + '<span id="miniMapNames" style="font-size:10px;color:#cbd5e1;flex:1;'
+               + 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>';
+  const bd = document.createElement('div');
+  bd.style.cssText = 'padding:4px;flex:1;display:flex;align-items:center;';
+  bd.appendChild(base);
+  d.appendChild(hd); d.appendChild(bd);
+  _miniBox = d;
+  return d;
+}
+
+// カードの列の最後に置き直す（renderBoard が中身を作り直すたびに呼ぶ）
+function miniMapAttach() {
+  const lv = document.getElementById('lview');
+  const t  = miniMapTile();
+  if (!lv || !t) return;
+  if (t.parentNode !== lv) lv.appendChild(t);
+}
+
 function renderBoardBeacons(leaders, lifts) {
-  const box  = document.getElementById('miniMapBox');
-  const body = document.getElementById('miniMapBody');
-  if (!box || !body) return;
+  const t = miniMapTile();
+  if (!t) return;
 
   const all = [
     ...leaders.map(([id, b], i) => ({ id, b, color: PERSON_COLORS[i % PERSON_COLORS.length] })),
     ...lifts.map(([id, b]) => ({ id, b, color: '#d97706' })),
   ];
-  if (!all.length) { box.style.display = 'none'; return; }
+  // ビーコンが1つも無いときは枠ごと出さない（ボードの場所を取らない）
+  if (!all.length) { if (t.parentNode) t.parentNode.removeChild(t); return; }
+  miniMapAttach();
 
-  const base = miniMapBase();
-  if (!base) return;
-  if (body.firstChild !== base) { body.innerHTML = ''; body.appendChild(base); }
-
-  const g = base.querySelector('#miniBeacons');
+  const g = _miniBase.querySelector('#miniBeacons');
   g.innerHTML = '';
   const NS = 'http://www.w3.org/2000/svg';
   const used = {};                           // エリアごとに何人目か
@@ -5887,13 +5908,13 @@ function renderBoardBeacons(leaders, lifts) {
     g.appendChild(dot);
 
     const nm = String(b.name || id);
-    const t = document.createElementNS(NS, 'text');
-    t.setAttribute('x', cx); t.setAttribute('y', cy + (nm.length > 2 ? 5 : 7));
-    t.setAttribute('text-anchor', 'middle'); t.setAttribute('fill', '#fff');
-    t.setAttribute('font-weight', '700');
-    t.setAttribute('font-size', nm.length > 2 ? 13 : 19);
-    t.textContent = nm.length > 2 ? nm.slice(0, 4) : nm.slice(0, 2);
-    g.appendChild(t);
+    const t2 = document.createElementNS(NS, 'text');
+    t2.setAttribute('x', cx); t2.setAttribute('y', cy + (nm.length > 2 ? 5 : 7));
+    t2.setAttribute('text-anchor', 'middle'); t2.setAttribute('fill', '#fff');
+    t2.setAttribute('font-weight', '700');
+    t2.setAttribute('font-size', nm.length > 2 ? 13 : 19);
+    t2.textContent = nm.length > 2 ? nm.slice(0, 4) : nm.slice(0, 2);
+    g.appendChild(t2);
 
     const tip = document.createElementNS(NS, 'title');
     tip.textContent = nm + '（' + (lost ? '位置不明' : (b.area || '不明')) + '）';
@@ -5904,13 +5925,6 @@ function renderBoardBeacons(leaders, lifts) {
   const nmEl = document.getElementById('miniMapNames');
   if (nmEl) nmEl.textContent = all.map(({ id, b }) =>
     (b.name || id) + '＝' + (b.isLost ? '不明' : (b.area || '不明'))).join('　');
-
-  box.style.display = '';
-  let closed = false;
-  try { closed = localStorage.getItem(MINI_LS) === '1'; } catch (_) {}
-  const bodyEl = document.getElementById('miniMapBody');
-  const btn = document.getElementById('miniMapBtn');
-  if (closed && bodyEl.style.display !== 'none') { bodyEl.style.display = 'none'; if (btn) btn.textContent = '▸'; }
 }
 
 // Firebaseから取得したlinesデータを保持
@@ -13009,7 +13023,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.24-2';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.24-3';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -16492,6 +16506,7 @@ function renderBoard(){
       '<div class="lupdate">更新：'+fmtTs(l.updatedAt)+'（'+(el<9999?el+'分前':'未更新')+'）</div>';
         c.appendChild(d);
   });
+  miniMapAttach();          // ★いまの位置（ミニ工場地図）をカードの最後に置く
   renderSum();renderAlts();
 }
 
@@ -22258,24 +22273,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<!-- ★いまの位置（ミニ工場地図）。進捗ボードの左下に浮かせる。
-     工場レイアウトを開かなくても、誰がどこにいるかが絵で分かる。
-     ✕で畳める（畳んだかどうかはこのPCに覚えさせる）。 -->
-<div id="miniMapBox" style="display:none;position:fixed;left:8px;bottom:8px;z-index:900;
-     width:min(540px,46vw);background:rgba(255,255,255,0.97);border:1px solid #cbd5e1;
-     border-radius:10px;box-shadow:0 4px 14px rgba(0,0,0,0.18);overflow:hidden;">
-  <div style="display:flex;align-items:center;gap:6px;padding:3px 8px;background:#1e293b;">
-    <span style="font-size:11px;font-weight:700;color:#fff;">📍 いまの位置</span>
-    <span id="miniMapNames" style="font-size:10px;color:#cbd5e1;flex:1;overflow:hidden;
-          text-overflow:ellipsis;white-space:nowrap;"></span>
-    <button onclick="miniMapToggle()" id="miniMapBtn" title="畳む／開く"
-      style="background:none;border:none;color:#cbd5e1;font-size:13px;cursor:pointer;
-             padding:0 2px;line-height:1;">▾</button>
-  </div>
-  <div id="miniMapBody" style="padding:4px;"></div>
-</div>
-
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.24-2</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.24-3</div>
 </body>
 </html>
 
