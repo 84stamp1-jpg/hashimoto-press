@@ -42,6 +42,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.24-7 : 上段の「この日の計画」の2点（社長指摘）。(1)<b>いま選んでいるグループのラインだけ</b>を出すようにした（プレスを見ているときはロボットライン・組立を出さない／ロボット組立を見ているときはプレスを出さない）。上のグループのタブに連動する。(2)<b>上段が広くなって進捗ボードが見にくくなった</b>ので、ラインの数に応じて<b>行の高さを詰める</b>ようにした（9〜15px）。上段は「いまの位置」の札（約145px）に収まり、計画を入れる前と同じ高さに戻る。 -->
 <!-- H-Hub v2026.10.24-6 : 進捗ボードの上段に<b>「📋 この日の計画」を時間の帯（ガント）で足した</b>（社長指示）。(1)サマリーのカード（稼働ライン〜段取り中）は<b>中身ぶんの幅だけ</b>使うようにし、空いた横を計画に回した。(2)計画は「いまの位置」の<b>左</b>。<b>横幅ぜんたいが1日（8:00〜20:00）</b>で、朝のものは左、昼からのものは真ん中、というように<b>時刻どおりの位置</b>に置く（配置表の下の札の並びは左寄せで、いつやるのか分からなかった）。2時間ごとの目盛りと<b>いまの時刻の赤い線</b>つき。<b>担当なしは赤枠</b>。中身は配置表と同じ <code>getAllDantoriEntries()</code> なので食い違わない。 -->
 <!-- H-Hub v2026.10.24-5 : 上段の<b>余白をなくした</b>（社長「もっと小さくても行けそう／余白がもったいない」）。(1)名前の一覧を<b>絵の下から横へ</b>移し、札の背を低くした（絵1.75：名前1の横並び）。(2)サマリーのカードを<b>札と同じ高さまで使う</b>ようにした（align-items:stretch）。これで、カードの下にできていた大きな灰色の空きが消える。(3)絵が小さくなるぶん<b>ビーコンの丸をさらに大きく</b>（半径44・文字37）して、名前の2文字が読めるようにした。 -->
 <!-- H-Hub v2026.10.24-4 : ミニ工場地図を<b>上段の右端（「段取り中」の右）へ移し、小さくした</b>（社長指示）。サマリー行(#sumRow)の最後に <b>幅 clamp(240px,20vw,340px)</b> の札として入る。絵を小さくしたぶん<b>ビーコンの丸を大きく描く</b>（824幅の絵の中で半径36・文字29）ので、240〜340pxに縮めても名前の2文字が読める。<b>絵の下に「● 仲田 プレスB　● 八木 現場事務所…」と文字でも出す</b>ので、絵が小さくても確実に分かる。 -->
@@ -9725,6 +9726,7 @@ function _rtBuildPlanList(allEntries){
 //   朝のものは左、昼からのものは真ん中、というように時間どおりの位置に置く。
 //   中身は配置表と同じ getAllDantoriEntries() なので食い違わない。
 let _planBox = null;
+let _planIds = null;   // いま見ているグループのラインID（進捗ボードから渡される）
 
 function miniPlanTile() {
   if (_planBox) return _planBox;
@@ -9740,7 +9742,12 @@ function miniPlanTile() {
   return d;
 }
 
-function renderBoardPlan() {
+// ids＝いま選んでいるグループのラインID。進捗ボード（module側）から渡す。
+// ★2026-10-24 社長「プレスではロボットライン以下は不要、ロボット組立では
+//   プレスのものは不要」。上のグループのタブに合わせて、そのグループの
+//   ラインだけを出す。
+function renderBoardPlan(ids) {
+  if (Array.isArray(ids) && ids.length) _planIds = ids;
   const row = document.getElementById('sumRow');
   const t   = miniPlanTile();
   if (!row || !t) return;
@@ -9758,6 +9765,16 @@ function renderBoardPlan() {
     return;
   }
 
+  if (_planIds && _planIds.length) {
+    const keep = new Set(_planIds);
+    ents = ents.filter(e => keep.has(e.lineId));
+    if (!ents.length) {
+      body.innerHTML = '<div style="font-size:10px;color:#94a3b8;padding:6px">'
+                     + 'このグループの予定はありません</div>';
+      return;
+    }
+  }
+
   const byLine = {};
   ents.forEach(e => (byLine[e.lineId] = byLine[e.lineId] || []).push(e));
   const order = Object.keys(LINE_COLORS_MAP);
@@ -9765,6 +9782,11 @@ function renderBoardPlan() {
     const ia = order.indexOf(a), ib = order.indexOf(b);
     return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b);
   });
+
+  // ★上段が高くなって進捗ボードが狭くならないよう、行の高さを詰める。
+  //   「いまの位置」の札（約145px）に収まる高さに割り振る。
+  const nLine = Object.keys(byLine).length;
+  const RH = Math.max(9, Math.min(15, Math.floor(112 / Math.max(1, nLine))));
 
   const SPAN = RT_END - RT_START;                       // 8:00〜20:00
   const pct  = m => Math.max(0, Math.min(100, (m - RT_START) / SPAN * 100));
@@ -9807,19 +9829,19 @@ function renderBoardPlan() {
       const nAdd = (d.shiftChanges || []).filter(c => c.inWorker).length;
       const none = !nW && !nAdd && !d.noWorker;
       const L = pct(s0), W = Math.max(1.2, pct(e0) - L);
-      const H = lanes > 1 ? 6.5 : 13;
-      const T = lanes > 1 ? (lane * 7 + 1) : 1;
+      const H = lanes > 1 ? (RH - 2) / 2 : RH - 2;
+      const T = lanes > 1 ? (lane * ((RH - 2) / 2 + 1) + 1) : 1;
       return '<div title="' + (d.partNo || '') + '　' + (d.prodStart || '') + '〜' + (d.prodEnd || '')
         + (none ? '　担当なし' : '　👷' + (nW + nAdd)) + '"'
         + ' style="position:absolute;left:' + L + '%;width:' + W + '%;top:' + T + 'px;height:' + H + 'px;'
         + 'background:' + (none ? '#fff5f5' : col + '26') + ';border:1px solid '
         + (none ? '#f87171' : col) + ';border-radius:3px;overflow:hidden;'
-        + 'font-size:8.5px;line-height:' + (H - 2) + 'px;color:#1e293b;padding:0 2px;white-space:nowrap;'
+        + 'font-size:8.5px;line-height:' + Math.max(7, H - 2) + 'px;color:#1e293b;padding:0 2px;white-space:nowrap;'
         + 'text-overflow:ellipsis;box-sizing:border-box">' + (lanes > 1 ? '' : (d.partNo || '')) + '</div>';
     }).join('');
-    return '<div style="display:flex;align-items:stretch;height:15px;margin-bottom:1px">'
-      + '<div style="flex:0 0 66px;font-size:9px;font-weight:700;color:#334155;'
-      + 'border-left:3px solid ' + col + ';padding-left:4px;line-height:15px;'
+    return '<div style="display:flex;align-items:stretch;height:' + RH + 'px;margin-bottom:1px">'
+      + '<div style="flex:0 0 66px;font-size:' + (RH >= 13 ? 9 : 8) + 'px;font-weight:700;color:#334155;'
+      + 'border-left:3px solid ' + col + ';padding-left:4px;line-height:' + RH + 'px;'
       + 'overflow:hidden;white-space:nowrap">' + getLineDisplayName(lid) + '</div>'
       + '<div style="position:relative;flex:1;min-width:0;background:#fbfcfe">'
       + ticks + bars + nowLine + '</div></div>';
@@ -13157,7 +13179,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.24-6';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.24-7';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -16640,7 +16662,7 @@ function renderBoard(){
       '<div class="lupdate">更新：'+fmtTs(l.updatedAt)+'（'+(el<9999?el+'分前':'未更新')+'）</div>';
         c.appendChild(d);
   });
-  renderBoardPlan();        // ★この日の計画（時間の帯）を上段に置く
+  renderBoardPlan(getIDS());   // ★この日の計画（時間の帯）。いま見ているグループのラインだけ
   miniMapAttach();          // ★いまの位置（ミニ工場地図）を上段の右端に置く
   renderSum();renderAlts();
 }
@@ -22408,7 +22430,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.24-6</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.24-7</div>
 </body>
 </html>
 
