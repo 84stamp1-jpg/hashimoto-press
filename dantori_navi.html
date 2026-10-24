@@ -42,6 +42,8 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.24-10 : 計画の帯の<b>行を余白いっぱいまで広げた</b>（社長「Cライン①の下に余白がある」）。段の高さの上限を15→22pxに上げ、段が少ない日は<b>使える高さをめいっぱい分け合う</b>ようにした。行が高いときは<b>品番の文字も大きく</b>する（8.5→10→11px）。上段が145pxを超えないのは変わらない。 -->
+<!-- H-Hub v2026.10.24-9 : 計画の帯で<b>Bラインなど「時間が重なっている行」だけ品番が出ていなかった</b>のを直した（社長指摘）。重なりのある行は上下2段にしていたが、<b>1行ぶんの高さを半分ずつに割っていたため細すぎて品番を置けず</b>、文字を空にしていた。<b>段ごとに1行ぶんの高さを持たせる</b>ようにし、どの帯にも品番が出るようにした。行の高さの配分も<b>ライン数ではなく段の総数</b>で割るように変えたので、重なりがあっても上段は145pxに収まる。段は最大3つまで。 -->
 <!-- H-Hub v2026.10.24-8 : 上段の「この日の計画」の出し分けを<b>グループぴったりから、プレスかロボット組立かの2つ</b>に変えた（社長指示）。<b>プレスA/B・プレスCのタブ→プレスのライン（A〜Cライン）を全部</b>、<b>ロボットライン・組立のタブ→ロボットライン以下だけ</b>。プレスかどうかは準備チェック表と同じ <code>SETUP_LINE_RE</code>（頭がA/B/C）で見る。 -->
 <!-- H-Hub v2026.10.24-7 : 上段の「この日の計画」の2点（社長指摘）。(1)<b>いま選んでいるグループのラインだけ</b>を出すようにした（プレスを見ているときはロボットライン・組立を出さない／ロボット組立を見ているときはプレスを出さない）。上のグループのタブに連動する。(2)<b>上段が広くなって進捗ボードが見にくくなった</b>ので、ラインの数に応じて<b>行の高さを詰める</b>ようにした（9〜15px）。上段は「いまの位置」の札（約145px）に収まり、計画を入れる前と同じ高さに戻る。 -->
 <!-- H-Hub v2026.10.24-6 : 進捗ボードの上段に<b>「📋 この日の計画」を時間の帯（ガント）で足した</b>（社長指示）。(1)サマリーのカード（稼働ライン〜段取り中）は<b>中身ぶんの幅だけ</b>使うようにし、空いた横を計画に回した。(2)計画は「いまの位置」の<b>左</b>。<b>横幅ぜんたいが1日（8:00〜20:00）</b>で、朝のものは左、昼からのものは真ん中、というように<b>時刻どおりの位置</b>に置く（配置表の下の札の並びは左寄せで、いつやるのか分からなかった）。2時間ごとの目盛りと<b>いまの時刻の赤い線</b>つき。<b>担当なしは赤枠</b>。中身は配置表と同じ <code>getAllDantoriEntries()</code> なので食い違わない。 -->
@@ -9791,10 +9793,36 @@ function renderBoardPlan(ids) {
 
   // ★上段が高くなって進捗ボードが狭くならないよう、行の高さを詰める。
   //   「いまの位置」の札（約145px）に収まる高さに割り振る。
-  const nLine = Object.keys(byLine).length;
-  // 見出し・目盛り・余白で約43px使うので、行に回せるのは約102px。
-  // 行は高さRH＋すき間1pxなので n*(RH+1) <= 102 になるように決める。
-  const RH = Math.max(9, Math.min(15, Math.floor(102 / Math.max(1, nLine)) - 1));
+  // ★先に、ラインごとの「段」を決める。
+  //   時間の重なっている品番は上下に分ける（重ねると読めないため）。
+  //   ★2026-10-24 社長「Bラインの品番が入っていないのはなぜ？」
+  //     重なりのある行だけ段を半分の高さにしていたので、細すぎて品番を
+  //     出せていなかった。段ごとに1行ぶんの高さを持たせ、品番を出す。
+  const prep = lids.map(lid => {
+    const js = byLine[lid].map(d => {
+      const s0 = rt_toMin(d.prodStart || d.setupStart);
+      let   e0 = rt_toMin(d.prodEnd);
+      if (s0 === null) return null;
+      if (e0 === null || e0 <= s0) e0 = s0 + 30;
+      return { d, s0, e0 };
+    }).filter(Boolean).sort((a, b) => a.s0 - b.s0);
+    const laneEnd = [];
+    js.forEach(j => {
+      let k = laneEnd.findIndex(v => v <= j.s0);
+      if (k < 0) { k = Math.min(laneEnd.length, 2); }   // 段は最大3つ
+      j.lane = k; laneEnd[k] = j.e0;
+    });
+    return { lid, js, lanes: Math.max(1, laneEnd.length) };
+  });
+
+  // 見出し・目盛り・余白で約43px使うので、段に回せるのは約102px。
+  // 段は高さRH＋すき間1pxなので 段の総数*(RH+1) <= 102 になるように決める。
+  // ★2026-10-24 社長「下に余白があるのでもっと行を広げられないか」。
+  //   段が少ない日は上限で頭打ちになって下が余っていたので、上限を上げて
+  //   使える高さをめいっぱい分け合うようにした。
+  const nLane = prep.reduce((a, p) => a + p.lanes, 0) || 1;
+  const RH = Math.max(9, Math.min(22, Math.floor(102 / nLane) - 1));
+  const FS = RH >= 19 ? 11 : RH >= 16 ? 10 : 8.5;      // 帯の中の品番の大きさ
 
   const SPAN = RT_END - RT_START;                       // 8:00〜20:00
   const pct  = m => Math.max(0, Math.min(100, (m - RT_START) / SPAN * 100));
@@ -9815,41 +9843,27 @@ function renderBoardPlan(ids) {
     ? '<div style="position:absolute;left:' + pct(nowM) + '%;top:0;bottom:0;width:2px;'
       + 'background:#dc2626;opacity:.75"></div>' : '';
 
-  const rows = lids.map(lid => {
+  const rows = prep.map(({ lid, js, lanes }) => {
     const col = LINE_COLORS_MAP[lid] || '#6b7280';
-    // 時間の重なっている品番は上下2段に分けて置く（重ねると読めないため）
-    const js = byLine[lid].map(d => {
-      const s0 = rt_toMin(d.prodStart || d.setupStart);
-      let   e0 = rt_toMin(d.prodEnd);
-      if (s0 === null) return null;
-      if (e0 === null || e0 <= s0) e0 = s0 + 30;
-      return { d, s0, e0 };
-    }).filter(Boolean).sort((a, b) => a.s0 - b.s0);
-    const laneEnd = [];
-    js.forEach(j => {
-      let k = laneEnd.findIndex(v => v <= j.s0);
-      if (k < 0) { k = Math.min(laneEnd.length, 1); }   // 段は最大2つ
-      j.lane = k; laneEnd[k] = j.e0;
-    });
-    const lanes = Math.min(2, laneEnd.length) || 1;
+    const rowH = lanes * RH + (lanes - 1);
     const bars = js.map(({ d, s0, e0, lane }) => {
       const nW   = (((d.roles || {}).作業者) || '').split(/[,、]/).map(x => x.trim()).filter(Boolean).length;
       const nAdd = (d.shiftChanges || []).filter(c => c.inWorker).length;
       const none = !nW && !nAdd && !d.noWorker;
       const L = pct(s0), W = Math.max(1.2, pct(e0) - L);
-      const H = lanes > 1 ? (RH - 2) / 2 : RH - 2;
-      const T = lanes > 1 ? (lane * ((RH - 2) / 2 + 1) + 1) : 1;
+      const H = RH - 2;
+      const T = lane * (RH + 1) + 1;
       return '<div title="' + (d.partNo || '') + '　' + (d.prodStart || '') + '〜' + (d.prodEnd || '')
         + (none ? '　担当なし' : '　👷' + (nW + nAdd)) + '"'
         + ' style="position:absolute;left:' + L + '%;width:' + W + '%;top:' + T + 'px;height:' + H + 'px;'
         + 'background:' + (none ? '#fff5f5' : col + '26') + ';border:1px solid '
         + (none ? '#f87171' : col) + ';border-radius:3px;overflow:hidden;'
-        + 'font-size:8.5px;line-height:' + Math.max(7, H - 2) + 'px;color:#1e293b;padding:0 2px;white-space:nowrap;'
-        + 'text-overflow:ellipsis;box-sizing:border-box">' + (lanes > 1 ? '' : (d.partNo || '')) + '</div>';
+        + 'font-size:' + FS + 'px;line-height:' + (H - 2) + 'px;color:#1e293b;padding:0 3px;white-space:nowrap;'
+        + 'text-overflow:ellipsis;box-sizing:border-box">' + (d.partNo || '') + '</div>';
     }).join('');
-    return '<div style="display:flex;align-items:stretch;height:' + RH + 'px;margin-bottom:1px">'
-      + '<div style="flex:0 0 66px;font-size:' + (RH >= 13 ? 9 : 8) + 'px;font-weight:700;color:#334155;'
-      + 'border-left:3px solid ' + col + ';padding-left:4px;line-height:' + RH + 'px;'
+    return '<div style="display:flex;align-items:stretch;height:' + rowH + 'px;margin-bottom:1px">'
+      + '<div style="flex:0 0 66px;font-size:' + (RH >= 16 ? 10 : RH >= 13 ? 9 : 8) + 'px;font-weight:700;color:#334155;'
+      + 'border-left:3px solid ' + col + ';padding-left:4px;line-height:' + rowH + 'px;'
       + 'overflow:hidden;white-space:nowrap">' + getLineDisplayName(lid) + '</div>'
       + '<div style="position:relative;flex:1;min-width:0;background:#fbfcfe">'
       + ticks + bars + nowLine + '</div></div>';
@@ -13187,7 +13201,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.24-8';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.24-10';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -22438,7 +22452,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.24-8</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.24-10</div>
 </body>
 </html>
 
