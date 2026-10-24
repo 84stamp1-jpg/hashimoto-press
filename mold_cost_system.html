@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.10.24-5 : 社長の4点。(1)手配先別合計に<b>◀▶の月送りボタン</b>を付けた（上の絞り込みと別に、月を1つずつ行き来できる）。(2)下のグラフを<b>「手配先ごとの月の推移」</b>に作り替えた。縦＝手配先・横＝月の表で、セルは千円と棒。<b>3か月／6か月／12か月</b>をボタンで切り替え（既定6か月）。(3)<b>今月ゼロでも直前3か月に手配があった手配先は、点線の灰色カードで「今月なし・前回○月」と出す</b>。(4)<b>取込で日付（日）を捨てていたのを直した</b>。kintoneの作業明細には日付が入っているのにmonth（YYYY-MM）しか残しておらず、日ごとに見られなかった。kintone直取り・CSV取込の両方で<code>date</code>（YYYY-MM-DD）を持たせ、明細の「月」の列を「日付」に変えた。<b>※すでに入っている13,955行に日付を入れるには、一度取り込み直しが要る</b>。(5)<b>加工費タブが遅かったのを直した</b>。全月のまま明細を全部描くと13,955行＝251,207要素・HTML18.6MBになり、開くのに約1秒かかっていた（実測。集計ビュー77ms・作業員ビュー8msなので、重いのは明細表）。新しい順に<b>500件だけ</b>描き、残りは月の絞り込みか検索で出す。件数と合計は全件ぶんのまま。 -->
 <!-- 金型原価 v2026.10.24-4 : 加工費に<b>「👤 作業員で見る」</b>を足した（社長の問い「月ごとで作業者別・何をどのくらい（何時間）やっているか」）。kintoneの作業明細は1行＝1作業で<b>月・作業員・作業内容・時間・金額が全13,955行に入っている</b>ので、縦＝作業員／横＝作業内容（M/C自動・M/C段取・W/C自動・W/C段取・レーザー・ﾗｼﾞｱﾙ等・組付・TRY・データ）の<b>クロス表</b>にできる。セルは時間、濃さで多寡が見える。右端に 計(h)／前月差／加工費。下に<b>この月にだれがどの金型を手がけたか</b>（時間の多い順）と、<b>直近12か月の総時間</b>の棒グラフ。月は上の絞り込みで選ぶ（全月のときは最新の月）。印刷とコピーも付けた。★日付は月までしか入っていないので日ごとには割れない。 -->
 <!-- 金型原価 v2026.10.24-3 : <b>手配先別合計を作り替えた</b>（社長指示）。(1)システム開始時の<b>一括計上6件（計¥10,636,660）を集計から外した</b>。2026-04-30付で管理NO.が金型番号そのもの・品名も材質も寸法も数量も空・金額だけの行。日付ではなく<b>「明細の中身が空か」</b>で見分けている（<code>isLumpRow()</code>）。(2)全期間ではなく<b>月で見る</b>。当月（絞り込みで月を選べばその月）と<b>前月との差</b>を出す。(3)下に<b>直近12か月の棒グラフ</b>。材料費・外注費・購入品費の3つとも同じ。 -->
 <!-- 金型原価 v2026.10.24-2 : 材料費の工程を<b>列ではなく管理NO.の下</b>に出すようにした（社長指示：列は増やさないでよい）。画面・印刷とも。 -->
@@ -659,7 +660,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.10.24-4</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.10.24-5</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -2757,6 +2758,20 @@ function isLumpRow(r) {
   return kara(r.supplier) && kara(r.name) && (!pn || !mn || pn === mn);
 }
 
+// 画面ごとに「いま見ている月」と「推移の幅」を覚えておく（材料・外注・購入で別々）
+const SUP_STATE = {};
+function supShiftMonth(elId, d) {
+  const st = SUP_STATE[elId]; if (!st) return;
+  const i = st.months.indexOf(st.cur) + d;
+  if (i < 0 || i >= st.months.length) return;
+  st.pin = st.months[i];
+  st.render();
+}
+function supSetSpan(elId, n) {
+  const st = SUP_STATE[elId]; if (!st) return;
+  st.span = n; st.render();
+}
+
 function renderSupplierSummary(entries, elId, getAmt, monthLabel) {
   const el = document.getElementById(elId);
   if (!el) return;
@@ -2764,34 +2779,43 @@ function renderSupplierSummary(entries, elId, getAmt, monthLabel) {
   // 一括計上を外す
   const lump = entries.filter(([,r]) => isLumpRow(r));
   const use  = entries.filter(([,r]) => !isLumpRow(r));
-  if (!use.length && !lump.length) { el.innerHTML = ''; return; }
+  if (!use.length && !lump.length) { el.innerHTML = ''; delete SUP_STATE[elId]; return; }
 
   const ym = r => String(r.month || '').slice(0, 7);          // YYYY-MM
   const months = [...new Set(use.map(([,r]) => ym(r)).filter(x => x.length === 7))].sort();
-  if (!months.length) { el.innerHTML = ''; return; }
+  if (!months.length) { el.innerHTML = ''; delete SUP_STATE[elId]; return; }
 
-  // 見ている月：絞り込みで月が選ばれていればそれ、無ければいちばん新しい月
-  const sel = (monthLabel || '').match(/(\d{4})年(\d{1,2})月/);
+  const prev = SUP_STATE[elId] || {};
+  const span = prev.span || 6;                                 // 推移の幅（3/6/12か月）
+
+  // 見る月：◀▶で選んだ月 → 絞り込みで選んだ月 → いちばん新しい月
   let cur = months[months.length - 1];
+  const sel = (monthLabel || '').match(/(\d{4})年(\d{1,2})月/);
   if (sel) {
     const c = sel[1] + '-' + String(sel[2]).padStart(2, '0');
     if (months.includes(c)) cur = c;
   }
-  const prev = months[months.indexOf(cur) - 1] || '';
+  if (prev.pin && months.includes(prev.pin) && !sel) cur = prev.pin;
 
-  const sumBy = m => {
-    const map = {};
-    use.filter(([,r]) => ym(r) === m).forEach(([,r]) => {
-      const k = (r.supplier || '').trim() || '（手配先なし）';
-      if (!map[k]) map[k] = { total: 0, count: 0 };
-      map[k].total += getAmt(r); map[k].count++;
-    });
-    return map;
-  };
-  const mc = sumBy(cur), mp = prev ? sumBy(prev) : {};
-  const gc = Object.values(mc).reduce((s, v) => s + v.total, 0);
-  const gp = Object.values(mp).reduce((s, v) => s + v.total, 0);
-  const nen = m => m.slice(0, 4) + '年' + parseInt(m.slice(5), 10) + '月';
+  SUP_STATE[elId] = { months, cur, span, pin: prev.pin,
+                      render: () => renderSupplierSummary(entries, elId, getAmt, monthLabel) };
+
+  // 月 → 手配先 → {total,count} を1回の走査で作る
+  const byMonth = {};
+  months.forEach(m => { byMonth[m] = {}; });
+  use.forEach(([,r]) => {
+    const m = ym(r); if (!byMonth[m]) return;
+    const k = (r.supplier || '').trim() || '（手配先なし）';
+    const o = byMonth[m][k] || (byMonth[m][k] = { total: 0, count: 0 });
+    o.total += getAmt(r); o.count++;
+  });
+
+  const idx  = months.indexOf(cur);
+  const pm   = months[idx - 1] || '';
+  const mc   = byMonth[cur] || {}, mp = pm ? (byMonth[pm] || {}) : {};
+  const gc   = Object.values(mc).reduce((s, v) => s + v.total, 0);
+  const gp   = Object.values(mp).reduce((s, v) => s + v.total, 0);
+  const nen  = m => m.slice(0, 4) + '年' + parseInt(m.slice(5), 10) + '月';
 
   const sa = (a, b) => {
     if (!b) return '<span style="color:var(--text3)">前月なし</span>';
@@ -2802,49 +2826,99 @@ function renderSupplierSummary(entries, elId, getAmt, monthLabel) {
          + '（' + (d > 0 ? '+' : '−') + Math.round(Math.abs(d) / b * 100) + '%）</span>';
   };
 
-  const cards = Object.entries(mc).sort(([,a],[,b]) => b.total - a.total).map(([k, v]) => `
-    <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:8px 14px;min-width:130px;box-shadow:0 1px 3px rgba(0,0,0,0.06)">
+  // ★今月ゼロでも、3か月以内に手配があった手配先は灰色で出す（社長指示）
+  const recent = months.slice(Math.max(0, idx - 3), idx);   // 直前の3か月
+  const nemuri = {};
+  recent.forEach(m => Object.keys(byMonth[m] || {}).forEach(k => {
+    if (!mc[k]) nemuri[k] = m;                               // 最後に手配があった月
+  }));
+
+  const card = (k, v, sleep) => `
+    <div style="background:${sleep ? 'transparent' : 'var(--bg2)'};border:1px ${sleep ? 'dashed' : 'solid'} var(--border2);
+                border-radius:8px;padding:8px 14px;min-width:130px;${sleep ? 'opacity:.62' : 'box-shadow:0 1px 3px rgba(0,0,0,0.06)'}">
       <div style="font-size:10px;color:var(--text2);margin-bottom:4px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:150px" title="${k}">${k}</div>
-      <div style="font-size:14px;font-weight:700;font-family:var(--mono);color:var(--text)">¥${fmt(v.total)}</div>
-      <div style="font-size:9px;color:var(--text3);margin-top:2px">${v.count}件　${sa(v.total, (mp[k]||{}).total || 0)}</div>
-    </div>`).join('') || '<div style="font-size:11px;color:var(--text3)">この月はありません</div>';
-
-  // 直近12か月の棒グラフ
-  const last = months.slice(-12);
-  const tot = {};
-  last.forEach(m => { tot[m] = use.filter(([,r]) => ym(r) === m).reduce((s,[,r]) => s + getAmt(r), 0); });
-  const mx = Math.max(1, ...Object.values(tot));
-  const bars = last.map(m => {
-    const h = Math.max(2, Math.round(tot[m] / mx * 56));
-    const ima = m === cur;
-    return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;min-width:38px" title="${nen(m)}　¥${fmt(tot[m])}">
-      <div style="font-size:8px;color:var(--text3);font-family:var(--mono)">${tot[m] ? Math.round(tot[m]/1000) + 'k' : ''}</div>
-      <div style="width:22px;height:${h}px;background:${ima ? 'var(--accent)' : '#c7d2e4'};border-radius:2px 2px 0 0"></div>
-      <div style="font-size:8.5px;color:${ima ? 'var(--accent)' : 'var(--text3)'};font-weight:${ima ? 700 : 400}">${parseInt(m.slice(5),10)}月</div>
+      <div style="font-size:14px;font-weight:700;font-family:var(--mono);color:${sleep ? 'var(--text3)' : 'var(--text)'}">¥${fmt(v)}</div>
+      <div style="font-size:9px;color:var(--text3);margin-top:2px">${sleep
+        ? '今月なし　前回 ' + parseInt(nemuri[k].slice(5), 10) + '月'
+        : mc[k].count + '件　' + sa(v, (mp[k] || {}).total || 0)}</div>
     </div>`;
-  }).join('');
 
-  const lumpAmt = lump.reduce((s,[,r]) => s + getAmt(r), 0);
+  const cards = (Object.entries(mc).sort(([,a],[,b]) => b.total - a.total)
+                   .map(([k, v]) => card(k, v.total, false)).join('')
+               + Object.keys(nemuri).sort().map(k => card(k, 0, true)).join(''))
+             || '<div style="font-size:11px;color:var(--text3)">この月はありません</div>';
+
+  // ★手配先ごとの月の推移（3/6/12か月）
+  const win = months.slice(Math.max(0, idx - span + 1), idx + 1);
+  const sup = {};
+  win.forEach(m => Object.entries(byMonth[m] || {}).forEach(([k, v]) => {
+    sup[k] = (sup[k] || 0) + v.total;
+  }));
+  const rank = Object.entries(sup).sort(([,a],[,b]) => b - a).map(([k]) => k);
+  const mxC  = Math.max(1, ...win.flatMap(m => Object.values(byMonth[m] || {}).map(v => v.total)));
+  const spanBtn = n => `<button onclick="supSetSpan('${elId}',${n})"
+      style="border:1px solid var(--border2);background:${span === n ? 'var(--accent)' : 'var(--bg2)'};
+             color:${span === n ? '#fff' : 'var(--text2)'};border-radius:5px;font-size:10px;
+             padding:1px 7px;cursor:pointer;margin-left:3px">${n}か月</button>`;
+
+  const trend = `
+    <table style="width:auto;min-width:420px">
+      <thead><tr>
+        <th style="text-align:left;font-size:10px">手配先</th>
+        ${win.map(m => `<th style="text-align:right;font-size:10px;white-space:nowrap${m === cur ? ';color:#fff;background:var(--accent)' : ''}">${parseInt(m.slice(5), 10)}月</th>`).join('')}
+        <th style="text-align:right;font-size:10px">計</th>
+      </tr></thead>
+      <tbody>${rank.map(k => `<tr>
+        <td style="font-size:10.5px;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis" title="${k}">${k}</td>
+        ${win.map(m => {
+          const v = (byMonth[m] || {})[k];
+          if (!v) return '<td style="text-align:right;color:var(--text3);font-size:10px">—</td>';
+          const w = Math.max(2, Math.round(v.total / mxC * 46));
+          return `<td style="text-align:right;font-size:10px;font-family:var(--mono);white-space:nowrap" title="${nen(m)}　¥${fmt(v.total)}（${v.count}件）">
+              <span style="display:inline-block;width:${w}px;height:7px;background:${m === cur ? 'var(--accent)' : '#aebdd4'};border-radius:2px;margin-right:4px;vertical-align:middle"></span>${Math.round(v.total / 1000)}k</td>`;
+        }).join('')}
+        <td style="text-align:right;font-size:10px;font-family:var(--mono);font-weight:700">${Math.round(sup[k] / 1000)}k</td>
+      </tr>`).join('')}
+      <tr style="border-top:2px solid var(--border2);font-weight:700;background:var(--bg2)">
+        <td style="font-size:10.5px">計</td>
+        ${win.map(m => {
+          const v = Object.values(byMonth[m] || {}).reduce((s, x) => s + x.total, 0);
+          return `<td style="text-align:right;font-size:10px;font-family:var(--mono)">${Math.round(v / 1000)}k</td>`;
+        }).join('')}
+        <td style="text-align:right;font-size:10px;font-family:var(--mono)">${Math.round(Object.values(sup).reduce((a, b) => a + b, 0) / 1000)}k</td>
+      </tr></tbody>
+    </table>`;
+
+  const lumpAmt = lump.reduce((s, [,r]) => s + getAmt(r), 0);
   const lumpNote = lump.length
     ? `<div style="font-size:9.5px;color:var(--text3);margin-top:6px">
          ※ システム開始時の一括計上 ${lump.length}件・¥${fmt(lumpAmt)} は、この集計から外しています（明細には出ています）
        </div>` : '';
+  const nav = (d, mk) => `<button onclick="supShiftMonth('${elId}',${d})" ${mk ? '' : 'disabled'}
+      style="border:1px solid var(--border2);background:var(--bg2);color:${mk ? 'var(--accent)' : 'var(--text3)'};
+             border-radius:5px;font-size:12px;padding:0 7px;cursor:${mk ? 'pointer' : 'default'};line-height:19px"
+      title="${mk ? nen(mk) : ''}">${d < 0 ? '◀' : '▶'}</button>`;
 
   el.innerHTML = `
     <div style="background:var(--accent-dim);border:1px solid var(--accent-glow);border-radius:10px;padding:10px 14px;margin-bottom:12px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <span style="font-size:11px;font-weight:700;color:var(--accent)">📊 手配先別合計
-          <span style="font-weight:400;color:var(--text2);margin-left:6px">${nen(cur)}</span>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px;flex-wrap:wrap">
+        <span style="font-size:11px;font-weight:700;color:var(--accent);display:inline-flex;align-items:center;gap:5px">
+          📊 手配先別合計
+          ${nav(-1, months[idx - 1])}
+          <span style="font-weight:700;color:var(--text);min-width:76px;text-align:center">${nen(cur)}</span>
+          ${nav(1, months[idx + 1])}
         </span>
         <span style="font-size:13px;font-family:var(--mono);font-weight:700;color:var(--accent)">
           合計：¥${fmt(gc)}
-          <span style="font-size:10px;font-weight:400;margin-left:8px">${prev ? '前月 ¥' + fmt(gp) + '　' + sa(gc, gp) : ''}</span>
+          <span style="font-size:10px;font-weight:400;margin-left:8px">${pm ? '前月 ¥' + fmt(gp) + '　' + sa(gc, gp) : ''}</span>
         </span>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:8px">${cards}</div>
       <div style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--border2)">
-        <div style="font-size:10px;color:var(--text2);margin-bottom:4px;font-weight:600">月ごとの推移（直近12か月）</div>
-        <div style="display:flex;align-items:flex-end;gap:4px;flex-wrap:wrap">${bars}</div>
+        <div style="font-size:10px;color:var(--text2);margin-bottom:5px;font-weight:600">
+          手配先ごとの月の推移（千円）${spanBtn(3)}${spanBtn(6)}${spanBtn(12)}
+        </div>
+        <div style="overflow-x:auto">${trend}</div>
       </div>
       ${lumpNote}
     </div>`;
@@ -3780,15 +3854,38 @@ function renderLabor() {
   document.getElementById('labCount').textContent = entries.length + '件　加工予算: ¥' + fmt(labBudget) + '　加工実績: ¥' + fmt(labTotal);
   renderLaborSummary(entries);   // ★品番×工程×作業内容の集計
   if (!entries.length) { document.getElementById('labTableBody').innerHTML = '<div class="empty"><div class="empty-icon">⚙️</div>データなし（データ取込タブからkintone CSVを取り込んでください）</div>'; return; }
-  document.getElementById('labTableBody').innerHTML = `
+
+  // ★2026-10-24 加工費タブを開くのが遅かった原因（社長指摘）。
+  //   全月のまま明細を全部描くと 13,955行＝251,207要素・HTML 18.6MB になり、
+  //   画面に入れるだけで約1秒かかっていた（実測）。集計ビューは77ms、
+  //   作業員ビューは8msなので、重いのはこの明細表。
+  //   新しい順に並べて先頭 LAB_MAX 件だけ描く。上に出している件数と
+  //   加工予算・加工実績の合計は、今までどおり全件ぶんで計算している。
+  const LAB_MAX = 500;
+  const dOf = r => String(r.date || r.month || '');
+  const sorted = entries.slice().sort((a, b) => {
+    const x = dOf(a[1]), y = dOf(b[1]);
+    return x === y ? 0 : (y > x ? 1 : -1);          // 新しい順
+  });
+  const shown = sorted.slice(0, LAB_MAX);
+  const nokori = sorted.length - shown.length;
+  const oshirase = nokori ? `
+    <div style="background:var(--accent-dim);border-bottom:1px solid var(--accent-glow);
+                padding:6px 12px;font-size:11px;color:var(--text2)">
+      全 <b>${fmt(sorted.length)}</b> 件のうち、新しい順に <b>${LAB_MAX}</b> 件だけ出しています
+      （残り ${fmt(nokori)} 件）。<b>上の月の絞り込みか検索</b>を使うと、そのぶんが出ます。
+      ※ 件数と合計は全件ぶんです
+    </div>` : '';
+
+  document.getElementById('labTableBody').innerHTML = oshirase + `
     <table>
       <thead><tr>
         <th style="width:44px"></th>
-        <th>月</th><th>管理NO.</th><th>部品番号</th><th>工程</th>
+        <th>日付</th><th>管理NO.</th><th>部品番号</th><th>工程</th>
         <th>作業員</th><th>作業内容</th><th>チャージ</th><th>時間</th>
         <th>状況</th><th>加工予算</th><th>加工実績</th><th>残予算</th>
       </tr></thead>
-      <tbody>${entries.map(([k,r])=>`
+      <tbody>${shown.map(([k,r])=>`
         <tr>
           <td style="white-space:nowrap;padding:4px 4px">
             <input type="checkbox" class="lab-check" data-key="${k}"
@@ -3798,7 +3895,7 @@ function renderLabor() {
             <button class="btn btn-danger btn-sm" style="padding:2px 5px;font-size:10px;margin-left:2px"
               onclick="labDeleteOne('${k}')">×</button>
           </td>
-          <td class="mono" style="font-size:15px">${r.month||''}</td>
+          <td class="mono" style="font-size:13px">${r.date || r.month || ''}</td>
           <td class="mono" style="font-size:15px;font-weight:600;color:var(--accent)">${r.moldNo||''}</td>
           <td class="mono" style="font-size:11px">${r.partNo||''}</td>
           <td><span class="chip">${r.process||''}</span></td>
@@ -4205,14 +4302,20 @@ async function importLaborFromKintone(appIdArg) {
       const amount = parseFloat(stVal(row, '金額').replace(/[,¥円\s]/g, '')) || (charge * time);
       if (!work && !time && !amount) return;
 
+      // ★2026-10-24 これまで月しか残しておらず、kintoneに入っている「日」を捨てていた。
+      //   date（YYYY-MM-DD）も持たせる。月は今までどおり集計に使う。
       const dateStr = stVal(row, '日付') || ktVal(rec, '更新日時');
-      let month = new Date().toISOString().slice(0, 7);
+      let month = new Date().toISOString().slice(0, 7), date = '';
       if (dateStr) {
-        const dt = new Date(String(dateStr).replace(/\//g, '-').slice(0, 10));
-        if (!isNaN(dt)) month = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0');
+        const d0 = String(dateStr).replace(/\//g, '-').slice(0, 10);
+        const dt = new Date(d0);
+        if (!isNaN(dt)) {
+          month = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0');
+          date  = month + '-' + String(dt.getDate()).padStart(2, '0');
+        }
       }
       DB.labor['lab_kt_' + ri + '_' + i] = {
-        month, moldNo, partNo, process,
+        month, date, moldNo, partNo, process,
         worker, work, workProcess, workType: status,
         charge, time, amount,
         // 予算・残予算はレコード単位の数字。1行目にだけ持たせて合計の水増しを防ぐ
@@ -4300,13 +4403,15 @@ function importKintoneCSV(e) {
       const worker  = (row['作業員'] || '').trim();
       const dateStr = (row['日付'] || row['更新日時'] || '').trim();
 
-      // 月を取得（2026/4/3 → 2026-04）
-      let month = new Date().toISOString().slice(0, 7);
+      // 月と日付を取得（2026/4/3 → month 2026-04 ／ date 2026-04-03）
+      // ★2026-10-24 これまで日を捨てていたので date も残すようにした
+      let month = new Date().toISOString().slice(0, 7), date = '';
       if (dateStr) {
         const d = dateStr.replace(/\//g, '-').slice(0, 10);
         const dt = new Date(d);
         if (!isNaN(dt)) {
           month = dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0');
+          date  = month + '-' + String(dt.getDate()).padStart(2, '0');
         }
       }
 
@@ -4329,7 +4434,7 @@ function importKintoneCSV(e) {
         //   入れると合計が水増しされる。レコードの開始行にだけ持たせる。
         const num = k => parseFloat((row[k] || '0').replace(/[,¥円\s]/g, '')) || 0;
         DB.labor[key] = {
-          month, moldNo, partNo, process,
+          month, date, moldNo, partNo, process,
           worker, work,
           workType: status,     // トライ状況（進捗。作業の内容ではない）
           charge, time, amount,
@@ -4342,7 +4447,7 @@ function importKintoneCSV(e) {
         const actual = parseFloat((row['加工実績'] || '0').replace(/[,¥円\s]/g, '')) || 0;
         const remain = parseFloat((row['残予算']   || '0').replace(/[,¥円\s]/g, '')) || 0;
         DB.labor[key] = {
-          month, moldNo, partNo, process,
+          month, date, moldNo, partNo, process,
           worker, work: '',
           workType: status,
           charge: 0,
