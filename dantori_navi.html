@@ -42,6 +42,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.24-8 : 上段の「この日の計画」の出し分けを<b>グループぴったりから、プレスかロボット組立かの2つ</b>に変えた（社長指示）。<b>プレスA/B・プレスCのタブ→プレスのライン（A〜Cライン）を全部</b>、<b>ロボットライン・組立のタブ→ロボットライン以下だけ</b>。プレスかどうかは準備チェック表と同じ <code>SETUP_LINE_RE</code>（頭がA/B/C）で見る。 -->
 <!-- H-Hub v2026.10.24-7 : 上段の「この日の計画」の2点（社長指摘）。(1)<b>いま選んでいるグループのラインだけ</b>を出すようにした（プレスを見ているときはロボットライン・組立を出さない／ロボット組立を見ているときはプレスを出さない）。上のグループのタブに連動する。(2)<b>上段が広くなって進捗ボードが見にくくなった</b>ので、ラインの数に応じて<b>行の高さを詰める</b>ようにした（9〜15px）。上段は「いまの位置」の札（約145px）に収まり、計画を入れる前と同じ高さに戻る。 -->
 <!-- H-Hub v2026.10.24-6 : 進捗ボードの上段に<b>「📋 この日の計画」を時間の帯（ガント）で足した</b>（社長指示）。(1)サマリーのカード（稼働ライン〜段取り中）は<b>中身ぶんの幅だけ</b>使うようにし、空いた横を計画に回した。(2)計画は「いまの位置」の<b>左</b>。<b>横幅ぜんたいが1日（8:00〜20:00）</b>で、朝のものは左、昼からのものは真ん中、というように<b>時刻どおりの位置</b>に置く（配置表の下の札の並びは左寄せで、いつやるのか分からなかった）。2時間ごとの目盛りと<b>いまの時刻の赤い線</b>つき。<b>担当なしは赤枠</b>。中身は配置表と同じ <code>getAllDantoriEntries()</code> なので食い違わない。 -->
 <!-- H-Hub v2026.10.24-5 : 上段の<b>余白をなくした</b>（社長「もっと小さくても行けそう／余白がもったいない」）。(1)名前の一覧を<b>絵の下から横へ</b>移し、札の背を低くした（絵1.75：名前1の横並び）。(2)サマリーのカードを<b>札と同じ高さまで使う</b>ようにした（align-items:stretch）。これで、カードの下にできていた大きな灰色の空きが消える。(3)絵が小さくなるぶん<b>ビーコンの丸をさらに大きく</b>（半径44・文字37）して、名前の2文字が読めるようにした。 -->
@@ -9765,12 +9766,17 @@ function renderBoardPlan(ids) {
     return;
   }
 
+  // ★2026-10-24 社長指示。グループぴったりではなく、プレスかロボット組立かの2つに分ける。
+  //   プレスA/B・プレスCのタブ → プレスのライン（A〜Cライン）を全部
+  //   ロボットライン・組立のタブ → ロボットライン以下だけ
+  //   プレスかどうかは準備チェック表と同じ SETUP_LINE_RE（頭がA/B/C）で見る。
   if (_planIds && _planIds.length) {
-    const keep = new Set(_planIds);
-    ents = ents.filter(e => keep.has(e.lineId));
+    const isPressTab = _planIds.some(id => SETUP_LINE_RE.test(String(id || '')));
+    ents = ents.filter(e => SETUP_LINE_RE.test(String(e.lineId || '')) === isPressTab);
     if (!ents.length) {
       body.innerHTML = '<div style="font-size:10px;color:#94a3b8;padding:6px">'
-                     + 'このグループの予定はありません</div>';
+                     + (isPressTab ? 'プレスの予定はありません' : 'ロボットライン・組立の予定はありません')
+                     + '</div>';
       return;
     }
   }
@@ -9786,7 +9792,9 @@ function renderBoardPlan(ids) {
   // ★上段が高くなって進捗ボードが狭くならないよう、行の高さを詰める。
   //   「いまの位置」の札（約145px）に収まる高さに割り振る。
   const nLine = Object.keys(byLine).length;
-  const RH = Math.max(9, Math.min(15, Math.floor(112 / Math.max(1, nLine))));
+  // 見出し・目盛り・余白で約43px使うので、行に回せるのは約102px。
+  // 行は高さRH＋すき間1pxなので n*(RH+1) <= 102 になるように決める。
+  const RH = Math.max(9, Math.min(15, Math.floor(102 / Math.max(1, nLine)) - 1));
 
   const SPAN = RT_END - RT_START;                       // 8:00〜20:00
   const pct  = m => Math.max(0, Math.min(100, (m - RT_START) / SPAN * 100));
@@ -13179,7 +13187,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.24-7';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.24-8';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -22430,7 +22438,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.24-7</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.24-8</div>
 </body>
 </html>
 
