@@ -42,6 +42,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.24-6 : 進捗ボードの上段に<b>「📋 この日の計画」を時間の帯（ガント）で足した</b>（社長指示）。(1)サマリーのカード（稼働ライン〜段取り中）は<b>中身ぶんの幅だけ</b>使うようにし、空いた横を計画に回した。(2)計画は「いまの位置」の<b>左</b>。<b>横幅ぜんたいが1日（8:00〜20:00）</b>で、朝のものは左、昼からのものは真ん中、というように<b>時刻どおりの位置</b>に置く（配置表の下の札の並びは左寄せで、いつやるのか分からなかった）。2時間ごとの目盛りと<b>いまの時刻の赤い線</b>つき。<b>担当なしは赤枠</b>。中身は配置表と同じ <code>getAllDantoriEntries()</code> なので食い違わない。 -->
 <!-- H-Hub v2026.10.24-5 : 上段の<b>余白をなくした</b>（社長「もっと小さくても行けそう／余白がもったいない」）。(1)名前の一覧を<b>絵の下から横へ</b>移し、札の背を低くした（絵1.75：名前1の横並び）。(2)サマリーのカードを<b>札と同じ高さまで使う</b>ようにした（align-items:stretch）。これで、カードの下にできていた大きな灰色の空きが消える。(3)絵が小さくなるぶん<b>ビーコンの丸をさらに大きく</b>（半径44・文字37）して、名前の2文字が読めるようにした。 -->
 <!-- H-Hub v2026.10.24-4 : ミニ工場地図を<b>上段の右端（「段取り中」の右）へ移し、小さくした</b>（社長指示）。サマリー行(#sumRow)の最後に <b>幅 clamp(240px,20vw,340px)</b> の札として入る。絵を小さくしたぶん<b>ビーコンの丸を大きく描く</b>（824幅の絵の中で半径36・文字29）ので、240〜340pxに縮めても名前の2文字が読める。<b>絵の下に「● 仲田 プレスB　● 八木 現場事務所…」と文字でも出す</b>ので、絵が小さくても確実に分かる。 -->
 <!-- H-Hub v2026.10.24-3 : ミニ工場地図を<b>浮かせるのをやめて、進捗ボードの中に1枠として置いた</b>（社長「進捗ボードと被ってしまいそう／畳むと見えなくなる」）。ラインのカードと同じ並び（3列のグリッド）の<b>いちばん最後に1枠</b>として入る。カードの上に重ならないので<b>何も隠さず、いつも見えている</b>。畳むボタンは要らなくなったので外した。枠は作り直さず使い回し、<code>renderBoard()</code> がカードを作り直すたびに置き直す。ビーコンが1つも無いときは枠ごと出さない（ボードの場所を取らない）。 -->
@@ -1192,7 +1193,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 
 /* サマリー：コンパクト横並び */
 #tab-progress .sum{display:flex;gap:6px;margin-bottom:8px;align-items:stretch;}  /* ★カードは右端のミニ地図と同じ高さまで使う（空きを作らない） */
-#tab-progress .sc{background:#fff;border-radius:7px;padding:6px 12px;border:1px solid #ddd;display:flex;align-items:center;gap:6px;flex:1;min-width:0;}
+#tab-progress .sc{background:#fff;border-radius:7px;padding:6px 10px;border:1px solid #ddd;display:flex;align-items:center;gap:8px;flex:0 1 auto;min-width:0;}  /* ★中身ぶんの幅だけ使う。余った横は「この日の計画」に回す */
 #tab-progress .sc-info{flex:1;min-width:0;}
 #tab-progress .sc-lbl{font-size:10px;color:#888;}
 #tab-progress .sc-hint{font-size:9px;color:#bbb;margin-top:1px;display:none;}
@@ -6747,6 +6748,7 @@ function renderDantoriCard(d){
 }
 
 function renderDantori(){
+  try { renderBoardPlan(); } catch(_) {}   // ★進捗ボード上段の「この日の計画」も合わせる
   renderKanban();
 }
 
@@ -9715,6 +9717,119 @@ function _rtBuildPlanList(allEntries){
   });
   html += `</div>`;
   return html;
+}
+
+// ===== 進捗ボードの上段：この日の計画を「時間の帯」で出す =====
+// ★2026-10-24 社長指示。配置表の下の「この日の計画」は左寄せの札の並びで、
+//   いつやるのかが分からなかった。横幅ぜんたいを1日（8:00〜20:00）と見て、
+//   朝のものは左、昼からのものは真ん中、というように時間どおりの位置に置く。
+//   中身は配置表と同じ getAllDantoriEntries() なので食い違わない。
+let _planBox = null;
+
+function miniPlanTile() {
+  if (_planBox) return _planBox;
+  const d = document.createElement('div');
+  d.id = 'miniPlanBox';
+  d.style.cssText = 'background:#fff;border:1px solid #cbd5e1;border-radius:7px;'
+                  + 'overflow:hidden;display:flex;flex-direction:column;flex:1 1 0;min-width:0;';
+  d.innerHTML = '<div style="padding:1px 7px;background:#1e293b;flex:0 0 auto">'
+              + '<span style="font-size:10px;font-weight:700;color:#fff">📋 この日の計画</span>'
+              + '<span style="font-size:9px;color:#94a3b8;margin-left:6px">横はそのまま時刻（8時〜20時）</span>'
+              + '</div><div id="miniPlanBody" style="padding:3px 5px 4px;flex:1;min-height:0;"></div>';
+  _planBox = d;
+  return d;
+}
+
+function renderBoardPlan() {
+  const row = document.getElementById('sumRow');
+  const t   = miniPlanTile();
+  if (!row || !t) return;
+  // 置き場所は「いまの位置」の左。地図がまだ無ければいちばん右。
+  const map = document.getElementById('miniMapBox');
+  if (map && map.parentNode === row) { if (t.nextSibling !== map) row.insertBefore(t, map); }
+  else if (t.parentNode !== row) row.appendChild(t);
+
+  const body = document.getElementById('miniPlanBody');
+  if (!body) return;
+  let ents = [];
+  try { ents = (getAllDantoriEntries() || []).filter(e => e && e.lineId); } catch (_) {}
+  if (!ents.length) {
+    body.innerHTML = '<div style="font-size:10px;color:#94a3b8;padding:6px">予定がありません</div>';
+    return;
+  }
+
+  const byLine = {};
+  ents.forEach(e => (byLine[e.lineId] = byLine[e.lineId] || []).push(e));
+  const order = Object.keys(LINE_COLORS_MAP);
+  const lids = Object.keys(byLine).sort((a, b) => {
+    const ia = order.indexOf(a), ib = order.indexOf(b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib) || a.localeCompare(b);
+  });
+
+  const SPAN = RT_END - RT_START;                       // 8:00〜20:00
+  const pct  = m => Math.max(0, Math.min(100, (m - RT_START) / SPAN * 100));
+  // 2時間ごとの目盛り
+  let ticks = '', tickLbl = '';
+  for (let h = 8; h <= 20; h += 2) {
+    const x = pct(h * 60);
+    ticks += '<div style="position:absolute;left:' + x + '%;top:0;bottom:0;width:1px;'
+           + 'background:#e8edf3"></div>';
+    // 数字は見出しの1行だけに出す（各行に出すと帯と重なって読みにくい）
+    tickLbl += '<div style="position:absolute;left:' + x + '%;top:0;transform:translateX(-50%);'
+            + 'font-size:8.5px;color:#94a3b8;line-height:11px">' + h + '</div>';
+  }
+  // いまの時刻
+  const now = new Date();
+  const nowM = now.getHours() * 60 + now.getMinutes();
+  const nowLine = (nowM >= RT_START && nowM <= RT_END)
+    ? '<div style="position:absolute;left:' + pct(nowM) + '%;top:0;bottom:0;width:2px;'
+      + 'background:#dc2626;opacity:.75"></div>' : '';
+
+  const rows = lids.map(lid => {
+    const col = LINE_COLORS_MAP[lid] || '#6b7280';
+    // 時間の重なっている品番は上下2段に分けて置く（重ねると読めないため）
+    const js = byLine[lid].map(d => {
+      const s0 = rt_toMin(d.prodStart || d.setupStart);
+      let   e0 = rt_toMin(d.prodEnd);
+      if (s0 === null) return null;
+      if (e0 === null || e0 <= s0) e0 = s0 + 30;
+      return { d, s0, e0 };
+    }).filter(Boolean).sort((a, b) => a.s0 - b.s0);
+    const laneEnd = [];
+    js.forEach(j => {
+      let k = laneEnd.findIndex(v => v <= j.s0);
+      if (k < 0) { k = Math.min(laneEnd.length, 1); }   // 段は最大2つ
+      j.lane = k; laneEnd[k] = j.e0;
+    });
+    const lanes = Math.min(2, laneEnd.length) || 1;
+    const bars = js.map(({ d, s0, e0, lane }) => {
+      const nW   = (((d.roles || {}).作業者) || '').split(/[,、]/).map(x => x.trim()).filter(Boolean).length;
+      const nAdd = (d.shiftChanges || []).filter(c => c.inWorker).length;
+      const none = !nW && !nAdd && !d.noWorker;
+      const L = pct(s0), W = Math.max(1.2, pct(e0) - L);
+      const H = lanes > 1 ? 6.5 : 13;
+      const T = lanes > 1 ? (lane * 7 + 1) : 1;
+      return '<div title="' + (d.partNo || '') + '　' + (d.prodStart || '') + '〜' + (d.prodEnd || '')
+        + (none ? '　担当なし' : '　👷' + (nW + nAdd)) + '"'
+        + ' style="position:absolute;left:' + L + '%;width:' + W + '%;top:' + T + 'px;height:' + H + 'px;'
+        + 'background:' + (none ? '#fff5f5' : col + '26') + ';border:1px solid '
+        + (none ? '#f87171' : col) + ';border-radius:3px;overflow:hidden;'
+        + 'font-size:8.5px;line-height:' + (H - 2) + 'px;color:#1e293b;padding:0 2px;white-space:nowrap;'
+        + 'text-overflow:ellipsis;box-sizing:border-box">' + (lanes > 1 ? '' : (d.partNo || '')) + '</div>';
+    }).join('');
+    return '<div style="display:flex;align-items:stretch;height:15px;margin-bottom:1px">'
+      + '<div style="flex:0 0 66px;font-size:9px;font-weight:700;color:#334155;'
+      + 'border-left:3px solid ' + col + ';padding-left:4px;line-height:15px;'
+      + 'overflow:hidden;white-space:nowrap">' + getLineDisplayName(lid) + '</div>'
+      + '<div style="position:relative;flex:1;min-width:0;background:#fbfcfe">'
+      + ticks + bars + nowLine + '</div></div>';
+  }).join('');
+
+  // 目盛りの見出し（時刻）を上に1行だけ
+  const head = '<div style="display:flex;height:11px;margin-bottom:1px">'
+    + '<div style="flex:0 0 66px"></div>'
+    + '<div style="position:relative;flex:1;min-width:0">' + tickLbl + '</div></div>';
+  body.innerHTML = head + rows;
 }
 
 /* 段取り開始は「ひとつ前の品番が終わった時刻」から決めている。
@@ -13042,7 +13157,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.24-5';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.24-6';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -16525,6 +16640,7 @@ function renderBoard(){
       '<div class="lupdate">更新：'+fmtTs(l.updatedAt)+'（'+(el<9999?el+'分前':'未更新')+'）</div>';
         c.appendChild(d);
   });
+  renderBoardPlan();        // ★この日の計画（時間の帯）を上段に置く
   miniMapAttach();          // ★いまの位置（ミニ工場地図）を上段の右端に置く
   renderSum();renderAlts();
 }
@@ -22292,7 +22408,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.24-5</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.24-6</div>
 </body>
 </html>
 
