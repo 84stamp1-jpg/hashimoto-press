@@ -42,6 +42,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.24-4 : ミニ工場地図を<b>上段の右端（「段取り中」の右）へ移し、小さくした</b>（社長指示）。サマリー行(#sumRow)の最後に <b>幅 clamp(240px,20vw,340px)</b> の札として入る。絵を小さくしたぶん<b>ビーコンの丸を大きく描く</b>（824幅の絵の中で半径36・文字29）ので、240〜340pxに縮めても名前の2文字が読める。<b>絵の下に「● 仲田 プレスB　● 八木 現場事務所…」と文字でも出す</b>ので、絵が小さくても確実に分かる。 -->
 <!-- H-Hub v2026.10.24-3 : ミニ工場地図を<b>浮かせるのをやめて、進捗ボードの中に1枠として置いた</b>（社長「進捗ボードと被ってしまいそう／畳むと見えなくなる」）。ラインのカードと同じ並び（3列のグリッド）の<b>いちばん最後に1枠</b>として入る。カードの上に重ならないので<b>何も隠さず、いつも見えている</b>。畳むボタンは要らなくなったので外した。枠は作り直さず使い回し、<code>renderBoard()</code> がカードを作り直すたびに置き直す。ビーコンが1つも無いときは枠ごと出さない（ボードの場所を取らない）。 -->
 <!-- H-Hub v2026.10.24-2 : 「いまの位置」を<b>名前の札の並び→ミニ工場地図</b>に作り替えた（社長「見にくい」）。進捗ボードの<b>左下に小さな工場の絵を浮かせ</b>、そこにビーコンを描く。下地は<b>本物の工場レイアウト(#factorySvg)を複製</b>して作るので座標が食い違わない。ラインのカード・カメラ・暑さ指数・凡例は外して、<b>枠と場所の名前だけ</b>残している。ビーコンは縮めても読めるよう<b>大きめの丸＋名前2文字</b>で描き直す（リフトは4文字）。帯の見出しには「仲田＝プレスB　八木＝現場事務所…」と一列でも出すので、小さい画面でも読める。<b>✕（▾）で畳める</b>。畳んだかどうかはそのPCに覚えさせる。呼び出しボタンとぶつからないよう左下に置いた。 -->
 <!-- H-Hub v2026.10.24-1 : <b>進捗ボードに「📍 いまの位置」の帯</b>を足した（社長依頼）。工場レイアウトを開かなくても、進捗ボードのまま誰がどこにいるかが分かる。サマリー行のすぐ下に、リーダーとリフトを<b>名前＋エリアの丸チップ</b>で並べる。色・ロスト（電波が届いていない＝薄い表示）の扱いは<b>工場レイアウトと同じ</b>（<code>updateBeacons()</code> が作る displayData をそのまま使い、<code>renderBoardBeacons()</code> に渡している）ので、2つの画面で食い違わない。2秒ごとの取り直しに相乗りしているため、通信は増えていない。ビーコンが1つも無いときは帯ごと隠す。 -->
@@ -1189,7 +1190,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 #tab-progress .main{flex:1;overflow-y:auto;padding:10px 14px;}
 
 /* サマリー：コンパクト横並び */
-#tab-progress .sum{display:flex;gap:6px;margin-bottom:8px;}
+#tab-progress .sum{display:flex;gap:6px;margin-bottom:8px;align-items:flex-start;}  /* ★右端のミニ地図に合わせてカードが縦に伸びないように */
 #tab-progress .sc{background:#fff;border-radius:7px;padding:6px 12px;border:1px solid #ddd;display:flex;align-items:center;gap:6px;flex:1;min-width:0;}
 #tab-progress .sc-info{flex:1;min-width:0;}
 #tab-progress .sc-lbl{font-size:10px;color:#888;}
@@ -5845,27 +5846,31 @@ function miniMapTile() {
   if (!base) return null;
   const d = document.createElement('div');
   d.id = 'miniMapBox';
-  d.style.cssText = 'background:#fff;border:1px solid #cbd5e1;border-radius:8px;'
-                  + 'overflow:hidden;display:flex;flex-direction:column;min-width:0;';
+  // ★上段（サマリー行）の右端に置くので、横は広げず決め打ちの幅にする
+  d.style.cssText = 'background:#fff;border:1px solid #cbd5e1;border-radius:7px;'
+                  + 'overflow:hidden;display:flex;flex-direction:column;'
+                  + 'flex:0 0 auto;width:clamp(220px,17vw,300px);align-self:flex-start;';
   const hd = document.createElement('div');
-  hd.style.cssText = 'display:flex;align-items:center;gap:6px;padding:3px 8px;background:#1e293b;';
-  hd.innerHTML = '<span style="font-size:11px;font-weight:700;color:#fff;white-space:nowrap">📍 いまの位置</span>'
-               + '<span id="miniMapNames" style="font-size:10px;color:#cbd5e1;flex:1;'
-               + 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>';
+  hd.style.cssText = 'padding:2px 7px;background:#1e293b;';
+  hd.innerHTML = '<span style="font-size:10px;font-weight:700;color:#fff;white-space:nowrap">📍 いまの位置</span>';
   const bd = document.createElement('div');
-  bd.style.cssText = 'padding:4px;flex:1;display:flex;align-items:center;';
+  bd.style.cssText = 'padding:2px;';
   bd.appendChild(base);
-  d.appendChild(hd); d.appendChild(bd);
+  // 名前は絵の下に文字でも出す（絵が小さいので、ここで読めるようにする）
+  const nm = document.createElement('div');
+  nm.id = 'miniMapNames';
+  nm.style.cssText = 'padding:1px 6px 4px;font-size:10px;line-height:1.45;color:#475569;';
+  d.appendChild(hd); d.appendChild(bd); d.appendChild(nm);
   _miniBox = d;
   return d;
 }
 
-// カードの列の最後に置き直す（renderBoard が中身を作り直すたびに呼ぶ）
+// 上段（サマリー行）の右端＝「段取り中」の右に置き直す
 function miniMapAttach() {
-  const lv = document.getElementById('lview');
-  const t  = miniMapTile();
-  if (!lv || !t) return;
-  if (t.parentNode !== lv) lv.appendChild(t);
+  const row = document.getElementById('sumRow');
+  const t   = miniMapTile();
+  if (!row || !t) return;
+  if (t.parentNode !== row) row.appendChild(t);
 }
 
 function renderBoardBeacons(leaders, lifts) {
@@ -5890,29 +5895,33 @@ function renderBoardBeacons(leaders, lifts) {
     const n = used[b.area] = (used[b.area] || 0);
     used[b.area]++;
     // 右端のエリアは左へ、それ以外は右へ並べる（レイアウトと同じ考え方）
+    // ★絵を小さくしたぶん、丸は大きめに描く（824幅の絵の中での大きさなので、
+    //   240〜340pxに縮めても名前の2文字が読める）
     const dir = (b.area === 'プレスC' || b.area === 'プレスD') ? -1 : 1;
-    const cx = pos.x + (n % 3) * 48 * dir;
-    const cy = pos.y + Math.floor(n / 3) * 48;
+    // 丸が大きいので、絵の外（組立・事務所など端の場所）へはみ出さないよう収める
+    const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+    const cx = clamp(pos.x + (n % 2) * 76 * dir, 40, 784);
+    const cy = clamp(pos.y + Math.floor(n / 2) * 76, 40, 406);
     const c  = lost ? '#94a3b8' : color;
 
     const ring = document.createElementNS(NS, 'circle');
-    ring.setAttribute('cx', cx); ring.setAttribute('cy', cy); ring.setAttribute('r', 24);
+    ring.setAttribute('cx', cx); ring.setAttribute('cy', cy); ring.setAttribute('r', 36);
     ring.setAttribute('fill', '#fff'); ring.setAttribute('stroke', c);
-    ring.setAttribute('stroke-width', 3);
-    ring.setAttribute('stroke-dasharray', lost ? '5,3' : 'none');
+    ring.setAttribute('stroke-width', 5);
+    ring.setAttribute('stroke-dasharray', lost ? '8,5' : 'none');
     g.appendChild(ring);
 
     const dot = document.createElementNS(NS, 'circle');
-    dot.setAttribute('cx', cx); dot.setAttribute('cy', cy); dot.setAttribute('r', 21);
+    dot.setAttribute('cx', cx); dot.setAttribute('cy', cy); dot.setAttribute('r', 32);
     dot.setAttribute('fill', c); dot.setAttribute('opacity', lost ? '0.55' : '1');
     g.appendChild(dot);
 
     const nm = String(b.name || id);
     const t2 = document.createElementNS(NS, 'text');
-    t2.setAttribute('x', cx); t2.setAttribute('y', cy + (nm.length > 2 ? 5 : 7));
+    t2.setAttribute('x', cx); t2.setAttribute('y', cy + (nm.length > 2 ? 7 : 11));
     t2.setAttribute('text-anchor', 'middle'); t2.setAttribute('fill', '#fff');
     t2.setAttribute('font-weight', '700');
-    t2.setAttribute('font-size', nm.length > 2 ? 13 : 19);
+    t2.setAttribute('font-size', nm.length > 2 ? 19 : 29);
     t2.textContent = nm.length > 2 ? nm.slice(0, 4) : nm.slice(0, 2);
     g.appendChild(t2);
 
@@ -5921,10 +5930,13 @@ function renderBoardBeacons(leaders, lifts) {
     g.appendChild(tip);
   });
 
-  // 見出しに名前とエリアを一列で（絵が小さいPCでも読めるように）
+  // 絵の下に名前とエリアを文字でも出す（絵が小さいので、ここで読めるようにする）
   const nmEl = document.getElementById('miniMapNames');
-  if (nmEl) nmEl.textContent = all.map(({ id, b }) =>
-    (b.name || id) + '＝' + (b.isLost ? '不明' : (b.area || '不明'))).join('　');
+  if (nmEl) nmEl.innerHTML = all.map(({ id, b, color }) =>
+    '<span style="white-space:nowrap;margin-right:7px">'
+    + '<b style="color:' + (b.isLost ? '#94a3b8' : color) + '">●</b> '
+    + (b.name || id) + ' <span style="color:#94a3b8">'
+    + (b.isLost ? '不明' : (b.area || '不明')) + '</span></span>').join('');
 }
 
 // Firebaseから取得したlinesデータを保持
@@ -13023,7 +13035,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.24-3';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.24-4';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -16506,7 +16518,7 @@ function renderBoard(){
       '<div class="lupdate">更新：'+fmtTs(l.updatedAt)+'（'+(el<9999?el+'分前':'未更新')+'）</div>';
         c.appendChild(d);
   });
-  miniMapAttach();          // ★いまの位置（ミニ工場地図）をカードの最後に置く
+  miniMapAttach();          // ★いまの位置（ミニ工場地図）を上段の右端に置く
   renderSum();renderAlts();
 }
 
@@ -22273,7 +22285,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.24-3</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.24-4</div>
 </body>
 </html>
 
