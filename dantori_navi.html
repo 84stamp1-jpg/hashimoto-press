@@ -42,6 +42,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.26-1 : 社長指示2点。(1)<b>進捗ボードを、その日の中身に合わせて自動で拡大</b>するようにした。ラインの本数はその日によって変わるのでカードが少ない日は下が余っていた。中身の高さと見えている高さをくらべ、入るだけ <code>zoom</code> で大きくする（最大1.8倍）。小さくはしない＝はみ出す日は今までどおり。ボードを描き直すたびと、窓の大きさを変えたときに計算し直す。(2)<b>「🏭 工場レイアウト」のタブをいったん隠した</b>（あまり使っていないとのこと）。最初に出るのは<b>進捗管理</b>。★タブは消さずに <code>display:none</code> にしてある（<code>switchTab()</code> がタブを並び順の番号で見ているため）。絵の中身も残してある（進捗ボードのミニ地図がこの絵を複製して使っているため）。戻すときはこの1行の display を外すだけ。 -->
 <!-- H-Hub v2026.10.24-10 : 計画の帯の<b>行を余白いっぱいまで広げた</b>（社長「Cライン①の下に余白がある」）。段の高さの上限を15→22pxに上げ、段が少ない日は<b>使える高さをめいっぱい分け合う</b>ようにした。行が高いときは<b>品番の文字も大きく</b>する（8.5→10→11px）。上段が145pxを超えないのは変わらない。 -->
 <!-- H-Hub v2026.10.24-9 : 計画の帯で<b>Bラインなど「時間が重なっている行」だけ品番が出ていなかった</b>のを直した（社長指摘）。重なりのある行は上下2段にしていたが、<b>1行ぶんの高さを半分ずつに割っていたため細すぎて品番を置けず</b>、文字を空にしていた。<b>段ごとに1行ぶんの高さを持たせる</b>ようにし、どの帯にも品番が出るようにした。行の高さの配分も<b>ライン数ではなく段の総数</b>で割るように変えたので、重なりがあっても上段は145pxに収まる。段は最大3つまで。 -->
 <!-- H-Hub v2026.10.24-8 : 上段の「この日の計画」の出し分けを<b>グループぴったりから、プレスかロボット組立かの2つ</b>に変えた（社長指示）。<b>プレスA/B・プレスCのタブ→プレスのライン（A〜Cライン）を全部</b>、<b>ロボットライン・組立のタブ→ロボットライン以下だけ</b>。プレスかどうかは準備チェック表と同じ <code>SETUP_LINE_RE</code>（頭がA/B/C）で見る。 -->
@@ -1408,8 +1409,11 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 <!-- タブ（ヘッダーを兼ねる） -->
 <div class="tabs">
   <div style="padding:0 14px 0 12px;font-size:15px;font-weight:900;color:#1d4ed8;letter-spacing:-0.5px;white-space:nowrap;border-right:1px solid #e5e5e5;align-self:stretch;display:flex;align-items:center;flex-shrink:0;">H-Hub</div>
-  <div class="tab active" onclick="switchTab('factory')">🏭 工場レイアウト</div>
-  <div class="tab" onclick="switchTab('progress')">📊 進捗管理</div>
+  <!-- ★2026-10-26 社長指示：工場レイアウトはあまり使わないので、いったん隠す。
+       switchTab() はタブを並び順の番号で見ているため、消さずに display:none にしてある。
+       中身（#tab-factory）も残す＝進捗ボードのミニ地図がこの絵を複製して使っているため。 -->
+  <div class="tab" onclick="switchTab('factory')" style="display:none;">🏭 工場レイアウト</div>
+  <div class="tab active" onclick="switchTab('progress')">📊 進捗管理</div>
   <div class="tab" onclick="switchTab('quality')">✅ 品質チェック</div>
   <div class="tab" onclick="switchTab('dantori')">📋 段取り指示</div>
   <div class="tab" onclick="switchTab('asmplan')">🔧 組立計画</div>
@@ -1587,7 +1591,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
   </div>
 </div>
 
-<div class="content active" id="tab-factory">
+<div class="content" id="tab-factory">
   <div class="factory-header">
     <button class="refresh-btn" onclick="refreshFactory()">↻ 更新</button>
   </div>
@@ -2562,7 +2566,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 </div><!-- /tab-quality -->
 
 <!-- ===== 進捗管理タブ（ネイティブ実装） ===== -->
-<div class="content" id="tab-progress" style="flex-direction:column;height:calc(100vh - 35px);overflow:hidden;">
+<div class="content active" id="tab-progress" style="flex-direction:column;height:calc(100vh - 35px);overflow:hidden;">
   <div style="display:flex;align-items:center;gap:8px;padding:4px 10px;background:#1a1a1a;flex-shrink:0;">
     <span style="color:#fff;font-size:11px;font-weight:700;flex:1;">📊 進捗管理ボード</span>
     <span class="conn off" id="conn" style="font-size:10px;padding:2px 8px;border-radius:10px;font-weight:700;">接続中...</span>
@@ -5858,7 +5862,7 @@ function miniMapTile() {
   //   大きな空きができていた。名前を絵の【横】に並べて背を低くする。
   d.style.cssText = 'background:#fff;border:1px solid #cbd5e1;border-radius:7px;'
                   + 'overflow:hidden;display:flex;flex-direction:column;'
-                  + 'flex:0 0 auto;width:clamp(255px,18vw,350px);';
+                  + 'flex:0 0 auto;width:clamp(200px,19%,350px);';
   const hd = document.createElement('div');
   hd.style.cssText = 'padding:1px 7px;background:#1e293b;flex:0 0 auto;';
   hd.innerHTML = '<span style="font-size:10px;font-weight:700;color:#fff;white-space:nowrap">📍 いまの位置</span>';
@@ -9749,6 +9753,33 @@ function miniPlanTile() {
 // ★2026-10-24 社長「プレスではロボットライン以下は不要、ロボット組立では
 //   プレスのものは不要」。上のグループのタブに合わせて、そのグループの
 //   ラインだけを出す。
+// ===== 進捗ボード：余白があれば全体を大きくする =====
+// ★2026-10-26 社長指示「その日の表示内容によって余白があれば、全体的に大きく」。
+//   ラインの本数はその日によって変わるので、カードが少ない日は下が余っていた。
+//   中身の高さと見えている高さをくらべて、入るだけ zoom で拡大する。
+//   小さくはしない（はみ出す日は今までどおりスクロール）。
+let _fitTimer = null;
+function fitBoard() {
+  const el = document.getElementById('tab-board');
+  const tp = document.getElementById('tab-progress');
+  if (!el || !tp || !tp.classList.contains('active')) return;
+  if (el.offsetParent === null) return;              // 表示されていない
+  const main = el.parentNode;
+  if (!main) return;
+  el.style.zoom = '1';                               // いったん等倍にして測る
+  const avail = main.clientHeight - 4;
+  const need  = el.scrollHeight;
+  if (!(avail > 0) || !(need > 0)) return;
+  let z = Math.floor(avail / need * 100) / 100;
+  z = Math.max(1, Math.min(1.8, z));
+  el.style.zoom = z > 1.02 ? String(z) : '';
+}
+function fitBoardSoon() {
+  clearTimeout(_fitTimer);
+  _fitTimer = setTimeout(fitBoard, 60);
+}
+window.addEventListener('resize', fitBoardSoon);
+
 function renderBoardPlan(ids) {
   if (Array.isArray(ids) && ids.length) _planIds = ids;
   const row = document.getElementById('sumRow');
@@ -13179,7 +13210,8 @@ function qcRestoreView(){
     sc   = localStorage.getItem('hhubQcScreen')||'';
     pend = localStorage.getItem('hhubQcPending')||'';
   }catch(e){}
-  if(!tab || tab==='factory') return;              // 工場レイアウトはそのまま
+  // ★2026-10-26 工場レイアウトのタブは隠したので、そこへは戻さず進捗管理を出す
+  if(!tab || tab==='factory') return;
   if(typeof window.switchTab !== 'function') return;
   window.switchTab(tab);
   if(tab!=='quality') return;
@@ -13201,7 +13233,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.24-10';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.26-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -16687,6 +16719,7 @@ function renderBoard(){
   renderBoardPlan(getIDS());   // ★この日の計画（時間の帯）。いま見ているグループのラインだけ
   miniMapAttach();          // ★いまの位置（ミニ工場地図）を上段の右端に置く
   renderSum();renderAlts();
+  fitBoardSoon();           // ★余白があれば全体を大きくする
 }
 
 // 段取り待機判定：手動 status==='setup' OR 前品番終了＋次品番未開始
@@ -22452,7 +22485,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.24-10</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.26-1</div>
 </body>
 </html>
 
