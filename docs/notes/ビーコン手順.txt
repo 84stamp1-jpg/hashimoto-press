@@ -10,3 +10,47 @@ STEP 4：config.jsonを編集
 メモ帳でMACアドレスと設置エリア名を入力して保存
 STEP 5：start.batをダブルクリック
 初回のみ自動でセットアップ（1〜2分）後、スキャン開始
+
+=====================================================================
+★2026-10-26　ビーコンが止まっていた件と、直し方
+=====================================================================
+【症状】
+  進捗ボード／工場レイアウトのビーコンが動かない。
+
+【調べた結果】
+  Firebase の /beacons を見ると、4台のスキャナーの最後の報告は
+      pc-press-D    10/05 08:58
+      pc-genbajimu  10/05 08:52
+      pc-press-B    10/05 08:50
+      pc-press-A    10/02 17:18
+  以後まったく更新されていない（約3週間）。
+
+【原因】
+  2026-10-04 に Firebase を「H-Hubの画面から来た通信しか受けない」設定
+  （App Check）にしたため。札（トークン）を持たない通信は
+      401 Missing appcheck token
+  で弾かれる。ブラウザのH-Hubは札を持っているので動くが、
+  スキャナーは素のまま書きに行くので届かなくなった。
+  ※ 2026-10-26 に素のまま読み書きして 401 になることを確認済み。
+
+【直し方】（4台それぞれで行う）
+  1) Firebase コンソール → App Check → アプリ → デバッグトークンを登録する。
+     4台で同じ札を使い回してよい（名前は beacon-scanner など）。
+  2) 各PCの Desktop\beacon_scanner に
+       appcheck_debug_token.txt      ← 1)の札だけを書いたファイル
+       beacon_appcheck.js            ← このフォルダの同名ファイルをコピー
+     を置く。★札はGitHubに置かないこと。
+  3) スキャナー本体（Firebaseへ書いているところ）を直す。
+       const { appCheckHeader } = require('./beacon_appcheck');
+       ...
+       const h = await appCheckHeader();
+       fetch(url, { method:'PUT',
+                    headers:{ 'Content-Type':'application/json', ...h },
+                    body: JSON.stringify(data) });
+  4) start.bat を動かし直し、H-Hubの進捗ボードの「📍 いまの位置」に
+     出るか確かめる。
+
+【あわせて】
+  pc-press-A だけ 10/02 の夕方で止まっており、他の3台より3日早い。
+  札を入れても動かないときは、このPCはスキャナー自体が起動していない
+  （電源が切れている・start.bat が動いていない）可能性が高い。
