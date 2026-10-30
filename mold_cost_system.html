@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.10.30-2 : <b>削除も取込も効かなかった本当の原因</b>（社長のコンソール画面で判明）。<code>saveLocal()</code> が <b>QuotaExceededError</b> を投げていた＝このPCの控え（localStorage・上限5MB）に<b>加工費13,955件を含む4.5MB</b>を書こうとして失敗。<code>writeToFirebase()</code> は先頭で<code>saveLocal()</code> を呼ぶので<b>そこで止まり、Firebaseに1文字も書けていなかった</b>。控えに入らないときは <b>snapshots→quoteRequests→加工費→材料費→購入品費 の順に外して</b>保存し、それでも無理なら控えをあきらめる（正はFirebase）。控えの失敗で本体の保存を止めない。 -->
 <!-- 金型原価 v2026.10.30-1 : <b>金型の削除が効かない</b>のを直した（社長指摘）。(1)Firebaseへの書き込みが失敗しても<code>console.warn</code>で握りつぶしていたため、書けていないのに「削除しました」と出ていた。<b>成否を返すようにし、失敗したら元に戻して「削除できませんでした」と赤で知らせる</b>。(2)金型一覧の編集／×ボタンに<code>event.stopPropagation()</code>が無く、行クリック（明細を開く）と二重に動いていた。(3)kintoneから取り込んだ金型は、kintone側を検収済にするか消さないと<b>次の「取込プレビュー」で戻ってくる</b>ので、確認のことばで断るようにした。 -->
 <!-- 金型原価 v2026.10.24-8 : 作業員ごとの表に<b>「残業(h)」と「1日平均」</b>を足した（社長依頼）。会社カレンダー（<b>休みは土日だけ・祝日も出勤</b>）でその月の<b>稼働日</b>を数え、<b>所定＝稼働日×8時間</b>（8:00-17:00から休憩60分を引いたもの）との差を出す。上の帯に「稼働日○日（所定○h／人）」を出し、計の行にも全員ぶんの差を出す。印刷にも同じ列。★<b>あくまで目安</b>。ここの時間はkintoneに付けた金型の作業だけで出勤時間ではないので、金型以外の仕事や付け忘れはそのまま差に出る。給与は20日締めだが、ここは月ごとで数えている（社長了承）。 -->
 <!-- 金型原価 v2026.10.24-7 : 社長指摘3点。(1)<b>購入品一覧</b>と(2)<b>外注費一覧</b>が仕入日の古い順だったので、<b>新しい順</b>に直した（<code>shiiredDescCmp()</code>）。日付が空の行（システム開始時の一括計上など）は材料費と同じく<b>最下段</b>にまとめる。(3)<b>加工費「作業員で見る」に ◀▶ の月送りボタン</b>を付けた。手配先別合計と同じ形で、先月・先々月へ1か月ずつ行き来できる。上の絞り込みで月を選んだときはそちらが優先。 -->
@@ -664,7 +665,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.10.30-1</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.10.30-2</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -2332,8 +2333,37 @@ function loadLocalData() {
   refreshAll();
 }
 
+// このPCの控え（localStorage）に書く。
+// ★2026-10-30：控えは5MBまでしか入らない。加工費が13,955件まで増えて全体が4.5MBに
+//   なり、setItem が QuotaExceededError を投げていた。saveLocal() は
+//   writeToFirebase() の先頭で呼ばれるため、そこで止まって
+//   **Firebaseに1文字も書けていなかった**（社長：金型を削除できない／
+//   取込ボタンを押しても何も起きない）。
+//   控えは「つながらないときに見るためのもの」なので、入らなければ
+//   かさばる枝から順に落とす。正はFirebase。
+const SAVE_LOCAL_DROP = ['snapshots', 'quoteRequests', 'labor', 'materials', 'purchase'];
 function saveLocal() {
-  localStorage.setItem('hk_mold_data', JSON.stringify(DB));
+  let d = DB;
+  for (let i = 0; i <= SAVE_LOCAL_DROP.length; i++) {
+    try {
+      localStorage.setItem('hk_mold_data', JSON.stringify(d));
+      if (i) console.warn('[mold] このPCの控えが一杯なので ' +
+        SAVE_LOCAL_DROP.slice(0, i).join('・') + ' を外して保存しました');
+      return true;
+    } catch (e) {
+      if (i === SAVE_LOCAL_DROP.length) {
+        try { localStorage.removeItem('hk_mold_data'); } catch (e2) {}
+        console.warn('[mold] このPCの控えを保存できませんでした（容量不足）', e);
+        if (!window._localFullTold) {
+          window._localFullTold = true;
+          try { toast('このPCの控えが一杯です（保存自体はできています）', 'error'); } catch (e3) {}
+        }
+        return false;
+      }
+      d = Object.assign({}, d);
+      delete d[SAVE_LOCAL_DROP[i]];
+    }
+  }
 }
 
 async function writeToFirebase(path, data) {
@@ -2341,8 +2371,8 @@ async function writeToFirebase(path, data) {
   if (path === 'quoteRequests') normalizeQuoteRequests(data);
   // ★金型が変わったら逆引きの索引を作り直す（NOを直しても件数が同じことがあるため）
   if (path === 'molds') invalidateMoldIndex();
-  // ローカルDBは常に最新を保持
-  saveLocal();
+  // ローカルDBは常に最新を保持（控えに書けなくてもFirebaseへの書き込みは止めない）
+  try { saveLocal(); } catch(e) { console.warn('saveLocal error:', e); }
   if (db) {
     window._fbWriting = true;  // リスナーによる上書きを防ぐ
     try {
