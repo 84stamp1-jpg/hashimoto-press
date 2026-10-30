@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.10.30-3 : <b>CSV出力がチェックを見ていなかった</b>のを直した（社長指摘）。材料費・購入品費・外注費の「⬇ CSV出力」「⬇ 3費目まとめて」は、これまで必ず全件を書き出していた。印刷と同じ考え方にそろえ、<b>どこか1つでもチェックが入っていればそのチェック分だけ</b>、1つも無ければ今までどおり全件。書き出したあとのことばにも「（チェックした分だけ）／（全件）」を出す。★列の並びは変えていない（生産管理システム側の設定が壊れるため）。 -->
 <!-- 金型原価 v2026.10.30-2 : <b>削除も取込も効かなかった本当の原因</b>（社長のコンソール画面で判明）。<code>saveLocal()</code> が <b>QuotaExceededError</b> を投げていた＝このPCの控え（localStorage・上限5MB）に<b>加工費13,955件を含む4.5MB</b>を書こうとして失敗。<code>writeToFirebase()</code> は先頭で<code>saveLocal()</code> を呼ぶので<b>そこで止まり、Firebaseに1文字も書けていなかった</b>。控えに入らないときは <b>snapshots→quoteRequests→加工費→材料費→購入品費 の順に外して</b>保存し、それでも無理なら控えをあきらめる（正はFirebase）。控えの失敗で本体の保存を止めない。 -->
 <!-- 金型原価 v2026.10.30-1 : <b>金型の削除が効かない</b>のを直した（社長指摘）。(1)Firebaseへの書き込みが失敗しても<code>console.warn</code>で握りつぶしていたため、書けていないのに「削除しました」と出ていた。<b>成否を返すようにし、失敗したら元に戻して「削除できませんでした」と赤で知らせる</b>。(2)金型一覧の編集／×ボタンに<code>event.stopPropagation()</code>が無く、行クリック（明細を開く）と二重に動いていた。(3)kintoneから取り込んだ金型は、kintone側を検収済にするか消さないと<b>次の「取込プレビュー」で戻ってくる</b>ので、確認のことばで断るようにした。 -->
 <!-- 金型原価 v2026.10.24-8 : 作業員ごとの表に<b>「残業(h)」と「1日平均」</b>を足した（社長依頼）。会社カレンダー（<b>休みは土日だけ・祝日も出勤</b>）でその月の<b>稼働日</b>を数え、<b>所定＝稼働日×8時間</b>（8:00-17:00から休憩60分を引いたもの）との差を出す。上の帯に「稼働日○日（所定○h／人）」を出し、計の行にも全員ぶんの差を出す。印刷にも同じ列。★<b>あくまで目安</b>。ここの時間はkintoneに付けた金型の作業だけで出勤時間ではないので、金型以外の仕事や付け忘れはそのまま差に出る。給与は20日締めだが、ここは月ごとで数えている（社長了承）。 -->
@@ -665,7 +666,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.10.30-2</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.10.30-3</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -1037,8 +1038,8 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
           </div>
           <button class="btn btn-secondary btn-sm" onclick="printMaterials()">🖨 印刷</button>
           <button class="btn btn-secondary btn-sm" onclick="copyTableToClipboard('matTableBody','材料費')">📋 全行コピー</button>
-          <button class="btn btn-secondary btn-sm" onclick="exportCostCsv('materials')" title="1行=1明細。3費目で列をそろえたCSV（全件）">⬇ CSV出力</button>
-          <button class="btn btn-secondary btn-sm" onclick="exportCostCsv('all')" title="材料費・購入品費・外注費を1つのCSVに（全件）">⬇ 3費目まとめて</button>
+          <button class="btn btn-secondary btn-sm" onclick="exportCostCsv('materials')" title="1行=1明細。チェックした明細だけ。チェックが無ければ全件">⬇ CSV出力</button>
+          <button class="btn btn-secondary btn-sm" onclick="exportCostCsv('all')" title="材料費・購入品費・外注費を1つのCSVに。チェックした明細だけ。チェックが無ければ全件">⬇ 3費目まとめて</button>
         </div>
       </div>
       <div id="matTableBody"><div class="loading"><div class="spin"></div></div></div>
@@ -1093,7 +1094,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
           </label>
           <button class="btn btn-danger btn-sm" id="outBulkDeleteBtn" style="display:none" onclick="outBulkDelete()">🗑 選択削除</button>
           <button class="btn btn-secondary btn-sm" onclick="copyTableToClipboard('outTableBody','外注費')">📋 全行コピー</button>
-          <button class="btn btn-secondary btn-sm" onclick="exportCostCsv('outsource')" title="1行=1明細。3費目で列をそろえたCSV（全件）">⬇ CSV出力</button>
+          <button class="btn btn-secondary btn-sm" onclick="exportCostCsv('outsource')" title="1行=1明細。チェックした明細だけ。チェックが無ければ全件">⬇ CSV出力</button>
         </div>
       </div>
       <div id="outTableBody"><div class="loading"><div class="spin"></div></div></div>
@@ -1150,7 +1151,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
           </label>
           <button class="btn btn-danger btn-sm" id="purBulkDeleteBtn" style="display:none" onclick="purBulkDelete()">🗑 選択削除</button>
           <button class="btn btn-secondary btn-sm" onclick="copyTableToClipboard('purTableBody','購入品費')">📋 全行コピー</button>
-          <button class="btn btn-secondary btn-sm" onclick="exportCostCsv('purchase')" title="1行=1明細。3費目で列をそろえたCSV（全件）">⬇ CSV出力</button>
+          <button class="btn btn-secondary btn-sm" onclick="exportCostCsv('purchase')" title="1行=1明細。チェックした明細だけ。チェックが無ければ全件">⬇ CSV出力</button>
         </div>
       </div>
       <div id="purTableBody"><div class="loading"><div class="spin"></div></div></div>
@@ -8356,19 +8357,36 @@ function costCsvRow(kind, key, r){
           (r.qty==null || r.qty==='' ? 1 : r.qty), g(r,'unit'), g(r,'total'),
           g(r,'supplier'), g(r,'note'), key];
 }
+// ★2026-10-30：チェックを入れた明細だけ出すようにした（社長指摘：
+//   チェックで選んだもの以外も出てしまう）。印刷（printMaterials）と同じ考え方で、
+//   どこか1つでもチェックが入っていれば**そのチェック分だけ**、
+//   1つも入っていなければ今までどおり全件。
+const COST_CHK_CLASS = { materials:'mat-check', purchase:'pur-check', outsource:'out-check' };
+function costCheckedKeys(kind){
+  const cls = COST_CHK_CLASS[kind];
+  if (!cls) return [];
+  return [...document.querySelectorAll('.' + cls + ':checked')].map(cb => cb.dataset.key);
+}
 // kind: 'materials' | 'purchase' | 'outsource' | 'all'
 function exportCostCsv(kind){
   const src = { materials: DB.materials, purchase: DB.purchase, outsource: DB.outsource };
   const kinds = (kind === 'all') ? ['materials','purchase','outsource'] : [kind];
+  const checked = {};
+  let nChecked = 0;
+  kinds.forEach(k => { checked[k] = costCheckedKeys(k); nChecked += checked[k].length; });
   const rows = [];
   kinds.forEach(k => {
     const o = src[k] || {};
-    Object.keys(o).sort().forEach(key => {
+    const keys = nChecked ? checked[k].slice().sort() : Object.keys(o).sort();
+    keys.forEach(key => {
       const r = o[key];
       if (r && typeof r === 'object') rows.push(costCsvRow(k, key, r));
     });
   });
-  if (!rows.length){ toast('出力する明細がありません', 'warn'); return; }
+  if (!rows.length){
+    toast(nChecked ? 'チェックした明細が見つかりません' : '出力する明細がありません', 'error');
+    return;
+  }
   // ★Excelで開けるように UTF-8 のBOM付き・改行はCRLF
   const body = [COST_CSV_COLS].concat(rows)
     .map(a => a.map(csvCell).join(',')).join('\r\n');
@@ -8381,7 +8399,8 @@ function exportCostCsv(kind){
   a.download = '金型原価_' + label + '_' + stamp + '.csv';
   document.body.appendChild(a); a.click();
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-  toast(label + ' ' + rows.length + '明細を書き出しました', 'success');
+  toast(label + ' ' + rows.length + '明細を書き出しました'
+        + (nChecked ? '（チェックした分だけ）' : '（全件）'), 'success');
 }
 
 // ★金型の逆引きは1行ごとに呼ばれる（材料費だけで数千回）。
