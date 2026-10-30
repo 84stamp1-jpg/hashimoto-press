@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.10.30-1 : <b>金型の削除が効かない</b>のを直した（社長指摘）。(1)Firebaseへの書き込みが失敗しても<code>console.warn</code>で握りつぶしていたため、書けていないのに「削除しました」と出ていた。<b>成否を返すようにし、失敗したら元に戻して「削除できませんでした」と赤で知らせる</b>。(2)金型一覧の編集／×ボタンに<code>event.stopPropagation()</code>が無く、行クリック（明細を開く）と二重に動いていた。(3)kintoneから取り込んだ金型は、kintone側を検収済にするか消さないと<b>次の「取込プレビュー」で戻ってくる</b>ので、確認のことばで断るようにした。 -->
 <!-- 金型原価 v2026.10.24-8 : 作業員ごとの表に<b>「残業(h)」と「1日平均」</b>を足した（社長依頼）。会社カレンダー（<b>休みは土日だけ・祝日も出勤</b>）でその月の<b>稼働日</b>を数え、<b>所定＝稼働日×8時間</b>（8:00-17:00から休憩60分を引いたもの）との差を出す。上の帯に「稼働日○日（所定○h／人）」を出し、計の行にも全員ぶんの差を出す。印刷にも同じ列。★<b>あくまで目安</b>。ここの時間はkintoneに付けた金型の作業だけで出勤時間ではないので、金型以外の仕事や付け忘れはそのまま差に出る。給与は20日締めだが、ここは月ごとで数えている（社長了承）。 -->
 <!-- 金型原価 v2026.10.24-7 : 社長指摘3点。(1)<b>購入品一覧</b>と(2)<b>外注費一覧</b>が仕入日の古い順だったので、<b>新しい順</b>に直した（<code>shiiredDescCmp()</code>）。日付が空の行（システム開始時の一括計上など）は材料費と同じく<b>最下段</b>にまとめる。(3)<b>加工費「作業員で見る」に ◀▶ の月送りボタン</b>を付けた。手配先別合計と同じ形で、先月・先々月へ1か月ずつ行き来できる。上の絞り込みで月を選んだときはそちらが優先。 -->
 <!-- 金型原価 v2026.10.24-6 : 手配先別合計の推移の出し方を変えた（社長指示）。縦＝手配先・横＝月の<b>表はやめて</b>、<b>手配先ごとのカードの中に直近3か月の棒グラフ</b>を入れた。「表よりも棒のほうがぱっと見で分かる」「カードの横幅のまま、メーカーの下に出してほしい」との指示。棒の高さはカードごとに目いっぱい使う（手配先どうしの大小は金額の数字で見る）。3か月／6か月／12か月の切り替えボタンは不要になったので外した。◀▶の月送りはそのまま。 -->
@@ -663,7 +664,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.10.24-8</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.10.30-1</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -2346,13 +2347,18 @@ async function writeToFirebase(path, data) {
     window._fbWriting = true;  // リスナーによる上書きを防ぐ
     try {
       await db.ref('/moldCostSystem/' + path).set(data);
+      return true;
     } catch(e) {
+      // ★2026-10-30：ここで握りつぶしていたので、書けていないのに画面は
+      //   「保存しました」と出ていた（社長：金型の削除が効かない）。成否を返す。
       console.warn('Firebase write error:', e);
+      return false;
     } finally {
       // 書き込み完了から2秒後にフラグ解除
       setTimeout(() => { window._fbWriting = false; }, 2000);
     }
   }
+  return null;                 // Firebaseにつながっていない（このPCの控えだけ）
 }
 
 function setStatus(online, msg) {
@@ -2643,8 +2649,8 @@ function renderMolds() {
             <td class="mono"><b>¥${fmt(c.total)}</b></td>
             <td>${progressHTML(c.total, m.estimate)}</td>
             <td style="white-space:nowrap">
-              <button class="btn btn-secondary btn-sm" style="padding:3px 8px;font-size:11px;margin-right:4px" onclick="editMold('${key}')">編集</button>
-              <button class="btn btn-danger btn-sm" style="padding:3px 8px;font-size:11px" onclick="deleteMold('${key}')">×</button>
+              <button class="btn btn-secondary btn-sm" style="padding:3px 8px;font-size:11px;margin-right:4px" onclick="event.stopPropagation();editMold('${key}')">編集</button>
+              <button class="btn btn-danger btn-sm" style="padding:3px 8px;font-size:11px" onclick="event.stopPropagation();deleteMold('${key}')">×</button>
             </td>
           </tr>`;
         }).join('')}
@@ -7416,11 +7422,27 @@ async function importCheckedKtRecords() {
 
 // 金型一覧から手動削除（検収済など不要なものを除去）
 async function deleteMold(key) {
-  if (!confirm('この金型を一覧から削除しますか？\n（材料費・外注費・購入品費のデータは削除されません）')) return;
+  const mold = DB.molds[key];
+  if (!mold) return;
+  // ★kintoneから取り込んだ金型は、kintone側を検収済にするか消さないと取込で戻ってくる
+  const back = mold.ktCode
+    ? '\n\n★この金型は kintone の★新規物件から取り込んだものです（管理NO ' + (mold.no||'') + '）。'
+      + '\n　kintone側を検収済にするか消さないと、次の「取込プレビュー」で戻ってきます。'
+    : '';
+  if (!confirm('この金型を一覧から削除しますか？\n（材料費・外注費・購入品費のデータは削除されません）' + back)) return;
   delete DB.molds[key];
-  await writeToFirebase('molds', DB.molds);
-  toast('削除しました', 'success');
+  const ok = await writeToFirebase('molds', DB.molds);
+  if (ok === false) {
+    DB.molds[key] = mold;      // 書けていないので画面も元に戻す
+    saveLocal();
+    toast('削除できませんでした（サーバーに書き込めません）', 'error');
+  } else if (ok === null) {
+    toast('このPCの控えからは消しましたが、サーバーにつながっていません', 'error');
+  } else {
+    toast('削除しました', 'success');
+  }
   renderMolds();
+  renderDashboard();
 }
 
 
