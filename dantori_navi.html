@@ -42,6 +42,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.30-1 : 品番検索の<b>改修履歴に「完了希望日」を出す</b>ようにした（社長指示）。kintone App6 の <code>日付_0</code>。<b>いま改修中（依頼書発行・作業着手）のものだけ</b>に出す＝終わった改修の希望日は見ても仕方がないので、完了日が入っている行はこれまでどおり完了日を出す。「⚠ いま改修中」の帯にも「完了希望 2026-11-02」を添え、<b>期限を過ぎていたら「★○日超過」と赤で</b>出す。 -->
 <!-- H-Hub v2026.10.26-1 : 社長指示2点。(1)<b>進捗ボードを、その日の中身に合わせて自動で拡大</b>するようにした。ラインの本数はその日によって変わるのでカードが少ない日は下が余っていた。中身の高さと見えている高さをくらべ、入るだけ <code>zoom</code> で大きくする（最大1.8倍）。小さくはしない＝はみ出す日は今までどおり。ボードを描き直すたびと、窓の大きさを変えたときに計算し直す。(2)<b>「🏭 工場レイアウト」のタブをいったん隠した</b>（あまり使っていないとのこと）。最初に出るのは<b>進捗管理</b>。★タブは消さずに <code>display:none</code> にしてある（<code>switchTab()</code> がタブを並び順の番号で見ているため）。絵の中身も残してある（進捗ボードのミニ地図がこの絵を複製して使っているため）。戻すときはこの1行の display を外すだけ。 -->
 <!-- H-Hub v2026.10.24-10 : 計画の帯の<b>行を余白いっぱいまで広げた</b>（社長「Cライン①の下に余白がある」）。段の高さの上限を15→22pxに上げ、段が少ない日は<b>使える高さをめいっぱい分け合う</b>ようにした。行が高いときは<b>品番の文字も大きく</b>する（8.5→10→11px）。上段が145pxを超えないのは変わらない。 -->
 <!-- H-Hub v2026.10.24-9 : 計画の帯で<b>Bラインなど「時間が重なっている行」だけ品番が出ていなかった</b>のを直した（社長指摘）。重なりのある行は上下2段にしていたが、<b>1行ぶんの高さを半分ずつに割っていたため細すぎて品番を置けず</b>、文字を空にしていた。<b>段ごとに1行ぶんの高さを持たせる</b>ようにし、どの帯にも品番が出るようにした。行の高さの配分も<b>ライン数ではなく段の総数</b>で割るように変えたので、重なりがあっても上段は145pxに収まる。段は最大3つまで。 -->
@@ -4961,6 +4962,14 @@ window.moldToggleMore = function(id, a){
   a.textContent = open ? ('すべて見る（'+t.querySelectorAll('tbody tr').length+'件）') : '閉じる';
 };
 function _stColor(st){ return MOLD_OPEN_ST.indexOf(st)>=0 ? '#dc2626' : (MOLD_WAIT_ST.indexOf(st)>=0 ? '#d97706' : '#16a34a'); }
+// 完了希望日（App6 日付_0）。★改修中（依頼書発行・作業着手）のものだけ出す ― 社長指示 2026-10-30
+//   終わった改修の希望日は見ても仕方がないので出さない。期限を過ぎていたら何日超過かを添える。
+function _moldKibo(r){
+  const d = _mv(r,'日付_0'); if(!d) return null;
+  const today = new Date().toLocaleDateString('sv-SE');
+  const over = Math.round((new Date(today) - new Date(d)) / 86400000);
+  return { d: d, over: over > 0 ? over : 0 };
+}
 function moldRepairHtml(d, part){
   const hd = '<div class="mold-sec-hd">🔧 改修履歴</div>';
   const nr = _moldNotReady(d, 6); if(nr) return hd + nr;
@@ -4972,15 +4981,24 @@ function moldRepairHtml(d, part){
   const open = recs.filter(r=>MOLD_OPEN_ST.indexOf(_mv(r,'ステータス'))>=0);
   const rows = recs.slice(0, 50).map(function(r){
     const st = _mv(r,'ステータス');
+    const kb = MOLD_OPEN_ST.indexOf(st)>=0 ? _moldKibo(r) : null;
+    const done = kb
+      ? '<span style="color:'+(kb.over?'#dc2626':'#d97706')+';font-weight:700;">希望 '+moldEsc(kb.d)+(kb.over?'<br>（'+kb.over+'日超過）':'')+'</span>'
+      : moldEsc(_mv(r,'日付_1')||'—');
     return '<td class="mn">'+moldEsc(_mv(r,'日付'))+'</td>'
-      + '<td class="mn">'+moldEsc(_mv(r,'日付_1')||'—')+'</td>'
+      + '<td class="mn">'+done+'</td>'
       + '<td class="mn">'+moldEsc(_mv(r,'複数選択'))+'</td>'
       + '<td class="mw">'+moldEsc(_mv(r,'文字列__複数行__1').split('\n')[0].slice(0,80))+'</td>'
       + '<td class="mn" style="color:'+_stColor(st)+';font-weight:700;">'+moldEsc(st)+'</td>';
   });
-  const warn = open.length ? '<div class="mold-warn">⚠ いま改修中：'+open.map(r=>moldEsc(_mv(r,'日付'))+' '+moldEsc(_mv(r,'複数選択'))+'（'+moldEsc(_mv(r,'ステータス'))+'）').join(' ／ ')+'</div>' : '';
+  const warn = open.length ? '<div class="mold-warn">⚠ いま改修中：'+open.map(function(r){
+      const kb = _moldKibo(r);
+      return moldEsc(_mv(r,'日付'))+' '+moldEsc(_mv(r,'複数選択'))
+        +'（'+moldEsc(_mv(r,'ステータス'))
+        +(kb ? '・完了希望 '+moldEsc(kb.d)+(kb.over?' ★'+kb.over+'日超過':'') : '')+'）';
+    }).join(' ／ ')+'</div>' : '';
   return '<div class="mold-sec-hd">🔧 改修履歴<span class="mold-note">直近1年 '+n1+'回・'+(recs.length>=100?'直近100回':'全'+recs.length+'回')+'</span></div>'
-    + warn + _moldTable(['依頼日','完了日','分類','内容','状況'], rows, 'moldRepTbl');
+    + warn + _moldTable(['依頼日','完了日<br><span style="font-weight:400;">(改修中は希望日)</span>','分類','内容','状況'], rows, 'moldRepTbl');
 }
 // 工程内不良（App31 ★不良品報告）。製品の品番（頭の2つ）で探す
 //   不具合一覧（サブテーブル）: 不具合数量 / ドロップダウン=不具合内容 / ドロップダウン_0=処置方法 / 文字列__1行__3=メモ
@@ -13233,7 +13251,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.10.26-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
+var QC_UI_VERSION = 'v2026.10.30-1';   // 画面に出して、どの版が読み込まれているか分かるようにする
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -22485,7 +22503,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.26-1</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.30-1</div>
 </body>
 </html>
 
