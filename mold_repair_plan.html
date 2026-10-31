@@ -4,6 +4,162 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script>
+/* ===== 管理者PIN（2026-10-31）=================================================
+   この画面は見積金額・加工費・チャージ・作業者名を扱う。メニューには載せていないが、
+   公開しているウェブ上にあるので、ファイル名を知っていれば誰でも開けてしまう。
+   そこで段取りナビと同じ「会社で1つの管理者PIN」を入口に置く。
+   ・PINそのものはどこにも置かない。Firebase settings/adminPinHash に
+     「hhub-admin:＋PIN」をSHA-256にかけた値だけが入っている（段取りナビと共通）
+   ・開くまでの間は、Firebaseと中継への通信を止める。見た目を隠すだけでなく、
+     中身を取りに行かせない
+   ・解錠すると画面を読み直す。そのタブを閉じるまでは聞かれない
+   ・settings/adminPinHash を消せば以前の方式（各PCの値・無ければ1234）に戻るので、
+     締め出されることはない
+   ★この関所は <head> のいちばん先に置くこと。合言葉の関所より後ろに置くと、
+     向こうが先に掴んだ fetch / script.src をそのまま使うので、鍵が開く前に
+     中継を呼べてしまう（2026-10-31に実機で確認）。
+   ※ブラウザの中だけの仕組みなので「うっかり開く」を止めるためのもの。 */
+(function(){
+  var OKK = 'hhub_pin_ok', HK = 'hhub_admin_pin_hash', PK = 'hhub_admin_pin';
+  var FB  = 'https://hashimoto-press-default-rtdb.asia-southeast1.firebasedatabase.app';
+  try { if (sessionStorage.getItem(OKK) === '1') return; } catch(e){}
+
+  var pass = false;   // PINを確かめるための通信だけは通す
+  function stop(u){
+    if (pass || typeof u !== 'string') return false;
+    return u.indexOf('firebasedatabase.app') >= 0 || u.indexOf('script.google.com') >= 0;
+  }
+  // JSONP：鍵が開くまで script.src でも取りに行かせない
+  try {
+    var sd = Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype, 'src');
+    if (sd && sd.set) Object.defineProperty(HTMLScriptElement.prototype, 'src', {
+      configurable: true, enumerable: !!sd.enumerable,
+      get: function(){ return sd.get.call(this); },
+      set: function(v){ if (stop(v)) return; sd.set.call(this, v); }
+    });
+  } catch(e){}
+
+  var of = window.fetch.bind(window);
+  window.fetch = function(i, init){
+    var u = (typeof i === 'string') ? i : (i && i.url) || '';
+    if (stop(u)) return Promise.reject(new Error('locked'));
+    return of(i, init);
+  };
+  try {
+    var xo = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function(m, u){
+      if (stop(u)) throw new Error('locked');
+      return xo.apply(this, arguments);
+    };
+  } catch(e){}
+  try {
+    var OWS = window.WebSocket;
+    var WS = function(u, p){
+      if (stop(u)) throw new Error('locked');
+      return (p === undefined) ? new OWS(u) : new OWS(u, p);
+    };
+    WS.prototype = OWS.prototype;
+    WS.OPEN = OWS.OPEN; WS.CLOSED = OWS.CLOSED;
+    WS.CONNECTING = OWS.CONNECTING; WS.CLOSING = OWS.CLOSING;
+    window.WebSocket = WS;
+  } catch(e){}
+
+  function sha(pin){
+    return crypto.subtle.digest('SHA-256', new TextEncoder().encode('hhub-admin:' + pin))
+      .then(function(b){
+        return Array.from(new Uint8Array(b))
+          .map(function(x){ return x.toString(16).padStart(2,'0'); }).join('');
+      });
+  }
+  // 会社のPIN（ハッシュ）をFirebaseから。取れなければ、このPCが最後に読んだ値。
+  function companyHash(){
+    return new Promise(function(res){
+      var t0 = Date.now();
+      (function wait(){
+        if (!window._acToken) {
+          if (Date.now() - t0 > 12000) return res(cached());
+          return setTimeout(wait, 150);
+        }
+        window._acToken().then(function(tk){
+          pass = true;
+          return of(FB + '/settings/adminPinHash.json?t=' + Date.now(),
+                    { headers: tk ? { 'X-Firebase-AppCheck': tk } : {}, cache: 'no-store' })
+            .then(function(r){
+              return r.ok ? r.json().then(function(v){ return { reached: true, v: v }; })
+                          : { reached: false, v: null };
+            })
+            .then(function(d){
+              pass = false;
+              // つながらなかっただけのときに控えを消さない。消すと PIN が 1234 に緩む
+              if (!d.reached) return res(cached());
+              if (typeof d.v === 'string' && /^[0-9a-f]{64}$/.test(d.v)) {
+                try { localStorage.setItem(HK, d.v); } catch(e){}
+                return res(d.v);
+              }
+              if (d.v === null) { try { localStorage.removeItem(HK); } catch(e){} return res(null); }
+              res(cached());
+            });
+        }).catch(function(){ pass = false; res(cached()); });
+      })();
+    });
+  }
+  function cached(){ try { return localStorage.getItem(HK) || null; } catch(e){ return null; } }
+
+  function build(){
+    var o = document.createElement('div');
+    o.id = 'hhubPinGate';
+    o.setAttribute('style',
+      'position:fixed;inset:0;z-index:2147483647;background:#0f172a;' +
+      'display:flex;align-items:center;justify-content:center;' +
+      'font-family:"Meiryo UI","Hiragino Kaku Gothic ProN",sans-serif');
+    o.innerHTML =
+      '<div style="background:#fff;border-radius:10px;padding:28px 30px;width:320px;' +
+        'box-shadow:0 10px 40px rgba(0,0,0,.4);text-align:center">' +
+      '<div style="font-size:17px;font-weight:700;margin-bottom:6px">🔒 管理者PIN</div>' +
+      '<div style="font-size:12px;color:#888;margin-bottom:18px">この画面を開くにはPINを入力してください</div>' +
+      '<input id="hhubPinInput" type="password" inputmode="numeric" placeholder="PINを入力" ' +
+        'style="width:100%;box-sizing:border-box;padding:10px;font-size:18px;text-align:center;' +
+        'letter-spacing:.3em;border:1px solid #ccc;border-radius:6px">' +
+      '<div id="hhubPinErr" style="color:#b91c1c;font-size:12px;min-height:18px;margin:8px 0"></div>' +
+      '<button id="hhubPinGo" style="width:100%;padding:10px;font-size:14px;font-weight:700;' +
+        'color:#fff;background:#1f3864;border:0;border-radius:6px;cursor:pointer">開く</button>' +
+      '<div style="font-size:11px;color:#aaa;margin-top:14px;line-height:1.6">' +
+        'PINが分からないときは、社長または各リーダーに聞いてください</div>' +
+      '</div>';
+    document.documentElement.appendChild(o);
+
+    var inp = o.querySelector('#hhubPinInput'), err = o.querySelector('#hhubPinErr');
+    var go  = o.querySelector('#hhubPinGo'), busy = false;
+    function submit(){
+      if (busy) return;
+      var v = (inp.value || '').trim();
+      if (!v) return;
+      busy = true; err.textContent = '確かめています…'; err.style.color = '#888';
+      companyHash().then(function(h){
+        if (h) return sha(v).then(function(x){ return x === h; });
+        var stored = '1234';
+        try { stored = localStorage.getItem(PK) || '1234'; } catch(e){}
+        return v === stored;
+      }).catch(function(){ return false; }).then(function(ok){
+        busy = false;
+        if (ok) {
+          try { sessionStorage.setItem(OKK, '1'); } catch(e){}
+          location.reload();
+        } else {
+          err.style.color = '#b91c1c'; err.textContent = 'PINが違います';
+          inp.value = ''; inp.focus();
+        }
+      });
+    }
+    go.addEventListener('click', submit);
+    inp.addEventListener('keydown', function(e){ if (e.key === 'Enter') submit(); });
+    setTimeout(function(){ inp.focus(); }, 80);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', build);
+  else build();
+})();
+</script>
+<script>
 /* ===== Firebaseへ直接取りに行く通信にも証明書を付ける（2026-10-05）===========
    Firebaseの公式部品（SDK）を通る通信には App Check の証明書が自動で付くが、
    fetch で …firebasedatabase.app/xxx.json を直接叩いている処理には付かない。
@@ -112,6 +268,8 @@
 })();
 </script>
 <title>金型管理システム</title>
+<!-- 金型管理 v2026.10.31-2 : ★<b>管理者PINを入口に置いた</b>（社長指示）。この画面は見積金額・加工費・チャージ・作業者名を扱うが、メニューに載せていないだけで、<b>ファイル名を知っていれば誰でも開けていた</b>。段取りナビと同じ<b>会社で1つの管理者PIN</b>（Firebase settings/adminPinHash・SHA-256）を入口に置く。PINそのものはどこにも持たない。<b>開くまではFirebaseと中継への通信を止める</b>ので、見た目を隠すだけでなく中身を取りに行かない。解錠すると読み直し、そのタブを閉じるまでは聞かれない。★settings/adminPinHash を消せば以前の方式に戻るので締め出されることはない。 -->
+
 <!-- 金型管理システム v2026.10.31-1 : ★<b>中継(GAS)への通信に合言葉を付けた</b>（社長指示・セキュリティ対策1）。中継のURLはこのHTMLに書いてある＝公開しているので、<b>URLだけでは中身を返さない</b>ようにした。中継の側に門番を置き、こちら側は<b>Firebase（App Checkで守られている）から合言葉を受け取って</b>URLに足す。合言葉は<b>コードにもリポジトリにも書かない</b>。入口を3つ（JSONPの<code>script.src</code>・<code>fetch</code>・<code>window.open</code>）くるんだので<b>呼び出し側のコードは1か所も直していない</b>。今後 GAS 宛ての通信を足しても自動で付く。★<b>先にGAS側へ門番を貼ること</b>（貼る前はこれまでどおり動く）。 -->
 <!-- 金型管理システム v2026.10.05-1 : ★<b>暑さ指数（WBGT）の通信にも証明書を付けた</b>（2026-10-05）。このページの暑さ指数は Firebaseの公式部品を通さず <code>fetch</code> で直接読み書きしている（6か所）ため、App Check を「適用」にすると記録が出なくなる。window.fetch をくるんで、Firebase宛てなら証明書を足してから送るようにした。 -->
 <!-- 金型管理システム v2026.10.04-1 : App Check の方式を <b>Fraud Defense（旧 reCAPTCHA Enterprise）</b> に変えた。Google が旧方式（reCAPTCHA v3 Classic）の新規登録を止めており、Firebase側で鍵を登録できなかったため。ページ側は鍵と provider の差し替えだけ。仕組みは同じで、現場には何も見えない。Firebase側はまだ「監視のみ」なので動きは変わらない。 -->
@@ -694,7 +852,7 @@ tr.act-worker td.act-holiday{background:#f5f6f8}
 <body>
 
 <header>
-  <div class="logo">⚙ <span>金型</span>管理システム<span style="font-size:9px;color:#9aa3b2;font-weight:400;margin-left:6px">v2026.10.31-1</span></div>
+  <div class="logo">⚙ <span>金型</span>管理システム<span style="font-size:9px;color:#9aa3b2;font-weight:400;margin-left:6px">v2026.10.31-2</span></div>
   <div class="main-tab-bar">
     <button class="main-tab-btn active" id="mainTabRepair" onclick="switchMainTab('repair')">🔧 改修計画表</button>
     <button class="main-tab-btn" id="mainTabNew" onclick="switchMainTab('newmold')">🏗️ 新規製作 日程表</button>
