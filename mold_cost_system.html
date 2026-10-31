@@ -39,6 +39,16 @@
     });
   } catch(e){}
 
+  // Firebaseの長い待ち受け（ロングポーリング）はiframeの中から出ていくので、
+  // 上のくるみを通らない。鍵が開くまでは iframe そのものを作らせない。
+  try {
+    var ce = document.createElement.bind(document);
+    document.createElement = function(t){
+      if (String(t).toLowerCase() === 'iframe') return ce('span');
+      return ce.apply(null, arguments);
+    };
+  } catch(e){}
+
   var of = window.fetch.bind(window);
   window.fetch = function(i, init){
     var u = (typeof i === 'string') ? i : (i && i.url) || '';
