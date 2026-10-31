@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.31-2 : ★<b>進捗ボードの「2秒ごとの取り直し」をやめた</b>（社長指示・Firebaseの転送量が無料枠の2.8倍になっていたため）。<code>fetchFirebaseLines()</code> が <code>/lines</code>（11.4KB）と <code>/beacons</code>（2.3KB）を<b>2秒ごとに丸ごと</b>取り直していた。1台が8時間開いているだけで約200MB、工場の台数ぶんで<b>月28GB＝無料枠10GBの2.8倍</b>。ところが <code>/lines</code> は進捗管理ボード側が最初から <code>onValue</code> で購読しており、<b>同じものを二重に取っていただけ</b>だった。届いた中身を <code>hhubOnLinesPush()</code> で非モジュール側へ配る形にし、<code>/beacons</code> も購読に変えた。段取り指示の組み立ては立て続けに届いたとき最後の1回にまとめる（300ms）。<b>2秒待たずに届くので画面の反応はむしろ速くなる</b>。★SDKが動かない環境のために、届いていないときだけ1分おきに見に行く道は残してある。 -->
 <!-- H-Hub v2026.10.31-1 : ★<b>中継(GAS)への通信に合言葉を付けた</b>（社長指示・セキュリティ対策1）。中継のURLはこのHTMLに書いてある＝公開しているので、<b>URLだけでは中身を返さない</b>ようにした。中継の側に門番を置き、こちら側は<b>Firebase（App Checkで守られている）から合言葉を受け取って</b>URLに足す。合言葉は<b>コードにもリポジトリにも書かない</b>。入口を3つ（JSONPの<code>script.src</code>・<code>fetch</code>・<code>window.open</code>）くるんだので<b>呼び出し側のコードは1か所も直していない</b>。今後 GAS 宛ての通信を足しても自動で付く。★<b>先にGAS側へ門番を貼ること</b>（貼る前はこれまでどおり動く）。 -->
 <!-- H-Hub v2026.10.30-1 : 品番検索の<b>改修履歴に「完了希望日」を出す</b>ようにした（社長指示）。kintone App6 の <code>日付_0</code>。<b>いま改修中（依頼書発行・作業着手）のものだけ</b>に出す＝終わった改修の希望日は見ても仕方がないので、完了日が入っている行はこれまでどおり完了日を出す。「⚠ いま改修中」の帯にも「完了希望 2026-11-02」を添え、<b>期限を過ぎていたら「★○日超過」と赤で</b>出す。 -->
 <!-- H-Hub v2026.10.26-1 : 社長指示2点。(1)<b>進捗ボードを、その日の中身に合わせて自動で拡大</b>するようにした。ラインの本数はその日によって変わるのでカードが少ない日は下が余っていた。中身の高さと見えている高さをくらべ、入るだけ <code>zoom</code> で大きくする（最大1.8倍）。小さくはしない＝はみ出す日は今までどおり。ボードを描き直すたびと、窓の大きさを変えたときに計算し直す。(2)<b>「🏭 工場レイアウト」のタブをいったん隠した</b>（あまり使っていないとのこと）。最初に出るのは<b>進捗管理</b>。★タブは消さずに <code>display:none</code> にしてある（<code>switchTab()</code> がタブを並び順の番号で見ているため）。絵の中身も残してある（進捗ボードのミニ地図がこの絵を複製して使っているため）。戻すときはこの1行の display を外すだけ。 -->
@@ -6617,12 +6618,41 @@ async function fetchFirebaseLines(){
   }
 }
 
+/* ★2026-10-31：2秒ごとの取り直しをやめた（社長指示・転送量の超過対策）
+   /lines と /beacons を2秒ごとに丸ごと取り直していた（13.7KB × 30回/分）。
+   1台が8時間開いているだけで約200MB、工場の台数ぶんで月28GB＝無料枠10GBの2.8倍。
+   ところが /lines は進捗管理ボード側が最初から onValue で購読していて、
+   同じものを二重に取っていただけだった。届いた中身をそのまま配る形にする。
+   /beacons も同じく購読に変えた（下のモジュール側）。
+   転送量が減るだけでなく、2秒待たずに届くので画面の反応はむしろ速くなる。
+   ★SDKが動かない環境のために、届いていないときだけ1分おきに見に行く道を残す。 */
+window._hhubLinesLive = 0;           // 最後にSDKから届いた時刻
+function hhubOnLinesPush(lines){
+  window._hhubLinesLive = Date.now();
+  try{
+    const dot = document.getElementById('fbDot');
+    const st  = document.getElementById('fbStatus');
+    if(dot) dot.classList.add('connected');
+    if(st) st.textContent = 'Firebase接続中（'
+      + new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'}) + ' 更新）';
+  }catch(e){}
+  // 段取り指示の組み立ては重いので、立て続けに届いたときは最後の1回にまとめる
+  clearTimeout(window._hhubDantoriT);
+  window._hhubDantoriT = setTimeout(function(){
+    try{ buildDantoriFromFirebase(lines); }catch(e){ console.warn(e); }
+  }, 300);
+}
+window.hhubOnLinesPush = hhubOnLinesPush;
+
 function connectFirebase(){
-  // 即時2回取得（初回表示を速くする）
+  // 初回だけ取りに行く（SDKの購読が始まるまでの繋ぎ）
   fetchFirebaseLines();
-  setTimeout(fetchFirebaseLines, 500);
   if(fbInterval) clearInterval(fbInterval);
-  fbInterval = setInterval(fetchFirebaseLines, 2000); // ビーコン追跡のため2秒
+  fbInterval = setInterval(function(){
+    // SDKから2分以内に届いていれば、見に行く必要はない
+    if(Date.now() - (window._hhubLinesLive || 0) < 120000) return;
+    fetchFirebaseLines();
+  }, 60000);
 }
 
 function refreshFactory(){
@@ -15974,6 +16004,13 @@ onValue(ref(db,'.info/connected'),s=>{
   if(s.val()){b.textContent='● 同期中';b.className='conn on';}
   else{b.textContent='○ オフライン';b.className='conn off';}
 });
+/* ★2026-10-31：ビーコンも2秒ごとの取り直しから購読へ */
+onValue(ref(db,'beacons'),s=>{
+  try{
+    const b = s.val();
+    if(b && typeof updateBeacons === 'function') updateBeacons(b);
+  }catch(e){ console.warn('beacons', e); }
+});
 onValue(ref(db,'lines'),s=>{
   try{
     lines=s.val()||{};
@@ -15987,6 +16024,8 @@ onValue(ref(db,'lines'),s=>{
     window._pmCalcLineLoss = calcLineLoss;
     window._pmLineNoAlert  = lineNoAlertMap;
     if(typeof updateFactoryView === 'function') updateFactoryView(lines);
+    // ★2026-10-31：2秒ごとの取り直しをやめ、届いた中身をここから配る
+    if(typeof hhubOnLinesPush === 'function') hhubOnLinesPush(lines);
     // Firebase SDK をグローバル公開（非モジュールスクリプトから利用）
     if(!window._fbSDK) window._fbSDK = { db, ref, update };
     updateLineSelects();
@@ -22574,7 +22613,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.31-1</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.31-2</div>
 </body>
 </html>
 
