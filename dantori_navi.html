@@ -41,7 +41,78 @@
   };
 })();
 </script>
+<script>
+/* ===== 中継(GAS)への通信に合言葉を付ける（2026-10-31）=======================
+   中継のURLは、このHTMLに書いてある＝公開している。URLだけで中身を返さない
+   ようにするため、中継の側に「合言葉がなければ返さない」門番を置き、こちら側は
+   Firebase（App Checkで守られている）から合言葉を受け取って、
+   script.google.com 宛てのURLに足す。
+   合言葉はコードにも書かないし、リポジトリにも入れない。
+   入口を3つ（JSONPのscript.src・fetch・window.open）くるんであるので、
+   呼び出している側のコードは1か所も直さなくてよい。
+   ★合言葉を変えるときは Firebase 側と、GAS側のスクリプトプロパティ HHUB_KEY の
+     両方を同じ値にする（手順は社内の手順書）。 */
+(function(){
+  var FB = 'https://hashimoto-press-default-rtdb.asia-southeast1.firebasedatabase.app';
+  var LS = 'hhubGasKey';
+  var RE = /^https:\/\/script\.google\.com\//;
+  try { window.__gasKey = localStorage.getItem(LS) || ''; } catch(e){ window.__gasKey = ''; }
+
+  function addKey(u){
+    if (typeof u !== 'string' || !RE.test(u) || /[?&]key=/.test(u)) return u;
+    if (!window.__gasKey) return u;
+    return u + (u.indexOf('?') < 0 ? '?' : '&') + 'key=' + encodeURIComponent(window.__gasKey);
+  }
+  window.hhubAddGasKey = addKey;
+
+  // ① JSONP：script.src にURLを入れた瞬間に足す
+  var d = Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype, 'src');
+  if (d && d.set) Object.defineProperty(HTMLScriptElement.prototype, 'src', {
+    configurable: true, enumerable: !!d.enumerable,
+    get: function(){ return d.get.call(this); },
+    set: function(v){ d.set.call(this, addKey(v)); }
+  });
+
+  // ② fetch（Firebase用のくるみの外側に重ねる。Firebase宛てはそのまま通る）
+  var of = window.fetch.bind(window);
+  window.fetch = function(input, init){
+    if (typeof input === 'string') return of(addKey(input), init);
+    if (input && input.url && RE.test(input.url)) return of(new Request(addKey(input.url), input), init);
+    return of(input, init);
+  };
+
+  // ③ 別のタブで開く形（原価のフィールドコード確認など）
+  var ow = window.open;
+  window.open = function(u, n, f){ return ow.call(window, addKey(u), n, f); };
+
+  // ④ 合言葉を Firebase から受け取る（App Checkの証明書ができてから）。
+  //    取れたらこのPCに控えるので、次からは最初の1回を待たずに送れる。
+  function pull(){
+    var t0 = Date.now();
+    (function wait(){
+      if (!window._acToken) {
+        if (Date.now() - t0 > 25000) return;
+        return setTimeout(wait, 150);
+      }
+      window._acToken().then(function(tk){
+        return of(FB + '/settings/gasKey.json?t=' + Date.now(),
+                  { headers: tk ? { 'X-Firebase-AppCheck': tk } : {}, cache: 'no-store' })
+          .then(function(r){ return r.json(); })
+          .then(function(k){
+            if (typeof k === 'string' && k) {
+              window.__gasKey = k;
+              try { localStorage.setItem(LS, k); } catch(e){}
+            }
+          });
+      }).catch(function(){});
+    })();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', pull);
+  else pull();
+})();
+</script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.10.31-1 : ★<b>中継(GAS)への通信に合言葉を付けた</b>（社長指示・セキュリティ対策1）。中継のURLはこのHTMLに書いてある＝公開しているので、<b>URLだけでは中身を返さない</b>ようにした。中継の側に門番を置き、こちら側は<b>Firebase（App Checkで守られている）から合言葉を受け取って</b>URLに足す。合言葉は<b>コードにもリポジトリにも書かない</b>。入口を3つ（JSONPの<code>script.src</code>・<code>fetch</code>・<code>window.open</code>）くるんだので<b>呼び出し側のコードは1か所も直していない</b>。今後 GAS 宛ての通信を足しても自動で付く。★<b>先にGAS側へ門番を貼ること</b>（貼る前はこれまでどおり動く）。 -->
 <!-- H-Hub v2026.10.30-1 : 品番検索の<b>改修履歴に「完了希望日」を出す</b>ようにした（社長指示）。kintone App6 の <code>日付_0</code>。<b>いま改修中（依頼書発行・作業着手）のものだけ</b>に出す＝終わった改修の希望日は見ても仕方がないので、完了日が入っている行はこれまでどおり完了日を出す。「⚠ いま改修中」の帯にも「完了希望 2026-11-02」を添え、<b>期限を過ぎていたら「★○日超過」と赤で</b>出す。 -->
 <!-- H-Hub v2026.10.26-1 : 社長指示2点。(1)<b>進捗ボードを、その日の中身に合わせて自動で拡大</b>するようにした。ラインの本数はその日によって変わるのでカードが少ない日は下が余っていた。中身の高さと見えている高さをくらべ、入るだけ <code>zoom</code> で大きくする（最大1.8倍）。小さくはしない＝はみ出す日は今までどおり。ボードを描き直すたびと、窓の大きさを変えたときに計算し直す。(2)<b>「🏭 工場レイアウト」のタブをいったん隠した</b>（あまり使っていないとのこと）。最初に出るのは<b>進捗管理</b>。★タブは消さずに <code>display:none</code> にしてある（<code>switchTab()</code> がタブを並び順の番号で見ているため）。絵の中身も残してある（進捗ボードのミニ地図がこの絵を複製して使っているため）。戻すときはこの1行の display を外すだけ。 -->
 <!-- H-Hub v2026.10.24-10 : 計画の帯の<b>行を余白いっぱいまで広げた</b>（社長「Cライン①の下に余白がある」）。段の高さの上限を15→22pxに上げ、段が少ない日は<b>使える高さをめいっぱい分け合う</b>ようにした。行が高いときは<b>品番の文字も大きく</b>する（8.5→10→11px）。上段が145pxを超えないのは変わらない。 -->
@@ -22503,7 +22574,7 @@ setInterval(_callRender, 10000);
     <div id="callMsg" style="margin-top:8px;font-size:13px;color:#16a34a;font-weight:700;"></div>
   </div>
 </div>
-<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.30-1</div>
+<div id="hhub-ver" style="position:fixed;right:6px;bottom:4px;z-index:9999;font-size:10px;color:#94a3b8;background:rgba(255,255,255,0.72);border-radius:4px;padding:1px 6px;pointer-events:none;user-select:none;">v2026.10.31-1</div>
 </body>
 </html>
 

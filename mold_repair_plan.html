@@ -41,7 +41,78 @@
   };
 })();
 </script>
+<script>
+/* ===== 中継(GAS)への通信に合言葉を付ける（2026-10-31）=======================
+   中継のURLは、このHTMLに書いてある＝公開している。URLだけで中身を返さない
+   ようにするため、中継の側に「合言葉がなければ返さない」門番を置き、こちら側は
+   Firebase（App Checkで守られている）から合言葉を受け取って、
+   script.google.com 宛てのURLに足す。
+   合言葉はコードにも書かないし、リポジトリにも入れない。
+   入口を3つ（JSONPのscript.src・fetch・window.open）くるんであるので、
+   呼び出している側のコードは1か所も直さなくてよい。
+   ★合言葉を変えるときは Firebase 側と、GAS側のスクリプトプロパティ HHUB_KEY の
+     両方を同じ値にする（手順は社内の手順書）。 */
+(function(){
+  var FB = 'https://hashimoto-press-default-rtdb.asia-southeast1.firebasedatabase.app';
+  var LS = 'hhubGasKey';
+  var RE = /^https:\/\/script\.google\.com\//;
+  try { window.__gasKey = localStorage.getItem(LS) || ''; } catch(e){ window.__gasKey = ''; }
+
+  function addKey(u){
+    if (typeof u !== 'string' || !RE.test(u) || /[?&]key=/.test(u)) return u;
+    if (!window.__gasKey) return u;
+    return u + (u.indexOf('?') < 0 ? '?' : '&') + 'key=' + encodeURIComponent(window.__gasKey);
+  }
+  window.hhubAddGasKey = addKey;
+
+  // ① JSONP：script.src にURLを入れた瞬間に足す
+  var d = Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype, 'src');
+  if (d && d.set) Object.defineProperty(HTMLScriptElement.prototype, 'src', {
+    configurable: true, enumerable: !!d.enumerable,
+    get: function(){ return d.get.call(this); },
+    set: function(v){ d.set.call(this, addKey(v)); }
+  });
+
+  // ② fetch（Firebase用のくるみの外側に重ねる。Firebase宛てはそのまま通る）
+  var of = window.fetch.bind(window);
+  window.fetch = function(input, init){
+    if (typeof input === 'string') return of(addKey(input), init);
+    if (input && input.url && RE.test(input.url)) return of(new Request(addKey(input.url), input), init);
+    return of(input, init);
+  };
+
+  // ③ 別のタブで開く形（原価のフィールドコード確認など）
+  var ow = window.open;
+  window.open = function(u, n, f){ return ow.call(window, addKey(u), n, f); };
+
+  // ④ 合言葉を Firebase から受け取る（App Checkの証明書ができてから）。
+  //    取れたらこのPCに控えるので、次からは最初の1回を待たずに送れる。
+  function pull(){
+    var t0 = Date.now();
+    (function wait(){
+      if (!window._acToken) {
+        if (Date.now() - t0 > 25000) return;
+        return setTimeout(wait, 150);
+      }
+      window._acToken().then(function(tk){
+        return of(FB + '/settings/gasKey.json?t=' + Date.now(),
+                  { headers: tk ? { 'X-Firebase-AppCheck': tk } : {}, cache: 'no-store' })
+          .then(function(r){ return r.json(); })
+          .then(function(k){
+            if (typeof k === 'string' && k) {
+              window.__gasKey = k;
+              try { localStorage.setItem(LS, k); } catch(e){}
+            }
+          });
+      }).catch(function(){});
+    })();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', pull);
+  else pull();
+})();
+</script>
 <title>金型管理システム</title>
+<!-- 金型管理システム v2026.10.31-1 : ★<b>中継(GAS)への通信に合言葉を付けた</b>（社長指示・セキュリティ対策1）。中継のURLはこのHTMLに書いてある＝公開しているので、<b>URLだけでは中身を返さない</b>ようにした。中継の側に門番を置き、こちら側は<b>Firebase（App Checkで守られている）から合言葉を受け取って</b>URLに足す。合言葉は<b>コードにもリポジトリにも書かない</b>。入口を3つ（JSONPの<code>script.src</code>・<code>fetch</code>・<code>window.open</code>）くるんだので<b>呼び出し側のコードは1か所も直していない</b>。今後 GAS 宛ての通信を足しても自動で付く。★<b>先にGAS側へ門番を貼ること</b>（貼る前はこれまでどおり動く）。 -->
 <!-- 金型管理システム v2026.10.05-1 : ★<b>暑さ指数（WBGT）の通信にも証明書を付けた</b>（2026-10-05）。このページの暑さ指数は Firebaseの公式部品を通さず <code>fetch</code> で直接読み書きしている（6か所）ため、App Check を「適用」にすると記録が出なくなる。window.fetch をくるんで、Firebase宛てなら証明書を足してから送るようにした。 -->
 <!-- 金型管理システム v2026.10.04-1 : App Check の方式を <b>Fraud Defense（旧 reCAPTCHA Enterprise）</b> に変えた。Google が旧方式（reCAPTCHA v3 Classic）の新規登録を止めており、Firebase側で鍵を登録できなかったため。ページ側は鍵と provider の差し替えだけ。仕組みは同じで、現場には何も見えない。Firebase側はまだ「監視のみ」なので動きは変わらない。 -->
 <!-- 金型管理システム v2026.10.03-1 : App Check を仕込んだ（社長指示：外から読めなくする／第2段階）。ページを開くと Google が「本物のブラウザから開かれた本物のページ」という証明書を出し、Firebase はそれが付いた通信だけを受ける。現場には何も見えない（パズルは出ない）。Firebase側はまだ「監視のみ」なので動きは変わらない。サイトキーは公開前提のキーで、秘密の鍵はFirebase側にしか無い。 Firebaseの起動が databaseURL だけだったので設定をひとそろいにし、2か所の起動を fbEnsureApp() に寄せた。 -->
@@ -623,7 +694,7 @@ tr.act-worker td.act-holiday{background:#f5f6f8}
 <body>
 
 <header>
-  <div class="logo">⚙ <span>金型</span>管理システム<span style="font-size:9px;color:#9aa3b2;font-weight:400;margin-left:6px">v2026.10.05-1</span></div>
+  <div class="logo">⚙ <span>金型</span>管理システム<span style="font-size:9px;color:#9aa3b2;font-weight:400;margin-left:6px">v2026.10.31-1</span></div>
   <div class="main-tab-bar">
     <button class="main-tab-btn active" id="mainTabRepair" onclick="switchMainTab('repair')">🔧 改修計画表</button>
     <button class="main-tab-btn" id="mainTabNew" onclick="switchMainTab('newmold')">🏗️ 新規製作 日程表</button>

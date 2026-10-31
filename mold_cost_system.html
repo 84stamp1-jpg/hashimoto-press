@@ -3,7 +3,78 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>
+/* ===== 中継(GAS)への通信に合言葉を付ける（2026-10-31）=======================
+   中継のURLは、このHTMLに書いてある＝公開している。URLだけで中身を返さない
+   ようにするため、中継の側に「合言葉がなければ返さない」門番を置き、こちら側は
+   Firebase（App Checkで守られている）から合言葉を受け取って、
+   script.google.com 宛てのURLに足す。
+   合言葉はコードにも書かないし、リポジトリにも入れない。
+   入口を3つ（JSONPのscript.src・fetch・window.open）くるんであるので、
+   呼び出している側のコードは1か所も直さなくてよい。
+   ★合言葉を変えるときは Firebase 側と、GAS側のスクリプトプロパティ HHUB_KEY の
+     両方を同じ値にする（手順は社内の手順書）。 */
+(function(){
+  var FB = 'https://hashimoto-press-default-rtdb.asia-southeast1.firebasedatabase.app';
+  var LS = 'hhubGasKey';
+  var RE = /^https:\/\/script\.google\.com\//;
+  try { window.__gasKey = localStorage.getItem(LS) || ''; } catch(e){ window.__gasKey = ''; }
+
+  function addKey(u){
+    if (typeof u !== 'string' || !RE.test(u) || /[?&]key=/.test(u)) return u;
+    if (!window.__gasKey) return u;
+    return u + (u.indexOf('?') < 0 ? '?' : '&') + 'key=' + encodeURIComponent(window.__gasKey);
+  }
+  window.hhubAddGasKey = addKey;
+
+  // ① JSONP：script.src にURLを入れた瞬間に足す
+  var d = Object.getOwnPropertyDescriptor(HTMLScriptElement.prototype, 'src');
+  if (d && d.set) Object.defineProperty(HTMLScriptElement.prototype, 'src', {
+    configurable: true, enumerable: !!d.enumerable,
+    get: function(){ return d.get.call(this); },
+    set: function(v){ d.set.call(this, addKey(v)); }
+  });
+
+  // ② fetch（Firebase用のくるみの外側に重ねる。Firebase宛てはそのまま通る）
+  var of = window.fetch.bind(window);
+  window.fetch = function(input, init){
+    if (typeof input === 'string') return of(addKey(input), init);
+    if (input && input.url && RE.test(input.url)) return of(new Request(addKey(input.url), input), init);
+    return of(input, init);
+  };
+
+  // ③ 別のタブで開く形（原価のフィールドコード確認など）
+  var ow = window.open;
+  window.open = function(u, n, f){ return ow.call(window, addKey(u), n, f); };
+
+  // ④ 合言葉を Firebase から受け取る（App Checkの証明書ができてから）。
+  //    取れたらこのPCに控えるので、次からは最初の1回を待たずに送れる。
+  function pull(){
+    var t0 = Date.now();
+    (function wait(){
+      if (!window._acToken) {
+        if (Date.now() - t0 > 25000) return;
+        return setTimeout(wait, 150);
+      }
+      window._acToken().then(function(tk){
+        return of(FB + '/settings/gasKey.json?t=' + Date.now(),
+                  { headers: tk ? { 'X-Firebase-AppCheck': tk } : {}, cache: 'no-store' })
+          .then(function(r){ return r.json(); })
+          .then(function(k){
+            if (typeof k === 'string' && k) {
+              window.__gasKey = k;
+              try { localStorage.setItem(LS, k); } catch(e){}
+            }
+          });
+      }).catch(function(){});
+    })();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', pull);
+  else pull();
+})();
+</script>
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.10.31-1 : ★<b>中継(GAS)への通信に合言葉を付けた</b>（社長指示・セキュリティ対策1）。中継のURLはこのHTMLに書いてある＝公開しているので、<b>URLだけでは中身を返さない</b>ようにした。中継の側に門番を置き、こちら側は<b>Firebase（App Checkで守られている）から合言葉を受け取って</b>URLに足す。合言葉は<b>コードにもリポジトリにも書かない</b>。入口を3つ（JSONPの<code>script.src</code>・<code>fetch</code>・<code>window.open</code>）くるんだので<b>呼び出し側のコードは1か所も直していない</b>。今後 GAS 宛ての通信を足しても自動で付く。★<b>先にGAS側へ門番を貼ること</b>（貼る前はこれまでどおり動く）。 -->
 <!-- 金型原価 v2026.10.30-3 : <b>CSV出力がチェックを見ていなかった</b>のを直した（社長指摘）。材料費・購入品費・外注費の「⬇ CSV出力」「⬇ 3費目まとめて」は、これまで必ず全件を書き出していた。印刷と同じ考え方にそろえ、<b>どこか1つでもチェックが入っていればそのチェック分だけ</b>、1つも無ければ今までどおり全件。書き出したあとのことばにも「（チェックした分だけ）／（全件）」を出す。★列の並びは変えていない（生産管理システム側の設定が壊れるため）。 -->
 <!-- 金型原価 v2026.10.30-2 : <b>削除も取込も効かなかった本当の原因</b>（社長のコンソール画面で判明）。<code>saveLocal()</code> が <b>QuotaExceededError</b> を投げていた＝このPCの控え（localStorage・上限5MB）に<b>加工費13,955件を含む4.5MB</b>を書こうとして失敗。<code>writeToFirebase()</code> は先頭で<code>saveLocal()</code> を呼ぶので<b>そこで止まり、Firebaseに1文字も書けていなかった</b>。控えに入らないときは <b>snapshots→quoteRequests→加工費→材料費→購入品費 の順に外して</b>保存し、それでも無理なら控えをあきらめる（正はFirebase）。控えの失敗で本体の保存を止めない。 -->
 <!-- 金型原価 v2026.10.30-1 : <b>金型の削除が効かない</b>のを直した（社長指摘）。(1)Firebaseへの書き込みが失敗しても<code>console.warn</code>で握りつぶしていたため、書けていないのに「削除しました」と出ていた。<b>成否を返すようにし、失敗したら元に戻して「削除できませんでした」と赤で知らせる</b>。(2)金型一覧の編集／×ボタンに<code>event.stopPropagation()</code>が無く、行クリック（明細を開く）と二重に動いていた。(3)kintoneから取り込んだ金型は、kintone側を検収済にするか消さないと<b>次の「取込プレビュー」で戻ってくる</b>ので、確認のことばで断るようにした。 -->
@@ -666,7 +737,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.10.30-3</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.10.31-1</span></div>
     </div>
   </div>
   <div class="header-right">
