@@ -221,6 +221,7 @@
 })();
 </script>
 <title>金型管理システム</title>
+<!-- 金型管理 v2026.11.02-2 : ★<b>担当者の表示と並びを決められるようにした</b>（社長指示）。松本利は普段プレス現場にいるので<b>いつもは出さない。作業が入った日だけ出る</b>。並びも上下で入れ替えられる（松永の下へ）。<b>人の追加</b>もできる（色は予備の5色から自動）。ツールバーの<b>👥担当者</b>から（管理者PIN）。設定は<b>会社で1つ</b>（Firebase /moldRepairPlan/workers）なのでどのPCでも同じ並びになる。★<b>自動配置も「いつも表示の人」だけで分ける</b>ようにした（今までは普段いない松本利にも半分配っていた）。いつも表示を外した人への最初の割付は、カードの「ほか…」または「⚡時刻指定で割付」から。 -->
 <!-- 金型管理 v2026.11.02-1 : ★<b>管理者PINを入口から外し、設定・マスタだけに掛け直した</b>（社長指示）。10/31に入口へ置いたが、<b>この画面は現場も毎日使う</b>（割付・完了・温度の記録）ので、入口で止めると<b>全員にPINを教えることになり錠の意味が無くなる</b>。段取りナビと同じ形にして、<b>工数マスタ・Import・接続設定の3つだけ</b>をPINで守る。それ以外は今までどおり誰でもすぐ使える。PINは会社で1つ（Firebase settings/adminPinHash・SHA-256）で段取りナビと共通。一度入れればそのタブを閉じるまでは聞かれない。★つながらなかっただけのときは控えを消さない（消すと1234に緩む）。 -->
 <!-- 金型管理 v2026.10.31-2 : ★<b>管理者PINを入口に置いた</b>（社長指示）。この画面は見積金額・加工費・チャージ・作業者名を扱うが、メニューに載せていないだけで、<b>ファイル名を知っていれば誰でも開けていた</b>。段取りナビと同じ<b>会社で1つの管理者PIN</b>（Firebase settings/adminPinHash・SHA-256）を入口に置く。PINそのものはどこにも持たない。<b>開くまではFirebaseと中継への通信を止める</b>ので、見た目を隠すだけでなく中身を取りに行かない。解錠すると読み直し、そのタブを閉じるまでは聞かれない。★settings/adminPinHash を消せば以前の方式に戻るので締め出されることはない。 -->
 
@@ -268,6 +269,15 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .act-bar-w{background:#6ee7b7;border:1px solid #10b981}.act-bar-v{background:#c4b5fd;border:1px solid #7c3aed}
 .act-bar-p{background:#f9a8d4;border:1px solid #db2777}.act-bar-t{background:#7dd3fc;border:1px solid #0284c7}
 .act-bar-y{background:#fde047;border:1px solid #ca8a04}
+/* あとから足した人の色（担当者設定で順に使う） */
+.bx1{background:#ffedd5;border-color:#fdba74}.bx1 .blabel,.bx1 .btime{color:#9a3412}
+.bx2{background:#ccfbf1;border-color:#5eead4}.bx2 .blabel,.bx2 .btime{color:#115e59}
+.bx3{background:#e2e8f0;border-color:#94a3b8}.bx3 .blabel,.bx3 .btime{color:#334155}
+.bx4{background:#fae8ff;border-color:#e879f9}.bx4 .blabel,.bx4 .btime{color:#86198f}
+.bx5{background:#dbeafe;border-color:#93c5fd}.bx5 .blabel,.bx5 .btime{color:#1e40af}
+.act-bar-x1{background:#fdba74;border:1px solid #ea580c}.act-bar-x2{background:#5eead4;border:1px solid #0d9488}
+.act-bar-x3{background:#94a3b8;border:1px solid #475569}.act-bar-x4{background:#e879f9;border:1px solid #c026d3}
+.act-bar-x5{background:#93c5fd;border:1px solid #2563eb}
 /* 担当者ラベル動的（インラインスタイルで上書き） */
 /* ===== WBGT（暑さ指数）パネル ※H-Hub(dantori_navi.html)と同一。片方だけ直さないこと ===== */
 #wbgtBar{display:flex;gap:8px;padding:6px 16px;align-items:stretch;background:#fff;border-bottom:1px solid var(--border)}
@@ -806,7 +816,7 @@ tr.act-worker td.act-holiday{background:#f5f6f8}
 <body>
 
 <header>
-  <div class="logo">⚙ <span>金型</span>管理システム<span style="font-size:9px;color:#9aa3b2;font-weight:400;margin-left:6px">v2026.11.02-1</span></div>
+  <div class="logo">⚙ <span>金型</span>管理システム<span style="font-size:9px;color:#9aa3b2;font-weight:400;margin-left:6px">v2026.11.02-2</span></div>
   <div class="main-tab-bar">
     <button class="main-tab-btn active" id="mainTabRepair" onclick="switchMainTab('repair')">🔧 改修計画表</button>
     <button class="main-tab-btn" id="mainTabNew" onclick="switchMainTab('newmold')">🏗️ 新規製作 日程表</button>
@@ -820,6 +830,7 @@ tr.act-worker td.act-holiday{background:#f5f6f8}
     <button class="btn btn-secondary btn-sm" onclick="loadKintone()">🔄 kintone同期</button>
     <button class="btn btn-secondary btn-sm" onclick="autoAll()">⚡ 自動配置</button>
     <button class="btn btn-danger btn-sm" onclick="resetDayTasks()" title="当日の配置を全て削除">🗑 配置リセット</button>
+    <button class="btn btn-secondary btn-sm" onclick="hhubRequirePin(openWorkerCfg)" title="改修計画表に出す人・並び・人の追加">👥 担当者</button>
     <button class="btn btn-secondary btn-sm" id="btnTmMaster" onclick="hhubRequirePin(openTmMaster)">⚙ 工数マスタ</button>
     <button class="btn btn-secondary btn-sm" onclick="resetKtEdits()" title="kintone改修依頼の工数編集をすべてリセット（kintone元値に戻す）">↩ 編集リセット</button>
     <button class="btn btn-secondary btn-sm" onclick="exportLocalStorage()" title="設定データをエクスポート">📤 Export</button>
@@ -913,13 +924,6 @@ tr.act-worker td.act-holiday{background:#f5f6f8}
         <div>
           <label style="font-size:11px;color:var(--text2);font-weight:600">担当者</label>
           <select id="attInAssignee" class="finput" style="width:100%">
-            <option value="matsumoto_t">松本利</option>
-            <option value="matsunaga">松永</option>
-            <option value="matsumura">村松</option>
-            <option value="matsumoto_m">松本み</option>
-            <option value="endo">遠藤</option>
-            <option value="oishi">大石</option>
-            <option value="nema">根間</option>
           </select>
         </div>
         <div>
@@ -1002,8 +1006,7 @@ tr.act-worker td.act-holiday{background:#f5f6f8}
     <div class="gctrl">
       <span class="ginfo">⏰ 作業開始 08:10 ／ 休憩 10:00・12:10・14:50・17:00</span>
       <div class="glegend">
-        <div class="legitem"><div class="legdot" style="background:var(--m)"></div>松本</div>
-        <div class="legitem"><div class="legdot" style="background:var(--n)"></div>松永</div>
+        <span id="glegendPeople"></span><!-- その日に出ている人（renderGanttで入れる） -->
         <div class="legitem"><div class="legdot" style="background:var(--trial)"></div>トライ</div>
         <div class="legitem"><div class="legdot" style="background:var(--m);opacity:.6;border:1px solid var(--m)"></div>実績</div>
         <div class="legitem"><div class="legdot" style="background:#fee2e2;border:1.5px solid #fca5a5"></div>突発</div>
@@ -1238,13 +1241,6 @@ tr.act-worker td.act-holiday{background:#f5f6f8}
       <div>
         <label class="flabel">担当者</label>
         <select id="insertAssignee" class="finput" onchange="updateInsertPreview()">
-          <option value="matsumoto_t">松本利</option>
-          <option value="matsunaga">松永</option>
-          <option value="matsumura">村松</option>
-          <option value="matsumoto_m">松本み</option>
-          <option value="endo">遠藤</option>
-          <option value="oishi">大石</option>
-          <option value="nema">根間</option>
         </select>
       </div>
       <div>
@@ -1377,8 +1373,6 @@ tr.act-worker td.act-holiday{background:#f5f6f8}
         <div>
           <label class="flabel">担当者</label>
           <select class="finput" id="inAssign">
-            <option value="matsumoto">松本</option>
-            <option value="matsunaga">松永</option>
           </select>
         </div>
       </div>
@@ -1415,7 +1409,7 @@ tr.act-worker td.act-holiday{background:#f5f6f8}
     <div class="f2col">
       <div class="frow"><label class="flabel">予定開始</label><input class="finput" id="eStart" type="time" step="600"/></div>
       <div class="frow"><label class="flabel">担当者</label>
-        <select class="finput" id="eAssign"><option value="matsumoto">松本</option><option value="matsunaga">松永</option></select>
+        <select class="finput" id="eAssign"></select>
       </div>
     </div>
     <div class="frow"><label class="flabel">メモ</label><input class="finput" id="eMemo"/></div>
@@ -1804,6 +1798,7 @@ function initFirebase(){
     });
     console.log('Firebase接続OK');
     initAttendanceFb();
+    initWorkersFb();   // 担当者の表示と並び（会社で1つ）
   } catch(e) {
     console.log('Firebase初期化失敗:', e);
   }
@@ -1856,7 +1851,7 @@ function renderAttendanceBanner(){
     const d = fmt(addDays(new Date(), i));
     const dayRec = attendanceData[d] || {};
     Object.entries(dayRec).forEach(([assignee, rec])=>{
-      const nameMap = {matsumoto_t:'松本利',matsunaga:'松永',matsumura:'村松',matsumoto_m:'松本み',endo:'遠藤',oishi:'大石',nema:'根間'};
+      const nameMap = wNameMap();
       const typeLabels = {absent:'欠席',late:'遅刻',early:'早退'};
       const cls = {absent:'att-chip-absent',late:'att-chip-late',early:'att-chip-early'};
       const timeStr = rec.time ? ` ${rec.time}` : '';
@@ -1932,7 +1927,7 @@ function deleteAttendanceEntry(dateStr, assignee){
 function renderAttList(){
   const el = document.getElementById('attList');
   if(!el) return;
-  const nameMap = {matsumoto_t:'松本利',matsunaga:'松永',matsumura:'村松',matsumoto_m:'松本み',endo:'遠藤',oishi:'大石',nema:'根間'};
+  const nameMap = wNameMap();
   const typeLabels = {absent:'欠席',late:'遅刻',early:'早退'};
   const cls = {absent:'att-badge-absent',late:'att-badge-late',early:'att-badge-early'};
   const today = todayStr();
@@ -2001,7 +1996,188 @@ const ASSIGNEE_ORDER=['matsumoto_t','matsunaga','matsumura','matsumoto_m','endo'
 // 旧キー → 新キーへの正規化マップ（'matsumoto' は 'matsumoto_t' として扱う）
 const ASSIGNEE_NORM={'matsumoto':'matsumoto_t'};
 function normA(a){return ASSIGNEE_NORM[a]||a;}
-function wcfg(a){return WORKER_CONFIG[normA(a)]||{name:a,bg:'#f3f4f6',bd:'#d1d5db',fg:'#374151',blockCls:'bn',actCls:'act-bar-n'};}
+function wcfg(a){
+  const k=normA(a);
+  if(WORKER_CONFIG[k]) return WORKER_CONFIG[k];
+  // あとから足した人（担当者設定で追加）
+  const e=(typeof workerCfg!=='undefined'&&workerCfg.extra)?workerCfg.extra[k]:null;
+  if(e){ const c=EXTRA_COLORS[(e.ci||0)%EXTRA_COLORS.length];
+         return {name:e.name,bg:c.bg,bd:c.bd,fg:c.fg,blockCls:c.blockCls,actCls:c.actCls}; }
+  return {name:a,bg:'#f3f4f6',bd:'#d1d5db',fg:'#374151',blockCls:'bn',actCls:'act-bar-n'};
+}
+
+/* ===== 担当者の表示と並び（2026-11-02 社長指示）==============================
+   松本利は普段プレス現場にいるので、改修計画表には出さない。ただし**作業が入った日は出る**。
+   並びは松永の下。人の追加もできるようにした。
+   保存先：Firebase /moldRepairPlan/workers ＝ 会社で1つ（どのPCでも同じ見え方）
+       { order:[キー…], always:{キー:true}, extra:{キー:{name,ci}} }
+   ・always ＝ いつも出す人。外した人は「その日に作業がある日」だけ出る
+   ・extra  ＝ あとから足した人。色は EXTRA_COLORS から順に
+   ・つながらないときは、このPCが最後に読んだ値（localStorage）で動く
+   ★並び順(order)は ASSIGNEE_ORDER ではなくここを見る。ASSIGNEE_ORDERは初期値。 */
+const W_FB_PATH='/moldRepairPlan/workers';
+const W_LS='repair_workers_v1';
+const EXTRA_COLORS=[
+  {bg:'#ffedd5',bd:'#fdba74',fg:'#9a3412',blockCls:'bx1',actCls:'act-bar-x1'},
+  {bg:'#ccfbf1',bd:'#5eead4',fg:'#115e59',blockCls:'bx2',actCls:'act-bar-x2'},
+  {bg:'#e2e8f0',bd:'#94a3b8',fg:'#334155',blockCls:'bx3',actCls:'act-bar-x3'},
+  {bg:'#fae8ff',bd:'#e879f9',fg:'#86198f',blockCls:'bx4',actCls:'act-bar-x4'},
+  {bg:'#dbeafe',bd:'#93c5fd',fg:'#1e40af',blockCls:'bx5',actCls:'act-bar-x5'},
+];
+// 何も保存されていないときの形。
+// ★松本利は普段プレス現場にいるので「いつも表示」から外し、並びは松永の下にしてある（社長指示）。
+//   作業が入った日は自動で出る。変えるのはツールバーの「👥 担当者」から。
+const W_DEFAULT={order:['matsunaga','matsumoto_t','matsumura','matsumoto_m','endo','oishi','nema'],
+                 always:{matsunaga:true}, extra:{}};
+
+// 保存された形を整える（知らないキーを落とし、抜けている人を後ろに足す）
+function wNorm(v){
+  const extra=(v&&v.extra)||{}, always=(v&&v.always)||{};
+  const known=Object.keys(WORKER_CONFIG).filter(k=>k!=='matsumoto').concat(Object.keys(extra));
+  const order=((v&&v.order)||[]).filter(k=>known.indexOf(k)>=0);
+  known.forEach(k=>{ if(order.indexOf(k)<0) order.push(k); });
+  return {order:order, always:always, extra:extra};
+}
+let workerCfg=(function(){
+  try{ const v=JSON.parse(localStorage.getItem(W_LS)||'null'); if(v&&v.order) return wNorm(v); }catch(e){}
+  return wNorm(JSON.parse(JSON.stringify(W_DEFAULT)));
+})();
+
+function wAll(){ return workerCfg.order.slice(); }                       // 全員（並び順）
+function wAlways(){ return wAll().filter(k=>!!workerCfg.always[k]); }    // いつも出す人
+function wNameMap(){ const m={matsumoto:'松本'}; wAll().forEach(k=>m[k]=wcfg(k).name); return m; }
+// その日に出る人＝いつも出す人 ＋ その日に作業がある人
+function wLanes(ds){
+  const t=(typeof getDate==='function')?getDate(ds):[];
+  const has=t.map(x=>normA(x.assignee)).filter(Boolean);
+  const out=[];
+  wAll().forEach(k=>{ if(workerCfg.always[k]||has.indexOf(k)>=0) out.push(k); });
+  has.forEach(k=>{ if(out.indexOf(k)<0) out.push(k); });   // 知らないキーは最後に
+  return out;
+}
+
+function wSaveLocal(){ try{ localStorage.setItem(W_LS,JSON.stringify(workerCfg)); }catch(e){} }
+function wPush(){
+  wSaveLocal();
+  try{ if(fbDb) fbDb.ref(W_FB_PATH).set(workerCfg).catch(e=>console.log('担当者設定の保存に失敗:',e)); }catch(e){}
+}
+function initWorkersFb(){
+  try{
+    if(!fbDb) return;
+    fbDb.ref(W_FB_PATH).on('value', snap=>{
+      const v=snap.val();
+      if(!v||!v.order) return;          // まだ何も置いていない＝既定のまま
+      workerCfg=wNorm(v); wSaveLocal();
+      wFillSelects();
+      renderGantt(); renderRequestList&&renderRequestList(); renderManualList&&renderManualList();
+    });
+  }catch(e){ console.log('担当者設定の受信に失敗:',e); }
+}
+
+// 担当者の選択欄（4か所）を作り直す
+function wFillSelects(){
+  const ids=['attInAssignee','insertAssignee','inAssign','eAssign'];
+  const html=wAll().map(k=>`<option value="${k}">${wcfg(k).name}</option>`).join('');
+  ids.forEach(id=>{
+    const el=document.getElementById(id); if(!el) return;
+    const cur=el.value;
+    el.innerHTML=html;
+    if(cur && wAll().indexOf(normA(cur))>=0) el.value=normA(cur);
+  });
+}
+
+// ===== 設定画面 =====
+let _wTmp=null;
+function openWorkerCfg(){
+  _wTmp=JSON.parse(JSON.stringify(workerCfg));
+  let o=document.getElementById('workerCfgModal');
+  if(!o){
+    o=document.createElement('div'); o.id='workerCfgModal';
+    o.setAttribute('style','position:fixed;inset:0;z-index:9000;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center');
+    document.body.appendChild(o);
+  }
+  o.style.display='flex';
+  wDrawCfg();
+}
+function closeWorkerCfg(){ const o=document.getElementById('workerCfgModal'); if(o) o.style.display='none'; }
+function wDrawCfg(){
+  const o=document.getElementById('workerCfgModal'); if(!o) return;
+  const rows=_wTmp.order.map((k,i)=>{
+    const c=wcfgOf(k,_wTmp), ex=!!_wTmp.extra[k];
+    return `<tr style="border-bottom:1px solid #eee">
+      <td style="padding:4px 6px;white-space:nowrap">
+        <button onclick="wMove(${i},-1)" ${i===0?'disabled':''} style="padding:2px 7px;cursor:pointer">↑</button>
+        <button onclick="wMove(${i},1)" ${i===_wTmp.order.length-1?'disabled':''} style="padding:2px 7px;cursor:pointer">↓</button></td>
+      <td style="padding:4px 6px"><span style="display:inline-block;width:16px;height:16px;border-radius:4px;vertical-align:-3px;background:${c.bg};border:1px solid ${c.bd}"></span></td>
+      <td style="padding:4px 8px;font-weight:700;color:${c.fg}">${c.name}</td>
+      <td style="padding:4px 6px;text-align:center">
+        <input type="checkbox" ${_wTmp.always[k]?'checked':''} onchange="wToggle('${k}',this.checked)" style="width:17px;height:17px;cursor:pointer"></td>
+      <td style="padding:4px 6px;text-align:center">${ex?`<button onclick="wDel('${k}')" style="font-size:11px;padding:2px 6px;border:1px solid #fca5a5;background:#fee2e2;color:#dc2626;border-radius:4px;cursor:pointer">削除</button>`:'<span style="color:#ccc;font-size:11px">—</span>'}</td>
+    </tr>`;
+  }).join('');
+  o.innerHTML=`<div style="background:#fff;border-radius:10px;padding:18px 20px;width:min(560px,94vw);max-height:88vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.35);font-family:inherit">
+    <h3 style="margin:0 0 4px;font-size:16px">👥 担当者（表示と並び）</h3>
+    <div style="font-size:12px;color:#666;line-height:1.7;margin-bottom:12px">
+      <b>いつも表示</b>を外した人は、<b>その日に作業が入ったときだけ</b>行が出ます。<br>
+      外した人へ最初の1件を割り付けるときは、作業カードの「<b>⚡ 時刻指定で割付</b>」から選んでください。<br>
+      この設定は<b>会社で1つ</b>です（どのPCでも同じ並びになります）。
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <tr style="background:#f6f7f9;font-size:11px;color:#555">
+        <th style="padding:5px 6px">並び</th><th>色</th><th style="text-align:left;padding-left:8px">名前</th>
+        <th style="padding:5px 6px">いつも表示</th><th style="padding:5px 6px">　</th></tr>
+      ${rows}
+    </table>
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid #eee">
+      <label style="font-size:12px;font-weight:600;color:#555">人を追加</label>
+      <div style="display:flex;gap:6px;margin-top:5px">
+        <input id="wNewName" placeholder="名前（例 中村）" style="flex:1;padding:7px;border:1px solid #ccc;border-radius:5px;font-family:inherit">
+        <button onclick="wAdd()" style="padding:7px 14px;font-weight:700;border:1px solid #93c5fd;background:#eff6ff;color:#1e40af;border-radius:5px;cursor:pointer;font-family:inherit">＋ 追加</button>
+      </div>
+      <div style="font-size:11px;color:#999;margin-top:4px">色は空いているものが自動で付きます（最大5人まで）</div>
+    </div>
+    <div style="text-align:right;margin-top:16px">
+      <button onclick="closeWorkerCfg()" style="padding:8px 16px;border:1px solid #ddd;background:#f6f7f9;border-radius:6px;cursor:pointer;font-family:inherit">やめる</button>
+      <button onclick="wSaveCfg()" style="padding:8px 18px;font-weight:700;color:#fff;background:#1f3864;border:0;border-radius:6px;cursor:pointer;font-family:inherit">保存</button>
+    </div></div>`;
+}
+// 設定画面の中だけで使う色引き（保存前の仮の形を見る）
+function wcfgOf(k,cfg){
+  if(WORKER_CONFIG[k]) return WORKER_CONFIG[k];
+  const e=cfg.extra[k];
+  if(e){ const c=EXTRA_COLORS[(e.ci||0)%EXTRA_COLORS.length]; return {name:e.name,bg:c.bg,bd:c.bd,fg:c.fg}; }
+  return {name:k,bg:'#f3f4f6',bd:'#d1d5db',fg:'#374151'};
+}
+function wMove(i,d){
+  const j=i+d; if(j<0||j>=_wTmp.order.length) return;
+  const a=_wTmp.order; const t=a[i]; a[i]=a[j]; a[j]=t; wDrawCfg();
+}
+function wToggle(k,on){ if(on) _wTmp.always[k]=true; else delete _wTmp.always[k]; }
+function wDel(k){
+  if(!confirm(wcfgOf(k,_wTmp).name+' を消します。よろしいですか？\n（この人に割り付けてある作業はそのまま残ります）')) return;
+  delete _wTmp.extra[k]; delete _wTmp.always[k];
+  _wTmp.order=_wTmp.order.filter(x=>x!==k);
+  wDrawCfg();
+}
+function wAdd(){
+  const el=document.getElementById('wNewName'); const nm=(el.value||'').trim();
+  if(!nm){ alert('名前を入れてください'); return; }
+  const used=Object.values(_wTmp.extra).map(e=>e.ci);
+  let ci=-1; for(let i=0;i<EXTRA_COLORS.length;i++){ if(used.indexOf(i)<0){ ci=i; break; } }
+  if(ci<0){ alert('追加できるのは5人までです。使っていない人を消してから足してください'); return; }
+  const key='x'+Date.now().toString(36);
+  _wTmp.extra[key]={name:nm,ci:ci};
+  _wTmp.order.push(key); _wTmp.always[key]=true;
+  el.value=''; wDrawCfg();
+}
+function wSaveCfg(){
+  workerCfg=wNorm(_wTmp);
+  wPush();
+  closeWorkerCfg();
+  wFillSelects();
+  renderGantt(); renderRequestList&&renderRequestList(); renderManualList&&renderManualList();
+}
+
 const WORK_STD_END=17*60; // 標準終業 17:00
 const BREAKS=[{s:600,e:610},{s:730,e:770},{s:890,e:900},{s:1020,e:1030}];
 // 残業設定（分単位で保持）
@@ -2419,7 +2595,7 @@ function _isManualDone(r){
   });
 }
 function renderManualList(){
-  const assigneeNames={matsumoto_t:'松本利',matsunaga:'松永',matsumura:'村松',matsumoto_m:'松本み',endo:'遠藤',oishi:'大石',nema:'根間',matsumoto:'松本',nakamura:'中村'};
+  const assigneeNames=wNameMap();
   const allManuals=requests.filter(r=>r.source==='manual');
   const manuals=allManuals.filter(r=>!_isManualDone(r));
   const doneManuals=allManuals.filter(r=>_isManualDone(r));
@@ -2497,10 +2673,7 @@ function renderManualList(){
            </div>`
         :`<div style="display:flex;flex-direction:column;gap:3px">
             <div style="display:flex;gap:3px">
-              <button onclick="event.stopPropagation();assignTo('${r.id}','matsumoto_t')"
-                style="flex:1;font-size:10px;font-weight:700;padding:3px 2px;border:1px solid var(--m-bd);border-radius:4px;background:var(--m-bg);color:var(--m);cursor:pointer;font-family:inherit">松本利</button>
-              <button onclick="event.stopPropagation();assignTo('${r.id}','matsunaga')"
-                style="flex:1;font-size:10px;font-weight:700;padding:3px 2px;border:1px solid var(--n-bd);border-radius:4px;background:var(--n-bg);color:var(--n);cursor:pointer;font-family:inherit">松永</button>
+              ${wBtnRow(r.id)}
               <button onclick="event.stopPropagation();deleteManualReq('${r.id}')"
                 style="font-size:10px;padding:3px 5px;border:1px solid #fca5a5;border-radius:4px;background:#fee2e2;color:#dc2626;cursor:pointer;font-family:inherit">🗑</button>
             </div>
@@ -2717,8 +2890,7 @@ function renderRequestList(){
           <span class="total-val" id="tot_${r.id}">${r.hours}H</span>
         </div>
         ${!r.assigned?`<div class="assign-row">
-          <button class="assign-btn ab-m" onclick="assignTo('${r.id}','matsumoto')">松本に割付</button>
-          <button class="assign-btn ab-n" onclick="assignTo('${r.id}','matsunaga')">松永に割付</button>
+          ${wAssignRow(r.id)}
           <button onclick="openInsertModal('${r.id}')"
             style="font-size:10px;font-weight:700;padding:3px 7px;border:1px solid #f59e0b;border-radius:4px;background:#fff8e1;color:#92400e;cursor:pointer;font-family:inherit;margin-top:3px;width:100%"
             title="時刻を指定して挿入し、後続タスクを後ろにずらす">⚡ 時刻指定で割付（後続をずらす）</button>
@@ -2983,6 +3155,26 @@ function insertTaskAt(rid, assignee, startMin){
   renderRequestList();renderGantt();renderDetail();
   renderManualList();
 }
+// 作業カードの割付ボタン。いつも表示の人をボタンに、それ以外は「ほか…」の中に入れる。
+function wBtnRow(id){
+  const ks=wLanes(curDate), rest=wAll().filter(k=>ks.indexOf(k)<0);
+  const btns=ks.map(k=>{const c=wcfg(k);return `<button onclick="event.stopPropagation();assignTo('${id}','${k}')" `
+    +`style="flex:1;font-size:10px;font-weight:700;padding:3px 2px;border:1px solid ${c.bd};border-radius:4px;`
+    +`background:${c.bg};color:${c.fg};cursor:pointer;font-family:inherit">${c.name}</button>`}).join('');
+  const other=rest.length?`<select onchange="event.stopPropagation();if(this.value)assignTo('${id}',this.value)" onclick="event.stopPropagation()" `
+    +`style="font-size:10px;padding:3px 2px;border:1px solid #d1d5db;border-radius:4px;background:#f6f7f9;color:#555;cursor:pointer;font-family:inherit">`
+    +`<option value="">ほか…</option>`+rest.map(k=>`<option value="${k}">${wcfg(k).name}</option>`).join('')+`</select>`:'';
+  return btns+other;
+}
+function wAssignRow(id){
+  const ks=wLanes(curDate), rest=wAll().filter(k=>ks.indexOf(k)<0);
+  const btns=ks.map(k=>{const c=wcfg(k);return `<button class="assign-btn" onclick="assignTo('${id}','${k}')" `
+    +`style="border-color:${c.bd};background:${c.bg};color:${c.fg}">${c.name}に割付</button>`}).join('');
+  const other=rest.length?`<select onchange="if(this.value)assignTo('${id}',this.value)" `
+    +`style="font-size:10px;padding:3px 5px;border:1px solid #d1d5db;border-radius:4px;background:#f6f7f9;color:#555;cursor:pointer;font-family:inherit">`
+    +`<option value="">ほかの人に割付…</option>`+rest.map(k=>`<option value="${k}">${wcfg(k).name}</option>`).join('')+`</select>`:'';
+  return btns+other;
+}
 function autoAll(){
   if(!requests.length){
     alert('kintoneのデータ取得中です。しばらく待ってから再試行してください。');return;
@@ -2990,10 +3182,11 @@ function autoAll(){
   const ua=requests.filter(r=>!r.assigned);
   if(ua.length){
     // 未割付を今日の日付に割り付け（負荷均等）
+    // ★2026-11-02：いつも表示の人だけで分ける（普段いない人に配らないように）
+    const pool=wAlways().length?wAlways():['matsumoto_t','matsunaga'];
     ua.forEach(r=>{
-      const mTasks=getDate(curDate).filter(t=>t.assignee==='matsumoto').length;
-      const nTasks=getDate(curDate).filter(t=>t.assignee==='matsunaga').length;
-      const a=mTasks<=nTasks?'matsumoto':'matsunaga';
+      const cnt=k=>getDate(curDate).filter(t=>normA(t.assignee)===k).length;
+      let a=pool[0]; pool.forEach(k=>{ if(cnt(k)<cnt(a)) a=k; });
       pushTask(r,a,curDate);r.assigned=true;r.assignee=a;
     });
   }
@@ -3196,9 +3389,13 @@ function renderGantt(){
   const tasks=getDate(curDate);
 
   // 当日タスクに存在する担当者を動的に取得（正規化して重複除去・ASSIGNEE_ORDERで並び替え）
-  const assigneesOnDay=[...new Set(tasks.map(t=>normA(t.assignee)).filter(Boolean))];
-  assigneesOnDay.sort((x,y)=>{const ix=ASSIGNEE_ORDER.indexOf(x),iy=ASSIGNEE_ORDER.indexOf(y);return(ix<0?99:ix)-(iy<0?99:iy);});
-  if(!assigneesOnDay.length) assigneesOnDay.push('matsumoto_t','matsunaga'); // タスクなし時のデフォルト
+  // ★2026-11-02：いつも表示の人 ＋ その日に作業がある人（並びは担当者設定のとおり）
+  const assigneesOnDay=wLanes(curDate);
+  if(!assigneesOnDay.length) assigneesOnDay.push('matsunaga'); // 誰も居ないときの保険
+  // 右上の色の見本も、その日に出ている人に合わせる
+  const _lg=document.getElementById('glegendPeople');
+  if(_lg) _lg.innerHTML=assigneesOnDay.map(k=>{const c=wcfg(k);
+    return `<div class="legitem"><div class="legdot" style="background:${c.fg}"></div>${c.name}</div>`}).join('');
 
   const rows=assigneesOnDay.map(a=>{
     const cfg=wcfg(a);
@@ -4788,6 +4985,7 @@ function clearSavedTasks(){
 
 requestAnimationFrame(()=>{
   buildDateNav();
+  wFillSelects();   // 担当者の選択欄をつくる
   loadSavedTasks();  // まずlocalStorageから復元
   // 任意作業をlocalStorageから復元（kintone取得前に先読み）
   const savedManuals=loadManualReqs();
