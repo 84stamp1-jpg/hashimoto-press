@@ -39,15 +39,26 @@
     });
   } catch(e){}
 
-  // Firebaseの長い待ち受け（ロングポーリング）はiframeの中から出ていくので、
-  // 上のくるみを通らない。鍵が開くまでは iframe そのものを作らせない。
-  try {
-    var ce = document.createElement.bind(document);
-    document.createElement = function(t){
-      if (String(t).toLowerCase() === 'iframe') return ce('span');
-      return ce.apply(null, arguments);
-    };
-  } catch(e){}
+  // ★2026-11-02：以前はここで iframe を作らせないようにしていた（Firebaseの長い待ち受けが
+  //   iframeの中から出ていくため）。ところが **reCAPTCHA も iframe の中で動く**ので、
+  //   App Check の証明書が取れず、会社のPIN（settings/adminPinHash）が401で読めなくなっていた。
+  //   その結果、控えの無いPCでは会社のPINが弾かれ、代わりに初期の番号で開いてしまう状態だった。
+  //   いまは iframe は作らせ、**Firebaseのデータベースだけ**を鍵が開くまで使わせない。
+  //   （鍵が開いたら画面を読み直すので、そのあとは普通に使える）
+  (function lockDb(){
+    try {
+      var fb = window.firebase;
+      if (fb && fb.database && !fb.database.__hhubLocked) {
+        var od = fb.database;
+        var f = function(){ throw new Error('locked'); };
+        for (var k in od) { try { f[k] = od[k]; } catch(e){} }
+        f.__hhubLocked = true;
+        fb.database = f;
+        return;
+      }
+    } catch(e){}
+    setTimeout(lockDb, 30);
+  })();
 
   var of = window.fetch.bind(window);
   window.fetch = function(i, init){
@@ -133,13 +144,14 @@
       '<div id="hhubPinErr" style="color:#b91c1c;font-size:12px;min-height:18px;margin:8px 0"></div>' +
       '<button id="hhubPinGo" style="width:100%;padding:10px;font-size:14px;font-weight:700;' +
         'color:#fff;background:#1f3864;border:0;border-radius:6px;cursor:pointer">開く</button>' +
-      '<div style="font-size:11px;color:#aaa;margin-top:14px;line-height:1.6">' +
+      '<div id="hhubPinNote" style="font-size:11px;color:#b45309;margin-top:10px;line-height:1.5"></div>' +
+      '<div style="font-size:11px;color:#aaa;margin-top:10px;line-height:1.6">' +
         'PINが分からないときは、社長または各リーダーに聞いてください</div>' +
       '</div>';
     document.documentElement.appendChild(o);
 
     var inp = o.querySelector('#hhubPinInput'), err = o.querySelector('#hhubPinErr');
-    var go  = o.querySelector('#hhubPinGo'), busy = false;
+    var go  = o.querySelector('#hhubPinGo'), note = o.querySelector('#hhubPinNote'), busy = false;
     function submit(){
       if (busy) return;
       var v = (inp.value || '').trim();
@@ -147,6 +159,9 @@
       busy = true; err.textContent = '確かめています…'; err.style.color = '#888';
       companyHash().then(function(h){
         if (h) return sha(v).then(function(x){ return x === h; });
+        // 会社のPINが読めず、このPCの控えも無い＝初期の番号で照合することになる。
+        // 黙って通すと気づけないので、その旨を出す（2026-11-02）
+        note.textContent = '※会社のPINを確認できませんでした（このPCの控えで照合します）';
         var stored = '1234';
         try { stored = localStorage.getItem(PK) || '1234'; } catch(e){}
         return v === stored;
@@ -240,6 +255,7 @@
 })();
 </script>
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.11.02-1 : ★<b>PINを入れても「PINが違います」になる件を直した</b>（社長報告）。入口の関所が<b>iframeを作らせない</b>ようにしていたが、<b>reCAPTCHAはiframeの中で動く</b>ため App Check の証明書が取れず、会社のPIN（Firebase settings/adminPinHash）が<b>401で読めなかった</b>。そのため控えのあるPCだけ通り、<b>控えの無いPCでは会社のPINが弾かれ、初期の番号で開いてしまう</b>状態だった。iframeは作らせ、代わりに<b>Firebaseのデータベースだけ</b>を鍵が開くまで使わせないようにした。あわせて、会社のPINを確認できないまま控えで照合するときは画面にその旨を出す。 -->
 <!-- 金型原価 v2026.10.31-2 : ★<b>管理者PINを入口に置いた</b>（社長指示）。この画面は見積金額・加工費・チャージ・作業者名を扱うが、メニューに載せていないだけで、<b>ファイル名を知っていれば誰でも開けていた</b>。段取りナビと同じ<b>会社で1つの管理者PIN</b>（Firebase settings/adminPinHash・SHA-256）を入口に置く。PINそのものはどこにも持たない。<b>開くまではFirebaseと中継への通信を止める</b>ので、見た目を隠すだけでなく中身を取りに行かない。解錠すると読み直し、そのタブを閉じるまでは聞かれない。★settings/adminPinHash を消せば以前の方式に戻るので締め出されることはない。 -->
 
 <!-- 金型原価 v2026.10.31-1 : ★<b>中継(GAS)への通信に合言葉を付けた</b>（社長指示・セキュリティ対策1）。中継のURLはこのHTMLに書いてある＝公開しているので、<b>URLだけでは中身を返さない</b>ようにした。中継の側に門番を置き、こちら側は<b>Firebase（App Checkで守られている）から合言葉を受け取って</b>URLに足す。合言葉は<b>コードにもリポジトリにも書かない</b>。入口を3つ（JSONPの<code>script.src</code>・<code>fetch</code>・<code>window.open</code>）くるんだので<b>呼び出し側のコードは1か所も直していない</b>。今後 GAS 宛ての通信を足しても自動で付く。★<b>先にGAS側へ門番を貼ること</b>（貼る前はこれまでどおり動く）。 -->
@@ -905,7 +921,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.10.31-2</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.11.02-1</span></div>
     </div>
   </div>
   <div class="header-right">
