@@ -255,6 +255,7 @@
 })();
 </script>
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.11.03-1 : <b>金型NO.の候補が 71-S までしか出なかった</b>のを直した（社長指摘）。材料費・外注費・購入品費・見積依頼の「選択または入力」は、管理NO.の小さい順に並べたあと<b>先頭20件で打ち切っていた</b>ため、あとから登録した新しい金型（71-T 以降）が一覧に出てこなかった。<b>上限を300件に上げ</b>、それでも超えるときだけ末尾に「ほか○件 — 文字を打つと絞り込めます」と出す。一覧は枠の中でスクロールする。★打ち込んで絞り込めば、今までも出ていた（データは入っている）。 -->
 <!-- 金型原価 v2026.11.02-1 : ★<b>PINを入れても「PINが違います」になる件を直した</b>（社長報告）。入口の関所が<b>iframeを作らせない</b>ようにしていたが、<b>reCAPTCHAはiframeの中で動く</b>ため App Check の証明書が取れず、会社のPIN（Firebase settings/adminPinHash）が<b>401で読めなかった</b>。そのため控えのあるPCだけ通り、<b>控えの無いPCでは会社のPINが弾かれ、初期の番号で開いてしまう</b>状態だった。iframeは作らせ、代わりに<b>Firebaseのデータベースだけ</b>を鍵が開くまで使わせないようにした。あわせて、会社のPINを確認できないまま控えで照合するときは画面にその旨を出す。 -->
 <!-- 金型原価 v2026.10.31-2 : ★<b>管理者PINを入口に置いた</b>（社長指示）。この画面は見積金額・加工費・チャージ・作業者名を扱うが、メニューに載せていないだけで、<b>ファイル名を知っていれば誰でも開けていた</b>。段取りナビと同じ<b>会社で1つの管理者PIN</b>（Firebase settings/adminPinHash・SHA-256）を入口に置く。PINそのものはどこにも持たない。<b>開くまではFirebaseと中継への通信を止める</b>ので、見た目を隠すだけでなく中身を取りに行かない。解錠すると読み直し、そのタブを閉じるまでは聞かれない。★settings/adminPinHash を消せば以前の方式に戻るので締め出されることはない。 -->
 
@@ -921,7 +922,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.11.02-1</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.11.03-1</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -7069,6 +7070,8 @@ function nextAlpha(str) {
 // 管理NO. コンボボックス（予測検索 + 品番自動補完）
 // ═══════════════════════════════════════════════
 
+const MOLD_COMBO_MAX = 300;   // 候補を出す上限（これを超えたときだけ「ほか○件」）
+
 function openMoldCombo(ddId, query, moldInputId, partNoInputId, partNoDispId) {
   const dd = document.getElementById(ddId);
   if (!dd) return;
@@ -7085,20 +7088,23 @@ function openMoldCombo(ddId, query, moldInputId, partNoInputId, partNoDispId) {
       (m.partName || '').toLowerCase().includes(q) ||
       (m.client   || '').toLowerCase().includes(q)
     )
-    .sort((a, b) => (a.no||'').localeCompare(b.no||'', 'ja', {numeric: true}))
-    .slice(0, 20);
+    .sort((a, b) => (a.no||'').localeCompare(b.no||'', 'ja', {numeric: true}));
+  const shown = filtered.slice(0, MOLD_COMBO_MAX);   // ★2026-11-03 20件で切れて新しい金型が出なかった
 
-  if (!filtered.length && !q) {
+  if (!shown.length && !q) {
     dd.innerHTML = '<div class="mold-combo-new">金型一覧タブで金型を登録してください</div>';
-  } else if (!filtered.length) {
+  } else if (!shown.length) {
     dd.innerHTML = `<div class="mold-combo-new">「${query}」は未登録 — このまま新規入力として使用</div>`;
   } else {
-    dd.innerHTML = filtered.map(m => `
+    dd.innerHTML = shown.map(m => `
       <div class="mold-combo-item" onmousedown="selectMoldCombo(event,'${ddId}','${(m.no||'').replace(/'/g,"\\\\'")}','${(m.partNo||'').replace(/'/g,"\\\\'")}','${(m.partName||'').replace(/'/g,"\\\\'")}','${moldInputId}','${partNoInputId}','${partNoDispId}')">
         <div class="ci-no">${m.no || '—'}</div>
         <div style="font-family:var(--mono);font-size:13px;font-weight:700;color:var(--accent);margin:2px 0">${m.partNo || ''}</div>
         <div style="font-size:11px;color:var(--text2)">${m.partName || ''} ／ ${m.client || ''}</div>
       </div>`).join('');
+    if (filtered.length > shown.length) {
+      dd.innerHTML += `<div class="mold-combo-new">ほか ${filtered.length - shown.length} 件 — 文字を打つと絞り込めます</div>`;
+    }
   }
   dd.classList.add('open');
 }
