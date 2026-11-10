@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.11-3 : ★<b>ロス記録のラインを「いくつでも選べる」ようにした</b>（社長要望）。ボタンにしただけでは1つしか選べず、<b>組立チームは作業者ごとの指示</b>なので何人かまとめて見たいことがある。<b>押すたびに入る／外れる</b>形にし、選んだものは全部濃い青。<b>1つも選んでいない＝すべてのライン</b>。選んだラインは <code>lhLine</code>（hidden）にカンマ区切りで入れ、絞り込みは <code>lineIds.length &amp;&amp; lineIds.indexOf(id)&lt;0</code> で見る。 -->
 <!-- H-Hub v2026.11.11-2 : ★<b>ロス記録のラインを、ドロップダウンから「並べて押す」形にした</b>（社長要望）。開かないと中身が見えず、いまどれを選んでいるかも分かりにくかった。<b>全部のラインを丸いボタンで並べ、選んでいるものは濃い青</b>にした（<code>lhRenderLineBtns()</code>）。★あわせて、一覧に混ざっていた <code>updatedAt</code> を外した。<code>/lines</code> の直下にはライン以外のキーも入っているので、<b>中身がオブジェクトのものだけ</b>をラインとして出す。 -->
 <!-- H-Hub v2026.11.11-1 : ★<b>システム入力待ちに、入力済みのもの（10月末の分）が出続けていたのを直した</b>（社長報告）。記録シートのM列は「済」になっているのに一覧から消えなかった。原因と直しは3つ。(1)★<b>判定が「済」との完全一致だった</b>（<code>(r[12]||'未')==='済'</code>）。手でシートに入れた<b>「済 」（うしろに空白）や「入力済」だと永久に未扱い</b>になる。<code>qcIsInputted()</code> を作り、<b>「済」の字が入っていれば済</b>とみなす形に6か所まとめて変えた。(2)★<b>入力待ちを開いても記録を取りに行かないことがあった</b>。「前の取得から3分以内なら取りに行かない」決まりのため、別の画面で直前に取り直していると<b>古い記録のまま一覧を作っていた</b>。この画面は毎回取り直す（多重にはならない）。(3)★<b>いつの記録で作った一覧か分からなかった</b>。見出しに「記録 7:16 時点」を出し、取れなかったときは<b>赤で「⚠ 最新の記録を取れませんでした」</b>と知らせる。 -->
 <!-- H-Hub v2026.11.03-1 : ★<b>「新しい版が出ています」が何度読み込み直しても消えなかったのを直した</b>（社長報告）。版の番号が<b>3か所</b>（先頭のコメント・右下の表示・<code>QC_UI_VERSION</code>）に別々に書いてあり、10/31の2回の直しで<b><code>QC_UI_VERSION</code> だけ v2026.10.30-1 のまま置き忘れていた</b>。知らせは「先頭のコメントの版 ＞ <code>QC_UI_VERSION</code>」で出すので、<b>画面は最新なのに知らせだけが永久に出続ける</b>状態だった。右下の表示を <code>QC_UI_VERSION</code> から入れる形にし、版の番号は<b>先頭のコメントと <code>QC_UI_VERSION</code> の2か所だけ</b>にした。 -->
@@ -2896,7 +2897,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
             <option value="part">品番ごと（ためて見る）</option>
             <option value="month">月ごと（前の月と比べる）</option>
           </select></div>
-        <div class="fi" style="flex:1 1 100%;"><label>ライン</label>
+        <div class="fi" style="flex:1 1 100%;"><label>ライン<span style="font-weight:400;color:#888;font-size:11px;margin-left:6px;">いくつでも選べます（もう一度押すと外れる）</span></label>
           <input type="hidden" id="lhLine" value="">
           <div id="lhLineBtns" class="lh-lines"></div></div>
         <div class="fi"><label>開始日</label>
@@ -13390,7 +13391,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.11-2';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.11-3';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -17150,18 +17151,32 @@ let _lhData=[];   // 表示中の記録（CSV用）
 // ラインの選び方を、ドロップダウンから「並べて押す」形に変えた（社長 2026-11-11）。
 // ★/lines の直下には updatedAt のような「ラインではないキー」も混ざっている（一覧に出ていた）。
 //   中身がオブジェクトのものだけをラインとして出す。
+// ★複数えらべる（社長 2026-11-11）。組立チームは作業者ごとの指示なので、
+//   何人かまとめて見たいことがある。選んだものは hidden にカンマ区切りで入れる。
+//   1つも選んでいない＝「すべてのライン」。
+function lhSelectedLines(){
+  const hid=document.getElementById('lhLine');
+  const v=hid?String(hid.value||''):'';
+  return v?v.split(',').filter(Boolean):[];
+}
 window.lhRenderLineBtns=function(){
   const host=document.getElementById('lhLineBtns'), hid=document.getElementById('lhLine');
   if(!host||!hid) return;
-  const cur=hid.value||'';
+  const cur=lhSelectedLines();
   const ids=Object.keys(lines||{}).filter(id=>lines[id]&&typeof lines[id]==='object'&&!Array.isArray(lines[id]));
   const items=[['','すべてのライン']].concat(ids.map(id=>[id,getLineName(id)]));
   host.innerHTML=items.map(function(it){
-    return '<button type="button" class="lh-line-btn'+(it[0]===cur?' on':'')+'" data-v="'+_lhEsc(it[0])+'">'+_lhEsc(it[1])+'</button>';
+    const on = it[0]==='' ? cur.length===0 : cur.indexOf(it[0])>=0;
+    return '<button type="button" class="lh-line-btn'+(on?' on':'')+'" data-v="'+_lhEsc(it[0])+'">'+_lhEsc(it[1])+'</button>';
   }).join('');
   host.onclick=function(e){
     const b=e.target.closest('.lh-line-btn'); if(!b) return;
-    hid.value=b.getAttribute('data-v')||'';
+    const v=b.getAttribute('data-v')||'';
+    let cur=lhSelectedLines();
+    if(!v) cur=[];                                   // 「すべてのライン」＝選択を外す
+    else if(cur.indexOf(v)>=0) cur=cur.filter(x=>x!==v);   // もう一度押すと外れる
+    else cur.push(v);
+    hid.value=cur.join(',');
     lhRenderLineBtns(); lhLoad();
   };
 };
@@ -17192,7 +17207,7 @@ window.lhLoad=async function(){
   // ★ラインはあとから届くことがある（開いた時点では lines が空）。表示のたびに並べ直す
   lhRenderLineBtns();
   const from=document.getElementById('lhFrom').value, to=document.getElementById('lhTo').value;
-  const lineId=document.getElementById('lhLine').value;
+  const lineIds=lhSelectedLines();   // 0件＝すべてのライン
   const mode=document.getElementById('lhMode').value;
   const body=document.getElementById('lhBody');
   body.innerHTML='<div style="color:#bbb;font-size:12px;padding:10px 0;">読み込み中...</div>';
@@ -17219,7 +17234,7 @@ window.lhLoad=async function(){
     if(!useAll&&from&&d<from) return;
     if(!useAll&&to&&d>to) return;
     Object.keys(all[d]||{}).forEach(id=>{
-      if(lineId&&id!==lineId) return;
+      if(lineIds.length&&lineIds.indexOf(id)<0) return;
       const r=all[d][id];
       if(r&&Array.isArray(r.jobs)) recs.push(Object.assign({},r,{date:d,lineId:id}));
     });
