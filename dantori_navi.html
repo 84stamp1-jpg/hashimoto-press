@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.11-4 : ★<b>ロス記録のラインに「プレス係」「組立係」のまとめボタンを足した</b>（社長要望）。「すべてのライン」のうしろに置き、<b>ひと押しでその係の全ラインが入る／外れる</b>。境目は並びの <b>「ロボットライン」</b>で、そこから後ろが組立係・前がプレス係（<code>LH_ASSY_FROM</code>）。組立は作業者ごとの指示なので人の名前がラインになっている。★ラインを足したときは、この境目より前に入るか後ろに入るかで係が決まる。 -->
 <!-- H-Hub v2026.11.11-3 : ★<b>ロス記録のラインを「いくつでも選べる」ようにした</b>（社長要望）。ボタンにしただけでは1つしか選べず、<b>組立チームは作業者ごとの指示</b>なので何人かまとめて見たいことがある。<b>押すたびに入る／外れる</b>形にし、選んだものは全部濃い青。<b>1つも選んでいない＝すべてのライン</b>。選んだラインは <code>lhLine</code>（hidden）にカンマ区切りで入れ、絞り込みは <code>lineIds.length &amp;&amp; lineIds.indexOf(id)&lt;0</code> で見る。 -->
 <!-- H-Hub v2026.11.11-2 : ★<b>ロス記録のラインを、ドロップダウンから「並べて押す」形にした</b>（社長要望）。開かないと中身が見えず、いまどれを選んでいるかも分かりにくかった。<b>全部のラインを丸いボタンで並べ、選んでいるものは濃い青</b>にした（<code>lhRenderLineBtns()</code>）。★あわせて、一覧に混ざっていた <code>updatedAt</code> を外した。<code>/lines</code> の直下にはライン以外のキーも入っているので、<b>中身がオブジェクトのものだけ</b>をラインとして出す。 -->
 <!-- H-Hub v2026.11.11-1 : ★<b>システム入力待ちに、入力済みのもの（10月末の分）が出続けていたのを直した</b>（社長報告）。記録シートのM列は「済」になっているのに一覧から消えなかった。原因と直しは3つ。(1)★<b>判定が「済」との完全一致だった</b>（<code>(r[12]||'未')==='済'</code>）。手でシートに入れた<b>「済 」（うしろに空白）や「入力済」だと永久に未扱い</b>になる。<code>qcIsInputted()</code> を作り、<b>「済」の字が入っていれば済</b>とみなす形に6か所まとめて変えた。(2)★<b>入力待ちを開いても記録を取りに行かないことがあった</b>。「前の取得から3分以内なら取りに行かない」決まりのため、別の画面で直前に取り直していると<b>古い記録のまま一覧を作っていた</b>。この画面は毎回取り直す（多重にはならない）。(3)★<b>いつの記録で作った一覧か分からなかった</b>。見出しに「記録 7:16 時点」を出し、取れなかったときは<b>赤で「⚠ 最新の記録を取れませんでした」</b>と知らせる。 -->
@@ -566,6 +567,10 @@ html, body {
   font-size:13px;font-family:inherit;cursor:pointer;white-space:nowrap;line-height:1.3;}
 .lh-line-btn:hover{background:#eef4fb;border-color:#1F4E79;}
 .lh-line-btn.on{background:#1F4E79;border-color:#1F4E79;color:#fff;font-weight:700;}
+/* 係のまとめ（プレス係・組立係）は、ひと目でまとめだと分かるように少し色を変える */
+.lh-line-btn.grp{background:#f1f5f9;border-color:#94a3b8;font-weight:700;}
+.lh-line-btn.grp:hover{background:#e2ecf7;}
+.lh-line-btn.grp.on{background:#0f3d63;border-color:#0f3d63;color:#fff;}
 .lh-tag{display:inline-block;padding:2px 9px;border-radius:10px;font-size:11.5px;font-weight:700;white-space:nowrap;}
 .lh-setup{background:#fef3c7;color:#92400e;}
 .lh-ct{background:#dbeafe;color:#1e40af;}
@@ -13391,7 +13396,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.11-3';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.11-4';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -17159,21 +17164,44 @@ function lhSelectedLines(){
   const v=hid?String(hid.value||''):'';
   return v?v.split(',').filter(Boolean):[];
 }
+// ★/lines の直下には updatedAt のような「ラインではないキー」も混ざっている。
+//   中身がオブジェクトのものだけをラインとして、Firebaseの並びのまま出す。
+function lhLineIds(){
+  return Object.keys(lines||{}).filter(id=>lines[id]&&typeof lines[id]==='object'&&!Array.isArray(lines[id]));
+}
+// ★係のまとめ（社長 2026-11-11）：並びの「ロボットライン」から後ろが組立係、その前がプレス係。
+//   組立は作業者ごとの指示なので人の名前がラインとして入っている（坂田・大塚…）。
+//   ★ラインを足したときは、この境目より前に入るか後ろに入るかで決まる。
+//   境目が見つからないときはグループのボタンを出さない。
+const LH_ASSY_FROM='ロボットライン';
+function lhGroups(ids){
+  let i=-1;
+  for(let k=0;k<ids.length;k++){ if(getLineName(ids[k])===LH_ASSY_FROM||ids[k]===LH_ASSY_FROM){ i=k; break; } }
+  if(i<0) return null;
+  return {press:ids.slice(0,i), assy:ids.slice(i)};
+}
 window.lhRenderLineBtns=function(){
   const host=document.getElementById('lhLineBtns'), hid=document.getElementById('lhLine');
   if(!host||!hid) return;
-  const cur=lhSelectedLines();
-  const ids=Object.keys(lines||{}).filter(id=>lines[id]&&typeof lines[id]==='object'&&!Array.isArray(lines[id]));
-  const items=[['','すべてのライン']].concat(ids.map(id=>[id,getLineName(id)]));
-  host.innerHTML=items.map(function(it){
-    const on = it[0]==='' ? cur.length===0 : cur.indexOf(it[0])>=0;
-    return '<button type="button" class="lh-line-btn'+(on?' on':'')+'" data-v="'+_lhEsc(it[0])+'">'+_lhEsc(it[1])+'</button>';
-  }).join('');
+  const cur=lhSelectedLines(), ids=lhLineIds(), g=lhGroups(ids);
+  const allOn=list=>list.length>0&&list.every(x=>cur.indexOf(x)>=0);
+  const btn=(v,n,on,cls)=>'<button type="button" class="lh-line-btn'+(cls?' '+cls:'')+(on?' on':'')+'" data-v="'+_lhEsc(v)+'">'+_lhEsc(n)+'</button>';
+  let html=btn('','すべてのライン',cur.length===0);
+  if(g) html+=btn('@press','プレス係',allOn(g.press),'grp')+btn('@assy','組立係',allOn(g.assy),'grp');
+  html+=ids.map(id=>btn(id,getLineName(id),cur.indexOf(id)>=0)).join('');
+  host.innerHTML=html;
   host.onclick=function(e){
     const b=e.target.closest('.lh-line-btn'); if(!b) return;
     const v=b.getAttribute('data-v')||'';
     let cur=lhSelectedLines();
+    const g2=lhGroups(lhLineIds());
     if(!v) cur=[];                                   // 「すべてのライン」＝選択を外す
+    else if(v==='@press'||v==='@assy'){              // 係ごとにまとめて入れる／外す
+      const list=(v==='@press'?(g2&&g2.press):(g2&&g2.assy))||[];
+      cur = (list.length&&list.every(x=>cur.indexOf(x)>=0))
+            ? cur.filter(x=>list.indexOf(x)<0)
+            : cur.concat(list.filter(x=>cur.indexOf(x)<0));
+    }
     else if(cur.indexOf(v)>=0) cur=cur.filter(x=>x!==v);   // もう一度押すと外れる
     else cur.push(v);
     hid.value=cur.join(',');
