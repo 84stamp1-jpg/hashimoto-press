@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.11-1 : ★<b>システム入力待ちに、入力済みのもの（10月末の分）が出続けていたのを直した</b>（社長報告）。記録シートのM列は「済」になっているのに一覧から消えなかった。原因と直しは3つ。(1)★<b>判定が「済」との完全一致だった</b>（<code>(r[12]||'未')==='済'</code>）。手でシートに入れた<b>「済 」（うしろに空白）や「入力済」だと永久に未扱い</b>になる。<code>qcIsInputted()</code> を作り、<b>「済」の字が入っていれば済</b>とみなす形に6か所まとめて変えた。(2)★<b>入力待ちを開いても記録を取りに行かないことがあった</b>。「前の取得から3分以内なら取りに行かない」決まりのため、別の画面で直前に取り直していると<b>古い記録のまま一覧を作っていた</b>。この画面は毎回取り直す（多重にはならない）。(3)★<b>いつの記録で作った一覧か分からなかった</b>。見出しに「記録 7:16 時点」を出し、取れなかったときは<b>赤で「⚠ 最新の記録を取れませんでした」</b>と知らせる。 -->
 <!-- H-Hub v2026.11.03-1 : ★<b>「新しい版が出ています」が何度読み込み直しても消えなかったのを直した</b>（社長報告）。版の番号が<b>3か所</b>（先頭のコメント・右下の表示・<code>QC_UI_VERSION</code>）に別々に書いてあり、10/31の2回の直しで<b><code>QC_UI_VERSION</code> だけ v2026.10.30-1 のまま置き忘れていた</b>。知らせは「先頭のコメントの版 ＞ <code>QC_UI_VERSION</code>」で出すので、<b>画面は最新なのに知らせだけが永久に出続ける</b>状態だった。右下の表示を <code>QC_UI_VERSION</code> から入れる形にし、版の番号は<b>先頭のコメントと <code>QC_UI_VERSION</code> の2か所だけ</b>にした。 -->
 <!-- H-Hub v2026.10.31-2 : ★<b>進捗ボードの「2秒ごとの取り直し」をやめた</b>（社長指示・Firebaseの転送量が無料枠の2.8倍になっていたため）。<code>fetchFirebaseLines()</code> が <code>/lines</code>（11.4KB）と <code>/beacons</code>（2.3KB）を<b>2秒ごとに丸ごと</b>取り直していた。1台が8時間開いているだけで約200MB、工場の台数ぶんで<b>月28GB＝無料枠10GBの2.8倍</b>。ところが <code>/lines</code> は進捗管理ボード側が最初から <code>onValue</code> で購読しており、<b>同じものを二重に取っていただけ</b>だった。届いた中身を <code>hhubOnLinesPush()</code> で非モジュール側へ配る形にし、<code>/beacons</code> も購読に変えた。段取り指示の組み立ては立て続けに届いたとき最後の1回にまとめる（300ms）。<b>2秒待たずに届くので画面の反応はむしろ速くなる</b>。★SDKが動かない環境のために、届いていないときだけ1分おきに見に行く道は残してある。 -->
 <!-- H-Hub v2026.10.31-1 : ★<b>中継(GAS)への通信に合言葉を付けた</b>（社長指示・セキュリティ対策1）。中継のURLはこのHTMLに書いてある＝公開しているので、<b>URLだけでは中身を返さない</b>ようにした。中継の側に門番を置き、こちら側は<b>Firebase（App Checkで守られている）から合言葉を受け取って</b>URLに足す。合言葉は<b>コードにもリポジトリにも書かない</b>。入口を3つ（JSONPの<code>script.src</code>・<code>fetch</code>・<code>window.open</code>）くるんだので<b>呼び出し側のコードは1か所も直していない</b>。今後 GAS 宛ての通信を足しても自動で付く。★<b>先にGAS側へ門番を貼ること</b>（貼る前はこれまでどおり動く）。 -->
@@ -12270,7 +12271,7 @@ function qcVerifyMarked(kr, cb){
     try{ localStorage.setItem('qcAllRecordsCache', JSON.stringify(QC_ALL_RECORDS)); }catch(e){}
     var ng = 0;
     QC_ALL_RECORDS.forEach(function(r){
-      if(want[String(parseInt(r[r.length-1]))] && (r[12]||'未')!=='済') ng++;
+      if(want[String(parseInt(r[r.length-1]))] && !qcIsInputted(r)) ng++;
     });
     cb(ng===0);
   }, function(){ cb(false); }, 25000);
@@ -12332,9 +12333,22 @@ function qcMarkShowError(btn, errs, total){
 // ★いま「システム入力待ち」に出るべき行の顔ぶれ。並べ替えて文字列にし、前回と比べる。
 var QC_PENDING_KEY = null;
 
+// ★M列（システム入力）が「済」と完全に同じときだけ済と見ていたため、
+//   手でシートに入れた「済 」（うしろに空白）や「入力済」だと永久に入力待ちに残っていた
+//   （社長報告 2026-11-10。シートは「済」なのに画面に出続けた）。
+//   「済」の字が入っていれば済とみなす。空欄と「未」だけが入力待ち。
+function qcIsInputted(r){
+  return String((r && r[12]) || '').indexOf('済') >= 0;
+}
+// 記録をいつ取れたか（入力待ちの見出しに出す）。取れなかったときは QC_REC_FETCH_ERR が立つ
+var QC_REC_FETCH_ERR = false;
+function qcHm(ms){
+  var d=new Date(ms);
+  return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+}
 function qcPendingRows(){
   return QC_ALL_RECORDS.filter(function(r){
-    return (r[7]||'')==='完納' && (r[12]||'未')==='未';
+    return (r[7]||'')==='完納' && !qcIsInputted(r);
   });
 }
 function qcPendingKeyNow(){
@@ -12419,6 +12433,7 @@ function qcFetchRecords(cb){
     if(res && res.ok){
       QC_ALL_RECORDS = res.records || [];
       QC_REC_FETCHED_MS = Date.now();
+      QC_REC_FETCH_ERR = false;
       qcApplyMarkedDone();   // ★入れ替えで消えた「済」を貼り直す（これが無いとボタンが復活する）
       try{ localStorage.setItem('qcAllRecordsCache', JSON.stringify(QC_ALL_RECORDS)); }catch(e){}
       qcUpdatePendingBadge(); qcBuildJobStatusMap();
@@ -12436,8 +12451,8 @@ function qcFetchRecords(cb){
         else if(!QC_PENDING_MODE){ QC_WANT_PENDING=false; qcShowPendingList(); }
       }
       finish(true);
-    } else finish(false);
-  }, function(){ finish(false); });
+    } else { QC_REC_FETCH_ERR = true; finish(false); }
+  }, function(){ QC_REC_FETCH_ERR = true; finish(false); });
 }
 
 // いま開いている一覧を、その画面のやり方で描き直す
@@ -12484,7 +12499,7 @@ function qcFilterRecords(){
 function qcRenderSummary(rows){
   var sa=document.getElementById('qc-summary-area'); if(!rows.length){ sa.innerHTML=''; return; }
   var tp=0,tn=0,pend=0;
-  rows.forEach(function(r){ tp+=parseInt(r[5]||0)||0; tn+=parseInt(r[6]||0)||0; if((r[12]||'未')==='未'&&(r[7]||'')==='完納') pend++; });
+  rows.forEach(function(r){ tp+=parseInt(r[5]||0)||0; tn+=parseInt(r[6]||0)||0; if(!qcIsInputted(r)&&(r[7]||'')==='完納') pend++; });
   var div=document.createElement('div'); div.className='qc-summary';
   var row=document.createElement('div'); row.className='qc-summary-row';
   [{l:'件数',v:rows.length+'件',ng:false},{l:'システム入力待ち',v:pend+'件',ng:pend>0}].forEach(function(item){
@@ -12595,7 +12610,7 @@ function qcMakeGroupCard(g){
     // QC_SAKUYOの一致レコードがあれば上書き（junjo一致優先、空junjoも許容）
     if(QC_SAKUYO) QC_SAKUYO.forEach(function(s){ if(s.seizoNo===g.seizoNo&&(String(s.junjo)===j||!s.junjo)){ if(parseInt(s.shiji)) shiji=parseInt(s.shiji); if(s.kosei) kosei=s.kosei; }});
     var hasKanno=kannoRecs.length>0;
-    var allDone=hasKanno&&kannoRecs.every(function(r){ return (r[12]||'未')==='済'; });
+    var allDone=hasKanno&&kannoRecs.every(function(r){ return qcIsInputted(r); });
     var sortedJ=jrecs.slice().sort(function(a,b){ return String(b[0]).localeCompare(String(a[0])); });
     var latestZairyo=sortedJ[0][8]||'';
     var hasZairyo=latestZairyo!=='なし'&&jrecs.some(function(r){ return r[8]==='あり'; });
@@ -12750,7 +12765,7 @@ function qcMakeGroupCard(g){
     if(jt.hasKanno&&!jt.allDone){
       var ga=document.createElement('div'); ga.className='qc-rec-actions';
       var mb=document.createElement('button'); mb.className='qc-mark-btn'; mb.textContent='✓ 入力済みにする';
-      var krecs=jt.kannoRecs.filter(function(r){ return (r[12]||'未')==='未'; });
+      var krecs=jt.kannoRecs.filter(function(r){ return !qcIsInputted(r); });
       (function(kr,btn){
         btn.addEventListener('click',function(){
           var LBL='✓ 入力済みにする';
@@ -13119,17 +13134,19 @@ function qcPendingRefreshHeader(host){
 }
 
 function qcUpdatePendingBadge(){
-  var pending=QC_ALL_RECORDS.filter(function(r){ return (r[7]||'')==='完納'&&(r[12]||'未')==='未'; });
+  var pending=QC_ALL_RECORDS.filter(function(r){ return (r[7]||'')==='完納'&&!qcIsInputted(r); });
   var badge=document.getElementById('qc-pending-badge'), countEl=document.getElementById('qc-pending-count');
   if(pending.length>0){ countEl.textContent=pending.length; badge.style.display='block'; } else { badge.style.display='none'; }
 }
 window.qcShowPendingList = function(){
   qcShowScreen('list');
   qcLoadCachedRecords();
-  // ★記録（スプレッドシート）側も、古ければ取り直す。
-  //   入力待ちを開いたのに何時間も前の記録で作っていると、
-  //   入力済みのものが出てくる。取りに行くあいだは手元のもので描く。
-  if(Date.now() - QC_REC_FETCHED_MS > 3*60*1000) qcFetchRecords();
+  // ★記録（スプレッドシート）を必ず取り直す。取りに行くあいだは手元のもので描く。
+  //   以前は「前の取得から3分以内なら取りに行かない」だったが、別の画面で直前に
+  //   取り直していると入力待ちを開いても取りに行かず、古い記録のまま一覧を作っていた
+  //   （シートは「済」なのに出続ける・社長報告 2026-11-10）。
+  //   qcFetchRecords() は QC_REC_INFLIGHT で多重にならないので、毎回呼んでよい。
+  qcFetchRecords();
   var pending=qcPendingRows();
   QC_PENDING_KEY = qcPendingKeyNow();   // いま出した顔ぶれを覚えておく
   if(!pending.length){ qcUpdatePendingBadge(); return; }
@@ -13148,6 +13165,17 @@ window.qcShowPendingList = function(){
   lbl.textContent='⚠️ システム入力待ち: '+pending.length+'件';
   var ver=document.createElement('span'); ver.style.cssText='font-size:10px;color:#94a3b8;margin-left:8px;font-weight:400;';
   ver.textContent=QC_UI_VERSION; lbl.appendChild(ver);
+  // ★いつの記録で作った一覧かを出す。取れなかったときは赤で知らせる
+  //   （古い記録のまま見ていることに気づけなかった・社長報告 2026-11-10）
+  var when=document.createElement('span');
+  if(QC_REC_FETCH_ERR){
+    when.style.cssText='font-size:11px;color:#E24B4A;margin-left:8px;font-weight:700;';
+    when.textContent='⚠ 最新の記録を取れませんでした'+(QC_REC_FETCHED_MS?'（表示は '+qcHm(QC_REC_FETCHED_MS)+' 時点）':'');
+  }else{
+    when.style.cssText='font-size:10px;color:#94a3b8;margin-left:8px;font-weight:400;';
+    when.textContent=QC_REC_FETCHED_MS?('記録 '+qcHm(QC_REC_FETCHED_MS)+' 時点'):'記録 取得中…';
+  }
+  lbl.appendChild(when);
   var btns=document.createElement('span'); btns.style.cssText='display:flex;gap:6px;';
   var ngBtn=document.createElement('button'); ngBtn.textContent='🔄 不良品報告を再取得'; ngBtn.style.cssText='padding:4px 10px;background:#fff;color:#1F4E79;border:1px solid #1F4E79;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;';
   ngBtn.onclick=function(){
@@ -13353,7 +13381,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.03-1';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.11-1';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
