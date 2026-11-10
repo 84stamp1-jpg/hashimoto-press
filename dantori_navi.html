@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.11-2 : ★<b>ロス記録のラインを、ドロップダウンから「並べて押す」形にした</b>（社長要望）。開かないと中身が見えず、いまどれを選んでいるかも分かりにくかった。<b>全部のラインを丸いボタンで並べ、選んでいるものは濃い青</b>にした（<code>lhRenderLineBtns()</code>）。★あわせて、一覧に混ざっていた <code>updatedAt</code> を外した。<code>/lines</code> の直下にはライン以外のキーも入っているので、<b>中身がオブジェクトのものだけ</b>をラインとして出す。 -->
 <!-- H-Hub v2026.11.11-1 : ★<b>システム入力待ちに、入力済みのもの（10月末の分）が出続けていたのを直した</b>（社長報告）。記録シートのM列は「済」になっているのに一覧から消えなかった。原因と直しは3つ。(1)★<b>判定が「済」との完全一致だった</b>（<code>(r[12]||'未')==='済'</code>）。手でシートに入れた<b>「済 」（うしろに空白）や「入力済」だと永久に未扱い</b>になる。<code>qcIsInputted()</code> を作り、<b>「済」の字が入っていれば済</b>とみなす形に6か所まとめて変えた。(2)★<b>入力待ちを開いても記録を取りに行かないことがあった</b>。「前の取得から3分以内なら取りに行かない」決まりのため、別の画面で直前に取り直していると<b>古い記録のまま一覧を作っていた</b>。この画面は毎回取り直す（多重にはならない）。(3)★<b>いつの記録で作った一覧か分からなかった</b>。見出しに「記録 7:16 時点」を出し、取れなかったときは<b>赤で「⚠ 最新の記録を取れませんでした」</b>と知らせる。 -->
 <!-- H-Hub v2026.11.03-1 : ★<b>「新しい版が出ています」が何度読み込み直しても消えなかったのを直した</b>（社長報告）。版の番号が<b>3か所</b>（先頭のコメント・右下の表示・<code>QC_UI_VERSION</code>）に別々に書いてあり、10/31の2回の直しで<b><code>QC_UI_VERSION</code> だけ v2026.10.30-1 のまま置き忘れていた</b>。知らせは「先頭のコメントの版 ＞ <code>QC_UI_VERSION</code>」で出すので、<b>画面は最新なのに知らせだけが永久に出続ける</b>状態だった。右下の表示を <code>QC_UI_VERSION</code> から入れる形にし、版の番号は<b>先頭のコメントと <code>QC_UI_VERSION</code> の2か所だけ</b>にした。 -->
 <!-- H-Hub v2026.10.31-2 : ★<b>進捗ボードの「2秒ごとの取り直し」をやめた</b>（社長指示・Firebaseの転送量が無料枠の2.8倍になっていたため）。<code>fetchFirebaseLines()</code> が <code>/lines</code>（11.4KB）と <code>/beacons</code>（2.3KB）を<b>2秒ごとに丸ごと</b>取り直していた。1台が8時間開いているだけで約200MB、工場の台数ぶんで<b>月28GB＝無料枠10GBの2.8倍</b>。ところが <code>/lines</code> は進捗管理ボード側が最初から <code>onValue</code> で購読しており、<b>同じものを二重に取っていただけ</b>だった。届いた中身を <code>hhubOnLinesPush()</code> で非モジュール側へ配る形にし、<code>/beacons</code> も購読に変えた。段取り指示の組み立ては立て続けに届いたとき最後の1回にまとめる（300ms）。<b>2秒待たずに届くので画面の反応はむしろ速くなる</b>。★SDKが動かない環境のために、届いていないときだけ1分おきに見に行く道は残してある。 -->
@@ -557,6 +558,13 @@ html, body {
 /* 入力フォームの620pxでは品番が2段になり、横いっぱいでは広がりすぎた。表が収まる幅で中央に置く */
 #tab-loss .fc{max-width:1280px;margin:0 auto 10px;}
 #tab-loss .fi{min-width:0;}
+/* ラインの選び方：ドロップダウンだと開かないと中身が見えず、どれを選んでいるかも分かりにくい
+   → 全部を並べて押せるようにした（社長 2026-11-11） */
+.lh-lines{display:flex;flex-wrap:wrap;gap:6px;}
+.lh-line-btn{padding:6px 13px;border:1px solid #cbd5e1;border-radius:999px;background:#fff;color:#334155;
+  font-size:13px;font-family:inherit;cursor:pointer;white-space:nowrap;line-height:1.3;}
+.lh-line-btn:hover{background:#eef4fb;border-color:#1F4E79;}
+.lh-line-btn.on{background:#1F4E79;border-color:#1F4E79;color:#fff;font-weight:700;}
 .lh-tag{display:inline-block;padding:2px 9px;border-radius:10px;font-size:11.5px;font-weight:700;white-space:nowrap;}
 .lh-setup{background:#fef3c7;color:#92400e;}
 .lh-ct{background:#dbeafe;color:#1e40af;}
@@ -2888,8 +2896,9 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
             <option value="part">品番ごと（ためて見る）</option>
             <option value="month">月ごと（前の月と比べる）</option>
           </select></div>
-        <div class="fi"><label>ライン</label>
-          <select id="lhLine" onchange="lhLoad()" style="padding:7px 9px;border:1px solid #ddd;border-radius:6px;font-size:13px;font-family:inherit;"></select></div>
+        <div class="fi" style="flex:1 1 100%;"><label>ライン</label>
+          <input type="hidden" id="lhLine" value="">
+          <div id="lhLineBtns" class="lh-lines"></div></div>
         <div class="fi"><label>開始日</label>
           <input type="date" id="lhFrom" onchange="lhLoad()" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px;"></div>
         <div class="fi"><label>終了日</label>
@@ -13381,7 +13390,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.11-1';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.11-2';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -17138,15 +17147,28 @@ function persistLossRecord(id){
 function persistLossAll(){ Object.keys(lines||{}).forEach(persistLossRecord); }
 
 let _lhData=[];   // 表示中の記録（CSV用）
+// ラインの選び方を、ドロップダウンから「並べて押す」形に変えた（社長 2026-11-11）。
+// ★/lines の直下には updatedAt のような「ラインではないキー」も混ざっている（一覧に出ていた）。
+//   中身がオブジェクトのものだけをラインとして出す。
+window.lhRenderLineBtns=function(){
+  const host=document.getElementById('lhLineBtns'), hid=document.getElementById('lhLine');
+  if(!host||!hid) return;
+  const cur=hid.value||'';
+  const ids=Object.keys(lines||{}).filter(id=>lines[id]&&typeof lines[id]==='object'&&!Array.isArray(lines[id]));
+  const items=[['','すべてのライン']].concat(ids.map(id=>[id,getLineName(id)]));
+  host.innerHTML=items.map(function(it){
+    return '<button type="button" class="lh-line-btn'+(it[0]===cur?' on':'')+'" data-v="'+_lhEsc(it[0])+'">'+_lhEsc(it[1])+'</button>';
+  }).join('');
+  host.onclick=function(e){
+    const b=e.target.closest('.lh-line-btn'); if(!b) return;
+    hid.value=b.getAttribute('data-v')||'';
+    lhRenderLineBtns(); lhLoad();
+  };
+};
 window.lhOpen=function(){
   // 朝礼で見るので、メンテが近い金型・ジグを上に出す（2026-09-22）
   if(typeof window.moldRenderMorning==='function') window.moldRenderMorning(document.getElementById('lhMold'));
-  const sel=document.getElementById('lhLine');
-  if(sel&&!sel.options.length){
-    const ids=Object.keys(lines||{});
-    sel.innerHTML='<option value="">すべてのライン</option>'+
-      ids.map(id=>'<option value="'+_lhEsc(id)+'">'+_lhEsc(getLineName(id))+'</option>').join('');
-  }
+  lhRenderLineBtns();
   if(!document.getElementById('lhFrom').value) lhQuick('yst');
   else lhLoad();
 };
@@ -17167,6 +17189,8 @@ window.lhSaveToday=function(){
   setTimeout(lhLoad,700);
 };
 window.lhLoad=async function(){
+  // ★ラインはあとから届くことがある（開いた時点では lines が空）。表示のたびに並べ直す
+  lhRenderLineBtns();
   const from=document.getElementById('lhFrom').value, to=document.getElementById('lhTo').value;
   const lineId=document.getElementById('lhLine').value;
   const mode=document.getElementById('lhMode').value;
