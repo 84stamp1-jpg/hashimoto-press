@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.11-8 : ★★<b>「⚠ 最新の記録を取れませんでした」の真犯人は無限ループだった</b>。帯に理由を出すようにしたら <code>[Maximum call stack size exceeded]</code> と出た。つまり<b>取り込みは成功していて、そのあとの描き直しがぐるぐる回って落ち</b>、その例外が fetch の .catch に吸われて「取得に失敗」として表示されていた。回っていた道＝<code>qcShowPendingList() → qcShowScreen('list') → qcLoadRecords() → qcRenderCurrentList() →（QC_PENDING_MODEなので）qcShowPendingList()</code>。バッジから開く1回目は QC_PENDING_MODE がまだ false なので回らず、<b>記録を取り直して一覧を作り直すとき（qcPendingSyncIfChanged）に回る</b>。QC_NG_INTERACTING が立っているときだけ qcRenderCurrentList が引き返すので、不良品報告を触ったあとは“たまたま”助かっていた＝出たり出なかったりの正体。→ (1)<b>入力待ちからは画面を切り替えるだけで記録を読み直さない</b>（qcShowScreen の _noLoad）。(2)描いている最中に呼ばれたら止める（QC_PENDING_DRAWING）。(3)ついでに<b>右下の版表示がずっと空欄だった</b>のも直した（ページ末尾の処理からは QC_UI_VERSION が見えず try/catch に吸われていた）。 -->
 <!-- H-Hub v2026.11.11-7 : ★<b>「⚠ 最新の記録を取れませんでした」の正体</b>（どのPCでも出る・閉じて開き直すと直る・社長報告）。入力待ちを開くと、同じGASへ<b>getRecords（記録の取り込み）と getKintonePartData（kintone不良品報告）が“同時に”飛んでいた</b>。Apps Scriptは同じ人からの同時呼び出しに弱く、どちらかが落ちる。閉じて開き直すと直るのは、2回目はkintoneのキャッシュが生きていて取りに行かず、<b>記録の1本だけになる</b>ため＝どのPCでも1回目に失敗していた理由。→ (1)<b>kintoneは記録の取り込みが終わってから行く</b>（30秒まで待つ・QC_NG_WAIT）。(2)それでも落ちたら<b>自動で取り直す</b>（1.5秒→3秒・最大2回・qcFetchRetryLater）。社長の「裏で閉じるを押して開いてくれれば」を、画面を触らずにやる。(3)<b>失敗の理由を帯に出す</b>（QC_REC_ERR_MSG）。写真から切り分けられるように。 -->
 <!-- H-Hub v2026.11.11-6 : ★<b>システム入力待ちに10月分（入力済み）が出た件</b>（現場PC・社長報告）。見出しは<b>「記録 取得中…」のまま</b>だった＝スプレッドシートの取り込みがまだ返っていないうちに、<b>手元の古い記録で一覧を作っていた</b>。取り込みが終われば自動で消える（「✕ 閉じる」で開き直すと消えたのはこのため）が、10pxの灰色で「取得中…」と出ているだけなので誰も気づけない。社長PCで出なかったのは取り込みが速く終わっていたから＝<b>回線やPCの速さで出たり出なかったりする</b>。→ (1)取り込みが終わるまで<b>一覧の上に黄色い帯</b>で「最新を確認しています／下の一覧は前回のもの」と出す。(2)取り込みが終わったら帯を消し、見出しの「記録 ○○時点」を必ず直す（顔ぶれが同じときは一覧を作り直さないので、これまで「取得中…」が残り続けていた）。(3)取り込みに失敗したときも、開いている一覧の見出しと帯で知らせる。(4)見出しを作り直すと「記録 ○○時点」が消えていたのを付け直すようにした。 -->
 <!-- H-Hub v2026.11.11-5 : ★<b>「📹 カメラ」タブのリンク先を中継PCの絶対URLに直した</b>（2026-10-10に「レイアウトのカメラ印と同じ絶対URLに統一した」と書いたのに、タブだけ取りこぼしで相対リンクのまま残っていた）。相対リンクのままだと、H-Hubをインターネット側（https）から開いた人はカメラ一覧もhttpsで開き、映像の取り込み先 <code>http://192.168.30.9:1984</code> が混在コンテンツで遮断されて<b>枠が全部黒くなる</b>。あわせて、カメラ一覧側に入れた<b>自動つなぎ直し</b>（v2026.11.11-1：つながり損ねた枠を1分で繋ぎ直す）も、状態の読み先が同じ口にないと効かないため、ここを直さないと現場で効かない。 -->
@@ -11887,7 +11888,11 @@ window.qcFromSearch = function(partNo){
 };
 
 // ----- サブ画面切替 -----
-window.qcShowScreen = function(sc){
+// ★_noLoad を true にすると、画面を切り替えるだけで中のデータを読み直さない。
+//   入力待ちの一覧は自分で記録を取りに行くので、ここで qcLoadRecords() を走らせると
+//   qcRenderCurrentList() → qcShowPendingList() と戻ってきて★無限ループになる
+//   （Maximum call stack size exceeded・2026-11-11）。
+window.qcShowScreen = function(sc, _noLoad){
   // 品質チェックの中のどの画面かも覚える（記録する／日別一覧／製造番号／予定更新）
   if(['form','list','search','upload'].indexOf(sc)>=0){
     try{ localStorage.setItem('hhubQcScreen', sc); }catch(e){}
@@ -11900,7 +11905,7 @@ window.qcShowScreen = function(sc){
     var el = document.getElementById('qc-tab-'+s);
     if(el) el.className = 'qc-tab' + (s===sc?' qc-active':'');
   });
-  if(sc==='list')   qcLoadRecords();
+  if(sc==='list' && !_noLoad) qcLoadRecords();
   if(sc==='search'){ qcLoadCachedRecords(); qcRunSeizoSearch(); if(!QC_ALL_RECORDS.length) qcFetchRecords(function(){ qcRunSeizoSearch(); }); }
   if(sc==='upload') qcUpdateCacheInfo();
 };
@@ -13225,8 +13230,13 @@ function qcUpdatePendingBadge(){
   var badge=document.getElementById('qc-pending-badge'), countEl=document.getElementById('qc-pending-count');
   if(pending.length>0){ countEl.textContent=pending.length; badge.style.display='block'; } else { badge.style.display='none'; }
 }
+var QC_PENDING_DRAWING = false;   // いま入力待ちの一覧を描いている最中か（無限ループ止め）
 window.qcShowPendingList = function(){
-  qcShowScreen('list');
+  // ★描いている最中にまた呼ばれたら、ここで止める（上の無限ループの二重の歯止め）
+  if(QC_PENDING_DRAWING) return;
+  QC_PENDING_DRAWING = true;
+  setTimeout(function(){ QC_PENDING_DRAWING = false; }, 0);
+  qcShowScreen('list', true);   // ★true＝記録は読み直さない（すぐ下で自分で取りに行く）
   qcLoadCachedRecords();
   // ★記録（スプレッドシート）を必ず取り直す。取りに行くあいだは手元のもので描く。
   //   以前は「前の取得から3分以内なら取りに行かない」だったが、別の画面で直前に
@@ -13462,7 +13472,18 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.11-7';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.11-8';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+// ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
+//   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
+//   （社長から「バージョンはどこに出ていますか？」）。
+(function(){
+  var put = function(){
+    try{ var e=document.getElementById('hhub-ver'); if(e) e.textContent = QC_UI_VERSION; }catch(e){}
+  };
+  put();
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', put);
+  setTimeout(put, 0);
+})();
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
