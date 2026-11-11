@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.11-7 : ★<b>「⚠ 最新の記録を取れませんでした」の正体</b>（どのPCでも出る・閉じて開き直すと直る・社長報告）。入力待ちを開くと、同じGASへ<b>getRecords（記録の取り込み）と getKintonePartData（kintone不良品報告）が“同時に”飛んでいた</b>。Apps Scriptは同じ人からの同時呼び出しに弱く、どちらかが落ちる。閉じて開き直すと直るのは、2回目はkintoneのキャッシュが生きていて取りに行かず、<b>記録の1本だけになる</b>ため＝どのPCでも1回目に失敗していた理由。→ (1)<b>kintoneは記録の取り込みが終わってから行く</b>（30秒まで待つ・QC_NG_WAIT）。(2)それでも落ちたら<b>自動で取り直す</b>（1.5秒→3秒・最大2回・qcFetchRetryLater）。社長の「裏で閉じるを押して開いてくれれば」を、画面を触らずにやる。(3)<b>失敗の理由を帯に出す</b>（QC_REC_ERR_MSG）。写真から切り分けられるように。 -->
 <!-- H-Hub v2026.11.11-6 : ★<b>システム入力待ちに10月分（入力済み）が出た件</b>（現場PC・社長報告）。見出しは<b>「記録 取得中…」のまま</b>だった＝スプレッドシートの取り込みがまだ返っていないうちに、<b>手元の古い記録で一覧を作っていた</b>。取り込みが終われば自動で消える（「✕ 閉じる」で開き直すと消えたのはこのため）が、10pxの灰色で「取得中…」と出ているだけなので誰も気づけない。社長PCで出なかったのは取り込みが速く終わっていたから＝<b>回線やPCの速さで出たり出なかったりする</b>。→ (1)取り込みが終わるまで<b>一覧の上に黄色い帯</b>で「最新を確認しています／下の一覧は前回のもの」と出す。(2)取り込みが終わったら帯を消し、見出しの「記録 ○○時点」を必ず直す（顔ぶれが同じときは一覧を作り直さないので、これまで「取得中…」が残り続けていた）。(3)取り込みに失敗したときも、開いている一覧の見出しと帯で知らせる。(4)見出しを作り直すと「記録 ○○時点」が消えていたのを付け直すようにした。 -->
 <!-- H-Hub v2026.11.11-5 : ★<b>「📹 カメラ」タブのリンク先を中継PCの絶対URLに直した</b>（2026-10-10に「レイアウトのカメラ印と同じ絶対URLに統一した」と書いたのに、タブだけ取りこぼしで相対リンクのまま残っていた）。相対リンクのままだと、H-Hubをインターネット側（https）から開いた人はカメラ一覧もhttpsで開き、映像の取り込み先 <code>http://192.168.30.9:1984</code> が混在コンテンツで遮断されて<b>枠が全部黒くなる</b>。あわせて、カメラ一覧側に入れた<b>自動つなぎ直し</b>（v2026.11.11-1：つながり損ねた枠を1分で繋ぎ直す）も、状態の読み先が同じ口にないと効かないため、ここを直さないと現場で効かない。 -->
 <!-- H-Hub v2026.11.11-4 : ★<b>ロス記録のラインに「プレス係」「組立係」のまとめボタンを足した</b>（社長要望）。「すべてのライン」のうしろに置き、<b>ひと押しでその係の全ラインが入る／外れる</b>。境目は並びの <b>「ロボットライン」</b>で、そこから後ろが組立係・前がプレス係（<code>LH_ASSY_FROM</code>）。組立は作業者ごとの指示なので人の名前がラインになっている。★ラインを足したときは、この境目より前に入るか後ろに入るかで係が決まる。 -->
@@ -12359,6 +12360,9 @@ function qcIsInputted(r){
 }
 // 記録をいつ取れたか（入力待ちの見出しに出す）。取れなかったときは QC_REC_FETCH_ERR が立つ
 var QC_REC_FETCH_ERR = false;
+var QC_REC_ERR_MSG = '';         // 失敗の理由（画面に小さく出す。切り分けのため）
+var QC_REC_RETRY = 0;            // 続けて失敗した回数（取り直しの上限に使う）
+var QC_NG_WAIT = 0;              // kintoneが記録の取り込みを待った回数
 // ★見出しの「記録 ○○時点」と、一覧の上に出す帯の文言。作る場所が3つに分かれて
 //   食い違わないよう、ここ1か所から配る。
 function qcPendingWhenText(){
@@ -12378,8 +12382,12 @@ function qcPendingStyleWhen(when){
 //   見出しの小さな「取得中…」では気づけないので、一覧の上に帯で大きく出す。取れたら消える。
 function qcPendingNoteText(){
   if(QC_REC_FETCH_ERR){
-    return '⚠ 最新の記録を取れませんでした。下の一覧は前回のもので、入力済みのものが混じっていることがあります。'
-         + 'しばらく待つか、「✕ 閉じる」でいったん戻ってから開き直してください';
+    var t = '⚠ 最新の記録を取れませんでした。下の一覧は前回のもので、入力済みのものが混じっていることがあります。';
+    t += (QC_REC_RETRY && QC_REC_RETRY <= 2)
+         ? '　🔄 取り直しています…（' + QC_REC_RETRY + '回目）'
+         : '　「✕ 閉じる」でいったん戻ってから開き直してください';
+    if(QC_REC_ERR_MSG) t += '　［' + QC_REC_ERR_MSG + '］';
+    return t;
   }
   if(!QC_REC_FETCHED_MS){
     return '🔄 最新の記録を確認しています…　下の一覧は前回のもので、入力済みのものが混じっていることがあります';
@@ -12484,6 +12492,7 @@ function qcFetchRecords(cb){
       QC_ALL_RECORDS = res.records || [];
       QC_REC_FETCHED_MS = Date.now();
       QC_REC_FETCH_ERR = false;
+      QC_REC_ERR_MSG = ''; QC_REC_RETRY = 0;
       qcApplyMarkedDone();   // ★入れ替えで消えた「済」を貼り直す（これが無いとボタンが復活する）
       try{ localStorage.setItem('qcAllRecordsCache', JSON.stringify(QC_ALL_RECORDS)); }catch(e){}
       qcUpdatePendingBadge(); qcBuildJobStatusMap();
@@ -12501,8 +12510,26 @@ function qcFetchRecords(cb){
         else if(!QC_PENDING_MODE){ QC_WANT_PENDING=false; qcShowPendingList(); }
       }
       finish(true);
-    } else { QC_REC_FETCH_ERR = true; qcPendingNoteOnError(); finish(false); }
-  }, function(){ QC_REC_FETCH_ERR = true; qcPendingNoteOnError(); finish(false); });
+    } else {
+      QC_REC_FETCH_ERR = true;
+      QC_REC_ERR_MSG = String((res && (res.err || res.error)) || 'GASが「ok」を返しませんでした').slice(0, 60);
+      qcPendingNoteOnError(); finish(false); qcFetchRetryLater();
+    }
+  }, function(e){
+    QC_REC_FETCH_ERR = true;
+    QC_REC_ERR_MSG = String((e && e.message) || '通信できませんでした').slice(0, 60);
+    qcPendingNoteOnError(); finish(false); qcFetchRetryLater();
+  });
+}
+
+// ★取り込みに失敗したら、少し待って自分で取り直す（2026-11-11・社長要望）。
+//   「裏で閉じるを押して開き直してくれればいい」と同じことを、画面を触らずにやる。
+//   上限は2回。立て続けに落ちるときはGASかネットの側の話なので、帯で知らせて止める。
+function qcFetchRetryLater(){
+  if(QC_REC_RETRY >= 2) return;
+  QC_REC_RETRY++;
+  var wait = 1500 * QC_REC_RETRY;
+  setTimeout(function(){ qcFetchRecords(); }, wait);
 }
 
 // 取り込みに失敗したとき、入力待ちを開いていれば見出しと帯で知らせる
@@ -13435,7 +13462,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.11-6';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.11-7';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
@@ -13754,6 +13781,18 @@ function qcNgHasQty(recs){
 function qcNgFetch(force, _retry, _wide){
   var cfg = qcNgCfg();
   if(!cfg.token || !cfg.appId){ QC_NG_STATE='unset'; qcNgRenderAll(); return; }
+  // ★記録の取り込みと“同時に”GASを叩かない（2026-11-11・今回の本命）。
+  //   入力待ちを開くと getRecords と getKintonePartData が同じGASへ同時に飛び、
+  //   Apps Scriptが同じ人からの同時呼び出しに弱いせいでどちらかが落ちていた
+  //   （＝「⚠ 最新の記録を取れませんでした」。閉じて開き直すと直るのは、2回目は
+  //   kintoneのキャッシュが生きていて取りに行かず、記録の1本だけになるため）。
+  //   記録のほうが終わるまで待ってから行く。待つのは30秒まで。
+  if(QC_REC_INFLIGHT && QC_NG_WAIT < 75){
+    QC_NG_WAIT++;
+    setTimeout(function(){ qcNgFetch(force, _retry, _wide); }, 400);
+    return;
+  }
+  QC_NG_WAIT = 0;
   // 取得に失敗して古いデータを見せている(stale)状態は、再描画で 'ok' に戻さない。
   // 戻すと「古い」という断りが消えてしまう
   // ★ここが「安定しない」の正体だった。以前は QC_NG_RECORDS が入ってさえいれば
