@@ -190,3 +190,23 @@ RTSP URL形式: `rtsp://<RTSPユーザー>:<パスワード>@<IP>:554/stream1`(�
   start_go2rtc_hidden.vbs / start_camera_page_server.vbs / install_autostart.bat / restart_go2rtc.bat(英字のみ)。
 - 2026-07-15: cam6(プレスBライン)追加で**6台稼働**。camera_grid v2026.07.15-1 で `?cams=` 対応。
   dantori_navi.html の工場レイアウトに📷カメラマークを追加(クリックで該当カメラを別タブ表示)。
+- 2026-11-11: **camera_grid.html v2026.11.11-1** — 枠の自動つなぎ直しを追加。
+  きっかけは cam8(Dライン)が `webrtc/offer: streams: dial tcp 192.168.30.232:554 i/o timeout` のまま
+  黒いままになった件。調べるとカメラも go2rtc も正常で、**一瞬つながり損ねた枠が自分では繋ぎ直さない**
+  のが原因だった(F5で復帰)。枠は go2rtc の stream.html を iframe で埋めているだけなので、
+  外から中のエラーは読めない(ポートが違いクロスオリジン)。そこで **go2rtc の `/api/streams` を
+  1分おきに見て、producers が空のストリームの枠だけ iframe を差し替える**方式にした。
+  go2rtc は見ている人がいるときだけカメラに繋ぐので、**自分の枠が生きていれば producers は必ず居る**
+  ＝ producers が空なら自分は切れている、と判定できる。映っている枠には触らないので映像は切れない。
+  カメラ自体が落ちている間に毎分リロードし続けないよう、失敗が続くと間隔を 1分→2分→5分→10分 と空け、
+  復帰したらリセット。画面が裏(document.hidden)のとき・拡大表示中は何もしない。
+  `/api/streams` 自体に繋がらないとき(go2rtcが落ちている)はページ側では直せないので何もしない
+  (Windowsタスク `HHub_go2rtc見張り` の担当)。cell に `data-src` を追加。
+  **状態の読み先は2本立て**: ①ページを配っている `serve_camera.py`(同じ8080)の中継 → ②go2rtc直。
+  go2rtcは1984で「別のサイト」あつかいになりページから直には読めない(CORS)。
+  go2rtc側に `api: origin: "*"` を立てれば直に読めるが、**社内LAN限定の口でもむやみに開けない方針**
+  としたので、配信側に**読み取り専用の中継を1本**置いた。go2rtcの設定も再起動も要らない
+  (＝映像が切れない)のが利点。8080の配信は `python -m http.server` から `serve_camera.py` に差し替え
+  (`go2rtc_win64/start_camera_page_server.vbs` を書き換え。タスク `camera_page_server` はそのまま)。
+  GitHub Pages から開いたときは①②とも読めないので、**3回で諦めてタイマーを止める**
+  (＝この機能が無かった頃と同じ動きに戻るだけ。毎分エラーを出し続けない)。

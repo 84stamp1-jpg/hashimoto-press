@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <!--
   camera_grid.html — 工場カメラ一覧表示(HHub)
-  v2026.10.12-1
+  v2026.11.11-1
+  v2026.11.11-1: つながり損ねた枠を裏で見張って静かに繋ぎ直すようにした（社長指示）。go2rtc は見ている人がいるときだけカメラに繋ぐので、/api/streams の producers が空＝その枠は切れている、と分かる。1分おきに見て、切れている枠の iframe だけ差し替える。映っている枠には触らないので映像は切れない。カメラ自体が落ちているときに毎分リロードし続けないよう、失敗が続くと間隔を 1分→2分→5分→10分 と空ける。画面が裏のとき・拡大表示中は何もしない。状態は、ページを配っている serve_camera.py の中継（同じ8080）から読む（go2rtcは1984で「別のサイト」あつかいになり、ページから直には読めないため）。社外から開いたときはどこからも読めないので、3回で諦めて止まる＝この仕掛けが無かった頃と同じ動きに戻る。
   v2026.10.03-1: App Check を仕込んだ（社長指示：外から読めなくする／第2段階）。ページを開くと Google が「本物のブラウザから開かれた本物のページ」という証明書を出し、Firebase はそれが付いた通信だけを受ける。現場には何も見えない（パズルは出ない）。Firebase側はまだ「監視のみ」なので動きは変わらない。サイトキーは公開前提のキーで、秘密の鍵はFirebase側にしか無い。
   仕様書: docs/camera_system_spec.md (Phase 2)
   構成: Tapoカメラ(RTSP) → 中継サーバーPC(go2rtc) → 本ページ(iframe/WebRTC)
@@ -103,7 +104,7 @@
 <header>
   <div>
     <div class="logo-main">HASHIMOTO KOGYO</div>
-    <div class="logo-sub">工場カメラ一覧 <span class="ver">v2026.10.12-1</span></div>
+    <div class="logo-sub">工場カメラ一覧 <span class="ver">v2026.11.11-1</span></div>
   </div>
   <div class="spacer"></div>
   <span id="fbStatus" class="fb-status">● Firebase未接続</span>
@@ -203,6 +204,7 @@ function render(){
     const cell = document.createElement('div');
     cell.className = 'cell';
     cell.dataset.area = cam.area || '';
+    cell.dataset.src = cam.src || '';   // 自動つなぎ直しで枠を見つけるため
     const streamUrl = camStreamUrl(cam);
     cell.innerHTML = `
       <div class="cell-head">
@@ -419,7 +421,75 @@ window.resolveTrouble = async () => {
   }
 };
 
+
+// ===== 枠の自動つなぎ直し（v2026.11.11-1） =====
+// 枠はgo2rtcの画面を埋め込んでいるだけなので、一度つながり損ねると自分では直らない。
+// go2rtcは見ている人がいるときだけカメラに繋ぐ＝producersが空ならこの枠は切れている。
+// 1分おきに見て、切れている枠だけ静かに差し替える（映っている枠には触らない）。
+const AR_WAIT = [60, 60, 120, 300, 600];   // 失敗が続いたら空ける間隔（秒）
+const arState = {};                        // src -> {miss:続けて失敗した回数, next:次に試す時刻}
+let arTimer = null;
+
+function arReload(src){
+  document.querySelectorAll('.cell[data-src="' + CSS.escape(src) + '"] iframe').forEach(f => {
+    const u = (f.src || '').split('#')[0].replace(/[?&]_t=\d+/, '');
+    if(!u) return;
+    f.src = u + (u.indexOf('?') >= 0 ? '&' : '?') + '_t=' + Date.now();
+  });
+}
+
+// 状態をどこから読むか。go2rtc(1984)はページ(8080)から直には読ませてくれない
+// （ブラウザが別のサイトあつかいで止める）ので、まず同じ口の中継を試す。
+let arApi = null, arNoApi = 0;
+async function arFetchStreams(){
+  const base = (config.serverUrl || '').replace(/\/+$/,'');
+  const cand = arApi ? [arApi]
+                     : [location.origin + '/api/streams',      // ページを配っている側の中継（現場PC）
+                        base ? base + '/api/streams' : ''];    // go2rtcに直（読ませてくれる設定なら）
+  for(const u of cand){
+    if(!u) continue;
+    try{
+      const r = await fetch(u, {cache:'no-store'});
+      if(!r.ok) continue;
+      const j = await r.json();
+      if(j && typeof j === 'object' && !j.error){ arApi = u; return j; }
+    }catch(e){ /* 次を試す */ }
+  }
+  return null;
+}
+
+async function autoRepair(){
+  if(document.hidden) return;                                      // 画面が裏なら触らない
+  const zm = document.getElementById('zoomModal');
+  if(zm && zm.classList.contains('show')) return;                  // 拡大して見ている間は触らない
+  if(!config.serverUrl) return;
+  const st = await arFetchStreams();
+  if(!st){                     // どこからも読めない（中継が落ちている／社外から開いた）
+    if(++arNoApi >= 3 && arTimer){
+      clearInterval(arTimer); arTimer = null;
+      console.log('[自動つなぎ直し] 状態を読めないので止めました');
+    }
+    return;
+  }
+  arNoApi = 0;
+  const now = Date.now();
+  document.querySelectorAll('.cell[data-src]').forEach(cell => {
+    const src = cell.dataset.src;
+    if(!src) return;
+    const s = st[src];
+    const alive = !!(s && (s.producers || []).length);
+    const a = arState[src] || (arState[src] = {miss:0, next:0});
+    if(alive){ a.miss = 0; a.next = 0; return; }                   // 映っている
+    if(now < a.next) return;                                       // まだ待つ番
+    a.miss++;
+    a.next = now + AR_WAIT[Math.min(a.miss - 1, AR_WAIT.length - 1)] * 1000;
+    console.log('[自動つなぎ直し]', src, a.miss + '回目');
+    arReload(src);
+  });
+}
+
 render();
+if(!arTimer) arTimer = setInterval(autoRepair, 60000);
 </script>
 </body>
 </html>

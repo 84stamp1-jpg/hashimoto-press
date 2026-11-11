@@ -858,8 +858,17 @@
   中継サーバー(go2rtc v1.9.14)は事務所の常時稼働PC(192.168.30.9)に導入・自動起動設定済み。
   **ゲストWiFi問題は解決済み(2026-07-14〜15)**: カメラを社内WiFi(192.168.30.x帯)へ移行し、
   台帳記入済みの6台(技術部MILLAC/プレスA/プレスC/技術MX55/技術ワイヤー/プレスB)は表示OK。
+  **2026-10-10に9台へ増設**(cam7=A-1 / cam8=Dライン / cam9=中央通路)。部署タブ・`?cams=`絞り込み・
+  カメラ台帳はFirebase `settings/cameras` で全PC共通。
+  **go2rtcが固まることがある**ため、Windowsタスク `HHub_go2rtc見張り`(5分おき)が
+  `/api/streams` の返事で生死を見て、返らなければ入れ直す。
+  **2026-11-11: 枠の自動つなぎ直しを追加**(v2026.11.11-1)。つながり損ねた枠は自分では直らないので、
+  1分おきに `/api/streams` を見て producers が空の枠だけ iframe を差し替える。
+  状態の読み先は、ページを配っている `serve_camera.py` の中継(同じ8080)が1本目、go2rtc直が2本目。
+  go2rtc 側のCORSは緩めていない(社内LAN限定の口でも、むやみに開けない方針)。
   **残課題**: 7台目が付録Aの台帳に未記入。設置場所とIPを記入すること
-- **関連ファイル**: `camera_grid.html`、`go2rtc.yaml.example`(実yamlはコミット禁止)
+- **関連ファイル**: `camera_grid.html`、`serve_camera.py`(現場PCの8080配信＋/api/streams中継)、
+  `go2rtc.yaml.example`(実yamlはコミット禁止)
 
 ### 17. 金型設計標準(HMDS)(金型設計標準/)
 - **名称**: **HMDS = HASHIMOTO KOGYO Mold Design Standard**(旧称HMSから2026-07-23改称)。
