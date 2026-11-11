@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.11-5 : ★<b>「📹 カメラ」タブのリンク先を中継PCの絶対URLに直した</b>（2026-10-10に「レイアウトのカメラ印と同じ絶対URLに統一した」と書いたのに、タブだけ取りこぼしで相対リンクのまま残っていた）。相対リンクのままだと、H-Hubをインターネット側（https）から開いた人はカメラ一覧もhttpsで開き、映像の取り込み先 <code>http://192.168.30.9:1984</code> が混在コンテンツで遮断されて<b>枠が全部黒くなる</b>。あわせて、カメラ一覧側に入れた<b>自動つなぎ直し</b>（v2026.11.11-1：つながり損ねた枠を1分で繋ぎ直す）も、状態の読み先が同じ口にないと効かないため、ここを直さないと現場で効かない。 -->
 <!-- H-Hub v2026.11.11-4 : ★<b>ロス記録のラインに「プレス係」「組立係」のまとめボタンを足した</b>（社長要望）。「すべてのライン」のうしろに置き、<b>ひと押しでその係の全ラインが入る／外れる</b>。境目は並びの <b>「ロボットライン」</b>で、そこから後ろが組立係・前がプレス係（<code>LH_ASSY_FROM</code>）。組立は作業者ごとの指示なので人の名前がラインになっている。★ラインを足したときは、この境目より前に入るか後ろに入るかで係が決まる。 -->
 <!-- H-Hub v2026.11.11-3 : ★<b>ロス記録のラインを「いくつでも選べる」ようにした</b>（社長要望）。ボタンにしただけでは1つしか選べず、<b>組立チームは作業者ごとの指示</b>なので何人かまとめて見たいことがある。<b>押すたびに入る／外れる</b>形にし、選んだものは全部濃い青。<b>1つも選んでいない＝すべてのライン</b>。選んだラインは <code>lhLine</code>（hidden）にカンマ区切りで入れ、絞り込みは <code>lineIds.length &amp;&amp; lineIds.indexOf(id)&lt;0</code> で見る。 -->
 <!-- H-Hub v2026.11.11-2 : ★<b>ロス記録のラインを、ドロップダウンから「並べて押す」形にした</b>（社長要望）。開かないと中身が見えず、いまどれを選んでいるかも分かりにくかった。<b>全部のラインを丸いボタンで並べ、選んでいるものは濃い青</b>にした（<code>lhRenderLineBtns()</code>）。★あわせて、一覧に混ざっていた <code>updatedAt</code> を外した。<code>/lines</code> の直下にはライン以外のキーも入っているので、<b>中身がオブジェクトのものだけ</b>をラインとして出す。 -->
@@ -1507,7 +1508,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
   <div class="tab" onclick="switchTab('dantori')">📋 段取り指示</div>
   <div class="tab" onclick="switchTab('asmplan')">🔧 組立計画</div>
   <div class="tab" onclick="switchTab('search')">🔍 品番検索</div>
-  <a class="tab" href="camera_grid.html" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;" title="工場カメラ一覧を開きます（映像は社内ネットワークからのみ。社外では案内が出ます）">📹 カメラ</a>
+  <a class="tab" href="http://192.168.30.9:8080/camera_grid.html" target="_blank" rel="noopener" style="text-decoration:none;color:inherit;" title="工場カメラ一覧を開きます（社内ネットワークからのみ。社外からは開きません）">📹 カメラ</a>
   <div style="margin-left:auto;display:flex;align-items:center;gap:6px;padding:0 10px;flex-shrink:0;">
     <!-- 毎朝の朝礼で見る2画面をひと押しで開く（2026-09-21 社長指示） -->
     <span style="font-size:10px;color:#94a3b8;font-weight:700;">朝礼</span>
@@ -13396,7 +13397,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.11-4';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.11-5';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
