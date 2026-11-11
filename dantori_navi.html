@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.11-6 : ★<b>システム入力待ちに10月分（入力済み）が出た件</b>（現場PC・社長報告）。見出しは<b>「記録 取得中…」のまま</b>だった＝スプレッドシートの取り込みがまだ返っていないうちに、<b>手元の古い記録で一覧を作っていた</b>。取り込みが終われば自動で消える（「✕ 閉じる」で開き直すと消えたのはこのため）が、10pxの灰色で「取得中…」と出ているだけなので誰も気づけない。社長PCで出なかったのは取り込みが速く終わっていたから＝<b>回線やPCの速さで出たり出なかったりする</b>。→ (1)取り込みが終わるまで<b>一覧の上に黄色い帯</b>で「最新を確認しています／下の一覧は前回のもの」と出す。(2)取り込みが終わったら帯を消し、見出しの「記録 ○○時点」を必ず直す（顔ぶれが同じときは一覧を作り直さないので、これまで「取得中…」が残り続けていた）。(3)取り込みに失敗したときも、開いている一覧の見出しと帯で知らせる。(4)見出しを作り直すと「記録 ○○時点」が消えていたのを付け直すようにした。 -->
 <!-- H-Hub v2026.11.11-5 : ★<b>「📹 カメラ」タブのリンク先を中継PCの絶対URLに直した</b>（2026-10-10に「レイアウトのカメラ印と同じ絶対URLに統一した」と書いたのに、タブだけ取りこぼしで相対リンクのまま残っていた）。相対リンクのままだと、H-Hubをインターネット側（https）から開いた人はカメラ一覧もhttpsで開き、映像の取り込み先 <code>http://192.168.30.9:1984</code> が混在コンテンツで遮断されて<b>枠が全部黒くなる</b>。あわせて、カメラ一覧側に入れた<b>自動つなぎ直し</b>（v2026.11.11-1：つながり損ねた枠を1分で繋ぎ直す）も、状態の読み先が同じ口にないと効かないため、ここを直さないと現場で効かない。 -->
 <!-- H-Hub v2026.11.11-4 : ★<b>ロス記録のラインに「プレス係」「組立係」のまとめボタンを足した</b>（社長要望）。「すべてのライン」のうしろに置き、<b>ひと押しでその係の全ラインが入る／外れる</b>。境目は並びの <b>「ロボットライン」</b>で、そこから後ろが組立係・前がプレス係（<code>LH_ASSY_FROM</code>）。組立は作業者ごとの指示なので人の名前がラインになっている。★ラインを足したときは、この境目より前に入るか後ろに入るかで係が決まる。 -->
 <!-- H-Hub v2026.11.11-3 : ★<b>ロス記録のラインを「いくつでも選べる」ようにした</b>（社長要望）。ボタンにしただけでは1つしか選べず、<b>組立チームは作業者ごとの指示</b>なので何人かまとめて見たいことがある。<b>押すたびに入る／外れる</b>形にし、選んだものは全部濃い青。<b>1つも選んでいない＝すべてのライン</b>。選んだラインは <code>lhLine</code>（hidden）にカンマ区切りで入れ、絞り込みは <code>lineIds.length &amp;&amp; lineIds.indexOf(id)&lt;0</code> で見る。 -->
@@ -12358,6 +12359,33 @@ function qcIsInputted(r){
 }
 // 記録をいつ取れたか（入力待ちの見出しに出す）。取れなかったときは QC_REC_FETCH_ERR が立つ
 var QC_REC_FETCH_ERR = false;
+// ★見出しの「記録 ○○時点」と、一覧の上に出す帯の文言。作る場所が3つに分かれて
+//   食い違わないよう、ここ1か所から配る。
+function qcPendingWhenText(){
+  if(QC_REC_FETCH_ERR){
+    return '⚠ 最新の記録を取れませんでした' + (QC_REC_FETCHED_MS ? '（表示は '+qcHm(QC_REC_FETCHED_MS)+' 時点）' : '');
+  }
+  return QC_REC_FETCHED_MS ? ('記録 '+qcHm(QC_REC_FETCHED_MS)+' 時点') : '記録 取得中…';
+}
+function qcPendingStyleWhen(when){
+  if(!when) return;
+  if(QC_REC_FETCH_ERR) when.style.cssText='font-size:11px;color:#E24B4A;margin-left:8px;font-weight:700;';
+  else                 when.style.cssText='font-size:10px;color:#94a3b8;margin-left:8px;font-weight:400;';
+  when.textContent = qcPendingWhenText();
+}
+// ★取り込みが終わるまでは、手元の（古い）記録で一覧を作っている。
+//   現場PCで10月の片付いたぶんが出て驚かれた（社長報告 2026-11-11）。
+//   見出しの小さな「取得中…」では気づけないので、一覧の上に帯で大きく出す。取れたら消える。
+function qcPendingNoteText(){
+  if(QC_REC_FETCH_ERR){
+    return '⚠ 最新の記録を取れませんでした。下の一覧は前回のもので、入力済みのものが混じっていることがあります。'
+         + 'しばらく待つか、「✕ 閉じる」でいったん戻ってから開き直してください';
+  }
+  if(!QC_REC_FETCHED_MS){
+    return '🔄 最新の記録を確認しています…　下の一覧は前回のもので、入力済みのものが混じっていることがあります';
+  }
+  return '';
+}
 function qcHm(ms){
   var d=new Date(ms);
   return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
@@ -12380,7 +12408,12 @@ function qcPendingKeyNow(){
 function qcPendingSyncIfChanged(){
   if(!QC_PENDING_MODE) return;
   var key = qcPendingKeyNow();
-  if(key === QC_PENDING_KEY) return;
+  if(key === QC_PENDING_KEY){
+    // 顔ぶれは同じでも「いつの記録か」は変わっている。一覧は触らず見出しと帯だけ直す
+    // （ここを直さないと、取り込みが終わっても「記録 取得中…」と帯が残ったままになる）
+    qcPendingRefreshHeader(); qcSetRefreshNote(qcPendingNoteText());
+    return;
+  }
   if(!key){
     // 全部片付いた。行を消して見出しだけ直す（qcShowPendingList は0件だと何もしない）
     var host = document.getElementById('qc-rec-list');
@@ -12388,6 +12421,7 @@ function qcPendingSyncIfChanged(){
       var ps = host.querySelectorAll('.qc-pair');
       for(var i=0;i<ps.length;i++) ps[i].parentNode.removeChild(ps[i]);
       qcPendingRefreshHeader(host);
+      qcSetRefreshNote(qcPendingNoteText());   // 帯も消す（見出しだけ直して帯が残っていた）
     }
     QC_PENDING_KEY = key;
     return;
@@ -12467,8 +12501,15 @@ function qcFetchRecords(cb){
         else if(!QC_PENDING_MODE){ QC_WANT_PENDING=false; qcShowPendingList(); }
       }
       finish(true);
-    } else { QC_REC_FETCH_ERR = true; finish(false); }
-  }, function(){ QC_REC_FETCH_ERR = true; finish(false); });
+    } else { QC_REC_FETCH_ERR = true; qcPendingNoteOnError(); finish(false); }
+  }, function(){ QC_REC_FETCH_ERR = true; qcPendingNoteOnError(); finish(false); });
+}
+
+// 取り込みに失敗したとき、入力待ちを開いていれば見出しと帯で知らせる
+//   （黙って古い一覧が残ると、入力済みのものを見て混乱する）
+function qcPendingNoteOnError(){
+  if(!QC_PENDING_MODE) return;
+  qcPendingRefreshHeader(); qcSetRefreshNote(qcPendingNoteText());
 }
 
 // いま開いている一覧を、その画面のやり方で描き直す
@@ -13137,10 +13178,13 @@ function qcPendingRefreshHeader(host){
   if(box) box.classList[n>0 ? 'remove' : 'add']('is-clear');
   var lbl = host.querySelector('.qc-pending-hdr span');
   if(lbl){
-    var ver = lbl.querySelector('span');          // 版表示は消さずに付け直す
+    var spans = lbl.querySelectorAll('span');
+    var ver = spans[0];                           // 版表示は消さずに付け直す
+    var when = spans[1];                          // ★「記録 ○○時点」も消さずに付け直す
     lbl.textContent = (n>0 ? '⚠️ システム入力待ち: '+n+'件' : '✓ システム入力待ちはありません');
     lbl.style.color = (n>0 ? '#E24B4A' : '#15803d');
     if(ver) lbl.appendChild(ver);
+    if(when){ qcPendingStyleWhen(when); lbl.appendChild(when); }
   }
   if(n===0 && !host.querySelector('.qc-pending-done')){
     var d=document.createElement('div'); d.className='qc-pending-done';
@@ -13165,7 +13209,7 @@ window.qcShowPendingList = function(){
   qcFetchRecords();
   var pending=qcPendingRows();
   QC_PENDING_KEY = qcPendingKeyNow();   // いま出した顔ぶれを覚えておく
-  if(!pending.length){ qcUpdatePendingBadge(); return; }
+  if(!pending.length){ qcUpdatePendingBadge(); qcSetRefreshNote(qcPendingNoteText()); return; }
   QC_PENDING_MODE=true;
   try{ localStorage.setItem('hhubQcPending','1'); }catch(e){}
   qcAutoRefreshStart();
@@ -13174,7 +13218,7 @@ window.qcShowPendingList = function(){
   // 右にkintone不良品報告を並べるので、幅の上限(500px)を外す
   var cont=document.querySelector('#qc-screen-list .qc-cont'); if(cont) cont.classList.add('qc-wide');
   var sa=document.getElementById('qc-summary-area'); if(sa) sa.innerHTML='';
-  qcSetRefreshNote('');
+  qcSetRefreshNote(qcPendingNoteText());   // ★取り込み中なら「まだ最新じゃない」と出す
   var el=document.getElementById('qc-rec-list'); el.innerHTML='';
   var hdr=document.createElement('div'); hdr.className='qc-pending-hdr';
   var lbl=document.createElement('span'); lbl.style.cssText='font-size:13px;color:#E24B4A;font-weight:700;white-space:nowrap;';
@@ -13184,13 +13228,7 @@ window.qcShowPendingList = function(){
   // ★いつの記録で作った一覧かを出す。取れなかったときは赤で知らせる
   //   （古い記録のまま見ていることに気づけなかった・社長報告 2026-11-10）
   var when=document.createElement('span');
-  if(QC_REC_FETCH_ERR){
-    when.style.cssText='font-size:11px;color:#E24B4A;margin-left:8px;font-weight:700;';
-    when.textContent='⚠ 最新の記録を取れませんでした'+(QC_REC_FETCHED_MS?'（表示は '+qcHm(QC_REC_FETCHED_MS)+' 時点）':'');
-  }else{
-    when.style.cssText='font-size:10px;color:#94a3b8;margin-left:8px;font-weight:400;';
-    when.textContent=QC_REC_FETCHED_MS?('記録 '+qcHm(QC_REC_FETCHED_MS)+' 時点'):'記録 取得中…';
-  }
+  qcPendingStyleWhen(when);
   lbl.appendChild(when);
   var btns=document.createElement('span'); btns.style.cssText='display:flex;gap:6px;';
   var ngBtn=document.createElement('button'); ngBtn.textContent='🔄 不良品報告を再取得'; ngBtn.style.cssText='padding:4px 10px;background:#fff;color:#1F4E79;border:1px solid #1F4E79;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;';
@@ -13397,7 +13435,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.11-5';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.11-6';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 var QC_NG_LS      = 'qcNgReportCfg';
 var QC_NG_CFG     = null;
 var QC_NG_RECORDS = null;   // kintoneから取った不良品報告（生レコード）
