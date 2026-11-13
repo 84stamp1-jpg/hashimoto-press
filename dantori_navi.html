@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.14-4 : ★<b>現品ラベルをH-Hubから出せるようにした</b>（社長指示）。配置表の右上「<b>🏷 現品ラベル</b>」→ 表示中の日付の<b>段取り計画に出てくる品番</b>が並ぶので、収容数などを入れて印刷する。紙は<b>A4横に4枚取り（1枚 143.5×100mm）</b>で破線で切る。<b>枚数＝生産数÷収容数の切り上げ</b>。<b>収容数と背番号は品番ごとに覚える</b>（Firebase <code>/settings/labelInfo/&lt;品番キー&gt;</code>。キーは app が元から使っている <code>_pnNorm</code> で記号ゆれを吸収したもの）。<b>工程</b>は kintone 製品アプリ(App7)の「工程一覧」（<code>文字列__複数行_</code>）の<b>最終工程</b>を自動で入れる。複数行テキストは検索条件に使えないので全件（500件×2回）読んでこちらで選り分ける。★<b>工程一覧が無い品番は空欄</b>にして、kintoneに入っていないと分かるようにした（手で選ぶこともできる）。品番の突き合わせは完全一致→前方一致が1件だけのときに限って採用（2件以上は決め打ちしない）。<b>ロットNo.(前工程)</b>は手入力で、空なら<b>線を引かない</b>（線があると手で書けない）。<b>メモ</b>は任意でラベルに見出しは出さない。<b>機械はH-Hubのライン名そのまま</b>、<b>製造日に曜日は出さない</b>。現品票の文字・客先名・バーコード・「製造G」は出さない。ついでに配置表のボタン名を「段取り準備チェック表」→「<b>段取り準備シート</b>」に直した（中身は11/13に作り直してある）。 -->
 <!-- H-Hub v2026.11.14-3 : 段取りブロックの「予定／実際」の見出しを社長の言い方に合わせた。<b>機械を止めた→段取り開始</b>、<b>生産を始めた→生産開始</b>（意味は同じ。機械を止めた＝内段取りの始まり）。 -->
 <!-- H-Hub v2026.11.14-2 : 段取り準備シートを<b>印刷したら左右が切れて下に余白ができる</b>のと、<b>文字が小さくて見にくい</b>のを直した（社長報告）。(1)切れる原因＝印刷の<b>余白を「なし」</b>にすると <code>@page</code> の 7mm が消え、中身が紙いっぱい(297mm)まで広がって<b>プリンタが刷れない端が切れていた</b>（高さは196mmのままなので下だけ余る）。→ 印刷時の紙の中身を <b>283mm 固定・左右 auto で中央寄せ</b>にしたので、余白が「既定」でも「なし」でも切れない。案内文も「余白 既定」だけにした。(2)<b>時間の列を広げた</b>：左のライン名欄 25mm→21mm・右の余り 5mm→2mm で、時間軸が 253mm→260mm。さらに右端を<b>1時間きざみ→30分きざみ</b>で止めるようにしたので、右に最大59分あった無駄が消え、<b>20:10まで仕事がある日</b>（20:30まで）も同じ幅に収まる。(3)<b>文字を全体に1〜1.5pt大きくした</b>（帯6.6→7.3pt・チェック欄6.5→6.9pt・ライン名8.2→9pt ほか）。増えた高さは、書く行9.4→8.4mm・凡例の文言短縮・枠内の余白詰めで回収し、2枚目の「気づいたこと」は<b>7行→6行だが1行を7.5→8.4mmに広げた</b>。本体コードのまま実行して<b>1枚目193.4mm／2枚目193.7mm（紙は196mm）・横のはみ出しゼロ・PDFは2ページ</b>を確認。 -->
 <!-- H-Hub v2026.11.14-1 : 段取り準備シートの<b>線の太さや文字の大きさがそろわない</b>のを直した（社長報告）。原因は前の版で入れた <code>transform:scale</code>。これは<b>でき上がった絵を引き伸ばすだけ</b>なので、0.5ptの細線が半端な位置に来て<b>太く見えたり消えたり</b>し、文字も大きさがそろわない。→ <b><code>zoom</code> に戻した</b>（中身をその大きさで組み直すので、線も文字もきれいに描かれる）。前に zoom をやめた理由だった「紙の枠から下がはみ出す」は、<b>画面では紙の高さを固めない（<code>height:196mm</code> → <code>min-height:196mm</code>）</b>ことで解決。組み直しで数mm伸びても切れない。印刷は <code>@media print</code> で <code>zoom:1</code>・高さ自動なので<b>A4横2枚のまま</b>（PDFで確認ずみ）。 -->
@@ -9782,6 +9783,378 @@ window.rtPrintSetupSheet = async function(){
 };
 
 
+/* ===================================================================
+   現品ラベル（A4横 4枚取り）　2026-11-14
+   -------------------------------------------------------------------
+   配置表の「🏷 現品ラベル」から開く。表示中の日付の段取り計画に出てくる
+   品番を並べ、収容数などを入れて印刷する。
+
+   社長の指示（2026-11-13〜14）
+     ・現品票の文字・客先名・バーコード・機械の「製造G」は出さない
+     ・1枚は A4横を縦横に割った大きさ（143.5×100mm）。破線で切る
+     ・収容数は入力（品番ごとに覚える）。枚数＝生産数÷収容数の切り上げ
+     ・最終工程は kintone 製品アプリ(App7)の「工程一覧」から選ぶ。
+       ★工程一覧が無い品番は空欄にする（kintoneに入っていないと分かるように）
+     ・背番号（W610・YP13/YP14 など）は機械の右に赤字。★別の入力欄から入れる
+     ・ロットNo.(前工程) は手入力（前工程の加工日）。空なら線を引かない
+       （線があると手で書けない）
+     ・メモは任意。ラベルに「メモ」の文字は出さない（書いた文字だけ出る）
+     ・機械は H-Hub のライン名そのまま（B-1／Aライン…）
+     ・製造日に曜日は出さない
+
+   覚えるところ：Firebase /settings/labelInfo/<品番キー> = { cap:収容数, idn:背番号 }
+   =================================================================== */
+const LB_STEP_FIELD = '文字列__複数行_';     // App7 の「工程一覧」
+let _lbRows  = [];      // 画面に出している行
+let _lbSteps = null;    // { 品番キー: [工程, …] }　null＝まだ読めていない
+let _lbList  = [];      // 工程のプルダウンの選択肢（よく使う順）
+let _lbInfo  = {};      // Firebase に覚えてある { 品番キー: {cap, idn} }
+let _lbYmd   = '';
+
+function _lbFb(){ return (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/, ''); }
+function _lbEsc(t){ return _ssEsc(t); }
+
+/* 覚えるときのキー＝突き合わせのキー。app が元から使っている _pnNorm（記号ゆれを
+   吸収する）に、計画の品番だけに付く注記を落としてから通す。
+   _pnNorm は . / _ 空白 ハイフン類を落とすので、Firebase のキーにもそのまま使える。 */
+function _lbKey(pn){
+  return _pnNorm(String(pn == null ? '' : pn)
+    .replace(/[（(][^）)]*[）)]/g, '')      // （W610）（YP09/YP10）などの注記
+    .replace(/\d+\s*人/g, ''));            // 「-2人」
+}
+
+/* 曜日は出さない（2026-11-14 社長指示） */
+function _lbDateJp(ymd){
+  if(!/^\d{8}$/.test(String(ymd))) return String(ymd || '');
+  return +ymd.slice(0,4) + '年' + (+ymd.slice(4,6)) + '月' + (+ymd.slice(6,8)) + '日';
+}
+
+/* 「1.BL,PC 2.FO 3.RST」→ ['BL,PC','FO','RST']（最後が最終工程） */
+function _lbParseSteps(s){
+  const t = String(s || '').replace(/\s+/g, ' ').trim();
+  if(!t) return [];
+  const out = [];
+  t.split(/\s*\d+\s*[.．]\s*/).forEach(function(x){ const v = x.trim(); if(v) out.push(v); });
+  return out.length ? out : [t];
+}
+
+/* App7（★マスタ_製品・金型）の品番と工程一覧をまとめて読む。
+   工程一覧は複数行テキストで検索条件に使えないので、全件取ってこちらで選り分ける。 */
+async function _lbLoadSteps(){
+  if(_lbSteps) return _lbSteps;
+  if(!config.gasUrl) { _lbSteps = {}; return _lbSteps; }
+  const f = [MOLD_PART_FIELD, LB_STEP_FIELD].join(',');
+  const map = {}, cnt = {};
+  for(let off = 0; off < 1200; off += 500){
+    const q = 'order by レコード番号 asc limit 500 offset ' + off;
+    const d = await _moldJsonp(config.gasUrl + '?query=' + encodeURIComponent(q)
+                             + '&fields=' + encodeURIComponent(f), 60000);
+    const rec = (d && d.records) || [];
+    rec.forEach(function(r){
+      const pn = _mv(r, MOLD_PART_FIELD); if(!pn) return;
+      const st = _lbParseSteps(_mv(r, LB_STEP_FIELD));
+      if(st.length){
+        map[_lbKey(pn)] = st;
+        st.forEach(function(x){ cnt[x] = (cnt[x] || 0) + 1; });
+      }
+    });
+    if(rec.length < 500) break;
+  }
+  _lbList = Object.keys(cnt).sort(function(a,b){ return cnt[b] - cnt[a] || a.localeCompare(b); });
+  _lbSteps = map;
+  return map;
+}
+
+/* 計画の品番 → App7 の工程一覧。見つからなければ [] を返す（＝空欄で出す） */
+function _lbStepsOf(pn){
+  if(!_lbSteps) return null;
+  const k = _lbKey(pn);
+  if(_lbSteps[k]) return _lbSteps[k];
+  /* マスタ側のほうが長いことがある（18120-6Y0 → 18120-6Y0-0-6-BL）。
+     前方一致が1件だけのときに限って採る。2件以上なら決め打ちしない。 */
+  if(k.length >= 6){
+    const hit = Object.keys(_lbSteps).filter(function(x){ return x.indexOf(k) === 0; });
+    if(hit.length === 1) return _lbSteps[hit[0]];
+  }
+  return [];
+}
+
+/* 品名は H-Hub の品番マスタ（Firebase /parts）から引く */
+async function _lbLoadNames(){
+  for(const r of _lbRows){
+    try{ const p = await findPartByNo(r.partNo); if(p && p.name) r.name = p.name; }catch(e){}
+  }
+}
+
+async function _lbLoadInfo(){
+  try{
+    const r = await fetch(_lbFb() + '/settings/labelInfo.json?t=' + Date.now(), { cache:'no-store' });
+    _lbInfo = (await r.json()) || {};
+  }catch(e){ _lbInfo = {}; }
+  return _lbInfo;
+}
+function _lbSaveInfo(key, obj){
+  if(!key) return;
+  fetch(_lbFb() + '/settings/labelInfo/' + encodeURIComponent(key) + '.json',
+    { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(obj) })
+    .catch(function(){});
+}
+
+/* ===== 画面 ===== */
+window.rtOpenLabelPanel = function(){
+  _lbYmd = getDantoriDatePath();
+  const jobs = _ssJobs(dantoriSchedule);
+  _lbRows = jobs.map(function(j){
+    const key = _lbKey(j.partNo), sv = _lbInfo[key] || {};
+    return { line:j.line, partNo:j.partNo, qty:j.qty, key:key,
+             cap:sv.cap || '', idn:sv.idn || '', step:'', lot:'', memo:'', n:'', name:'' };
+  });
+
+  let m = document.getElementById('lb-mask');
+  if(!m){
+    m = document.createElement('div');
+    m.id = 'lb-mask';
+    m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9998;overflow:auto;';
+    m.onclick = function(e){ if(e.target === m) window.rtLabelClose(); };
+    document.body.appendChild(m);
+  }
+  m.style.display = 'block';
+  _lbRender('読み込み中…');
+
+  /* 覚えてある収容数・背番号と、kintone の工程一覧を取りに行く */
+  Promise.all([_lbLoadInfo(), _lbLoadSteps(), _lbLoadNames()]).then(function(){
+    _lbRows.forEach(function(r){
+      const sv = _lbInfo[r.key] || {};
+      if(!r.cap && sv.cap) r.cap = sv.cap;
+      if(!r.idn && sv.idn) r.idn = sv.idn;
+      const st = _lbStepsOf(r.partNo);
+      r.step = (st && st.length) ? st[st.length - 1] : '';
+    });
+    _lbRender('');
+  }).catch(function(e){
+    _lbRender('※ kintone の工程一覧を読めませんでした（' + (e && e.message ? e.message : e) + '）。工程は手で選んでください。');
+  });
+};
+
+window.rtLabelClose = function(){
+  const m = document.getElementById('lb-mask');
+  if(m) m.style.display = 'none';
+};
+
+function _lbCount(r){
+  const q = parseInt(r.qty, 10), c = parseInt(r.cap, 10);
+  if(r.n !== '' && r.n != null) return parseInt(r.n, 10) || 0;
+  if(!q || !c) return 0;
+  return Math.ceil(q / c);
+}
+
+window.rtLabelInput = function(i, k, v){
+  const r = _lbRows[i]; if(!r) return;
+  r[k] = v;
+  if(k === 'cap' || k === 'n'){
+    const td = document.getElementById('lb-n-' + i);
+    if(td) td.textContent = _lbCount(r) ? _lbCount(r) + '枚' : '';
+    const ck = document.getElementById('lb-ck-' + i);
+    if(ck && k === 'cap') ck.checked = !!_lbCount(r);
+  }
+  if(k === 'cap' || k === 'idn'){        /* 品番ごとに覚える */
+    _lbSaveInfo(r.key, { cap: r.cap || '', idn: r.idn || '' });
+  }
+};
+
+function _lbRender(msg){
+  const m = document.getElementById('lb-mask'); if(!m) return;
+  const opt = function(sel){
+    let o = '<option value="">（空欄）</option>';
+    const list = _lbList.slice();
+    if(sel && list.indexOf(sel) < 0) list.unshift(sel);
+    list.forEach(function(x){
+      o += '<option value="' + _lbEsc(x) + '"' + (x === sel ? ' selected' : '') + '>' + _lbEsc(x) + '</option>';
+    });
+    return o;
+  };
+  const inp = 'width:100%;box-sizing:border-box;font-family:inherit;font-size:12px;padding:2px 4px;border:1px solid #cbd5e1;border-radius:3px;';
+  let rows = '';
+  _lbRows.forEach(function(r, i){
+    const n = _lbCount(r);
+    rows += '<tr>'
+      + '<td style="text-align:center;"><input type="checkbox" id="lb-ck-' + i + '"' + (n ? ' checked' : '') + '></td>'
+      + '<td style="white-space:nowrap;">' + _lbEsc(r.line) + '</td>'
+      + '<td style="white-space:nowrap;font-weight:600;">' + _lbEsc(r.partNo) + '</td>'
+      + '<td style="text-align:right;">' + (r.qty || '') + '</td>'
+      + '<td><input type="number" min="1" value="' + _lbEsc(r.cap) + '" style="' + inp + 'text-align:right;"'
+      +   ' oninput="rtLabelInput(' + i + ',\'cap\',this.value)"></td>'
+      + '<td id="lb-n-' + i + '" style="text-align:right;font-weight:700;white-space:nowrap;">' + (n ? n + '枚' : '') + '</td>'
+      + '<td><select style="' + inp + '" onchange="rtLabelInput(' + i + ',\'step\',this.value)">' + opt(r.step) + '</select></td>'
+      + '<td><input value="' + _lbEsc(r.idn) + '" placeholder="W610" style="' + inp + 'color:#c00;font-weight:700;"'
+      +   ' oninput="rtLabelInput(' + i + ',\'idn\',this.value)"></td>'
+      + '<td><input value="' + _lbEsc(r.lot) + '" placeholder="2026/11/13" style="' + inp + '"'
+      +   ' oninput="rtLabelInput(' + i + ',\'lot\',this.value)"></td>'
+      + '<td><input value="' + _lbEsc(r.memo) + '" placeholder="（任意）" style="' + inp + '"'
+      +   ' oninput="rtLabelInput(' + i + ',\'memo\',this.value)"></td>'
+      + '</tr>';
+  });
+  const th = 'padding:4px 6px;background:#f1f5f9;border-bottom:1px solid #cbd5e1;font-size:11px;color:#334155;text-align:left;white-space:nowrap;';
+  m.innerHTML = '<div style="max-width:1180px;margin:2vh auto 4vh;background:#fff;border-radius:8px;'
+    + 'box-shadow:0 10px 40px rgba(0,0,0,.4);font-family:\'Meiryo UI\',sans-serif;">'
+    + '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #e2e8f0;">'
+    +   '<b style="font-size:15px;">🏷 現品ラベル</b>'
+    +   '<span style="font-size:12px;color:#64748b;">' + _lbDateJp(_lbYmd) + ' の段取り計画の品番　／　'
+    +   'A4横に4枚取り（143.5×100mm）。破線で切ります</span>'
+    +   '<span style="flex:1"></span>'
+    +   '<button onclick="rtLabelPrint()" style="padding:5px 16px;font-size:12px;font-weight:700;border:none;'
+    +     'border-radius:5px;background:#b45309;color:#fff;cursor:pointer;">🖨 印刷する</button>'
+    +   '<button onclick="rtLabelClose()" style="padding:5px 12px;font-size:12px;border:1px solid #cbd5e1;'
+    +     'border-radius:5px;background:#fff;color:#475569;cursor:pointer;">閉じる</button>'
+    + '</div>'
+    + (msg ? '<div style="padding:6px 14px;font-size:12px;color:#b45309;background:#fffbeb;">' + _lbEsc(msg) + '</div>' : '')
+    + '<div style="padding:4px 14px 14px;">'
+    + '<table style="width:100%;border-collapse:collapse;font-size:12px;">'
+    + '<thead><tr>'
+    +   '<th style="' + th + 'width:34px;text-align:center;">出す</th>'
+    +   '<th style="' + th + '">機械</th><th style="' + th + '">品番</th>'
+    +   '<th style="' + th + 'text-align:right;">生産数</th>'
+    +   '<th style="' + th + 'width:72px;">収容数</th>'
+    +   '<th style="' + th + 'text-align:right;width:56px;">枚数</th>'
+    +   '<th style="' + th + 'width:130px;">工程</th>'
+    +   '<th style="' + th + 'width:110px;">背番号</th>'
+    +   '<th style="' + th + 'width:110px;">ロットNo.(前工程)</th>'
+    +   '<th style="' + th + 'width:190px;">メモ（ラベルに見出しは出ません）</th>'
+    + '</tr></thead><tbody>' + rows + '</tbody></table>'
+    + (_lbRows.length ? '' : '<div style="padding:18px;color:#64748b;font-size:13px;">'
+        + 'この日の段取り計画が H-Hub にまだ入っていません。</div>')
+    + '<div style="margin-top:8px;font-size:11px;color:#64748b;line-height:1.7;">'
+    +   '・<b>収容数</b>と<b>背番号</b>は品番ごとに覚えます（次からは入れなくて済みます）。<br>'
+    +   '・<b>枚数</b>は 生産数 ÷ 収容数 の切り上げです。<br>'
+    +   '・<b>工程</b>は kintone の製品アプリ（★マスタ_製品・金型）の「工程一覧」の最終工程です。'
+    +   '<b>空欄のものは kintone に工程一覧が入っていません</b>（手で選ぶこともできます）。<br>'
+    +   '・<b>ロットNo.(前工程)</b> は前工程の加工日です。空のままにすると線を引かずに出すので、手で書けます。'
+    + '</div></div></div>';
+}
+
+/* ===== 紙 ===== */
+const _LB_CSS = `
+  @page { size: 297mm 210mm; margin: 5mm; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:#8a8a8a; font-family:"Meiryo UI","Yu Gothic UI",sans-serif;
+        color:#111; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .sheet{ width:287mm; height:200mm; background:#fff; margin:8mm auto;
+          display:flex; flex-wrap:wrap; box-shadow:0 2px 12px rgba(0,0,0,.4); }
+  /* 画面で大きく見せる入れ物。zoom（中身を組み直す）を使う。transform は線が汚くなる */
+  #lb-pages{ width:287mm; margin:0 auto; }
+  @media print{
+    body{ background:#fff; }
+    /* ★紙の中身を287mm固定・左右autoにしておくと、余白が「既定」でも「なし」でも切れない */
+    #lb-pages{ zoom:1 !important; width:auto; margin:0; }
+    .sheet{ margin:0 auto; box-shadow:none; page-break-after:always; }
+    .sheet:last-of-type{ page-break-after:auto; }
+    .noprint{ display:none !important; }
+  }
+  .lb{ width:143.5mm; height:100mm; border:.8pt dashed #999; padding:4mm 5mm 3mm;
+       display:flex; flex-direction:column; }
+  .cap{ font-size:9pt; color:#555; font-weight:400; white-space:nowrap; }
+  .r1{ flex:1.35; display:flex; align-items:center; gap:4mm; border-bottom:1.2pt solid #000; }
+  .pn{ font-weight:800; line-height:1; letter-spacing:.3pt; white-space:nowrap; flex:1; min-width:0; }
+  .r2{ flex:.85; display:flex; align-items:center; gap:3mm; border-bottom:.7pt solid #777; }
+  .nm{ font-weight:700; font-size:15pt; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  /* 収容数と工程。★工程は収容数のすぐ右（長い工程名が入るように） */
+  .r3{ flex:1.35; display:flex; align-items:center; gap:3mm; border-bottom:.7pt solid #777; }
+  .r3 .sep{ border-left:1pt solid #000; align-self:stretch; margin:1.5mm 2mm 1.5mm 3mm; }
+  .big{ font-weight:800; font-size:32pt; line-height:1; }
+  .st{ font-weight:800; font-size:22pt; line-height:1; white-space:nowrap; flex:1; min-width:0; overflow:hidden; }
+  /* 製造日・機械・★背番号（機械の右） */
+  .r4{ flex:1; display:flex; align-items:center; gap:4mm; font-size:11.5pt;
+       border-bottom:.5pt dotted #999; overflow:hidden; }
+  .r4 > span{ white-space:nowrap; }
+  .r4 b{ font-weight:700; }
+  .r4 .sp{ flex:1; }
+  .idn{ font-weight:800; color:#c00; line-height:1; white-space:nowrap; font-size:26pt; }
+  /* ★ロットNo.(前工程)。製造日のすぐ下。空なら線を引かない（線があると手で書けない） */
+  .r5{ flex:.75; display:flex; align-items:center; font-size:11.5pt; }
+  /* 任意のメモ。見出しは出さない（書いた文字だけ出る） */
+  .r6{ flex:.8; display:flex; align-items:flex-end; gap:4mm; font-size:11.5pt; }
+  .r6 .sp{ flex:1; }
+  .mm{ font-weight:700; font-size:13pt; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
+  .co{ font-weight:700; font-size:12pt; white-space:nowrap; }
+  .bar-top{ position:sticky; top:0; z-index:9; background:#2b2b2b; color:#fff;
+            padding:6px 14px; display:flex; align-items:center; gap:12px; font-size:12px; }
+  .bar-top button{ font-family:inherit; font-size:12px; font-weight:700; padding:4px 14px;
+                   border:none; border-radius:4px; background:#f3b344; cursor:pointer; }
+  .bar-top .m{ color:#ccc; }
+`;
+
+function _lbOne(d, day){
+  return '<div class="lb">'
+    + '<div class="r1"><span class="cap">部品番号</span>'
+    +   '<span class="pn">' + _lbEsc(d.partNo) + '</span></div>'
+    + '<div class="r2"><span class="cap">部品名称</span>'
+    +   '<span class="nm">' + _lbEsc(d.name || '') + '</span></div>'
+    + '<div class="r3"><span class="cap">収容数</span>'
+    +   '<span class="big">' + _lbEsc(d.cap || '') + '</span>'
+    +   '<span class="sep"></span><span class="cap">工程</span>'
+    +   '<span class="st">' + _lbEsc(d.step || '') + '</span></div>'
+    + '<div class="r4">'
+    +   '<span><span class="cap">製造日</span>　<b>' + _lbEsc(day) + '</b></span>'
+    +   '<span><span class="cap">機械</span>　<b>' + _lbEsc(d.line) + '</b></span>'
+    +   (d.idn ? '<span class="idn">' + _lbEsc(d.idn) + '</span>' : '')
+    +   '<span class="sp"></span></div>'
+    + '<div class="r5"><span class="cap">ロットNo.(前工程)</span>　'
+    +   (d.lot ? '<b style="font-size:13pt">' + _lbEsc(d.lot) + '</b>' : '') + '</div>'
+    + '<div class="r6"><span class="mm">' + _lbEsc(d.memo || '') + '</span>'
+    +   '<span class="sp"></span><span class="co">橋本工業株式会社</span></div>'
+    + '</div>';
+}
+
+window.rtLabelPrint = function(){
+  const pick = [];
+  _lbRows.forEach(function(r, i){
+    const ck = document.getElementById('lb-ck-' + i);
+    const n  = _lbCount(r);
+    if(ck && ck.checked && n > 0) pick.push({ r:r, n:n });
+  });
+  if(!pick.length){ alert('出すものがありません。\n収容数を入れて「出す」にチェックを付けてください。'); return; }
+  let total = 0; pick.forEach(function(x){ total += x.n; });
+  if(total > 200 && !confirm(total + '枚（' + Math.ceil(total/4) + 'ページ）になります。よろしいですか？')) return;
+
+  /* ★窓は押した流れのまま先に開ける（await をはさむとブラウザが黙って止める） */
+  const win = window.open('', '_blank');
+  if(!win){ alert('ポップアップがブロックされました。\nアドレスバー右側のアイコンから許可してください。'); return; }
+
+  const day = _lbDateJp(_lbYmd);
+  const cellArr = [];
+  pick.forEach(function(x){
+    for(let k = 0; k < x.n; k++) cellArr.push(_lbOne(x.r, day));
+  });
+  let pages = '';
+  for(let i = 0; i < cellArr.length; i += 4)
+    pages += '<div class="sheet">' + cellArr.slice(i, i+4).join('') + '</div>';
+
+  win.document.open();
+  win.document.write('<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">'
+    + '<title>現品ラベル ' + _lbYmd + '</title><style>' + _LB_CSS + '</style></head><body>'
+    + '<div class="bar-top noprint"><button onclick="window.print()">🖨 A4横で印刷（'
+    +   Math.ceil(cellArr.length/4) + 'ページ・' + cellArr.length + '枚）</button>'
+    + '<span class="m">印刷画面で　用紙 <b>A4</b>　／　向き <b>横</b>　／　倍率 <b>100</b>　／　'
+    + '余白 <b>既定</b>　に合わせてください。破線で切ります</span></div>'
+    + '<div id="lb-pages">' + pages + '</div>'
+    + '<script>(function(){'
+    + 'document.querySelectorAll(".pn").forEach(function(el){var px=32;el.style.fontSize=px+"pt";'
+    +   'while(px>14&&el.scrollWidth>el.clientWidth){px-=0.5;el.style.fontSize=px+"pt";}});'
+    + 'document.querySelectorAll(".st").forEach(function(el){var px=22;el.style.fontSize=px+"pt";'
+    +   'while(px>11&&el.scrollWidth>el.clientWidth){px-=0.5;el.style.fontSize=px+"pt";}});'
+    + 'document.querySelectorAll(".lb").forEach(function(lb){var r4=lb.querySelector(".r4"),id=lb.querySelector(".idn");'
+    +   'if(!id)return;var px=26;while(px>12&&r4.scrollWidth>r4.clientWidth){px-=0.5;id.style.fontSize=px+"pt";}});'
+    + 'var W=287*96/25.4;function f(){var w=document.documentElement.clientWidth;'
+    +   'var k=Math.max(.35,Math.min(3,(w-30)/W));'
+    +   'document.getElementById("lb-pages").style.zoom=k;'
+    +   'var b=document.querySelector(".bar-top"); if(b) b.style.zoom=k;}'
+    + 'f();window.addEventListener("resize",f);})();<\/script>'
+    + '</body></html>');
+  win.document.close();
+  win.focus();
+};
+
+
 // ===== kp4：配置表の印刷 =====
 // position:fixed や sticky はChromeの印刷で崩れるため、別ウィンドウへ複製して印刷する
 // （進捗管理スナップショットと同じ方式）。表示中の日付を必ず見出しに入れる。
@@ -10133,7 +10506,8 @@ function renderPressTimeline(allEntries){
       <button onclick="rtToggleOverrideMode()" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid;border-radius:5px;cursor:pointer;white-space:nowrap;${ovrBtnStyle}">${_rtOverrideMode ? '✕ 優先ライン変更終了' : `📌 今日の優先ライン${ovrCount?'('+ovrCount+'件)':''}`}</button>
       <button onclick="rtToggleSwapMode()" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid;border-radius:5px;cursor:pointer;white-space:nowrap;${swapBtnStyle}">${_rtSwapMode ? '✕ 入れ替えモード終了' : '🔀 入れ替えモード'}</button>
       <button onclick="rtOpenSpotNew('',12*60,event)" title="予定に無い修正・検査などを入れます" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid #7c3aed;border-radius:5px;cursor:pointer;white-space:nowrap;background:#fff;color:#7c3aed;">＋ 突発作業</button>
-      <button onclick="rtPrintSetupSheetClick()" title="その日の段取りが入った『段取り準備チェック表』を印刷します（A4横1枚）" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid #b45309;border-radius:5px;cursor:pointer;white-space:nowrap;background:#fffbeb;color:#b45309;">📋 段取り準備チェック表</button>
+      <button onclick="rtPrintSetupSheetClick()" title="その日の段取りが入った『段取り準備シート』を印刷します（A4横2枚）" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid #b45309;border-radius:5px;cursor:pointer;white-space:nowrap;background:#fffbeb;color:#b45309;">📋 段取り準備シート</button>
+      <button onclick="rtOpenLabelPanel()" title="その日の段取り計画の品番で現品ラベルを出します（A4横に4枚取り）" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid #b45309;border-radius:5px;cursor:pointer;white-space:nowrap;background:#fffbeb;color:#b45309;">🏷 現品ラベル</button>
       <button onclick="rtPrintRoster()" title="表示中の日付の配置表を印刷します（A4横）" style="padding:3px 10px;font-size:11px;font-weight:600;border:1px solid #cbd5e1;border-radius:5px;cursor:pointer;white-space:nowrap;background:#fff;color:#475569;">🖨 印刷</button>
     </div>
   </div>
@@ -13797,7 +14171,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.14-3';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.14-4';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
