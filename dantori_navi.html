@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.13-1 : ★<b>段取り準備チェック表を「段取り準備シート」（A4横2枚）に作り直した</b>（社長指示）。1枚の表（1行＝1段取り・①〜⑫は記号だけの列）では<b>項目名が読めず、1件ぶんが横に散っていた</b>ため、<b>段取り1件＝1ブロック</b>にした。<b>1枚目＝今日</b>：ラインごとの<b>生産の帯</b>（品番・数量・標準個/h・段取り・休憩）＋その下に<b>回ったときに記号を書く行</b>（○空容器・△スクラップ箱・□材料。◎＝急ぐ、済んだら／を重ねる）、下半分に今日の段取りブロック（①〜⑫／終品：前の品番／予定・実際の2段〈外段取り開始・機械を止めた・生産を始めた〉／後段取り❶〜❹）。<b>2枚目＝明日のため</b>：翌営業日の生産の帯と<b>「🌙 今日のうちに終えるもの」</b>。★<b>「段取りなし」は段取りが要らないという意味ではない</b>（社長説明）。品番が変わるのに段取りが無いことはありえず、<b>外段取り</b>（見原さん・仲田L）か<b>前日に作業者も一緒に終えている</b>かのどちらか。これまでは <code>noSetup</code> の行を紙に出していなかったので、<b>前日に金型を出しておくべきものが紙から消えていた</b>。→ <b>前に流す品番と見くらべて</b>、変わるものを「<b>外</b>」として2枚目に出す（その日の最初の工程は<b>今日の最後に流す品番</b>と見くらべる）。出すのは<b>段取りの始まり（生産開始−標準段取り時間）が10時まで</b>のものだけで、それより後は当日の朝の外段取りで間に合うので1行の注記にする。運ぶもの（空容器など）は<b>自動で出さない</b>（箱入数・収容数を登録できる見込みが無く、計算した印で埋まって読みにくい）。2枚目に<b>下線（やった人・時刻）は置かない</b>（枠の中が狭くなってかえって書けない）。数量・個/h・段取り時間はすべて計画の本物で、生産ペースは進捗ボードと同じ <code>netMins()</code> で逆算している。 -->
 <!-- H-Hub v2026.11.11-8 : ★★<b>「⚠ 最新の記録を取れませんでした」の真犯人は無限ループだった</b>。帯に理由を出すようにしたら <code>[Maximum call stack size exceeded]</code> と出た。つまり<b>取り込みは成功していて、そのあとの描き直しがぐるぐる回って落ち</b>、その例外が fetch の .catch に吸われて「取得に失敗」として表示されていた。回っていた道＝<code>qcShowPendingList() → qcShowScreen('list') → qcLoadRecords() → qcRenderCurrentList() →（QC_PENDING_MODEなので）qcShowPendingList()</code>。バッジから開く1回目は QC_PENDING_MODE がまだ false なので回らず、<b>記録を取り直して一覧を作り直すとき（qcPendingSyncIfChanged）に回る</b>。QC_NG_INTERACTING が立っているときだけ qcRenderCurrentList が引き返すので、不良品報告を触ったあとは“たまたま”助かっていた＝出たり出なかったりの正体。→ (1)<b>入力待ちからは画面を切り替えるだけで記録を読み直さない</b>（qcShowScreen の _noLoad）。(2)描いている最中に呼ばれたら止める（QC_PENDING_DRAWING）。(3)ついでに<b>右下の版表示がずっと空欄だった</b>のも直した（ページ末尾の処理からは QC_UI_VERSION が見えず try/catch に吸われていた）。 -->
 <!-- H-Hub v2026.11.11-7 : ★<b>「⚠ 最新の記録を取れませんでした」の正体</b>（どのPCでも出る・閉じて開き直すと直る・社長報告）。入力待ちを開くと、同じGASへ<b>getRecords（記録の取り込み）と getKintonePartData（kintone不良品報告）が“同時に”飛んでいた</b>。Apps Scriptは同じ人からの同時呼び出しに弱く、どちらかが落ちる。閉じて開き直すと直るのは、2回目はkintoneのキャッシュが生きていて取りに行かず、<b>記録の1本だけになる</b>ため＝どのPCでも1回目に失敗していた理由。→ (1)<b>kintoneは記録の取り込みが終わってから行く</b>（30秒まで待つ・QC_NG_WAIT）。(2)それでも落ちたら<b>自動で取り直す</b>（1.5秒→3秒・最大2回・qcFetchRetryLater）。社長の「裏で閉じるを押して開いてくれれば」を、画面を触らずにやる。(3)<b>失敗の理由を帯に出す</b>（QC_REC_ERR_MSG）。写真から切り分けられるように。 -->
 <!-- H-Hub v2026.11.11-6 : ★<b>システム入力待ちに10月分（入力済み）が出た件</b>（現場PC・社長報告）。見出しは<b>「記録 取得中…」のまま</b>だった＝スプレッドシートの取り込みがまだ返っていないうちに、<b>手元の古い記録で一覧を作っていた</b>。取り込みが終われば自動で消える（「✕ 閉じる」で開き直すと消えたのはこのため）が、10pxの灰色で「取得中…」と出ているだけなので誰も気づけない。社長PCで出なかったのは取り込みが速く終わっていたから＝<b>回線やPCの速さで出たり出なかったりする</b>。→ (1)取り込みが終わるまで<b>一覧の上に黄色い帯</b>で「最新を確認しています／下の一覧は前回のもの」と出す。(2)取り込みが終わったら帯を消し、見出しの「記録 ○○時点」を必ず直す（顔ぶれが同じときは一覧を作り直さないので、これまで「取得中…」が残り続けていた）。(3)取り込みに失敗したときも、開いている一覧の見出しと帯で知らせる。(4)見出しを作り直すと「記録 ○○時点」が消えていたのを付け直すようにした。 -->
@@ -9134,16 +9135,32 @@ function _stripPrintMedia(css){
 }
 
 
-/* ===== 段取り準備チェック表の印刷（2026-10-10 社長指示）=======================
-   これまでは Excel の雛形に bat で流し込んでいたが、どのPCからでも出せるように
-   H-Hub から直接印刷する。その日の段取り（ライン・品番・準備開始・帯）が入った
-   状態で出る。チェック欄・担当・準備完了は手書き（書くのはリフトマンの2人）。
-   帯＝内段取り（機械を止める時間）。準備開始＝外段取りを始める予定時刻。 */
-const SETUP_LEAD_MIN = 30;     // 準備開始＝段取り開始の何分前か
-const SETUP_SHEET_ROWS = 12;   // 用紙に載る行数（A〜Cラインだけなので1日3〜5件。1行を大きく取る）
-const SETUP_T0 = 8, SETUP_T_SLOTS = 18;   // 8:00から30分きざみで18コマ（17:00まで）
-const SETUP_LINE_RE = /^[ABC]/i;          // 対象はAライン〜Cラインだけ（永丘などは出さない。社長指示 2026-10-10）
+/* ===== 段取り準備シート（A4横2枚）の印刷 ==================================
+   2026-11-13 社長指示で全面的に作り直した。
+   それまでは A4横1枚の表（1行＝1段取り、①〜⑫は記号だけの列）だったが、
+     ・項目名が読めない／1件ぶんが横に散る
+     ・「今日のうちに終えるもの」が分からない（段取りなしの行は出ていなかった）
+   ため、**段取り1件＝1ブロック**の形にして2枚にした。印刷して手書きで記録する紙。
 
+   1枚目＝今日　… 時間でみる（生産の帯＋回って書く行）／今日の段取りブロック
+   2枚目＝明日のため … 明日の生産の帯／今日のうちに終えるもの（外段取り・前日準備）
+
+   ★運ぶもの（空容器・スクラップ箱・材料）は自動で出さない（社長指示）。
+     箱入数・収容数まで登録できる見込みが無く、計算した印と時刻で埋まって読みにくい。
+     帯の下の空いた行に、回ったときその場で記号を書く。○容器 △スクラップ □材料。
+   ★2枚目に下線（やった人・時刻）は出さない（社長指示）。枠の中が狭くなって
+     かえって書けなくなるため。だれが・いつ終えたかは⑫担当と時刻に書く。
+   ★「段取りなし」は段取りが要らないという意味ではない（社長説明）。
+     品番が変わるのに段取りが無いことはありえず、外段取り（見原さん・仲田L）か、
+     前日に作業者も一緒に終えているかのどちらか。だから**前に流す品番と見くらべ**て、
+     変わるものは2枚目の「外」の枠に出す。前の日の分は今日の最後に流す品番と見くらべる。 */
+
+const SETUP_LEAD_MIN = 30;                // 準備開始＝段取り開始の何分前か
+const SETUP_T0       = 8;                 // 時間軸の左端（始業）
+const SETUP_LINE_RE  = /^[ABC]/i;         // 対象はAライン〜Cラインだけ（社長指示 2026-10-10）
+const SETUP_LINE_ORDER = ['A1','A2','B1','B2','Bライン','Cライン①','Cライン②'];
+
+/* ①〜⑫（3つめは「何を見るのか」の覚え書き。紙には番号と短い名前だけ出す） */
 const SETUP_SOTO = [
   ['①','次の金型','置場から出した／前回の不具合は改善(改修)されている'],
   ['②','材料','材質・板厚・幅・所要量が合っている'],
@@ -9158,72 +9175,88 @@ const SETUP_SOTO = [
   ['⑪','現品ラベル','枚数・ロット番号（初品札）'],
   ['⑫','担当と時刻','誰が何時から入るか(配置表)／応援・リフトの手配は済んだか']
 ];
-const SETUP_ATO = [
-  ['❶','旧金型の手入れ','清掃・不具合あれば記録・改修'],
-  ['❷','旧金型を戻す','決められた置場へ戻した(出しっぱなしにしない)'],
-  ['❸','片付け','残材の識別・返却／旧容器・旧ラベルの片付け'],
-  ['❹','記録','段取り時間を入れた／超過したときは原因を選んだ（H-Hub）']
-];
+/* 前日にできるのは物と紙でそろうものだけ。②材料・③空容器・④スクラップ・⑤コンベアは当日の朝。
+   10/12〜10/28の実績で足りなかったのは ⑪現品ラベル15回・⑨標準書類・⑥治工具の順。 */
+const SETUP_YOBI = ['①','⑥','⑦','⑧','⑨','⑩','⑪'];
 
-function _ssHHMM(m){ return String(Math.floor(m/60)) + ':' + String(m%60).padStart(2,'0'); }
+function _ssHHMM(m){ return String(Math.floor(m/60)) + ':' + String(Math.round(m)%60).padStart(2,'0'); }
 
-/* 段取り開始時刻が入っていない工程の「いつから段取りを始められるか」（2026-10-11 社長指示）
-   同じラインで先に終わる工程があれば、その終了時刻から始められる。
-   そのラインに先の作業が無ければ、始業（8:00）から始められる。 */
-function _ssEarliestStart(d, all){
-  const p = rt_toMin(d.prodStart);
-  let prevEnd = null;
-  (all || []).forEach(function(o){
-    if(o === d || o.lineId !== d.lineId) return;
-    const oe = rt_toMin(o.prodEnd);
-    if(oe === null || (p !== null && oe > p)) return;        // その工程より後に終わるものは関係ない
-    if(prevEnd === null || oe > prevEnd) prevEnd = oe;       // いちばん遅く終わる「前の作業」
-  });
-  return (prevEnd !== null) ? prevEnd : SETUP_T0 * 60;       // 前の作業が無ければ始業から
+/* 休憩（設定にあればそちらを使う）。帯の灰色に使う。
+   生産ペースの逆算は進捗ボードと同じ netMins() を使い回す（作り直さない）。 */
+function _ssBreaks(){
+  const toM = function(t){ const m = /^(\d+):(\d+)$/.exec(String(t||'')); return m ? +m[1]*60 + +m[2] : null; };
+  return ((config.breaks && config.breaks.length) ? config.breaks : DEFAULT_BREAKS)
+    .map(function(b){ return [toM(b.start), toM(b.end)]; })
+    .filter(function(b){ return b[0] != null && b[1] != null && b[1] > b[0]; });
 }
 
-// その日の段取り（段取りなしの行は除く）を時間の早い順に
-function _ssRows(){
+/* その日の計画（dantoriSchedule と同じ形の配列）→ 紙に出す形。A〜Cラインだけ */
+function _ssJobs(sched){
   const out = [];
-  const all = (dantoriSchedule || []);
-  all.forEach(function(d){
-    if(d.noSetup) return;
-    if(!SETUP_LINE_RE.test(String(d.lineId || ''))) return;   // A〜Cライン以外は出さない
-    let s = rt_toMin(d.setupStart), p = rt_toMin(d.prodStart);
-    const std = parseInt(d.stdSetupMin, 10) || 0;
-    let est = false;
-    if(s === null){
-      est = true;
-      const early = _ssEarliestStart(d, all);                 // 前の作業が終わった時刻
-      const latest = (p !== null && std) ? p - std : null;    // 遅くともここまでに始める
-      s = (latest !== null) ? Math.min(early, latest) : early;
-    }
-    if(s === null && p === null) return;
-    if(p === null) p = s + (std || 30);
-    const mount = String((d.roles || {}).金型取付 || '')
-      .split(/[,、]/).map(x => x.trim()).filter(Boolean);
-    /* ★終品を測るのは「次の品番」ではなく、いま流れている<b>前の品番</b>（2026-10-14 社長指摘：
-       「前の品が何かはわかりません」）。同じラインで、この工程の生産が始まる前に
-       終わる工程のうち、いちばん遅く終わるものを前の品番とする。
-       段取りなしの工程も相手になるので、絞り込む前の全部（all）から探すこと。 */
-    let prevPart = '', prevEnd = null;
-    (all || []).forEach(function(o){
-      if(o === d || o.lineId !== d.lineId) return;
-      const oe = rt_toMin(o.prodEnd);
-      if(oe === null || oe > p) return;
-      if(prevEnd === null || oe > prevEnd){ prevEnd = oe; prevPart = o.partNo || ''; }
+  (sched || []).forEach(function(d){
+    if(!d || !SETUP_LINE_RE.test(String(d.lineId || ''))) return;
+    const ps = rt_toMin(d.prodStart), pe = rt_toMin(d.prodEnd);
+    if(ps === null || pe === null) return;
+    const qty = parseInt(d.plan, 10) || 0;
+    const net = netMins(ps, pe);                     // 休憩を引いた稼働分
+    out.push({
+      lineId: d.lineId, line: getLineDisplayName(d.lineId), partNo: d.partNo || '',
+      qty: qty, perH: (net > 0 && qty > 0) ? Math.round(qty / net * 60) : 0,
+      ss: rt_toMin(d.setupStart), ps: ps, pe: pe,
+      kata: parseInt(d.mountKata, 10) || 0,
+      noSetup: !!d.noSetup,
+      std: Math.max(5, parseInt(effSetupStdMin(d), 10) || SETUP_LEAD_MIN)
     });
-    out.push({ line:getLineDisplayName(d.lineId), part:d.partNo || '',
-               prevPart:prevPart, prevEnd:prevEnd,
-               s:s, p:p, std:std, est:est, mount:mount,
-               /* 段取り開始が生産開始より後ろ＝入力がおかしい（2026-10-14 社長指摘）。
-                  続きの工程で段取りが要らないのに「段取りなし」になっていない行が
-                  こうなる。黙って帯が空になると誰も気づけないので印を出す。 */
-               bad: (p !== null && s > p),
-               prevDay: (s - SETUP_LEAD_MIN) < SETUP_T0 * 60 });   // 準備が前日になる行
   });
-  out.sort(function(a,b){ return a.s - b.s || String(a.line).localeCompare(b.line); });
+  const rank = function(L){ const i = SETUP_LINE_ORDER.indexOf(L); return i < 0 ? 99 : i; };
+  out.sort(function(a,b){ return rank(a.line) - rank(b.line) || a.ps - b.ps
+                              || String(a.line).localeCompare(b.line); });
   return out;
+}
+
+/* 段取りの始まり。時刻が入っていなければ生産開始から標準段取り時間で逆算する。
+   段取り開始が生産開始より後ろの行（入力がおかしい）も逆算に回す。 */
+function _ssSetupOf(j){
+  if(j.noSetup) return null;
+  if(j.ss !== null && j.ss < j.ps) return { at: j.ss, guess:false };
+  return { at: j.ps - j.std, guess:true };
+}
+
+/* その日の終わりに合わせて時間軸を伸ばす（残業の日に右が切れないように。最短17:00） */
+function _ssEndOfDay(jobs){
+  let mx = 17 * 60;
+  jobs.forEach(function(j){ if(j.pe > mx) mx = j.pe; });
+  return Math.ceil(mx / 60) * 60;
+}
+
+/* 「段取りなし」なのに前に流す品番と変わるもの＝段取りは必ずある。
+   prevLast＝そのラインで前の日の最後に流す品番（その日いちばん最初の工程の相手） */
+function _ssSotoList(jobs, prevLast){
+  const out = [];
+  const lines = [];
+  jobs.forEach(function(j){ if(lines.indexOf(j.line) < 0) lines.push(j.line); });
+  lines.forEach(function(L){
+    let prev = (prevLast || {})[L] || null;
+    jobs.filter(function(j){ return j.line === L; }).forEach(function(j){
+      if(!_ssSetupOf(j) && prev && prev !== j.partNo) out.push(j);
+      prev = j.partNo;
+    });
+  });
+  return out;
+}
+
+/* 終品チェックで測るのは「次の品番」ではなく、いま流れている前の品番
+   （2026-10-14 社長指摘：前の品が何かはわかりません）。
+   同じラインで、この工程の生産が始まる前に終わる工程のうちいちばん遅いもの。
+   段取りなしの工程も相手になるので、絞り込む前の全部から探すこと。 */
+function _ssPrevPart(j, all){
+  let part = '', end = null;
+  (all || []).forEach(function(o){
+    if(o === j || o.line !== j.line) return;
+    if(o.pe > j.ps) return;
+    if(end === null || o.pe > end){ end = o.pe; part = o.partNo || ''; }
+  });
+  return part ? { part:part, end:end } : null;
 }
 
 /* 金型のショット数の判定を、品番ごとに引けるようにする（2026-10-13 社長指示）
@@ -9264,6 +9297,311 @@ window.rtPrintSetupSheetClick = function(){
   });
 };
 
+/* 紙の見た目（印刷する窓にそのまま流し込む）。A4横2枚ぶん */
+const _SS_CSS = `
+  @page { size: 297mm 210mm; margin: 7mm; }   /* A4横。キーワードより寸法指定のほうが確実に効く */
+
+  :root{
+    --ink:#1a1a1a; --sub:#555; --line:#999; --faint:#d8d8d8;
+    --prod:#dbeafe; --prodbd:#60a5fa; --setup:#fde7c7; --setupbd:#e08a2e;
+    --rest:#f0f0f0;
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:#8a8a8a; font-family:"Meiryo UI","Yu Gothic UI",sans-serif;
+        color:var(--ink); -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+
+  .sheet{ width:283mm; height:196mm; background:#fff; margin:8mm auto;
+          position:relative; overflow:hidden; box-shadow:0 2px 12px rgba(0,0,0,.4); }
+  @media print{
+    body{ background:#fff; }
+    .sheet{ margin:0; box-shadow:none; page-break-after:always; width:auto; height:auto; }
+    .sheet:last-of-type{ page-break-after:auto; }
+    .noprint{ display:none !important; }
+  }
+
+  .top{ display:flex; align-items:flex-end; gap:6mm; border-bottom:1.6pt solid var(--ink);
+        padding-bottom:.8mm; margin-bottom:1.2mm; }
+  .ttl{ font-size:13pt; font-weight:700; letter-spacing:.5pt; }
+  .day{ font-size:10pt; font-weight:700; }
+  .top .sp{ flex:1; }
+  .who{ font-size:8pt; color:var(--sub); }
+  .who b{ font-weight:600; color:var(--ink); }
+  .sec{ font-size:8.3pt; font-weight:700; margin:1mm 0 .6mm; padding-left:1.5mm;
+        border-left:3pt solid var(--ink); line-height:1.3; }
+  .sec span{ font-weight:400; font-size:7.3pt; color:var(--sub); }
+
+  /* ===== 時間軸 ===== */
+  .axis{ position:relative; height:3.6mm; margin:0 5mm 0 25mm; border-bottom:.6pt solid var(--line); }
+  .axis .h{ position:absolute; top:0; font-size:6.5pt; color:var(--sub); transform:translateX(-50%); }
+  .lineblk{ margin-bottom:.3mm; border:.6pt solid var(--faint); border-left:none; position:relative; }
+  .lname{ position:absolute; left:0; width:25mm; font-size:8.2pt; font-weight:700; padding-left:1mm; }
+  .row{ position:relative; margin:0 5mm 0 25mm; border-top:.4pt solid var(--faint); }
+  .row:first-child{ border-top:none; }
+  .rlab{ position:absolute; left:-25mm; width:24.5mm; font-size:6.6pt; color:var(--sub);
+         padding-left:1.5mm; white-space:nowrap; }
+  .rlab b{ color:var(--ink); font-weight:600; }
+
+  .track{ position:relative; height:100%; }
+  .grid{ position:absolute; inset:0; }
+  .grid i{ position:absolute; top:0; bottom:0; border-left:.4pt solid var(--faint); }
+  .grid i.hr{ border-left:.5pt solid #c2c2c2; }
+  .grid u{ position:absolute; top:0; bottom:0; background:var(--rest); }   /* 休憩 */
+
+  .rbar{ height:5.4mm; }
+  .bar{ position:absolute; top:.4mm; height:4.8mm; border-radius:1pt; overflow:hidden;
+        font-size:6.6pt; line-height:4.8mm; padding:0 .8mm; white-space:nowrap; }
+  .bar.p{ background:var(--prod); border:.6pt solid var(--prodbd); }
+  .bar.s{ background:var(--setup); border:.6pt solid var(--setupbd); font-weight:700;
+          text-align:center; padding:0; }
+  .bar.p.chk{ border-left:1.6pt solid #e08a2e; }
+  .soto{ background:#fde7c7; border:.5pt solid #e08a2e; border-radius:1pt;
+         padding:0 .6mm; margin-right:.6mm; font-size:5.8pt; font-weight:700; color:#8a4b00; }
+  .bar.s.guess{ background:repeating-linear-gradient(45deg,#fdf1e0 0,#fdf1e0 1.2mm,#fbe3c4 1.2mm,#fbe3c4 2.4mm);
+                border-style:dashed; }
+  .bar b{ font-weight:700; }
+  .bar em{ font-style:normal; color:#444; }
+
+  .rmark{ height:5mm; }
+  .outlbl{ position:absolute; top:1.2mm; font-size:5.6pt; color:#444;
+           white-space:nowrap; padding-left:1mm; }
+  .mk{ position:absolute; top:.2mm; transform:translateX(-50%); text-align:center;
+       font-size:6pt; line-height:1.15; white-space:nowrap; }
+  .mk .ic{ font-size:7pt; }
+  .mk .tm{ font-weight:700; }
+
+  .rwrite{ height:9.4mm; }
+
+  .legend{ font-size:6.4pt; color:var(--sub); margin-top:.5mm; line-height:1.4; }
+  .legend b{ color:var(--ink); }
+  .chip{ display:inline-block; border:.6pt solid var(--line); border-radius:1pt;
+         padding:0 .8mm; margin-right:.5mm; }
+
+  /* ===== 段取りブロック ===== */
+  .blocks{ display:flex; flex-wrap:wrap; gap:1.5mm; }
+  .blk{ flex:0 0 69mm; min-width:0; overflow:hidden;
+        border:.8pt solid var(--ink); border-radius:1pt; padding:.8mm 1.5mm 1mm; }
+  .bh{ display:flex; align-items:center; gap:1.2mm; white-space:nowrap; }
+  .bh .ln{ font-size:8.2pt; font-weight:700; }
+  .bh .tm{ font-size:9pt; font-weight:700; background:var(--setup); padding:0 1mm; border-radius:1pt; }
+  .bh .tm.guess{ background:#fff; border:.6pt dashed var(--setupbd); font-size:7.6pt; }
+  .bh .sp{ flex:1; }
+  .bh .kt{ font-size:6.2pt; color:var(--sub); border:.5pt solid var(--line); padding:0 .8mm; }
+  .bh2{ font-size:7.4pt; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+        border-bottom:.5pt solid var(--faint); padding-bottom:.4mm; margin:.3mm 0 .4mm; }
+  .bh2 i{ font-style:normal; font-weight:400; font-size:6.2pt; color:var(--sub); }
+  .ck{ display:flex; flex-wrap:wrap; font-size:6.5pt; line-height:1.62; }
+  .ck span{ width:33.33%; white-space:nowrap; }
+  /* 終品チェックで測る品番（2026-10-14 社長指摘。前の品を出す） */
+  .prev{ font-size:6.2pt; font-weight:700; color:#8a4b00; white-space:nowrap;
+         overflow:hidden; text-overflow:ellipsis; margin:-.1mm 0 .2mm; }
+  .star{ color:#c00; font-weight:800; margin-right:.3mm; }
+  .bf{ display:flex; gap:1.5mm; font-size:6.5pt; margin-top:.5mm; white-space:nowrap;
+       border-top:.5pt dashed var(--line); padding-top:.5mm; align-items:baseline; }
+  .bf .sp{ flex:1; }
+  .ul{ display:inline-block; border-bottom:.5pt solid var(--ink); min-width:11mm; }
+  .ul.w{ min-width:24mm; }
+  .jk{ width:100%; border-collapse:collapse; font-size:6.3pt; margin-top:.6mm; }
+  .jk th{ font-weight:400; color:var(--sub); font-size:5.8pt; text-align:center;
+          border-bottom:.4pt solid var(--faint); padding:0; white-space:nowrap; }
+  .jk td{ text-align:center; padding:.2mm 0; white-space:nowrap; }
+  .jk td:first-child, .jk th:first-child{ width:7mm; text-align:left; color:var(--sub); font-size:5.8pt; }
+  .jk .yt td{ font-weight:700; }
+  .jk .js td{ border-bottom:.5pt solid var(--ink); height:3.4mm; }
+  .jk .js td:first-child{ border-bottom:none; }
+  .jk .tn{ width:17mm; border-bottom:.5pt solid var(--ink); }
+  .after{ font-size:6.2pt; line-height:1.3; margin-top:.4mm;
+          border-top:.5pt dashed var(--line); padding-top:.4mm; color:#333; }
+  .blk.sotoblk{ border-color:#e08a2e; background:#fffdf8; }
+  .bh .tm.soto2{ background:#fde7c7; border:.6pt solid #e08a2e; font-size:7.6pt; }
+  .asa{ background:#ffe9e9; border:.6pt solid #d33; color:#b00; font-weight:700;
+        font-size:6.3pt; padding:0 1mm; border-radius:1pt; }
+
+  .bar-top{ position:sticky; top:0; z-index:9; background:#2b2b2b; color:#fff;
+            padding:6px 14px; display:flex; align-items:center; gap:12px; font-size:12px; }
+  .bar-top button{ font-family:inherit; font-size:12px; font-weight:700; padding:4px 14px;
+                   border:none; border-radius:4px; background:#f3b344; cursor:pointer; }
+  .bar-top .m{ color:#ccc; }
+`;
+
+/* ===== 時間でみる（生産の帯＋回って書く行） ===== */
+function _ssTimeline(jobs, opt){
+  opt = opt || {};
+  const T1 = _ssEndOfDay(jobs), D0 = SETUP_T0 * 60, SPAN = T1 - D0;
+  const esc = _ssEsc;
+  const pct = function(m){ return Math.max(0, Math.min(100, (m - D0) / SPAN * 100)); };
+  const brk = _ssBreaks();
+
+  const gridHtml = function(){
+    let g = '';
+    for(let m = D0; m <= T1; m += 30)
+      g += '<i class="' + (m % 60 === 0 ? 'hr' : '') + '" style="left:' + pct(m) + '%"></i>';
+    brk.forEach(function(b){
+      if(b[1] <= T1 && b[0] >= D0)
+        g += '<u style="left:' + pct(b[0]) + '%;width:' + ((b[1]-b[0])/SPAN*100) + '%"></u>';
+    });
+    return '<div class="grid">' + g + '</div>';
+  };
+
+  let ax = '';
+  for(let m = D0; m <= T1; m += 30){
+    const half = m % 60 !== 0;
+    ax += '<span class="h" style="left:' + pct(m) + '%;' + (half ? 'font-size:5.4pt;color:#b0b0b0' : '') + '">'
+        + (half ? '30' : _ssHHMM(m)) + '</span>';
+  }
+  let h = '<div class="axis">' + ax + '</div>';
+
+  const soto = _ssSotoList(jobs, opt.prevLast);
+  const lines = [];
+  jobs.forEach(function(j){ if(lines.indexOf(j.line) < 0) lines.push(j.line); });
+
+  lines.forEach(function(L){
+    let bars = '';
+    jobs.filter(function(j){ return j.line === L; }).forEach(function(j){
+      const su = _ssSetupOf(j);
+      const chk = soto.indexOf(j) >= 0;              /* 外段取り／前日に終えておくもの */
+      if(su){
+        const w = (j.ps - Math.max(su.at, D0)) / SPAN * 100;
+        bars += '<div class="bar s' + (su.guess ? ' guess' : '') + '" style="left:' + pct(su.at)
+              + '%;width:' + w + '%">' + (w > 3.5 ? '段取り' : (w > 1.8 ? '段' : '')) + '</div>';
+      }
+      const w = (j.pe - j.ps) / SPAN * 100;
+      bars += '<div class="bar p' + (chk ? ' chk' : '') + '" style="left:' + pct(j.ps)
+            + '%;width:' + w + '%">' + (chk ? '<b class="soto">外</b>' : '')
+            + (w > 12 ? '<b>' + esc(j.partNo) + '</b>　<em>' + j.qty + '個'
+                        + (j.perH ? ' ' + j.perH + '個/h' : '') + '</em>'
+                      : (w > 6 ? '<b>' + esc(j.partNo) + '</b>' : '')) + '</div>';
+      /* 帯が細すぎて品番が入らないものは、帯の右わきに小さく出す（何の帯か分からなくなるため） */
+      if(w <= 6)
+        bars += '<div class="outlbl" style="left:' + pct(j.pe) + '%">'
+              + esc(j.partNo) + '　' + j.qty + '個</div>';
+    });
+
+    let rows = '<div class="row rbar"><div class="track">' + gridHtml() + bars + '</div></div>';
+    if(opt.full){
+      /* ★自動では何も出さない。回ったときに、切れそうな時間のところへ記号を書く */
+      rows += '<div class="row rwrite"><span class="rlab" style="top:1.2mm">'
+            +   '<span style="font-size:5.8pt">○ 容器　△ ｽｸﾗｯﾌﾟ　□ 材料</span></span>'
+            +   '<div class="track">' + gridHtml() + '</div></div>';
+    }
+    h += '<div class="lineblk"><div class="lname" style="top:1mm">' + esc(L) + '</div>'
+       + rows + '</div>';
+  });
+
+  if(opt.full){
+    h += '<div class="legend">'
+       + '<span class="chip">帯</span>青＝生産（品番・数量・標準個/h）／だいだい＝段取り'
+       + '（<b>ななめ縞は計画に時刻が無く生産開始から逆算したもの</b>）　'
+       + '<span class="chip">灰</span>休憩　'
+       + '<b class="soto">外</b>＝計画が「段取りなし」だが<b>前に流す品番と変わる</b>もの'
+       + '＝段取りは必ずある。<b>外段取り</b>か、前日に作業者も一緒に終えたもの<br>'
+       + '<b>帯の下の空いている行</b>は、回ったときに'
+       + '<b>「このくらいで切れそう／いっぱいになりそう」と思った時間のところへ記号を書く欄</b>です。　'
+       + '<b style="font-size:8pt">○</b>＝空容器　'
+       + '<b style="font-size:8pt">△</b>＝スクラップ箱　'
+       + '<b style="font-size:8pt">□</b>＝材料（コイル・切板・前工程）　／　'
+       + '急ぐものは二重に <b style="font-size:8pt">◎</b>、'
+       + '手当てが済んだら記号に <b style="font-size:8pt">／</b> を重ねる'
+       + '</div>';
+  }
+  return h;
+}
+
+/* ===== 段取り1件＝1ブロック ===== */
+function _ssBlock(j, opt){
+  opt = opt || {};
+  const esc = _ssEsc;
+  const su  = _ssSetupOf(j);
+  if(!su && !opt.soto) return '';
+  const at  = su ? su.at : j.ps;                     /* 外段取りは段取り時刻が無いので生産開始で見る */
+  const asa = opt.next && at <= SETUP_T0 * 60 + 20;  /* 翌日の朝いちばん */
+  const lead = at - SETUP_LEAD_MIN;
+
+  let ck = '';
+  SETUP_SOTO.forEach(function(x){
+    if(opt.only && opt.only.indexOf(x[0]) < 0) return;
+    ck += '<span>□' + x[0] + ' ' + x[1] + '</span>';
+  });
+
+  let h = '<div class="blk' + (opt.soto ? ' sotoblk' : '') + '">'
+    + '<div class="bh"><span class="ln">' + esc(j.line) + '</span>'
+    +   (opt.soto
+         ? '<span class="tm soto2">外段取り</span>'
+           + '<span style="font-size:6.3pt;color:#555">'
+           + _ssHHMM(at - j.std) + 'までに終える（生産 ' + _ssHHMM(at) + 'から）</span>'
+         : '<span class="tm' + (su.guess ? ' guess' : '') + '">' + _ssHHMM(su.at) + ' 段取り'
+           + (su.guess ? '(逆算)' : '') + '</span>')
+    +   '<span class="sp"></span>'
+    +   (asa ? '<span class="asa">★今日のうちに</span>' : '')
+    +   (j.kata ? '<span class="kt">金型' + j.kata + '型</span>' : '')
+    + '</div>'
+    + '<div class="bh2">'
+    +   ((opt.mlv || {})[moldNorm(j.partNo)] === 'red' ? '<span class="star">★</span>' : '')
+    +   esc(j.partNo) + '　<i>' + j.qty + '個</i></div>';
+
+  /* 終品チェックで測るのは「次の品番」ではなく前の品番（2026-10-14 社長指摘）。今日の紙だけに出す */
+  if(!opt.next){
+    const pv = opt.prev;
+    h += '<div class="prev">終品：'
+       + (pv ? esc(pv.part) + '（〜' + _ssHHMM(pv.end) + '）' : '—') + '</div>';
+  }
+  h += '<div class="ck">' + ck + '</div>';
+
+  if(opt.next){
+    /* ★2枚目に下線（やった人・時刻・申し送り）は出さない（2026-11-13 社長指示）。
+       下線のぶん枠の中が狭くなって、かえって書けなくなるため。
+       だれが・いつ終えたかは⑫担当と時刻に書く。申し送りは下の「気づいたこと」へ。 */
+  }else{
+    /* 予定と実際を縦にそろえる。段取り時間の実績（H-Hubに入れる元の数字）がここで取れる */
+    h += '<table class="jk"><tr><th></th><th>外段取り開始</th><th>機械を止めた</th>'
+       +   '<th>生産を始めた</th><th class="tn">担当</th></tr>'
+       + '<tr class="yt"><td>予定</td><td>'
+       +   (lead < SETUP_T0 * 60 ? '前日' : _ssHHMM(lead)) + '</td><td>' + _ssHHMM(su.at)
+       +   '</td><td>' + _ssHHMM(j.ps) + '</td><td rowspan="2" class="tn"></td></tr>'
+       + '<tr class="js"><td>実際</td><td></td><td></td><td></td></tr></table>'
+       + '<div class="after"><b>後段取り</b>　□❶型手入れ　□❷型戻す　□❸片付け　□❹記録</div>';
+  }
+  return h + '</div>';
+}
+
+/* 手書きのメモ欄（rows 行ぶんの罫線）。印刷で消えないよう div を並べる */
+function _ssMemo(rows){
+  let h = '<div style="border:.8pt solid #999;border-bottom:none">';
+  for(let i = 0; i < rows; i++) h += '<div style="height:7.5mm;border-bottom:.5pt solid #c4c4c4"></div>';
+  return h + '</div>';
+}
+
+function _ssEsc(t){
+  return String(t == null ? '' : t).replace(/[&<>"]/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; });
+}
+
+/* 次の営業日。休みは土日だけ（祝日も出勤） */
+function _ssNextWorkday(ymd){
+  const d = _dtParse(ymd);
+  do { d.setDate(d.getDate() + 1); } while(d.getDay() === 0 || d.getDay() === 6);
+  return _dtYmd(d);
+}
+
+/* 別の日の段取り計画を読む（2枚目に出す明日のぶん）。取れなくても紙は出す */
+async function _ssLoadDay(ymd){
+  const fbUrl = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
+  try{
+    const res = await fetch(fbUrl + '/dantori/' + ymd + '.json');
+    if(!res.ok) return [];
+    const data = await res.json();
+    if(!data) return [];
+    return Object.entries(data).map(function(e){
+      return Object.assign({}, e[1], { _id:e[0], lineId: resolveLineId(e[1] && e[1].lineId) });
+    });
+  }catch(e){ return []; }
+}
+
+function _ssDateJp(ymd){
+  const d  = _dtParse(ymd);
+  const wd = ['日','月','火','水','木','金','土'][d.getDay()];
+  return d.getFullYear() + '年' + (d.getMonth()+1) + '月' + d.getDate() + '日（' + wd + '）';
+}
+
 window.rtPrintSetupSheet = async function(){
   /* ★窓は、押した流れのまま先に開けること（2026-10-14 社長報告「押しても反応しない」）。
      await をはさんだあとに window.open を呼ぶと、ブラウザは「人が押した操作」と
@@ -9271,191 +9609,115 @@ window.rtPrintSetupSheet = async function(){
   const win = window.open('', '_blank');
   if(!win){ alert('ポップアップがブロックされました。\nアドレスバー右側のアイコンから許可してください。'); return; }
   win.document.write('<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">'
-    + '<title>段取り準備チェック表</title></head><body>'
+    + '<title>段取り準備シート</title></head><body>'
     + '<div style="font-family:\'Meiryo UI\',sans-serif;padding:26px;font-size:15px;color:#555;">'
-    + '表を作っています…</div></body></html>');
+    + 'シートを作っています…</div></body></html>');
 
-  const ymd = getDantoriDatePath();
-  const d   = _dtParse(ymd);
-  const wd  = ['日','月','火','水','木','金','土'][d.getDay()];
-  const dateStr = d.getFullYear() + '年' + (d.getMonth()+1) + '月' + d.getDate() + '日（' + wd + '）';
-  const rows = _ssRows();
-  const mlv  = await _ssMoldLevels();   // ★を出すため（取れなければ空）
+  const ymd  = getDantoriDatePath();
+  const nymd = _ssNextWorkday(ymd);
+  const pair = await Promise.all([_ssLoadDay(nymd), _ssMoldLevels()]);
+  const mlv  = pair[1] || {};              /* ★を出すため（取れなければ空） */
 
-  const esc = function(t){ return String(t==null?'':t).replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); };
+  const jobs = _ssJobs(dantoriSchedule);   /* 今日（表示中の日付） */
+  const nxt  = _ssJobs(pair[0]);           /* 次の営業日 */
+  const esc  = _ssEsc;
 
-  // 本体の行
-  let body = '';
-  for(let i = 0; i < SETUP_SHEET_ROWS; i++){
-    const r = rows[i];
-    let tds = '<td class="no">' + (i+1) + '</td>';
-    if(r){
-      const lead = r.s - SETUP_LEAD_MIN;
-      tds += '<td class="ln">' + esc(r.line) + '</td>'
-           + '<td class="pt">'
-           + (mlv[moldNorm(r.part)] === 'red' ? '<span class="star">★</span>' : '')
-           + esc(r.part)
-           + '<div class="sub">段取り ' + _ssHHMM(r.s) + '→' + _ssHHMM(r.p)
-           + (r.est ? '<span class="est">（予想）</span>' : '')
-           + (r.bad ? '<span class="bad">⚠ 段取りなし？</span>' : '') + '</div>'
-           /* ★終品チェックで測るのは「前の品番」。何を測るのか分かるように出す
-              （2026-10-14 社長指摘） */
-           + '<div class="sub prev">終品：'
-           + (r.prevPart ? esc(r.prevPart) : '—') + '</div></td>'
-           + '<td class="tn">' + (r.mount.length ? esc(r.mount.join('／')) : '') + '</td>'
-           + '<td class="tm">'
-           + (r.bad ? '<span class="bad">⚠要確認</span>'
-                    : (lead < SETUP_T0*60 ? '前日' : _ssHHMM(lead))) + '</td>';
-    }else{
-      tds += '<td></td><td></td><td></td><td></td>';
-    }
-    /* ★2026-10-11 社長指摘：30分のマス単位で塗っていたため、70分の段取りが4マス＝2時間に
-       見えていた。実際の時刻どおりの幅で塗る（マスの中を部分的に塗る）。
-       8時より前は段取りできないので塗らない。準備が前日になる行は薄い色で区別する。 */
-    const DAY0 = SETUP_T0 * 60;
-    for(let k = 0; k < SETUP_T_SLOTS; k++){
-      const from = DAY0 + k*30, to = from + 30;
-      let st = '';
-      if(r && !r.bad){
-        const a = Math.max(r.s, from, DAY0), b = Math.min(r.p, to);
-        if(b > a){
-          const x1 = ((a - from) / 30 * 100).toFixed(1);
-          const x2 = ((b - from) / 30 * 100).toFixed(1);
-          const col = r.prevDay ? '#ccd7ea' : '#9bafd2';
-          st = ' style="background:linear-gradient(to right,transparent ' + x1 + '%,'
-             + col + ' ' + x1 + '%,' + col + ' ' + x2 + '%,transparent ' + x2 + '%)!important;"';
-        }
-      }
-      tds += '<td class="t' + (k%2 ? ' h' : '') + (k===0 ? ' sep' : '') + '"' + st + '></td>';
-    }
-    for(let k = 0; k < 12; k++) tds += '<td class="ck' + (k===0?' sep':'') + '"></td>';
-    tds += '<td class="dn sep"></td>';
-    for(let k = 0; k < 4; k++) tds += '<td class="ck2' + (k===0?' sep':'') + '"></td>';
-    tds += '<td class="mm sep"></td>';
-    body += '<tr>' + tds + '</tr>';
-  }
+  const today = jobs.filter(function(j){ return _ssSetupOf(j); });
+  const next  = nxt.filter(function(j){ return _ssSetupOf(j); });
 
-  // 時間の見出し
-  let h2 = '';
-  for(let k = 0; k < SETUP_T_SLOTS; k += 2) h2 += '<th colspan="2" class="t' + (k===0?' sep':'') + '">' + (SETUP_T0 + k/2) + '</th>';
-  SETUP_SOTO.forEach(function(x, i){ h2 += '<th class="ck' + (i===0?' sep':'') + '">' + x[0] + '</th>'; });
-  h2 += '<th class="dn"></th>';
-  SETUP_ATO.forEach(function(x, i){ h2 += '<th class="ck2' + (i===0?' sep':'') + '">' + x[0] + '</th>'; });
-  // ★そろわなかったもの欄は1行目で rowspan=2 にしてあるので、ここでは出さない（出すと列が1つ余分になって右端が潰れる）
+  /* ラインごとに、今日いちばん最後に流す品番。明日の朝いちで金型を替えるかの判断に使う
+     （_ssJobs はライン順・時刻順に並べてあるので、最後に入ったものが残る） */
+  const prevLast = {};
+  jobs.forEach(function(j){ prevLast[j.line] = j.partNo; });
 
-  /* 凡例。brks に入れた位置の前で改行する（社長指示：⑤の前と⑩の前で折り返す） */
-  const leg = function(list, brks){
-    brks = brks || [];
-    let out = '';
-    list.forEach(function(x, i){
-      if(i > 0) out += (brks.indexOf(i) >= 0 ? '<br>' : '　　');
-      out += '<b>' + x[0] + ' ' + x[1] + '</b>＝' + x[2];
-    });
-    return out;
-  };
+  /* 前日に終えておくのは「段取りの始まりが10時までのもの」だけ（社長指示 2026-11-13）。
+     見るのは生産の開始ではなく外段取りの始まり＝生産開始−標準段取り時間。
+     準備は段取りの前に要るので、段取りの始まりで区切るのが筋。
+     それより後は、当日の朝から外段取りすれば間に合う。 */
+  const ASA = 10 * 60;
+  const sotoStart = function(j){ return j.ps - j.std; };
+  const sotoAll  = _ssSotoList(nxt, prevLast).sort(function(a,b){ return sotoStart(a) - sotoStart(b); });
+  const sotoNext = sotoAll.filter(function(j){ return sotoStart(j) <= ASA; });
+  const sotoPM   = sotoAll.filter(function(j){ return sotoStart(j) >  ASA; });
+
   const now = new Date();
   const stamp = now.getFullYear() + '/' + (now.getMonth()+1) + '/' + now.getDate() + ' '
               + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+  const head = function(sub){
+    return '<div class="top"><span class="ttl">段取り準備シート</span>'
+      + '<span class="day">' + _ssDateJp(ymd) + '</span><span class="sp"></span>'
+      + '<span class="who">' + sub + '　<span style="color:#aaa">印刷 ' + stamp + '</span></span></div>';
+  };
 
-  win.document.open();          // 「作っています…」を消して、本物を書き込む
+  /* --- 1枚目：今日のこと（これだけで今日の記録は済む） --- */
+  const p1 = '<div class="sheet">' + head('1枚目／今日')
+    + '<div class="sec">時間でみる<span>　生産の予定。運ぶもの（容器・スクラップ・材料）は、回りながら記号で書き込む</span></div>'
+    + (jobs.length ? _ssTimeline(jobs, { full:true })
+                   : '<div class="legend">※ この日の計画は H-Hub にまだ入っていません。</div>')
+    + '<div class="sec">今日の段取り　' + today.length + '件'
+    +   '<span>　準備開始＝段取り開始の' + SETUP_LEAD_MIN + '分前。機械を止める前にそろえる。'
+    +   '<b>終品：</b>＝終品を測るのはこの品番（いま流れている前の品）</span></div>'
+    + '<div class="blocks">'
+    +   today.map(function(j){ return _ssBlock(j, { mlv:mlv, prev:_ssPrevPart(j, jobs) }); }).join('')
+    + '</div>'
+    + (today.length ? ''
+        : '<div class="legend">※ この日の段取りは H-Hub にまだ入っていません。手書きで使ってください。</div>')
+    + '</div>';
+
+  /* --- 2枚目：明日のための前日準備 --- */
+  const p2 = '<div class="sheet">' + head('2枚目／明日のため')
+    + '<div class="sec">明日の生産　' + _ssDateJp(nymd)
+    +   '<span>　どのラインがいつ動くか。だいだい＝段取り（この前までにそろえる）</span></div>'
+    + (nxt.length ? _ssTimeline(nxt, { prevLast: prevLast })
+                  : '<div class="legend">※ ' + _ssDateJp(nymd)
+                    + ' の計画は H-Hub にまだ入っていません（取り込み前）。</div>')
+    + (nxt.length
+        ? '<div class="legend"><b class="soto">外</b>＝計画が「段取りなし」だが、'
+          + '<b>前に流す品番と変わる</b>もの＝段取りは必ずある。外段取りか、'
+          + '前日に作業者も一緒に終えるもの。その日いちばん最初の工程は'
+          + '<b>今日の最後に流す品番</b>と見くらべています。下の枠で記録してください。</div>'
+        : '')
+    + '<div class="sec" style="margin-top:2mm">🌙 今日のうちに終えるもの　<span>　'
+    +   _ssDateJp(nymd) + ' のぶん（<b>段取りの始まりが10時までのもの</b>）。'
+    +   (sotoNext.length ? '<b>外段取り' + sotoNext.length + '件（金型を載せるところまで今日のうちに）</b>＋' : '')
+    +   '段取り' + next.length + '件の前準備（物と紙だけでできるもの）（★印＝翌朝いちばん）</span></div>'
+    + '<div class="blocks">'
+    +   sotoNext.map(function(j){ return _ssBlock(j, { next:true, soto:true, mlv:mlv }); }).join('')
+    +   next.map(function(j){ return _ssBlock(j, { next:true, only:SETUP_YOBI, mlv:mlv }); }).join('')
+    + '</div>'
+    + (sotoPM.length
+        ? '<div class="legend" style="margin-top:1mm">※ <b class="soto">外</b> のうち、'
+          + sotoPM.map(function(j){ return j.line + ' ' + esc(j.partNo)
+                 + '（段取り ' + _ssHHMM(sotoStart(j)) + '／生産 ' + _ssHHMM(j.ps) + '）'; }).join('、')
+          + ' は<b>段取りの始まりが10時より後なので、当日の外段取りで間に合います</b>。枠は出していません。</div>'
+        : '')
+    + '<div class="legend" style="margin-top:1.5mm">'
+    +   '<b class="soto">外</b> の枠＝計画が「段取りなし」だが<b>前に流す品番と変わる</b>もの。'
+    +   '外段取りか、前日に作業者も一緒に段取りを終えるもの。'
+    +   '<b>金型を載せるところまで今日のうちに</b>終えておく。①〜⑫をすべて見る。<br>'
+    +   'ふつうの枠＝明日その場で段取りするもの。前日にできるのは <b>①次の金型（置場から出す）・⑥治工具・'
+    +   '⑦副資材・⑧計測具・⑨標準書類・⑩品質チェックシート・⑪現品ラベル</b> の7つ。'
+    +   '②材料・③空容器・④スクラップ容器・⑤コンベアは当日の朝に見る。'
+    +   '10/12〜10/28の実績で足りなかったのは <b>⑪現品ラベル15回</b>・⑨標準書類・⑥治工具の順。<br>'
+    +   '<span class="star">★</span>＝次の1ロットで定期メンテの目安を超える金型（トライ用の材料を手配）。</div>'
+    + '<div class="sec" style="margin-top:2.5mm">気づいたこと'
+    +   '<span>　だれが・いつ終えたかは⑫担当と時刻へ。申し送りはここへ</span></div>'
+    + _ssMemo(7)
+    + '</div>';
+
+  win.document.open();          /* 「作っています…」を消して、本物を書き込む */
   win.document.write('<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">'
-+ '<title>段取り準備チェック表 ' + ymd + '</title>'
-+ '<style>'
-+ '*{box-sizing:border-box;}'
-+ 'body{font-family:"Meiryo UI","Noto Sans JP",sans-serif;margin:0;padding:7mm;background:#fff;color:#111;}'
-+ '.ttl{font-size:17px;font-weight:800;letter-spacing:.06em;}'
-+ '.hd{display:flex;align-items:center;gap:10px;margin-bottom:3px;}'
-+ '.hd .box{border:1px solid #44506a;padding:2px 8px;font-size:12px;}'
-+ '.hd .box b{font-weight:700;margin-right:10px;}'
-+ '.hd .stamp{margin-left:auto;font-size:9px;color:#999;}'
-+ '.note{font-size:9.5px;color:#555;line-height:1.5;margin-bottom:5px;}'
-+ 'table{border-collapse:collapse;width:100%;table-layout:fixed;}'
-+ 'th,td{border:1px solid #9aa3b2;font-size:10.5px;text-align:center;padding:0;height:19px;}'
-+ 'tbody td{height:44px;}'      /* A4横の下いっぱいまで使う（12行で残り余白ゼロ） */
-+ 'tbody td.tm,tbody td.tn{vertical-align:top;padding-top:2px;}'   /* 上に予定、下の空きに実際を書く */
-+ 'td.tn{font-size:9px;color:#1f2937;line-height:1.2;}'
-+ 'td.pt .est{color:#b45309;font-weight:700;margin-left:2px;}'
-+ 'td.pt .star{color:#c00;font-weight:800;margin-right:1px;}'
-+ 'td.pt .bad,td.tm .bad{color:#c0392b;font-weight:700;margin-left:2px;}'
-+ 'thead th{background:#dde6f2;font-weight:700;}'
-+ 'thead th.tm{white-space:nowrap;}'   /* 「終品チェック」を途中で折らない（2行ちょうど） */
-+ 'th.g1{background:#e4efdc;} th.g2{background:#dce7f5;} th.g0{background:#eaf0f8;}'
-+ 'tbody tr:nth-child(even) td{background:#f7f9fc;}'
-+ 'td.t.h{border-left:1px dotted #c9d0db;}'
-+ 'td.t.h{border-left:1px dotted #c9d0db;}'
-+ 'td.bd{background:#9bafd2!important;}'
-+ 'tbody td{font-size:12px;} .ln{font-size:10.5px;} .pt{font-size:11px;} .mm{font-size:8.5px;color:#111;}'
-+ 'th.sep,td.sep{border-left:2px solid #44506a!important;}'   /* ブロックの仕切りを濃く */
-+ 'col.sep{}'
-+ 'td.ln{white-space:nowrap;overflow:hidden;}'
-+ 'td.pt{word-break:break-all;line-height:1.15;}'   /* 長い品番は2行に折り返して切らさない */
-+ 'td.pt .sub{font-size:8.5px;color:#475569;font-weight:400;margin-top:2px;white-space:nowrap;}'
-+ 'td.pt .prev{color:#8a4b00;font-weight:700;white-space:normal;line-height:1.25;}'   /* 終品チェックで測る＝前の品番。長い品番ははみ出すので折り返す */
-+ '.lg{margin-top:4px;font-size:9px;line-height:1.42;}'
-+ '.lg .cap{font-weight:700;font-size:9px;padding:0 6px;margin-top:2px;}'
-+ '.lg .c1{background:#e4efdc;} .lg .c2{background:#dce7f5;}'
-+ '.btn{margin-bottom:6px;}'
-+ '.btn button{background:#2980b9;color:#fff;border:none;border-radius:5px;padding:7px 16px;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;}'
-+ '@page{size:297mm 210mm;margin:5mm;}'   /* A4横。キーワードより寸法指定のほうが確実に効く */
-+ '@media print{.btn{display:none!important;}body{padding:6mm!important;}'
-+ ' th,td,.lg .cap{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}'
-+ '</style></head><body>'
-+ '<div class="btn"><button onclick="window.print()">🖨 印刷する（Ctrl+P）</button>'
-+ '<span style="margin-left:10px;font-size:13px;font-weight:700;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:5px;padding:5px 10px;">'
-+ '印刷画面で　用紙サイズ <b>A4</b>　／　向き <b>横</b>　／　倍率 <b>100</b>　／　余白 <b>なし</b>　に合わせてください'
-+ '</span><span style="font-size:11px;color:#888;margin-left:8px;">※「向き」が縦のままだと、縮んで下に大きな余白が出ます</span></div>'
-+ '<div class="hd"><span class="ttl">当日の段取り計画 ＆ 準備チェック表</span>'
-+ '<span class="box"><b>日付</b>' + dateStr + '</span>'
-+ '<span class="stamp">印刷 ' + stamp + '</span></div>'
-+ '<div class="note">※ 帯＝機械を止めている時間（内段取り）。<b>準備開始</b>＝<b>段取り開始</b>の' + SETUP_LEAD_MIN + '分前（生産開始ではありません。段取りの時刻は品番の下に書いてあります）。帯が縦に重なっている時間帯は、リフト待ち・人の取り合いが起きます。<br>'
-+ '※ ①〜⑫は前の品番が流れている間にそろえ、そろったら ✓。そろわないものが出たら、すぐ H-Hub の「呼ぶ」で呼ぶこと（自分で探しに行かない）。❶〜❹は流れ始めてから。</div>'
-+ '<table>' + (function(){
-    /* ★列幅はここで決める。colspanの見出しがあるので th/td の width は効かない（2026-10-10）。
-       %で書いて合計100にしておくと、用紙幅が変わっても比率が崩れない。 */
-    /* もとのExcelの列幅の比率に合わせる（社長指示 2026-10-10）。
-       Excel: No3.0 ライン4.9 品番16.3 担当6.3 準備開始5.3 時間軸1.9×18 外段取り2.6×12
-              準備完了6.6 後段取り2.6×4 メモ39.3（合計157.3）
-       No・ラインは文字が収まる幅まで詰め、準備開始・完了は少し広げてある。 */
-    const W = { no:1.3, ln:3.6, pt:10.5, tanto:4.0, tm:6.4, t:1.55, ck:1.85, dn:4.8, ck2:1.85 };
-    const used = W.no + W.ln + W.pt + W.tanto + W.tm + W.t*SETUP_T_SLOTS + W.ck*12 + W.dn + W.ck2*4;
-    let g = '<colgroup>'
-      + '<col style="width:' + W.no + '%">' + '<col style="width:' + W.ln + '%">'
-      + '<col style="width:' + W.pt + '%">' + '<col style="width:' + W.tanto + '%">'
-      + '<col style="width:' + W.tm + '%">';
-    for(let i=0;i<SETUP_T_SLOTS;i++) g += '<col style="width:' + W.t + '%">';
-    for(let i=0;i<12;i++)            g += '<col style="width:' + W.ck + '%">';
-    g += '<col style="width:' + W.dn + '%">';
-    for(let i=0;i<4;i++)             g += '<col style="width:' + W.ck2 + '%">';
-    g += '<col style="width:' + (100 - used).toFixed(2) + '%"></colgroup>';
-    return g;
-  })() + '<thead><tr>'
-+ '<th rowspan="2" class="no">No</th><th rowspan="2" class="ln">ライン</th>'
-+ '<th rowspan="2" class="pt">次 の 品 番</th><th rowspan="2" style="width:40px">担当</th>'
-+ '<th rowspan="2" class="tm">準備開始<br>終品チェック</th>'
-+ '<th colspan="' + SETUP_T_SLOTS + '" class="g0 sep">予 定 の 段 取 り 時 間</th>'
-+ '<th colspan="12" class="g1 sep">外 段 取 り（止める前にそろえる）</th>'
-+ '<th rowspan="2" class="dn sep">準備<br>完了</th>'
-+ '<th colspan="4" class="g2 sep">後 段 取 り</th>'
-+ '<th rowspan="2" class="mm sep">そろわなかったもの・待たされたこと<br><span style="font-weight:400;font-size:7.5px;color:#999;">（No.と、何を・何分待ったかを書く）</span></th>'
-+ '</tr><tr>' + h2.replace('<th class="dn"></th>','') + '</tr></thead><tbody>' + body + '</tbody></table>'
-+ '<div class="lg"><div class="cap c1">外 段 取 り（機械を止める前にそろえる）</div>' + leg(SETUP_SOTO, [4, 8])
-+ '<div class="cap c2">後 段 取 り（流れ始めてから。ここをやらないと次の段取りが遅れる）</div>' + leg(SETUP_ATO) + '</div>'
-+ '<div style="margin-top:4px;font-size:9px;color:#555;line-height:1.5;">'
-+ '<b>準備開始／終品チェック</b>＝段取り開始の30分前。この時刻に、'
-+ 'いま流れている品の<b>終品を測り</b>（板厚減少・板減・板厚・孔径・バリ高さ）、同時に外段取りを始める。'
-+ '<b>測るのは品番の下の「終品：」に書いてある品番</b>（＝前の品）。'
-+ 'その行の大きい品番は<b>次に載せる品</b>なので、間違えないこと。'
-+ '「終品：—」は、この日の計画に前の品が無い（前日から流れている）という意味。'
-+ '△・×なら止めずに段取り者と保全へ伝え、トライ用（完成品10台分＋NG工程の工程サンプル）を確保する。'
-+ '<br><span style="color:#c00;font-weight:800;">★</span>'
-+ '＝次の1ロットで定期メンテの目安を超える見込みの金型。改修になる可能性があるので、'
-+ 'トライ用の材料を前もって手配しておく。'
-+ '</div>'
-+ (rows.length ? '' : '<div style="margin-top:6px;font-size:10px;color:#b45309;">※ この日の段取りは H-Hub にまだ入っていません。手書きで使ってください。</div>')
-+ '</body></html>');
+    + '<title>段取り準備シート ' + ymd + '</title><style>' + _SS_CSS + '</style></head><body>'
+    + '<div class="bar-top noprint">'
+    + '<button onclick="window.print()">🖨 A4横で印刷（2枚）</button>'
+    + '<span class="m">印刷画面で　用紙 <b>A4</b>　／　向き <b>横</b>　／　倍率 <b>100</b>　／　'
+    + '余白 <b>既定（または なし）</b>　に合わせてください。'
+    + '1枚目＝今日の記録／2枚目＝明日のための前日準備です</span></div>'
+    + p1 + p2 + '</body></html>');
   win.document.close();
   win.focus();
 };
+
 
 // ===== kp4：配置表の印刷 =====
 // position:fixed や sticky はChromeの印刷で崩れるため、別ウィンドウへ複製して印刷する
@@ -13472,7 +13734,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.11-8';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.13-1';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
