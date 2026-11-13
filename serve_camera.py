@@ -52,6 +52,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def end_headers(self):
+        # ★ページを直しても古いまま表示される件（2026-11-13）
+        #   ブラウザは Cache-Control が無いと「しばらく聞き直さなくていい」と勝手に判断し、
+        #   Ctrl+Shift+R しないと新しい版にならなかった。no-cache＝毎回サーバに確かめる。
+        #   変わっていなければ 304 を返すだけなので、重くはならない。
+        if self.path.split('?')[0].endswith('.html'):
+            self.send_header('Cache-Control', 'no-cache')
+        super().end_headers()
+
     def log_message(self, *a):
         pass                      # 裏で動くので画面には何も出さない
 
