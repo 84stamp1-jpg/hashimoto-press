@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.14-8 : (1)★<b>準備シートで帯が重なると前の帯が隠れていた</b>のを直した（社長報告の食い違いの一因）。同じラインで時間が重なる帯は<b>下の段へ置く</b>ようにした。重ねたまま描くと後の帯が上に乗り、<b>計画の重複や「リフト待ち・人の取り合い」が紙から消える</b>。（11/14はB2に 8:50〜11:37 と 8:50〜11:52 の2件が入っていて、片方が見えなかった）(2)現品ラベルで<b>押して来た品番でも生産数を探す</b>ようにした。品番検索は記号ゆれを吸収してマスタの品番（例 <code>18120-6Y0 -0000-PR</code>）を出すので、進捗ボードで押した品番（例 <code>18120-6Y0</code>）を覚えておき、その両方で <code>/lines</code> を探す。 -->
 <!-- H-Hub v2026.11.14-7 : ★<b>品番検索からも現品ラベルを出せるようにした</b>（社長指示）。「✅ 品質チェック記録」の下に「<b>🏷 現品ラベル</b>」を置いた。押すとその品番1件ぶんのラベル画面が開く。<b>生産数は、いま出ている進捗管理ボードの予定（<code>/lines</code>）→ その日の段取り計画（<code>/dantori</code>）の順に探して入れる</b>（品番の記号ゆれは <code>_lbKey</code> で吸収）。見つからなければ空にして、<b>機械と生産数を手で入れられる</b>ようにしてある（1品番のときだけ入力欄になる）。 -->
 <!-- H-Hub v2026.11.14-6 : 現品ラベルの<b>品名が空欄になる</b>のを直した。マスタ側の品番に「<code>46488-78R00-BL (W610)</code>」のような<b>注記が付いている</b>ため <code>findPartByNo</code> では引けなかった（実機で確認）。→ 工程と同じ <code>_lbKey</code>（注記を外して記号ゆれを吸収）で<b>マスタ側も正規化してから</b>突き合わせる。 -->
 <!-- H-Hub v2026.11.14-5 : 現品ラベルの<b>工程と品名の拾い漏れを減らした</b>。実機（11/14の計画10件）で工程が入ったのは4件だけだった。(1)工程＝前方一致が<b>2件以上でも最終工程が全部同じなら採る</b>（18120-6Y0 は板厚ちがいで何件も当たるが工程は同じ）。(2)品名＝計画の品番だけに付く注記（（YP09/YP10）・-2人）を外して<b>引き直す</b>。(3)画面に<b>「工程を入れられたのは○件／○件」</b>を出して、空欄＝製品アプリに工程一覧が無いことが分かるようにした。 -->
@@ -6705,7 +6706,13 @@ function searchPart(partNo){
 // イベント委譲：カンバン内の品番クリックを一括処理（inline onclickが動かない環境でも確実に動作）
 document.addEventListener('click', function(e){
   const el = e.target.closest('[data-search-part]');
-  if(el) searchPart(el.dataset.searchPart);
+  if(el){
+    /* ★押した品番を覚えておく（2026-11-14）。品番検索は記号ゆれを吸収して
+       マスタの品番（例 18120-6Y0 -0000-PR）を出すので、現品ラベルで生産数を
+       引くときは「押したほうの品番」（例 18120-6Y0）でも探せるようにするため。 */
+    window._LB_HINT = el.dataset.searchPart || '';
+    searchPart(el.dataset.searchPart);
+  }
 });
 
 function clickLineId(lineId){
@@ -9501,29 +9508,50 @@ function _ssTimeline(jobs, opt){
   const lines = [];
   jobs.forEach(function(j){ if(lines.indexOf(j.line) < 0) lines.push(j.line); });
 
+  const LANE_H = 5.7;      /* 帯1段ぶんの高さ(mm) */
   lines.forEach(function(L){
     let bars = '';
-    jobs.filter(function(j){ return j.line === L; }).forEach(function(j){
+    const list = jobs.filter(function(j){ return j.line === L; });
+    /* ★同じラインで時間が重なる帯は下の段へ（2026-11-14 社長報告）。
+       重ねたまま描くと後の帯が上に乗って前の帯が隠れ、
+       計画の重複や「リフト待ち・人の取り合い」が紙から消えてしまう。 */
+    const laneEnd = [];
+    list.forEach(function(j){
+      const su0 = _ssSetupOf(j);
+      const st = su0 ? Math.min(su0.at, j.ps) : j.ps;
+      let k = 0;
+      while(k < laneEnd.length && laneEnd[k] > st) k++;
+      if(k === laneEnd.length) laneEnd.push(0);
+      laneEnd[k] = j.pe;
+      j._lane = k;
+    });
+    const nLane = Math.max(1, laneEnd.length);
+    list.forEach(function(j){
       const su = _ssSetupOf(j);
       const chk = soto.indexOf(j) >= 0;              /* 外段取り／前日に終えておくもの */
+      const top = (0.5 + j._lane * LANE_H).toFixed(2) + 'mm';
       if(su){
         const w = (j.ps - Math.max(su.at, D0)) / SPAN * 100;
-        bars += '<div class="bar s' + (su.guess ? ' guess' : '') + '" style="left:' + pct(su.at)
+        bars += '<div class="bar s' + (su.guess ? ' guess' : '') + '" style="top:' + top
+              + ';left:' + pct(su.at)
               + '%;width:' + w + '%">' + (w > 3.5 ? '段取り' : (w > 1.8 ? '段' : '')) + '</div>';
       }
       const w = (j.pe - j.ps) / SPAN * 100;
-      bars += '<div class="bar p' + (chk ? ' chk' : '') + '" style="left:' + pct(j.ps)
+      bars += '<div class="bar p' + (chk ? ' chk' : '') + '" style="top:' + top
+            + ';left:' + pct(j.ps)
             + '%;width:' + w + '%">' + (chk ? '<b class="soto">外</b>' : '')
             + (w > 12 ? '<b>' + esc(j.partNo) + '</b>　<em>' + j.qty + '個'
                         + (j.perH ? ' ' + j.perH + '個/h' : '') + '</em>'
                       : (w > 6 ? '<b>' + esc(j.partNo) + '</b>' : '')) + '</div>';
       /* 帯が細すぎて品番が入らないものは、帯の右わきに小さく出す（何の帯か分からなくなるため） */
       if(w <= 6)
-        bars += '<div class="outlbl" style="left:' + pct(j.pe) + '%">'
+        bars += '<div class="outlbl" style="top:' + (1.4 + j._lane * LANE_H).toFixed(2)
+              + 'mm;left:' + pct(j.pe) + '%">'
               + esc(j.partNo) + '　' + j.qty + '個</div>';
     });
 
-    let rows = '<div class="row rbar"><div class="track">' + gridHtml() + bars + '</div></div>';
+    let rows = '<div class="row rbar" style="height:' + (nLane * LANE_H + 0.3).toFixed(2) + 'mm">'
+             + '<div class="track">' + gridHtml() + bars + '</div></div>';
     if(opt.full){
       /* ★自動では何も出さない。回ったときに、切れそうな時間のところへ記号を書く */
       rows += '<div class="row rwrite"><span class="rlab" style="top:1.2mm">'
@@ -9974,6 +10002,10 @@ function _lbStart(first){
 window.rtOpenLabelFor = async function(partNo){
   _lbYmd = getDantoriDatePath();
   const key = _lbKey(partNo);
+  /* 探すキー：いま出ている品番と、進捗ボードなどで押して来た品番の両方 */
+  const keys = [key];
+  const hint = window._LB_HINT ? _lbKey(window._LB_HINT) : '';
+  if(hint && keys.indexOf(hint) < 0) keys.push(hint);
   let line = '', qty = '';
   try{
     const ls = (await (await fetch(_lbFb() + '/lines.json?t=' + Date.now(), { cache:'no-store' })).json()) || {};
@@ -9982,7 +10014,7 @@ window.rtOpenLabelFor = async function(partNo){
       const jobs = (v.jobs && v.jobs.length) ? v.jobs : (v.part ? [{ partNo:v.part, plan:v.plan }] : []);
       jobs.forEach(function(j){
         const pn = j && (j.partNo || j.part);
-        if(pn && _lbKey(pn) === key && !qty){ qty = j.plan || j.qty || ''; line = L; }
+        if(pn && keys.indexOf(_lbKey(pn)) >= 0 && !qty){ qty = j.plan || j.qty || ''; line = L; }
       });
     });
   }catch(e){}
@@ -9991,7 +10023,7 @@ window.rtOpenLabelFor = async function(partNo){
       const d = (await (await fetch(_lbFb() + '/dantori/' + _lbYmd + '.json?t=' + Date.now(), { cache:'no-store' })).json()) || {};
       Object.keys(d).forEach(function(k2){
         const x = d[k2];
-        if(x && x.partNo && _lbKey(x.partNo) === key && !qty){
+        if(x && x.partNo && keys.indexOf(_lbKey(x.partNo)) >= 0 && !qty){
           qty = x.plan || ''; line = getLineDisplayName(x.lineId);
         }
       });
@@ -14244,7 +14276,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.14-7';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.14-8';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
