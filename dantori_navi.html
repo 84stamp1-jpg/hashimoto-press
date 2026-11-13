@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.14-1 : 段取り準備シートの<b>線の太さや文字の大きさがそろわない</b>のを直した（社長報告）。原因は前の版で入れた <code>transform:scale</code>。これは<b>でき上がった絵を引き伸ばすだけ</b>なので、0.5ptの細線が半端な位置に来て<b>太く見えたり消えたり</b>し、文字も大きさがそろわない。→ <b><code>zoom</code> に戻した</b>（中身をその大きさで組み直すので、線も文字もきれいに描かれる）。前に zoom をやめた理由だった「紙の枠から下がはみ出す」は、<b>画面では紙の高さを固めない（<code>height:196mm</code> → <code>min-height:196mm</code>）</b>ことで解決。組み直しで数mm伸びても切れない。印刷は <code>@media print</code> で <code>zoom:1</code>・高さ自動なので<b>A4横2枚のまま</b>（PDFで確認ずみ）。 -->
 <!-- H-Hub v2026.11.13-5 : 段取り準備シートの<b>紙の枠から下がはみ出していた</b>のと、<b>上の印刷ボタンの帯が小さすぎて読めない</b>のを直した（社長報告）。前の版で画面を大きく見せるのに <code>zoom</code> を使ったのが原因。<b>zoom は中身を組み直す</b>ので、文字の丸めが1行ずつ積み上がって、高さを固めてある紙（196mm）の外へ5mmほど押し出していた。→ <b><code>transform:scale</code>（見た目だけ拡大・組み直さない）</b>に変え、紙は <code>#ss-pages</code> という入れ物ごと拡大する。測り直して<b>はみ出しゼロ</b>・印刷はA4横2枚のままを確認。印刷ボタンの帯だけは組み直しても困らないので zoom で同じ倍率に大きくした。 -->
 <!-- H-Hub v2026.11.13-4 : 段取り準備シートが<b>画面でものすごく小さく表示される</b>のを直した（社長報告）。紙の寸法（283mm）で固めてあるので、<b>窓の拡大率が小さいと豆粒のように出る</b>（Ctrl+0 で戻るが、気づけない）。→ <b>窓の幅いっぱいに広がるように zoom を掛けた</b>（0.35〜3.5倍。窓の大きさを変えれば追従する）。印刷のときは <code>@media print</code> で <code>zoom:1</code> に戻すので、紙は今までどおりA4横2枚。 -->
 <!-- H-Hub v2026.11.13-3 : 段取り準備シート2枚目の記入欄を戻した（社長指摘：消してほしかったのは<b>アンダーバーだけ</b>で、欄そのものではない）。「やった人／時刻／申し送り」「段取りした人／終わった時刻」の<b>文字は置き、下線は引かない</b>（線があるより空けておくほうが書きやすい）。書く場所の幅は決め打ちにせず<b>枠の残りを分け合う</b>形にした（決め打ちだと「申し送り」が枠の外に切れる）。2枚に収まることは確認ずみ。 -->
@@ -9328,17 +9329,22 @@ const _SS_CSS = `
   body{ margin:0; background:#8a8a8a; font-family:"Meiryo UI","Yu Gothic UI",sans-serif;
         color:var(--ink); -webkit-print-color-adjust:exact; print-color-adjust:exact; }
 
-  .sheet{ width:283mm; height:196mm; background:#fff; margin:8mm 0;
-          position:relative; overflow:hidden; box-shadow:0 2px 12px rgba(0,0,0,.4); }
-  /* ★画面で大きく見せるための入れ物（2026-11-13）。
-     zoom で拡大すると中身の丸め誤差が積み上がって<b>紙の枠から下がはみ出す</b>ので、
-     transform:scale（見た目だけ拡大。組み直さない）を使う。 */
+  /* ★画面では高さを固めない（min-height）。固めると、拡大したときの丸め誤差の数mmで
+     下が切れて「枠からはみ出した」ように見えるため（2026-11-13）。印刷は @media print で
+     height:auto・@page まかせなので、紙は今までどおりA4横2枚。 */
+  .sheet{ width:283mm; min-height:196mm; background:#fff; margin:8mm 0;
+          position:relative; box-shadow:0 2px 12px rgba(0,0,0,.4); }
+  /* ★画面で大きく見せるための入れ物（2026-11-14）。
+     transform:scale は「見た目だけ引き伸ばす」ので、0.5ptの細線が半端な位置に来て
+     太く見えたり消えたりし、文字も大きさがそろわない（社長報告）。
+     zoom は中身を組み直すので、線も文字もその大きさで描き直され、きれいに出る。
+     zoom で数mm伸びるぶんは上の min-height で受ける。 */
   #ss-wrap{ overflow:hidden; }
-  #ss-pages{ width:283mm; transform-origin:top left; }
+  #ss-pages{ width:283mm; margin:0 auto; }
   @media print{
     body{ background:#fff; }
     #ss-wrap{ overflow:visible; }
-    #ss-pages{ transform:none !important; width:auto; }
+    #ss-pages{ zoom:1 !important; width:auto; margin:0; }
     .sheet{ margin:0; box-shadow:none; page-break-after:always; width:auto; height:auto; }
     .sheet:last-of-type{ page-break-after:auto; }
     .noprint{ display:none !important; }
@@ -9749,16 +9755,14 @@ window.rtPrintSetupSheet = async function(){
     + '<div id="ss-wrap"><div id="ss-pages">' + p1 + p2 + '</div></div>'
     /* ★画面では窓の幅いっぱいに広げて見せる（2026-11-13 社長報告「ものすごく小さく表示される」）。
        紙の寸法(283mm)で固めてあるので、窓の拡大率が小さいと豆粒のように出る。
-       ★zoom ではなく transform:scale を使うこと。zoom は中身を組み直すので、
-         文字の丸めが積み上がって紙の枠から下がはみ出す（実際にそうなった）。
-       上の「🖨 印刷」の帯だけは組み直しても困らないので zoom で大きくする。 */
+       ★拡大は zoom で行う（2026-11-14 社長報告「線の太さや文字のサイズがおかしい」）。
+         transform:scale は見た目だけ引き伸ばすので、細線が半端な位置に来て太く見えたり
+         消えたりし、文字の大きさもそろわない。zoom は中身をその大きさで組み直すので
+         線も文字もきれいに出る。伸びる数mmは .sheet の min-height で受ける。 */
     + '<script>(function(){var W=283*96/25.4;'
     + 'function f(){var w=document.documentElement.clientWidth;'
-    + 'var k=Math.max(.35,Math.min(3.5,(w-30)/W));'
-    + 'var p=document.getElementById("ss-pages"),r=document.getElementById("ss-wrap");'
-    + 'var L=Math.max(0,(w-W*k)/2);'
-    + 'p.style.transform="translateX("+L+"px) scale("+k+")";'
-    + 'r.style.height=(p.offsetHeight*k)+"px";'
+    + 'var k=Math.max(.35,Math.min(3,(w-30)/W));'
+    + 'var p=document.getElementById("ss-pages"); p.style.zoom=k;'
     + 'var b=document.querySelector(".bar-top"); if(b) b.style.zoom=k;}'
     + 'f();window.addEventListener("resize",f);})();<\/script>'
     + '</body></html>');
@@ -13782,7 +13786,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.13-5';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.14-1';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
