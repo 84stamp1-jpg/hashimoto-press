@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.14-2 : 段取り準備シートを<b>印刷したら左右が切れて下に余白ができる</b>のと、<b>文字が小さくて見にくい</b>のを直した（社長報告）。(1)切れる原因＝印刷の<b>余白を「なし」</b>にすると <code>@page</code> の 7mm が消え、中身が紙いっぱい(297mm)まで広がって<b>プリンタが刷れない端が切れていた</b>（高さは196mmのままなので下だけ余る）。→ 印刷時の紙の中身を <b>283mm 固定・左右 auto で中央寄せ</b>にしたので、余白が「既定」でも「なし」でも切れない。案内文も「余白 既定」だけにした。(2)<b>時間の列を広げた</b>：左のライン名欄 25mm→21mm・右の余り 5mm→2mm で、時間軸が 253mm→260mm。さらに右端を<b>1時間きざみ→30分きざみ</b>で止めるようにしたので、右に最大59分あった無駄が消え、<b>20:10まで仕事がある日</b>（20:30まで）も同じ幅に収まる。(3)<b>文字を全体に1〜1.5pt大きくした</b>（帯6.6→7.3pt・チェック欄6.5→6.9pt・ライン名8.2→9pt ほか）。増えた高さは、書く行9.4→8.4mm・凡例の文言短縮・枠内の余白詰めで回収し、2枚目の「気づいたこと」は<b>7行→6行だが1行を7.5→8.4mmに広げた</b>。本体コードのまま実行して<b>1枚目193.4mm／2枚目193.7mm（紙は196mm）・横のはみ出しゼロ・PDFは2ページ</b>を確認。 -->
 <!-- H-Hub v2026.11.14-1 : 段取り準備シートの<b>線の太さや文字の大きさがそろわない</b>のを直した（社長報告）。原因は前の版で入れた <code>transform:scale</code>。これは<b>でき上がった絵を引き伸ばすだけ</b>なので、0.5ptの細線が半端な位置に来て<b>太く見えたり消えたり</b>し、文字も大きさがそろわない。→ <b><code>zoom</code> に戻した</b>（中身をその大きさで組み直すので、線も文字もきれいに描かれる）。前に zoom をやめた理由だった「紙の枠から下がはみ出す」は、<b>画面では紙の高さを固めない（<code>height:196mm</code> → <code>min-height:196mm</code>）</b>ことで解決。組み直しで数mm伸びても切れない。印刷は <code>@media print</code> で <code>zoom:1</code>・高さ自動なので<b>A4横2枚のまま</b>（PDFで確認ずみ）。 -->
 <!-- H-Hub v2026.11.13-5 : 段取り準備シートの<b>紙の枠から下がはみ出していた</b>のと、<b>上の印刷ボタンの帯が小さすぎて読めない</b>のを直した（社長報告）。前の版で画面を大きく見せるのに <code>zoom</code> を使ったのが原因。<b>zoom は中身を組み直す</b>ので、文字の丸めが1行ずつ積み上がって、高さを固めてある紙（196mm）の外へ5mmほど押し出していた。→ <b><code>transform:scale</code>（見た目だけ拡大・組み直さない）</b>に変え、紙は <code>#ss-pages</code> という入れ物ごと拡大する。測り直して<b>はみ出しゼロ</b>・印刷はA4横2枚のままを確認。印刷ボタンの帯だけは組み直しても困らないので zoom で同じ倍率に大きくした。 -->
 <!-- H-Hub v2026.11.13-4 : 段取り準備シートが<b>画面でものすごく小さく表示される</b>のを直した（社長報告）。紙の寸法（283mm）で固めてあるので、<b>窓の拡大率が小さいと豆粒のように出る</b>（Ctrl+0 で戻るが、気づけない）。→ <b>窓の幅いっぱいに広がるように zoom を掛けた</b>（0.35〜3.5倍。窓の大きさを変えれば追従する）。印刷のときは <code>@media print</code> で <code>zoom:1</code> に戻すので、紙は今までどおりA4横2枚。 -->
@@ -9245,7 +9246,9 @@ function _ssSetupOf(j){
 function _ssEndOfDay(jobs){
   let mx = 17 * 60;
   jobs.forEach(function(j){ if(j.pe > mx) mx = j.pe; });
-  return Math.ceil(mx / 60) * 60;
+  /* ★30分きざみで止める（1時間きざみだと右に最大59分の無駄が出て、そのぶん列が細くなる）。
+     20:10まで仕事がある日は20:30まで伸びる（2026-11-14 社長指示） */
+  return Math.ceil(mx / 30) * 30;
 }
 
 /* 「段取りなし」なのに前に流す品番と変わるもの＝段取りは必ずある。
@@ -9345,30 +9348,31 @@ const _SS_CSS = `
     body{ background:#fff; }
     #ss-wrap{ overflow:visible; }
     #ss-pages{ zoom:1 !important; width:auto; margin:0; }
-    .sheet{ margin:0; box-shadow:none; page-break-after:always; width:auto; height:auto; }
+    .sheet{ margin:0 auto; box-shadow:none; page-break-after:always;
+            width:283mm; height:auto; min-height:0; }
     .sheet:last-of-type{ page-break-after:auto; }
     .noprint{ display:none !important; }
   }
 
   .top{ display:flex; align-items:flex-end; gap:6mm; border-bottom:1.6pt solid var(--ink);
         padding-bottom:.8mm; margin-bottom:1.2mm; }
-  .ttl{ font-size:13pt; font-weight:700; letter-spacing:.5pt; }
-  .day{ font-size:10pt; font-weight:700; }
+  .ttl{ font-size:14.5pt; font-weight:700; letter-spacing:.5pt; }
+  .day{ font-size:11.5pt; font-weight:700; }
   .top .sp{ flex:1; }
-  .who{ font-size:8pt; color:var(--sub); }
+  .who{ font-size:8.5pt; color:var(--sub); }
   .who b{ font-weight:600; color:var(--ink); }
-  .sec{ font-size:8.3pt; font-weight:700; margin:1mm 0 .6mm; padding-left:1.5mm;
+  .sec{ font-size:9.4pt; font-weight:700; margin:.7mm 0 .4mm; padding-left:1.5mm;
         border-left:3pt solid var(--ink); line-height:1.3; }
-  .sec span{ font-weight:400; font-size:7.3pt; color:var(--sub); }
+  .sec span{ font-weight:400; font-size:8pt; color:var(--sub); }
 
   /* ===== 時間軸 ===== */
-  .axis{ position:relative; height:3.6mm; margin:0 5mm 0 25mm; border-bottom:.6pt solid var(--line); }
-  .axis .h{ position:absolute; top:0; font-size:6.5pt; color:var(--sub); transform:translateX(-50%); }
+  .axis{ position:relative; height:4mm; margin:0 2mm 0 21mm; border-bottom:.6pt solid var(--line); }
+  .axis .h{ position:absolute; top:0; font-size:7.2pt; color:var(--sub); transform:translateX(-50%); }
   .lineblk{ margin-bottom:.3mm; border:.6pt solid var(--faint); border-left:none; position:relative; }
-  .lname{ position:absolute; left:0; width:25mm; font-size:8.2pt; font-weight:700; padding-left:1mm; }
-  .row{ position:relative; margin:0 5mm 0 25mm; border-top:.4pt solid var(--faint); }
+  .lname{ position:absolute; left:0; width:21mm; font-size:9pt; font-weight:700; padding-left:1mm; }
+  .row{ position:relative; margin:0 2mm 0 21mm; border-top:.4pt solid var(--faint); }
   .row:first-child{ border-top:none; }
-  .rlab{ position:absolute; left:-25mm; width:24.5mm; font-size:6.6pt; color:var(--sub);
+  .rlab{ position:absolute; left:-21mm; width:20.5mm; font-size:7pt; line-height:1.25; color:var(--sub);
          padding-left:1.5mm; white-space:nowrap; }
   .rlab b{ color:var(--ink); font-weight:600; }
 
@@ -9378,76 +9382,78 @@ const _SS_CSS = `
   .grid i.hr{ border-left:.5pt solid #c2c2c2; }
   .grid u{ position:absolute; top:0; bottom:0; background:var(--rest); }   /* 休憩 */
 
-  .rbar{ height:5.4mm; }
-  .bar{ position:absolute; top:.4mm; height:4.8mm; border-radius:1pt; overflow:hidden;
-        font-size:6.6pt; line-height:4.8mm; padding:0 .8mm; white-space:nowrap; }
+  .rbar{ height:6mm; }
+  .bar{ position:absolute; top:.5mm; height:5.2mm; border-radius:1pt; overflow:hidden;
+        font-size:7.3pt; line-height:5.2mm; padding:0 .8mm; white-space:nowrap; }
   .bar.p{ background:var(--prod); border:.6pt solid var(--prodbd); }
   .bar.s{ background:var(--setup); border:.6pt solid var(--setupbd); font-weight:700;
           text-align:center; padding:0; }
   .bar.p.chk{ border-left:1.6pt solid #e08a2e; }
   .soto{ background:#fde7c7; border:.5pt solid #e08a2e; border-radius:1pt;
-         padding:0 .6mm; margin-right:.6mm; font-size:5.8pt; font-weight:700; color:#8a4b00; }
+         padding:0 .6mm; margin-right:.6mm; font-size:6.4pt; font-weight:700; color:#8a4b00; }
   .bar.s.guess{ background:repeating-linear-gradient(45deg,#fdf1e0 0,#fdf1e0 1.2mm,#fbe3c4 1.2mm,#fbe3c4 2.4mm);
                 border-style:dashed; }
   .bar b{ font-weight:700; }
   .bar em{ font-style:normal; color:#444; }
 
   .rmark{ height:5mm; }
-  .outlbl{ position:absolute; top:1.2mm; font-size:5.6pt; color:#444;
+  .outlbl{ position:absolute; top:1.4mm; font-size:6.2pt; color:#444;
            white-space:nowrap; padding-left:1mm; }
   .mk{ position:absolute; top:.2mm; transform:translateX(-50%); text-align:center;
        font-size:6pt; line-height:1.15; white-space:nowrap; }
   .mk .ic{ font-size:7pt; }
   .mk .tm{ font-weight:700; }
 
-  .rwrite{ height:9.4mm; }
+  .rwrite{ height:8.4mm; }   /* 文字を大きくしたぶんをここから1mm回収（2026-11-14） */
 
-  .legend{ font-size:6.4pt; color:var(--sub); margin-top:.5mm; line-height:1.4; }
+  .legend{ font-size:7pt; color:var(--sub); margin-top:.5mm; line-height:1.4; }
   .legend b{ color:var(--ink); }
   .chip{ display:inline-block; border:.6pt solid var(--line); border-radius:1pt;
          padding:0 .8mm; margin-right:.5mm; }
 
   /* ===== 段取りブロック ===== */
-  .blocks{ display:flex; flex-wrap:wrap; gap:1.5mm; }
+  .blocks{ display:flex; flex-wrap:wrap; gap:1mm; }
   .blk{ flex:0 0 69mm; min-width:0; overflow:hidden;
-        border:.8pt solid var(--ink); border-radius:1pt; padding:.8mm 1.5mm 1mm; }
+        border:.8pt solid var(--ink); border-radius:1pt; padding:.5mm 1.5mm .7mm; }
   .bh{ display:flex; align-items:center; gap:1.2mm; white-space:nowrap; }
-  .bh .ln{ font-size:8.2pt; font-weight:700; }
-  .bh .tm{ font-size:9pt; font-weight:700; background:var(--setup); padding:0 1mm; border-radius:1pt; }
-  .bh .tm.guess{ background:#fff; border:.6pt dashed var(--setupbd); font-size:7.6pt; }
+  .bh .ln{ font-size:9.2pt; font-weight:700; }
+  .bh .tm{ font-size:10.2pt; font-weight:700; background:var(--setup); padding:0 1mm; border-radius:1pt; }
+  .bh .tm.guess{ background:#fff; border:.6pt dashed var(--setupbd); font-size:8.6pt; }
   .bh .sp{ flex:1; }
-  .bh .kt{ font-size:6.2pt; color:var(--sub); border:.5pt solid var(--line); padding:0 .8mm; }
-  .bh2{ font-size:7.4pt; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-        border-bottom:.5pt solid var(--faint); padding-bottom:.4mm; margin:.3mm 0 .4mm; }
-  .bh2 i{ font-style:normal; font-weight:400; font-size:6.2pt; color:var(--sub); }
-  .ck{ display:flex; flex-wrap:wrap; font-size:6.5pt; line-height:1.62; }
-  .ck span{ width:33.33%; white-space:nowrap; }
+  .bh .kt{ font-size:6.9pt; color:var(--sub); border:.5pt solid var(--line); padding:0 .8mm; }
+  .bh2{ font-size:8.3pt; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+        border-bottom:.5pt solid var(--faint); padding-bottom:.3mm; margin:.15mm 0 .25mm; }
+  .bh2 i{ font-style:normal; font-weight:400; font-size:6.9pt; color:var(--sub); }
+  .ck{ display:flex; flex-wrap:wrap; font-size:6.9pt; line-height:1.38; }
+  /* 3列。いちばん長い「□⑩品質チェックシート」が列幅(21.7mm)に収まる上限が6.9pt。
+     これを超えると隣の列の頭にかぶる（2026-11-14 に実測） */
+  .ck span{ width:33.33%; white-space:nowrap; letter-spacing:-.05pt; }
   /* 終品チェックで測る品番（2026-10-14 社長指摘。前の品を出す） */
-  .prev{ font-size:6.2pt; font-weight:700; color:#8a4b00; white-space:nowrap;
+  .prev{ font-size:6.9pt; font-weight:700; color:#8a4b00; white-space:nowrap;
          overflow:hidden; text-overflow:ellipsis; margin:-.1mm 0 .2mm; }
   .star{ color:#c00; font-weight:800; margin-right:.3mm; }
-  .bf{ display:flex; gap:1.5mm; font-size:6.5pt; margin-top:.5mm; white-space:nowrap;
-       border-top:.5pt dashed var(--line); padding-top:.5mm; align-items:baseline; }
+  .bf{ display:flex; gap:1.5mm; font-size:7.2pt; margin-top:.3mm; white-space:nowrap;
+       border-top:.5pt dashed var(--line); padding-top:.3mm; align-items:baseline; }
   .bf .sp{ flex:1; }
   /* ★下線は引かない（2026-11-13 社長指示）。線があるより空けておくほうが書きやすい。
      書く場所は幅を決め打ちにせず、枠の残りを分け合う（決め打ちだと「申し送り」が切れる） */
   .ul{ flex:1 1 6mm; min-width:5mm; }
   .ul.w{ flex:1.7 1 10mm; }
-  .jk{ width:100%; border-collapse:collapse; font-size:6.3pt; margin-top:.6mm; }
-  .jk th{ font-weight:400; color:var(--sub); font-size:5.8pt; text-align:center;
+  .jk{ width:100%; border-collapse:collapse; font-size:7pt; margin-top:.3mm; }
+  .jk th{ font-weight:400; color:var(--sub); font-size:6.4pt; text-align:center;
           border-bottom:.4pt solid var(--faint); padding:0; white-space:nowrap; }
   .jk td{ text-align:center; padding:.2mm 0; white-space:nowrap; }
-  .jk td:first-child, .jk th:first-child{ width:7mm; text-align:left; color:var(--sub); font-size:5.8pt; }
+  .jk td:first-child, .jk th:first-child{ width:7.5mm; text-align:left; color:var(--sub); font-size:6.4pt; }
   .jk .yt td{ font-weight:700; }
-  .jk .js td{ border-bottom:.5pt solid var(--ink); height:3.4mm; }
+  .jk .js td{ border-bottom:.5pt solid var(--ink); height:3.8mm; }
   .jk .js td:first-child{ border-bottom:none; }
   .jk .tn{ width:17mm; border-bottom:.5pt solid var(--ink); }
-  .after{ font-size:6.2pt; line-height:1.3; margin-top:.4mm;
-          border-top:.5pt dashed var(--line); padding-top:.4mm; color:#333; }
+  .after{ font-size:6.9pt; line-height:1.3; margin-top:.25mm;
+          border-top:.5pt dashed var(--line); padding-top:.25mm; color:#333; }
   .blk.sotoblk{ border-color:#e08a2e; background:#fffdf8; }
   .bh .tm.soto2{ background:#fde7c7; border:.6pt solid #e08a2e; font-size:7.6pt; }
   .asa{ background:#ffe9e9; border:.6pt solid #d33; color:#b00; font-weight:700;
-        font-size:6.3pt; padding:0 1mm; border-radius:1pt; }
+        font-size:7pt; padding:0 1mm; border-radius:1pt; }
 
   .bar-top{ position:sticky; top:0; z-index:9; background:#2b2b2b; color:#fff;
             padding:6px 14px; display:flex; align-items:center; gap:12px; font-size:12px; }
@@ -9478,7 +9484,7 @@ function _ssTimeline(jobs, opt){
   let ax = '';
   for(let m = D0; m <= T1; m += 30){
     const half = m % 60 !== 0;
-    ax += '<span class="h" style="left:' + pct(m) + '%;' + (half ? 'font-size:5.4pt;color:#b0b0b0' : '') + '">'
+    ax += '<span class="h" style="left:' + pct(m) + '%;' + (half ? 'font-size:6pt;color:#aaa' : '') + '">'
         + (half ? '30' : _ssHHMM(m)) + '</span>';
   }
   let h = '<div class="axis">' + ax + '</div>';
@@ -9513,7 +9519,7 @@ function _ssTimeline(jobs, opt){
     if(opt.full){
       /* ★自動では何も出さない。回ったときに、切れそうな時間のところへ記号を書く */
       rows += '<div class="row rwrite"><span class="rlab" style="top:1.2mm">'
-            +   '<span style="font-size:5.8pt">○ 容器　△ ｽｸﾗｯﾌﾟ　□ 材料</span></span>'
+            +   '<span style="font-size:6.4pt">○ 容器　△ ｽｸﾗｯﾌﾟ<br>□ 材料</span></span>'
             +   '<div class="track">' + gridHtml() + '</div></div>';
     }
     h += '<div class="lineblk"><div class="lname" style="top:1mm">' + esc(L) + '</div>'
@@ -9523,17 +9529,17 @@ function _ssTimeline(jobs, opt){
   if(opt.full){
     h += '<div class="legend">'
        + '<span class="chip">帯</span>青＝生産（品番・数量・標準個/h）／だいだい＝段取り'
-       + '（<b>ななめ縞は計画に時刻が無く生産開始から逆算したもの</b>）　'
+       + '（<b>ななめ縞は生産開始から逆算</b>）　'
        + '<span class="chip">灰</span>休憩　'
-       + '<b class="soto">外</b>＝計画が「段取りなし」だが<b>前に流す品番と変わる</b>もの'
-       + '＝段取りは必ずある。<b>外段取り</b>か、前日に作業者も一緒に終えたもの<br>'
-       + '<b>帯の下の空いている行</b>は、回ったときに'
-       + '<b>「このくらいで切れそう／いっぱいになりそう」と思った時間のところへ記号を書く欄</b>です。　'
-       + '<b style="font-size:8pt">○</b>＝空容器　'
-       + '<b style="font-size:8pt">△</b>＝スクラップ箱　'
-       + '<b style="font-size:8pt">□</b>＝材料（コイル・切板・前工程）　／　'
-       + '急ぐものは二重に <b style="font-size:8pt">◎</b>、'
-       + '手当てが済んだら記号に <b style="font-size:8pt">／</b> を重ねる'
+       + '<b class="soto">外</b>＝「段取りなし」でも<b>前の品番と変わる</b>もの'
+       + '＝外段取りか前日に終えたもの<br>'
+       + '<b>帯の下の空いた行</b>は、回って'
+       + '<b>「このくらいで切れそう／いっぱいになりそう」と思った時間に記号を書く欄</b>。　'
+       + '<b style="font-size:8.5pt">○</b>＝空容器　'
+       + '<b style="font-size:8.5pt">△</b>＝スクラップ箱　'
+       + '<b style="font-size:8.5pt">□</b>＝材料　／　'
+       + '急ぐものは<b style="font-size:8.5pt">◎</b>、'
+       + '手当て済みは記号に<b style="font-size:8.5pt">／</b>を重ねる'
        + '</div>';
   }
   return h;
@@ -9552,7 +9558,8 @@ function _ssBlock(j, opt){
   let ck = '';
   SETUP_SOTO.forEach(function(x){
     if(opt.only && opt.only.indexOf(x[0]) < 0) return;
-    ck += '<span>□' + x[0] + ' ' + x[1] + '</span>';
+    /* ★番号のあとに空白を入れない（文字を大きくすると「品質チェックシート」が隣の列にかぶる） */
+    ck += '<span>□' + x[0] + x[1] + '</span>';
   });
 
   let h = '<div class="blk' + (opt.soto ? ' sotoblk' : '') + '">'
@@ -9605,7 +9612,8 @@ function _ssBlock(j, opt){
 /* 手書きのメモ欄（rows 行ぶんの罫線）。印刷で消えないよう div を並べる */
 function _ssMemo(rows){
   let h = '<div style="border:.8pt solid #999;border-bottom:none">';
-  for(let i = 0; i < rows; i++) h += '<div style="height:7.5mm;border-bottom:.5pt solid #c4c4c4"></div>';
+  /* 1行8.4mm。文字を大きくしたぶん行数は6行に減ったので、1行あたりを広げて書きやすくした（2026-11-14） */
+  for(let i = 0; i < rows; i++) h += '<div style="height:8.4mm;border-bottom:.5pt solid #c4c4c4"></div>';
   return h + '</div>';
 }
 
@@ -9741,7 +9749,7 @@ window.rtPrintSetupSheet = async function(){
     +   '<span class="star">★</span>＝次の1ロットで定期メンテの目安を超える金型（トライ用の材料を手配）。</div>'
     + '<div class="sec" style="margin-top:2.5mm">気づいたこと'
     +   '<span>　だれが・いつ終えたかは⑫担当と時刻へ。申し送りはここへ</span></div>'
-    + _ssMemo(7)
+    + _ssMemo(6)
     + '</div>';
 
   win.document.open();          /* 「作っています…」を消して、本物を書き込む */
@@ -9750,7 +9758,7 @@ window.rtPrintSetupSheet = async function(){
     + '<div class="bar-top noprint">'
     + '<button onclick="window.print()">🖨 A4横で印刷（2枚）</button>'
     + '<span class="m">印刷画面で　用紙 <b>A4</b>　／　向き <b>横</b>　／　倍率 <b>100</b>　／　'
-    + '余白 <b>既定（または なし）</b>　に合わせてください。'
+    + '余白 <b>既定</b>　に合わせてください。'
     + '1枚目＝今日の記録／2枚目＝明日のための前日準備です</span></div>'
     + '<div id="ss-wrap"><div id="ss-pages">' + p1 + p2 + '</div></div>'
     /* ★画面では窓の幅いっぱいに広げて見せる（2026-11-13 社長報告「ものすごく小さく表示される」）。
@@ -13786,7 +13794,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.14-1';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.14-2';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
