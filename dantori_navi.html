@@ -112,7 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
-<!-- H-Hub v2026.11.14-19 : 現品ラベルを社長指示で直した。(1)<b>ID No.と「加工先→次工程」の並びを逆</b>にし（IDが左）、間を8mm空けた。(2)★<b>加工先＝kintoneの「ドロップダウン」／次工程＝「ドロップダウン_0」</b>から入れるようにした。入っていない品番は今までどおり、加工先に「機械」が入り、次工程は手入力。 -->
+<!-- H-Hub v2026.11.14-20 : 現品ラベルの文字の大きさと間隔を社長指示で直した。(1)<b>収容数 32pt→38pt／製造日 16pt→23pt</b>（収容数より小さい大きさにそろえた。収容数が4桁のときは製造日が入りきるまで自動で小さくする）。(2)「仕掛品 BL 完」の<b>「完」の前</b>と、「プレス B → 出荷」の<b>矢印の前後</b>に空きを入れた。 -->
 <!-- H-Hub v2026.11.14-18 : ★現品ラベルを組み直した（社長指示）。(1)<b>工程があった場所（収容数の右）に製造日</b>を移した。(2)<b>製造日があった場所に「加工先 → 次工程」</b>を大きく出す。(3)途中の設備トラブルなどで工程の最後まで行かなかったものは、画面の<b>「仕掛」にチェック</b>すると<b>「仕掛品　BL完」</b>のように出る（工程名はkintoneの工程一覧から選ぶ）。★<b>kintone(★マスタ_製品・金型/App7)に「加工先」「次工程」の欄は無い</b>（860件を全部調べた。近いのは<code>ドロップダウン</code>(設備・11件)、<code>ドロップダウン_0</code>、<code>文字列__複数行__0/__1</code>(「岩沢工業」など6件/16件)で、いずれもほとんど空）。そのため<b>加工先ははじめ「機械」が入り、次工程は手入力</b>にした。欄ができたらそこから入れる。 -->
 <!-- H-Hub v2026.11.14-17 : ロス記録「月ごと」の表を読みやすくした（社長指摘）。(1)★<b>見出しが左寄せ・数字が右寄せでずれていた</b>のを直した（<code>.lh-tbl th</code> のほうが <code>.lh-num</code> より強く、右そろえが効いていなかった）。(2)見出しを「1回あたり」→<b>「1回あたり超過」</b>、「前月比」→<b>「前月比（▲が改善）」</b>に。(3)見方に、段取り回数・該当・該当率・超過計・1回あたり超過の意味と、<b>1回あたり超過は「段取り1回につき平均何分オーバーしているか」で小さいほど良い</b>こと、<b>▲＝改善／＋＝悪化</b>を書き足した。 -->
 <!-- H-Hub v2026.11.14-16 : ロス記録で<b>「月ごと」を選んでも開始日・終了日が効かない</b>のが分かりにくかったのを直した（社長指摘）。月ごとは<b>残っている記録を全部</b>使う作りなので日付は見ていないが、画面では日付欄が生きて見えていた。→ 月ごとのときは<b>日付欄を使えなくして薄くし、「効きません」と理由を出す</b>。 -->
@@ -10236,9 +10236,9 @@ const _LB_CSS = `
   /* 収容数と工程。★工程は収容数のすぐ右（長い工程名が入るように） */
   .r3{ flex:1.35; display:flex; align-items:center; gap:3mm; border-bottom:.7pt solid #777; }
   .r3 .sep{ border-left:1pt solid #000; align-self:stretch; margin:1.5mm 2mm 1.5mm 3mm; }
-  .big{ font-weight:800; font-size:32pt; line-height:1; }
+  .big{ font-weight:800; font-size:38pt; line-height:1; }
   /* 3行目の製造日（工程があった場所。2026-11-14 社長指示） */
-  .dt{ font-weight:700; font-size:16pt; line-height:1; white-space:nowrap; flex:1; min-width:0; overflow:hidden; }
+  .dt{ font-weight:700; font-size:23pt; line-height:1; white-space:nowrap; flex:1; min-width:0; overflow:hidden; }
   /* 製造日・機械・★背番号（機械の右） */
   .r4{ flex:1; display:flex; align-items:center; gap:4mm; font-size:11.5pt;
        border-bottom:.5pt dotted #999; overflow:hidden; }
@@ -10248,7 +10248,7 @@ const _LB_CSS = `
   /* ★どこへ持っていくか。「加工先 → 次工程」、途中で止まったものは「仕掛品 ○○完」 */
   .nx{ font-weight:800; font-size:22pt; line-height:1; white-space:nowrap; overflow:hidden; min-width:0;
        margin-left:8mm; }   /* ★ID No.との間を少し空ける */
-  .nx .arw{ margin:0 2mm; font-weight:800; }
+  .nx .arw{ margin:0 3.5mm; font-weight:800; }
   .nx .wip{ color:#c00; }
   .idn{ font-weight:800; color:#c00; line-height:1; white-space:nowrap; font-size:26pt; }
   /* ★任意のメモ。ラベルの中ほどに大きく、左寄せで出す（2026-11-14 社長指示）。
@@ -10285,7 +10285,7 @@ function _lbOne(d, day){
     + '<div class="r4">'
     +   (d.idn ? '<span class="idn">' + _lbEsc(d.idn) + '</span>' : '')
     +   (d.wip
-          ? '<span class="nx"><b class="wip">仕掛品</b>　' + _lbEsc(d.step || '') + (d.step ? '完' : '') + '</span>'
+          ? '<span class="nx"><b class="wip">仕掛品</b>　' + _lbEsc(d.step || '') + (d.step ? '　完' : '') + '</span>'
           : '<span class="nx">' + _lbEsc(d.dest || d.line || '') +
             (d.next ? '<b class="arw">→</b>' + _lbEsc(d.next) : '') + '</span>')
     +   '<span class="sp"></span>'
@@ -10338,6 +10338,9 @@ window.rtLabelPrint = function(){
        （2026-11-14 社長指示「行に余裕があればもっと大きく」）。
        ただし<b>1行で20pt以上入るなら1行を優先</b>する。高さだけで決めると、
        「次工程まで 平積み厳禁」の「禁」だけが2行目に落ちて読みにくいため。 */
+    + 'document.querySelectorAll(".r3").forEach(function(r3){var d=r3.querySelector(".dt");'
+    +   'if(!d||!d.textContent)return;var px=23;d.style.fontSize=px+"pt";'
+    +   'while(px>13&&d.scrollWidth>d.clientWidth){px-=0.5;d.style.fontSize=px+"pt";}});'
     + 'document.querySelectorAll(".r6").forEach(function(r6){var m=r6.querySelector(".mm");'
     +   'if(!m||!m.textContent)return;'
     +   'm.style.whiteSpace="nowrap";var px=36;m.style.fontSize=px+"pt";'
@@ -14372,7 +14375,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.14-19';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.14-20';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
