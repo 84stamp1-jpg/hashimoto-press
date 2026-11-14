@@ -335,12 +335,20 @@ _JUDGE_STYLE = {'○': 'cellc_ok', '△': 'cellc_warn', '×': 'cellc_bad'}
 
 
 def make_table(S, header, rows, col_widths, extra_style=None):
+    # 中央そろえは判定記号(○△×)と、幅のせまい列(20mm以下＝判定・件数の列)だけにする。
+    # 本文の列は「ゼロ」のような短い言葉でも左そろえ（2026-11-14 社長指摘）
+    narrow = [w <= 20 * mm for w in col_widths]
     wrapped = [header]
     for row in rows:
-        wrapped.append([
-            Paragraph(str(v).replace('\n', '<br/>'), S[_JUDGE_STYLE.get(str(v), 'cellc' if len(str(v)) <= 6 else 'cell')])
-            for v in row
-        ])
+        cells = []
+        for i, v in enumerate(row):
+            txt = str(v)
+            name = _JUDGE_STYLE.get(txt)
+            if not name:
+                is_narrow = i < len(narrow) and narrow[i]
+                name = 'cellc' if (is_narrow and len(txt) <= 6) else 'cell'
+            cells.append(Paragraph(txt.replace(chr(92) + "n", "<br/>"), S[name]))
+        wrapped.append(cells)
     style = tbl_style_base()
     if extra_style:
         style += extra_style
