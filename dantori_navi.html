@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.14-16 : ロス記録で<b>「月ごと」を選んでも開始日・終了日が効かない</b>のが分かりにくかったのを直した（社長指摘）。月ごとは<b>残っている記録を全部</b>使う作りなので日付は見ていないが、画面では日付欄が生きて見えていた。→ 月ごとのときは<b>日付欄を使えなくして薄くし、「効きません」と理由を出す</b>。 -->
 <!-- H-Hub v2026.11.14-15 : 現品ラベルのメモが<b>上に寄って見えていた</b>のを直した（社長報告）。会社名を別の行にしていたため、メモの行だけで上下中央にしても、<b>2つ合わせた余白の中では上寄り</b>になっていた。会社名をメモと同じ行の右下に戻し、メモは<b>製造日の下からラベルの下端までの真ん中</b>に置くようにした（ラベルの下の余白3mmも枠の中に入れたので、<b>破線の枠で見て上下が同じ</b>になる）。あわせて、<b>1行で20pt以上入るときは1行を優先</b>するようにした。高さだけで決めると「次工程まで 平積み厳禁」の「禁」だけが2行目に落ちて読みにくかったため。 -->
 <!-- H-Hub v2026.11.14-14 : 現品ラベルのメモを<b>枠に収まるいちばん大きい字</b>で出すようにした（社長指示）。36ptから下げていき、入る大きさで止める。短いメモは大きく、長いメモは折り返して入る大きさに落ち着く。 -->
 <!-- H-Hub v2026.11.14-13 : 現品ラベルのメモを<b>左寄せ</b>にし、<b>長いときは次の行へ折り返す</b>ようにした（社長指示）。2行でも入らないときだけ、収まるまで文字を小さくする（下限9pt・高さで判定）。 -->
@@ -2929,10 +2930,12 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
         <div class="fi" style="flex:1 1 100%;"><label>ライン<span style="font-weight:400;color:#888;font-size:11px;margin-left:6px;">いくつでも選べます（もう一度押すと外れる）</span></label>
           <input type="hidden" id="lhLine" value="">
           <div id="lhLineBtns" class="lh-lines"></div></div>
-        <div class="fi"><label>開始日</label>
+        <div class="fi" id="lhFromBox"><label>開始日</label>
           <input type="date" id="lhFrom" onchange="lhLoad()" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px;"></div>
-        <div class="fi"><label>終了日</label>
+        <div class="fi" id="lhToBox"><label>終了日</label>
           <input type="date" id="lhTo" onchange="lhLoad()" style="padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px;"></div>
+        <div id="lhDateNote" style="display:none;font-size:11px;color:#b45309;align-self:center;padding-bottom:6px;">
+          ※「月ごと」は<b>残っている記録を全部</b>使うので、開始日・終了日は効きません</div>
         <button class="bp" onclick="lhLoad()">表示</button>
         <button class="bd" onclick="lhQuick('yst')">前日</button>
         <button class="bd" onclick="lhQuick('7d')">7日</button>
@@ -14322,7 +14325,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.14-15';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.14-16';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
@@ -18186,6 +18189,20 @@ window.lhLoad=async function(){
   const from=document.getElementById('lhFrom').value, to=document.getElementById('lhTo').value;
   const lineIds=lhSelectedLines();   // 0件＝すべてのライン
   const mode=document.getElementById('lhMode').value;
+  /* ★「月ごと」は期間で切らない（残っている分を全部使う）ので、日付欄が効かない。
+     画面では生きて見えて紛らわしいため、使えなくして理由を出す（2026-11-14 社長指摘） */
+  (function(){
+    const isM = (mode==='month');
+    ['lhFrom','lhTo'].forEach(function(id){
+      const e=document.getElementById(id); if(!e) return;
+      e.disabled = isM; e.style.background = isM ? '#f1f5f9' : '';
+      e.style.color = isM ? '#94a3b8' : '';
+    });
+    ['lhFromBox','lhToBox'].forEach(function(id){
+      const e=document.getElementById(id); if(e) e.style.opacity = isM ? '.45' : '1';
+    });
+    const nt=document.getElementById('lhDateNote'); if(nt) nt.style.display = isM ? 'block' : 'none';
+  })();
   const body=document.getElementById('lhBody');
   body.innerHTML='<div style="color:#bbb;font-size:12px;padding:10px 0;">読み込み中...</div>';
   let all={};
