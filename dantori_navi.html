@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.14-18 : ★現品ラベルを組み直した（社長指示）。(1)<b>工程があった場所（収容数の右）に製造日</b>を移した。(2)<b>製造日があった場所に「加工先 → 次工程」</b>を大きく出す。(3)途中の設備トラブルなどで工程の最後まで行かなかったものは、画面の<b>「仕掛」にチェック</b>すると<b>「仕掛品　BL完」</b>のように出る（工程名はkintoneの工程一覧から選ぶ）。★<b>kintone(★マスタ_製品・金型/App7)に「加工先」「次工程」の欄は無い</b>（860件を全部調べた。近いのは<code>ドロップダウン</code>(設備・11件)、<code>ドロップダウン_0</code>、<code>文字列__複数行__0/__1</code>(「岩沢工業」など6件/16件)で、いずれもほとんど空）。そのため<b>加工先ははじめ「機械」が入り、次工程は手入力</b>にした。欄ができたらそこから入れる。 -->
 <!-- H-Hub v2026.11.14-17 : ロス記録「月ごと」の表を読みやすくした（社長指摘）。(1)★<b>見出しが左寄せ・数字が右寄せでずれていた</b>のを直した（<code>.lh-tbl th</code> のほうが <code>.lh-num</code> より強く、右そろえが効いていなかった）。(2)見出しを「1回あたり」→<b>「1回あたり超過」</b>、「前月比」→<b>「前月比（▲が改善）」</b>に。(3)見方に、段取り回数・該当・該当率・超過計・1回あたり超過の意味と、<b>1回あたり超過は「段取り1回につき平均何分オーバーしているか」で小さいほど良い</b>こと、<b>▲＝改善／＋＝悪化</b>を書き足した。 -->
 <!-- H-Hub v2026.11.14-16 : ロス記録で<b>「月ごと」を選んでも開始日・終了日が効かない</b>のが分かりにくかったのを直した（社長指摘）。月ごとは<b>残っている記録を全部</b>使う作りなので日付は見ていないが、画面では日付欄が生きて見えていた。→ 月ごとのときは<b>日付欄を使えなくして薄くし、「効きません」と理由を出す</b>。 -->
 <!-- H-Hub v2026.11.14-15 : 現品ラベルのメモが<b>上に寄って見えていた</b>のを直した（社長報告）。会社名を別の行にしていたため、メモの行だけで上下中央にしても、<b>2つ合わせた余白の中では上寄り</b>になっていた。会社名をメモと同じ行の右下に戻し、メモは<b>製造日の下からラベルの下端までの真ん中</b>に置くようにした（ラベルの下の余白3mmも枠の中に入れたので、<b>破線の枠で見て上下が同じ</b>になる）。あわせて、<b>1行で20pt以上入るときは1行を優先</b>するようにした。高さだけで決めると「次工程まで 平積み厳禁」の「禁」だけが2行目に落ちて読みにくかったため。 -->
@@ -9984,7 +9985,8 @@ window.rtOpenLabelPanel = function(){
   _lbRows = jobs.map(function(j){
     const key = _lbKey(j.partNo), sv = _lbInfo[key] || {};
     return { line:j.line, partNo:j.partNo, qty:j.qty, key:key,
-             cap:sv.cap || '', idn:sv.idn || '', step:'', memo:'', n:'', name:'' };
+             cap:sv.cap || '', idn:sv.idn || '', step:'', memo:'', n:'', name:'',
+             dest:'', next:'', wip:false };
   });
 
   _lbStart('読み込み中…');
@@ -10058,7 +10060,8 @@ window.rtOpenLabelFor = async function(partNo){
   }
   const sv = _lbInfo[key] || {};
   _lbRows = [{ line:line || '', partNo:partNo, qty:qty || '', key:key, free:true,
-               cap:sv.cap || '', idn:sv.idn || '', step:'', memo:'', n:'', name:'' }];
+               cap:sv.cap || '', idn:sv.idn || '', step:'', memo:'', n:'', name:'',
+             dest:'', next:'', wip:false }];
   _lbStart('読み込み中…');
 };
 
@@ -10123,8 +10126,17 @@ function _lbRender(msg){
       + '<td><input type="number" min="1" value="' + _lbEsc(r.cap) + '" style="' + inp + 'text-align:right;"'
       +   ' oninput="rtLabelInput(' + i + ',\'cap\',this.value)"></td>'
       + '<td id="lb-n-' + i + '" style="text-align:right;font-weight:700;white-space:nowrap;">' + (n ? n + '枚' : '') + '</td>'
+      /* ★どこへ持っていくか（2026-11-14 社長指示）。加工先ははじめ「機械」が入っている。
+         kintone(★マスタ_製品・金型)に加工先・次工程の欄ができたら、そこから入れる。 */
+      + '<td><input value="' + _lbEsc(r.dest != null && r.dest !== '' ? r.dest : r.line) + '" placeholder="B-2" style="' + inp + '"'
+      +   ' oninput="rtLabelInput(' + i + ',\'dest\',this.value)"></td>'
+      + '<td><input value="' + _lbEsc(r.next) + '" placeholder="RST" style="' + inp + '"'
+      +   ' oninput="rtLabelInput(' + i + ',\'next\',this.value)"></td>'
+      + '<td style="text-align:center;"><input type="checkbox"' + (r.wip ? ' checked' : '')
+      +   ' onchange="rtLabelInput(' + i + ',\'wip\',this.checked)"></td>'
       /* ★工程一覧が kintone に入っている品番＝その工程だけのプルダウン。
-         入っていない品番＝空欄の入力欄にして、手で書けるようにする（2026-11-14 社長指示） */
+         入っていない品番＝空欄の入力欄にして、手で書けるようにする（2026-11-14 社長指示）。
+         ★仕掛品のときは「どこまで終わったか」としてラベルに出る（例：仕掛品 BL完） */
       + '<td>' + ((r.steps && r.steps.length)
           ? '<select style="' + inp + '" onchange="rtLabelInput(' + i + ',\'step\',this.value)">'
             + opt(r.step, r.steps) + '</select>'
@@ -10161,7 +10173,10 @@ function _lbRender(msg){
     +   '<th style="' + th + 'text-align:right;">生産数</th>'
     +   '<th style="' + th + 'width:72px;">収容数</th>'
     +   '<th style="' + th + 'text-align:right;width:56px;">枚数</th>'
-    +   '<th style="' + th + 'width:130px;">工程</th>'
+    +   '<th style="' + th + 'width:96px;">加工先</th>'
+    +   '<th style="' + th + 'width:96px;">次工程</th>'
+    +   '<th style="' + th + 'width:40px;text-align:center;">仕掛</th>'
+    +   '<th style="' + th + 'width:120px;">工程（仕掛のとき）</th>'
     +   '<th style="' + th + 'width:110px;">ID No.など</th>'
     +   '<th style="' + th + 'width:190px;">メモ（ラベルに見出しは出ません）</th>'
     + '</tr></thead><tbody>' + rows + '</tbody></table>'
@@ -10170,7 +10185,12 @@ function _lbRender(msg){
     + '<div style="margin-top:8px;font-size:11px;color:#64748b;line-height:1.7;">'
     +   '・<b>収容数</b>と<b>ID No.など</b>は品番ごとに覚えます（次からは入れなくて済みます）。<br>'
     +   '・<b>枚数</b>は 生産数 ÷ 収容数 の切り上げです。<br>'
-    +   '・<b>製造日</b>は上で変えられます（はじめは表示中の日付です）。<br>'
+    +   '・<b>製造日</b>は上で変えられます（はじめは表示中の日付です）。ラベルでは収容数の右に出ます。<br>'
+    +   '・<b>加工先 → 次工程</b>がラベルの真ん中に大きく出ます。'
+    +   '<b>加工先</b>にははじめ「機械」が入っています（kintoneに加工先・次工程の欄ができたら、そこから入れます）。'
+    +   '<b>次工程</b>は手で入れてください。<br>'
+    +   '・途中の設備トラブルなどで工程の最後まで行かなかったものは、<b>「仕掛」にチェック</b>を入れると、'
+    +   '加工先→次工程の代わりに<b>「仕掛品　BL完」</b>のように出ます（「工程（仕掛のとき）」で選んだ工程名を使います）。<br>'
     +   '・<b>工程</b>は kintone の製品アプリ（★マスタ_製品・金型）の「工程一覧」の最終工程です。'
     +   'プルダウンにはその品番の工程だけが出ます。'
     +   '<b>kintone に工程一覧が無い品番は空欄の入力欄</b>になるので、必要なら手で書いてください。<br>'
@@ -10206,13 +10226,18 @@ const _LB_CSS = `
   .r3{ flex:1.35; display:flex; align-items:center; gap:3mm; border-bottom:.7pt solid #777; }
   .r3 .sep{ border-left:1pt solid #000; align-self:stretch; margin:1.5mm 2mm 1.5mm 3mm; }
   .big{ font-weight:800; font-size:32pt; line-height:1; }
-  .st{ font-weight:800; font-size:22pt; line-height:1; white-space:nowrap; flex:1; min-width:0; overflow:hidden; }
+  /* 3行目の製造日（工程があった場所。2026-11-14 社長指示） */
+  .dt{ font-weight:700; font-size:16pt; line-height:1; white-space:nowrap; flex:1; min-width:0; overflow:hidden; }
   /* 製造日・機械・★背番号（機械の右） */
   .r4{ flex:1; display:flex; align-items:center; gap:4mm; font-size:11.5pt;
        border-bottom:.5pt dotted #999; overflow:hidden; }
   .r4 > span{ white-space:nowrap; }
   .r4 b{ font-weight:700; }
   .r4 .sp{ flex:1; }
+  /* ★どこへ持っていくか。「加工先 → 次工程」、途中で止まったものは「仕掛品 ○○完」 */
+  .nx{ font-weight:800; font-size:22pt; line-height:1; white-space:nowrap; overflow:hidden; min-width:0; }
+  .nx .arw{ margin:0 2mm; font-weight:800; }
+  .nx .wip{ color:#c00; }
   .idn{ font-weight:800; color:#c00; line-height:1; white-space:nowrap; font-size:26pt; }
   /* ★任意のメモ。ラベルの中ほどに大きく、左寄せで出す（2026-11-14 社長指示）。
      左下で小さいと読まれないため。見出し（「メモ」の文字）は出さない。
@@ -10237,15 +10262,21 @@ function _lbOne(d, day){
     +   '<span class="pn">' + _lbEsc(d.partNo) + '</span></div>'
     + '<div class="r2"><span class="cap">部品名称</span>'
     +   '<span class="nm">' + _lbEsc(d.name || '') + '</span></div>'
+    /* 3行目＝収容数と製造日（工程があった場所に製造日を入れた。2026-11-14 社長指示） */
     + '<div class="r3"><span class="cap">収容数</span>'
     +   '<span class="big">' + _lbEsc(d.cap || '') + '</span>'
-    +   '<span class="sep"></span><span class="cap">工程</span>'
-    +   '<span class="st">' + _lbEsc(d.step || '') + '</span></div>'
+    +   '<span class="sep"></span><span class="cap">製造日</span>'
+    +   '<span class="dt">' + _lbEsc(day) + '</span></div>'
+    /* 4行目＝どこへ持っていくか。ふつうは「加工先 → 次工程」。
+       工程の途中で止まったものは「仕掛品　BL完」のように、どこまで終わったかを書く。 */
     + '<div class="r4">'
-    +   '<span><span class="cap">製造日</span>　<b>' + _lbEsc(day) + '</b></span>'
-    +   '<span><span class="cap">機械</span>　<b>' + _lbEsc(d.line) + '</b></span>'
+    +   (d.wip
+          ? '<span class="nx"><b class="wip">仕掛品</b>　' + _lbEsc(d.step || '') + (d.step ? '完' : '') + '</span>'
+          : '<span class="nx">' + _lbEsc(d.dest || d.line || '') +
+            (d.next ? '<b class="arw">→</b>' + _lbEsc(d.next) : '') + '</span>')
+    +   '<span class="sp"></span>'
     +   (d.idn ? '<span class="idn">' + _lbEsc(d.idn) + '</span>' : '')
-    +   '<span class="sp"></span></div>'
+    +   '</div>'
     + '<div class="r6"><span class="mm">' + _lbEsc(d.memo || '') + '</span>'
     +   '<span class="co">橋本工業株式会社</span></div>'
     + '</div>';
@@ -14328,7 +14359,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.14-17';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.14-18';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
