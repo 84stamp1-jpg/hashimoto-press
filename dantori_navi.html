@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.14-13 : 現品ラベルのメモを<b>左寄せ</b>にし、<b>長いときは次の行へ折り返す</b>ようにした（社長指示）。2行でも入らないときだけ、収まるまで文字を小さくする（下限9pt・高さで判定）。 -->
 <!-- H-Hub v2026.11.14-12 : 現品ラベルの<b>メモを真ん中に大きく</b>した（社長指示）。左下で11.5ptだと小さくて読まれないため、<b>ラベルの中央・20pt</b>にし、「橋本工業株式会社」はその下の行の右端へ移した。長いメモは枠に収まるまで自動で小さくする（下限9pt）。 -->
 <!-- H-Hub v2026.11.14-11 : 現品ラベルを社長指示で直した。(1)★<b>ロットNo.(前工程) をやめた</b>（画面の入力欄もラベルの行も削除）。空いたぶんメモの行を広げた。(2)★<b>製造日を変えられるようにした</b>。はじめは表示中の日付が入っていて、画面の上の日付欄で変えられる。 -->
 <!-- H-Hub v2026.11.14-10 : 現品ラベルで<b>kintone に工程一覧が無い品番は、プルダウンをやめて空欄の入力欄にした</b>（社長指示）。v-9 では全部の工程（130種類）を出していたが、その品番と関係のない工程が並ぶのは同じなので、<b>空欄にして任意で書ける</b>形にした。工程一覧が入っている品番は今までどおり、その品番の工程だけのプルダウン。 -->
@@ -10205,11 +10206,12 @@ const _LB_CSS = `
   .r4 b{ font-weight:700; }
   .r4 .sp{ flex:1; }
   .idn{ font-weight:800; color:#c00; line-height:1; white-space:nowrap; font-size:26pt; }
-  /* ★任意のメモ。ラベルの真ん中に大きく出す（2026-11-14 社長指示）。
+  /* ★任意のメモ。ラベルの中ほどに大きく、左寄せで出す（2026-11-14 社長指示）。
      左下で小さいと読まれないため。見出し（「メモ」の文字）は出さない。
-     長いメモは下のスクリプトで、枠に収まるまで自動で小さくする。 */
-  .r6{ flex:1.1; display:flex; align-items:center; justify-content:center; overflow:hidden; }
-  .mm{ font-weight:700; font-size:20pt; line-height:1.15; white-space:nowrap; text-align:center; }
+     長いときは次の行へ折り返し、2行でも入らなければ下のスクリプトで小さくする。 */
+  .r6{ flex:1.1; display:flex; align-items:center; justify-content:flex-start; overflow:hidden; }
+  .mm{ font-weight:700; font-size:20pt; line-height:1.15; text-align:left; width:100%;
+       word-break:break-word; }
   .r7{ flex:.45; display:flex; align-items:flex-end; justify-content:flex-end; }
   .co{ font-weight:700; font-size:12pt; white-space:nowrap; }
   .bar-top{ position:sticky; top:0; z-index:9; background:#2b2b2b; color:#fff;
@@ -10278,9 +10280,10 @@ window.rtLabelPrint = function(){
     +   'while(px>11&&el.scrollWidth>el.clientWidth){px-=0.5;el.style.fontSize=px+"pt";}});'
     + 'document.querySelectorAll(".lb").forEach(function(lb){var r4=lb.querySelector(".r4"),id=lb.querySelector(".idn");'
     +   'if(!id)return;var px=26;while(px>12&&r4.scrollWidth>r4.clientWidth){px-=0.5;id.style.fontSize=px+"pt";}});'
+    /* メモは左寄せで、長ければ次の行へ折り返す。それでも入らなければ小さくする */
     + 'document.querySelectorAll(".r6").forEach(function(r6){var m=r6.querySelector(".mm");'
     +   'if(!m||!m.textContent)return;var px=20;m.style.fontSize=px+"pt";'
-    +   'while(px>9&&m.scrollWidth>r6.clientWidth){px-=0.5;m.style.fontSize=px+"pt";}});'
+    +   'while(px>9&&m.scrollHeight>r6.clientHeight){px-=0.5;m.style.fontSize=px+"pt";}});'
     + 'var W=287*96/25.4;function f(){var w=document.documentElement.clientWidth;'
     +   'var k=Math.max(.35,Math.min(3,(w-30)/W));'
     +   'document.getElementById("lb-pages").style.zoom=k;'
@@ -14308,7 +14311,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.14-12';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.14-13';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
