@@ -263,6 +263,7 @@ def read_data_from_xlsx(path):
     nm = _cell(kv.get('next_month', ''))
     data['next_month'] = nm if nm else _guess_next_month(data['report_month'])
     data['page_label'] = _cell(kv.get('page_label', ''))
+    data['ki'] = _cell(kv.get('ki', '')) or '71期'     # 設定シートの ki（例「72期」）
     defect_target = int(kv.get('defect_target_yen') or 41666)
     profit_target = int(kv.get('profit_target_senyen') or 8000)
 
@@ -277,7 +278,7 @@ def read_data_from_xlsx(path):
             continue
         months.append(_cell(row[0].value))
         defect.append(int(row[1].value or 0))
-        profit.append(int(row[2].value or 0))
+        profit.append(None if row[2].value in (None, '') else int(row[2].value))
     data['trend'] = {'months': months, 'defect': defect, 'defect_target': defect_target,
                       'profit': profit, 'profit_target': profit_target}
 
@@ -365,13 +366,18 @@ def chart_defect_trend(trend):
 def chart_profit_trend(trend):
     months, profit, target = trend['months'], trend['profit'], trend['profit_target']
     fig, ax = plt.subplots(figsize=(5.5, 2.6))
-    bcols = [C_GREEN if v >= 0 else C_RED for v in profit]
-    bars = ax.bar(months, profit, color=bcols, alpha=0.85, zorder=3, width=0.55)
+    # ★実績がまだ出ていない月は棒を描かず「未確定」と出す（2026-11 追加）
+    bcols = [(C_GREEN if v >= 0 else C_RED) if v is not None else (1, 1, 1, 0) for v in profit]
+    vals = [0 if v is None else v for v in profit]
+    bars = ax.bar(months, vals, color=bcols, alpha=0.85, zorder=3, width=0.55)
     ax.axhline(target, color='#333', lw=1.3, ls='--', label=f'目標{target:,}千円')
     ax.axhline(0, color='#333', lw=0.7)
     ax.set_ylabel('千円', fontsize=7); ax.tick_params(axis='both', labelsize=7)
     ax.yaxis.grid(True, linestyle='--', alpha=0.4, zorder=0); ax.set_axisbelow(True)
     for bar, v in zip(bars, profit):
+        if v is None:
+            ax.text(bar.get_x() + bar.get_width() / 2, 150, '未確定', ha='center', fontsize=6, color='#888')
+            continue
         ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 150 if v >= 0 else bar.get_height() - 500, f'{v:+,}', ha='center', fontsize=6, color='#333')
     ax.legend(fontsize=7, framealpha=0.8); ax.set_title(f'月次粗利推移（{months[0]}〜{months[-1]}・金型売上除く）', fontsize=8.5, fontweight='bold', pad=4)
     fig.tight_layout(pad=0.5); buf = io.BytesIO(); fig.savefig(buf, format='png', dpi=150, bbox_inches='tight'); plt.close(fig); buf.seek(0); return buf
@@ -383,7 +389,8 @@ def build_pdf(data, out_path):
     story = []
     month = data['report_month']; page_label = data['page_label']
 
-    story.append(Paragraph(f'71期 月次会　{month}実績', S['title']))
+    ki = data.get('ki', '71期')
+    story.append(Paragraph(f'{ki} 月次会　{month}実績', S['title']))
     story.append(HRFlowable(width='100%', thickness=1.5, color=NAVY, spaceAfter=3))
     story.append(Paragraph('■ 重要事項・前月フォロー', S['sec2']))
     for para in data['top_notice']:
@@ -412,10 +419,10 @@ def build_pdf(data, out_path):
     story.append(make_table(S, dl['header'], dl['rows'], [24 * mm, 142 * mm, 14 * mm], [('VALIGN', (0, 0), (-1, -1), 'TOP')]))
 
     story.append(Spacer(1, 2 * mm)); story.append(HRFlowable(width='100%', thickness=0.8, color=MGRAY))
-    story.append(Paragraph(f'橋本工業株式会社　71期 月次会資料　{page_label}　（1/2）', S['label']))
+    story.append(Paragraph(f'橋本工業株式会社　{ki} 月次会資料　{page_label}　（1/2）', S['label']))
 
     story.append(PageBreak())
-    story.append(Paragraph('71期 月次会　― プレス実績・前月フォロー・指示事項 ―', S['title']))
+    story.append(Paragraph(f'{ki} 月次会　― プレス実績・前月フォロー・指示事項 ―', S['title']))
     story.append(HRFlowable(width='100%', thickness=1.5, color=NAVY, spaceAfter=3))
 
     p = data['press']
@@ -448,7 +455,7 @@ def build_pdf(data, out_path):
     story.append(make_table(S, act['header'], act['rows'], [8 * mm, 114 * mm, 32 * mm, 26 * mm], [('VALIGN', (0, 0), (-1, -1), 'TOP')]))
 
     story.append(Spacer(1, 1 * mm)); story.append(HRFlowable(width='100%', thickness=0.8, color=MGRAY))
-    story.append(Paragraph(f'橋本工業株式会社　71期 月次会資料　{page_label}　（2/2）', S['label']))
+    story.append(Paragraph(f'橋本工業株式会社　{ki} 月次会資料　{page_label}　（2/2）', S['label']))
 
     doc.build(story)
     print('PDFを作成しました:', out_path)
