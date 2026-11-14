@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.14-11 : 現品ラベルを社長指示で直した。(1)★<b>ロットNo.(前工程) をやめた</b>（画面の入力欄もラベルの行も削除）。空いたぶんメモの行を広げた。(2)★<b>製造日を変えられるようにした</b>。はじめは表示中の日付が入っていて、画面の上の日付欄で変えられる。 -->
 <!-- H-Hub v2026.11.14-10 : 現品ラベルで<b>kintone に工程一覧が無い品番は、プルダウンをやめて空欄の入力欄にした</b>（社長指示）。v-9 では全部の工程（130種類）を出していたが、その品番と関係のない工程が並ぶのは同じなので、<b>空欄にして任意で書ける</b>形にした。工程一覧が入っている品番は今までどおり、その品番の工程だけのプルダウン。 -->
 <!-- H-Hub v2026.11.14-9 : 現品ラベルの画面を社長指示で直した。(1)★<b>工程のプルダウンは、その品番の工程一覧（App7）に入っている工程だけ</b>にした（関係のない工程が130種類並んで選びにくかった）。工程一覧そのものが無い品番だけは、手で選べるよう今までどおり全部の工程を出す。(2)列の名前を<b>「背番号」→「ID No.など」</b>に変えた。(3)ロットNo.の見本表示を <code>2026/11/13</code> → <b><code>261113</code></b>（西暦下2桁＋月日・区切りなし）にした。 -->
 <!-- H-Hub v2026.11.14-8 : (1)★<b>準備シートで帯が重なると前の帯が隠れていた</b>のを直した（社長報告の食い違いの一因）。同じラインで時間が重なる帯は<b>下の段へ置く</b>ようにした。重ねたまま描くと後の帯が上に乗り、<b>計画の重複や「リフト待ち・人の取り合い」が紙から消える</b>。（11/14はB2に 8:50〜11:37 と 8:50〜11:52 の2件が入っていて、片方が見えなかった）(2)現品ラベルで<b>押して来た品番でも生産数を探す</b>ようにした。品番検索は記号ゆれを吸収してマスタの品番（例 <code>18120-6Y0 -0000-PR</code>）を出すので、進捗ボードで押した品番（例 <code>18120-6Y0</code>）を覚えておき、その両方で <code>/lines</code> を探す。 -->
@@ -9832,7 +9833,6 @@ window.rtPrintSetupSheet = async function(){
      ・最終工程は kintone 製品アプリ(App7)の「工程一覧」から選ぶ。
        ★工程一覧が無い品番は空欄にする（kintoneに入っていないと分かるように）
      ・背番号（W610・YP13/YP14 など）は機械の右に赤字。★別の入力欄から入れる
-     ・ロットNo.(前工程) は手入力（前工程の加工日）。空なら線を引かない
        （線があると手で書けない）
      ・メモは任意。ラベルに「メモ」の文字は出さない（書いた文字だけ出る）
      ・機械は H-Hub のライン名そのまま（B-1／Aライン…）
@@ -9846,6 +9846,7 @@ let _lbSteps = null;    // { 品番キー: [工程, …] }　null＝まだ読め
 let _lbList  = [];      // 工程のプルダウンの選択肢（よく使う順）
 let _lbInfo  = {};      // Firebase に覚えてある { 品番キー: {cap, idn} }
 let _lbYmd   = '';
+let _lbDay   = '';      /* 製造日（YYYY-MM-DD）。既定は表示中の日付。画面で変えられる */
 
 function _lbFb(){ return (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/, ''); }
 function _lbEsc(t){ return _ssEsc(t); }
@@ -9859,6 +9860,17 @@ function _lbKey(pn){
     .replace(/\d+\s*人/g, ''));            // 「-2人」
 }
 
+/* 日付の形を変える。YYYYMMDD → YYYY-MM-DD */
+function _lbIso(ymd){
+  const t = String(ymd || '');
+  return /^[0-9]{8}$/.test(t) ? t.slice(0,4) + '-' + t.slice(4,6) + '-' + t.slice(6,8) : t;
+}
+/* 製造日の表示（曜日は出さない） */
+function _lbDayJp(iso){
+  const q = String(iso || '').split('-');
+  if(q.length < 3) return '';
+  return (+q[0]) + '年' + (+q[1]) + '月' + (+q[2]) + '日';
+}
 /* 曜日は出さない（2026-11-14 社長指示） */
 function _lbDateJp(ymd){
   if(!/^\d{8}$/.test(String(ymd))) return String(ymd || '');
@@ -9957,11 +9969,12 @@ function _lbSaveInfo(key, obj){
 /* ===== 画面 ===== */
 window.rtOpenLabelPanel = function(){
   _lbYmd = getDantoriDatePath();
+  _lbDay = _lbIso(_lbYmd);        /* 製造日の既定＝表示中の日付 */
   const jobs = _ssJobs(dantoriSchedule);
   _lbRows = jobs.map(function(j){
     const key = _lbKey(j.partNo), sv = _lbInfo[key] || {};
     return { line:j.line, partNo:j.partNo, qty:j.qty, key:key,
-             cap:sv.cap || '', idn:sv.idn || '', step:'', lot:'', memo:'', n:'', name:'' };
+             cap:sv.cap || '', idn:sv.idn || '', step:'', memo:'', n:'', name:'' };
   });
 
   _lbStart('読み込み中…');
@@ -10004,6 +10017,7 @@ function _lbStart(first){
    見つからなければ空にして、機械と生産数は手で入れられるようにする。 */
 window.rtOpenLabelFor = async function(partNo){
   _lbYmd = getDantoriDatePath();
+  _lbDay = _lbIso(_lbYmd);        /* 製造日の既定＝表示中の日付 */
   const key = _lbKey(partNo);
   /* 探すキー：いま出ている品番と、進捗ボードなどで押して来た品番の両方 */
   const keys = [key];
@@ -10034,9 +10048,12 @@ window.rtOpenLabelFor = async function(partNo){
   }
   const sv = _lbInfo[key] || {};
   _lbRows = [{ line:line || '', partNo:partNo, qty:qty || '', key:key, free:true,
-               cap:sv.cap || '', idn:sv.idn || '', step:'', lot:'', memo:'', n:'', name:'' }];
+               cap:sv.cap || '', idn:sv.idn || '', step:'', memo:'', n:'', name:'' }];
   _lbStart('読み込み中…');
 };
+
+/* ★製造日は既定で表示中の日付。画面で変えられる（2026-11-14 社長指示） */
+window.rtLabelSetDay = function(v){ _lbDay = v || _lbIso(_lbYmd); };
 
 window.rtLabelClose = function(){
   const m = document.getElementById('lb-mask');
@@ -10105,8 +10122,6 @@ function _lbRender(msg){
             + ' oninput="rtLabelInput(' + i + ',\'step\',this.value)">') + '</td>'
       + '<td><input value="' + _lbEsc(r.idn) + '" placeholder="W610" style="' + inp + 'color:#c00;font-weight:700;"'
       +   ' oninput="rtLabelInput(' + i + ',\'idn\',this.value)"></td>'
-      + '<td><input value="' + _lbEsc(r.lot) + '" placeholder="261113" style="' + inp + '"'
-      +   ' oninput="rtLabelInput(' + i + ',\'lot\',this.value)"></td>'
       + '<td><input value="' + _lbEsc(r.memo) + '" placeholder="（任意）" style="' + inp + '"'
       +   ' oninput="rtLabelInput(' + i + ',\'memo\',this.value)"></td>'
       + '</tr>';
@@ -10119,6 +10134,9 @@ function _lbRender(msg){
     +   '<span style="font-size:12px;color:#64748b;">' + _lbDateJp(_lbYmd) + ' の段取り計画の品番　／　'
     +   'A4横に4枚取り（143.5×100mm）。破線で切ります</span>'
     +   '<span style="flex:1"></span>'
+    +   '<span style="font-size:12px;font-weight:700;color:#334155;">製造日</span>'
+    +   '<input type="date" value="' + _lbEsc(_lbDay) + '" onchange="rtLabelSetDay(this.value)"'
+    +     ' style="font-family:inherit;font-size:12px;padding:3px 6px;border:1px solid #cbd5e1;border-radius:4px;">'
     +   '<button onclick="rtLabelPrint()" style="padding:5px 16px;font-size:12px;font-weight:700;border:none;'
     +     'border-radius:5px;background:#b45309;color:#fff;cursor:pointer;">🖨 印刷する</button>'
     +   '<button onclick="rtLabelClose()" style="padding:5px 12px;font-size:12px;border:1px solid #cbd5e1;'
@@ -10135,7 +10153,6 @@ function _lbRender(msg){
     +   '<th style="' + th + 'text-align:right;width:56px;">枚数</th>'
     +   '<th style="' + th + 'width:130px;">工程</th>'
     +   '<th style="' + th + 'width:110px;">ID No.など</th>'
-    +   '<th style="' + th + 'width:110px;">ロットNo.(前工程)</th>'
     +   '<th style="' + th + 'width:190px;">メモ（ラベルに見出しは出ません）</th>'
     + '</tr></thead><tbody>' + rows + '</tbody></table>'
     + (_lbRows.length ? '' : '<div style="padding:18px;color:#64748b;font-size:13px;">'
@@ -10143,10 +10160,10 @@ function _lbRender(msg){
     + '<div style="margin-top:8px;font-size:11px;color:#64748b;line-height:1.7;">'
     +   '・<b>収容数</b>と<b>ID No.など</b>は品番ごとに覚えます（次からは入れなくて済みます）。<br>'
     +   '・<b>枚数</b>は 生産数 ÷ 収容数 の切り上げです。<br>'
+    +   '・<b>製造日</b>は上で変えられます（はじめは表示中の日付です）。<br>'
     +   '・<b>工程</b>は kintone の製品アプリ（★マスタ_製品・金型）の「工程一覧」の最終工程です。'
     +   'プルダウンにはその品番の工程だけが出ます。'
     +   '<b>kintone に工程一覧が無い品番は空欄の入力欄</b>になるので、必要なら手で書いてください。<br>'
-    +   '・<b>ロットNo.(前工程)</b> は前工程の加工日です。空のままにすると線を引かずに出すので、手で書けます。'
     + '</div></div></div>';
 }
 
@@ -10187,10 +10204,8 @@ const _LB_CSS = `
   .r4 b{ font-weight:700; }
   .r4 .sp{ flex:1; }
   .idn{ font-weight:800; color:#c00; line-height:1; white-space:nowrap; font-size:26pt; }
-  /* ★ロットNo.(前工程)。製造日のすぐ下。空なら線を引かない（線があると手で書けない） */
-  .r5{ flex:.75; display:flex; align-items:center; font-size:11.5pt; }
   /* 任意のメモ。見出しは出さない（書いた文字だけ出る） */
-  .r6{ flex:.8; display:flex; align-items:flex-end; gap:4mm; font-size:11.5pt; }
+  .r6{ flex:.95; display:flex; align-items:flex-end; gap:4mm; font-size:11.5pt; }
   .r6 .sp{ flex:1; }
   .mm{ font-weight:700; font-size:13pt; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
   .co{ font-weight:700; font-size:12pt; white-space:nowrap; }
@@ -10216,8 +10231,6 @@ function _lbOne(d, day){
     +   '<span><span class="cap">機械</span>　<b>' + _lbEsc(d.line) + '</b></span>'
     +   (d.idn ? '<span class="idn">' + _lbEsc(d.idn) + '</span>' : '')
     +   '<span class="sp"></span></div>'
-    + '<div class="r5"><span class="cap">ロットNo.(前工程)</span>　'
-    +   (d.lot ? '<b style="font-size:13pt">' + _lbEsc(d.lot) + '</b>' : '') + '</div>'
     + '<div class="r6"><span class="mm">' + _lbEsc(d.memo || '') + '</span>'
     +   '<span class="sp"></span><span class="co">橋本工業株式会社</span></div>'
     + '</div>';
@@ -10238,7 +10251,7 @@ window.rtLabelPrint = function(){
   const win = window.open('', '_blank');
   if(!win){ alert('ポップアップがブロックされました。\nアドレスバー右側のアイコンから許可してください。'); return; }
 
-  const day = _lbDateJp(_lbYmd);
+  const day = _lbDayJp(_lbDay) || _lbDateJp(_lbYmd);
   const cellArr = [];
   pick.forEach(function(x){
     for(let k = 0; k < x.n; k++) cellArr.push(_lbOne(x.r, day));
@@ -14289,7 +14302,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.14-10';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.14-11';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
