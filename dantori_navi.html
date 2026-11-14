@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.14-15 : 現品ラベルのメモが<b>上に寄って見えていた</b>のを直した（社長報告）。会社名を別の行にしていたため、メモの行だけで上下中央にしても、<b>2つ合わせた余白の中では上寄り</b>になっていた。会社名をメモと同じ行の右下に戻し、メモは<b>製造日の下からラベルの下端までの真ん中</b>に置くようにした（ラベルの下の余白3mmも枠の中に入れたので、<b>破線の枠で見て上下が同じ</b>になる）。あわせて、<b>1行で20pt以上入るときは1行を優先</b>するようにした。高さだけで決めると「次工程まで 平積み厳禁」の「禁」だけが2行目に落ちて読みにくかったため。 -->
 <!-- H-Hub v2026.11.14-14 : 現品ラベルのメモを<b>枠に収まるいちばん大きい字</b>で出すようにした（社長指示）。36ptから下げていき、入る大きさで止める。短いメモは大きく、長いメモは折り返して入る大きさに落ち着く。 -->
 <!-- H-Hub v2026.11.14-13 : 現品ラベルのメモを<b>左寄せ</b>にし、<b>長いときは次の行へ折り返す</b>ようにした（社長指示）。2行でも入らないときだけ、収まるまで文字を小さくする（下限9pt・高さで判定）。 -->
 <!-- H-Hub v2026.11.14-12 : 現品ラベルの<b>メモを真ん中に大きく</b>した（社長指示）。左下で11.5ptだと小さくて読まれないため、<b>ラベルの中央・20pt</b>にし、「橋本工業株式会社」はその下の行の右端へ移した。長いメモは枠に収まるまで自動で小さくする（下限9pt）。 -->
@@ -10188,7 +10189,7 @@ const _LB_CSS = `
     .sheet:last-of-type{ page-break-after:auto; }
     .noprint{ display:none !important; }
   }
-  .lb{ width:143.5mm; height:100mm; border:.8pt dashed #999; padding:4mm 5mm 3mm;
+  .lb{ width:143.5mm; height:100mm; border:.8pt dashed #999; padding:4mm 5mm 0;
        display:flex; flex-direction:column; }
   .cap{ font-size:9pt; color:#555; font-weight:400; white-space:nowrap; }
   .r1{ flex:1.35; display:flex; align-items:center; gap:4mm; border-bottom:1.2pt solid #000; }
@@ -10210,11 +10211,13 @@ const _LB_CSS = `
   /* ★任意のメモ。ラベルの中ほどに大きく、左寄せで出す（2026-11-14 社長指示）。
      左下で小さいと読まれないため。見出し（「メモ」の文字）は出さない。
      長いときは次の行へ折り返し、2行でも入らなければ下のスクリプトで小さくする。 */
-  .r6{ flex:1.1; display:flex; align-items:center; justify-content:flex-start; overflow:hidden; }
-  .mm{ font-weight:700; font-size:36pt; line-height:1.12; text-align:left; width:100%;
-       word-break:break-word; }
-  .r7{ flex:.45; display:flex; align-items:flex-end; justify-content:flex-end; }
-  .co{ font-weight:700; font-size:12pt; white-space:nowrap; }
+  /* ★メモは「製造日の下からラベルの下端まで」の真ん中に置く（2026-11-14 社長指示）。
+     会社名を別の行にすると、2つ合わせた余白の中でメモが上に寄って見えたため、
+     会社名はこの行の右下に戻した。 */
+  .r6{ flex:1.55; display:flex; align-items:center; gap:4mm; overflow:hidden; }
+  .mm{ flex:1; min-width:0; font-weight:700; font-size:36pt; line-height:1.15;
+       text-align:left; word-break:break-word; }
+  .co{ flex:0 0 auto; align-self:flex-end; margin-bottom:3mm; font-weight:700; font-size:12pt; white-space:nowrap; }
   .bar-top{ position:sticky; top:0; z-index:9; background:#2b2b2b; color:#fff;
             padding:6px 14px; display:flex; align-items:center; gap:12px; font-size:12px; }
   .bar-top button{ font-family:inherit; font-size:12px; font-weight:700; padding:4px 14px;
@@ -10237,8 +10240,8 @@ function _lbOne(d, day){
     +   '<span><span class="cap">機械</span>　<b>' + _lbEsc(d.line) + '</b></span>'
     +   (d.idn ? '<span class="idn">' + _lbEsc(d.idn) + '</span>' : '')
     +   '<span class="sp"></span></div>'
-    + '<div class="r6"><span class="mm">' + _lbEsc(d.memo || '') + '</span></div>'
-    + '<div class="r7"><span class="co">橋本工業株式会社</span></div>'
+    + '<div class="r6"><span class="mm">' + _lbEsc(d.memo || '') + '</span>'
+    +   '<span class="co">橋本工業株式会社</span></div>'
     + '</div>';
 }
 
@@ -10283,9 +10286,14 @@ window.rtLabelPrint = function(){
     +   'if(!id)return;var px=26;while(px>12&&r4.scrollWidth>r4.clientWidth){px-=0.5;id.style.fontSize=px+"pt";}});'
     /* ★メモは左寄せ。大きいほうから下げていき、枠に収まる「いちばん大きい字」にする
        （2026-11-14 社長指示「行に余裕があればもっと大きく」）。
-       短いメモは36ptまで大きくなり、長いメモは折り返して入る大きさに落ち着く。 */
+       ただし<b>1行で20pt以上入るなら1行を優先</b>する。高さだけで決めると、
+       「次工程まで 平積み厳禁」の「禁」だけが2行目に落ちて読みにくいため。 */
     + 'document.querySelectorAll(".r6").forEach(function(r6){var m=r6.querySelector(".mm");'
-    +   'if(!m||!m.textContent)return;var px=36;m.style.fontSize=px+"pt";'
+    +   'if(!m||!m.textContent)return;'
+    +   'm.style.whiteSpace="nowrap";var px=36;m.style.fontSize=px+"pt";'
+    +   'while(px>9&&m.scrollWidth>m.clientWidth){px-=0.5;m.style.fontSize=px+"pt";}'
+    +   'if(px>=20)return;'
+    +   'm.style.whiteSpace="normal";px=36;m.style.fontSize=px+"pt";'
     +   'while(px>9&&m.scrollHeight>r6.clientHeight){px-=0.5;m.style.fontSize=px+"pt";}});'
     + 'var W=287*96/25.4;function f(){var w=document.documentElement.clientWidth;'
     +   'var k=Math.max(.35,Math.min(3,(w-30)/W));'
@@ -14314,7 +14322,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.14-14';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.14-15';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
