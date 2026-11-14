@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.14-19 : 現品ラベルを社長指示で直した。(1)<b>ID No.と「加工先→次工程」の並びを逆</b>にし（IDが左）、間を8mm空けた。(2)★<b>加工先＝kintoneの「ドロップダウン」／次工程＝「ドロップダウン_0」</b>から入れるようにした。入っていない品番は今までどおり、加工先に「機械」が入り、次工程は手入力。 -->
 <!-- H-Hub v2026.11.14-18 : ★現品ラベルを組み直した（社長指示）。(1)<b>工程があった場所（収容数の右）に製造日</b>を移した。(2)<b>製造日があった場所に「加工先 → 次工程」</b>を大きく出す。(3)途中の設備トラブルなどで工程の最後まで行かなかったものは、画面の<b>「仕掛」にチェック</b>すると<b>「仕掛品　BL完」</b>のように出る（工程名はkintoneの工程一覧から選ぶ）。★<b>kintone(★マスタ_製品・金型/App7)に「加工先」「次工程」の欄は無い</b>（860件を全部調べた。近いのは<code>ドロップダウン</code>(設備・11件)、<code>ドロップダウン_0</code>、<code>文字列__複数行__0/__1</code>(「岩沢工業」など6件/16件)で、いずれもほとんど空）。そのため<b>加工先ははじめ「機械」が入り、次工程は手入力</b>にした。欄ができたらそこから入れる。 -->
 <!-- H-Hub v2026.11.14-17 : ロス記録「月ごと」の表を読みやすくした（社長指摘）。(1)★<b>見出しが左寄せ・数字が右寄せでずれていた</b>のを直した（<code>.lh-tbl th</code> のほうが <code>.lh-num</code> より強く、右そろえが効いていなかった）。(2)見出しを「1回あたり」→<b>「1回あたり超過」</b>、「前月比」→<b>「前月比（▲が改善）」</b>に。(3)見方に、段取り回数・該当・該当率・超過計・1回あたり超過の意味と、<b>1回あたり超過は「段取り1回につき平均何分オーバーしているか」で小さいほど良い</b>こと、<b>▲＝改善／＋＝悪化</b>を書き足した。 -->
 <!-- H-Hub v2026.11.14-16 : ロス記録で<b>「月ごと」を選んでも開始日・終了日が効かない</b>のが分かりにくかったのを直した（社長指摘）。月ごとは<b>残っている記録を全部</b>使う作りなので日付は見ていないが、画面では日付欄が生きて見えていた。→ 月ごとのときは<b>日付欄を使えなくして薄くし、「効きません」と理由を出す</b>。 -->
@@ -9852,6 +9853,8 @@ window.rtPrintSetupSheet = async function(){
    覚えるところ：Firebase /settings/labelInfo/<品番キー> = { cap:収容数, idn:背番号 }
    =================================================================== */
 const LB_STEP_FIELD = '文字列__複数行_';     // App7 の「工程一覧」
+const LB_DEST_FIELD = 'ドロップダウン';      // App7 の「加工先」（2026-11-14 社長）
+const LB_NEXT_FIELD = 'ドロップダウン_0';    // App7 の「次工程」
 let _lbRows  = [];      // 画面に出している行
 let _lbSteps = null;    // { 品番キー: [工程, …] }　null＝まだ読めていない
 let _lbList  = [];      // 工程のプルダウンの選択肢（よく使う順）
@@ -9902,7 +9905,7 @@ function _lbParseSteps(s){
 async function _lbLoadSteps(){
   if(_lbSteps) return _lbSteps;
   if(!config.gasUrl) { _lbSteps = {}; return _lbSteps; }
-  const f = [MOLD_PART_FIELD, LB_STEP_FIELD].join(',');
+  const f = [MOLD_PART_FIELD, LB_STEP_FIELD, LB_DEST_FIELD, LB_NEXT_FIELD].join(',');
   const map = {}, cnt = {};
   for(let off = 0; off < 1200; off += 500){
     const q = 'order by レコード番号 asc limit 500 offset ' + off;
@@ -9912,8 +9915,9 @@ async function _lbLoadSteps(){
     rec.forEach(function(r){
       const pn = _mv(r, MOLD_PART_FIELD); if(!pn) return;
       const st = _lbParseSteps(_mv(r, LB_STEP_FIELD));
-      if(st.length){
-        map[_lbKey(pn)] = st;
+      const de = _mv(r, LB_DEST_FIELD), nx = _mv(r, LB_NEXT_FIELD);
+      if(st.length || de || nx){
+        map[_lbKey(pn)] = { steps:st, dest:de, next:nx };
         st.forEach(function(x){ cnt[x] = (cnt[x] || 0) + 1; });
       }
     });
@@ -9925,7 +9929,8 @@ async function _lbLoadSteps(){
 }
 
 /* 計画の品番 → App7 の工程一覧。見つからなければ [] を返す（＝空欄で出す） */
-function _lbStepsOf(pn){
+/* 品番から、マスタの { steps:[工程一覧], dest:加工先, next:次工程 } を引く */
+function _lbMasterOf(pn){
   if(!_lbSteps) return null;
   const k = _lbKey(pn);
   if(_lbSteps[k]) return _lbSteps[k];
@@ -9936,11 +9941,12 @@ function _lbStepsOf(pn){
     if(hit.length === 1) return _lbSteps[hit[0]];
     if(hit.length > 1){
       /* 板厚ちがいなどで何件も当たることがある。最終工程が全部同じなら、それを採る */
-      const last = hit.map(function(x){ const a = _lbSteps[x]; return a[a.length - 1]; });
-      if(last.every(function(v){ return v === last[0]; })) return [last[0]];
+      const last = hit.map(function(x){ const a = (_lbSteps[x].steps || []); return a[a.length - 1]; });
+      if(last[0] && last.every(function(v){ return v === last[0]; }))
+        return { steps:[last[0]], dest:'', next:'' };
     }
   }
-  return [];
+  return { steps:[], dest:'', next:'' };
 }
 
 /* 品名は H-Hub の品番マスタ（Firebase /parts）から引く。
@@ -10010,9 +10016,14 @@ function _lbStart(first){
       const sv = _lbInfo[r.key] || {};
       if(!r.cap && sv.cap) r.cap = sv.cap;
       if(!r.idn && sv.idn) r.idn = sv.idn;
-      const st = _lbStepsOf(r.partNo);
-      r.steps = (st && st.length) ? st : null;     /* プルダウンに出す候補 */
-      r.step  = (st && st.length) ? st[st.length - 1] : '';
+      const m  = _lbMasterOf(r.partNo);
+      const st = (m && m.steps) || [];
+      r.steps = st.length ? st : null;             /* プルダウンに出す候補 */
+      r.step  = st.length ? st[st.length - 1] : '';
+      /* ★加工先・次工程は kintone(ドロップダウン／ドロップダウン_0)から。
+         入っていなければ 加工先＝機械、次工程は手入力（2026-11-14 社長指示） */
+      if(m && m.dest) r.dest = m.dest;
+      if(m && m.next) r.next = m.next;
     });
     const got = _lbRows.filter(function(r){ return r.step; }).length;
     _lbRender(_lbRows.length
@@ -10186,9 +10197,9 @@ function _lbRender(msg){
     +   '・<b>収容数</b>と<b>ID No.など</b>は品番ごとに覚えます（次からは入れなくて済みます）。<br>'
     +   '・<b>枚数</b>は 生産数 ÷ 収容数 の切り上げです。<br>'
     +   '・<b>製造日</b>は上で変えられます（はじめは表示中の日付です）。ラベルでは収容数の右に出ます。<br>'
-    +   '・<b>加工先 → 次工程</b>がラベルの真ん中に大きく出ます。'
-    +   '<b>加工先</b>にははじめ「機械」が入っています（kintoneに加工先・次工程の欄ができたら、そこから入れます）。'
-    +   '<b>次工程</b>は手で入れてください。<br>'
+    +   '・<b>加工先 → 次工程</b>がラベルに大きく出ます（ID No.の右）。'
+    +   'kintone（★マスタ_製品・金型）の<b>加工先</b>・<b>次工程</b>から入ります。'
+    +   '入っていない品番は、加工先に「機械」が入るので、次工程だけ手で入れてください。<br>'
     +   '・途中の設備トラブルなどで工程の最後まで行かなかったものは、<b>「仕掛」にチェック</b>を入れると、'
     +   '加工先→次工程の代わりに<b>「仕掛品　BL完」</b>のように出ます（「工程（仕掛のとき）」で選んだ工程名を使います）。<br>'
     +   '・<b>工程</b>は kintone の製品アプリ（★マスタ_製品・金型）の「工程一覧」の最終工程です。'
@@ -10235,7 +10246,8 @@ const _LB_CSS = `
   .r4 b{ font-weight:700; }
   .r4 .sp{ flex:1; }
   /* ★どこへ持っていくか。「加工先 → 次工程」、途中で止まったものは「仕掛品 ○○完」 */
-  .nx{ font-weight:800; font-size:22pt; line-height:1; white-space:nowrap; overflow:hidden; min-width:0; }
+  .nx{ font-weight:800; font-size:22pt; line-height:1; white-space:nowrap; overflow:hidden; min-width:0;
+       margin-left:8mm; }   /* ★ID No.との間を少し空ける */
   .nx .arw{ margin:0 2mm; font-weight:800; }
   .nx .wip{ color:#c00; }
   .idn{ font-weight:800; color:#c00; line-height:1; white-space:nowrap; font-size:26pt; }
@@ -10269,13 +10281,14 @@ function _lbOne(d, day){
     +   '<span class="dt">' + _lbEsc(day) + '</span></div>'
     /* 4行目＝どこへ持っていくか。ふつうは「加工先 → 次工程」。
        工程の途中で止まったものは「仕掛品　BL完」のように、どこまで終わったかを書く。 */
+    /* ★ID No.が左、加工先→次工程が右。間は少し空ける（2026-11-14 社長指示） */
     + '<div class="r4">'
+    +   (d.idn ? '<span class="idn">' + _lbEsc(d.idn) + '</span>' : '')
     +   (d.wip
           ? '<span class="nx"><b class="wip">仕掛品</b>　' + _lbEsc(d.step || '') + (d.step ? '完' : '') + '</span>'
           : '<span class="nx">' + _lbEsc(d.dest || d.line || '') +
             (d.next ? '<b class="arw">→</b>' + _lbEsc(d.next) : '') + '</span>')
     +   '<span class="sp"></span>'
-    +   (d.idn ? '<span class="idn">' + _lbEsc(d.idn) + '</span>' : '')
     +   '</div>'
     + '<div class="r6"><span class="mm">' + _lbEsc(d.memo || '') + '</span>'
     +   '<span class="co">橋本工業株式会社</span></div>'
@@ -14359,7 +14372,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.14-18';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.14-19';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
