@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.16-1 : 段取り準備シートで<b>前日から続いている仕事の品番が出ていなかった</b>のを直した（2026-11-16 社長指摘「A2の8時からの品番がわからない」）。原因は<b>帯の幅を紙の左右で切っていなかった</b>こと。前日から流れている仕事は開始時刻が紙の左端より前にあるため、幅が100%近くまで伸びて右の帯の下に回り込み、左端にあるはずの品番も重なった帯に隠れていた。→ <b>帯を紙の左右で切り</b>、前日から続くものは左を青い破線にして品番の頭に<b>←</b>を付けた。あわせて、<b>幅が足りない帯は中に品番を書かず、右わきに小さく出す</b>ようにした（中に書くと途中で切れて読めないため。わきのラベルは白地にして重なっても読めるようにした）。 -->
 <!-- H-Hub v2026.11.14-20 : 現品ラベルの文字の大きさと間隔を社長指示で直した。(1)<b>収容数 32pt→38pt／製造日 16pt→23pt</b>（収容数より小さい大きさにそろえた。収容数が4桁のときは製造日が入りきるまで自動で小さくする）。(2)「仕掛品 BL 完」の<b>「完」の前</b>と、「プレス B → 出荷」の<b>矢印の前後</b>に空きを入れた。 -->
 <!-- H-Hub v2026.11.14-18 : ★現品ラベルを組み直した（社長指示）。(1)<b>工程があった場所（収容数の右）に製造日</b>を移した。(2)<b>製造日があった場所に「加工先 → 次工程」</b>を大きく出す。(3)途中の設備トラブルなどで工程の最後まで行かなかったものは、画面の<b>「仕掛」にチェック</b>すると<b>「仕掛品　BL完」</b>のように出る（工程名はkintoneの工程一覧から選ぶ）。★<b>kintone(★マスタ_製品・金型/App7)に「加工先」「次工程」の欄は無い</b>（860件を全部調べた。近いのは<code>ドロップダウン</code>(設備・11件)、<code>ドロップダウン_0</code>、<code>文字列__複数行__0/__1</code>(「岩沢工業」など6件/16件)で、いずれもほとんど空）。そのため<b>加工先ははじめ「機械」が入り、次工程は手入力</b>にした。欄ができたらそこから入れる。 -->
 <!-- H-Hub v2026.11.14-17 : ロス記録「月ごと」の表を読みやすくした（社長指摘）。(1)★<b>見出しが左寄せ・数字が右寄せでずれていた</b>のを直した（<code>.lh-tbl th</code> のほうが <code>.lh-num</code> より強く、右そろえが効いていなかった）。(2)見出しを「1回あたり」→<b>「1回あたり超過」</b>、「前月比」→<b>「前月比（▲が改善）」</b>に。(3)見方に、段取り回数・該当・該当率・超過計・1回あたり超過の意味と、<b>1回あたり超過は「段取り1回につき平均何分オーバーしているか」で小さいほど良い</b>こと、<b>▲＝改善／＋＝悪化</b>を書き足した。 -->
@@ -9419,6 +9420,8 @@ const _SS_CSS = `
   .bar.s{ background:var(--setup); border:.6pt solid var(--setupbd); font-weight:700;
           text-align:center; padding:0; }
   .bar.p.chk{ border-left:1.6pt solid #e08a2e; }
+  .bar.p.cont{ border-left:1.6pt dashed #2b6cb0; }   /* 前日から続いている */
+  .bar.p.cont b{ color:#2b6cb0; }
   .soto{ background:#fde7c7; border:.5pt solid #e08a2e; border-radius:1pt;
          padding:0 .6mm; margin-right:.6mm; font-size:6.4pt; font-weight:700; color:#8a4b00; }
   .bar.s.guess{ background:repeating-linear-gradient(45deg,#fdf1e0 0,#fdf1e0 1.2mm,#fbe3c4 1.2mm,#fbe3c4 2.4mm);
@@ -9427,7 +9430,8 @@ const _SS_CSS = `
   .bar em{ font-style:normal; color:#444; }
 
   .rmark{ height:5mm; }
-  .outlbl{ position:absolute; top:1.4mm; font-size:6.2pt; color:#444;
+  .outlbl{ position:absolute; top:1.4mm; font-size:6.2pt; color:#444; z-index:3;
+           background:#fff; padding:0 .4mm; border-radius:.5pt;
            white-space:nowrap; padding-left:1mm; }
   .mk{ position:absolute; top:.2mm; transform:translateX(-50%); text-align:center;
        font-size:6pt; line-height:1.15; white-space:nowrap; }
@@ -9551,18 +9555,26 @@ function _ssTimeline(jobs, opt){
               + ';left:' + pct(su.at)
               + '%;width:' + w + '%">' + (w > 3.5 ? '段取り' : (w > 1.8 ? '段' : '')) + '</div>';
       }
-      const w = (j.pe - j.ps) / SPAN * 100;
-      bars += '<div class="bar p' + (chk ? ' chk' : '') + '" style="top:' + top
-            + ';left:' + pct(j.ps)
+      /* ★帯を紙の左右で切る（2026-11-16 社長指摘「A2の8時からの品番がわからない」）。
+         前日から続いている仕事は j.ps が紙の左端より前にあり、切らずに描くと
+         幅が100%を超えて右まで伸び、品番の文字も重なった帯の下に隠れてしまう。 */
+      const bs = Math.max(j.ps, D0), be = Math.min(j.pe, T1);
+      const cont = j.ps < D0;                      /* 前日（前の紙）から続いているもの */
+      const w = (be - bs) / SPAN * 100;
+      /* 品番は帯の中に収まる幅があるときだけ中に出す。入りきらない幅で中に出すと
+         途中で切れて読めないので、その場合は帯の右わきに小さく出す */
+      const lab = (cont ? '←' : '') + esc(j.partNo);
+      bars += '<div class="bar p' + (chk ? ' chk' : '') + (cont ? ' cont' : '') + '" style="top:' + top
+            + ';left:' + pct(bs)
             + '%;width:' + w + '%">' + (chk ? '<b class="soto">外</b>' : '')
-            + (w > 12 ? '<b>' + esc(j.partNo) + '</b>　<em>' + j.qty + '個'
+            + (w > 14 ? '<b>' + lab + '</b>　<em>' + j.qty + '個'
                         + (j.perH ? ' ' + j.perH + '個/h' : '') + '</em>'
-                      : (w > 6 ? '<b>' + esc(j.partNo) + '</b>' : '')) + '</div>';
-      /* 帯が細すぎて品番が入らないものは、帯の右わきに小さく出す（何の帯か分からなくなるため） */
-      if(w <= 6)
+                      : (w > 9 ? '<b>' + lab + '</b>' : '')) + '</div>';
+      /* 帯が細くて品番が入らないものは、帯の右わきに小さく出す（何の帯か分からなくなるため） */
+      if(w <= 9)
         bars += '<div class="outlbl" style="top:' + (1.4 + j._lane * LANE_H).toFixed(2)
-              + 'mm;left:' + pct(j.pe) + '%">'
-              + esc(j.partNo) + '　' + j.qty + '個</div>';
+              + 'mm;left:' + pct(be) + '%">'
+              + lab + '　' + j.qty + '個</div>';
     });
 
     let rows = '<div class="row rbar" style="height:' + (nLane * LANE_H + 0.3).toFixed(2) + 'mm">'
@@ -14375,7 +14387,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.14-20';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.16-1';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
