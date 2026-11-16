@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.17-1 : 呼び出しの帯が<b>上のメニューにかぶさって他を操作できなかった</b>のを直した（2026-11-17 社長指摘）。帯は <code>position:fixed; top:0</code> で画面の上に<b>重ねて</b>出ていたため、その下の見出し（進捗を保存・稼働中）や、スクロールしたときに上に残る<b>タブ（進捗ボード・実績入力…）が帯の下に潜って押せない</b>。→ 帯の高さを測って <code>--callh</code> に入れ、<b>画面全体をその分下げる</b>＋<b>タブは帯の真下に固定</b>するようにした。帯が消えれば元に戻る。印刷では帯を出さない。 -->
 <!-- H-Hub v2026.11.16-2 : 段取り準備シートで<b>次の品番が見えなくなっていた</b>のを直した（2026-11-16 社長指摘）。v2026.11.16-1 で入れた「幅が足りない帯は品番を右わきに出す」が原因で、そのラベルがちょうど<b>次の帯の頭に重なり、白地で次の品番を消していた</b>。→ <b>品番は帯の幅に合わせて小さくし、帯の中に出す</b>を優先にした（5.2ptまで自動で落とす）。どうしても入らない細い帯だけわきに出し、<b>次の帯がすぐ始まるときは出さない</b>。 -->
 <!-- H-Hub v2026.11.16-1 : 段取り準備シートで<b>前日から続いている仕事の品番が出ていなかった</b>のを直した（2026-11-16 社長指摘「A2の8時からの品番がわからない」）。原因は<b>帯の幅を紙の左右で切っていなかった</b>こと。前日から流れている仕事は開始時刻が紙の左端より前にあるため、幅が100%近くまで伸びて右の帯の下に回り込み、左端にあるはずの品番も重なった帯に隠れていた。→ <b>帯を紙の左右で切り</b>、前日から続くものは左を青い破線にして品番の頭に<b>←</b>を付けた。あわせて、<b>幅が足りない帯は中に品番を書かず、右わきに小さく出す</b>ようにした（中に書くと途中で切れて読めないため。わきのラベルは白地にして重なっても読めるようにした）。 -->
 <!-- H-Hub v2026.11.14-20 : 現品ラベルの文字の大きさと間隔を社長指示で直した。(1)<b>収容数 32pt→38pt／製造日 16pt→23pt</b>（収容数より小さい大きさにそろえた。収容数が4桁のときは製造日が入りきるまで自動で小さくする）。(2)「仕掛品 BL 完」の<b>「完」の前</b>と、「プレス B → 出荷」の<b>矢印の前後</b>に空きを入れた。 -->
@@ -366,7 +367,12 @@ html, body {
 .app{max-width:100%;margin:0;display:flex;flex-direction:column;min-height:100vh;}
 .clock{font-size:12px;color:#444;font-variant-numeric:tabular-nums;white-space:nowrap;}
 
-.tabs{background:white;display:flex;align-items:center;border-bottom:2px solid #e5e5e5;position:sticky;top:0;z-index:99;}
+.tabs{background:white;display:flex;align-items:center;border-bottom:2px solid #e5e5e5;position:sticky;top:var(--callh,0px);z-index:99;}
+/* ★呼び出しの帯の高さだけ、画面全体を下げる
+   （2026-11-17 社長指摘「帯が上のメニューにかぶさって他を操作できない」）。
+   --callh は _callRender() が帯の高さを測って入れる（帯が無いときは 0px）。 */
+body{padding-top:var(--callh,0px);}
+@media print{ #callBanner{display:none!important;} body{padding-top:0!important;} }
 .tab{padding:8px 14px;font-size:12px;cursor:pointer;color:#888;border-bottom:2px solid transparent;transition:all 0.15s;white-space:nowrap;}
 .tab.active{color:#1a1a1a;border-bottom-color:#1a1a1a;font-weight:600;}
 .tab:hover:not(.active){color:#1a1a1a;background:#fafafa;}
@@ -14428,7 +14434,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.16-2';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.17-1';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
@@ -23588,13 +23594,22 @@ function _callRepeatTick(){
 }
 setInterval(_callRepeatTick, 1500);   // 5秒おきを選べるよう、見に行く間隔は短く
 
+/* 帯の高さを --callh に入れる。これで body にその分の余白がつき、
+   上にいるメニュー（.tabs）も帯の下に待機する（2026-11-17）。 */
+function _callSyncH(){
+  const b = document.getElementById('callBanner');
+  const h = (b && b.style.display !== 'none') ? b.offsetHeight : 0;
+  document.documentElement.style.setProperty('--callh', h + 'px');
+}
+window.addEventListener('resize', _callSyncH);
+
 function _callRender(){
   const b = document.getElementById('callBanner');
   if(!b) return;
   const open = Object.entries(_calls)
     .filter(([,r]) => r && r.status !== 'done')
     .sort((x,y) => x[1].at - y[1].at);
-  if(!open.length){ b.style.display='none'; b.innerHTML=''; return; }
+  if(!open.length){ b.style.display='none'; b.innerHTML=''; _callSyncH(); return; }
   b.style.display='';
   b.innerHTML = open.map(function([key,r]){
     const m = _cMin(r.at);
@@ -23621,6 +23636,7 @@ function _callRender(){
       + 'padding:7px 10px;font-size:13px;cursor:pointer;font-family:inherit;background:rgba(255,255,255,.25);color:#fff;">✕</button>'
       + '</span></div>';
   }).join('');
+  _callSyncH();
 }
 
 // サーバーの時計とのずれを1回測っておく（.info/serverTimeOffset はFirebaseが持っている）
