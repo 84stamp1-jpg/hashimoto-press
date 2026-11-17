@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.17-3 : 段取り準備シートを 2 点直した（2026-11-17 社長指摘）。(1)<b>変なところで紙が割れていた</b>：段取りの枠が下端にかかると、<b>見出しだけが前の紙に残り、中身が次の紙</b>に落ちていた。→ 枠は途中で割らない（<code>break-inside:avoid</code>）、かつ<b>入りきらない枠は「今日の段取り（つづき）」の紙へ自動で送る</b>（組み上がったあとに高さを測って移す）。印刷ボタンの「～枚」も実際の枚数になる。(2)<b>今日の段取りを時間の早い順</b>に並べた（前はライン順で A1 16:53 が先頭に来ていた）。 -->
 <!-- H-Hub v2026.11.17-2 : v2026.11.17-1 の直し方が半端で、呼び出し中に<b>帯とメニューの間にすきまができ、メニューが下の見出しに重なっていた</b>（2026-11-17 社長指摘）。余白を <code>body</code> に付けたため、中の <code>sticky</code> のメニューが<b>余白の分だけ二重に下がった</b>のが原因。→ 余白を <code>.app</code> に移し、メニューの固定位置は元に戻した。あわせて画面の高さ（<code>100vh</code>）から帯の高さを引き、<b>帯が出ても縦に余分なスクロールが出ない</b>ようにした（進捗管理・品質チェック・組立計画）。 -->
 <!-- H-Hub v2026.11.17-1 : 呼び出しの帯が<b>上のメニューにかぶさって他を操作できなかった</b>のを直した（2026-11-17 社長指摘）。帯は <code>position:fixed; top:0</code> で画面の上に<b>重ねて</b>出ていたため、その下の見出し（進捗を保存・稼働中）や、スクロールしたときに上に残る<b>タブ（進捗ボード・実績入力…）が帯の下に潜って押せない</b>。→ 帯の高さを測って <code>--callh</code> に入れ、<b>画面全体をその分下げる</b>＋<b>タブは帯の真下に固定</b>するようにした。帯が消えれば元に戻る。印刷では帯を出さない。 -->
 <!-- H-Hub v2026.11.16-2 : 段取り準備シートで<b>次の品番が見えなくなっていた</b>のを直した（2026-11-16 社長指摘）。v2026.11.16-1 で入れた「幅が足りない帯は品番を右わきに出す」が原因で、そのラベルがちょうど<b>次の帯の頭に重なり、白地で次の品番を消していた</b>。→ <b>品番は帯の幅に合わせて小さくし、帯の中に出す</b>を優先にした（5.2ptまで自動で落とす）。どうしても入らない細い帯だけわきに出し、<b>次の帯がすぐ始まるときは出さない</b>。 -->
@@ -9459,7 +9460,9 @@ const _SS_CSS = `
   /* ===== 段取りブロック ===== */
   .blocks{ display:flex; flex-wrap:wrap; gap:1mm; }
   .blk{ flex:0 0 69mm; min-width:0; overflow:hidden;
-        border:.8pt solid var(--ink); border-radius:1pt; padding:.5mm 1.5mm .7mm; }
+        border:.8pt solid var(--ink); border-radius:1pt; padding:.5mm 1.5mm .7mm;
+        /* ★枠の途中で紙を割らない（2026-11-17 社長指摘「変なところで2枚に分かれる」） */
+        break-inside:avoid; page-break-inside:avoid; }
   .bh{ display:flex; align-items:center; gap:1.2mm; white-space:nowrap; }
   .bh .ln{ font-size:9.2pt; font-weight:700; }
   .bh .tm{ font-size:10.2pt; font-weight:700; background:var(--setup); padding:0 1mm; border-radius:1pt; }
@@ -9785,7 +9788,10 @@ window.rtPrintSetupSheet = async function(){
   const nxt  = _ssJobs(pair[0]);           /* 次の営業日 */
   const esc  = _ssEsc;
 
-  const today = jobs.filter(function(j){ return _ssSetupOf(j); });
+  /* ★今日の段取りは<b>時間の早い順</b>に並べる（2026-11-17 社長指示）。
+     _ssJobs はライン順なので、そのままだと A1 16:53 が先頭に来てしまう。 */
+  const today = jobs.filter(function(j){ return _ssSetupOf(j); })
+                    .sort(function(a,b){ return _ssSetupOf(a).at - _ssSetupOf(b).at; });
   const next  = nxt.filter(function(j){ return _ssSetupOf(j); });
 
   /* ラインごとに、今日いちばん最後に流す品番。明日の朝いちで金型を替えるかの判断に使う
@@ -9877,6 +9883,31 @@ window.rtPrintSetupSheet = async function(){
     + '余白 <b>既定</b>　に合わせてください。'
     + '1枚目＝今日の記録／2枚目＝明日のための前日準備です</span></div>'
     + '<div id="ss-wrap"><div id="ss-pages">' + p1 + p2 + '</div></div>'
+    /* ★紙に入りきらない段取りの枠を「つづき」の紙へ送る（2026-11-17 社長指摘
+       「変なところで2枚に分かれてしまう」）。枠の途中で割れると見出しだけが前の紙に残る。
+       組み上がったあとに高さを測り、はみ出したぶんを後ろの枠から順に次の紙へ移す。
+       ★zoom を掛ける前に走らせること（zoom のあとは測った値がずれる）。 */
+    + '<script>(function(){var PAGE=196*96/25.4;'
+    + 'var pg=document.getElementById("ss-pages");'
+    + 'var list=[].slice.call(pg.querySelectorAll(".sheet"));'
+    + 'list.forEach(function(sh){var g=0;'
+    + ' while(sh.scrollHeight>PAGE+2&&g++<40){'
+    + '  var bs=sh.querySelectorAll(".blocks"); if(!bs.length)break;'
+    + '  var box=bs[bs.length-1]; if(box.children.length<2)break;'
+    + '  var nx=sh.nextElementSibling;'
+    + '  if(!nx||!nx.classList.contains("contsheet")){'
+    + '   nx=document.createElement("div"); nx.className="sheet contsheet";'
+    + '   var tp=sh.querySelector(".top");'
+    + '   nx.innerHTML=(tp?tp.outerHTML:"")'
+    + '    +"<div class=\\"sec\\">今日の段取り（つづき）<span>　前の紙に入りきらなかったぶんです</span></div>"'
+    + '    +"<div class=\\"blocks\\"></div>";'
+    + '   var w=nx.querySelector(".who"); if(w)w.innerHTML="つづき";'
+    + '   sh.parentNode.insertBefore(nx,sh.nextSibling);}'
+    + '  var tb=nx.querySelector(".blocks");'
+    + '  tb.insertBefore(box.lastElementChild,tb.firstChild);}});'
+    + 'var n=pg.querySelectorAll(".sheet").length;'
+    + 'var b=document.querySelector(".bar-top button"); if(b)b.textContent="🖨 A4横で印刷（"+n+"枚）";'
+    + '})();<\/script>'
     /* ★画面では窓の幅いっぱいに広げて見せる（2026-11-13 社長報告「ものすごく小さく表示される」）。
        紙の寸法(283mm)で固めてあるので、窓の拡大率が小さいと豆粒のように出る。
        ★拡大は zoom で行う（2026-11-14 社長報告「線の太さや文字のサイズがおかしい」）。
@@ -14438,7 +14469,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.17-2';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.17-3';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
