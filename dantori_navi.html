@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.18-1 : ★<b>「✓ 入力済みにする」の押し間違い対策</b>（2026-11-18 社長指摘「間違えて押してしまう人がいます」「ボタンの上にマウスがあって、画面が固まったときに何気なく押してしまうらしい」「入力する前に押す」「関係ない場所で押す」）。(1)★<b>1回押しただけでは確定しない</b>。1回目は<b>「⚠ ○○（製造番号）を入力しましたか？　もう一度押すと確定」</b>という黄色い見た目に変わるだけで、何も起きない。<b>0.6秒たってからの2回目</b>で確定する（連打やダブルクリックでは通り抜けない）。<b>8秒さわらなければひとりでに元に戻る</b>ので、うっかり1回押しただけなら何も残らない。ボタンは一度に1つだけ確認の状態になる。(2)★<b>入力済みにしたものを画面に残す</b>（社長指摘「間違って押したことに気づかないこともある」）。これまでは「✓ ○○ を入力済みにしました」が<b>3.5秒で消えていた</b>ので、押したことも何を押したかも残らなかった。→ 消さずに<b>製造番号・品番・時刻つきで積み上げ</b>、✕ で消す形にした。あとから見直せるよう<b>「まだシステムに入力していなければ押し間違いです。記録シートのM列を『未』に戻してください」</b>も小さく添える。※取り消しボタン（画面から「未」に戻す）はGASの貼り替えが要るため、まだ入れていない。 -->
 <!-- H-Hub v2026.11.17-6 : ★<b>段取りの実績時間から休憩を引くようにした</b>（2026-11-17 社長指摘「段取り時間に休憩時間も含まれているようです」）。実績入力の段取り開始・終了をそのまま引き算していたため、<b>昼休み（12:10〜12:50）や10分休憩をまたいだ段取りは、休んでいた時間まで段取り時間に入っていた</b>。標準段取り時間は休憩を含まない正味の時間なので、段取り率(%)も超過分も実態より大きく出ていた。→ 保存するときに休憩を引く。あわせて<b>画面に出すときも段取り開始・終了の時刻からその場で計算し直す</b>ので、<b>すでに保存されている記録（進捗ボード・ロス記録の「日ごと」）もこの場で正しい長さになる</b>。★ただし<b>ロス記録の「月ごと」の集計（/lossHistory に残っている過去の日）は直らない</b>＝保存ずみの数字をそのまま足しているため。★<b>休憩の中だけで終わっている段取り</b>（12:13〜12:18 など）は、休憩をとらずに作業したということなので<b>引かずにそのままの長さ</b>にする（0分にしない）。ロス記録に段取り開始・終了の時刻も残すようにした。 -->
 <!-- H-Hub v2026.11.17-5 : 段取り準備シートの今日の紙は<b>進捗管理ボードの予定だけ</b>を見るようにした（2026-11-17 社長指示「配置表の段取り計画は人の配置だけをみているので見なくていい」）。v2026.11.17-4 では配置表を控えに使っていたが、その控えをやめた。ボードが空のとき・別の日を表示中は<b>紙に理由を書いて空で出す</b>（ボードは当日ぶんしか持たないため）。★2枚目の<b>明日の生産だけは配置表の計画のまま</b>＝明日ぶんはボードに存在しないため、ほかに元が無い。 -->
 <!-- H-Hub v2026.11.17-4 : ★段取り準備シートの<b>今日の分を「進捗管理ボードの予定」から取る</b>ようにした（2026-11-17 社長指示）。配置表の <code>dantori/&lt;日付&gt;</code> には<b>「固定」した行がそのまま残る</b>ため、進捗ボードの予定と食い違う（社長指摘）。→ <b>今日を見ているときは lines から組み直す</b>（<code>window._pmLinesRealtime</code>→<code>linesData</code>。組み立て方は「今すぐ同期」と同じ）。別の日を見ているときとボードが空のときはこれまでどおり配置表の計画を使う（lines は<b>当日の状態しか持たない</b>ため、2枚目の明日分は従来どおり）。<b>どちらから取ったかは紙の見出しに青字で出す</b>。あわせて、段取り開始が前の仕事の終わりから<b>標準段取り時間の2倍より離れているときは生産開始から逆算</b>するようにした（間が空いた日に「段取り」の帯が何時間も伸びていたため）。 -->
@@ -1047,6 +1048,14 @@ html, body {
               border:1px solid #f0d08a;border-radius:6px;padding:5px 8px;margin-top:6px;}
 .qc-chk-act{margin-top:9px;padding-top:8px;border-top:1px dashed #cbd5e1;}
 .qc-chk-act .qc-mark-btn{width:100%;padding:8px 10px;font-size:13px;}
+/* ★1回目に押したときの「本当に？」の見た目（2026-11-18 社長指摘：
+   ボタンの上にマウスを置いたまま、画面が固まったときに押してしまう人がいる） */
+.qc-mark-btn.is-arm{background:#fff4cc;border-color:#d97706;color:#92400e;}
+/* 入力済みにしたものを画面に残しておく札（押し間違いに気づくため） */
+.qc-toast.keep{display:flex;gap:8px;align-items:flex-start;justify-content:space-between;}
+.qc-toast .qc-toast-x{border:0;background:transparent;color:#15803d;font-size:14px;
+          font-weight:700;cursor:pointer;line-height:1;padding:0 2px;}
+.qc-toast .qc-toast-sub{display:block;margin-top:3px;font-size:10.5px;font-weight:600;color:#4b7d61;}
 .qc-chk-v.ok{color:#15803d;} .qc-chk-v.warn{color:#b45309;}
 .qc-chk-v.mute{color:#94a3b8;font-weight:600;}
 .qc-chk-v .qc-copy{font-size:11px;}
@@ -13918,6 +13927,11 @@ function qcMakeGroupCard(g){
           var LBL='✓ 入力済みにする';
           // ★対象が0件のときは何も起きず、ボタンが「更新中...」のまま戻らなかった
           if(!kr.length){ alert('入力済みにする対象がありません。'); return; }
+          // ★1回押しただけでは確定しない（2026-11-18 社長指摘）。くわしくは qcArmMark
+          var _nm = (kr[0] && (kr[0][13] || kr[0][2])) || 'この記録';
+          if(btn.getAttribute('data-arm')!=='1'){ qcArmMark(btn, _nm); return; }
+          if(Date.now() - (+btn.getAttribute('data-armt')||0) < 600) return;  // 連打よけ
+          qcDisarmMark(btn);
           btn.disabled=true; btn.textContent='更新中...';
           // ★押した瞬間にこの行のコピーを止める。通信の返りを待つ間に
           //   入力済みの製造番号をコピーしてしまう事故があったため
@@ -14191,6 +14205,32 @@ function qcChkRefreshAll(){
 // ★押した瞬間に、その行をコピーできない状態にする。
 //   消えるまでの1〜2秒のあいだに、入力済みの製造番号をコピーしてしまう事故があったため。
 //   （通信に失敗したときは qcPendingUnlock で元に戻す）
+/* ★「✓ 入力済みにする」は1回押しただけでは確定しない（2026-11-18 社長指摘）。
+   ボタンの上にマウスがあるまま画面が固まったときのポチッ、関係ない場所での
+   クリック、入力する前のうっかり押しで、まだ入力していないものが一覧から
+   消えてしまっていた。1回目は確認の見た目に変わるだけ。0.6秒たってからの
+   2回目で確定する（連打やダブルクリックでは通り抜けない）。
+   8秒さわらなければ、ひとりでに元に戻る。 */
+var QC_ARMED = null;
+function qcDisarmMark(btn){
+  if(!btn) return;
+  if(btn.__qcT){ clearTimeout(btn.__qcT); btn.__qcT=null; }
+  btn.removeAttribute('data-arm'); btn.removeAttribute('data-armt');
+  btn.classList.remove('is-arm');
+  btn.textContent = btn.__qcLbl || '✓ 入力済みにする';
+  if(QC_ARMED===btn) QC_ARMED=null;
+}
+function qcArmMark(btn, name){
+  if(QC_ARMED && QC_ARMED!==btn) qcDisarmMark(QC_ARMED);
+  if(!btn.__qcLbl) btn.__qcLbl = btn.textContent;
+  btn.setAttribute('data-arm','1');
+  btn.setAttribute('data-armt', String(Date.now()));
+  btn.classList.add('is-arm');
+  btn.textContent = '⚠ ' + name + ' を入力しましたか？　もう一度押すと確定';
+  QC_ARMED = btn;
+  btn.__qcT = setTimeout(function(){ qcDisarmMark(btn); }, 8000);
+}
+
 function qcPendingPair(btn){
   var p = btn;
   while(p && !(p.classList && p.classList.contains('qc-pair'))) p = p.parentNode;
@@ -14215,17 +14255,27 @@ function qcPendingUnlock(btn){
 
 // 行が消えたあと「何を入力済みにしたか」を短く出す。
 // 行をしばらく残して読ませる代わりなので、行は早く消せる。
+/* ★2026-11-18 社長指摘「間違って押したことに気づかないこともある」。
+   以前は3.5秒で消えていたので、押したことも、何を押したかも残らなかった。
+   消さずに積み上げ、✕ で消す形にする（画面を開き直せば消える）。
+   押し間違いに気づけるよう、直し方も小さく添える。 */
 function qcPendingToast(host, text){
   host = host || document.getElementById('qc-rec-list');
   if(!host) return;
   var hdr = host.querySelector('.qc-pending-hdr');
-  var t=document.createElement('div'); t.className='qc-toast';
-  t.textContent='✓ '+text+' を入力済みにしました';
+  var now = new Date();
+  var hm = ('0'+now.getHours()).slice(-2)+':'+('0'+now.getMinutes()).slice(-2);
+  var t=document.createElement('div'); t.className='qc-toast keep';
+  var body=document.createElement('div');
+  body.textContent='✓ '+text+' を入力済みにしました（'+hm+'）';
+  var sub=document.createElement('span'); sub.className='qc-toast-sub';
+  sub.textContent='まだシステムに入力していなければ押し間違いです。記録シートのM列を「未」に戻してください。';
+  body.appendChild(sub);
+  var x=document.createElement('button'); x.className='qc-toast-x'; x.textContent='✕';
+  x.title='この札を消す';
+  x.addEventListener('click',function(){ if(t.parentNode) t.parentNode.removeChild(t); });
+  t.appendChild(body); t.appendChild(x);
   if(hdr && hdr.nextSibling) host.insertBefore(t, hdr.nextSibling); else host.appendChild(t);
-  setTimeout(function(){
-    t.style.opacity='0';
-    setTimeout(function(){ if(t.parentNode) t.parentNode.removeChild(t); }, 470);
-  }, 3500);
 }
 
 // ★入力済みにした行は「システム入力待ち」ではなくなるので、一覧から消す。
@@ -14242,7 +14292,8 @@ function qcPendingRemoveRow(btn){
   }
   var host = pair.parentNode;
   var st = (pair.querySelector('.qc-rec') || {}).__qcStats || {};
-  var name = (st.seizoNo || st.hinban || 'この記録');
+  var name = st.seizoNo ? (st.seizoNo + (st.hinban ? '（'+st.hinban+'）' : ''))
+                        : (st.hinban || 'この記録');
   // ★以前は結果を読ませるために1.4秒置いてから消していたが、その間に
   //   入力済みの製造番号をコピーしてしまう事故が起きた。押した時点で
   //   qcPendingLock がコピーを止めているので、ここは短くてよい。
@@ -14530,7 +14581,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.17-6';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.18-1';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
