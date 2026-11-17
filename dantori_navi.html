@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.17-4 : ★段取り準備シートの<b>今日の分を「進捗管理ボードの予定」から取る</b>ようにした（2026-11-17 社長指示）。配置表の <code>dantori/&lt;日付&gt;</code> には<b>「固定」した行がそのまま残る</b>ため、進捗ボードの予定と食い違う（社長指摘）。→ <b>今日を見ているときは lines から組み直す</b>（<code>window._pmLinesRealtime</code>→<code>linesData</code>。組み立て方は「今すぐ同期」と同じ）。別の日を見ているときとボードが空のときはこれまでどおり配置表の計画を使う（lines は<b>当日の状態しか持たない</b>ため、2枚目の明日分は従来どおり）。<b>どちらから取ったかは紙の見出しに青字で出す</b>。あわせて、段取り開始が前の仕事の終わりから<b>標準段取り時間の2倍より離れているときは生産開始から逆算</b>するようにした（間が空いた日に「段取り」の帯が何時間も伸びていたため）。 -->
 <!-- H-Hub v2026.11.17-3 : 段取り準備シートを 2 点直した（2026-11-17 社長指摘）。(1)<b>変なところで紙が割れていた</b>：段取りの枠が下端にかかると、<b>見出しだけが前の紙に残り、中身が次の紙</b>に落ちていた。→ 枠は途中で割らない（<code>break-inside:avoid</code>）、かつ<b>入りきらない枠は「今日の段取り（つづき）」の紙へ自動で送る</b>（組み上がったあとに高さを測って移す）。印刷ボタンの「～枚」も実際の枚数になる。(2)<b>今日の段取りを時間の早い順</b>に並べた（前はライン順で A1 16:53 が先頭に来ていた）。 -->
 <!-- H-Hub v2026.11.17-2 : v2026.11.17-1 の直し方が半端で、呼び出し中に<b>帯とメニューの間にすきまができ、メニューが下の見出しに重なっていた</b>（2026-11-17 社長指摘）。余白を <code>body</code> に付けたため、中の <code>sticky</code> のメニューが<b>余白の分だけ二重に下がった</b>のが原因。→ 余白を <code>.app</code> に移し、メニューの固定位置は元に戻した。あわせて画面の高さ（<code>100vh</code>）から帯の高さを引き、<b>帯が出ても縦に余分なスクロールが出ない</b>ようにした（進捗管理・品質チェック・組立計画）。 -->
 <!-- H-Hub v2026.11.17-1 : 呼び出しの帯が<b>上のメニューにかぶさって他を操作できなかった</b>のを直した（2026-11-17 社長指摘）。帯は <code>position:fixed; top:0</code> で画面の上に<b>重ねて</b>出ていたため、その下の見出し（進捗を保存・稼働中）や、スクロールしたときに上に残る<b>タブ（進捗ボード・実績入力…）が帯の下に潜って押せない</b>。→ 帯の高さを測って <code>--callh</code> に入れ、<b>画面全体をその分下げる</b>＋<b>タブは帯の真下に固定</b>するようにした。帯が消えれば元に戻る。印刷では帯を出さない。 -->
@@ -9277,11 +9278,63 @@ function _ssJobs(sched){
   return out;
 }
 
+/* ★今日のぶんは「進捗管理ボード」の予定を使う（2026-11-17 社長指示）。
+   配置表の dantori/<日付> には「固定」した行がそのまま残るので、
+   進捗ボードの予定と食い違う（社長指摘：配置表のこの日の計画と進捗ボードの予定は違う）。
+   紙に出すのは、現場が見ている進捗ボードのほうにそろえる。
+   ★lines は日付を持たない「当日の状態」しか無いので、今日を見ているときだけ使う。
+     別の日を見ているときと、ボードが空のときは、これまでどおり配置表の計画を使う。
+   ★進捗ボード本体（lines）は <script type="module"> の中にあって直接は見えない。
+     module が window._pmLinesRealtime に出しているものを読む（無ければ
+     RESTで拾っている linesData）。どちらも空なら null を返す。
+   組み立て方は「今すぐ同期」と同じにしてある。 */
+function _ssBoardEntries(){
+  const src = (window._pmLinesRealtime && Object.keys(window._pmLinesRealtime).length)
+            ? window._pmLinesRealtime : linesData;
+  if(!src || !Object.keys(src).length) return null;
+  const out = [];
+  _dedupeLineKeys(src).sort().forEach(function(raw){
+    const line = src[raw];
+    if(!line) return;
+    const lineId = resolveLineId(raw);
+    const jr = Array.isArray(line.jobs) ? line.jobs
+             : (line.jobs && typeof line.jobs === 'object' ? Object.values(line.jobs) : null);
+    if(!jr) return;
+    const jobs = _dtSortJobs(jr.filter(function(j){
+      return j && j.part && j.start && j.end && !j.history;   /* 終わった行・空の行は出さない */
+    }));
+    jobs.forEach(function(j, ji){
+      const ns = !!(j.noSetup || (j.kata === 0 && j.ninzu === 0));
+      out.push({
+        lineId: lineId, partNo: j.part,
+        setupStart: _dtSetupStart(jobs, ji, j, ns),
+        prodStart: j.start, prodEnd: j.end, plan: j.plan || 0,
+        mountCount: j.ninzu || 0, workerCount: j.hito || 0,
+        mountKata: j.kata || 0, noSetup: ns
+      });
+    });
+  });
+  return out.length ? out : null;
+}
+
+/* 今日の紙に使う計画。進捗ボードが取れればそれ、取れなければ配置表の計画。
+   どちらを使ったかは紙の見出しに出す（食い違ったときに原因が分かるように）。 */
+function _ssTodaySource(){
+  if(isDantoriToday()){
+    const b = _ssBoardEntries();
+    if(b) return { rows:b, from:'進捗管理ボードの予定' };
+  }
+  return { rows:dantoriSchedule, from:'配置表の段取り計画' };
+}
+
 /* 段取りの始まり。時刻が入っていなければ生産開始から標準段取り時間で逆算する。
    段取り開始が生産開始より後ろの行（入力がおかしい）も逆算に回す。 */
 function _ssSetupOf(j){
   if(j.noSetup) return null;
-  if(j.ss !== null && j.ss < j.ps) return { at: j.ss, guess:false };
+  /* ★前の仕事の終わりがそのまま段取り開始として入っていることがあり、
+     間が空いた日は「段取り」の帯が何時間にも伸びてしまう。
+     標準段取り時間の2倍より離れていたら、生産開始から逆算する（2026-11-17）。 */
+  if(j.ss !== null && j.ss < j.ps && (j.ps - j.ss) <= j.std * 2) return { at: j.ss, guess:false };
   return { at: j.ps - j.std, guess:true };
 }
 
@@ -9784,8 +9837,9 @@ window.rtPrintSetupSheet = async function(){
   const pair = await Promise.all([_ssLoadDay(nymd), _ssMoldLevels()]);
   const mlv  = pair[1] || {};              /* ★を出すため（取れなければ空） */
 
-  const jobs = _ssJobs(dantoriSchedule);   /* 今日（表示中の日付） */
-  const nxt  = _ssJobs(pair[0]);           /* 次の営業日 */
+  const src  = _ssTodaySource();           /* 今日は進捗管理ボードの予定を使う */
+  const jobs = _ssJobs(src.rows);          /* 今日（表示中の日付） */
+  const nxt  = _ssJobs(pair[0]);           /* 次の営業日（ボードは当日ぶんしか無いので配置表の計画） */
   const esc  = _ssEsc;
 
   /* ★今日の段取りは<b>時間の早い順</b>に並べる（2026-11-17 社長指示）。
@@ -9819,7 +9873,7 @@ window.rtPrintSetupSheet = async function(){
   };
 
   /* --- 1枚目：今日のこと（これだけで今日の記録は済む） --- */
-  const p1 = '<div class="sheet">' + head('1枚目／今日')
+  const p1 = '<div class="sheet">' + head('1枚目／今日　<span style="color:#1d4ed8">' + src.from + '</span>')
     + '<div class="sec">時間でみる<span>　生産の予定。運ぶもの（容器・スクラップ・材料）は、回りながら記号で書き込む</span></div>'
     + (jobs.length ? _ssTimeline(jobs, { full:true })
                    : '<div class="legend">※ この日の計画は H-Hub にまだ入っていません。</div>')
@@ -14469,7 +14523,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.17-3';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.17-4';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
