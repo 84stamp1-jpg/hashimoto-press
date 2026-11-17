@@ -1070,6 +1070,8 @@ html, body {
 .qc-undo-btn{font-size:11px;padding:3px 8px;border:1px solid #6366f1;border-radius:6px;
           background:#fff;color:#4338ca;cursor:pointer;font-weight:600;}
 .qc-undo-btn.is-arm{background:#fff4cc;border-color:#d97706;color:#92400e;}
+.qc-undo-ng{font-size:10.5px;font-weight:700;color:#a01c1c;background:#ffecec;
+          border:1px solid #f5a9a9;border-radius:5px;padding:2px 7px;align-self:center;}
 .qc-chk-v.ok{color:#15803d;} .qc-chk-v.warn{color:#b45309;}
 .qc-chk-v.mute{color:#94a3b8;font-weight:600;}
 .qc-chk-v .qc-copy{font-size:11px;}
@@ -13995,9 +13997,14 @@ function qcMakeGroupCard(g){
             b2.disabled=true; b2.textContent='取り消し中...';
             qcUnmarkRecs([row], function(errs){
               if(errs.length){
+                /* ★alertは閉じると残らず、あとから理由が分からない（v2026.09.09-6の教訓）。
+                   ボタンの横に赤い字で残す */
                 b2.disabled=false; b2.textContent='↶ 取り消す';
-                alert('取り消せませんでした。\n'+errs[0]
-                     +'\n\n記録シートのM列を手で「未」に戻してください。');
+                var ng=b2.parentNode.querySelector('.qc-undo-ng');
+                if(!ng){ ng=document.createElement('span'); ng.className='qc-undo-ng';
+                         b2.parentNode.appendChild(ng); }
+                ng.textContent='⚠ 取り消せませんでした（'+errs[0]
+                             +'）。記録シートのM列を手で「未」に戻してください。';
                 return;
               }
               b2.textContent='↶ 戻しました';
