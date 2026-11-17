@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.17-6 : ★<b>段取りの実績時間から休憩を引くようにした</b>（2026-11-17 社長指摘「段取り時間に休憩時間も含まれているようです」）。実績入力の段取り開始・終了をそのまま引き算していたため、<b>昼休み（12:10〜12:50）や10分休憩をまたいだ段取りは、休んでいた時間まで段取り時間に入っていた</b>。標準段取り時間は休憩を含まない正味の時間なので、段取り率(%)も超過分も実態より大きく出ていた。→ 保存するときに休憩を引く。あわせて<b>画面に出すときも段取り開始・終了の時刻からその場で計算し直す</b>ので、<b>すでに保存されている記録（進捗ボード・ロス記録の「日ごと」）もこの場で正しい長さになる</b>。★ただし<b>ロス記録の「月ごと」の集計（/lossHistory に残っている過去の日）は直らない</b>＝保存ずみの数字をそのまま足しているため。★<b>休憩の中だけで終わっている段取り</b>（12:13〜12:18 など）は、休憩をとらずに作業したということなので<b>引かずにそのままの長さ</b>にする（0分にしない）。ロス記録に段取り開始・終了の時刻も残すようにした。 -->
 <!-- H-Hub v2026.11.17-5 : 段取り準備シートの今日の紙は<b>進捗管理ボードの予定だけ</b>を見るようにした（2026-11-17 社長指示「配置表の段取り計画は人の配置だけをみているので見なくていい」）。v2026.11.17-4 では配置表を控えに使っていたが、その控えをやめた。ボードが空のとき・別の日を表示中は<b>紙に理由を書いて空で出す</b>（ボードは当日ぶんしか持たないため）。★2枚目の<b>明日の生産だけは配置表の計画のまま</b>＝明日ぶんはボードに存在しないため、ほかに元が無い。 -->
 <!-- H-Hub v2026.11.17-4 : ★段取り準備シートの<b>今日の分を「進捗管理ボードの予定」から取る</b>ようにした（2026-11-17 社長指示）。配置表の <code>dantori/&lt;日付&gt;</code> には<b>「固定」した行がそのまま残る</b>ため、進捗ボードの予定と食い違う（社長指摘）。→ <b>今日を見ているときは lines から組み直す</b>（<code>window._pmLinesRealtime</code>→<code>linesData</code>。組み立て方は「今すぐ同期」と同じ）。別の日を見ているときとボードが空のときはこれまでどおり配置表の計画を使う（lines は<b>当日の状態しか持たない</b>ため、2枚目の明日分は従来どおり）。<b>どちらから取ったかは紙の見出しに青字で出す</b>。あわせて、段取り開始が前の仕事の終わりから<b>標準段取り時間の2倍より離れているときは生産開始から逆算</b>するようにした（間が空いた日に「段取り」の帯が何時間も伸びていたため）。 -->
 <!-- H-Hub v2026.11.17-3 : 段取り準備シートを 2 点直した（2026-11-17 社長指摘）。(1)<b>変なところで紙が割れていた</b>：段取りの枠が下端にかかると、<b>見出しだけが前の紙に残り、中身が次の紙</b>に落ちていた。→ 枠は途中で割らない（<code>break-inside:avoid</code>）、かつ<b>入りきらない枠は「今日の段取り（つづき）」の紙へ自動で送る</b>（組み上がったあとに高さを測って移す）。印刷ボタンの「～枚」も実際の枚数になる。(2)<b>今日の段取りを時間の早い順</b>に並べた（前はライン順で A1 16:53 が先頭に来ていた）。 -->
@@ -14529,7 +14530,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.17-5';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.17-6';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
@@ -17329,11 +17330,15 @@ function lossJobRows(l,id){
     const jWE=cur?((l.workEnd&&l.workEnd!=='')?l.workEnd:(j.actualEnd||'')):(j.actualEnd||'');
     const jSetupMin=cur?(l.setupMin||j.setupActualMin||0):(j.setupActualMin||0);
     const std=calcSetupTime(id,j.kata,j.ninzu)||0;
+    const jSS=cur?(l.setupStartTime||j.setupStartTime||''):(j.setupStartTime||'');
+    const jSE=cur?(l.setupEndTime||j.setupEndTime||''):(j.setupEndTime||'');
     let disp=0;
     if(!j.noSetup){
-      const implied=jWS?calcImpliedSetup(jobs,ji,jWS,
+      /* ★段取り開始・終了が入っていれば、そこから休憩を引いて計算し直す（2026-11-17）。
+         保存されている分数（jSetupMin）は休憩を引く前のものが残っているため */
+      const implied=(jWS||jSS)?calcImpliedSetup(jobs,ji,jWS,
         cur?(l.setupStartTime||''):'', cur?(l.setupEndTime||''):''):null;
-      disp=jSetupMin>0?jSetupMin:(implied||0);
+      disp=(implied&&implied>0)?implied:jSetupMin;
     }
     const over=(!j.noSetup&&disp>0)?Math.max(0,Math.round(disp-std)):0;
     // CT達成率（行の表示と同じ式）
@@ -17371,6 +17376,7 @@ function lossJobRows(l,id){
     const setupRate=(!j.noSetup&&disp>0&&std>0)?Math.round(disp/std*100):null;
     rows.push({seq:Number(j.seq)||(ji+1), row:ji+1, part:j.part||'', plan:effPlan, actual:jAct,
       planStart:j.start||'', planEnd:j.end||'', actStart:jWS||'', actEnd:jWE||'',
+      setupStart:jSS||'', setupEnd:jSE||'',
       setupMin:Math.round(disp), setupStd:std, setupOver:over, setupRate:setupRate, noSetup:!!j.noSetup,
       setupCause:j.setupCause||'', needCause:setupNeedsCause(setupRate,over),
       ctRate:ct, qtyRate:qty, stopMin:stop, stopTypes:stopTypes, done:done,
@@ -17504,6 +17510,19 @@ function netMins(startM,endM){
   if(!startM||!endM||endM<=startM) return 0;
   return Math.max(0,(endM-startM)-breakMins(startM,endM));
 }
+/* 段取りの実績時間（分）。開始・終了を分で受け取り、休憩を引いて返す。
+   ★2026-11-17 社長指摘「段取り時間に休憩時間も含まれているようです」。
+     標準段取り時間は休憩を含まない正味の時間なので、昼休みをまたいだ段取りを
+     時計どおりの長さのままにすると、段取り率(%)も超過分も実態より大きく出る。
+   ★休憩の中だけで終わっている段取り（12:13〜12:18 など）は、休憩をとらずに
+     作業したということなので、引かずにそのままの長さを返す（0分にしない）。
+   時刻が足りないときは null（＝計算できない）。 */
+function setupNetFromMin(sM,eM){
+  if(sM===null||sM===undefined||eM===null||eM===undefined) return null;
+  if(eM<=sM) return null;
+  const net=Math.round(netMins(sM,eM));
+  return net>0?net:Math.round(eM-sM);
+}
 // 正味分数を加算して時計時刻(分)を返す（休憩時間を正確に加算）
 function addNetMins(startClockM,netToAdd){
   if(!netToAdd||netToAdd<=0) return Math.round(startClockM);
@@ -17523,7 +17542,6 @@ const SETUP_BASE_MIN=8*60+10; // 08:10 始業基準
 function calcImpliedSetup(jobs,ji,actualWorkStart,ssIn,seIn){
   const j=jobs[ji];
   if(j.noSetup) return null;               // 段取りなしフラグ
-  if((j.setupActualMin||0)>0) return j.setupActualMin; // 実績入力あり
   // ★段取り開始が入っていれば、そこを段取りの始まりにする（2026-09-21 社長指示）
   //   終わりは 段取り終了 → 無ければ 生産開始。
   //   1本目は前の作業が無いので、この入力が唯一のよりどころ（始業08:10からの推定では実態と合わない）
@@ -17532,10 +17550,15 @@ function calcImpliedSetup(jobs,ji,actualWorkStart,ssIn,seIn){
     if(ssM!==null){
       const seM=timeToMin(seIn||j.setupEndTime||'');
       const endM=(seM!==null)?seM:timeToMin(actualWorkStart||j.actualStart||'');
-      if(endM!==null&&endM>ssM) return Math.max(0,netMins(ssM,endM));
+      /* ★休憩は引く（2026-11-17）。ここで時刻から計算し直すので、
+         休憩を引く前に保存された記録もこの場で正しい長さになる */
+      const sNet=setupNetFromMin(ssM,endM);
+      if(sNet!==null) return sNet;
       return 0;
     }
   }
+  /* 時刻が入っていないが分数だけ残っている記録 */
+  if((j.setupActualMin||0)>0) return j.setupActualMin;
   // 実際の作業開始時刻（引数優先→j.actualStart→j.start）
   const startM=timeToMin(actualWorkStart||j.actualStart||j.start);
   if(!startM) return 0;
@@ -17801,7 +17824,12 @@ function renderBoard(){
         }
         const jWS=cur?(l.workStart||j.actualStart||''):(j.actualStart||'');
         const jWE=cur?(l.workEnd||j.actualEnd||''):(j.actualEnd||'');
-        const jSetupMin=cur?(l.setupMin||j.setupActualMin||0):(j.setupActualMin||0);
+        const jSetupStored=cur?(l.setupMin||j.setupActualMin||0):(j.setupActualMin||0);
+        const jSetupHasSS=!!(cur?(l.setupStartTime||j.setupStartTime):j.setupStartTime);
+        const jSetupImp=(jWS||jSetupHasSS)?calcImpliedSetup(jobs,jIdx,jWS,
+          cur?(l.setupStartTime||''):'', cur?(l.setupEndTime||''):''):null;
+        /* ★休憩を引いた長さに合わせる（行の表示と食い違わないように・2026-11-17） */
+        const jSetupMin=(jSetupImp&&jSetupImp>0)?jSetupImp:jSetupStored;
         const tParts=[];
         if(jSetupMin>0) tParts.push('段取'+jSetupMin+'分');
         if(jWS) tParts.push('開'+jWS);
@@ -19031,10 +19059,12 @@ window.openModal=function(id){
     const rc=r===null?'':r>=95?'c-ok':r>=80?'c-wn':'c-ng';
     // 段取り時間：実績 or 推定（作業開始済みの場合のみ推定計算）
     const actSU=j.setupActualMin||0;
-    const implSU=jWS2?calcImpliedSetup(jobs,ji,jWS2,
+    const hasSS=!!(isCur?(l.setupStartTime||j.setupStartTime):j.setupStartTime);
+    const implSU=(jWS2||hasSS)?calcImpliedSetup(jobs,ji,jWS2,
       isCur?(l.setupStartTime||''):'', isCur?(l.setupEndTime||''):''):null;
-    const dispSU=actSU>0?actSU:(implSU||0);
-    const isImpliedSU=actSU===0&&(implSU||0)>0;
+    /* ★時刻から計算し直したもの（休憩を引いたもの）を優先する（2026-11-17） */
+    const dispSU=(implSU&&implSU>0)?implSU:actSU;
+    const isImpliedSU=!hasSS&&actSU===0&&(implSU||0)>0;
     const suR=dispSU>0&&stdSetup>0?Math.round(dispSU/stdSetup*100):null;
     const suCol=suR===null?'#aaa':suR<=100?'#27ae60':suR<=125?'#e67e22':'#c0392b';
     const suDisp=j.noSetup
@@ -19216,8 +19246,7 @@ window.updSetupCauseBox=function(){
     const job=(l.jobs||[]).find(function(j){return j.part===opt.value&&(!startVal||j.start===startVal);})
            ||(l.jobs||[]).find(function(j){return j.part===opt.value;});
     const std=calcSetupTime(lineId, job&&job.kata, job&&job.ninzu)||0;
-    const sh=timeToH(ss), eh=timeToH(se);
-    const mins=(sh&&eh&&eh>sh)?Math.round((eh-sh)*60):0;
+    const mins=setupNetFromMin(timeToMin(ss),timeToMin(se))||0;   /* ★休憩は引く（2026-11-17） */
     if(std>0&&mins>0){
       const rate=Math.round(mins/std*100), over=Math.max(0,Math.round(mins-std));
       if(setupNeedsCause(rate,over)){
@@ -19277,9 +19306,12 @@ window.doSub=function(){
     const prev2T=lines[id]?.prevUpdatedAt||0;
 
     // 段取り時間計算
+    // ★休憩は引く（2026-11-17 社長指摘「段取り時間に休憩時間も含まれている」）。
+    //   昼休みをまたいだ段取りを時計どおりの長さで保存していたため、
+    //   段取り率(%)も超過分も実態より大きく出ていた。
     let setupMin=null;
-    if(ss&&se){const sh=timeToH(ss),eh=timeToH(se);if(sh&&eh)setupMin=Math.round((eh-sh)*60);}
-    else if(ss&&ws){const sh=timeToH(ss),wh=timeToH(ws);if(sh&&wh)setupMin=Math.round((wh-sh)*60);}
+    if(ss&&se)      setupMin=setupNetFromMin(timeToMin(ss),timeToMin(se));
+    else if(ss&&ws) setupMin=setupNetFromMin(timeToMin(ss),timeToMin(ws));
 
     // jobs配列をコピー
     const curJobs=[...(lines[id]?.jobs||[])];
