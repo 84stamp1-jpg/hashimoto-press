@@ -17,7 +17,8 @@ function doPost(e) {
     if      (action === 'submitRecord')       { result = submitRecord(payload.data); }
     else if (action === 'updateRecord')       { result = updateRecord(payload.rowNum, payload.data, payload.key); }
     else if (action === 'deleteRecord')       { result = deleteRecord(payload.rowNum, payload.key); }
-    else if (action === 'markAsInputted')     { result = markAsInputted(payload.rowNum, payload.key); }
+    else if (action === 'markAsInputted')     { result = markAsInputted(payload.rowNum, payload.key, payload.by); }
+    else if (action === 'unmarkInputted')     { result = unmarkInputted(payload.rowNum, payload.key, payload.by); }
     else if (action === 'getSakuyoData')      { result = { ok: true, data: getSakuyoData() }; }
     else if (action === 'getRecords')         { result = { ok: true, records: getRecords() }; }
     else if (action === 'updateSakuyo')       { result = (typeof updateSakuyoFromXlsx === 'function') ? updateSakuyoFromXlsx() : { ok: false, err: 'updateSakuyoFromXlsx not defined' }; }
@@ -150,15 +151,41 @@ function resolveRow_(sheet, rowNum, key) {
                         + 'シートで直接直してください（行 ' + hits.join(',') + '）。' };
 }
 
-function markAsInputted(rowNum, key) {
+function markAsInputted(rowNum, key, by) {
   try {
     var sheet = getOrCreateSheet().getSheetByName(SHEET_NAME);
     var f = resolveRow_(sheet, rowNum, key);
     if (!f.ok) return f;
-    sheet.getRange(f.row, 13).setValue('済');
+    setInputtedStamp_(sheet, f.row, '済', by);
     SpreadsheetApp.flush();
     return { ok: true, row: f.row, moved: !!f.moved };
   } catch(e) { return { ok: false, err: e.message }; }
+}
+
+// ★入力済みを取り消す（2026-11-18 社長指示）
+//   「✓ 入力済みにする」を押し間違える人がいるため、H-Hubから「未」に戻せるようにした。
+//   いつ・どの端末から取り消したかも残す。
+function unmarkInputted(rowNum, key, by) {
+  try {
+    var sheet = getOrCreateSheet().getSheetByName(SHEET_NAME);
+    var f = resolveRow_(sheet, rowNum, key);
+    if (!f.ok) return f;
+    setInputtedStamp_(sheet, f.row, '未', by ? ('取消 ' + by) : '取消');
+    SpreadsheetApp.flush();
+    return { ok: true, row: f.row, moved: !!f.moved };
+  } catch(e) { return { ok: false, err: e.message }; }
+}
+
+// M列(13)＝システム入力（済／未）、U列(21)＝いつ押したか、V列(22)＝どの端末から
+// ★「済」の一文字しか残らないと、誰がいつ押したのか分からず、押し間違いを追えない。
+//   列は A〜T(20) まで使っているので、その右の2列に足す（見出しも無ければ入れる）。
+function setInputtedStamp_(sheet, row, val, by) {
+  sheet.getRange(row, 13).setValue(val);
+  sheet.getRange(row, 21).setValue(Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm'));
+  sheet.getRange(row, 22).setValue(String(by || ''));
+  var h = sheet.getRange(1, 21, 1, 2).getValues()[0];
+  if (!h[0]) sheet.getRange(1, 21).setValue('システム入力 日時');
+  if (!h[1]) sheet.getRange(1, 22).setValue('システム入力 端末');
 }
 
 function deleteRecord(rowNum, key) {

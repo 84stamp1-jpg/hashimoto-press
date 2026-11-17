@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.18-2 : ★<b>入力済みの「↶ 取り消す」と、誰がいつ押したかの記録</b>（2026-11-18 社長指示）。v2026.11.18-1 の2段階確認に加えて、<b>押してしまったものを戻せる</b>ようにした。(1)★<b>押した直後の札から「↶ 取り消す」</b>。その場で気づいたらすぐ入力待ちへ戻せる。(2)★<b>あとから気づいたとき</b>は、日別一覧の明細（✏️🗑️の並び）に出る<b>「システム入力 済（日時　端末）」</b>の横の「↶ 取り消す」から戻せる。(3)★<b>いつ・どの端末から押したかをシートに残す</b>。これまでM列の「済」の一文字しか残らず、押し間違いを追えなかった。<b>U列＝システム入力 日時／V列＝システム入力 端末</b>（端末名は呼び出しの設定で決めた「この端末の置き場所」）。取り消したときは「未」に戻し、V列に「取消 ○○」と残す。(4)取り消しも<b>1回押しただけでは確定しない</b>（押し間違いを押し間違いで直さないため）。★<b>GASの貼り替えと再デプロイが必要</b>（品質チェックシート/gas仕様/コード.gs・手順書あり）。貼り替えるまで「↶ 取り消す」は失敗する。 -->
 <!-- H-Hub v2026.11.18-1 : ★<b>「✓ 入力済みにする」の押し間違い対策</b>（2026-11-18 社長指摘「間違えて押してしまう人がいます」「ボタンの上にマウスがあって、画面が固まったときに何気なく押してしまうらしい」「入力する前に押す」「関係ない場所で押す」）。(1)★<b>1回押しただけでは確定しない</b>。1回目は<b>「⚠ ○○（製造番号）を入力しましたか？　もう一度押すと確定」</b>という黄色い見た目に変わるだけで、何も起きない。<b>0.6秒たってからの2回目</b>で確定する（連打やダブルクリックでは通り抜けない）。<b>8秒さわらなければひとりでに元に戻る</b>ので、うっかり1回押しただけなら何も残らない。ボタンは一度に1つだけ確認の状態になる。(2)★<b>入力済みにしたものを画面に残す</b>（社長指摘「間違って押したことに気づかないこともある」）。これまでは「✓ ○○ を入力済みにしました」が<b>3.5秒で消えていた</b>ので、押したことも何を押したかも残らなかった。→ 消さずに<b>製造番号・品番・時刻つきで積み上げ</b>、✕ で消す形にした。あとから見直せるよう<b>「まだシステムに入力していなければ押し間違いです。記録シートのM列を『未』に戻してください」</b>も小さく添える。※取り消しボタン（画面から「未」に戻す）はGASの貼り替えが要るため、まだ入れていない。 -->
 <!-- H-Hub v2026.11.17-6 : ★<b>段取りの実績時間から休憩を引くようにした</b>（2026-11-17 社長指摘「段取り時間に休憩時間も含まれているようです」）。実績入力の段取り開始・終了をそのまま引き算していたため、<b>昼休み（12:10〜12:50）や10分休憩をまたいだ段取りは、休んでいた時間まで段取り時間に入っていた</b>。標準段取り時間は休憩を含まない正味の時間なので、段取り率(%)も超過分も実態より大きく出ていた。→ 保存するときに休憩を引く。あわせて<b>画面に出すときも段取り開始・終了の時刻からその場で計算し直す</b>ので、<b>すでに保存されている記録（進捗ボード・ロス記録の「日ごと」）もこの場で正しい長さになる</b>。★ただし<b>ロス記録の「月ごと」の集計（/lossHistory に残っている過去の日）は直らない</b>＝保存ずみの数字をそのまま足しているため。★<b>休憩の中だけで終わっている段取り</b>（12:13〜12:18 など）は、休憩をとらずに作業したということなので<b>引かずにそのままの長さ</b>にする（0分にしない）。ロス記録に段取り開始・終了の時刻も残すようにした。 -->
 <!-- H-Hub v2026.11.17-5 : 段取り準備シートの今日の紙は<b>進捗管理ボードの予定だけ</b>を見るようにした（2026-11-17 社長指示「配置表の段取り計画は人の配置だけをみているので見なくていい」）。v2026.11.17-4 では配置表を控えに使っていたが、その控えをやめた。ボードが空のとき・別の日を表示中は<b>紙に理由を書いて空で出す</b>（ボードは当日ぶんしか持たないため）。★2枚目の<b>明日の生産だけは配置表の計画のまま</b>＝明日ぶんはボードに存在しないため、ほかに元が無い。 -->
@@ -1056,6 +1057,18 @@ html, body {
 .qc-toast .qc-toast-x{border:0;background:transparent;color:#15803d;font-size:14px;
           font-weight:700;cursor:pointer;line-height:1;padding:0 2px;}
 .qc-toast .qc-toast-sub{display:block;margin-top:3px;font-size:10.5px;font-weight:600;color:#4b7d61;}
+.qc-toast .qc-toast-undo{font-size:11.5px;padding:3px 9px;border:1px solid #15803d;border-radius:6px;
+          background:#fff;color:#15803d;cursor:pointer;font-weight:700;white-space:nowrap;}
+.qc-toast .qc-toast-undo.is-arm{background:#fff4cc;border-color:#d97706;color:#92400e;}
+.qc-toast.undone{background:#f1f5f9;border-color:#cbd5e1;color:#475569;}
+.qc-toast.undone .qc-toast-sub{color:#64748b;}
+.qc-toast.ng{background:#ffecec;border-color:#f5a9a9;color:#a01c1c;}
+.qc-toast.ng .qc-toast-sub{color:#a01c1c;}
+/* 明細の「システム入力 済」と、そこからの取り消し */
+.qc-stamp{font-size:10px;background:#eef2ff;color:#3730a3;border-radius:4px;padding:2px 7px;align-self:center;}
+.qc-undo-btn{font-size:11px;padding:3px 8px;border:1px solid #6366f1;border-radius:6px;
+          background:#fff;color:#4338ca;cursor:pointer;font-weight:600;}
+.qc-undo-btn.is-arm{background:#fff4cc;border-color:#d97706;color:#92400e;}
 .qc-chk-v.ok{color:#15803d;} .qc-chk-v.warn{color:#b45309;}
 .qc-chk-v.mute{color:#94a3b8;font-weight:600;}
 .qc-chk-v .qc-copy{font-size:11px;}
@@ -12552,6 +12565,14 @@ var QC_EDIT_KEY = null, QC_DEL_KEY = null;
 //   送信日時・製造番号・工順・良品数を「目印」として一緒に送り、
 //   GAS側で本当にその行かを確かめてもらう。違っていれば探し直し、
 //   見つからなければ何もせずエラーを返す。
+/* ★この端末の置き場所（呼び出しの設定で決めたもの）。
+   入力済みにした／取り消したのが「どの端末からか」をシートに残すために送る
+   （2026-11-18 社長指示）。決めていない端末は空のまま送る。 */
+function qcTermName(){
+  try{ var v=JSON.parse(localStorage.getItem('hhubCallCfg')||'{}');
+       if(v && v.site) return String(v.site); }catch(e){}
+  return '';
+}
 function qcRowKey(r){
   if(!r) return null;
   return { ts:String(r[0]||''), seizo:String(r[13]||''), junjo:String(r[14]||''), prod:String(r[5]||'') };
@@ -13367,6 +13388,32 @@ function qcVerifyMarked(kr, cb){
   }, function(){ cb(false); }, 25000);
 }
 
+// ★入力済みを取り消す（2026-11-18 社長指示。押し間違いを戻せるようにする）。
+//   GAS側は unmarkInputted（M列を「未」に戻し、いつ・どの端末からかも残す）。
+//   ※GASの貼り替えがまだの環境では「不明なaction」で返るので、その旨を出す。
+function qcUnmarkRecs(recs, cb){
+  if(!recs || !recs.length){ cb(['どの記録を戻せばよいか分かりませんでした']); return; }
+  var done=0, errs=[];
+  recs.forEach(function(r){
+    var rn=parseInt(r[r.length-1]);
+    qcGasPost('unmarkInputted',{rowNum:rn,key:qcRowKey(r),by:qcTermName()},function(res){
+      done++;
+      /* ★GASは知らないactionにも ok:true（案内メッセージ）を返す。
+         ok だけ見ると、貼り替えがまだなのに「戻しました」と出てしまう。
+         本物の unmarkInputted は row を返すので、それが無ければ失敗とみなす */
+      if(!res || !res.ok) errs.push((res&&(res.err||res.error))||'GASがokを返しませんでした');
+      else if(!res.row)   errs.push('GASの貼り替えがまだのようです（unmarkInputted が入っていません）');
+      else { r[12]='未'; qcUnmarkDone(rn); }
+      if(done===recs.length) finish();
+    },function(e){ done++; errs.push(e.message||'通信エラー'); if(done===recs.length) finish(); }, 25000);
+  });
+  function finish(){
+    try{ localStorage.setItem('qcAllRecordsCache', JSON.stringify(QC_ALL_RECORDS)); }catch(e){}
+    try{ qcUpdatePendingBadge(); }catch(e){}
+    cb(errs);
+  }
+}
+
 // ----- 記録の保存が「本当に入らなかった」のかを確かめる -----
 // ★写真つきの保存はGASで10秒以上かかることがあり、そのあいだに回線が切れると
 //   fetch は Failed to fetch になる。だがGAS側の書き込みは終わっていることが多い。
@@ -13511,6 +13558,11 @@ function qcPendingSyncIfChanged(){
 
 function qcMarkDone(rowNum){
   if(rowNum || rowNum===0) QC_MARKED_DONE[String(rowNum)] = true;
+}
+/* ★取り消したら覚えから外す。外さないと qcApplyMarkedDone() が
+   記録を取り直すたびに「済」を貼り直し、取り消したのに済に戻る */
+function qcUnmarkDone(rowNum){
+  if(rowNum || rowNum===0) delete QC_MARKED_DONE[String(rowNum)];
 }
 function qcApplyMarkedDone(){
   var keys = Object.keys(QC_MARKED_DONE);
@@ -13915,6 +13967,39 @@ function qcMakeGroupCard(g){
       (function(row){ eb.addEventListener('click',function(e){ e.stopPropagation(); qcOpenEditModal(row); }); })(r); sa.appendChild(eb);
       var db=document.createElement('button'); db.className='qc-del-btn'; db.style.cssText='font-size:11px;padding:3px 8px'; db.textContent='🗑️';
       (function(row){ db.addEventListener('click',function(){ qcOpenDelModal(row); }); })(r); sa.appendChild(db);
+      /* ★システム入力が済んでいる行には、いつ・どの端末から押したかを出し、
+         ここから取り消せるようにする（2026-11-18 社長指示）。
+         押し間違いにあとから気づいたときの戻し口。 */
+      if(qcIsInputted(r)){
+        var stv=document.createElement('span'); stv.className='qc-stamp';
+        stv.textContent='システム入力 済'
+          + (r[20] ? '（'+r[20]+(r[21]?'　'+r[21]:'')+'）' : '');
+        sa.appendChild(stv);
+        var ub=document.createElement('button'); ub.className='qc-undo-btn';
+        ub.textContent='↶ 取り消す';
+        (function(row,b2){
+          b2.addEventListener('click',function(){
+            if(b2.getAttribute('data-arm')!=='1'){
+              qcArmMark(b2, '↶ '+(row[13]||row[2]||'この記録')+' を入力待ちに戻します。もう一度押すと確定');
+              return;
+            }
+            if(Date.now() - (+b2.getAttribute('data-armt')||0) < 600) return;
+            qcDisarmMark(b2);
+            b2.disabled=true; b2.textContent='取り消し中...';
+            qcUnmarkRecs([row], function(errs){
+              if(errs.length){
+                b2.disabled=false; b2.textContent='↶ 取り消す';
+                alert('取り消せませんでした。\n'+errs[0]
+                     +'\n\n記録シートのM列を手で「未」に戻してください。');
+                return;
+              }
+              b2.textContent='↶ 戻しました';
+              setTimeout(qcLoadRecords, 700);
+            });
+          });
+        })(r,ub);
+        sa.appendChild(ub);
+      }
       sr.appendChild(sa); jDetail.appendChild(sr);
     });
     sec.appendChild(jDetail);
@@ -13929,7 +14014,9 @@ function qcMakeGroupCard(g){
           if(!kr.length){ alert('入力済みにする対象がありません。'); return; }
           // ★1回押しただけでは確定しない（2026-11-18 社長指摘）。くわしくは qcArmMark
           var _nm = (kr[0] && (kr[0][13] || kr[0][2])) || 'この記録';
-          if(btn.getAttribute('data-arm')!=='1'){ qcArmMark(btn, _nm); return; }
+          btn.__qcKr = kr;   /* 取り消すときに、どの記録だったかを使う */
+          if(btn.getAttribute('data-arm')!=='1'){
+            qcArmMark(btn, '⚠ ' + _nm + ' を入力しましたか？　もう一度押すと確定'); return; }
           if(Date.now() - (+btn.getAttribute('data-armt')||0) < 600) return;  // 連打よけ
           qcDisarmMark(btn);
           btn.disabled=true; btn.textContent='更新中...';
@@ -13975,7 +14062,7 @@ function qcMakeGroupCard(g){
             });
           }
           kr.forEach(function(r){
-            qcGasPost('markAsInputted',{rowNum:parseInt(r[r.length-1]),key:qcRowKey(r)},function(res){
+            qcGasPost('markAsInputted',{rowNum:parseInt(r[r.length-1]),key:qcRowKey(r),by:qcTermName()},function(res){
               done++;
               if(!res || !res.ok) errs.push((res&&(res.err||res.error))||'GASがokを返しませんでした');
               finish();
@@ -14220,13 +14307,13 @@ function qcDisarmMark(btn){
   btn.textContent = btn.__qcLbl || '✓ 入力済みにする';
   if(QC_ARMED===btn) QC_ARMED=null;
 }
-function qcArmMark(btn, name){
+function qcArmMark(btn, msg){
   if(QC_ARMED && QC_ARMED!==btn) qcDisarmMark(QC_ARMED);
   if(!btn.__qcLbl) btn.__qcLbl = btn.textContent;
   btn.setAttribute('data-arm','1');
   btn.setAttribute('data-armt', String(Date.now()));
   btn.classList.add('is-arm');
-  btn.textContent = '⚠ ' + name + ' を入力しましたか？　もう一度押すと確定';
+  btn.textContent = msg;
   QC_ARMED = btn;
   btn.__qcT = setTimeout(function(){ qcDisarmMark(btn); }, 8000);
 }
@@ -14259,22 +14346,51 @@ function qcPendingUnlock(btn){
    以前は3.5秒で消えていたので、押したことも、何を押したかも残らなかった。
    消さずに積み上げ、✕ で消す形にする（画面を開き直せば消える）。
    押し間違いに気づけるよう、直し方も小さく添える。 */
-function qcPendingToast(host, text){
+function qcPendingToast(host, text, recs){
   host = host || document.getElementById('qc-rec-list');
   if(!host) return;
   var hdr = host.querySelector('.qc-pending-hdr');
   var now = new Date();
   var hm = ('0'+now.getHours()).slice(-2)+':'+('0'+now.getMinutes()).slice(-2);
   var t=document.createElement('div'); t.className='qc-toast keep';
-  var body=document.createElement('div');
-  body.textContent='✓ '+text+' を入力済みにしました（'+hm+'）';
+  var body=document.createElement('div'); body.className='qc-toast-body';
+  var main=document.createElement('span'); main.className='qc-toast-main';
+  main.textContent='✓ '+text+' を入力済みにしました（'+hm+'）';
   var sub=document.createElement('span'); sub.className='qc-toast-sub';
-  sub.textContent='まだシステムに入力していなければ押し間違いです。記録シートのM列を「未」に戻してください。';
-  body.appendChild(sub);
+  sub.textContent='押し間違いなら「↶ 取り消す」で入力待ちに戻せます。';
+  body.appendChild(main); body.appendChild(sub);
+  var right=document.createElement('div');
+  right.style.cssText='display:flex;gap:6px;align-items:center;';
+  if(recs && recs.length){
+    var u=document.createElement('button'); u.className='qc-toast-undo'; u.textContent='↶ 取り消す';
+    /* ★取り消しも1回押しただけでは確定しない（押し間違いを押し間違いで直さないため） */
+    u.addEventListener('click',function(){
+      if(u.getAttribute('data-arm')!=='1'){
+        qcArmMark(u, '↶ 入力待ちに戻します。もう一度押すと確定'); return; }
+      if(Date.now() - (+u.getAttribute('data-armt')||0) < 600) return;
+      qcDisarmMark(u);
+      u.disabled=true; u.textContent='取り消し中...';
+      qcUnmarkRecs(recs, function(errs){
+        if(errs.length){
+          u.disabled=false; u.textContent='↶ 取り消す';
+          t.classList.add('ng');
+          sub.textContent='⚠ 取り消せませんでした（'+errs[0]+'）。記録シートのM列を手で「未」に戻してください。';
+          return;
+        }
+        t.classList.remove('keep'); t.classList.add('undone');
+        main.textContent='↶ '+text+' を入力待ちに戻しました';
+        sub.textContent='一覧を読み直します。';
+        if(u.parentNode) u.parentNode.removeChild(u);
+        setTimeout(qcLoadRecords, 700);
+      });
+    });
+    right.appendChild(u);
+  }
   var x=document.createElement('button'); x.className='qc-toast-x'; x.textContent='✕';
   x.title='この札を消す';
   x.addEventListener('click',function(){ if(t.parentNode) t.parentNode.removeChild(t); });
-  t.appendChild(body); t.appendChild(x);
+  right.appendChild(x);
+  t.appendChild(body); t.appendChild(right);
   if(hdr && hdr.nextSibling) host.insertBefore(t, hdr.nextSibling); else host.appendChild(t);
 }
 
@@ -14287,8 +14403,10 @@ function qcPendingRemoveRow(btn){
   while(pair && !(pair.classList && pair.classList.contains('qc-pair'))) pair = pair.parentNode;
   if(!pair) return;
   var marks = pair.querySelectorAll('.qc-mark-btn');
+  var recs = [];
   for(var i=0;i<marks.length;i++){
     if(marks[i].getAttribute('data-done')!=='1') return;   // まだ残っている
+    if(marks[i].__qcKr) recs = recs.concat(marks[i].__qcKr);  // 取り消し用
   }
   var host = pair.parentNode;
   var st = (pair.querySelector('.qc-rec') || {}).__qcStats || {};
@@ -14304,7 +14422,7 @@ function qcPendingRemoveRow(btn){
     setTimeout(function(){
       if(pair.parentNode) pair.parentNode.removeChild(pair);
       qcPendingRefreshHeader(host);
-      qcPendingToast(host, name);
+      qcPendingToast(host, name, recs);
     }, 420);
   }, 500);
 }
@@ -14581,7 +14699,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.18-1';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.18-2';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
