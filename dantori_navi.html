@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.18-10 : ★<b>PCによって段取り準備シートが出ない</b>件（2026-11-18 社長報告）の、原因を突き止めるための手当て。これまでは窓が<b>「シートを作っています…」のまま黙って固まる</b>ので、何で止まっているのかPCの前でしか分からなかった。(1)★<b>明日のぶんの読み込み（Firebaseへのfetch）に8秒の上限</b>を付けた。返事が来ないPCでは、これまで<b>いつまでも待っていた</b>。諦めても<b>2枚目の明日のぶんが空になるだけで、1枚目は出る</b>。(2)★<b>12秒たっても書き終わらなければ、窓に理由を出す</b>（「このPCから、明日の計画か金型の情報に届いていないようです」）。(3)★<b>窓に版を出す</b>（「H-Hub v2026.11.18-10」）。そのPCが<b>古い版を読んだまま</b>かどうかがその場で分かる（v2026.11.13-1以前は、このシート自体が真っ白になる不具合があった）。(4)つまずいたときの断り書きを、alertだけでなく<b>窓の中にも</b>出す（alertは閉じると残らず、写真に撮れない）。※ポップアップがブロックされているPCは、これまでどおり「ポップアップがブロックされました」と出る。 -->
 <!-- H-Hub v2026.11.18-9 : ★社長が実機で確認（「18120-5YT も朝からの累計です」）。(1)<b>累計の判定を元に戻した</b>＝同じ品番が複数の行に分かれていたら、計画数を超えているかどうかに関係なく<b>前の行までを引く</b>。v-8 で「計画数を超えた行だけ」に絞っていたが、B2 の 1,797個は計画3,080個の中に収まっているため引けていなかった。(2)★<b>工程詳細で1行目にも1,797が出ていたのを直した</b>（社長指摘「B2工程詳細には1も1797、入力画面では813」）。いま流している行を<b>品番名が同じか</b>で決めていたため、同じ品番が2行に分かれていると<b>両方が「いまの行」</b>になり、どちらにもライン全体の実績が出ていた。→ <b>行の位置（curJobIndex）</b>で決め、実績は行ごとの数を出す。(3)同じ理由で<b>達成率・ペース・「現時点の目標」も、いつも1行目（もう終わった行）を見ていた</b>。<code>curJobPlanned()</code> を作って、いま流している行を使うようにした。★この3つが重なって、B2 は実際より良い数字が出ていた。 -->
 <!-- H-Hub v2026.11.18-8 : ★<b>累計として引くのを「その行の計画数を超えている行」だけに絞った</b>。v-6で入れた「同じ品番が分かれていたら必ず累計として引く」を本番のデータで確かめたところ、<b>B2 で ありもしない783個の遅れが出た</b>。B2は 18120-5YT を 820＋3,080 に割っているが、<b>行ごとに数えて入れている</b>（2行目1,797個は10:10からの実績そのもので、ペース442個/h＝標準430個/hとぴったり合う）。ここを引くと実績2,610個が1,797個に化け、ペースも242個/hになってしまう。→ <b>引くのは「実績がその行の計画数を超えていて、累計としか考えられない」とき</b>だけにした。Cライン①の 14120-80U50 は2行目が665個で計画300個を超えているので、これまでどおり565個に直る。★<b>累計がまだその行の計画数の中に収まっているうちは見分けられない</b>（そのぶんは実際より良い数字のまま）。その場合でも「⚠ 実績が計画を大きく超えています」で気づけるようにしてある。 -->
 <!-- H-Hub v2026.11.18-7 : ★<b>「朝の計画との差」を、その日の全部の行で見るようにした</b>（2026-11-18 社長指摘「Cラインが出ていないのはなぜですか」）。実データを見たところ、<b>Cライン①は2,237個できているのに帯に出ていなかった</b>。原因は(1)「いま流している品番」が<b>まだ1個も入っていない行</b>（600個の行）を指していたため実績0とみなされた (2)差を<b>いま流している1行だけ</b>で見ていたので、終わった行のぶんが入らない、の2つ。大塚（2,250個）も同じ理由で消えていた。しかも<b>消えたことが画面のどこにも出ていなかった</b>。→ <code>calcPlanDiff()</code> を、その日の全部の行について「計画数 × 計画開始から基準時刻までの正味時間の割合」を足し上げる形に変えた。分数はその日ならしの標準CTで換算。あわせて<b>計画はあるのに実績が無いラインを「まだ実績が入っていない：◯◯・◯◯」と名前で出す</b>ようにしたので、黙って消えることがなくなった。★<b>ロス記録も同じ読み方にした</b>（社長「ロス記録も同じ考え方でいい」）＝同じ品番が分かれている行の実績を、カウンターの累計として前の行ぶんを引いてから数量達成率・CT達成率を出す。 -->
@@ -9464,7 +9465,23 @@ function _ssMoldLevels(){
      属性には関数名だけ書き、中身はここに置くこと。 */
 window.rtPrintSetupSheetClick = function(){
   Promise.resolve(window.rtPrintSetupSheet()).catch(function(e){
-    alert('段取り準備チェック表を作れませんでした。\n' + (e && e.message ? e.message : e));
+    const msg = (e && e.message ? e.message : String(e));
+    /* ★窓が「作っています…」のまま残らないよう、窓の中にも理由を出す（2026-11-18）。
+       alert は閉じると残らないので、写真に撮って見せてもらえるように窓へ書く。 */
+    try{
+      const w = window.__ssWin;
+      if(w && !w.closed){
+        w.document.body.innerHTML =
+          '<div style="font-family:\'Meiryo UI\',sans-serif;padding:26px;font-size:14px;line-height:1.9;color:#333;">'
+          + '<div style="font-size:17px;font-weight:700;color:#c0392b;">シートを作れませんでした</div>'
+          + '<div style="margin-top:10px;white-space:pre-wrap;">' + String(msg).replace(/[<>&]/g,'') + '</div>'
+          + '<div style="margin-top:10px;">この画面をそのまま社長に見せてください。</div>'
+          + '<div style="margin-top:14px;color:#888;font-size:12px;">H-Hub '
+          + ((typeof QC_UI_VERSION!=='undefined')?QC_UI_VERSION:'版不明')
+          + '　／　' + new Date().toLocaleString('ja-JP') + '</div></div>';
+      }
+    }catch(_){}
+    alert('段取り準備シートを作れませんでした。\n' + msg);
   });
 };
 
@@ -9858,7 +9875,13 @@ function _ssNextWorkday(ymd){
 async function _ssLoadDay(ymd){
   const fbUrl = (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/,'');
   try{
-    const res = await fetch(fbUrl + '/dantori/' + ymd + '.json');
+    /* ★返事が返ってこないPCがある（2026-11-18 社長報告「PCによって段取り準備シートが
+       出ません」）。待ちっぱなしだと窓が「作っています…」のまま固まるので、
+       8秒で諦める（2枚目の明日のぶんが空になるだけで、1枚目は出る）。 */
+    const _ctl = (typeof AbortController!=='undefined') ? new AbortController() : null;
+    const _tid = setTimeout(function(){ try{ _ctl && _ctl.abort(); }catch(e){} }, 8000);
+    const res = await fetch(fbUrl + '/dantori/' + ymd + '.json', _ctl?{signal:_ctl.signal}:undefined);
+    clearTimeout(_tid);
     if(!res.ok) return [];
     const data = await res.json();
     if(!data) return [];
@@ -9880,10 +9903,30 @@ window.rtPrintSetupSheet = async function(){
      見なさず黙って止める。警告も出ないので、壊れたようにしか見えない。 */
   const win = window.open('', '_blank');
   if(!win){ alert('ポップアップがブロックされました。\nアドレスバー右側のアイコンから許可してください。'); return; }
+  const _ssVer = (typeof QC_UI_VERSION!=='undefined') ? QC_UI_VERSION : '版不明';
   win.document.write('<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">'
     + '<title>段取り準備シート</title></head><body>'
-    + '<div style="font-family:\'Meiryo UI\',sans-serif;padding:26px;font-size:15px;color:#555;">'
-    + 'シートを作っています…</div></body></html>');
+    + '<div id="ssmsg" style="font-family:\'Meiryo UI\',sans-serif;padding:26px;font-size:15px;color:#555;">'
+    + 'シートを作っています…'
+    + '<div style="margin-top:10px;font-size:11px;color:#aaa;">H-Hub ' + _ssVer + '</div>'
+    + '</div></body></html>');
+  window.__ssWin = win;
+  /* ★PCによって出ないことがある（2026-11-18 社長報告）。黙って「作っています…」の
+     ままで固まらないよう、12秒たっても書き終わっていなければ理由を出す。
+     ここに版が出るので、そのPCが古い版を読んでいるのかどうかも分かる。 */
+  const _ssWd = setTimeout(function(){
+    try{
+      win.document.body.innerHTML =
+        '<div style="font-family:\'Meiryo UI\',sans-serif;padding:26px;font-size:14px;line-height:1.9;color:#333;">'
+        + '<div style="font-size:17px;font-weight:700;color:#c0392b;">シートを作れませんでした</div>'
+        + '<div style="margin-top:10px;">12秒待っても出来上がりませんでした。'
+        + 'このPCから、明日の計画（Firebase）か金型の情報（kintone）に届いていないようです。</div>'
+        + '<div style="margin-top:10px;">もう一度ボタンを押すと出ることがあります。'
+        + '出ないときは、この画面をそのまま社長に見せてください。</div>'
+        + '<div style="margin-top:14px;color:#888;font-size:12px;">H-Hub ' + _ssVer
+        + '　／　' + new Date().toLocaleString('ja-JP') + '</div></div>';
+    }catch(e){}
+  }, 12000);
 
   const ymd  = getDantoriDatePath();
   const nymd = _ssNextWorkday(ymd);
@@ -9982,6 +10025,7 @@ window.rtPrintSetupSheet = async function(){
     + _ssMemo(6)
     + '</div>';
 
+  clearTimeout(_ssWd);          /* 間に合ったので、見張りは止める */
   win.document.open();          /* 「作っています…」を消して、本物を書き込む */
   win.document.write('<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8">'
     + '<title>段取り準備シート ' + ymd + '</title><style>' + _SS_CSS + '</style></head><body>'
@@ -14735,7 +14779,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.18-9';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.18-10';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
