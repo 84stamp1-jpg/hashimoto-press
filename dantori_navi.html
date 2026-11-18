@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.19-2 : ★<b>1枚目に「今日の終品確認」の一覧を足した</b>（2026-11-19 社長指示）。帯の下の ※ だけだと帯を目で追うことになるので、<b>時刻の早い順に全ライン並べた札</b>を帯のすぐ下に置く（「<b>16:30</b> B2 18120-5YT □」）。横に並べるので高さをほとんど使わない。測り終えたら□にチェック。あわせて<b>凡例を短くした</b>（社長指示）＝「※＝終品確認（その品番のいちばん最後の生産が終わる30分前）」だけにし、「休憩は飛ばして作業時間で逆算」「測るのは仲田さん・見原さん」「30分に満たないものは開始と同時」は紙から外した（決めごとは変えていない。動きはそのまま）。 -->
 <!-- H-Hub v2026.11.19-1 : ★<b>段取り準備シートに「終品確認」の時刻を出した</b>（2026-11-19 社長指示）。生産の終了30分前に終品の確認をしなければならないが、紙には<b>いつ確認するかが出ていなかった</b>（段取りブロックの「終品：◯◯（〜17:00）」は品番と終わりの時刻だけで、しかも<b>そのあとに段取りが無い生産には出ない</b>）。→ <b>容器・スクラップを書く欄（帯の下の行）に、その時刻のところへ「※ 16:30」</b>と入れる。決めごとは社長指示のとおり：(1)<b>作業時間で30分前</b>＝休憩は飛ばして逆算する（時計で30分前だと、休憩をまたぐと実質20分しかない）(2)<b>全ライン30分</b>(3)<b>同じ品番が何回かに割れて予定されているときは、いちばん最後の生産終了の30分前だけ</b>(4)<b>生産が30分に満たないときは生産の開始と同時</b>。凡例に「測るのは仲田さん・見原さん（またはその二人が指示した人）」と明記した＝<b>ラインに付いている人は測らない</b>。 -->
 <!-- H-Hub v2026.11.18-10 : ★<b>PCによって段取り準備シートが出ない</b>件（2026-11-18 社長報告）の、原因を突き止めるための手当て。これまでは窓が<b>「シートを作っています…」のまま黙って固まる</b>ので、何で止まっているのかPCの前でしか分からなかった。(1)★<b>明日のぶんの読み込み（Firebaseへのfetch）に8秒の上限</b>を付けた。返事が来ないPCでは、これまで<b>いつまでも待っていた</b>。諦めても<b>2枚目の明日のぶんが空になるだけで、1枚目は出る</b>。(2)★<b>12秒たっても書き終わらなければ、窓に理由を出す</b>（「このPCから、明日の計画か金型の情報に届いていないようです」）。(3)★<b>窓に版を出す</b>（「H-Hub v2026.11.18-10」）。そのPCが<b>古い版を読んだまま</b>かどうかがその場で分かる（v2026.11.13-1以前は、このシート自体が真っ白になる不具合があった）。(4)つまずいたときの断り書きを、alertだけでなく<b>窓の中にも</b>出す（alertは閉じると残らず、写真に撮れない）。※ポップアップがブロックされているPCは、これまでどおり「ポップアップがブロックされました」と出る。 -->
 <!-- H-Hub v2026.11.18-9 : ★社長が実機で確認（「18120-5YT も朝からの累計です」）。(1)<b>累計の判定を元に戻した</b>＝同じ品番が複数の行に分かれていたら、計画数を超えているかどうかに関係なく<b>前の行までを引く</b>。v-8 で「計画数を超えた行だけ」に絞っていたが、B2 の 1,797個は計画3,080個の中に収まっているため引けていなかった。(2)★<b>工程詳細で1行目にも1,797が出ていたのを直した</b>（社長指摘「B2工程詳細には1も1797、入力画面では813」）。いま流している行を<b>品番名が同じか</b>で決めていたため、同じ品番が2行に分かれていると<b>両方が「いまの行」</b>になり、どちらにもライン全体の実績が出ていた。→ <b>行の位置（curJobIndex）</b>で決め、実績は行ごとの数を出す。(3)同じ理由で<b>達成率・ペース・「現時点の目標」も、いつも1行目（もう終わった行）を見ていた</b>。<code>curJobPlanned()</code> を作って、いま流している行を使うようにした。★この3つが重なって、B2 は実際より良い数字が出ていた。 -->
@@ -9578,6 +9579,16 @@ const _SS_CSS = `
   .mk.shu .ic{ font-size:9pt; font-weight:700; line-height:1; }
   .mk.shu .tm{ font-size:6.2pt; }
 
+  /* 「今日の終品確認」の一覧（2026-11-19 社長指示）。横に並べて高さを使わない */
+  .shulist{ display:flex; flex-wrap:wrap; gap:1.2mm; margin:.6mm 0 0; }
+  .shulist .s{ flex:0 0 auto; border:.7pt solid var(--line); border-radius:1pt;
+               padding:.5mm 1.6mm; font-size:7.4pt; white-space:nowrap; }
+  .shulist .s b{ color:#b45309; font-weight:800; margin-right:1.2mm; }
+  .shulist .s i{ font-style:normal; color:var(--sub); font-size:6.8pt; margin-right:1.2mm; }
+  .shulist .s u{ text-decoration:none; border:.7pt solid var(--line);
+                 display:inline-block; width:3mm; height:3mm;
+                 vertical-align:-.5mm; margin-left:1.4mm; }
+
   .rwrite{ height:8.4mm; }   /* 文字を大きくしたぶんをここから1mm回収（2026-11-14） */
 
   .legend{ font-size:7pt; color:var(--sub); margin-top:.5mm; line-height:1.4; }
@@ -9667,6 +9678,19 @@ function _ssShuhinTimes(list){
     }
     return { at:at, part:g.part };
   });
+}
+
+/* 全ラインぶんの終品確認を、時刻の早い順に並べて返す（1枚目の一覧用）。
+   2026-11-19 社長指示「『今日の終品確認』の一覧もお願いします」 */
+function _ssShuhinAll(jobs){
+  const ls = [];
+  (jobs || []).forEach(function(j){ if(ls.indexOf(j.line) < 0) ls.push(j.line); });
+  const out = [];
+  ls.forEach(function(L){
+    _ssShuhinTimes((jobs || []).filter(function(j){ return j.line === L; }))
+      .forEach(function(x){ out.push({ at:x.at, part:x.part, line:L }); });
+  });
+  return out.sort(function(a, b){ return a.at - b.at; });
 }
 
 function _ssTimeline(jobs, opt){
@@ -9825,9 +9849,7 @@ function _ssTimeline(jobs, opt){
        + '急ぐものは<b style="font-size:8.5pt">◎</b>、'
        + '手当て済みは記号に<b style="font-size:8.5pt">／</b>を重ねる<br>'
        + '<b style="color:#b45309;font-size:9pt">※</b>'
-       + '＝<b>終品確認</b>（その品番の<b>いちばん最後の生産が終わる30分前</b>。'
-       + '休憩は飛ばして作業時間で逆算）。<b>測るのは仲田さん・見原さん</b>'
-       + '（またはその二人が指示した人）。生産が30分に満たないものは生産の開始と同時'
+       + '＝<b>終品確認</b>（その品番の<b>いちばん最後の生産が終わる30分前</b>）'
        + '</div>';
   }
   return h;
@@ -10016,11 +10038,24 @@ window.rtPrintSetupSheet = async function(){
       + '<span class="who">' + sub + '　<span style="color:#aaa">印刷 ' + stamp + '</span></span></div>';
   };
 
+  /* 今日の終品確認（時刻の早い順・全ライン）。2026-11-19 社長指示 */
+  const shuAll = _ssShuhinAll(jobs);
+
   /* --- 1枚目：今日のこと（これだけで今日の記録は済む） --- */
   const p1 = '<div class="sheet">' + head('1枚目／今日　<span style="color:#1d4ed8">進捗管理ボードの予定</span>')
     + '<div class="sec">時間でみる<span>　生産の予定。運ぶもの（容器・スクラップ・材料）は、回りながら記号で書き込む</span></div>'
     + (jobs.length ? _ssTimeline(jobs, { full:true })
                    : '<div class="legend">※ ' + src.why + '</div>')
+    + (shuAll.length
+        ? '<div class="sec" style="margin-top:1.5mm">今日の終品確認　' + shuAll.length + '件'
+          + '<span>　その品番の<b>最後の生産が終わる30分前</b>。測り終えたら□にチェック</span></div>'
+          + '<div class="shulist">'
+          + shuAll.map(function(x){
+              return '<div class="s"><b>' + _ssHHMM(x.at) + '</b>'
+                   + '<i>' + esc(x.line) + '</i>' + esc(x.part) + '<u></u></div>';
+            }).join('')
+          + '</div>'
+        : '')
     + '<div class="sec">今日の段取り　' + today.length + '件'
     +   '<span>　準備開始＝段取り開始の' + SETUP_LEAD_MIN + '分前。機械を止める前にそろえる。'
     +   '<b>終品：</b>＝終品を測るのはこの品番（いま流れている前の品）</span></div>'
@@ -14827,7 +14862,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.19-1';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.19-2';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
