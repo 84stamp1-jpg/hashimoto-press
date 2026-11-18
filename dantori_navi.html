@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.18-5 : ★進捗ボードの3点（2026-11-18 社長指示）。(1)★<b>上の帯をラインごとにした</b>。前の版は全ラインを足した合計だったので「先行+1,684個」がどのラインのものか分からなかった。→ <b>A1 +238個(133分先行)</b> のような札をラインの数だけ並べる（緑＝先行・赤＝遅れ）。合計は出さない。(2)★<b>「今日の終わりに何個足りない見込みか」</b>をカードに足した。<code>calcDayEnd()</code>＝今日の計画（その日の全品番の合計）に対し、<b>いまのペース（通算）のまま終業まで流したら何個できるか</b>を出し、差を「📅 終業 19:10 までに 590個 足りない見込み」と出す。下に「今日の計画○個／いま○個／残り○分を通算○個/h で流して 見込み○個」と根拠も添える。これまでの「計画比」は<b>いま流している品番だけ</b>だったので、1日の着地が分からなかった。(3)★<b>カウンターの累計を入れている疑いを知らせる</b>（社長指摘：14120-80U50 は計画を3つに割ってあるのに、実績はカウンターの累計で入れている）。実績が計画の1.2倍を超え、かつ50個以上多い行に<b>「⚠ 実績○個が計画○個を大きく超えています。カウンターの累計ではなくこの行だけの数を入れてください」</b>を出す。※累計のまま入っていると、達成率・計画との差・今日の見込みが<b>すべて実際より良く出る</b>。 -->
 <!-- H-Hub v2026.11.18-4 : ★<b>進捗ボードに「朝の計画との差」を足した</b>（2026-11-18 社長指示）。(1)★<b>カードの「⏱ 計画比」を、先行しているときも出す</b>ようにした。これまでは<b>遅れているときしか出ず</b>、先行ぶんは「現時点の目標」と「実績」を見て自分で引き算するしかなかった。→ 遅れ＝赤「計画比 13分遅れ（56個不足）」／先行＝緑「計画比 136分先行（238個多い）」／ぴったり＝灰「計画どおり」。(2)★<b>いつ時点の数字かを頭に出す</b>（「14:00時点」）。この数字はすべて<b>最後に実績を入れた時刻が基準</b>で、入力が止まっていればその時刻のまま動かない。社長の指摘「その進度は実績入力を更新した時点ですよね」に対応。(3)★<b>カードの真上に全体の帯</b>を置いた。「⏱ 朝の計画との差（13:59〜14:00 時点）／先行 +775個（139分ぶん）／遅れ −56個（13分ぶん）／遅れているライン：Bライン（−56個・13分）」。1本ずつ足し算しなくても、どこが貯金でどこが借金かが一目で分かる。実績が未入力のラインは数に入れず「○本は数えていません」と添える。計算は <code>calcPlanDiff()</code> に1本化（計画の開始から基準時刻までの正味時間÷標準CT＝あるべき数、との差）。 -->
 <!-- H-Hub v2026.11.18-3 : 「システム入力 済」の札に<b>行番号が日時として出ていた</b>のを直した（本番で確認）。記録の行は<b>末尾に行番号が足してある</b>ので、U列(21)のつもりで <code>r[20]</code> を読むと、まだU列が無いシートでは行番号そのものになる（「済（3116）」と出た）。本当の列数（<code>r.length-1</code>）を見て、列がそこまで無ければ空にする。 -->
 <!-- H-Hub v2026.11.18-2 : ★<b>入力済みの「↶ 取り消す」と、誰がいつ押したかの記録</b>（2026-11-18 社長指示）。v2026.11.18-1 の2段階確認に加えて、<b>押してしまったものを戻せる</b>ようにした。(1)★<b>押した直後の札から「↶ 取り消す」</b>。その場で気づいたらすぐ入力待ちへ戻せる。(2)★<b>あとから気づいたとき</b>は、日別一覧の明細（✏️🗑️の並び）に出る<b>「システム入力 済（日時　端末）」</b>の横の「↶ 取り消す」から戻せる。(3)★<b>いつ・どの端末から押したかをシートに残す</b>。これまでM列の「済」の一文字しか残らず、押し間違いを追えなかった。<b>U列＝システム入力 日時／V列＝システム入力 端末</b>（端末名は呼び出しの設定で決めた「この端末の置き場所」）。取り消したときは「未」に戻し、V列に「取消 ○○」と残す。(4)取り消しも<b>1回押しただけでは確定しない</b>（押し間違いを押し間違いで直さないため）。★<b>GASの貼り替えと再デプロイが必要</b>（品質チェックシート/gas仕様/コード.gs・手順書あり）。貼り替えるまで「↶ 取り消す」は失敗する。 -->
@@ -1366,6 +1367,12 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 #tab-progress .plansum .ps-ng{font-weight:800;color:#c0392b;}
 #tab-progress .plansum .ps-who{color:#c0392b;font-weight:700;}
 #tab-progress .plansum .ps-mute{color:#94a3b8;}
+#tab-progress .plansum .ps-chip{display:inline-flex;align-items:baseline;gap:5px;
+  padding:2px 8px;border-radius:999px;font-weight:800;font-size:12px;white-space:nowrap;}
+#tab-progress .plansum .ps-chip.ok{background:#eaf7f0;border:1px solid #86efac;color:#15803d;}
+#tab-progress .plansum .ps-chip.ng{background:#ffecec;border:1px solid #f5a9a9;color:#c0392b;}
+#tab-progress .plansum .ps-chip.even{background:#f1f5f9;border:1px solid #cbd5e1;color:#475569;}
+#tab-progress .plansum .ps-sub{font-weight:600;font-size:10px;opacity:.85;}
 #tab-progress .sum{display:flex;gap:6px;margin-bottom:8px;align-items:stretch;}  /* ★カードは右端のミニ地図と同じ高さまで使う（空きを作らない） */
 #tab-progress .sc{background:#fff;border-radius:7px;padding:6px 10px;border:1px solid #ddd;display:flex;align-items:center;gap:8px;flex:0 1 auto;min-width:0;}  /* ★中身ぶんの幅だけ使う。余った横は「この日の計画」に回す */
 #tab-progress .sc-info{flex:1;min-width:0;}
@@ -14724,7 +14731,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.18-4';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.18-5';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
@@ -17884,12 +17891,42 @@ function calcPlanDiff(l){
            minutes:Math.round(Math.abs(diff)*planCT), planCT:planCT, job:j };
 }
 
-/* ★全体で何個の遅れ／先行か（カードの真上の帯）。遅れているラインは名前で出す */
+/* ★今日の終わりに何個足りない見込みか（2026-11-18 社長指示）。
+   今日の計画（その日の全品番の合計）に対して、いまのペースのまま最後まで流したとき、
+   終業（その日のいちばん遅い計画終了時刻）までに何個できるかを出す。
+   ペースは「今日ここまでの実績 ÷ 最初の計画開始から基準時刻までの正味分」＝カードの「通算」と同じ考え方。
+   段取りも停止もぜんぶ入った、ありのままのペース。 */
+function calcDayEnd(l){
+  if(!l || !(l.updatedAt>0)) return null;
+  const js=(l.jobs||[]).filter(j=>j&&j.plan>0&&j.start&&j.end&&!j.history);
+  if(!js.length) return null;
+  const ut=new Date(l.updatedAt);
+  const updM=ut.getHours()*60+ut.getMinutes();
+  let planTotal=0, actualTotal=0, firstStart=null, lastEnd=null;
+  js.forEach(function(j){
+    planTotal+=(j.revisedPlan||j.plan||0);
+    actualTotal+=(j.actualCount||0);
+    const sm=timeToMin(j.actualStart||j.start), em=timeToMin(j.end);
+    if(sm!==null&&(firstStart===null||sm<firstStart)) firstStart=sm;
+    if(em!==null&&(lastEnd===null||em>lastEnd)) lastEnd=em;
+  });
+  if(!(planTotal>0)||!(actualTotal>0)||firstStart===null||lastEnd===null) return null;
+  const worked=netMins(firstStart,Math.min(updM,lastEnd));
+  if(!(worked>0)) return null;
+  const pace=actualTotal/worked;                       // 個/分
+  const remain=Math.round(netMins(Math.min(updM,lastEnd),lastEnd));
+  const forecast=Math.round(actualTotal+pace*remain);
+  return { planTotal:planTotal, actualTotal:actualTotal, lastEnd:lastEnd, updM:updM,
+           remain:remain, forecast:forecast, diff:forecast-planTotal,
+           paceH:Math.round(pace*60) };
+}
+
+/* ★全体で何個の遅れ／先行か（カードの真上の帯）。ラインごとに出す */
 function renderPlanSum(ids){
   const box=document.getElementById('planSumBox');
   if(!box) return;
-  let ahead=0, aheadMin=0, behind=0, behindMin=0, t0=null, t1=null, noInput=0;
-  const late=[];
+  let t0=null, t1=null, noInput=0;
+  const chips=[];
   (ids||[]).forEach(function(id){
     const l=lines[id]; if(!l) return;
     const running=!!(l.workStart&&l.workStart!==''&&(!l.workEnd||l.workEnd===''));
@@ -17897,18 +17934,21 @@ function renderPlanSum(ids){
     if(!pd){ if(running) noInput++; return; }
     t0=(t0===null||pd.updM<t0)?pd.updM:t0;
     t1=(t1===null||pd.updM>t1)?pd.updM:t1;
-    if(pd.diff<0){ behind+=-pd.diff; behindMin+=pd.minutes;
-      late.push(getLineName(id)+'（'+pd.diff.toLocaleString()+'個・'+pd.minutes+'分）'); }
-    else if(pd.diff>0){ ahead+=pd.diff; aheadMin+=pd.minutes; }
+    const nm=getLineName(id);
+    if(pd.diff<0)
+      chips.push('<span class="ps-chip ng">'+nm+' −'+(-pd.diff).toLocaleString()
+                +'個<span class="ps-sub">'+pd.minutes+'分遅れ</span></span>');
+    else if(pd.diff>0)
+      chips.push('<span class="ps-chip ok">'+nm+' +'+pd.diff.toLocaleString()
+                +'個<span class="ps-sub">'+pd.minutes+'分先行</span></span>');
+    else
+      chips.push('<span class="ps-chip even">'+nm+' 計画どおり</span>');
   });
   if(t0===null && !noInput){ box.style.display='none'; return; }
   const when=(t0===null)?'' : (t0===t1? _hhmm(t0)+' 時点' : _hhmm(t0)+'〜'+_hhmm(t1)+' 時点');
-  let h='<span class="ps-t">⏱ 朝の計画との差'+(when?'（'+when+'）':'')+'</span>';
-  if(ahead>0)  h+='<span class="ps-ok">先行 +'+ahead.toLocaleString()+'個（'+aheadMin+'分ぶん）</span>';
-  if(behind>0) h+='<span class="ps-ng">遅れ −'+behind.toLocaleString()+'個（'+behindMin+'分ぶん）</span>';
-  if(late.length) h+='<span class="ps-who">遅れているライン：'+late.join('　')+'</span>';
-  else if(t0!==null) h+='<span class="ps-ok">遅れているラインはありません</span>';
-  if(noInput>0) h+='<span class="ps-mute">（実績が未入力のライン '+noInput+'本は数えていません）</span>';
+  let h='<span class="ps-t">⏱ 朝の計画との差'+(when?'（'+when+'）':'')+'　ラインごと</span>';
+  h+=chips.join('');
+  if(noInput>0) h+='<span class="ps-mute">実績が未入力のライン '+noInput+'本は出していません</span>';
   box.innerHTML=h;
   box.style.display='';
 }
@@ -17989,6 +18029,18 @@ function renderBoard(){
           delayDisp='<div style="font-size:10px;color:#64748b;font-weight:700;margin-top:2px;">'+when
                    +'計画どおり</div>';
         }
+      }
+      /* ★今日の終わりに何個足りない見込みか（2026-11-18 社長指示） */
+      const de=calcDayEnd(l);
+      if(de){
+        const col=de.diff<0?'#c0392b':'#15803d';
+        const txt=de.diff<0
+          ? ('終業 '+_hhmm(de.lastEnd)+' までに '+(-de.diff).toLocaleString()+'個 足りない見込み')
+          : ('終業 '+_hhmm(de.lastEnd)+' までに 計画より '+de.diff.toLocaleString()+'個 多い見込み');
+        delayDisp+='<div style="font-size:10px;color:'+col+';font-weight:700;margin-top:2px;">📅 '+txt+'</div>'
+          +'<div style="font-size:9px;color:#888;margin-top:1px;padding-left:2px;">└ 今日の計画 '
+          +de.planTotal.toLocaleString()+'個／いま '+de.actualTotal.toLocaleString()+'個／'
+          +'残り'+de.remain+'分を通算'+de.paceH+'個/h で流して 見込み '+de.forecast.toLocaleString()+'個</div>';
       }
     }
     // 3種類ペース（現品番のみ・正味時間ベースで統一）
@@ -18162,6 +18214,17 @@ function renderBoard(){
             ? '<span></span>'+
               '<span style="grid-column:2/-1;font-size:10px;color:#b45309;background:#fff8e1;border-left:3px solid #f9a825;border-radius:0 4px 4px 0;padding:2px 6px;margin-top:2px;white-space:normal;word-break:break-all;">📝 '+noteEsc+'</span>'
             : '';
+          /* ★実績が計画を大きく超えている行。カウンターの累計を入れている疑い
+             （2026-11-18 社長指摘：計画は3つに割ってあるが、実績はカウンターの累計で入れている）。
+             そのままだと達成率も「計画との差」も実際より良く出てしまう。 */
+          const _planJ=(j.revisedPlan||j.plan||0), _actJ=(j.actualCount||0);
+          const cumWarn=(_planJ>0&&_actJ>_planJ*1.2&&_actJ>_planJ+50)
+            ? '<span></span><span style="grid-column:2/-1;font-size:10px;color:#9a3412;'
+              +'background:#fff7ed;border-left:3px solid #fb923c;border-radius:0 4px 4px 0;'
+              +'padding:2px 6px;margin-top:2px;white-space:normal;">⚠ 実績 '+_actJ.toLocaleString()
+              +'個が計画 '+_planJ.toLocaleString()+'個を大きく超えています。'
+              +'カウンターの累計ではなく<b>この行だけの数</b>を入れてください</span>'
+            : '';
           sched+='<div class="sr'+(cur?' cur':'')+'">'+
             '<span class="sn">'+(j.seq!=null?j.seq:jIdx+1)+'</span>'+
             '<span class="sp sp-link" data-search-part="'+_thEsc(j.part)+'" title="品番検索で開く">'+(cur?'▶ ':'')+j.part+'</span>'+
@@ -18175,6 +18238,7 @@ function renderBoard(){
               '<span></span>'+'<span></span>'+
               '<span style="font-size:9px;line-height:1.8;display:flex;flex-wrap:wrap;gap:0 2px;min-width:0;">'+snapDisp+'</span>'
             :'')+
+            cumWarn+
             noteRow+
           '</div>';
       });
