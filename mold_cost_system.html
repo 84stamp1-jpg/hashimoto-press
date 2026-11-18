@@ -255,6 +255,7 @@
 })();
 </script>
 <title>金型製作原価管理システム | 橋本工業</title>
+<!-- 金型原価 v2026.11.18-1 : <b>材料見積の品目リストで 6F に▽の仕上記号が出なかった</b>のを直した（2026-11-18 社長指摘。出るのは2Fと4Fだけだった）。材料表Excelの「F」の列（どの面を仕上げるか）だけを見て▽を出していたが、<b>6Fの行はF列が空で「仕上」の列に 6F とだけ書いてある</b>ため、1つも立たなかった。→ <code>finishFaces()</code> を作り、<b>1面も立っていないときは仕上記号から決める</b>ようにした（6F→X・Y・Z／4F→X・Z／2F→Z。手入力の既定と同じ並び）。取り込むときにも、F列の数が仕上記号と合わなければ仕上記号を正として入れ直す。<b>すでに取り込んである品目も、画面を開き直せば▽が出る</b>（保存し直し不要）。依頼品目リスト・比較決定の一覧・材料依頼書の印刷・材料費への確定の4か所に同じ判定を通した。 -->
 <!-- 金型原価 v2026.11.03-1 : <b>金型NO.の候補が 71-S までしか出なかった</b>のを直した（社長指摘）。材料費・外注費・購入品費・見積依頼の「選択または入力」は、管理NO.の小さい順に並べたあと<b>先頭20件で打ち切っていた</b>ため、あとから登録した新しい金型（71-T 以降）が一覧に出てこなかった。<b>上限を300件に上げ</b>、それでも超えるときだけ末尾に「ほか○件 — 文字を打つと絞り込めます」と出す。一覧は枠の中でスクロールする。★打ち込んで絞り込めば、今までも出ていた（データは入っている）。 -->
 <!-- 金型原価 v2026.11.02-1 : ★<b>PINを入れても「PINが違います」になる件を直した</b>（社長報告）。入口の関所が<b>iframeを作らせない</b>ようにしていたが、<b>reCAPTCHAはiframeの中で動く</b>ため App Check の証明書が取れず、会社のPIN（Firebase settings/adminPinHash）が<b>401で読めなかった</b>。そのため控えのあるPCだけ通り、<b>控えの無いPCでは会社のPINが弾かれ、初期の番号で開いてしまう</b>状態だった。iframeは作らせ、代わりに<b>Firebaseのデータベースだけ</b>を鍵が開くまで使わせないようにした。あわせて、会社のPINを確認できないまま控えで照合するときは画面にその旨を出す。 -->
 <!-- 金型原価 v2026.10.31-2 : ★<b>管理者PINを入口に置いた</b>（社長指示）。この画面は見積金額・加工費・チャージ・作業者名を扱うが、メニューに載せていないだけで、<b>ファイル名を知っていれば誰でも開けていた</b>。段取りナビと同じ<b>会社で1つの管理者PIN</b>（Firebase settings/adminPinHash・SHA-256）を入口に置く。PINそのものはどこにも持たない。<b>開くまではFirebaseと中継への通信を止める</b>ので、見た目を隠すだけでなく中身を取りに行かない。解錠すると読み直し、そのタブを閉じるまでは聞かれない。★settings/adminPinHash を消せば以前の方式に戻るので締め出されることはない。 -->
@@ -922,7 +923,7 @@ input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; margin
     <div class="logo-mark">H</div>
     <div>
       <div class="logo-text">金型製作原価管理</div>
-      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.11.03-1</span></div>
+      <div class="logo-sub">HASHIMOTO KOGYO — MOLD COST SYSTEM &nbsp; <span style='font-size:9px;background:#334155;padding:1px 6px;border-radius:3px;letter-spacing:0.05em'>v2026.11.18-1</span></div>
     </div>
   </div>
   <div class="header-right">
@@ -5405,6 +5406,30 @@ function finishLabel(f) {
   return map[f] || (f ? String(f) : '—');
 }
 
+// 仕上げ面の数（6F＝3面・4F＝2面・2F＝1面）。黒皮・空欄・その他は null
+function finishFaceCount(f) {
+  if (f === '' || f === null || f === undefined) return null;
+  const m = finishLabel(f);
+  if (m === '6F') return 3;
+  if (m === '4F') return 2;
+  if (m === '2F') return 1;
+  return null;
+}
+
+// どの寸法に ▽▽ を出すか。
+// ・品目に fX/fY/fZ（どの面を仕上げるか）が立っていれば、それをそのまま使う
+// ・★1面も立っていないのに仕上記号だけ入っているときは、仕上記号から決める。
+//   材料表Excelは「仕上」の列だけ書いて F の列が空のことがあり、そのままだと
+//   6F なのに▽が1つも出なかった（2026-11-18 社長指摘）。
+//   並びは手入力のときの既定と同じ（6F→X・Y・Z／4F→X・Z／2F→Z）。
+function finishFaces(item) {
+  if (item && (item.fX || item.fY || item.fZ))
+    return { fX: !!item.fX, fY: !!item.fY, fZ: !!item.fZ };
+  const n = finishFaceCount(item && item.finish);
+  if (n === null) return { fX: false, fY: false, fZ: false };
+  return { fX: n >= 2, fY: n >= 3, fZ: n >= 1 };
+}
+
 // F数から仕上げ記号を計算（Excelの列5,7,9のF）
 function calcFinish(xF, yF, zF, explicitFinish) {
   if (explicitFinish) return explicitFinish;
@@ -5556,6 +5581,7 @@ function renderQuoteItemTable() {
       </tr></thead>
       <tbody>${quoteItems.map((r,i) => {
         const sizeCell = (val, hasF) => { const num=String(val||'').replace(/\.00$/,''); if(!num)return'—'; const mark=hasF?'<div style="color:var(--green);font-size:14pt;font-weight:700;line-height:1;text-align:center">▽▽</div>':'<div style="height:13px"></div>'; return '<div style="display:inline-flex;flex-direction:column;align-items:center;line-height:1.3">'+mark+'<span>'+num+'</span></div>'; };
+        const _ff = finishFaces(r);   /* ★F列が空でも仕上記号から▽を出す（2026-11-18） */
         // itemMatNo(71-B113)または moldNo(71-B)で前方一致チェック
         const _checkNo = r.moldNo || '';
         const moldOk = Object.values(DB.molds||{}).some(m =>
@@ -5575,9 +5601,9 @@ function renderQuoteItemTable() {
           '<td>' + (r.name||'') + '</td>' +
           '<td class="mono">' + (r.qty||1) + '</td>' +
           '<td class="mono">' + (r.material||'') + '</td>' +
-          '<td class="mono" style="font-size:11px;text-align:center;vertical-align:middle;padding:3px 4px">' + sizeCell(r.sizeX, r.fX) + '</td>' +
-          '<td class="mono" style="font-size:11px;text-align:center;vertical-align:middle;padding:3px 4px">' + sizeCell(r.sizeY, r.fY) + '</td>' +
-          '<td class="mono" style="font-size:11px;text-align:center;vertical-align:middle;padding:3px 4px">' + sizeCell(r.sizeZ, r.fZ) + '</td>' +
+          '<td class="mono" style="font-size:11px;text-align:center;vertical-align:middle;padding:3px 4px">' + sizeCell(r.sizeX, _ff.fX) + '</td>' +
+          '<td class="mono" style="font-size:11px;text-align:center;vertical-align:middle;padding:3px 4px">' + sizeCell(r.sizeY, _ff.fY) + '</td>' +
+          '<td class="mono" style="font-size:11px;text-align:center;vertical-align:middle;padding:3px 4px">' + sizeCell(r.sizeZ, _ff.fZ) + '</td>' +
           '<td style="text-align:center;vertical-align:middle;padding:4px 8px;font-weight:600">' + finishLabel(r.finish) + '</td>' +
           '<td style="font-size:11px">' + (r.note||'') + '</td>' +
           '<td style="white-space:nowrap">' +
@@ -5678,10 +5704,17 @@ function parseMaterialExcel(buf) {
     const size = [sizeX, sizeY, sizeZ].filter(Boolean).join(' × ');
 
 
-    // fX/fY/fZ はExcelのF列から取得したbool値
-    const fXb = (xF === 'F' || xF === 'f');
-    const fYb = (yF === 'F' || yF === 'f');
-    const fZb = (zF === 'F' || zF === 'f');
+    // fX/fY/fZ はExcelのF列（どの面を仕上げるか）から取得したbool値。
+    // ★ただし材料表は「仕上」の列だけ書いて F の列が空のことがある（6Fがこれ）。
+    //   そのままだと▽が1つも出ないので、面の数が仕上記号と合わないときは
+    //   仕上記号のほうを正として入れ直す（2026-11-18 社長指摘）。
+    let fXb = (xF === 'F' || xF === 'f');
+    let fYb = (yF === 'F' || yF === 'f');
+    let fZb = (zF === 'F' || zF === 'f');
+    const _want = finishFaceCount(finish);
+    if (_want !== null && _want !== [fXb,fYb,fZb].filter(Boolean).length) {
+      fXb = _want >= 2; fYb = _want >= 3; fZb = _want >= 1;
+    }
 
     // 管理NO連番（baseExcelMatNoからループ内で連番付加）
     const baseForSeq = baseExcelMatNo ? (baseExcelMatNo.length >= 5 && !isNaN(baseExcelMatNo.slice(-2)) ? baseExcelMatNo.slice(0,-2) : baseExcelMatNo) : '';
@@ -5983,8 +6016,8 @@ function renderCompare() {
         ...sups.map(sid => `<option value="${sid}"${itemDecided===sid?' selected':''}>${supShort[sid]||sid}</option>`)
       ].join('');
 
-      const _hf='fX' in item,_af=!_hf&&['6F','4F','▽▽▽','▽▽','6F（全面）','4F（2面）'].includes(item.finish);
-      const _fX=_hf?item.fX:_af,_fY=_hf?item.fY:_af,_fZ=_hf?item.fZ:_af;
+      const _ff2=finishFaces(item);   /* ★F列が空でも仕上記号から▽を出す（2026-11-18） */
+      const _fX=_ff2.fX,_fY=_ff2.fY,_fZ=_ff2.fZ;
       const isChecked = (rec.checkedItems||{})[i] === true;
       return `<tr style="border-bottom:1px solid var(--border);${isChecked?'':'opacity:0.5'}">
         <td style="padding:4px 6px;text-align:center">
@@ -6227,8 +6260,8 @@ function printCompareSheet(reqKey, showPrice) {
     const q=sid?(rec.quotes?.[reqKey+'_'+i+'_'+sid]||{}):{};
     const up=parseFloat(q.unitPrice||0);
     const f3=v=>String(v||'').replace(/\.00$/,'');
-    const hf='fX' in item,af=!hf&&['6F','4F','▽▽▽','▽▽','6F（全面）','4F（2面）'].includes(item.finish);
-    const fX=hf?item.fX:af,fY=hf?item.fY:af,fZ=hf?item.fZ:af;
+    const _ff3=finishFaces(item);   /* ★F列が空でも仕上記号から▽を出す（2026-11-18） */
+    const fX=_ff3.fX,fY=_ff3.fY,fZ=_ff3.fZ;
     const sc=(v,f)=>{const n=f3(v);if(!n)return'&mdash;';return(f?'<div style="color:#16a34a;font-size:11px;font-weight:700;text-align:center">▽▽</div>':'<div style="height:16px"></div>')+'<div>'+n+'</div>';};
     const fm={'6F':'6F','4F':'4F','2F':'2F','黒皮':'黒皮','▽▽▽':'6F','▽▽':'4F','▽':'2F','6F（全面）':'6F','4F（2面）':'4F','2F（1面）':'2F'};
     const pc=showPrice?`<td style="text-align:right;padding:5px 8px">${up?'&yen;'+fmt(up):'&mdash;'}</td>`:'';
@@ -6282,9 +6315,9 @@ async function addToMaterials(reqKey, supId, indices) {
       sizeX:    item.sizeX || '',
       sizeY:    item.sizeY || '',
       sizeZ:    item.sizeZ || '',
-      fX:       item.fX || false,
-      fY:       item.fY || false,
-      fZ:       item.fZ || false,
+      fX:       finishFaces(item).fX,
+      fY:       finishFaces(item).fY,
+      fZ:       finishFaces(item).fZ,
       finish:   item.finish || '',
       weight:   item.weight || '',
       qty:      item.qty    || 1,
@@ -8946,9 +8979,9 @@ async function confirmCheckedItems(reqKey) {
       sizeX:    item.sizeX || '',
       sizeY:    item.sizeY || '',
       sizeZ:    item.sizeZ || '',
-      fX:       item.fX || false,
-      fY:       item.fY || false,
-      fZ:       item.fZ || false,
+      fX:       finishFaces(item).fX,
+      fY:       finishFaces(item).fY,
+      fZ:       finishFaces(item).fZ,
       finish:   item.finish   || '',
       weight:   item.weight   || '',
       qty:      item.qty      || 1,
