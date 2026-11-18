@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.18-4 : ★<b>進捗ボードに「朝の計画との差」を足した</b>（2026-11-18 社長指示）。(1)★<b>カードの「⏱ 計画比」を、先行しているときも出す</b>ようにした。これまでは<b>遅れているときしか出ず</b>、先行ぶんは「現時点の目標」と「実績」を見て自分で引き算するしかなかった。→ 遅れ＝赤「計画比 13分遅れ（56個不足）」／先行＝緑「計画比 136分先行（238個多い）」／ぴったり＝灰「計画どおり」。(2)★<b>いつ時点の数字かを頭に出す</b>（「14:00時点」）。この数字はすべて<b>最後に実績を入れた時刻が基準</b>で、入力が止まっていればその時刻のまま動かない。社長の指摘「その進度は実績入力を更新した時点ですよね」に対応。(3)★<b>カードの真上に全体の帯</b>を置いた。「⏱ 朝の計画との差（13:59〜14:00 時点）／先行 +775個（139分ぶん）／遅れ −56個（13分ぶん）／遅れているライン：Bライン（−56個・13分）」。1本ずつ足し算しなくても、どこが貯金でどこが借金かが一目で分かる。実績が未入力のラインは数に入れず「○本は数えていません」と添える。計算は <code>calcPlanDiff()</code> に1本化（計画の開始から基準時刻までの正味時間÷標準CT＝あるべき数、との差）。 -->
 <!-- H-Hub v2026.11.18-3 : 「システム入力 済」の札に<b>行番号が日時として出ていた</b>のを直した（本番で確認）。記録の行は<b>末尾に行番号が足してある</b>ので、U列(21)のつもりで <code>r[20]</code> を読むと、まだU列が無いシートでは行番号そのものになる（「済（3116）」と出た）。本当の列数（<code>r.length-1</code>）を見て、列がそこまで無ければ空にする。 -->
 <!-- H-Hub v2026.11.18-2 : ★<b>入力済みの「↶ 取り消す」と、誰がいつ押したかの記録</b>（2026-11-18 社長指示）。v2026.11.18-1 の2段階確認に加えて、<b>押してしまったものを戻せる</b>ようにした。(1)★<b>押した直後の札から「↶ 取り消す」</b>。その場で気づいたらすぐ入力待ちへ戻せる。(2)★<b>あとから気づいたとき</b>は、日別一覧の明細（✏️🗑️の並び）に出る<b>「システム入力 済（日時　端末）」</b>の横の「↶ 取り消す」から戻せる。(3)★<b>いつ・どの端末から押したかをシートに残す</b>。これまでM列の「済」の一文字しか残らず、押し間違いを追えなかった。<b>U列＝システム入力 日時／V列＝システム入力 端末</b>（端末名は呼び出しの設定で決めた「この端末の置き場所」）。取り消したときは「未」に戻し、V列に「取消 ○○」と残す。(4)取り消しも<b>1回押しただけでは確定しない</b>（押し間違いを押し間違いで直さないため）。★<b>GASの貼り替えと再デプロイが必要</b>（品質チェックシート/gas仕様/コード.gs・手順書あり）。貼り替えるまで「↶ 取り消す」は失敗する。 -->
 <!-- H-Hub v2026.11.18-1 : ★<b>「✓ 入力済みにする」の押し間違い対策</b>（2026-11-18 社長指摘「間違えて押してしまう人がいます」「ボタンの上にマウスがあって、画面が固まったときに何気なく押してしまうらしい」「入力する前に押す」「関係ない場所で押す」）。(1)★<b>1回押しただけでは確定しない</b>。1回目は<b>「⚠ ○○（製造番号）を入力しましたか？　もう一度押すと確定」</b>という黄色い見た目に変わるだけで、何も起きない。<b>0.6秒たってからの2回目</b>で確定する（連打やダブルクリックでは通り抜けない）。<b>8秒さわらなければひとりでに元に戻る</b>ので、うっかり1回押しただけなら何も残らない。ボタンは一度に1つだけ確認の状態になる。(2)★<b>入力済みにしたものを画面に残す</b>（社長指摘「間違って押したことに気づかないこともある」）。これまでは「✓ ○○ を入力済みにしました」が<b>3.5秒で消えていた</b>ので、押したことも何を押したかも残らなかった。→ 消さずに<b>製造番号・品番・時刻つきで積み上げ</b>、✕ で消す形にした。あとから見直せるよう<b>「まだシステムに入力していなければ押し間違いです。記録シートのM列を『未』に戻してください」</b>も小さく添える。※取り消しボタン（画面から「未」に戻す）はGASの貼り替えが要るため、まだ入れていない。 -->
@@ -1357,6 +1358,14 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 #tab-progress .main{flex:1;overflow-y:auto;padding:10px 14px;}
 
 /* サマリー：コンパクト横並び */
+/* ★朝の計画との差（全体）。カードの真上に置く（2026-11-18 社長指示） */
+#tab-progress .plansum{display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+  margin:0 0 8px;padding:6px 10px;border-radius:7px;background:#f8fafc;border:1px solid #e2e8f0;font-size:12px;}
+#tab-progress .plansum .ps-t{font-weight:700;color:#334155;}
+#tab-progress .plansum .ps-ok{font-weight:800;color:#15803d;}
+#tab-progress .plansum .ps-ng{font-weight:800;color:#c0392b;}
+#tab-progress .plansum .ps-who{color:#c0392b;font-weight:700;}
+#tab-progress .plansum .ps-mute{color:#94a3b8;}
 #tab-progress .sum{display:flex;gap:6px;margin-bottom:8px;align-items:stretch;}  /* ★カードは右端のミニ地図と同じ高さまで使う（空きを作らない） */
 #tab-progress .sc{background:#fff;border-radius:7px;padding:6px 10px;border:1px solid #ddd;display:flex;align-items:center;gap:8px;flex:0 1 auto;min-width:0;}  /* ★中身ぶんの幅だけ使う。余った横は「この日の計画」に回す */
 #tab-progress .sc-info{flex:1;min-width:0;}
@@ -2765,6 +2774,8 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
     </div>
     <div class="alts" id="alts"></div>
     <div id="grpTabs" style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;"></div>
+    <!-- ★朝の計画との差を全体でまとめた帯（2026-11-18 社長指示） -->
+    <div id="planSumBox" class="plansum" style="display:none;"></div>
     <div class="lines" id="lview"><div style="padding:20px;color:#888;font-size:12px;">読み込み中...</div></div>
   </div>
 
@@ -14713,7 +14724,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.18-3';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.18-4';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
@@ -17842,6 +17853,66 @@ function getStatus(l){
   return{lbl:'遅れ',bdg:'ng',card:'s-ng',bar:'c-ng',pr};
 }
 
+/* 分（0〜1440）を HH:MM に */
+function _hhmm(m){ return ('0'+Math.floor(m/60)).slice(-2)+':'+('0'+Math.round(m%60)).slice(-2); }
+
+/* ★朝の計画に対して、いま何個・何分の遅れ／先行か（2026-11-18 社長指示）。
+   ・基準の時刻は「最後に実績を入れた時刻（updatedAt）」。入れていなければ出ない
+   ・計画の開始時刻から基準時刻までの正味時間 ÷ 標準CT ＝「いま何個あるべきか」
+   ・diff ＝ 実績 − あるべき数。プラスが先行、マイナスが遅れ
+   ・分数は diff × 標準CT（何分ぶんの貯金／借金か） */
+function calcPlanDiff(l){
+  if(!l) return null;
+  if(l.workEnd && l.workEnd!=='') return null;              // 終わった行は見ない
+  const j=(l.jobs||[]).find(x=>x.part===l.part&&x.plan>0&&x.start&&x.end);
+  if(!j) return null;
+  const cj=curJob(l);
+  const act=cj?((cj.actualCount)||0):(l.actual||0);
+  if(!(act>0)) return null;
+  if(!(l.updatedAt>0)) return null;
+  const sm=timeToMin(j.start), em=timeToMin(j.end);
+  if(sm===null||em===null||em<=sm) return null;
+  const ut=new Date(l.updatedAt);
+  const updM=ut.getHours()*60+ut.getMinutes();
+  const planNet=netMins(sm,em);
+  const planCT=planNet>0?planNet/j.plan:0;
+  if(!(planCT>0)) return null;
+  const target=Math.round(netMins(sm,Math.min(updM,em))/planCT);
+  if(!(target>0)) return null;
+  const diff=act-target;
+  return { updM:updM, target:target, actual:act, diff:diff,
+           minutes:Math.round(Math.abs(diff)*planCT), planCT:planCT, job:j };
+}
+
+/* ★全体で何個の遅れ／先行か（カードの真上の帯）。遅れているラインは名前で出す */
+function renderPlanSum(ids){
+  const box=document.getElementById('planSumBox');
+  if(!box) return;
+  let ahead=0, aheadMin=0, behind=0, behindMin=0, t0=null, t1=null, noInput=0;
+  const late=[];
+  (ids||[]).forEach(function(id){
+    const l=lines[id]; if(!l) return;
+    const running=!!(l.workStart&&l.workStart!==''&&(!l.workEnd||l.workEnd===''));
+    const pd=calcPlanDiff(l);
+    if(!pd){ if(running) noInput++; return; }
+    t0=(t0===null||pd.updM<t0)?pd.updM:t0;
+    t1=(t1===null||pd.updM>t1)?pd.updM:t1;
+    if(pd.diff<0){ behind+=-pd.diff; behindMin+=pd.minutes;
+      late.push(getLineName(id)+'（'+pd.diff.toLocaleString()+'個・'+pd.minutes+'分）'); }
+    else if(pd.diff>0){ ahead+=pd.diff; aheadMin+=pd.minutes; }
+  });
+  if(t0===null && !noInput){ box.style.display='none'; return; }
+  const when=(t0===null)?'' : (t0===t1? _hhmm(t0)+' 時点' : _hhmm(t0)+'〜'+_hhmm(t1)+' 時点');
+  let h='<span class="ps-t">⏱ 朝の計画との差'+(when?'（'+when+'）':'')+'</span>';
+  if(ahead>0)  h+='<span class="ps-ok">先行 +'+ahead.toLocaleString()+'個（'+aheadMin+'分ぶん）</span>';
+  if(behind>0) h+='<span class="ps-ng">遅れ −'+behind.toLocaleString()+'個（'+behindMin+'分ぶん）</span>';
+  if(late.length) h+='<span class="ps-who">遅れているライン：'+late.join('　')+'</span>';
+  else if(t0!==null) h+='<span class="ps-ok">遅れているラインはありません</span>';
+  if(noInput>0) h+='<span class="ps-mute">（実績が未入力のライン '+noInput+'本は数えていません）</span>';
+  box.innerHTML=h;
+  box.style.display='';
+}
+
 function renderBoard(){
   const c=document.getElementById('lview');
   c.innerHTML='';
@@ -17877,52 +17948,46 @@ function renderBoard(){
     const barW=l.status==='setup'?100:(pv>0?Math.min(Math.round(partActual/pv*100),100):0);
     // 品番リスト（jobs宣言をここに移動してTDZを回避）
     const jobs=(l.jobs||[]).filter(j=>j.plan>0);
-    // 遅れ分数：スケジュール開始基準で計算（段取・トラブルを含む計画全体の遅れ）
+    // ★朝の計画との差。遅れだけでなく「先行」も出す（2026-11-18 社長指示）。
+    //   基準は実績を入れた時刻なので、その時刻も一緒に出す（いつ時点の数字か分かるように）
     let delayDisp='';
-    if(partActual>0&&!(l.workEnd&&l.workEnd!=='')){
-      const cjD=(l.jobs||[]).find(j=>j.part===l.part&&j.plan>0&&j.start&&j.end);
-      if(cjD){
-        const sm2=timeToMin(cjD.start),em2=timeToMin(cjD.end);
-        if(sm2&&em2&&em2>sm2){
-          const updM=l.updatedAt>0?(function(){const ut=new Date(l.updatedAt);return ut.getHours()*60+ut.getMinutes();})():null;
-          if(updM){
-            const planNetD=netMins(sm2,em2);
-            const planCTD=planNetD>0?planNetD/cjD.plan:0;
-            // スケジュール開始(sm2)基準で「今この時点で何個あるべきか」
-            const elapsedFromSched=netMins(sm2,Math.min(updM,em2));
-            const targetFromSched=planCTD>0?Math.round(elapsedFromSched/planCTD):0;
-            const totalShortage=targetFromSched-partActual;
-            if(totalShortage>0){
-              const totalDelayMin=Math.round(totalShortage*planCTD);
-              // 遅れ内訳の計算
-              const breakdownParts=[];
-              // ① 段取超過分
-              const _curJ=jobs.find(jj=>jj.status==='running')||jobs[0];
-              const stdSetupForLine=calcSetupTime(id,_curJ?.kata,_curJ?.ninzu)||0;
-              const wsM_d=timeToMin(l.workStart||'');
-              if(wsM_d&&stdSetupForLine>0){
-                const actualSetupNet=netMins(sm2,wsM_d);
-                const setupOverrun=Math.max(0,Math.round(actualSetupNet-stdSetupForLine));
-                if(setupOverrun>0) breakdownParts.push('段取超過 +'+setupOverrun+'分');
-              }
-              // ② トラブル停止分（当日の記録合計）
-              const trbs=(l.troubles||[]).filter(t=>t&&t.start);
-              if(trbs.length>0){
-                let troubleNet=0;
-                trbs.forEach(t=>{
-                  const ts=timeToMin(t.start);
-                  const te=t.end?timeToMin(t.end):Math.min(updM,em2);
-                  if(ts&&te>ts) troubleNet+=netMins(ts,te);
-                });
-                if(troubleNet>0) breakdownParts.push('トラブル +'+Math.round(troubleNet)+'分');
-              }
-              let html='<div style="font-size:10px;color:#c0392b;font-weight:700;margin-top:2px;">⏱ 計画比 '+totalDelayMin+'分遅れ（'+totalShortage.toLocaleString()+'個不足）</div>';
-              if(breakdownParts.length>0){
-                html+='<div style="font-size:9px;color:#888;margin-top:1px;padding-left:2px;">└ '+breakdownParts.join('　')+'</div>';
-              }
-              delayDisp=html;
-            }
+    {
+      const pd=calcPlanDiff(l);
+      if(pd){
+        const sm2=timeToMin(pd.job.start), em2=timeToMin(pd.job.end), updM=pd.updM;
+        const when='<span style="font-weight:600;color:#94a3b8;">'+_hhmm(updM)+'時点</span>　';
+        if(pd.diff<0){
+          // 遅れの内訳（段取超過・トラブル）
+          const breakdownParts=[];
+          const _curJ=jobs.find(jj=>jj.status==='running')||jobs[0];
+          const stdSetupForLine=calcSetupTime(id,_curJ?.kata,_curJ?.ninzu)||0;
+          const wsM_d=timeToMin(l.workStart||'');
+          if(wsM_d&&stdSetupForLine>0){
+            const setupOverrun=Math.max(0,Math.round(netMins(sm2,wsM_d)-stdSetupForLine));
+            if(setupOverrun>0) breakdownParts.push('段取超過 +'+setupOverrun+'分');
           }
+          const trbs=(l.troubles||[]).filter(t=>t&&t.start);
+          if(trbs.length>0){
+            let troubleNet=0;
+            trbs.forEach(t=>{
+              const ts=timeToMin(t.start);
+              const te=t.end?timeToMin(t.end):Math.min(updM,em2);
+              if(ts&&te>ts) troubleNet+=netMins(ts,te);
+            });
+            if(troubleNet>0) breakdownParts.push('トラブル +'+Math.round(troubleNet)+'分');
+          }
+          delayDisp='<div style="font-size:10px;color:#c0392b;font-weight:700;margin-top:2px;">'+when
+                   +'計画比 '+pd.minutes+'分遅れ（'+(-pd.diff).toLocaleString()+'個不足）</div>';
+          if(breakdownParts.length>0){
+            delayDisp+='<div style="font-size:9px;color:#888;margin-top:1px;padding-left:2px;">└ '
+                      +breakdownParts.join('　')+'</div>';
+          }
+        }else if(pd.diff>0){
+          delayDisp='<div style="font-size:10px;color:#15803d;font-weight:700;margin-top:2px;">'+when
+                   +'計画比 '+pd.minutes+'分先行（'+pd.diff.toLocaleString()+'個多い）</div>';
+        }else{
+          delayDisp='<div style="font-size:10px;color:#64748b;font-weight:700;margin-top:2px;">'+when
+                   +'計画どおり</div>';
         }
       }
     }
@@ -18255,6 +18320,7 @@ function renderBoard(){
       '<div class="lupdate">更新：'+fmtTs(l.updatedAt)+'（'+(el<9999?el+'分前':'未更新')+'）</div>';
         c.appendChild(d);
   });
+  renderPlanSum(getAllIDS());  // ★朝の計画との差（全ライン）をカードの真上に出す
   renderBoardPlan(getIDS());   // ★この日の計画（時間の帯）。いま見ているグループのラインだけ
   miniMapAttach();          // ★いまの位置（ミニ工場地図）を上段の右端に置く
   renderSum();renderAlts();
