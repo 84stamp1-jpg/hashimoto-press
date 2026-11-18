@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.18-6 : ★<b>同じ品番が複数の行に分かれているときは、実績を「カウンターの累計」として読む</b>ようにした（2026-11-18 社長指示）。例＝14120-80U50 を 150／300／600 に割ってあり、2行目に 665 と入っている。これは1行目の100を含んだ累計なので、<b>この行だけなら 565個</b>。これまでは665を2行目だけの数として扱っていたため、<b>達成率（222%）・計画との差（先行）・今日の終わりの見込みが、すべて実際より良く出ていた</b>。→ <code>jobOwnCounts()</code> を追加し、同じ品番の行を並び順に見て<b>前の行までの入力を引く</b>。品番が1行しかなければそのまま。引くと負になるとき（カウンターを戻した）はそのままの数を使う。履歴の行は数珠つなぎに入れない。進捗ボードの<b>品番ごとの実績・CT達成率・いま流している品番の実績・計画との差・今日の終わりの見込み</b>がこれを通る。行には<b>「↳ 入力は累計 665個 → この行だけでは 565個」</b>と静かに出すので、入力した本人も何が起きたか分かる。※ロス記録（日ごと・月ごと）はまだこの読み方を入れていない。 -->
 <!-- H-Hub v2026.11.18-5 : ★進捗ボードの3点（2026-11-18 社長指示）。(1)★<b>上の帯をラインごとにした</b>。前の版は全ラインを足した合計だったので「先行+1,684個」がどのラインのものか分からなかった。→ <b>A1 +238個(133分先行)</b> のような札をラインの数だけ並べる（緑＝先行・赤＝遅れ）。合計は出さない。(2)★<b>「今日の終わりに何個足りない見込みか」</b>をカードに足した。<code>calcDayEnd()</code>＝今日の計画（その日の全品番の合計）に対し、<b>いまのペース（通算）のまま終業まで流したら何個できるか</b>を出し、差を「📅 終業 19:10 までに 590個 足りない見込み」と出す。下に「今日の計画○個／いま○個／残り○分を通算○個/h で流して 見込み○個」と根拠も添える。これまでの「計画比」は<b>いま流している品番だけ</b>だったので、1日の着地が分からなかった。(3)★<b>カウンターの累計を入れている疑いを知らせる</b>（社長指摘：14120-80U50 は計画を3つに割ってあるのに、実績はカウンターの累計で入れている）。実績が計画の1.2倍を超え、かつ50個以上多い行に<b>「⚠ 実績○個が計画○個を大きく超えています。カウンターの累計ではなくこの行だけの数を入れてください」</b>を出す。※累計のまま入っていると、達成率・計画との差・今日の見込みが<b>すべて実際より良く出る</b>。 -->
 <!-- H-Hub v2026.11.18-4 : ★<b>進捗ボードに「朝の計画との差」を足した</b>（2026-11-18 社長指示）。(1)★<b>カードの「⏱ 計画比」を、先行しているときも出す</b>ようにした。これまでは<b>遅れているときしか出ず</b>、先行ぶんは「現時点の目標」と「実績」を見て自分で引き算するしかなかった。→ 遅れ＝赤「計画比 13分遅れ（56個不足）」／先行＝緑「計画比 136分先行（238個多い）」／ぴったり＝灰「計画どおり」。(2)★<b>いつ時点の数字かを頭に出す</b>（「14:00時点」）。この数字はすべて<b>最後に実績を入れた時刻が基準</b>で、入力が止まっていればその時刻のまま動かない。社長の指摘「その進度は実績入力を更新した時点ですよね」に対応。(3)★<b>カードの真上に全体の帯</b>を置いた。「⏱ 朝の計画との差（13:59〜14:00 時点）／先行 +775個（139分ぶん）／遅れ −56個（13分ぶん）／遅れているライン：Bライン（−56個・13分）」。1本ずつ足し算しなくても、どこが貯金でどこが借金かが一目で分かる。実績が未入力のラインは数に入れず「○本は数えていません」と添える。計算は <code>calcPlanDiff()</code> に1本化（計画の開始から基準時刻までの正味時間÷標準CT＝あるべき数、との差）。 -->
 <!-- H-Hub v2026.11.18-3 : 「システム入力 済」の札に<b>行番号が日時として出ていた</b>のを直した（本番で確認）。記録の行は<b>末尾に行番号が足してある</b>ので、U列(21)のつもりで <code>r[20]</code> を読むと、まだU列が無いシートでは行番号そのものになる（「済（3116）」と出た）。本当の列数（<code>r.length-1</code>）を見て、列がそこまで無ければ空にする。 -->
@@ -14731,7 +14732,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.18-5';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.18-6';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
@@ -17863,6 +17864,45 @@ function getStatus(l){
 /* 分（0〜1440）を HH:MM に */
 function _hhmm(m){ return ('0'+Math.floor(m/60)).slice(-2)+':'+('0'+Math.round(m%60)).slice(-2); }
 
+/* ★同じ品番が複数の行に分かれているとき、実績は「カウンターの累計」で入っている
+   （2026-11-18 社長指示「同じ品番が分かれていたら累計としてみてほしい」）。
+   例：14120-80U50 を 150／300／600 に割ってあり、2行目に 665 と入っている＝
+       1行目の100を含んだ累計。この行だけなら 565個。
+   ・同じ品番の行を並び順に見て、前の行までに入っていた数を引く
+   ・その品番が1行しかなければ、入力をそのまま使う
+   ・引くと負になるとき（カウンターを戻した・入れ直した）は、そのままの数を使う
+   ・履歴の行（計画から外れたが実績が残っている行）は数珠つなぎに入れない
+   戻り値は jobs と同じ並びの「その行だけの数」の配列。 */
+function jobOwnCounts(jobs){
+  const arr=jobs||[];
+  const own=arr.map(j=>(j&&j.actualCount)||0);
+  const cntByPart={};
+  arr.forEach(function(j){
+    if(!j||!j.part||j.history) return;
+    cntByPart[j.part]=(cntByPart[j.part]||0)+1;
+  });
+  const prevByPart={};
+  arr.forEach(function(j,i){
+    if(!j||!j.part||j.history) return;
+    if((cntByPart[j.part]||0)<2) return;          // 分かれていない品番はそのまま
+    const raw=(j.actualCount)||0;
+    const prev=prevByPart[j.part];
+    if(prev!==undefined && raw>0){
+      const d=raw-prev;
+      own[i]=(d>=0)?d:raw;                        // 戻っていたら、そのままの数
+    }
+    if(raw>0) prevByPart[j.part]=raw;             // 次の行が引く相手は「入力された累計」
+  });
+  return own;
+}
+/* その行だけの数（1件だけ取りたいとき） */
+function ownCountOf(l, j){
+  const arr=(l&&l.jobs)||[];
+  const i=arr.indexOf(j);
+  if(i<0) return (j&&j.actualCount)||0;
+  return jobOwnCounts(arr)[i]||0;
+}
+
 /* ★朝の計画に対して、いま何個・何分の遅れ／先行か（2026-11-18 社長指示）。
    ・基準の時刻は「最後に実績を入れた時刻（updatedAt）」。入れていなければ出ない
    ・計画の開始時刻から基準時刻までの正味時間 ÷ 標準CT ＝「いま何個あるべきか」
@@ -17874,7 +17914,7 @@ function calcPlanDiff(l){
   const j=(l.jobs||[]).find(x=>x.part===l.part&&x.plan>0&&x.start&&x.end);
   if(!j) return null;
   const cj=curJob(l);
-  const act=cj?((cj.actualCount)||0):(l.actual||0);
+  const act=cj?ownCountOf(l,cj):(l.actual||0);    // ★累計で入っていればその行だけの数に直す
   if(!(act>0)) return null;
   if(!(l.updatedAt>0)) return null;
   const sm=timeToMin(j.start), em=timeToMin(j.end);
@@ -17902,10 +17942,12 @@ function calcDayEnd(l){
   if(!js.length) return null;
   const ut=new Date(l.updatedAt);
   const updM=ut.getHours()*60+ut.getMinutes();
+  const _ownAll=jobOwnCounts(l.jobs||[]);
   let planTotal=0, actualTotal=0, firstStart=null, lastEnd=null;
   js.forEach(function(j){
+    const _i=(l.jobs||[]).indexOf(j);
     planTotal+=(j.revisedPlan||j.plan||0);
-    actualTotal+=(j.actualCount||0);
+    actualTotal+=(_i>=0?(_ownAll[_i]||0):(j.actualCount||0));   // ★その行だけの数
     const sm=timeToMin(j.actualStart||j.start), em=timeToMin(j.end);
     if(sm!==null&&(firstStart===null||sm<firstStart)) firstStart=sm;
     if(em!==null&&(lastEnd===null||em>lastEnd)) lastEnd=em;
@@ -17963,8 +18005,9 @@ function renderBoard(){
     const pr=s.pr||getProRata(l);
     const pv=pr&&pr.proRata>0?pr.proRata:0;
     // 現在品番のjobからactualCountを取得（lineレベルに依存しない）
+    // ★同じ品番が分かれているときは累計で入っているので、その行だけの数に直す（2026-11-18）
     const _curJob2=curJob(l);
-    const partActual=_curJob2?((_curJob2.actualCount)||0):(l.actual||0);
+    const partActual=_curJob2?ownCountOf(l,_curJob2):(l.actual||0);
     const proRataDisp=pv>0?pv.toLocaleString()+'個':'';
     // 達成率（入力時点の目標CT個数比・全て統一）
     let partRate2=null;
@@ -18101,7 +18144,9 @@ function renderBoard(){
         }
         const cur=(jIdx===curJobIdx);
         // 常にjobレベルのactualCountを使用（lineレベルに依存しない）
-        const jAct=j.actualCount||0;
+        // ★同じ品番が分かれているときは累計なので、その行だけの数に直す（2026-11-18）
+        const jRaw=j.actualCount||0;
+        const jAct=ownCountOf(l,j);
         // CT達成率：標準CT vs 実績CT（「この個数を作るのに標準通りの時間か」）
         let jR=null, rc='none';
         if(jAct>0&&j.plan>0&&j.start&&j.end){
@@ -18217,14 +18262,22 @@ function renderBoard(){
           /* ★実績が計画を大きく超えている行。カウンターの累計を入れている疑い
              （2026-11-18 社長指摘：計画は3つに割ってあるが、実績はカウンターの累計で入れている）。
              そのままだと達成率も「計画との差」も実際より良く出てしまう。 */
-          const _planJ=(j.revisedPlan||j.plan||0), _actJ=(j.actualCount||0);
-          const cumWarn=(_planJ>0&&_actJ>_planJ*1.2&&_actJ>_planJ+50)
-            ? '<span></span><span style="grid-column:2/-1;font-size:10px;color:#9a3412;'
+          const _planJ=(j.revisedPlan||j.plan||0);
+          let cumWarn='';
+          if(jRaw!==jAct){
+            // 累計から直したことを静かに知らせる（入力した本人が見て分かるように）
+            cumWarn='<span></span><span style="grid-column:2/-1;font-size:9px;color:#475569;'
+              +'background:#f1f5f9;border-left:3px solid #94a3b8;border-radius:0 4px 4px 0;'
+              +'padding:2px 6px;margin-top:2px;white-space:normal;">↳ 入力は累計 '
+              +jRaw.toLocaleString()+'個　→　この行だけでは <b>'+jAct.toLocaleString()
+              +'個</b>（同じ品番が分かれているため、前の行までを引いています）</span>';
+          }else if(_planJ>0&&jAct>_planJ*1.2&&jAct>_planJ+50){
+            cumWarn='<span></span><span style="grid-column:2/-1;font-size:10px;color:#9a3412;'
               +'background:#fff7ed;border-left:3px solid #fb923c;border-radius:0 4px 4px 0;'
-              +'padding:2px 6px;margin-top:2px;white-space:normal;">⚠ 実績 '+_actJ.toLocaleString()
+              +'padding:2px 6px;margin-top:2px;white-space:normal;">⚠ 実績 '+jAct.toLocaleString()
               +'個が計画 '+_planJ.toLocaleString()+'個を大きく超えています。'
-              +'カウンターの累計ではなく<b>この行だけの数</b>を入れてください</span>'
-            : '';
+              +'入力をお確かめください</span>';
+          }
           sched+='<div class="sr'+(cur?' cur':'')+'">'+
             '<span class="sn">'+(j.seq!=null?j.seq:jIdx+1)+'</span>'+
             '<span class="sp sp-link" data-search-part="'+_thEsc(j.part)+'" title="品番検索で開く">'+(cur?'▶ ':'')+j.part+'</span>'+
