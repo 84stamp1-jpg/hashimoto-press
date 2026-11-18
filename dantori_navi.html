@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.19-5 : ★<b>終品確認の時刻になったら、画面に出してスマホを鳴らす</b>ようにした（2026-11-19 社長指示）。紙（段取り準備シート）は「予定を見る」もの、こちらは「その時間が来た」と知らせるもの。<b>呼び出しの仕組みをそのまま使う</b>ので、<b>全端末の上に赤い帯</b>が出て、<b>チャイムと読み上げ</b>（「A1から、終品確認 3KO-6440-12 を呼んでいます」）が流れ、<b>スマホにも届く</b>（ntfy）。受けた人が「向かいます」→「完了」を押すのも同じ。時刻は<b>紙とまったく同じ計算</b>（<code>_ssShuhinAll()</code>＝生産が終わる30分前・作業時間で逆算・同じ品番が割れていれば最後の1回だけ）。★<b>作るのは1台だけ</b>＝呼び出しの鍵を「日付＋ライン＋品番」で決め打ちにし、<b>calls の中だけで取り合う</b>ので（新しい置き場所を作らないのでFirebaseのルールを触らなくてよい）、13台が同時に出しても呼び出しは1件。完了したあとも鍵が残るので二度は鳴らない。★<b>1つの品番につき1回だけ</b>で、<b>鳴らし直しもしない</b>（<code>auto:true</code> の呼び出しは10秒おきの鳴らし直しから外した。人が押した呼び出しはこれまでどおり鳴り続ける）。★画面を遅く開いた端末が<b>過ぎた時刻を鳴らさない</b>よう、時刻から10分のあいだだけ出す。 -->
 <!-- H-Hub v2026.11.19-4 : ★<b>段取りの枠を広げるため、帯の下の凡例を減らした</b>（2026-11-19 社長指示）。「帯の下の空いた行は、回って『このくらいで切れそう／いっぱいになりそう』と思った時間に記号を書く欄。○＝空容器 △＝スクラップ箱 □＝材料／急ぐものは◎、手当て済みは記号に／を重ねる」を<b>丸ごと削除</b>（記号の意味は帯の左の見出しに ○容器 △ｽｸﾗｯﾌﾟ □材料 と出ているので、紙の下まで繰り返さない）。終品の説明も「（その品番のいちばん最後の生産が終わる30分前）」→<b>「（生産が終わる30分前）」</b>に短くした。凡例が3行から1行になり、そのぶん段取りの枠に回る。 -->
 <!-- H-Hub v2026.11.19-3 : ★<b>1枚目の右が空いているのに2枚に分かれていた</b>のを直した（2026-11-19 社長指摘）。「つづきの紙へ送る」処理が、<b>送っても高さが減らないときにも紙を増やしていた</b>。段取りの枠は<b>横に4つ並ぶ</b>ので、2件しかない日に1件送っても列が1行のままで<b>高さは1mmも減らない</b>。それでも紙を1枚作っていたため、1枚目の右が空いたまま「つづき」の紙に1件だけ載っていた。→ <b>送ったあとに測り直し、高さが減っていなければ元へ戻して紙を増やさない</b>。本当にはみ出すとき（枠が5件以上で2行目ができるとき）だけ、これまでどおりつづきの紙へ送る。 -->
 <!-- H-Hub v2026.11.19-2 : ★<b>1枚目に「今日の終品確認」の一覧を足した</b>（2026-11-19 社長指示）。帯の下の ※ だけだと帯を目で追うことになるので、<b>時刻の早い順に全ライン並べた札</b>を帯のすぐ下に置く（「<b>16:30</b> B2 18120-5YT □」）。横に並べるので高さをほとんど使わない。測り終えたら□にチェック。あわせて<b>凡例を短くした</b>（社長指示）＝「※＝終品確認（その品番のいちばん最後の生産が終わる30分前）」だけにし、「休憩は飛ばして作業時間で逆算」「測るのは仲田さん・見原さん」「30分に満たないものは開始と同時」は紙から外した（決めごとは変えていない。動きはそのまま）。 -->
@@ -9664,7 +9665,7 @@ function _ssShuhinTimes(list){
   const grp = {}, order = [];
   (list || []).forEach(function(j){
     const k = j.partNo || '';
-    if(!grp[k]){ grp[k] = { ps:j.ps, pe:j.pe, part:k }; order.push(k); }
+    if(!grp[k]){ grp[k] = { ps:j.ps, pe:j.pe, part:k, lineId:j.lineId }; order.push(k); }
     else { if(j.ps < grp[k].ps) grp[k].ps = j.ps;
            if(j.pe > grp[k].pe) grp[k].pe = j.pe; }
   });
@@ -9678,7 +9679,7 @@ function _ssShuhinTimes(list){
       let n = 0;
       while(at > g.ps && _ssNet(at, g.pe) < SHU_MIN && n++ < 240) at--;  /* 休憩のぶんさかのぼる */
     }
-    return { at:at, part:g.part };
+    return { at:at, part:g.part, lineId:g.lineId };
   });
 }
 
@@ -9690,7 +9691,7 @@ function _ssShuhinAll(jobs){
   const out = [];
   ls.forEach(function(L){
     _ssShuhinTimes((jobs || []).filter(function(j){ return j.line === L; }))
-      .forEach(function(x){ out.push({ at:x.at, part:x.part, line:L }); });
+      .forEach(function(x){ out.push({ at:x.at, part:x.part, line:L, lineId:x.lineId }); });
   });
   return out.sort(function(a, b){ return a.at - b.at; });
 }
@@ -14865,7 +14866,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.19-4';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.19-6';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
@@ -24257,6 +24258,7 @@ function _callRepeatTick(){
   Object.keys(_calls).forEach(function(k){
     const r = _calls[k];
     if(!r || r.status !== 'open'){ delete _callLastPlay[k]; return; }   // 向かいます/完了で止まる
+    if(r.auto) return;   /* ★終品確認など自動で出したものは鳴らし直さない（1回だけ・2026-11-19） */
     if(!callShouldRing(r)) return;
     const last = _callLastPlay[k] || 0;
     if(now - last >= (_callCfg.repeatSec || CALL_REPEAT_DEF) * 1000){
@@ -24266,6 +24268,50 @@ function _callRepeatTick(){
   });
 }
 setInterval(_callRepeatTick, 1500);   // 5秒おきを選べるよう、見に行く間隔は短く
+
+/* ★終品確認の時刻になったら、呼び出しとして出す（2026-11-19 社長指示
+   「その時間になったら画面に出す・スマホを鳴らす」）。
+   赤い帯・チャイム・読み上げ・スマホ通知（ntfy）は、呼び出しの仕組みをそのまま使う。
+   ・時刻は段取り準備シートと同じ _ssShuhinAll()（生産が終わる30分前・作業時間で逆算）
+   ・作るのは1台だけ。Firebase の shuhinFired を取り合って決める（13台が同時に作らない）
+   ・1つの品番につき1回だけ。鳴らし直しもしない（auto:true）
+   ・画面を遅く開いた端末が古いものを鳴らさないよう、時刻から10分のあいだだけ */
+const SHU_FIRE_WIN = 10;          // 分
+const _shuTried = {};
+async function shuhinWatch(){
+  try{
+    if(typeof _ssBoardEntries !== 'function' || typeof _ssShuhinAll !== 'function'
+       || typeof _ssJobs !== 'function') return;
+    const rows = _ssBoardEntries();
+    if(!rows || !rows.length) return;
+    const jobs = _ssJobs(rows);
+    if(!jobs.length) return;
+    const now  = new Date(Date.now() + (_callSkew || 0));
+    const nowM = now.getHours() * 60 + now.getMinutes();
+    const day  = _cDay();
+    const list = _ssShuhinAll(jobs);
+    for(let i = 0; i < list.length; i++){
+      const x = list[i];
+      if(nowM < x.at || nowM > x.at + SHU_FIRE_WIN) continue;
+      const safe = function(v){ return String(v == null ? '' : v).replace(/[.#$\/\[\]\s]/g, '_'); };
+      /* ★鍵は「日付＋ライン＋品番」で決め打ちにする。
+         こうすると、取り合いも重複よけも <b>calls の中だけ</b>で済む
+         （新しい置き場所を作らない＝Firebaseのルールを触らなくてよい）。
+         すでにその鍵があれば＝誰かが出した／もう完了した、なので何もしない。 */
+      const key = 'shu_' + day.replace(/-/g,'') + '_' + safe(x.lineId || x.line) + '_' + safe(x.part);
+      if(_shuTried[key]) continue;
+      _shuTried[key] = true;
+      await runTransaction(ref(db, 'calls/' + key), function(cur){
+        if(cur) return undefined;                       // すでにある＝降りる
+        return { line: x.lineId || x.line, lineName: x.line,
+                 kind: '終品確認　' + x.part,
+                 at: Date.now() + (_callSkew || 0), day: day, status: 'open', auto: true };
+      });
+    }
+  }catch(e){ console.warn('終品確認の見張り', e); }
+}
+setInterval(shuhinWatch, 30000);
+setTimeout(shuhinWatch, 8000);     // 開いた直後にも1回だけ見る
 
 /* 帯の高さを --callh に入れる。これで body にその分の余白がつき、
    上にいるメニュー（.tabs）も帯の下に待機する（2026-11-17）。 */
