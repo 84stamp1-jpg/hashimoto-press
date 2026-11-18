@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.18-7 : ★<b>「朝の計画との差」を、その日の全部の行で見るようにした</b>（2026-11-18 社長指摘「Cラインが出ていないのはなぜですか」）。実データを見たところ、<b>Cライン①は2,237個できているのに帯に出ていなかった</b>。原因は(1)「いま流している品番」が<b>まだ1個も入っていない行</b>（600個の行）を指していたため実績0とみなされた (2)差を<b>いま流している1行だけ</b>で見ていたので、終わった行のぶんが入らない、の2つ。大塚（2,250個）も同じ理由で消えていた。しかも<b>消えたことが画面のどこにも出ていなかった</b>。→ <code>calcPlanDiff()</code> を、その日の全部の行について「計画数 × 計画開始から基準時刻までの正味時間の割合」を足し上げる形に変えた。分数はその日ならしの標準CTで換算。あわせて<b>計画はあるのに実績が無いラインを「まだ実績が入っていない：◯◯・◯◯」と名前で出す</b>ようにしたので、黙って消えることがなくなった。★<b>ロス記録も同じ読み方にした</b>（社長「ロス記録も同じ考え方でいい」）＝同じ品番が分かれている行の実績を、カウンターの累計として前の行ぶんを引いてから数量達成率・CT達成率を出す。 -->
 <!-- H-Hub v2026.11.18-6 : ★<b>同じ品番が複数の行に分かれているときは、実績を「カウンターの累計」として読む</b>ようにした（2026-11-18 社長指示）。例＝14120-80U50 を 150／300／600 に割ってあり、2行目に 665 と入っている。これは1行目の100を含んだ累計なので、<b>この行だけなら 565個</b>。これまでは665を2行目だけの数として扱っていたため、<b>達成率（222%）・計画との差（先行）・今日の終わりの見込みが、すべて実際より良く出ていた</b>。→ <code>jobOwnCounts()</code> を追加し、同じ品番の行を並び順に見て<b>前の行までの入力を引く</b>。品番が1行しかなければそのまま。引くと負になるとき（カウンターを戻した）はそのままの数を使う。履歴の行は数珠つなぎに入れない。進捗ボードの<b>品番ごとの実績・CT達成率・いま流している品番の実績・計画との差・今日の終わりの見込み</b>がこれを通る。行には<b>「↳ 入力は累計 665個 → この行だけでは 565個」</b>と静かに出すので、入力した本人も何が起きたか分かる。※ロス記録（日ごと・月ごと）はまだこの読み方を入れていない。 -->
 <!-- H-Hub v2026.11.18-5 : ★進捗ボードの3点（2026-11-18 社長指示）。(1)★<b>上の帯をラインごとにした</b>。前の版は全ラインを足した合計だったので「先行+1,684個」がどのラインのものか分からなかった。→ <b>A1 +238個(133分先行)</b> のような札をラインの数だけ並べる（緑＝先行・赤＝遅れ）。合計は出さない。(2)★<b>「今日の終わりに何個足りない見込みか」</b>をカードに足した。<code>calcDayEnd()</code>＝今日の計画（その日の全品番の合計）に対し、<b>いまのペース（通算）のまま終業まで流したら何個できるか</b>を出し、差を「📅 終業 19:10 までに 590個 足りない見込み」と出す。下に「今日の計画○個／いま○個／残り○分を通算○個/h で流して 見込み○個」と根拠も添える。これまでの「計画比」は<b>いま流している品番だけ</b>だったので、1日の着地が分からなかった。(3)★<b>カウンターの累計を入れている疑いを知らせる</b>（社長指摘：14120-80U50 は計画を3つに割ってあるのに、実績はカウンターの累計で入れている）。実績が計画の1.2倍を超え、かつ50個以上多い行に<b>「⚠ 実績○個が計画○個を大きく超えています。カウンターの累計ではなくこの行だけの数を入れてください」</b>を出す。※累計のまま入っていると、達成率・計画との差・今日の見込みが<b>すべて実際より良く出る</b>。 -->
 <!-- H-Hub v2026.11.18-4 : ★<b>進捗ボードに「朝の計画との差」を足した</b>（2026-11-18 社長指示）。(1)★<b>カードの「⏱ 計画比」を、先行しているときも出す</b>ようにした。これまでは<b>遅れているときしか出ず</b>、先行ぶんは「現時点の目標」と「実績」を見て自分で引き算するしかなかった。→ 遅れ＝赤「計画比 13分遅れ（56個不足）」／先行＝緑「計画比 136分先行（238個多い）」／ぴったり＝灰「計画どおり」。(2)★<b>いつ時点の数字かを頭に出す</b>（「14:00時点」）。この数字はすべて<b>最後に実績を入れた時刻が基準</b>で、入力が止まっていればその時刻のまま動かない。社長の指摘「その進度は実績入力を更新した時点ですよね」に対応。(3)★<b>カードの真上に全体の帯</b>を置いた。「⏱ 朝の計画との差（13:59〜14:00 時点）／先行 +775個（139分ぶん）／遅れ −56個（13分ぶん）／遅れているライン：Bライン（−56個・13分）」。1本ずつ足し算しなくても、どこが貯金でどこが借金かが一目で分かる。実績が未入力のラインは数に入れず「○本は数えていません」と添える。計算は <code>calcPlanDiff()</code> に1本化（計画の開始から基準時刻までの正味時間÷標準CT＝あるべき数、との差）。 -->
@@ -14732,7 +14733,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.18-6';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.18-7';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
@@ -17547,7 +17548,9 @@ function lossJobRows(l,id){
     const sm=timeToMin(j.start), em=timeToMin(j.end);
     const planNet=(sm!==null&&em!==null)?netMins(sm,em):0;
     const stdCT=(planNet>0&&j.plan>0)?planNet/j.plan:0;
-    const jAct=j.actualCount||0;
+    /* ★同じ品番が分かれているときの実績はカウンターの累計。その行だけの数に直す
+       （2026-11-18 社長「ロス記録も同じ考え方でいい」） */
+    const jAct=ownCountOf(l,j);
     const wsM=timeToMin(jWS||'');
     const weM=(jWE&&jWE!=='')?timeToMin(jWE):(jAct>0?lastCountMin(j,l):null);
     const actNet=(wsM!==null&&weM!==null)?netMins(wsM,weM):0;
@@ -17905,30 +17908,43 @@ function ownCountOf(l, j){
 
 /* ★朝の計画に対して、いま何個・何分の遅れ／先行か（2026-11-18 社長指示）。
    ・基準の時刻は「最後に実績を入れた時刻（updatedAt）」。入れていなければ出ない
-   ・計画の開始時刻から基準時刻までの正味時間 ÷ 標準CT ＝「いま何個あるべきか」
-   ・diff ＝ 実績 − あるべき数。プラスが先行、マイナスが遅れ
-   ・分数は diff × 標準CT（何分ぶんの貯金／借金か） */
+   ・★その日の<b>全部の行</b>を足して見る（2026-11-18 社長指摘「Cラインが出ていない」）。
+     いま流している1行だけで見ると、まだ1個も入っていない行が「いまの品番」に
+     なっているライン（Cライン①・大塚）が、実績が2,000個以上あるのに消えていた
+   ・行ごとに「計画数 × 計画開始から基準時刻までの正味時間の割合」＝いまあるべき数
+   ・diff ＝ 実績合計 − あるべき数の合計。プラスが先行、マイナスが遅れ
+   ・分数は diff × その日ならしの標準CT（何分ぶんの貯金／借金か） */
 function calcPlanDiff(l){
-  if(!l) return null;
-  if(l.workEnd && l.workEnd!=='') return null;              // 終わった行は見ない
-  const j=(l.jobs||[]).find(x=>x.part===l.part&&x.plan>0&&x.start&&x.end);
-  if(!j) return null;
-  const cj=curJob(l);
-  const act=cj?ownCountOf(l,cj):(l.actual||0);    // ★累計で入っていればその行だけの数に直す
-  if(!(act>0)) return null;
-  if(!(l.updatedAt>0)) return null;
-  const sm=timeToMin(j.start), em=timeToMin(j.end);
-  if(sm===null||em===null||em<=sm) return null;
+  if(!l || !(l.updatedAt>0)) return null;
+  const all=(l.jobs||[]);
+  const js=all.filter(j=>j&&j.plan>0&&j.start&&j.end&&!j.history);
+  if(!js.length) return null;
+  const own=jobOwnCounts(all);                 // ★累計で入っていればその行だけの数に直す
   const ut=new Date(l.updatedAt);
   const updM=ut.getHours()*60+ut.getMinutes();
-  const planNet=netMins(sm,em);
-  const planCT=planNet>0?planNet/j.plan:0;
-  if(!(planCT>0)) return null;
-  const target=Math.round(netMins(sm,Math.min(updM,em))/planCT);
-  if(!(target>0)) return null;
-  const diff=act-target;
-  return { updM:updM, target:target, actual:act, diff:diff,
-           minutes:Math.round(Math.abs(diff)*planCT), planCT:planCT, job:j };
+  let target=0, actual=0, planNetAll=0, planAll=0, firstStart=null, lastEnd=null;
+  js.forEach(function(j){
+    const sm=timeToMin(j.start), em=timeToMin(j.end);
+    if(sm===null||em===null||em<=sm) return;
+    const plan=(j.revisedPlan||j.plan||0);
+    const pnet=netMins(sm,em);
+    if(!(pnet>0)||!(plan>0)) return;
+    planNetAll+=pnet; planAll+=plan;
+    if(firstStart===null||sm<firstStart) firstStart=sm;
+    if(lastEnd===null||em>lastEnd) lastEnd=em;
+    // その行の「いまあるべき数」＝計画数 × （計画開始から基準時刻までの正味時間 ÷ その行の正味時間）
+    const el=(updM<=sm)?0:netMins(sm,Math.min(updM,em));
+    target+=plan*(el/pnet);
+    const i=all.indexOf(j);
+    actual+=(i>=0?(own[i]||0):(j.actualCount||0));
+  });
+  if(!(actual>0)||!(target>0)) return null;
+  const planCT=planAll>0?planNetAll/planAll:0;   // その日ならしの標準CT（分/個）
+  target=Math.round(target);
+  const diff=actual-target;
+  return { updM:updM, target:target, actual:actual, diff:diff,
+           minutes:Math.round(Math.abs(diff)*planCT), planCT:planCT,
+           firstStart:firstStart, lastEnd:lastEnd };
 }
 
 /* ★今日の終わりに何個足りない見込みか（2026-11-18 社長指示）。
@@ -17967,13 +17983,18 @@ function calcDayEnd(l){
 function renderPlanSum(ids){
   const box=document.getElementById('planSumBox');
   if(!box) return;
-  let t0=null, t1=null, noInput=0;
-  const chips=[];
+  let t0=null, t1=null;
+  const chips=[], noActual=[];
   (ids||[]).forEach(function(id){
     const l=lines[id]; if(!l) return;
-    const running=!!(l.workStart&&l.workStart!==''&&(!l.workEnd||l.workEnd===''));
     const pd=calcPlanDiff(l);
-    if(!pd){ if(running) noInput++; return; }
+    if(!pd){
+      /* ★出ない理由が分かるように、計画があるのに実績が無いラインは名前を出す
+         （2026-11-18 社長指摘「Cラインが出ていないのはなぜですか」）。
+         計画そのものが無いライン（待機中で行が0）は出さない */
+      if((l.jobs||[]).some(j=>j&&j.plan>0&&!j.history)) noActual.push(getLineName(id));
+      return;
+    }
     t0=(t0===null||pd.updM<t0)?pd.updM:t0;
     t1=(t1===null||pd.updM>t1)?pd.updM:t1;
     const nm=getLineName(id);
@@ -17986,11 +18007,11 @@ function renderPlanSum(ids){
     else
       chips.push('<span class="ps-chip even">'+nm+' 計画どおり</span>');
   });
-  if(t0===null && !noInput){ box.style.display='none'; return; }
+  if(t0===null && !noActual.length){ box.style.display='none'; return; }
   const when=(t0===null)?'' : (t0===t1? _hhmm(t0)+' 時点' : _hhmm(t0)+'〜'+_hhmm(t1)+' 時点');
   let h='<span class="ps-t">⏱ 朝の計画との差'+(when?'（'+when+'）':'')+'　ラインごと</span>';
   h+=chips.join('');
-  if(noInput>0) h+='<span class="ps-mute">実績が未入力のライン '+noInput+'本は出していません</span>';
+  if(noActual.length) h+='<span class="ps-mute">まだ実績が入っていない：'+noActual.join('・')+'</span>';
   box.innerHTML=h;
   box.style.display='';
 }
@@ -18037,7 +18058,7 @@ function renderBoard(){
     {
       const pd=calcPlanDiff(l);
       if(pd){
-        const sm2=timeToMin(pd.job.start), em2=timeToMin(pd.job.end), updM=pd.updM;
+        const sm2=pd.firstStart, em2=pd.lastEnd, updM=pd.updM;
         const when='<span style="font-weight:600;color:#94a3b8;">'+_hhmm(updM)+'時点</span>　';
         if(pd.diff<0){
           // 遅れの内訳（段取超過・トラブル）
