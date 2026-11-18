@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.18-9 : ★社長が実機で確認（「18120-5YT も朝からの累計です」）。(1)<b>累計の判定を元に戻した</b>＝同じ品番が複数の行に分かれていたら、計画数を超えているかどうかに関係なく<b>前の行までを引く</b>。v-8 で「計画数を超えた行だけ」に絞っていたが、B2 の 1,797個は計画3,080個の中に収まっているため引けていなかった。(2)★<b>工程詳細で1行目にも1,797が出ていたのを直した</b>（社長指摘「B2工程詳細には1も1797、入力画面では813」）。いま流している行を<b>品番名が同じか</b>で決めていたため、同じ品番が2行に分かれていると<b>両方が「いまの行」</b>になり、どちらにもライン全体の実績が出ていた。→ <b>行の位置（curJobIndex）</b>で決め、実績は行ごとの数を出す。(3)同じ理由で<b>達成率・ペース・「現時点の目標」も、いつも1行目（もう終わった行）を見ていた</b>。<code>curJobPlanned()</code> を作って、いま流している行を使うようにした。★この3つが重なって、B2 は実際より良い数字が出ていた。 -->
 <!-- H-Hub v2026.11.18-8 : ★<b>累計として引くのを「その行の計画数を超えている行」だけに絞った</b>。v-6で入れた「同じ品番が分かれていたら必ず累計として引く」を本番のデータで確かめたところ、<b>B2 で ありもしない783個の遅れが出た</b>。B2は 18120-5YT を 820＋3,080 に割っているが、<b>行ごとに数えて入れている</b>（2行目1,797個は10:10からの実績そのもので、ペース442個/h＝標準430個/hとぴったり合う）。ここを引くと実績2,610個が1,797個に化け、ペースも242個/hになってしまう。→ <b>引くのは「実績がその行の計画数を超えていて、累計としか考えられない」とき</b>だけにした。Cライン①の 14120-80U50 は2行目が665個で計画300個を超えているので、これまでどおり565個に直る。★<b>累計がまだその行の計画数の中に収まっているうちは見分けられない</b>（そのぶんは実際より良い数字のまま）。その場合でも「⚠ 実績が計画を大きく超えています」で気づけるようにしてある。 -->
 <!-- H-Hub v2026.11.18-7 : ★<b>「朝の計画との差」を、その日の全部の行で見るようにした</b>（2026-11-18 社長指摘「Cラインが出ていないのはなぜですか」）。実データを見たところ、<b>Cライン①は2,237個できているのに帯に出ていなかった</b>。原因は(1)「いま流している品番」が<b>まだ1個も入っていない行</b>（600個の行）を指していたため実績0とみなされた (2)差を<b>いま流している1行だけ</b>で見ていたので、終わった行のぶんが入らない、の2つ。大塚（2,250個）も同じ理由で消えていた。しかも<b>消えたことが画面のどこにも出ていなかった</b>。→ <code>calcPlanDiff()</code> を、その日の全部の行について「計画数 × 計画開始から基準時刻までの正味時間の割合」を足し上げる形に変えた。分数はその日ならしの標準CTで換算。あわせて<b>計画はあるのに実績が無いラインを「まだ実績が入っていない：◯◯・◯◯」と名前で出す</b>ようにしたので、黙って消えることがなくなった。★<b>ロス記録も同じ読み方にした</b>（社長「ロス記録も同じ考え方でいい」）＝同じ品番が分かれている行の実績を、カウンターの累計として前の行ぶんを引いてから数量達成率・CT達成率を出す。 -->
 <!-- H-Hub v2026.11.18-6 : ★<b>同じ品番が複数の行に分かれているときは、実績を「カウンターの累計」として読む</b>ようにした（2026-11-18 社長指示）。例＝14120-80U50 を 150／300／600 に割ってあり、2行目に 665 と入っている。これは1行目の100を含んだ累計なので、<b>この行だけなら 565個</b>。これまでは665を2行目だけの数として扱っていたため、<b>達成率（222%）・計画との差（先行）・今日の終わりの見込みが、すべて実際より良く出ていた</b>。→ <code>jobOwnCounts()</code> を追加し、同じ品番の行を並び順に見て<b>前の行までの入力を引く</b>。品番が1行しかなければそのまま。引くと負になるとき（カウンターを戻した）はそのままの数を使う。履歴の行は数珠つなぎに入れない。進捗ボードの<b>品番ごとの実績・CT達成率・いま流している品番の実績・計画との差・今日の終わりの見込み</b>がこれを通る。行には<b>「↳ 入力は累計 665個 → この行だけでは 565個」</b>と静かに出すので、入力した本人も何が起きたか分かる。※ロス記録（日ごと・月ごと）はまだこの読み方を入れていない。 -->
@@ -14734,7 +14735,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.18-8';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.18-9';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
@@ -17782,7 +17783,10 @@ function calcImpliedSetup(jobs,ji,actualWorkStart,ssIn,seIn){
 }
 
 function getProRata(l){
-  const jobs=(l.jobs||[]).filter(j=>j.plan>0&&j.start&&j.end&&j.part===l.part);
+  /* ★いま流している行を使う。品番名で絞ると、同じ品番が2行に分かれているときに
+     1行目（もう終わった行）を見てしまう（2026-11-18） */
+  const _cjPR=curJobPlanned(l);
+  const jobs=_cjPR?[_cjPR]:(l.jobs||[]).filter(j=>j.plan>0&&j.start&&j.end&&j.part===l.part);
   // 入力時点（updatedAt）を基準に計算、未入力なら現在時刻
   const updT=l.updatedAt>0?new Date(l.updatedAt):new Date();
   const nowMin=updT.getHours()*60+updT.getMinutes();
@@ -17823,9 +17827,12 @@ function getStatus(l){
   if(pr&&(pr.phase==='before'||pr.phase==='done'||pr.phase==='over')){
     if(pr.phase==='done'){
       // 終了済み：実績で最終評価
-      const cjSt2=(l.jobs||[]).find(j=>j.part===l.part&&j.plan>0);
-      if(cjSt2&&l.actual>0){
-        const r2=Math.round(l.actual/cjSt2.plan*100);
+      /* ★いま流している行を使い、実績もその行の数で見る（同じ品番が分かれている
+         ときに1行目を拾い、ラインの累計と比べていた。2026-11-18） */
+      const cjSt2=curJob(l)||(l.jobs||[]).find(j=>j.part===l.part&&j.plan>0);
+      const _a2=cjSt2?ownCountOf(l,cjSt2):(l.actual||0);
+      if(cjSt2&&cjSt2.plan>0&&_a2>0){
+        const r2=Math.round(_a2/cjSt2.plan*100);
         if(r2>=95)return{lbl:'完了',bdg:'ok',card:'s-ok',bar:'c-ok',pr};
         if(r2>=80)return{lbl:'完了',bdg:'wn',card:'s-wn',bar:'c-wn',pr};
         return{lbl:'完了',bdg:'ng',card:'s-ng',bar:'c-ng',pr};
@@ -17847,18 +17854,21 @@ function getStatus(l){
   }
   // CT達成率で状態判定（net minutes で統一）
   let r=0;
-  const cjSt=(l.jobs||[]).find(j=>j.part===l.part&&j.plan>0&&j.start&&j.end);
-  if(cjSt&&l.actual>0){
+  /* ★同じ品番が分かれているとき、品番名で find すると1行目（もう終わった行）を拾う。
+     実績もラインの累計（l.actual）ではなく、その行の数で見る。2026-11-18 */
+  const cjSt=curJobPlanned(l);
+  const _aSt=cjSt?ownCountOf(l,cjSt):(l.actual||0);
+  if(cjSt&&_aSt>0){
     const planNetSt=netMins(timeToMin(cjSt.start),timeToMin(cjSt.end)); // net minutes
     const planCtSt=planNetSt>0?planNetSt/cjSt.plan:0;
     const wsStM=timeToMin(l.workStart||cjSt.start);
     const weStM=l.workEnd&&l.workEnd!==''?timeToMin(l.workEnd):lastCountMin(cjSt,l);
     const actMinSt=wsStM&&weStM?netMins(wsStM,weStM):0;
-    const actCtSt=actMinSt>0&&l.actual>0?actMinSt/l.actual:0;
+    const actCtSt=actMinSt>0&&_aSt>0?actMinSt/_aSt:0;
     if(planCtSt>0&&actCtSt>0) r=Math.round(planCtSt/actCtSt*100);
-    else r=Math.round(l.actual/pv*100);
+    else r=Math.round(_aSt/pv*100);
   } else {
-    r=l.actual!=null?Math.round(l.actual/pv*100):0;
+    r=_aSt!=null?Math.round(_aSt/pv*100):0;
   }
   if(r>=95)return{lbl:'正常',bdg:'ok',card:'s-ok',bar:'c-ok',pr};
   if(r>=90)return{lbl:'注意',bdg:'wn',card:'s-wn',bar:'c-wn',pr};
@@ -17890,18 +17900,12 @@ function jobOwnCounts(jobs){
     if(!j||!j.part||j.history) return;
     if((cntByPart[j.part]||0)<2) return;          // 分かれていない品番はそのまま
     const raw=(j.actualCount)||0;
-    const plan=(j.revisedPlan||j.plan||0);
     const prev=prevByPart[j.part];
-    /* ★引くのは「その行の計画数を超えていて、累計としか考えられない」ときだけ。
-       ──同じ品番を2行に割っていても、行ごとに数えて入れている現場がある。
-         実データで確かめたところ B2（18120-5YT を 820＋3,080 に割っている）が
-         まさにそれで、何でも引くと実績2,610個が1,797個になり、
-         ★ありもしない「783個の遅れ」が出た（ペースも442個/h→242個/hに化けた）。
-       ──Cライン①（14120-80U50 を 150／300／600）は2行目が665個で、
-         その行の計画300個を超えている＝累計としか考えられない。ここだけ引く。
-       ※累計がまだその行の計画数の中に収まっているうちは見分けられない。
-         そのぶんは実際より良い数字のままになる（下の⚠で気づけるようにしてある）。 */
-    if(prev!==undefined && raw>0 && plan>0 && raw>plan){
+    /* ★同じ品番が分かれていたら、実績は朝からの累計（2026-11-18 社長が実機で確認。
+       「18120-5YT も朝からの累計です」）。計画数を超えているかどうかに関係なく引く。
+       ※v2026.11.18-8 では「計画数を超えた行だけ」に絞っていたが、B2 の 18120-5YT は
+         1,797個が朝からの累計（計画3,080個の中に収まっている）だったため引けていなかった。 */
+    if(prev!==undefined && raw>0){
       const d=raw-prev;
       own[i]=(d>=0)?d:raw;                        // 戻っていたら、そのままの数
     }
@@ -17925,6 +17929,15 @@ function ownCountOf(l, j){
    ・行ごとに「計画数 × 計画開始から基準時刻までの正味時間の割合」＝いまあるべき数
    ・diff ＝ 実績合計 − あるべき数の合計。プラスが先行、マイナスが遅れ
    ・分数は diff × その日ならしの標準CT（何分ぶんの貯金／借金か） */
+/* ★「いま流している行」。品番名で find すると、同じ品番が2行に分かれているときに
+   いつも1行目を拾ってしまう（B2＝18120-5YT が 820＋3,080 の2行）。
+   curJobIndex（curSeq を見る）で決めた行を優先する。2026-11-18 */
+function curJobPlanned(l){
+  const cj=curJob(l);
+  if(cj&&cj.plan>0&&cj.start&&cj.end) return cj;
+  return (l&&l.jobs||[]).find(j=>j.part===l.part&&j.plan>0&&j.start&&j.end)||null;
+}
+
 function calcPlanDiff(l){
   if(!l || !(l.updatedAt>0)) return null;
   const all=(l.jobs||[]);
@@ -18043,7 +18056,7 @@ function renderBoard(){
     const proRataDisp=pv>0?pv.toLocaleString()+'個':'';
     // 達成率（入力時点の目標CT個数比・全て統一）
     let partRate2=null;
-    const cjCT=(l.jobs||[]).find(j=>j.part===l.part&&j.plan>0&&j.start&&j.end);
+    const cjCT=curJobPlanned(l);
     if(cjCT&&partActual>0){
       const smCT=timeToMin(cjCT.start),emCT=timeToMin(cjCT.end);
       const planNetCT=netMins(smCT,emCT);
@@ -18119,7 +18132,7 @@ function renderBoard(){
       }
     }
     // 3種類ペース（現品番のみ・正味時間ベースで統一）
-    const cjP=(l.jobs||[]).find(j=>j.part===l.part&&j.plan>0&&j.start&&j.end);
+    const cjP=curJobPlanned(l);
     const planNetP=cjP?netMins(timeToMin(cjP.start),timeToMin(cjP.end)):0; // 正味時間（休憩除外）
     const planPace=planNetP>0?Math.round(cjP.plan/planNetP*60):0; // 正味時間ベースの計画ペース
     function mkPace(p){
@@ -19441,9 +19454,14 @@ window.openModal=function(id){
   const stdSetup=sets[id]||60;
   let h=`<table class="jtbl"><thead><tr><th>#</th><th>品番</th><th>計画数</th><th>実績数</th><th>CT達成率</th><th>段取り<br><span style="font-weight:400;color:#aaa;">標準${stdSetup}分</span></th><th>予定時間</th><th>実績時間</th><th></th></tr></thead><tbody>`;
   if(!jobs.length){h+='<tr><td colspan="9" style="padding:16px;color:#aaa;text-align:center;">工程データなし</td></tr>';}
+  /* ★いま流している行を「品番が同じかどうか」で決めていたため、同じ品番が2行に
+     分かれていると<b>両方が「いまの行」</b>になり、どちらにもラインの実績(l.actual)が
+     出ていた（2026-11-18 社長指摘：B2工程詳細は1行目も1,797、入力画面では813）。
+     行の位置（curJobIndex）で決める。実績は行ごとの数（累計なら直したもの）を出す。 */
+  const curIdx=curJobIndex({...l,jobs:jobs});
   jobs.forEach((j,ji)=>{
-    const isCur=j.part===l.part;
-    const a=isCur?l.actual:(j.actualCount||0);
+    const isCur=(ji===curIdx);
+    const a=ownCountOf(l,j);
     // CT達成率：(実績数×標準CT) ÷ 実績時間 × 100
     const sm2=timeToMin(j.start),em2=timeToMin(j.end);
     const planNet2=sm2&&em2?netMins(sm2,em2):0;
