@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.19-7 : ★<b>新しい版に入れ替わらないまま一日動いていたのを直した</b>（2026-11-19 社長報告「昼前に終品チェックがあったと思いますが、画面表示されていない」）。終品確認の呼び出しは今朝入れてあったのに一度も出ていなかった。原因は2つ。①<b>版を見に行く処理が、品質チェックの「入力待ち」を開いたときにしか回っていなかった</b>（<code>qcAutoRefreshStart</code> の時計からしか呼ばれていない）。現場のPCは進捗ボードを開きっぱなしなので、<b>「新しい版が出ています」の知らせそのものが出ていなかった</b>。→ <b>どの画面を開いていても5分おきに見に行く</b>ようにした。②知らせが出ても、人が〔読み込み直す〕を押すまで古いまま動く。→ <b>知らせを出してから5分たっても押されず、画面も5分さわられていなければ、こちらから読み込み直す</b>。★人が使っている最中には動かさない（入力中・窓が開いている・紙を出している・5分以内にさわられた、のどれかなら見送る）。「あとで」を押されたらその端末では自動で直さない。読み直しても版が変わらないときの堂々巡りよけに2回まで。 -->
 <!-- H-Hub v2026.11.19-6 : ★<b>終品確認の時刻になったら、画面に出してスマホを鳴らす</b>ようにした（2026-11-19 社長指示）。紙（段取り準備シート）は「予定を見る」もの、こちらは「その時間が来た」と知らせるもの。<b>呼び出しの仕組みをそのまま使う</b>ので、<b>全端末の上に赤い帯</b>が出て、<b>チャイムと読み上げ</b>（「A1から、終品確認 3KO-6440-12 を呼んでいます」）が流れ、<b>スマホにも届く</b>（ntfy）。受けた人が「向かいます」→「完了」を押すのも同じ。時刻は<b>紙とまったく同じ計算</b>（<code>_ssShuhinAll()</code>＝生産が終わる30分前・作業時間で逆算・同じ品番が割れていれば最後の1回だけ）。★<b>作るのは1台だけ</b>＝呼び出しの鍵を「日付＋ライン＋品番」で決め打ちにし、<b>calls の中だけで取り合う</b>ので（新しい置き場所を作らないのでFirebaseのルールを触らなくてよい）、13台が同時に出しても呼び出しは1件。完了したあとも鍵が残るので二度は鳴らない。★<b>1つの品番につき1回だけ</b>で、<b>鳴らし直しもしない</b>（<code>auto:true</code> の呼び出しは10秒おきの鳴らし直しから外した。人が押した呼び出しはこれまでどおり鳴り続ける）。★画面を遅く開いた端末が<b>過ぎた時刻を鳴らさない</b>よう、時刻から10分のあいだだけ出す。 -->
 <!-- H-Hub v2026.11.19-4 : ★<b>段取りの枠を広げるため、帯の下の凡例を減らした</b>（2026-11-19 社長指示）。「帯の下の空いた行は、回って『このくらいで切れそう／いっぱいになりそう』と思った時間に記号を書く欄。○＝空容器 △＝スクラップ箱 □＝材料／急ぐものは◎、手当て済みは記号に／を重ねる」を<b>丸ごと削除</b>（記号の意味は帯の左の見出しに ○容器 △ｽｸﾗｯﾌﾟ □材料 と出ているので、紙の下まで繰り返さない）。終品の説明も「（その品番のいちばん最後の生産が終わる30分前）」→<b>「（生産が終わる30分前）」</b>に短くした。凡例が3行から1行になり、そのぶん段取りの枠に回る。 -->
 <!-- H-Hub v2026.11.19-3 : ★<b>1枚目の右が空いているのに2枚に分かれていた</b>のを直した（2026-11-19 社長指摘）。「つづきの紙へ送る」処理が、<b>送っても高さが減らないときにも紙を増やしていた</b>。段取りの枠は<b>横に4つ並ぶ</b>ので、2件しかない日に1件送っても列が1行のままで<b>高さは1mmも減らない</b>。それでも紙を1枚作っていたため、1枚目の右が空いたまま「つづき」の紙に1件だけ載っていた。→ <b>送ったあとに測り直し、高さが減っていなければ元へ戻して紙を増やさない</b>。本当にはみ出すとき（枠が5件以上で2行目ができるとき）だけ、これまでどおりつづきの紙へ送る。 -->
@@ -14784,10 +14785,12 @@ function qcCheckNewVersion(){
       // 先頭のコメントは新しい順に並んでいるので、最初に見つかったものが最新
       var m = t.match(/H-Hub\s+(v\d{4}\.\d{2}\.\d{2}-\d+)/);
       if(m && qcVerNewer(m[1], QC_UI_VERSION)) qcShowNewVersion(m[1]);
+      else { try{ sessionStorage.removeItem('hhubAutoReloadN'); }catch(e){} }
     })
     .catch(function(){});   // 取れなければ黙って何もしない
 }
 function qcShowNewVersion(v){
+  if(!QC_NEWVER_AT) QC_NEWVER_AT = Date.now();   /* 自動で読み直すまでの待ち時間の起点 */
   if(document.getElementById('qc-newver')) return;
   var d=document.createElement('div'); d.id='qc-newver'; d.className='qc-newver';
   var t=document.createElement('span');
@@ -14796,10 +14799,70 @@ function qcShowNewVersion(v){
   b.onclick=function(){ location.reload(); };
   var x=document.createElement('button');
   x.textContent='あとで'; x.style.cssText='background:#e2e8f0;color:#334155';
-  x.onclick=function(){ d.parentNode.removeChild(d); };
+  x.onclick=function(){ QC_NEWVER_OFF = true;    /* 人が「あとで」と決めたので勝手に直さない */
+                        d.parentNode.removeChild(d); };
   d.appendChild(t); d.appendChild(b); d.appendChild(x);
   document.body.appendChild(d);
 }
+
+/* ★新しい版に入れ替わらないまま一日動いていた、を直す（2026-11-19 社長報告
+   「昼前に終品チェックがあったと思いますが、画面表示されていない」）。
+   調べたところ、原因は2つあった。
+   ①版を見に行く qcCheckNewVersion() は、品質チェックの「入力待ち」を開いた
+     ときに回り始める時計（qcAutoRefreshStart）からしか呼ばれていなかった。
+     現場のPCは進捗ボードを開きっぱなしなので、<b>知らせそのものが出ていなかった</b>。
+     → 下で、画面に関係なく5分おきに見に行くようにした。
+   ②知らせが出ても、人が〔読み込み直す〕を押すまで古いまま動く。
+     → 知らせを出してから5分たっても押されず、画面も5分さわられていなければ、
+       こちらから読み込み直す。
+   人が使っている最中には絶対に動かさない（下の qcAutoReloadSafe を全部通ったときだけ）。 */
+var QC_NEWVER_AT  = 0;              // 知らせを出した時刻
+var QC_NEWVER_OFF = false;          // 「あとで」を押されたら自動では直さない
+var QC_TOUCH_AT   = Date.now();     // 最後に画面をさわった時刻
+['pointerdown','keydown','wheel','touchstart'].forEach(function(ev){
+  window.addEventListener(ev, function(){ QC_TOUCH_AT = Date.now(); },
+                          { passive:true, capture:true });
+});
+var QC_AUTO_RELOAD_WAIT = 5*60*1000;
+function qcAutoReloadSafe(){
+  if(QC_NEWVER_OFF || !QC_NEWVER_AT) return false;
+  if(Date.now() - QC_NEWVER_AT < QC_AUTO_RELOAD_WAIT) return false;  // 押す間をとる
+  if(Date.now() - QC_TOUCH_AT  < QC_AUTO_RELOAD_WAIT) return false;  // 誰かが使っている
+  var a = document.activeElement;                                     // 入力の途中
+  if(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName || '')) return false;
+  if(a && a.isContentEditable) return false;
+  try{ if(window.__ssWin && !window.__ssWin.closed) return false; }catch(e){ return false; }
+  var open = false;                                                   // 何かの窓が開いている
+  try{
+    var ms = document.querySelectorAll('.modal-overlay, .qc-modal, dialog[open]');
+    for(var i = 0; i < ms.length; i++){
+      var st = ms[i].style ? ms[i].style.display : '';
+      if(ms[i].tagName === 'DIALOG'){ open = true; break; }
+      if(st && st !== 'none'){ open = true; break; }
+    }
+  }catch(e){ return false; }
+  if(open) return false;
+  return true;
+}
+function qcAutoReloadTick(){
+  var ok = qcAutoReloadSafe();
+  /* 動いていること・見送った理由を、あとから見られるように残す
+     （画面の何も触らない。開発者ツールで window.__hhubAutoReload を見るだけ） */
+  try{ window.__hhubAutoReload = { ok:ok, 知らせ:QC_NEWVER_AT, さわった:QC_TOUCH_AT,
+                                   あとで:QC_NEWVER_OFF, 見た:Date.now() }; }catch(e){}
+  if(!ok) return;
+  /* 読み直しても版が変わらないとき（古いものが配られ続けるなど）に
+     堂々巡りにならないよう、2回までにする */
+  var n = 0;
+  try{ n = parseInt(sessionStorage.getItem('hhubAutoReloadN') || '0', 10) || 0; }catch(e){}
+  if(n >= 2){ QC_NEWVER_OFF = true; return; }
+  try{ sessionStorage.setItem('hhubAutoReloadN', String(n + 1)); }catch(e){}
+  location.reload();
+}
+setInterval(qcAutoReloadTick, 30000);
+/* ★版を見に行くのは、どの画面を開いていても5分おきに（中で5分の間引きをしている） */
+setInterval(function(){ try{ qcCheckNewVersion(); }catch(e){} }, 5*60*1000);
+setTimeout(function(){ try{ qcCheckNewVersion(); }catch(e){} }, 20000);
 
 // ===== 朝礼の2画面（2026-09-21 社長指示）=====
 //   毎朝の朝礼で「配置表」と「前日のロス記録」を見るので、ひと押しで開けるようにした。
@@ -14866,7 +14929,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.19-6';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.19-7';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
