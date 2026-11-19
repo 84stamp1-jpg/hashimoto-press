@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.19-8 : ★<b>トラブルで止まっていた時間を、段取り時間とCT達成率から引くようにした</b>（2026-11-19 社長指示「停止時間は段取りからもCTからも引いてください」）。これまでは<b>どちらにも入ったまま</b>だった。(1)<b>段取り</b>＝段取りをしていた時間帯に重なった停止を引く。実例＝今日のA2 18220-T7D は 09:50→11:08 の<b>68分</b>のうち <b>10:40〜11:08 の28分がトラブル記録「金型調整」</b>で、段取率<b>252%・超過+41分</b>、しかも「段取率150%以上・原因未記入」に上がっていた。引くと<b>40分・148%・超過+13分</b>。(2)<b>CT達成率</b>＝分母の実績時間から、その品番を流していた間の停止を引く。止まっていた時間を「作っていた時間」として数えていたため、<b>トラブルがあった品番ほどサイクルタイムが悪く出ていた</b>。(3)あわせて<b>ライン合計の二重計上が消える</b>（A2は「段取超過+41分 停止+30分=71分」だったが、28分を2回数えていた。正しくは+13分と+30分で43分）。(4)★<b>進捗ボードのCT達成率（calcLineRate）も同じ読み方</b>にそろえた（ロス記録と数字が食い違わないように）。見込み完了時刻は別に「停止中は丸ごと後ろへずらす」仕組みがあるので、CTから停止を除いても遅れは消えない。(5)画面には<b>「68分から停止28分を除く」「停止30分を除く」</b>と小さく出すので、元の数字も分かる。※<b>段取り時間を分数だけで手入力した記録</b>は時間帯が分からないので引けない（時刻で入っているものだけ）。※<b>月ごと（保存済みの集計）はさかのぼって直らない</b>。 -->
 <!-- H-Hub v2026.11.19-7 : ★<b>新しい版に入れ替わらないまま一日動いていたのを直した</b>（2026-11-19 社長報告「昼前に終品チェックがあったと思いますが、画面表示されていない」）。終品確認の呼び出しは今朝入れてあったのに一度も出ていなかった。原因は2つ。①<b>版を見に行く処理が、品質チェックの「入力待ち」を開いたときにしか回っていなかった</b>（<code>qcAutoRefreshStart</code> の時計からしか呼ばれていない）。現場のPCは進捗ボードを開きっぱなしなので、<b>「新しい版が出ています」の知らせそのものが出ていなかった</b>。→ <b>どの画面を開いていても5分おきに見に行く</b>ようにした。②知らせが出ても、人が〔読み込み直す〕を押すまで古いまま動く。→ <b>知らせを出してから5分たっても押されず、画面も5分さわられていなければ、こちらから読み込み直す</b>。★人が使っている最中には動かさない（入力中・窓が開いている・紙を出している・5分以内にさわられた、のどれかなら見送る）。「あとで」を押されたらその端末では自動で直さない。読み直しても版が変わらないときの堂々巡りよけに2回まで。 -->
 <!-- H-Hub v2026.11.19-6 : ★<b>終品確認の時刻になったら、画面に出してスマホを鳴らす</b>ようにした（2026-11-19 社長指示）。紙（段取り準備シート）は「予定を見る」もの、こちらは「その時間が来た」と知らせるもの。<b>呼び出しの仕組みをそのまま使う</b>ので、<b>全端末の上に赤い帯</b>が出て、<b>チャイムと読み上げ</b>（「A1から、終品確認 3KO-6440-12 を呼んでいます」）が流れ、<b>スマホにも届く</b>（ntfy）。受けた人が「向かいます」→「完了」を押すのも同じ。時刻は<b>紙とまったく同じ計算</b>（<code>_ssShuhinAll()</code>＝生産が終わる30分前・作業時間で逆算・同じ品番が割れていれば最後の1回だけ）。★<b>作るのは1台だけ</b>＝呼び出しの鍵を「日付＋ライン＋品番」で決め打ちにし、<b>calls の中だけで取り合う</b>ので（新しい置き場所を作らないのでFirebaseのルールを触らなくてよい）、13台が同時に出しても呼び出しは1件。完了したあとも鍵が残るので二度は鳴らない。★<b>1つの品番につき1回だけ</b>で、<b>鳴らし直しもしない</b>（<code>auto:true</code> の呼び出しは10秒おきの鳴らし直しから外した。人が押した呼び出しはこれまでどおり鳴り続ける）。★画面を遅く開いた端末が<b>過ぎた時刻を鳴らさない</b>よう、時刻から10分のあいだだけ出す。 -->
 <!-- H-Hub v2026.11.19-4 : ★<b>段取りの枠を広げるため、帯の下の凡例を減らした</b>（2026-11-19 社長指示）。「帯の下の空いた行は、回って『このくらいで切れそう／いっぱいになりそう』と思った時間に記号を書く欄。○＝空容器 △＝スクラップ箱 □＝材料／急ぐものは◎、手当て済みは記号に／を重ねる」を<b>丸ごと削除</b>（記号の意味は帯の左の見出しに ○容器 △ｽｸﾗｯﾌﾟ □材料 と出ているので、紙の下まで繰り返さない）。終品の説明も「（その品番のいちばん最後の生産が終わる30分前）」→<b>「（生産が終わる30分前）」</b>に短くした。凡例が3行から1行になり、そのぶん段取りの枠に回る。 -->
@@ -14929,7 +14930,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.19-7';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.19-8';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
@@ -17715,6 +17716,41 @@ function setupNeedsCause(rate, over){
   return (rate!=null && rate>=SETUP_ASK_RATE && (over||0)>=SETUP_ASK_OVER);
 }
 
+/* ★ある時間帯に重なったトラブル停止の長さ（休憩は除いた正味の分）
+   2026-11-19 社長指示「停止時間は段取りからもCTからも引いてください」 */
+function stopOverlapMin(trbs,fromM,toM,nowMin){
+  if(fromM===null||fromM===undefined||toM===null||toM===undefined||toM<=fromM) return 0;
+  let m=0;
+  (trbs||[]).forEach(function(t){
+    if(!t||!t.start) return;
+    const ts=timeToMin(t.start), te=t.end?timeToMin(t.end):nowMin;
+    if(ts===null||te===null||te<=ts) return;
+    const os=Math.max(ts,fromM), oe=Math.min(te,toM);
+    if(oe>os) m+=netMins(os,oe);
+  });
+  return Math.round(m);
+}
+
+/* 段取りをしていた時間帯。calcImpliedSetup とまったく同じ順で決める
+   （分数だけが残っている記録は時間帯が分からないので null＝引けない） */
+function setupSpanFor(jobs,ji,actualWorkStart,ssIn,seIn){
+  const j=jobs[ji];
+  if(!j||j.noSetup) return null;
+  const ssM=timeToMin(ssIn||j.setupStartTime||'');
+  if(ssM!==null){
+    const seM=timeToMin(seIn||j.setupEndTime||'');
+    const endM=(seM!==null)?seM:timeToMin(actualWorkStart||j.actualStart||'');
+    return (endM!==null&&endM>ssM)?{from:ssM,to:endM}:null;
+  }
+  if((j.setupActualMin||0)>0) return null;
+  const startM=timeToMin(actualWorkStart||j.actualStart||j.start);
+  if(!startM) return null;
+  let prevEndM;
+  if(ji>0){ const pj=jobs[ji-1]; prevEndM=timeToMin(pj.actualEnd||pj.end)||SETUP_BASE_MIN; }
+  else { prevEndM=SETUP_BASE_MIN; }
+  return (startM>prevEndM)?{from:prevEndM,to:startM}:null;
+}
+
 function lossJobRows(l,id){
   if(!l) return [];
   const jobs=(l.jobs||[]).filter(j=>j&&j.plan>0);
@@ -17739,6 +17775,18 @@ function lossJobRows(l,id){
         cur?(l.setupStartTime||''):'', cur?(l.setupEndTime||''):''):null;
       disp=(implied&&implied>0)?implied:jSetupMin;
     }
+    /* ★段取りをしている間に止まっていた時間は、段取り時間から引く（2026-11-19 社長指示）。
+       例＝A2 18220-T7D：09:50→11:08 の68分のうち 10:40〜11:08 の28分は
+       トラブル記録「金型調整」。これを入れたままだと段取率252%・超過+41分になり、
+       しかもライン合計で停止と二重に数えていた */
+    let setupStop=0;
+    const dispRaw=Math.round(disp);
+    if(!j.noSetup&&disp>0){
+      const sp=setupSpanFor(jobs,ji,jWS,
+        cur?(l.setupStartTime||''):'', cur?(l.setupEndTime||''):'');
+      if(sp) setupStop=Math.min(Math.round(disp),stopOverlapMin(trbs,sp.from,sp.to,nowMin));
+      if(setupStop>0) disp=Math.max(0,disp-setupStop);
+    }
     const over=(!j.noSetup&&disp>0)?Math.max(0,Math.round(disp-std)):0;
     // CT達成率（行の表示と同じ式）
     const sm=timeToMin(j.start), em=timeToMin(j.end);
@@ -17750,11 +17798,6 @@ function lossJobRows(l,id){
     const wsM=timeToMin(jWS||'');
     const weM=(jWE&&jWE!=='')?timeToMin(jWE):(jAct>0?lastCountMin(j,l):null);
     const actNet=(wsM!==null&&weM!==null)?netMins(wsM,weM):0;
-    const ct=(stdCT>0&&actNet>0&&jAct>0)?Math.round(jAct*stdCT/actNet*100):null;
-    const effPlan=j.revisedPlan||j.plan;
-    const started=!!(jWS||jAct>0);
-    // まだ始まっていない品番は 0% ではなく「--」（空欄）にする
-    const qty=(effPlan>0&&started)?Math.round(jAct/effPlan*100):null;
     // その品番を流していた時間帯に重なった停止
     let stop=0; const stopTypes=[];
     if(wsM!==null){
@@ -17767,6 +17810,15 @@ function lossJobRows(l,id){
       });
     }
     stop=Math.round(stop);
+    /* ★止まっていた時間は「作っていた時間」ではないので、CTの分母から引く
+       （2026-11-19 社長指示）。トラブルのぶんまでサイクルタイムの悪さとして
+       出ていた（例＝11/18 Bライン 64210…B② の83%） */
+    const actNetRun=Math.max(0,actNet-stop);
+    const ct=(stdCT>0&&actNetRun>0&&jAct>0)?Math.round(jAct*stdCT/actNetRun*100):null;
+    const effPlan=j.revisedPlan||j.plan;
+    const started=!!(jWS||jAct>0);
+    // まだ始まっていない品番は 0% ではなく「--」（空欄）にする
+    const qty=(effPlan>0&&started)?Math.round(jAct/effPlan*100):null;
     const done=!!(j.status==='done'||(j.actualEnd&&j.actualEnd!==''));
     const causes=[];
     if(over>0) causes.push('段取り');
@@ -17779,6 +17831,7 @@ function lossJobRows(l,id){
       planStart:j.start||'', planEnd:j.end||'', actStart:jWS||'', actEnd:jWE||'',
       setupStart:jSS||'', setupEnd:jSE||'',
       setupMin:Math.round(disp), setupStd:std, setupOver:over, setupRate:setupRate, noSetup:!!j.noSetup,
+      setupRaw:dispRaw, setupStop:setupStop, actNetRun:actNetRun, actNetRaw:actNet,
       setupCause:j.setupCause||'', needCause:setupNeedsCause(setupRate,over),
       ctRate:ct, qtyRate:qty, stopMin:stop, stopTypes:stopTypes, done:done,
       started:started, note:j.note||'', causes:causes});
@@ -17808,6 +17861,7 @@ function calcLineLoss(l, id){
 function calcLineRate(l){
   const jobs=(l.jobs||[]).filter(j=>j.plan>0&&j.start&&j.end&&!j.history);
   if(!jobs.length) return null;
+  const _trbs=(l.troubles||[]).filter(t=>t&&t.start);   /* 停止はCTの分母から引く */
 
   const now=new Date();
   const nowMin=now.getHours()*60+now.getMinutes();
@@ -17837,7 +17891,10 @@ function calcLineRate(l){
     const wsJ=timeToMin(isCur?(l.workStart||j.actualStart||j.start):(j.actualStart||j.start));
     const weRaw=isCur?(l.workEnd&&l.workEnd!==''?l.workEnd:''):(j.actualEnd||'');
     const weJ=weRaw!==''?timeToMin(weRaw):lastCountMin(j,l);
-    const actualNetJ=(jAct>0&&wsJ&&weJ)?netMins(wsJ,weJ):0;
+    /* ★止まっていた時間は「作っていた時間」ではないので引く（2026-11-19 社長指示）。
+       ロス記録（lossJobRows）と同じ読み方にして、数字が食い違わないようにする */
+    const actualNetRaw=(jAct>0&&wsJ&&weJ)?netMins(wsJ,weJ):0;
+    const actualNetJ=Math.max(0,actualNetRaw-stopOverlapMin(_trbs,wsJ,weJ,nowMin));
     const isDone=j.status==='done'||(j.actualEnd&&j.actualEnd!=='');
     const effectivePlan=j.revisedPlan||j.plan;
     info.push({j:j, sm:sm, em:em, planCT:planCT, jAct:jAct,
@@ -19252,9 +19309,11 @@ function _lhRenderDay(recs){
         +'<td class="lh-num" style="color:#aaa;">'+j.row+'</td>'
         +'<td style="vertical-align:top;"><b>'+_lhEsc(j.part)+'</b>'+(j.note?'<span style="font-size:11.5px;color:#999;margin-left:10px;">📝 '+_lhEsc(j.note)+'</span>':'')+'</td>'
         +'<td class="lh-num">'+(j.actual||0).toLocaleString()+' / '+(j.plan||0).toLocaleString()+'</td>'
-        +'<td class="lh-num">'+_lhPct(j.ctRate)+'</td>'
+        +'<td class="lh-num">'+_lhPct(j.ctRate)
+          +((j.stopMin>0&&j.ctRate!=null)?'<div style="font-size:11px;color:#9d174d;">停止'+j.stopMin+'分を除く</div>':'')+'</td>'
         +'<td class="lh-num">'+(j.noSetup?'<span style="color:#ccc;">なし</span>'
-            :(j.setupMin>0?j.setupMin+'/'+j.setupStd+'分':'<span style="color:#ccc;">--/'+j.setupStd+'分</span>'))+'</td>'
+            :(j.setupMin>0?j.setupMin+'/'+j.setupStd+'分':'<span style="color:#ccc;">--/'+j.setupStd+'分</span>'))
+          +((j.setupStop>0)?'<div style="font-size:11px;color:#9d174d;">'+j.setupRaw+'分から停止'+j.setupStop+'分を除く</div>':'')+'</td>'
         +'<td class="lh-num">'+_lhSetupRate(_lhRate(j))+'</td>'
         +'<td class="lh-num">'+_lhMin(j.setupOver)+'</td>'
         +'<td class="lh-num">'+_lhMin(j.stopMin)
