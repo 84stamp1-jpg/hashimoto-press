@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.20-3 : ★<b>画面を見ていなくても呼び出しの音だけは鳴るようにした</b>（2026-11-20 社長指示「画面に出なくても呼び出しの音だけ鳴ればいいですけど難しいですか？」）。Chromeは画面に出ていないタブを止めるが、<b>音を出し続けているタブは絶対に止めない</b>（止めたら音楽が切れてしまうため）。そこで呼び出し設定（⚙）に <b>「🔊 画面を見ていなくても鳴らす」</b>（この端末だけ・既定は切）を足した。入にすると <b>60Hz・音量0.002（約-54dB）の、聞こえないほど小さい音をずっと流し続ける</b>。PCの小さいスピーカーはこの低さをほとんど出せないので人には聞こえないが、Chromeには「音が出ている」と見えるのでタブが止まらず、呼び出しが来た瞬間に<b>チャイムと読み上げ</b>（「A1から、リフトを呼んでいます」）が鳴る。タブに<b>音符の印</b>が出るのが効いている目印。★読み込み直したあとは<b>画面を一度クリック</b>しないと音を出せない（ブラウザの自動再生の制限）ので、チェックの下に「✅待ち受けています／⚠一度クリックしてください」と出す。30秒おきに見張り、スリープから戻って音の装置が止まっていれば入れ直す。現場の13台で常時音を出す必要はないので既定は切。 -->
 <!-- H-Hub v2026.11.20-2 : ★<b>画面を見ていない間の呼び出しを取りこぼさないようにした</b>（2026-11-20 社長報告「クロムのリモートデスクトップで他のPCを見ていると呼び出しが鳴らない」）。Chromeは<b>画面に出ていないタブをしばらくすると止める</b>（凍結・タブの捨て）。止まっている間は呼び出しが届かず、画面に戻った瞬間にまとめて届くが、これまでは<b>「受け取った時点で60秒以内のものだけ鳴らす」</b>決まりだったので、そこで黙って捨てていた（とくに終品確認は <code>auto:true</code> で鳴らし直しをしないので1回きり＝完全に取りこぼす）。→ ①<b>まだ誰も受けていない（status が open の）呼び出しなら10分前のものまで鳴らす</b>（「向かいます」が押されたものは鳴らさない）。②<b>Web Lock を握り続けて、Chromeにタブを止めさせにくくする</b>（Web Lock を持つタブは凍結の対象外という決まりを使う。対応していないブラウザでは何も起きない）。★それでも<b>PCの画面が完全に隠れている間に確実に気づくならスマホ（ntfy）</b>が確実。 -->
 <!-- H-Hub v2026.11.20-1 : ★<b>現品ラベルの画面が呼び出しの帯にかぶって「印刷する」が押せなかったのを直した</b>（2026-11-20 社長指摘）。呼び出しの帯は <code>position:fixed; top:0; z-index:10000</code> で必ずいちばん上に出るのに、ラベルの画面は <code>inset:0</code> で画面の天井から始まっていたため、見出しの〔🖨 印刷する〕が帯の下に潜っていた。→ ラベルの画面を <code>--callh</code>（帯の高さ）の分だけ下げた。帯が消えれば元に戻る。あわせて ★<b>ラベルの製造日を右寄せ・幅固定にして、収容数の枠を広げた</b>（同日 社長指示）。収容数が空のラベルで日付が左へ寄り、手で書く場所が無かったため。収容数は3行目の余った幅を全部もらい、製造日は <b>56mm 固定・右寄せ</b>（字の大きさは枠に収まるまで自動で下げる）。どのラベルでも日付の位置と大きさがそろい、収容数は空のときの記入欄にも、入っているときの訂正の余白にもなる。 -->
 <!-- H-Hub v2026.11.19-9 : ★<b>現品ラベルの余った枠を白紙にせず、収容数を空けたラベルを出すようにした</b>（2026-11-19 社長指示「4分割の内のどれかが余白になる場合は、数量欄を空欄にして出してほしい。手書きで数字を入れれるように」）。A4横の4つ割りで枚数が4の倍数でないとき、余った1〜3枠に<b>最後に出した品番と同じラベル（収容数の欄だけ空）</b>を入れる。端数の箱は収容数に満たないので、その場で手で書ける。印刷ボタンには「4ページ・16枚／うち収容数が空のもの 2枚」と出す。 -->
@@ -14964,7 +14965,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.20-2';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.20-3';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
@@ -23948,7 +23949,7 @@ const CALL_BAD_MIN  = 5;      // これを過ぎたら赤で点滅
 const CALL_KEEP_DAYS = 30;
 let _calls = {}, _callLine = '', _callSeen = {};
 // この端末の設定（置き場所・鳴らす種類）。端末ごとに違うので localStorage に持つ
-let _callCfg = { site:'', ring:null, mute:false, repeat:true, repeatSec:10, push:false };
+let _callCfg = { site:'', ring:null, mute:false, repeat:true, repeatSec:10, push:false, awake:false };
 // スマホへの通知（ntfy）。トピック名は公開リポジトリに書けないので Firebase に置く
 let _ntfy = { topic:'', times:5, sec:5 };
 let _ntfySent = {};              // 呼び出しごとの送信回数と最後に送った時刻
@@ -23968,7 +23969,7 @@ function callLoadCfg(){
        _callCfg = { site:v.site||'', ring:Array.isArray(v.ring)?v.ring:null, mute:!!v.mute,
                     repeat:(v.repeat===undefined?true:!!v.repeat),
                     repeatSec:(parseInt(v.repeatSec,10) || CALL_REPEAT_DEF),
-                    push:!!v.push, relay:!!v.relay }; }catch(e){}
+                    push:!!v.push, relay:!!v.relay, awake:!!v.awake }; }catch(e){}
 }
 window.callSaveCfg = function(){
   _callCfg.site = document.getElementById('callSite')?.value || '';
@@ -23977,9 +23978,11 @@ window.callSaveCfg = function(){
   _callCfg.repeatSec = parseInt(document.getElementById('callRepeatSec')?.value, 10) || CALL_REPEAT_DEF;
   _callCfg.push = !!document.getElementById('callPush')?.checked;
   _callCfg.relay = !!document.getElementById('callRelay')?.checked;
+  _callCfg.awake = !!document.getElementById('callAwake')?.checked;
   _callCfg.ring = [...document.querySelectorAll('.call-ring:checked')].map(c=>c.value);
   try{ localStorage.setItem('hhubCallCfg', JSON.stringify(_callCfg)); }catch(e){}
   if(_callCfg.site) _callLine = _callCfg.site;
+  keepAwakeApply();
   callFabLabel();
 };
 function callFabLabel(){
@@ -24035,6 +24038,8 @@ window.callOpen = function(){
   document.getElementById('callRepeatSec').value = String(_callCfg.repeatSec || CALL_REPEAT_DEF);
   document.getElementById('callPush').checked = !!_callCfg.push;
   document.getElementById('callRelay').checked = !!_callCfg.relay;
+  const _aw = document.getElementById('callAwake');
+  if(_aw){ _aw.checked = !!_callCfg.awake; keepAwakeMsg(); }
   document.getElementById('callKindsEdit').value  = _listToText(CALL_KINDS, true);
   document.getElementById('callPlacesEdit').value = _listToText(callOrigins(), false);
   document.getElementById('callYomiEdit').value  = CALL_YOMI.map(function(p){ return p[0] + '=' + p[1]; }).join('\n');
@@ -24125,8 +24130,67 @@ function _callAudioCtx(){
 }
 // 最初のクリック／キー操作で音を使えるようにしておく（自動再生の制限をはずす）
 ['click','keydown','touchstart'].forEach(function(ev){
-  window.addEventListener(ev, function(){ _callAudioCtx(); }, {once:false, passive:true});
+  window.addEventListener(ev, function(){
+    _callAudioCtx();
+    if(_callCfg.awake) keepAwakeApply();   /* ★待ち受けの音もここで始める（自動再生の制限ばらし） */
+  }, {once:false, passive:true});
 });
+/* ★画面を見ていなくても音だけは鳴らす（2026-11-20 社長指示
+   「画面に出なくても呼び出しの音だけ鳴ればいいですけど難しいですか？」）。
+
+   Chromeは画面に出ていないタブをしばらくすると止める（凍結）ので音も出なくなるが、
+   <b>音を出し続けているタブは絶対に止めない</b>（止めたら音楽が切れてしまうため）。
+   そこで、<b>聞こえないほど小さい低い音をずっと流しておく</b>。
+   これでタブは「仕事中」とみなされ、呼び出しが来た瞬間に
+   チャイムと読み上げ（「A1から、リフトを呼んでいます」）が鳴る。
+
+   ・60Hz（とても低い音）、音量 0.002（およそ -54dB）。PCの小さいスピーカーは
+     この低さをほとんど出せないので人には聞こえないが、Chromeには「音が出ている」と見える。
+   ・タブに<b>音符の印</b>が出る＝効いている目印。
+   ・この端末だけの設定（既定は切）。現場の13台で常時音を出す必要はないため。
+   ・ページを開いて一度もクリックしていないとブラウザが音を止める決まりなので、
+     読み込み直したあとは<b>画面を一度クリック</b>する必要がある（下の文で案内する）。 */
+let _awakeNode = null;
+function keepAwakeOn(){
+  if(_awakeNode) return true;
+  const C = _callAudioCtx();
+  if(!C) return false;
+  try{
+    const o = C.createOscillator(), g = C.createGain();
+    o.type = 'sine'; o.frequency.value = 60;
+    g.gain.value = 0.002;
+    o.connect(g); g.connect(C.destination);
+    o.start();
+    _awakeNode = { o:o, g:g };
+    return true;
+  }catch(e){ console.warn('呼び出しの待ち受けの音を出せません', e); return false; }
+}
+function keepAwakeOff(){
+  if(!_awakeNode) return;
+  try{ _awakeNode.o.stop(); _awakeNode.o.disconnect(); _awakeNode.g.disconnect(); }catch(e){}
+  _awakeNode = null;
+}
+function keepAwakeApply(){
+  if(_callCfg.awake) keepAwakeOn(); else keepAwakeOff();
+  keepAwakeMsg();
+}
+function keepAwakeMsg(){
+  const el = document.getElementById('callAwakeMsg');
+  if(!el) return;
+  if(!_callCfg.awake){ el.textContent = ''; return; }
+  const ok = _awakeNode && _callAC && _callAC.state === 'running';
+  el.textContent = ok ? '✅ 待ち受けています（タブに音符の印が出ます）'
+                      : '⚠ 画面のどこかを一度クリックしてください（まだ音を出せません）';
+  el.style.color = ok ? '#15803d' : '#b45309';
+}
+/* 30秒おきに見張る。パソコンがスリープから戻ると音の装置が止まっていることがあるため */
+setInterval(function(){
+  if(!_callCfg.awake) return;
+  try{ if(_callAC && _callAC.state === 'suspended') _callAC.resume(); }catch(e){}
+  if(!_awakeNode) keepAwakeOn();
+  keepAwakeMsg();
+}, 30000);
+
 function _callChime(){
   try{
     const C = _callAudioCtx();
@@ -24613,6 +24677,10 @@ setInterval(_callRender, 10000);
       </div>
       <div style="font-size:12px;color:#555;margin-bottom:5px;">この端末で音を鳴らす呼び出し</div>
       <div id="callRing" style="display:flex;flex-wrap:wrap;gap:10px;"></div>
+      <label style="cursor:pointer;font-size:12.5px;color:#15803d;display:block;margin-top:10px;font-weight:700;">
+        <input type="checkbox" id="callAwake" onchange="callSaveCfg()"> 🔊 画面を見ていなくても鳴らす
+        <span style="font-weight:400;color:#94a3b8;font-size:11px;">（リモートデスクトップや他のアプリを全画面にしている間も、チャイムと読み上げが鳴ります。聞こえないほど小さい音を流し続けて、Chromeにタブを止めさせません。タブに音符の印が出ます）</span></label>
+      <div id="callAwakeMsg" style="font-size:11.5px;margin:3px 0 0 20px;"></div>
       <label style="cursor:pointer;font-size:12.5px;color:#1d4ed8;display:block;margin-top:10px;font-weight:700;">
         <input type="checkbox" id="callPush" onchange="callSaveCfg()"> 📱 この端末からスマホへ通知を送る
         <span style="font-weight:400;color:#94a3b8;font-size:11px;">（何台入にしても二重には届きません。2〜3台入にしておくと安心）</span></label>
