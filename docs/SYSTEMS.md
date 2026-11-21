@@ -842,9 +842,29 @@
 - **目的**: 減点式の手当計算(残ポイント×100円)。kintone + GAS + Sheets + Excel + Slack統合
 - **状態**: 試行運用中(Rev.1.2)。残タスク: Slack一括通知ボタン、
   kintone JSカスタマイズのGASデプロイURL更新、App75連携、社労士確認
-- **コード**: kintoneカスタマイズJS(App74/75/77)・GAS本体・VBAマクロ・システムサマリーを
+- **コード**: kintoneカスタマイズJS(App74/75/77/**45**)・GAS本体・VBAマクロ・システムサマリーを
   `基準遵守/` に収録(2026-07-07)。GAS内のSlack Webhook URLは公開リポジトリのため
   除去済み(実URLはGASスクリプトプロパティで管理)。月次処理Excel(個人データ含む)は未収録
+- **★kintone → Slack 個人あて通知(2026-11-21・GAS v3.9)**:
+  これまで通知はチャンネル(#基準遵守手当bot)に投稿されるだけで担当者名は
+  プレーンテキストだったため本人に届いていなかった。また App45(苦情・不適合報告書)は
+  通知自体が無かった。次を追加:
+  | アプリ | 契機 | 宛先 |
+  |---|---|---|
+  | App77 期限管理 | 新規登録 | チャンネル(担当者をメンション) + 担当者へDM |
+  | App77 期限管理 | 完了報告 | チャンネル + 依頼者(社長)へDM |
+  | App45 苦情・不適合 | 対策担当者/提出期限が入った・変わった | チャンネル(メンション) + 担当者へDM |
+  - 実装: GAS に `slackUserMap()` / `slackUserId()` / `slackMention()` / `slackDM()` /
+    `kintoneRecordUrl()` / `handleHoukokushoAssign()` を追加。App45 用カスタマイズJSは
+    `基準遵守/kintone_customize_app45.js`(新規)。App45 は保存のたびに鳴らないよう
+    「担当者または期限が前と変わったときだけ」送る。
+  - **氏名→SlackID の対応表とBotトークンはリポジトリに置かない**。GASのスクリプトプロパティ
+    `SLACK_USER_MAP`(JSON) / `SLACK_BOT_TOKEN` で管理。対応表の正本は
+    `Desktop\橋本_作業データ\briefing_tools\slack_user_map.json`(リポジトリ外)。
+    **どちらも未設定でも止まらず**、従来どおりチャンネル投稿のみになる。
+  - 対応表の値が `C` ではじまる場合はチャンネル宛(例: 技術 → #技術)。
+    その場合 Bot をそのチャンネルに招待しておくこと。
+  - 設定手順: `基準遵守/Slack個人通知_設定手順_2026-11-21.md`
 - **減点項目マスタPDF**: `基準遵守/master_pdf.py`(2026-07-17収録)。
   `python master_pdf.py ja 出力.pdf` / `python master_pdf.py en 出力.pdf` で日英を同一データから生成。
   A4横4ページ。依存は reportlab のみ。

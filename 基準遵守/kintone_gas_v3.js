@@ -1,9 +1,11 @@
 // ================================================================
-// 橋本工業　基準遵守手当システム　GAS v3.8
+// 橋本工業　基準遵守手当システム　GAS v3.9
 // App74：週次チェック・減点記録
 // App75：5S巡回チェック
 // App73：減点項目マスタ
 // App25：社員マスタ
+// App77：期限管理（指示・依頼事項）　★2026-11-21 担当者メンション＋本人DMを追加
+// App45：苦情・不適合報告書　　　　　★2026-11-21 担当者が決まったら通知を新設
 // ================================================================
 
 var CONFIG = {
@@ -14,6 +16,9 @@ var CONFIG = {
   APP_5S:      "75",
   APP_MASTER:  "73",
   APP_MEMBER:  "25",
+  APP_DEADLINE:    "77",   // 期限管理（指示・依頼事項）
+  APP_HOUKOKUSHO:  "45",   // 苦情・不適合報告書
+  REPORT_TO:       "深津　健介",  // 完了報告をDMで受け取る人（依頼者）
 
   // チームコード→部門名マッピング（App73の波及範囲テキストと照合用）
   TEAM_KEYWORDS: {
@@ -70,6 +75,7 @@ function doGet(e) {
     else if (action === "5sNotify")          { result = handle5SNotify(params); }
     else if (action === "qualityNew")        { result = handleQualityNew(params); }
     else if (action === "qualityComplete")   { result = handleQualityComplete(params); }
+    else if (action === "houkokushoAssign")  { result = handleHoukokushoAssign(params); }
     else if (action === "setSetting") { result = handleSetSetting(params); }
     else if (action === "weeklyCheck") { result = runWeeklyCheck(); }
     else if (action === "runMonthly") {
@@ -1753,16 +1759,29 @@ function handleQualityNew(params) {
   var deadline = params.deadline || "";
   var person   = params.person   || "";
   var detail   = params.detail   || "";
+  var recordId = params.recordId || "";
 
-  var urgentMark = deadline ? "" : "";
+  // チャンネルへ（担当者は ★メンション にする。対応表に無い名前はそのまま出る）
   var text  = ":clipboard: *期限管理　新規登録*\n";
   text += "> 種別：" + type + "\n";
   text += "> 件名：*" + title + "*\n";
   text += "> 発生日：" + occDate + "　　対応期限：*" + (deadline || "未設定") + "*\n";
-  text += "> 担当者：" + (person || "未設定");
+  text += "> 担当者：" + (person ? slackMention(person) : "未設定");
   if (detail) text += "\n> 内容：" + detail;
-
   postToSlack(text, true);
+
+  // ★担当者本人へDM（チャンネルを見ていなくても届くように）
+  if (person) {
+    var dm  = ":clipboard: *あなたへの指示・依頼が登録されました*\n";
+    dm += "> 種別：" + type + "\n";
+    dm += "> 件名：*" + title + "*\n";
+    dm += "> 対応期限：*" + (deadline || "未設定") + "*\n";
+    if (detail) dm += "> 内容：" + detail + "\n";
+    dm += "できたらkintoneで「完了報告」を押してください。\n";
+    dm += kintoneRecordUrl(CONFIG.APP_DEADLINE, recordId);
+    slackDM(person, dm);
+  }
+
   Logger.log("handleQualityNew: " + title);
   return { status: "ok", message: "新規登録通知送信: " + title };
 }
@@ -1777,6 +1796,8 @@ function handleQualityComplete(params) {
   var completeDate = params.completeDate || "";
   var comment      = params.comment      || "";
 
+  var recordId = params.recordId || "";
+
   var text  = ":white_check_mark: *期限管理　完了報告*\n";
   text += "> 種別：" + type + "\n";
   text += "> 件名：*" + title + "*\n";
@@ -1785,6 +1806,16 @@ function handleQualityComplete(params) {
   if (comment) text += "\n> コメント：" + comment;
 
   postToSlack(text, true);
+
+  // ★依頼した人（社長）へDM。確認して「確認完了」を押すまでが1件なので、見落とさないように
+  var dm  = ":white_check_mark: *完了報告が上がりました*\n";
+  dm += "> 件名：*" + title + "*\n";
+  dm += "> 報告者：" + reporter + "　　完了日：" + (completeDate || "未入力") + "\n";
+  if (comment) dm += "> コメント：" + comment + "\n";
+  dm += "中身を確かめて、よければ「確認完了」を押してください。\n";
+  dm += kintoneRecordUrl(CONFIG.APP_DEADLINE, recordId);
+  slackDM(CONFIG.REPORT_TO, dm);
+
   Logger.log("handleQualityComplete: " + title);
   return { status: "ok", message: "完了報告通知送信: " + title };
 }
@@ -1955,6 +1986,115 @@ function buildMonthlySlackMessage(dateFrom, dateTo, summary, sheetUrl) {
   }
   text += ">\n>:link: *スプレッドシートを確認:* " + sheetUrl;
   return text;
+}
+
+// ================================================================
+// 苦情・不適合報告書（App45）　担当者が決まったら知らせる　★2026-11-21 新設
+//   これまでApp45からの通知は一切なく、報告書が起票されても
+//   対策担当者に伝わっていなかった。担当者または提出期限が入った時点で
+//   チャンネル投稿＋本人DMを出す。
+// ================================================================
+function handleHoukokushoAssign(params) {
+  var kubun    = params.kubun    || "";   // 報告区分（苦情/不適合/改善/異常）
+  var part     = params.part     || "";   // 部品番号
+  var partName = params.partName || "";   // 部品名称
+  var content  = params.content  || "";   // 不具合内容
+  var person   = params.person   || "";   // 対策担当者
+  var deadline = params.deadline || "";   // 提出期限
+  var recordId = params.recordId || "";
+
+  var hinban = part + (partName ? "　" + partName : "");
+
+  var text  = ":page_facing_up: *苦情・不適合報告書　担当者が決まりました*\n";
+  text += "> 区分：" + (kubun || "未入力") + "\n";
+  if (hinban) text += "> 部品：" + hinban + "\n";
+  text += "> 対策担当者：" + (person ? slackMention(person) : "未設定")
+       +  "　　提出期限：*" + (deadline || "未設定") + "*";
+  if (content) text += "\n> 内容：" + content;
+  postToSlack(text, true);
+
+  if (person) {
+    var dm  = ":page_facing_up: *あなたが対策担当者になりました（苦情・不適合報告書）*\n";
+    dm += "> 区分：" + (kubun || "未入力") + "\n";
+    if (hinban) dm += "> 部品：" + hinban + "\n";
+    dm += "> 提出期限：*" + (deadline || "未設定") + "*\n";
+    if (content) dm += "> 内容：" + content + "\n";
+    dm += "発生原因・発生対策・処置内容を入れて、対策提出日を入力してください。\n";
+    dm += kintoneRecordUrl(CONFIG.APP_HOUKOKUSHO, recordId);
+    slackDM(person, dm);
+  }
+
+  Logger.log("handleHoukokushoAssign: " + hinban + " / " + person);
+  return { status: "ok", message: "報告書 担当者通知送信: " + person };
+}
+
+// ================================================================
+// Slack 個人あて通知のしくみ　★2026-11-21 追加
+//   ・氏名→SlackユーザーID の対応表は、スクリプトプロパティ
+//     SLACK_USER_MAP（JSON）に入れる。例 {"八木　貴志":"U06...", ...}
+//   ・DMは Bot トークン（スクリプトプロパティ SLACK_BOT_TOKEN）で送る
+//   ★どちらも未設定でも止まらない。これまでどおりチャンネル投稿だけ行う。
+//     氏名が対応表に無いときも、メンションにせず名前のまま出す。
+// ================================================================
+function slackUserMap() {
+  if (slackUserMap._cache) return slackUserMap._cache;
+  var raw = PropertiesService.getScriptProperties().getProperty("SLACK_USER_MAP") || "{}";
+  var map = {};
+  try {
+    map = JSON.parse(raw);
+  } catch (e) {
+    Logger.log("SLACK_USER_MAP が読めません（JSONの書き方を確認）: " + e);
+  }
+  slackUserMap._cache = map;
+  return map;
+}
+
+// 氏名からSlackのユーザーIDを引く。全角・半角の空白は詰めて照合する
+function slackUserId(name) {
+  if (!name) return "";
+  var map = slackUserMap();
+  var key = String(name).replace(/[\s　]/g, "");
+  for (var k in map) {
+    if (String(k).replace(/[\s　]/g, "") === key) return map[k];
+  }
+  return "";
+}
+
+// 名前をメンションに変える。対応表に無ければ名前のまま返す
+//   ★対応表の値が C ではじまるときはチャンネル（例 技術＝#技術）なので <#…> にする
+function slackMention(name) {
+  var id = slackUserId(name);
+  if (!id) return String(name || "");
+  return (id.charAt(0) === "C") ? "<#" + id + ">" : "<@" + id + ">";
+}
+
+// 本人あてDM。送れたら true
+//   ★宛先がチャンネルID（Cではじまる）ならそのチャンネルへの投稿になる。
+//     担当者欄に「技術」のようにチーム名が入っているときに使う。
+//     ⚠その場合、Botがそのチャンネルに入っていないと not_in_channel で失敗する。
+function slackDM(name, text) {
+  var id = slackUserId(name);
+  if (!id) { Logger.log("DMの宛先が分かりません: " + name); return false; }
+  var token = PropertiesService.getScriptProperties().getProperty("SLACK_BOT_TOKEN");
+  if (!token) { Logger.log("SLACK_BOT_TOKEN が未設定のためDMは送りません"); return false; }
+
+  var res = UrlFetchApp.fetch("https://slack.com/api/chat.postMessage", {
+    method: "post",
+    contentType: "application/json; charset=utf-8",
+    headers: { Authorization: "Bearer " + token },
+    payload: JSON.stringify({ channel: id, text: text }),
+    muteHttpExceptions: true,
+  });
+  var ok = false;
+  try { ok = JSON.parse(res.getContentText()).ok === true; } catch (e) {}
+  Logger.log("DM " + name + " → " + (ok ? "送信しました" : "失敗 " + res.getContentText()));
+  return ok;
+}
+
+// kintoneのレコードを開くURL
+function kintoneRecordUrl(appId, recordId) {
+  if (!appId || !recordId) return "";
+  return "https://" + CONFIG.KINTONE_DOMAIN + "/k/" + appId + "/show#record=" + recordId;
 }
 
 // ================================================================
