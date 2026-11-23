@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.23-14 : -13 で入れた <code>missedReportHours()</code> が <code>timeToMin</code> を呼んでおり、<b>その場所からは見えないスコープ</b>だったため <code>ReferenceError</code> で落ちていた（進捗ボードの警告リストが描けなくなる）。→ 同じ変換をその関数の中に持たせて、外への依存をなくした。 -->
 <!-- H-Hub v2026.11.23-13 : ★<b>実績を入れ忘れた時刻を、その日じゅう残して出すようにした</b>（2026-11-23 社長指示「14時が未入力のまま15時の入力をしたらどうなりますか？14時は実績入力されていないことを少し目立つように表示してほしい。<b>戒めのように</b>」）。それまでは「<b>最後の締めの時刻ぶんが入っているか</b>」しか見ていなかったので、<b>14時を飛ばして15時に入れると、14時の抜けは黙って消えていた</b>（社長の問いのとおり）。→ 実績を入れるたびに積まれる <code>snapHistory</code> の時刻を集め、<b>締めを過ぎた時刻のうち前後10分に1件も入力が無いもの</b>を <code>missedReportHours()</code> で並べ、「<b>📝 実績の入れ忘れ：A2　14時 の実績が入っていません</b>」と出す。<b>あとから入れても消えない</b>＝その日の終わりまで残る。★<b>生産を始める前・終えたあとの時刻は数えない</b>（<code>workStart</code>／<code>workEnd</code> で切る）。★いま出ている「未報告」と同じ時刻は二重に出さない。★色は未報告（黄）より淡い<b>すみれ色</b>にした＝いま手を動かすものではなく、<b>あとで振り返るもの</b>だと見分けられるように。 -->
 <!-- H-Hub v2026.11.23-12 : ★<b>決められた時刻の10分前からの入力も、その時刻ぶんとして認める</b>（2026-11-23 社長指示）。前の版（-11）は「その時刻<b>以降</b>の入力」しか数えなかったので、<b>13:55 に入れた人は 14:15 に「14時の実績が未入力」と出て</b>いた＝現場は時計ぴったりには入れられないのに、少し早く入れたほうが叱られる形になっていた。→ <code>REPORT_EARLY_MIN = 10</code> を足し、<b>13:50 以降の入力は14時ぶん</b>として数える。出すかどうかを見る時刻（その時刻から10分待つ＝<code>REPORT_GRACE_MIN</code>）は変えていないので、<b>13:50〜14:10 の20分のあいだに入れればよい</b>ことになる。 -->
 <!-- H-Hub v2026.11.23-11 : ★<b>「未報告」を“決められた時刻に入っているか”で見るようにした</b>（2026-11-23 社長指示「実績入力してほしいのは、9時、10時、11時、12時、2時、3時、4時、5時、残業があるときは6時、7時、8時」）。前の版（-10）は<b>前回の入力から正味60分</b>で見ていたが、それだと<b>13:55に入れた人は14:55まで何も出ず、14時のぶんが丸ごと抜けても気づけない</b>（社長指摘「1時間に1回のルールを満たせない可能性がありますよね」）。→ <code>REPORT_HOURS = [9,10,11,12,14,15,16,17,18,19,20]</code> を置き、<b>その時刻から10分待って、その時刻ぶんの実績が入っていなければ出す</b>。★<b>13時が無い</b>のは、12時に午前ぶんを入れたあと <b>12:10〜12:50 が昼休み</b>で、午後の最初の区切りが14時になるため。★<b>8時が無い</b>のは、始業からの1時間ぶんを9時に入れるため。★残業の18・19・20時は、残業していなければラインが<b>稼働中でない</b>ので出ない。★朝いちばん（9:10より前）は何も出ない。表示は「<b>14時の実績が未入力</b>　前回更新：12:18」。工場レイアウトのカードも同じ基準にした。時刻は設定 <code>settings/reportHours</code>（例 "9,10,11,12,14,15,16,17"）で変えられる。-10 で入れた <code>netMinSince()</code> と <code>settings/noRepMin</code> は使わなくなった。 -->
@@ -6416,6 +6417,12 @@ function dueReportHour(now){
    ★生産を始める前・終えたあとの時刻は数えない（workStart / workEnd で切る）。 */
 function missedReportHours(l, now){
   if(!l) return [];
+  /* ★timeToMin はこの場所からは見えない（別のスコープで定義されている）ので、
+     ここで用意する。2026-11-23 */
+  const toMin = function(t){
+    const m = String(t==null?'':t).match(/^(\d{1,2}):(\d{2})/);
+    return m ? (parseInt(m[1],10)*60 + parseInt(m[2],10)) : 0;
+  };
   const d = now || new Date();
   const nowMin = d.getHours()*60 + d.getMinutes();
   const list = (Array.isArray(window._pmReportHours) && window._pmReportHours.length)
@@ -6424,7 +6431,7 @@ function missedReportHours(l, now){
   const stamps = [];
   (l.jobs||[]).forEach(function(j){
     (j.snapHistory||[]).forEach(function(sn){
-      const m = timeToMin(sn && sn.t);
+      const m = toMin(sn && sn.t);
       if(m) stamps.push(m);
     });
   });
@@ -6433,14 +6440,14 @@ function missedReportHours(l, now){
     stamps.push(u.getHours()*60 + u.getMinutes());
   }
   /* 生産していた時間帯 */
-  let wsMin = timeToMin(l.workStart||'') || 0;
+  let wsMin = toMin(l.workStart||'') || 0;
   if(!wsMin){
     (l.jobs||[]).forEach(function(j){
-      const m = timeToMin(j.actualStart||'');
+      const m = toMin(j.actualStart||'');
       if(m && (!wsMin || m < wsMin)) wsMin = m;
     });
   }
-  const weMin = timeToMin(l.workEnd||'') || 0;
+  const weMin = toMin(l.workEnd||'') || 0;
   const out = [];
   list.slice().sort(function(a,b){ return a-b; }).forEach(function(H){
     const due = H*60;
@@ -15160,7 +15167,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.23-13';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.23-14';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
