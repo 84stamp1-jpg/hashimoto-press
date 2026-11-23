@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.23-13 : ★<b>実績を入れ忘れた時刻を、その日じゅう残して出すようにした</b>（2026-11-23 社長指示「14時が未入力のまま15時の入力をしたらどうなりますか？14時は実績入力されていないことを少し目立つように表示してほしい。<b>戒めのように</b>」）。それまでは「<b>最後の締めの時刻ぶんが入っているか</b>」しか見ていなかったので、<b>14時を飛ばして15時に入れると、14時の抜けは黙って消えていた</b>（社長の問いのとおり）。→ 実績を入れるたびに積まれる <code>snapHistory</code> の時刻を集め、<b>締めを過ぎた時刻のうち前後10分に1件も入力が無いもの</b>を <code>missedReportHours()</code> で並べ、「<b>📝 実績の入れ忘れ：A2　14時 の実績が入っていません</b>」と出す。<b>あとから入れても消えない</b>＝その日の終わりまで残る。★<b>生産を始める前・終えたあとの時刻は数えない</b>（<code>workStart</code>／<code>workEnd</code> で切る）。★いま出ている「未報告」と同じ時刻は二重に出さない。★色は未報告（黄）より淡い<b>すみれ色</b>にした＝いま手を動かすものではなく、<b>あとで振り返るもの</b>だと見分けられるように。 -->
 <!-- H-Hub v2026.11.23-12 : ★<b>決められた時刻の10分前からの入力も、その時刻ぶんとして認める</b>（2026-11-23 社長指示）。前の版（-11）は「その時刻<b>以降</b>の入力」しか数えなかったので、<b>13:55 に入れた人は 14:15 に「14時の実績が未入力」と出て</b>いた＝現場は時計ぴったりには入れられないのに、少し早く入れたほうが叱られる形になっていた。→ <code>REPORT_EARLY_MIN = 10</code> を足し、<b>13:50 以降の入力は14時ぶん</b>として数える。出すかどうかを見る時刻（その時刻から10分待つ＝<code>REPORT_GRACE_MIN</code>）は変えていないので、<b>13:50〜14:10 の20分のあいだに入れればよい</b>ことになる。 -->
 <!-- H-Hub v2026.11.23-11 : ★<b>「未報告」を“決められた時刻に入っているか”で見るようにした</b>（2026-11-23 社長指示「実績入力してほしいのは、9時、10時、11時、12時、2時、3時、4時、5時、残業があるときは6時、7時、8時」）。前の版（-10）は<b>前回の入力から正味60分</b>で見ていたが、それだと<b>13:55に入れた人は14:55まで何も出ず、14時のぶんが丸ごと抜けても気づけない</b>（社長指摘「1時間に1回のルールを満たせない可能性がありますよね」）。→ <code>REPORT_HOURS = [9,10,11,12,14,15,16,17,18,19,20]</code> を置き、<b>その時刻から10分待って、その時刻ぶんの実績が入っていなければ出す</b>。★<b>13時が無い</b>のは、12時に午前ぶんを入れたあと <b>12:10〜12:50 が昼休み</b>で、午後の最初の区切りが14時になるため。★<b>8時が無い</b>のは、始業からの1時間ぶんを9時に入れるため。★残業の18・19・20時は、残業していなければラインが<b>稼働中でない</b>ので出ない。★朝いちばん（9:10より前）は何も出ない。表示は「<b>14時の実績が未入力</b>　前回更新：12:18」。工場レイアウトのカードも同じ基準にした。時刻は設定 <code>settings/reportHours</code>（例 "9,10,11,12,14,15,16,17"）で変えられる。-10 で入れた <code>netMinSince()</code> と <code>settings/noRepMin</code> は使わなくなった。 -->
 <!-- H-Hub v2026.11.23-10 : ★<b>「未報告」が休憩明けすぐに出ていたのを直した</b>（2026-11-23 社長報告「A1などの未報告はなぜ出ますか？午前中の作業終了時に入力して、午後はまだ1時間たっていません」）。原因は2つ。①<b>経過時間を測っていなかった</b>＝進捗ボードの警告は「<b>いまの“時台”に実績が入っているか</b>」だけで見ており（<code>updAfter5</code>）、12:59に入れても<b>13:10には未報告</b>になっていた。②<b>休憩を数えていなかった</b>＝昼休み(12:10〜12:50)の40分も経過に入れていた。この日は5ライン全部が12:17〜12:19（＝昼休みに入ってから）の入力で、<b>13:10に一斉に鳴っていた</b>。★<b>毎日3回</b>（10:10・13:10・15:10）同じことが起きており、毎日鳴る警告は本当に止まったときの警告まで見過ごさせる。→ <b>前回の入力から「休憩を引いた正味」で60分たつまで出さない</b>（<code>netMinSince()</code>）。12:17に入力したなら<b>休憩明け12:50から60分＝13:50</b>に出る（社長の指示どおり）。工場レイアウトのカードも同じにし、表示を「⚠ 未報告 <b>作業</b>60分」とした（時計の経過ではなく働いた時間であることを示すため）。★一度も入力が無いラインはこれまでどおりすぐ出す。★60分という長さは設定 <code>settings/noRepMin</code> で変えられる。 -->
@@ -1425,6 +1426,11 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 #tab-progress .al-txt{font-size:12px;font-weight:700;color:#c0392b;}
 #tab-progress .al-txt.w{color:#d68910;}
 #tab-progress .al-sub{font-size:10px;color:#999;margin-left:auto;}
+/* ★実績の入れ忘れ（2026-11-23 社長指示「戒めのように」）。
+   未報告（黄）より淡いすみれ色にして、いま手を動かすものではなく
+   あとで振り返るものだと見分けられるようにする。あとから入れても消えない。 */
+#tab-progress .al.miss{background:#f7f5fd;border-left-color:#7c6bb5;}
+#tab-progress .al-txt.m{color:#6b5aa6;}
 
 /* ラインカード */
 #tab-progress .lines{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
@@ -6398,6 +6404,55 @@ function dueReportHour(now){
     if(h > H || (h === H && m >= REPORT_GRACE_MIN)) due = H;
   });
   return due;
+}
+
+/* ★その日、実績を入れ忘れた時刻（2026-11-23 社長指示
+   「14時が未入力のまま15時の入力をしたらどうなりますか？
+     14時は実績入力されていないことを少し目立つように表示してほしい。戒めのように」）。
+   それまでの作りでは「最後の締めの時刻ぶんが入っているか」しか見ていないので、
+   14時を飛ばして15時に入れると<b>14時の抜けは黙って消えていた</b>。
+   → 入力のあった時刻を `snapHistory`（実績を入れるたびに {t:"HH:MM"} が積まれる）から集め、
+     締めを過ぎた時刻のうち、その前後10分に1件も入力が無いものを並べて返す。
+   ★生産を始める前・終えたあとの時刻は数えない（workStart / workEnd で切る）。 */
+function missedReportHours(l, now){
+  if(!l) return [];
+  const d = now || new Date();
+  const nowMin = d.getHours()*60 + d.getMinutes();
+  const list = (Array.isArray(window._pmReportHours) && window._pmReportHours.length)
+             ? window._pmReportHours : REPORT_HOURS;
+  /* その日、実績を入れた時刻（分）を集める */
+  const stamps = [];
+  (l.jobs||[]).forEach(function(j){
+    (j.snapHistory||[]).forEach(function(sn){
+      const m = timeToMin(sn && sn.t);
+      if(m) stamps.push(m);
+    });
+  });
+  if(l.updatedAt > 0){
+    const u = new Date(l.updatedAt);
+    stamps.push(u.getHours()*60 + u.getMinutes());
+  }
+  /* 生産していた時間帯 */
+  let wsMin = timeToMin(l.workStart||'') || 0;
+  if(!wsMin){
+    (l.jobs||[]).forEach(function(j){
+      const m = timeToMin(j.actualStart||'');
+      if(m && (!wsMin || m < wsMin)) wsMin = m;
+    });
+  }
+  const weMin = timeToMin(l.workEnd||'') || 0;
+  const out = [];
+  list.slice().sort(function(a,b){ return a-b; }).forEach(function(H){
+    const due = H*60;
+    if(nowMin < due + REPORT_GRACE_MIN) return;      /* まだ締めていない */
+    if(wsMin && due < wsMin) return;                 /* まだ始まっていなかった */
+    if(weMin && due > weMin) return;                 /* もう終わっていた */
+    const ok = stamps.some(function(m){
+      return m >= due - REPORT_EARLY_MIN && m <= due + REPORT_GRACE_MIN;
+    });
+    if(!ok) out.push(H);
+  });
+  return out;
 }
 
 /* その時刻ぶんの実績がまだ入っていないか */
@@ -15105,7 +15160,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.23-12';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.23-13';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
@@ -19049,6 +19104,16 @@ function renderAlts(){
     const rp5 = reportMissed(l.updatedAt);
     if(l.status==='running'&&l.plan>0&&isWork5&&rp5.missed&&!allDone5&&!pastLastEnd5&&!lineNoAlertMap[id])
       h+='<div class="al warn"><div class="al-txt w">⚠️ 未報告：'+getLineName(id)+'</div><div class="al-sub">'+rp5.due+'時の実績が未入力'+(l.updatedAt>0?'　前回更新：'+fmtTs(l.updatedAt):'')+'</div></div>';
+    /* ★入れ忘れた時刻は、あとから入れても消さずにその日じゅう出す（2026-11-23 社長指示「戒めのように」）。
+       いまの未報告（rp5）に出ている時刻は二重に出さない。 */
+    if(l.status==='running'||l.workStart){
+      const miss5=(typeof missedReportHours==='function')?missedReportHours(l):[];
+      const miss5b=miss5.filter(function(H){ return !(rp5.missed&&H===rp5.due); });
+      if(miss5b.length&&!lineNoAlertMap[id])
+        h+='<div class="al miss"><div class="al-txt m">📝 実績の入れ忘れ：'+getLineName(id)+'</div>'
+          +'<div class="al-sub">'+miss5b.map(function(H){ return H+'時'; }).join('・')
+          +' の実績が入っていません</div></div>';
+    }
     // 終了時刻の入力漏れ（2026-09-21 社長指摘。Cライン①が夜まで稼働中に見えていた原因）
     if(typeof lineOpenEnds==='function'){
       const oe=lineOpenEnds(l);
