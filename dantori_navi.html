@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.23-17 : ★<b>工程詳細（現場が見る画面）からも生産の順番を入れ替えられるようにした</b>（2026-11-23 社長指摘「生産の順番入れ替えはこの画面ではないですか？」）。-9 で設定の「計画修正」に↑↓を付けたが、<b>現場の人は設定画面に入らない</b>。順番が変わったことに気づくのは、ラインを押してこの工程詳細を見ている人。→ 各行に<b>「順番」の列</b>を足し、↑↓で入れ替えられるようにした。★<b>押したらすぐ保存</b>する（この画面には「保存」ボタンが無いため）。取り消せないので、<b>入れ替える2つの品番を名指しで確かめてから</b>書く。★<b>実績は行に紐づいているので、行ごと入れ替われば実績も付いてくる</b>（品番だけを書き換えると別の品番に実績が付く）。<code>seq</code> を振り直し、<code>remapCurSeq()</code> で「いま流している行」を貼り直すのは計画修正と同じ。先頭の↑と末尾の↓は押せない。 -->
 <!-- H-Hub v2026.11.23-16 : 入れ忘れの数え方を<b>1対1の割り当て</b>に直した。-15 では <b>14:53 の入力が「15時ぶん」に吸われて「14時の入れ忘れ」と出て</b>いた（まだ15時になっていないのに）。逆に幅を広げるだけだと、1件の入力が2つの時刻の両方を埋めてしまい入れ忘れを見逃す。→ <b>入力1件は時刻1つにだけ使う</b>（早い時刻から順に埋める）。幅は「その時刻の10分前」から「次の時刻」まで（12時なら 11:50〜14:00、14時なら 13:50〜15:00）。実データで確認：A1＝9時・10時／A2＝なし／Bライン＝11時、と実態どおりになった。 -->
 <!-- H-Hub v2026.11.23-15 : -13 で入れた「実績の入れ忘れ」を実データに当てたら、<b>12:18 の入力が「12時の入れ忘れ」と出て</b>いた（きっかり前後10分でしか数えていなかったため）。12時の入力が 12:18 になることは普通にある。→ その時刻ぶんと認める幅を <b>「10分前」から「次の時刻の10分前」まで</b>にした（12時なら 11:50〜13:50、14時なら 13:50〜14:50）。あわせて、<b>作業開始が入っていないライン</b>（Cライン①は workStart も actualStart も空だった）は、その日いちばん最初の入力を開始とみなす＝まだ動いていない時間帯を入れ忘れに数えない。 -->
 <!-- H-Hub v2026.11.23-14 : -13 で入れた <code>missedReportHours()</code> が <code>timeToMin</code> を呼んでおり、<b>その場所からは見えないスコープ</b>だったため <code>ReferenceError</code> で落ちていた（進捗ボードの警告リストが描けなくなる）。→ 同じ変換をその関数の中に持たせて、外への依存をなくした。 -->
@@ -1432,6 +1433,11 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 /* ★実績の入れ忘れ（2026-11-23 社長指示「戒めのように」）。
    未報告（黄）より淡いすみれ色にして、いま手を動かすものではなく
    あとで振り返るものだと見分けられるようにする。あとから入れても消えない。 */
+/* ★工程詳細（現場が見る画面）の並べ替えボタン（2026-11-23 社長指示） */
+.btn-jmv{font-size:11px;line-height:1;padding:3px 6px;border:1px solid #cfd8e3;background:#f7fafc;
+         color:#34495e;border-radius:3px;cursor:pointer;margin-right:2px;}
+.btn-jmv:hover{background:#eaf2f8;border-color:#aac4dd;}
+.btn-jmv:disabled{opacity:.25;cursor:default;background:#f7fafc;}
 #tab-progress .al.miss{background:#f7f5fd;border-left-color:#7c6bb5;}
 #tab-progress .al-txt.m{color:#6b5aa6;}
 
@@ -15183,7 +15189,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.23-16';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.23-17';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
@@ -20024,8 +20030,8 @@ window.openModal=function(id){
   document.getElementById('mttl').textContent=getLineName(id)+' 工程詳細';
   const jobs=(l.jobs||[]).filter(j=>j.plan>0);
   const stdSetup=sets[id]||60;
-  let h=`<table class="jtbl"><thead><tr><th>#</th><th>品番</th><th>計画数</th><th>実績数</th><th>CT達成率</th><th>段取り<br><span style="font-weight:400;color:#aaa;">標準${stdSetup}分</span></th><th>予定時間</th><th>実績時間</th><th></th></tr></thead><tbody>`;
-  if(!jobs.length){h+='<tr><td colspan="9" style="padding:16px;color:#aaa;text-align:center;">工程データなし</td></tr>';}
+  let h=`<table class="jtbl"><thead><tr><th>#</th><th>品番</th><th>計画数</th><th>実績数</th><th>CT達成率</th><th>段取り<br><span style="font-weight:400;color:#aaa;">標準${stdSetup}分</span></th><th>予定時間</th><th>実績時間</th><th style="white-space:nowrap;">順番</th><th></th></tr></thead><tbody>`;
+  if(!jobs.length){h+='<tr><td colspan="10" style="padding:16px;color:#aaa;text-align:center;">工程データなし</td></tr>';}
   /* ★いま流している行を「品番が同じかどうか」で決めていたため、同じ品番が2行に
      分かれていると<b>両方が「いまの行」</b>になり、どちらにもラインの実績(l.actual)が
      出ていた（2026-11-18 社長指摘：B2工程詳細は1行目も1,797、入力画面では813）。
@@ -20074,6 +20080,7 @@ window.openModal=function(id){
       <td style="min-width:70px;">${suDisp}</td>
       <td style="font-size:10px;color:#888;">${pTime}</td>
       <td style="font-size:10px;color:#555;">${aTime}</td>
+      <td style="white-space:nowrap;"><button class="btn-jmv" title="1つ上へ" ${ji===0?'disabled':''} onclick="moveJobOrder('${id}',${j.seq},-1)">↑</button><button class="btn-jmv" title="1つ下へ" ${ji===jobs.length-1?'disabled':''} onclick="moveJobOrder('${id}',${j.seq},1)">↓</button></td>
       <td><button class="btn-to-input" onclick="goToInput('${id}','${j.part}','${j.seq}','${j.start||''}');closeOvD();">入力</button></td>
     </tr>`;
   });
@@ -20081,6 +20088,40 @@ window.openModal=function(id){
   document.getElementById('mbody').innerHTML=h;
   document.getElementById('ov').classList.add('open');
 };
+/* ★工程詳細から生産の順番を入れ替える（2026-11-23 社長指示
+   「生産の順番入れ替えはこの画面ではないですか？」）。
+   設定の「計画修正」にも↑↓を付けたが、<b>現場の人は設定画面に入らない</b>。
+   実際に順番が変わったことに気づくのは、この工程詳細を見ている人。
+   ★ここは<b>押したらすぐ保存</b>する（計画修正のような「保存」ボタンが無いため）。
+     取り消せないので、入れ替える2つの品番を名指しで確かめてから書く。
+   ★実績は行に紐づいているので、<b>行ごと入れ替われば実績も付いてくる</b>。
+     品番だけを書き換えてはいけない。
+   ★seq を振り直し、remapCurSeq() で「いま流している行」を貼り直す。 */
+window.moveJobOrder=async function(lineId, seq, dir){
+  const l=lines[lineId]; if(!l) return;
+  const orig=[...(l.jobs||[])];
+  const i=orig.findIndex(j=>Number(j.seq)===Number(seq));
+  const k=i+(dir<0?-1:1);
+  if(i<0||k<0||k>=orig.length) return;
+  const nameA=orig[i].part||'（品番なし）', nameB=orig[k].part||'（品番なし）';
+  if(!confirm('生産の順番を入れ替えます。\n\n　'+nameA+'\n　　↑↓\n　'+nameB
+             +'\n\n入れた実績はそれぞれの品番に付いたまま動きます。\nよろしいですか。')) return;
+  const jobs=[...orig];
+  const t=jobs[i]; jobs[i]=jobs[k]; jobs[k]=t;
+  const merged=jobs.map((j,idx)=>({...j, seq:idx+1}));
+  try{
+    const updates={};
+    updates['lines/'+lineId+'/jobs']=merged;
+    updates['lines/'+lineId+'/curSeq']=remapCurSeq(orig,merged,l);
+    await update(ref(db),updates);
+    lines[lineId]={...l, jobs:merged, curSeq:updates['lines/'+lineId+'/curSeq']};
+    openModal(lineId);
+  }catch(e){
+    console.error('順番の入れ替え', e);
+    alert('入れ替えられませんでした。\n' + (e&&e.message?e.message:''));
+  }
+};
+
 window.closeOv=e=>{if(e.target===document.getElementById('ov'))closeOvD();};
 window.closeOvD=()=>document.getElementById('ov').classList.remove('open');
 
