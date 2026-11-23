@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.23-19 : ★<b>組立のラインには実績入力・遅れの警告を出さないようにした</b>（2026-11-23 社長指示「組立の実績入力や遅れの警告は今はなしでいいです」）。組立は<b>作業者ごとの指示</b>で、プレスのように決められた時刻に実績を入れる運用になっていない。そのため <b>⚠️未報告／📝実績の入れ忘れ／🔴遅れ</b> の3つが毎日出続け、<b>プレスの本当の警告まで埋もれていた</b>。→ <code>isAssyLine()</code> を置き、この3つを組立では出さない。工場レイアウトのカードの「⚠ ○時の実績が未入力」も同じ。★見分け方は<b>頭がA/B/C＝プレス</b>（準備チェック表と同じ <code>SETUP_LINE_RE</code> の決まり）、<b>ロボットラインも今までどおり出す</b>、<b>それ以外＝組立</b>（組立は人の名前がそのままラインの名前になっている）。ラインを足したときは、頭がA/B/Cでなければ自動で組立として扱われる。★<b>段取りの警告（生産開始が未報告・段取り超過）と終了時刻の入力漏れは今までどおり出す</b>＝組立も段取りの報告はしているため。★「朝の計画との差」の帯は<b>警告ではなく数字の一覧</b>なので、組立も今までどおり出す。 -->
 <!-- H-Hub v2026.11.23-18 : ★<b>進捗ボードの警告が、横に広い画面で真ん中が大きく空いていた</b>のを直した（2026-11-23 社長指摘「真ん中の余白が多いですが、何とかなりませんか？」）。1件が横いっぱいに広がり、左にタイトル・右端に説明が離れて並んでいた（<code>.al-sub{margin-left:auto}</code>）。→ <b>1件ずつ縦に積むのをやめ、幅に応じて自動で段を増やす</b>（<code>grid</code> の <code>auto-fill minmax(420px,1fr)</code>）。広い画面では2〜4列に並ぶので、余白が減るうえ<b>縦も短くなる</b>（警告が10件あると画面を埋めていた）。1件あたり420pxを下限にしてあるので、<b>狭い画面やスマホではこれまでどおり1列</b>。 -->
 <!-- H-Hub v2026.11.23-17 : ★<b>工程詳細（現場が見る画面）からも生産の順番を入れ替えられるようにした</b>（2026-11-23 社長指摘「生産の順番入れ替えはこの画面ではないですか？」）。-9 で設定の「計画修正」に↑↓を付けたが、<b>現場の人は設定画面に入らない</b>。順番が変わったことに気づくのは、ラインを押してこの工程詳細を見ている人。→ 各行に<b>「順番」の列</b>を足し、↑↓で入れ替えられるようにした。★<b>押したらすぐ保存</b>する（この画面には「保存」ボタンが無いため）。取り消せないので、<b>入れ替える2つの品番を名指しで確かめてから</b>書く。★<b>実績は行に紐づいているので、行ごと入れ替われば実績も付いてくる</b>（品番だけを書き換えると別の品番に実績が付く）。<code>seq</code> を振り直し、<code>remapCurSeq()</code> で「いま流している行」を貼り直すのは計画修正と同じ。先頭の↑と末尾の↓は押せない。 -->
 <!-- H-Hub v2026.11.23-16 : 入れ忘れの数え方を<b>1対1の割り当て</b>に直した。-15 では <b>14:53 の入力が「15時ぶん」に吸われて「14時の入れ忘れ」と出て</b>いた（まだ15時になっていないのに）。逆に幅を広げるだけだと、1件の入力が2つの時刻の両方を埋めてしまい入れ忘れを見逃す。→ <b>入力1件は時刻1つにだけ使う</b>（早い時刻から順に埋める）。幅は「その時刻の10分前」から「次の時刻」まで（12時なら 11:50〜14:00、14時なら 13:50〜15:00）。実データで確認：A1＝9時・10時／A2＝なし／Bライン＝11時、と実態どおりになった。 -->
@@ -6407,6 +6408,24 @@ const REPORT_GRACE_MIN = 10;   // その時刻から何分待つか
    現場は時計ぴったりには入れられない。13:50 に入れたものは 14時ぶんとして数える。 */
 const REPORT_EARLY_MIN = 10;
 
+/* ★組立のラインかどうか（2026-11-23 社長指示
+     「組立の実績入力や遅れの警告は今はなしでいいです」）。
+   組立は作業者ごとの指示で、プレスのように決められた時刻に実績を入れる運用に
+   なっていないため、<b>未報告・実績の入れ忘れ・遅れ</b>の3つを出さない。
+   ★プレスは頭がA/B/C（準備チェック表と同じ決まり＝SETUP_LINE_RE）。
+     ロボットラインも今までどおり出す。
+   ★それ以外＝組立。組立は<b>人の名前がそのままラインの名前</b>になっている。
+     ラインを足したとき、頭がA/B/Cでなければ自動で組立として扱われる。
+   ★段取りの警告（生産開始が未報告・段取り超過）と終了時刻の入力漏れは
+     そのまま出す。止めるときはここではなく、それぞれの条件に足す。 */
+function isAssyLine(id){
+  const sid = String(id || '');
+  const nm  = String((typeof getLineName === 'function' ? getLineName(id) : '') || sid);
+  if(/^[ABC]/i.test(sid) || /^[ABC]/i.test(nm)) return false;        /* プレス */
+  if(/^robot/i.test(sid) || nm === 'ロボットライン') return false;    /* ロボットライン */
+  return true;
+}
+
 /* いま過ぎている最後の「入れてほしい時刻」。まだ最初の時刻の前なら null */
 function dueReportHour(now){
   const d = now || new Date();
@@ -6649,7 +6668,7 @@ function updateFactoryView(lines){
       if(open.length){
         alertEl.textContent = `⚠ 終了未入力 ${open.map(x => x.row + '行目').join('・')}`;
       } else {
-        const show = isRunning && !noAlert && rp.missed;
+        const show = isRunning && !noAlert && rp.missed && !isAssyLine(lineId);
         alertEl.textContent = show ? `⚠ ${rp.due}時の実績が未入力` : '';
       }
     }
@@ -15194,7 +15213,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.23-18';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.23-19';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
@@ -19136,11 +19155,11 @@ function renderAlts(){
        ※以前は「いまの“時台”に実績があるか」だけで見ており、12:59に入れても13:10に出ていた。
          昼休み(12:10〜12:50)も数えていたので、毎日13:10に全ラインが一斉に鳴っていた。 */
     const rp5 = reportMissed(l.updatedAt);
-    if(l.status==='running'&&l.plan>0&&isWork5&&rp5.missed&&!allDone5&&!pastLastEnd5&&!lineNoAlertMap[id])
+    if(l.status==='running'&&l.plan>0&&isWork5&&rp5.missed&&!allDone5&&!pastLastEnd5&&!lineNoAlertMap[id]&&!isAssyLine(id))
       h+='<div class="al warn"><div class="al-txt w">⚠️ 未報告：'+getLineName(id)+'</div><div class="al-sub">'+rp5.due+'時の実績が未入力'+(l.updatedAt>0?'　前回更新：'+fmtTs(l.updatedAt):'')+'</div></div>';
     /* ★入れ忘れた時刻は、あとから入れても消さずにその日じゅう出す（2026-11-23 社長指示「戒めのように」）。
        いまの未報告（rp5）に出ている時刻は二重に出さない。 */
-    if(l.status==='running'||l.workStart){
+    if((l.status==='running'||l.workStart)&&!isAssyLine(id)){
       const miss5=(typeof missedReportHours==='function')?missedReportHours(l):[];
       const miss5b=miss5.filter(function(H){ return !(rp5.missed&&H===rp5.due); });
       if(miss5b.length&&!lineNoAlertMap[id])
@@ -19189,7 +19208,7 @@ function renderAlts(){
       }
     }
     const pr5=getProRata(l);
-    if(l.status==='running'&&l.plan>0&&l.actual>0&&l.updatedAt>0&&pr5&&pr5.proRata>0&&Math.round(l.actual/pr5.proRata*100)<80)
+    if(l.status==='running'&&l.plan>0&&l.actual>0&&l.updatedAt>0&&pr5&&pr5.proRata>0&&Math.round(l.actual/pr5.proRata*100)<80&&!isAssyLine(id))
       h+='<div class="al"><div class="al-txt">🔴 遅れ：'+getLineName(id)+'（'+l.part+'）</div><div class="al-sub">達成率'+Math.round(l.actual/pr5.proRata*100)+'%</div></div>';
   });
   document.getElementById('alts').innerHTML=h;
