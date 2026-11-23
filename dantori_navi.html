@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.23-11 : ★<b>「未報告」を“決められた時刻に入っているか”で見るようにした</b>（2026-11-23 社長指示「実績入力してほしいのは、9時、10時、11時、12時、2時、3時、4時、5時、残業があるときは6時、7時、8時」）。前の版（-10）は<b>前回の入力から正味60分</b>で見ていたが、それだと<b>13:55に入れた人は14:55まで何も出ず、14時のぶんが丸ごと抜けても気づけない</b>（社長指摘「1時間に1回のルールを満たせない可能性がありますよね」）。→ <code>REPORT_HOURS = [9,10,11,12,14,15,16,17,18,19,20]</code> を置き、<b>その時刻から10分待って、その時刻ぶんの実績が入っていなければ出す</b>。★<b>13時が無い</b>のは、12時に午前ぶんを入れたあと <b>12:10〜12:50 が昼休み</b>で、午後の最初の区切りが14時になるため。★<b>8時が無い</b>のは、始業からの1時間ぶんを9時に入れるため。★残業の18・19・20時は、残業していなければラインが<b>稼働中でない</b>ので出ない。★朝いちばん（9:10より前）は何も出ない。表示は「<b>14時の実績が未入力</b>　前回更新：12:18」。工場レイアウトのカードも同じ基準にした。時刻は設定 <code>settings/reportHours</code>（例 "9,10,11,12,14,15,16,17"）で変えられる。-10 で入れた <code>netMinSince()</code> と <code>settings/noRepMin</code> は使わなくなった。 -->
 <!-- H-Hub v2026.11.23-10 : ★<b>「未報告」が休憩明けすぐに出ていたのを直した</b>（2026-11-23 社長報告「A1などの未報告はなぜ出ますか？午前中の作業終了時に入力して、午後はまだ1時間たっていません」）。原因は2つ。①<b>経過時間を測っていなかった</b>＝進捗ボードの警告は「<b>いまの“時台”に実績が入っているか</b>」だけで見ており（<code>updAfter5</code>）、12:59に入れても<b>13:10には未報告</b>になっていた。②<b>休憩を数えていなかった</b>＝昼休み(12:10〜12:50)の40分も経過に入れていた。この日は5ライン全部が12:17〜12:19（＝昼休みに入ってから）の入力で、<b>13:10に一斉に鳴っていた</b>。★<b>毎日3回</b>（10:10・13:10・15:10）同じことが起きており、毎日鳴る警告は本当に止まったときの警告まで見過ごさせる。→ <b>前回の入力から「休憩を引いた正味」で60分たつまで出さない</b>（<code>netMinSince()</code>）。12:17に入力したなら<b>休憩明け12:50から60分＝13:50</b>に出る（社長の指示どおり）。工場レイアウトのカードも同じにし、表示を「⚠ 未報告 <b>作業</b>60分」とした（時計の経過ではなく働いた時間であることを示すため）。★一度も入力が無いラインはこれまでどおりすぐ出す。★60分という長さは設定 <code>settings/noRepMin</code> で変えられる。 -->
 <!-- H-Hub v2026.11.23-9 : ★<b>進捗管理ボードの「計画修正」に、行の並べ替え（↑↓）を付けた</b>（2026-11-23 社長指示）。当日やるものは決まっていても<b>順番が入れ替わる</b>（この日のA2は、金型を逆にセットしたことで3行目の 11250-85U-1.2BL が2行目の 0.6BL より先に流れた）。これまで計画修正でできたのは<b>品番・数量・時刻の書き換えと行の削除だけ</b>で、並べ替える手段が無かった。★<b>品番だけを書き換えて入れ替えてはいけない</b>＝実績は行に紐づいているので、<b>別の品番に実績が付いてしまう</b>。→ 行ごと動かす↑↓を足した。保存のとき画面の並びで <code>seq</code> を振り直し、<code>remapCurSeq()</code> が「いま流している行」を貼り直すので、<b>実績は元の品番に付いたまま付いてくる</b>（この仕組みは元から入っていた。足りなかったのはボタンだけ）。★<b>開始・終了の時刻も行に付いて動く</b>ので、枠（時間帯）に合わせたいときは動かしたあとに時刻を直す。先頭の↑と末尾の↓は薄くして押せないようにした。★順番が狂ったまま放っておくと、<b>見込み完了時刻</b>と<b>終品確認が鳴る時刻</b>がずれる（終品確認は予定の終了時刻から30分前で計算しているため）。 -->
 <!-- H-Hub v2026.11.23-8 : ★<b>段取りなしの準備を「表」にした</b>（2026-11-23 社長指示「②材料③空容器などは上段にタイトルとして入れ、チェックボックスをその下にすればもう少しコンパクトになりませんか？」）。これまでは1件ごとに<b>②材料・③空容器…と名前を8つずつ繰り返して</b>いたので、行が横に長く、件数が増えるほど同じ文字が並んでいた。→ <b>項目の名前は上段の見出しに1回だけ</b>、下の行は<b>□だけ</b>にした。縦にそろうので目で追いやすく、横幅も高さも詰まる。やった人の欄は右端にそのまま残した。★クラス名は <code>.nstbl</code>（<code>.ck</code> は段取りブロックが3列折り返しで使っているので使い回さない。-7 の失敗）。 -->
@@ -6368,7 +6369,41 @@ window.inputResumeLine = function(){
 setInterval(() => { try{ window.updateInputStopUI(); }catch(e){} }, 5000);
 
 // 未報告と見なすまでの分数（設定 settings/noRepMin で変えられる）
+// ※2026-11-23 以降は使っていない。判定は下の REPORT_HOURS（決められた時刻）で行う。
 const FACTORY_NOREP_MIN = 60;
+
+/* ★実績を入れてほしい時刻（2026-11-23 社長指示）。
+   「9時、10時、11時、12時、2時、3時、4時、5時、残業があるときは6時、7時、8時」。
+   ★13時が無いのは、12時に午前ぶんを入れたあと 12:10〜12:50 が昼休みで、
+     午後の最初の区切りが14時になるため。8時が無いのは、始業からの1時間ぶんを
+     9時に入れるため。
+   ★「前回から○分」では測らない。それだと 13:55 に入れた人は 14:55 まで何も出ず、
+     14時のぶんが丸ごと抜けても気づけない（社長指摘）。
+   設定 settings/reportHours（例 "9,10,11,12,14,15,16,17"）で上書きできる。 */
+const REPORT_HOURS = [9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20];
+const REPORT_GRACE_MIN = 10;   // その時刻から何分待つか
+
+/* いま過ぎている最後の「入れてほしい時刻」。まだ最初の時刻の前なら null */
+function dueReportHour(now){
+  const d = now || new Date();
+  const h = d.getHours(), m = d.getMinutes();
+  const list = (Array.isArray(window._pmReportHours) && window._pmReportHours.length)
+             ? window._pmReportHours : REPORT_HOURS;
+  let due = null;
+  list.slice().sort(function(a,b){ return a-b; }).forEach(function(H){
+    if(h > H || (h === H && m >= REPORT_GRACE_MIN)) due = H;
+  });
+  return due;
+}
+
+/* その時刻ぶんの実績がまだ入っていないか */
+function reportMissed(updatedAt, now){
+  const due = dueReportHour(now);
+  if(due === null) return { missed:false, due:null };
+  if(!updatedAt) return { missed:true, due:due };
+  const d = new Date(updatedAt);
+  return { missed: (d.getHours()*60 + d.getMinutes()) < due*60, due: due };
+}
 
 function updateFactoryView(lines){
   linesData = lines || {};
@@ -6509,20 +6544,19 @@ function updateFactoryView(lines){
     // ⑤ 未報告（最後に実績を入れてから一定時間が経っている）
     const alertEl = document.getElementById(prefix + '-alert');
     if(alertEl){
-      const lim = Number(window._pmNoRepMin) > 0 ? Number(window._pmNoRepMin) : FACTORY_NOREP_MIN;
       const noAlert = (window._pmLineNoAlert || {})[lineId];
       const upd = (L && L.updatedAt > 0) ? L.updatedAt : 0;
-      /* ★素の経過ではなく「休憩を引いた正味」で見る（2026-11-23 社長指示）。
-         昼休み(12:10〜12:50)をまたぐと、休んでいた40分まで数えていた。 */
-      const mins = upd ? netMinSince(upd) : null;
+      /* ★「決められた時刻に入っているか」で見る（2026-11-23 社長指示）。
+         経過分数では測らない。 */
+      const rp = reportMissed(upd);
       // 終了時刻の入力漏れは、未報告より先に出す（直せば消えるものなので）
       let open = [];
       try{ open = lineOpenEnds(L || {}); }catch(e){ open = []; }
       if(open.length){
         alertEl.textContent = `⚠ 終了未入力 ${open.map(x => x.row + '行目').join('・')}`;
       } else {
-        const show = isRunning && !noAlert && mins !== null && mins >= lim;
-        alertEl.textContent = show ? `⚠ 未報告 作業${mins}分` : '';
+        const show = isRunning && !noAlert && rp.missed;
+        alertEl.textContent = show ? `⚠ ${rp.due}時の実績が未入力` : '';
       }
     }
 
@@ -8370,38 +8404,6 @@ function calcSetupNetMin(start, end){
   return net > 0 ? net : total; // 念のため0以下にならないようにする
 }
 
-/* ★前回の実績入力から、いままでの「正味」の分数（休憩を引いたもの）。
-   2026-11-23 社長指示「休憩時間に入ってから実績入力したと思うので、
-   休憩終わりから60分経ってから出したい」。
-   例＝昼休み(12:10〜12:50)のさなか 12:17 に入力したとき、
-   12:17〜12:50 の33分は休んでいた時間なので引く。
-   13:50 でちょうど正味60分＝休憩明け12:50から60分、となる。
-   ★calcSetupNetMin は「休憩の中だけで終わった段取り」を0分にしないため
-   0以下のとき total を返すが、こちらは 0 を返す（休憩中はまだ数え始めない）。 */
-function netMinSince(ms){
-  if(!ms) return null;
-  const d1 = new Date(ms);
-  const total = Math.round((Date.now() - ms) / 60000);
-  if(total <= 0) return 0;
-  const toMin = t => { const [h,m] = String(t).split(':').map(Number); return h*60+m; };
-  const sMin = d1.getHours()*60 + d1.getMinutes();
-  const eMin = sMin + total;
-  const breaks = (typeof config !== 'undefined' && config.breaks && config.breaks.length)
-               ? config.breaks : DEFAULT_BREAKS;
-  let overlap = 0;
-  breaks.forEach(function(b){
-    let bsM = toMin(b.start), beM = toMin(b.end);
-    if(beM <= bsM) beM += 24*60;
-    /* 日をまたいで数えることがあるので、翌日ぶんの休憩も重ねて見る */
-    [0, 24*60].forEach(function(off){
-      const o1 = Math.max(sMin, bsM + off);
-      const o2 = Math.min(eMin, beM + off);
-      if(o2 > o1) overlap += (o2 - o1);
-    });
-  });
-  const net = total - overlap;
-  return net > 0 ? net : 0;
-}
 
 function renderKanbanCard(d){
   const roles   = d.roles || {};
@@ -15098,7 +15100,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.23-10';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.23-11';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
@@ -17853,6 +17855,13 @@ onValue(ref(db,'settings'),s=>{
   if(v.lineNames&&typeof v.lineNames==='object') lineNamesMap={...v.lineNames};
   if(v.lineNoAlert&&typeof v.lineNoAlert==='object'){ lineNoAlertMap={...v.lineNoAlert}; window._pmLineNoAlert=lineNoAlertMap; }
   if(Number(v.noRepMin)>0) window._pmNoRepMin=Number(v.noRepMin);
+  /* 実績を入れてほしい時刻（settings/reportHours）。"9,10,11,12,14,15,16,17" でも配列でもよい */
+  if(v.reportHours){
+    const arr = (Array.isArray(v.reportHours) ? v.reportHours : String(v.reportHours).split(','))
+      .map(function(x){ return parseInt(x,10); })
+      .filter(function(x){ return !isNaN(x) && x>=0 && x<=23; });
+    if(arr.length) window._pmReportHours = arr;
+  }
   if(v.troubleThresh&&typeof v.troubleThresh==='object') troubleThresh={...troubleThresh,...v.troubleThresh};
   if(typeof v.troubleSlackUrl==='string') troubleSlackUrl=v.troubleSlackUrl;
   // しきい値UIに反映
@@ -19028,14 +19037,13 @@ function renderAlts(){
     const allJobs5=(l.jobs||[]).filter(j=>j.plan>0&&j.end);
     const lastEndMin5=allJobs5.length?Math.max(...allJobs5.map(j=>timeToMin(j.end)||0)):0;
     const pastLastEnd5=lastEndMin5>0&&(nowH5*60+nowM5)>=lastEndMin5;
-    /* ★「いまの時台に実績が入っていない」だけでは、12:59に入れても13:10に出てしまう。
-       さらに昼休み(12:10〜12:50)を数えていたので、毎日13:10に全ラインが一斉に鳴っていた。
-       → 前回の入力から「休憩を引いた正味」で60分たつまでは出さない（2026-11-23 社長指示）。
-       一度も入力が無い（updatedAt===0）ときはこれまでどおりすぐ出す。 */
-    const netOver5 = (l.updatedAt===0) ||
-      ((netMinSince(l.updatedAt)||0) >= (Number(window._pmNoRepMin)>0 ? Number(window._pmNoRepMin) : FACTORY_NOREP_MIN));
-    if(l.status==='running'&&l.plan>0&&isWork5&&nowM5>=10&&!updAfter5&&netOver5&&!allDone5&&!pastLastEnd5&&!lineNoAlertMap[id])
-      h+='<div class="al warn"><div class="al-txt w">⚠️ 未報告：'+getLineName(id)+'</div><div class="al-sub">'+(l.updatedAt===0?nowH5+'時台の実績が未入力':'前回更新：'+fmtTs(l.updatedAt))+'</div></div>';
+    /* ★実績を入れてほしいのは決められた時刻（9・10・11・12・14・15・16・17時、
+       残業があれば18・19・20時）。その時刻ぶんが入っていなければ出す（2026-11-23 社長指示）。
+       ※以前は「いまの“時台”に実績があるか」だけで見ており、12:59に入れても13:10に出ていた。
+         昼休み(12:10〜12:50)も数えていたので、毎日13:10に全ラインが一斉に鳴っていた。 */
+    const rp5 = reportMissed(l.updatedAt);
+    if(l.status==='running'&&l.plan>0&&isWork5&&rp5.missed&&!allDone5&&!pastLastEnd5&&!lineNoAlertMap[id])
+      h+='<div class="al warn"><div class="al-txt w">⚠️ 未報告：'+getLineName(id)+'</div><div class="al-sub">'+rp5.due+'時の実績が未入力'+(l.updatedAt>0?'　前回更新：'+fmtTs(l.updatedAt):'')+'</div></div>';
     // 終了時刻の入力漏れ（2026-09-21 社長指摘。Cライン①が夜まで稼働中に見えていた原因）
     if(typeof lineOpenEnds==='function'){
       const oe=lineOpenEnds(l);
