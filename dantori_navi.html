@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.23-9 : ★<b>進捗管理ボードの「計画修正」に、行の並べ替え（↑↓）を付けた</b>（2026-11-23 社長指示）。当日やるものは決まっていても<b>順番が入れ替わる</b>（この日のA2は、金型を逆にセットしたことで3行目の 11250-85U-1.2BL が2行目の 0.6BL より先に流れた）。これまで計画修正でできたのは<b>品番・数量・時刻の書き換えと行の削除だけ</b>で、並べ替える手段が無かった。★<b>品番だけを書き換えて入れ替えてはいけない</b>＝実績は行に紐づいているので、<b>別の品番に実績が付いてしまう</b>。→ 行ごと動かす↑↓を足した。保存のとき画面の並びで <code>seq</code> を振り直し、<code>remapCurSeq()</code> が「いま流している行」を貼り直すので、<b>実績は元の品番に付いたまま付いてくる</b>（この仕組みは元から入っていた。足りなかったのはボタンだけ）。★<b>開始・終了の時刻も行に付いて動く</b>ので、枠（時間帯）に合わせたいときは動かしたあとに時刻を直す。先頭の↑と末尾の↓は薄くして押せないようにした。★順番が狂ったまま放っておくと、<b>見込み完了時刻</b>と<b>終品確認が鳴る時刻</b>がずれる（終品確認は予定の終了時刻から30分前で計算しているため）。 -->
 <!-- H-Hub v2026.11.23-8 : ★<b>段取りなしの準備を「表」にした</b>（2026-11-23 社長指示「②材料③空容器などは上段にタイトルとして入れ、チェックボックスをその下にすればもう少しコンパクトになりませんか？」）。これまでは1件ごとに<b>②材料・③空容器…と名前を8つずつ繰り返して</b>いたので、行が横に長く、件数が増えるほど同じ文字が並んでいた。→ <b>項目の名前は上段の見出しに1回だけ</b>、下の行は<b>□だけ</b>にした。縦にそろうので目で追いやすく、横幅も高さも詰まる。やった人の欄は右端にそのまま残した。★クラス名は <code>.nstbl</code>（<code>.ck</code> は段取りブロックが3列折り返しで使っているので使い回さない。-7 の失敗）。 -->
 <!-- H-Hub v2026.11.23-7 : ★<b>段取りなしの準備で「□②材料 □③空容器 □④ｽｸﾗｯﾌﾟ」の3つしか出ていなかった、本当の原因を直した</b>（2026-11-23 社長報告）。チェック欄に <code>class="ck"</code> を使っていたが、<b>この名前は段取りブロックのチェック欄がすでに使っていた</b>。そちらは<code>.ck{display:flex; flex-wrap:wrap}</code>＋<code>.ck span{width:33.33%}</code>＝<b>1項目を欄の1/3幅にして3列で折り返す</b>決まり。段取りなしの行は高さが1行ぶんしかないので、8項目が<b>3列×3行</b>に積まれ、<b>1行目の②③④だけが見えて残り5つ（⑧⑨⑩⑪⑫）は下に隠れていた</b>（実測：1項目62.9mm・欄の高さ13.5mm）。前の2つの版（-5・-7の前）で <code>flex-wrap</code> や <code>flex:0 0 auto</code> を足しても効かなかったのは、<code>display</code> と <code>width:33.33%</code> を上書きしていなかったため。→ <b>クラス名を <code>.nsck</code> に分けた</b>。名前が衝突しなくなったので、8項目とも横1行に出る。 -->
 <!-- H-Hub v2026.11.23-6 : ★<b>①1枚目から「今日の終品確認」の一覧を外した</b>（2026-11-23 社長指示「今日の終品確認をやめようと思います」）。時刻は<b>帯の中の ※</b> に出ており、その時刻になれば<b>呼び出し（赤い帯・チャイム・スマホ）</b>も鳴るので、紙に同じものを重ねて持つ必要がない。<b>決めごとは何も変えていない</b>（30分前・作業時間で逆算・同じ品番は最後の1回だけ・呼び出しもそのまま）。紙の高さを<b>約20mm</b>返す。★<b>②段取りなしの準備で、チェックが「□②材料 □③空容器 □④ｽｸﾗｯﾌﾟ」の3つしか出ていなかったのを直した</b>（社長報告）。チェック欄を <code>display:flex</code> で作っていたため、項目が<b>横いっぱいに引き伸ばされて</b>3つで欄を使い切り、残り5つ（⑧⑨⑩⑪⑫）が<code>overflow:hidden</code> で<b>切り捨てられていた</b>。→ <b>flex をやめてただの文字の並び</b>にした。8つとも出る。 -->
@@ -1547,6 +1548,11 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 .pe-act.none{background:#f5f5f5;color:#bbb;}
 .pe-del{font-size:10px;padding:2px 8px;border:1px solid #e0c0c0;background:#fdf5f5;color:#c0392b;border-radius:3px;cursor:pointer;white-space:nowrap;}
 .pe-del:hover{background:#fdecea;}
+/* ★行の並べ替え（2026-11-23 社長指示）。当日やるものは決まっていても順番が変わる */
+.pe-mv{font-size:11px;line-height:1;padding:2px 6px;border:1px solid #cfd8e3;background:#f7fafc;
+       color:#34495e;border-radius:3px;cursor:pointer;margin-right:2px;}
+.pe-mv:hover{background:#eaf2f8;border-color:#aac4dd;}
+.pe-mv:disabled{opacity:.25;cursor:default;background:#f7fafc;}
 .msg{font-size:11px;color:#27ae60;margin-top:6px;min-height:15px;}
 .slbl{font-size:10px;color:#aaa;font-weight:500;margin:6px 0 4px;letter-spacing:0.04em;}
 
@@ -15056,7 +15062,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.23-8';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.23-9';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
@@ -21213,6 +21219,10 @@ window.loadPlanEdit=function(){
     _peAllLines[id]=JSON.parse(JSON.stringify(lines[id]?.jobs||[]));
   });
   _renderPeAllTables(ids);
+  /* 先頭の↑と末尾の↓を薄くする（押しても動かないため） */
+  setTimeout(function(){
+    document.querySelectorAll('#peTable .pe-body').forEach(_peRenumber);
+  }, 0);
 };
 
 // グループ内の全ラインをセクションごとに描画
@@ -21225,7 +21235,7 @@ function _renderPeAllTables(ids){
     h+=`<div class="pe-section" data-lineid="${lineId}" style="margin-bottom:14px;">`;
     h+=`<div style="font-size:12px;font-weight:700;color:#1a1a1a;margin-bottom:5px;padding-bottom:4px;border-bottom:1px solid #e0e0e0;">${_esc(getLineName(lineId))}</div>`;
     h+='<div style="overflow-x:auto;"><table class="pe-tbl">';
-    h+='<thead><tr><th>#</th><th>品番</th><th>予定数</th><th>開始</th><th>終了</th><th>段取りなし</th><th style="white-space:nowrap;">作業人数</th><th>実績状況</th><th></th></tr></thead>';
+    h+='<thead><tr><th>#</th><th>品番</th><th>予定数</th><th>開始</th><th>終了</th><th>段取りなし</th><th style="white-space:nowrap;">作業人数</th><th>実績状況</th><th style="white-space:nowrap;">並べ替え／削除</th></tr></thead>';
     h+=`<tbody class="pe-body" data-lineid="${lineId}">`;
     if(origJobs.length){
       origJobs.forEach((j,i)=>{h+=_buildPeRow(j,i,i+1,lineId);});
@@ -21271,7 +21281,7 @@ function _buildPeRow(j,origJi,rowNum,lineId){
     <td style="text-align:center;"><input type="checkbox" ${j.noSetup?'checked':''}></td>
     <td style="text-align:center;"><input class="pe-inp" type="number" min="0" max="99" value="${j.hito||0}" style="width:44px;padding:3px;text-align:center;" title="作業人数"></td>
     <td>${actBadge}</td>
-    <td><button class="pe-del" onclick="window.removePeRow(this)">削除</button></td>
+    <td style="white-space:nowrap;"><button class="pe-mv" onclick="window.movePeRow(this,-1)" title="1つ上へ">↑</button><button class="pe-mv" onclick="window.movePeRow(this,1)" title="1つ下へ">↓</button><button class="pe-del" onclick="window.removePeRow(this)">削除</button></td>
   </tr>`;
 }
 
@@ -21293,8 +21303,48 @@ window.addPeRow=function(lineId){
     <td style="text-align:center;"><input type="checkbox"></td>
     <td style="text-align:center;"><input class="pe-inp" type="number" min="0" max="99" value="0" style="width:44px;padding:3px;text-align:center;" title="作業人数"></td>
     <td><span class="pe-act none">未実施</span></td>
-    <td><button class="pe-del" onclick="window.removePeRow(this)">削除</button></td>`;
+    <td style="white-space:nowrap;"><button class="pe-mv" onclick="window.movePeRow(this,-1)" title="1つ上へ">↑</button><button class="pe-mv" onclick="window.movePeRow(this,1)" title="1つ下へ">↓</button><button class="pe-del" onclick="window.removePeRow(this)">削除</button></td>`;
   tbody.appendChild(tr);
+  _peRenumber(tbody);
+};
+
+/* ★行の並べ替え（2026-11-23 社長指示）。
+   当日やるものは決まっていても、金型の逆セットや条件出しで順番が入れ替わる。
+   ★行ごと動かすので、開始・終了の時刻もその行に付いて動く。
+     枠（時間帯）に合わせたいときは、動かしたあとに時刻を手で直す。
+   ★保存するとき `[...rows].map((row,ri)=>({...oj, seq:ri+1}))` と
+     画面の並びで seq を振り直し、`remapCurSeq()` が「いま流している行」を
+     貼り直すので、実績は元の品番に付いたまま付いてくる。
+   ★品番だけを書き換えて入れ替えてはいけない（実績が別の品番に付く）。 */
+function _peRenumber(tbody){
+  if(!tbody) return;
+  const rows=[...tbody.querySelectorAll('.pe-row')];
+  rows.forEach((r,i)=>{
+    r.cells[0].textContent=i+1;
+    const mv=r.querySelectorAll('.pe-mv');
+    if(mv[0]) mv[0].disabled=(i===0);
+    if(mv[1]) mv[1].disabled=(i===rows.length-1);
+  });
+}
+
+window.movePeRow=function(btn,dir){
+  const row=btn.closest('.pe-row');
+  if(!row) return;
+  const tbody=row.parentNode;
+  if(dir<0){
+    const prev=row.previousElementSibling;
+    if(!prev||!prev.classList.contains('pe-row')) return;
+    tbody.insertBefore(row,prev);
+  }else{
+    const next=row.nextElementSibling;
+    if(!next||!next.classList.contains('pe-row')) return;
+    tbody.insertBefore(next,row);
+  }
+  _peRenumber(tbody);
+  /* 動いた行が目で追えるよう、ひと呼吸だけ色を付ける */
+  row.style.transition='background .45s';
+  row.style.background='#fff7e0';
+  setTimeout(function(){ row.style.background=''; }, 450);
 };
 
 window.removePeRow=function(btn){
@@ -21305,8 +21355,7 @@ window.removePeRow=function(btn){
   const hasActual=_jobHasActualData(oj);
   if(hasActual&&!confirm('この品番には実績データが入力されています。\n削除すると実績データも失われます。続けますか？')) return;
   row.remove();
-  const tbody=document.querySelector(`.pe-body[data-lineid="${lineId}"]`);
-  if(tbody) tbody.querySelectorAll('.pe-row').forEach((r,i)=>{r.cells[0].textContent=i+1;});
+  _peRenumber(document.querySelector(`.pe-body[data-lineid="${lineId}"]`));
 };
 
 window.cancelPlanEdit=function(){
