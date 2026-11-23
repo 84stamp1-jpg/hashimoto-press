@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.23-8 : ★<b>段取りなしの準備を「表」にした</b>（2026-11-23 社長指示「②材料③空容器などは上段にタイトルとして入れ、チェックボックスをその下にすればもう少しコンパクトになりませんか？」）。これまでは1件ごとに<b>②材料・③空容器…と名前を8つずつ繰り返して</b>いたので、行が横に長く、件数が増えるほど同じ文字が並んでいた。→ <b>項目の名前は上段の見出しに1回だけ</b>、下の行は<b>□だけ</b>にした。縦にそろうので目で追いやすく、横幅も高さも詰まる。やった人の欄は右端にそのまま残した。★クラス名は <code>.nstbl</code>（<code>.ck</code> は段取りブロックが3列折り返しで使っているので使い回さない。-7 の失敗）。 -->
 <!-- H-Hub v2026.11.23-7 : ★<b>段取りなしの準備で「□②材料 □③空容器 □④ｽｸﾗｯﾌﾟ」の3つしか出ていなかった、本当の原因を直した</b>（2026-11-23 社長報告）。チェック欄に <code>class="ck"</code> を使っていたが、<b>この名前は段取りブロックのチェック欄がすでに使っていた</b>。そちらは<code>.ck{display:flex; flex-wrap:wrap}</code>＋<code>.ck span{width:33.33%}</code>＝<b>1項目を欄の1/3幅にして3列で折り返す</b>決まり。段取りなしの行は高さが1行ぶんしかないので、8項目が<b>3列×3行</b>に積まれ、<b>1行目の②③④だけが見えて残り5つ（⑧⑨⑩⑪⑫）は下に隠れていた</b>（実測：1項目62.9mm・欄の高さ13.5mm）。前の2つの版（-5・-7の前）で <code>flex-wrap</code> や <code>flex:0 0 auto</code> を足しても効かなかったのは、<code>display</code> と <code>width:33.33%</code> を上書きしていなかったため。→ <b>クラス名を <code>.nsck</code> に分けた</b>。名前が衝突しなくなったので、8項目とも横1行に出る。 -->
 <!-- H-Hub v2026.11.23-6 : ★<b>①1枚目から「今日の終品確認」の一覧を外した</b>（2026-11-23 社長指示「今日の終品確認をやめようと思います」）。時刻は<b>帯の中の ※</b> に出ており、その時刻になれば<b>呼び出し（赤い帯・チャイム・スマホ）</b>も鳴るので、紙に同じものを重ねて持つ必要がない。<b>決めごとは何も変えていない</b>（30分前・作業時間で逆算・同じ品番は最後の1回だけ・呼び出しもそのまま）。紙の高さを<b>約20mm</b>返す。★<b>②段取りなしの準備で、チェックが「□②材料 □③空容器 □④ｽｸﾗｯﾌﾟ」の3つしか出ていなかったのを直した</b>（社長報告）。チェック欄を <code>display:flex</code> で作っていたため、項目が<b>横いっぱいに引き伸ばされて</b>3つで欄を使い切り、残り5つ（⑧⑨⑩⑪⑫）が<code>overflow:hidden</code> で<b>切り捨てられていた</b>。→ <b>flex をやめてただの文字の並び</b>にした。8つとも出る。 -->
 <!-- H-Hub v2026.11.23-5 : ★<b>前の版で足した「段取りなしの準備」が、1行21.8mmに膨らんでいたのを直した</b>。チェック欄を横1行のつもりで作ったが、<b>flex の折り返しを明示していなかった</b>ため、すぐ上にある終品確認の一覧（<code>.shulist{flex-wrap:wrap}</code>）の決まりを受け継いで<b>折り返し</b>、さらに項目が横いっぱいに<b>引き伸ばされて1項目62mm</b>になっていた（実測）。4行で89mmを食い、1枚目が<b>285mm</b>（紙は196mm）になって紙が3枚に増えていた。→ <code>flex-wrap:nowrap</code>／<code>span{flex:0 0 auto}</code>／字の大きさを<b>明示</b>で指定した。1行 約5mm に戻る。 -->
@@ -9622,27 +9623,23 @@ const _SS_CSS = `
                  display:inline-block; width:3mm; height:3mm;
                  vertical-align:-.5mm; margin-left:1.4mm; }
 
-  /* ★段取りなしの準備（2026-11-23 社長指示）。1件＝横1行。
-     ふつうの段取りの枠は予定・実際の時刻や後段取りがあって縦に大きいが、
-     こちらは当日そろえるものを確かめるだけなので、1行で足りる（1件 約5mm）。 */
-  .nslist{ margin:.6mm 0 0; }
-  .nslist .r{ display:flex; align-items:center; gap:1.4mm;
-              border:.7pt solid var(--line); border-radius:1pt;
-              padding:.6mm 1.4mm; font-size:7.3pt; margin-bottom:.7mm; }
-  .nslist .r i{ font-style:normal; color:var(--sub); font-size:6.8pt;
-                flex:0 0 15mm; }
-  .nslist .r b{ font-weight:700; flex:0 0 42mm; white-space:nowrap;
-                overflow:hidden; text-overflow:ellipsis; }
-  /* ★横1行に並べきる。クラス名を <b>.nsck</b> にしてあるのは、
-     段取りブロックの <code>.ck</code> が
-     <code>{display:flex; flex-wrap:wrap}</code>＋<code>span{width:33.33%}</code>
-     ＝<b>3列に折り返す</b>決まりだから（2026-11-23）。同じ名前を使っていたため
-     8項目が3列×3行になり、1行目の<b>②③④しか見えていなかった</b>（社長報告）。
-     名前を分けたうえで、ここは flex を使わずただの文字の並びにする。 */
-  .nslist .r .nsck{ flex:1 1 auto; white-space:nowrap; overflow:hidden;
-                    font-size:6.9pt; letter-spacing:0; }
-  .nslist .r .nsck span{ display:inline-block; width:auto; margin-right:2.4mm; }
-  .nslist .r .sg{ flex:0 0 28mm; border-bottom:.7pt solid var(--line); height:3.4mm; }
+  /* ★段取りなしの準備（2026-11-23 社長指示）。<b>表</b>にする。
+     項目の名前（②材料…）は<b>上段の見出しに1回だけ</b>置き、下の行は□だけにする
+     （社長指示 2026-11-23「上段にタイトル、チェックボックスをその下に」）。
+     1件ずつ名前を繰り返すより横幅も高さも詰まり、縦に目で追える。
+     ★クラス名は <code>.nstbl</code>。段取りブロックの <code>.ck</code> は
+     <code>{display:flex; flex-wrap:wrap}</code>＋<code>span{width:33.33%}</code>＝
+     <b>3列で折り返す</b>決まりなので、ここで使い回してはいけない。 */
+  .nstbl{ width:100%; border-collapse:collapse; margin:.6mm 0 0; font-size:7.3pt; }
+  .nstbl th{ font-size:6.4pt; font-weight:600; color:var(--sub);
+             border:.7pt solid var(--line); padding:.3mm .7mm;
+             white-space:nowrap; text-align:center; }
+  .nstbl td{ border:.7pt solid var(--line); padding:.5mm .8mm; }
+  .nstbl .l{ width:15mm; font-size:6.8pt; color:var(--sub); white-space:nowrap; }
+  .nstbl .p{ width:42mm; font-weight:700; white-space:nowrap;
+             overflow:hidden; text-overflow:ellipsis; }
+  .nstbl .ckc{ text-align:center; font-size:8pt; line-height:1; }
+  .nstbl .sg{ width:24mm; }
 
   .rwrite{ height:8.4mm; }   /* 文字を大きくしたぶんをここから1mm回収（2026-11-14） */
 
@@ -10130,14 +10127,16 @@ window.rtPrintSetupSheet = async function(){
     + (todaySoto.length
         ? '<div class="sec" style="margin-top:1.5mm">段取りなしの準備　' + todaySoto.length + '件'
           + '<span>　外段取り、または前日に終えたぶん。<b>当日そろえるものだけ</b>確かめて□にチェック</span></div>'
-          + '<div class="nslist">'
+          + '<table class="nstbl"><tr><th class="l"></th><th class="p"></th>'
+          + SETUP_NS.map(function(x){ return '<th>' + x[0] + x[1] + '</th>'; }).join('')
+          + '<th class="sg">やった人</th></tr>'
           + todaySoto.map(function(j){
-              return '<div class="r"><i>' + esc(j.line) + '</i><b>' + esc(j.partNo) + '</b>'
-                   + '<span class="nsck">'
-                   + SETUP_NS.map(function(x){ return '<span>□' + x[0] + x[1] + '</span>'; }).join('')
-                   + '</span><span class="sg"></span></div>';
+              return '<tr><td class="l">' + esc(j.line) + '</td>'
+                   + '<td class="p">' + esc(j.partNo) + '</td>'
+                   + SETUP_NS.map(function(){ return '<td class="ckc">□</td>'; }).join('')
+                   + '<td class="sg"></td></tr>';
             }).join('')
-          + '</div>'
+          + '</table>'
         : '')
     + (today.length ? ''
         : '<div class="legend">※ ' + (src.why || 'この日の段取りは進捗管理ボードに入っていません。')
@@ -15057,7 +15056,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.23-7';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.23-8';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
