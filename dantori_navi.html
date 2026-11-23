@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.23-10 : ★<b>「未報告」が休憩明けすぐに出ていたのを直した</b>（2026-11-23 社長報告「A1などの未報告はなぜ出ますか？午前中の作業終了時に入力して、午後はまだ1時間たっていません」）。原因は2つ。①<b>経過時間を測っていなかった</b>＝進捗ボードの警告は「<b>いまの“時台”に実績が入っているか</b>」だけで見ており（<code>updAfter5</code>）、12:59に入れても<b>13:10には未報告</b>になっていた。②<b>休憩を数えていなかった</b>＝昼休み(12:10〜12:50)の40分も経過に入れていた。この日は5ライン全部が12:17〜12:19（＝昼休みに入ってから）の入力で、<b>13:10に一斉に鳴っていた</b>。★<b>毎日3回</b>（10:10・13:10・15:10）同じことが起きており、毎日鳴る警告は本当に止まったときの警告まで見過ごさせる。→ <b>前回の入力から「休憩を引いた正味」で60分たつまで出さない</b>（<code>netMinSince()</code>）。12:17に入力したなら<b>休憩明け12:50から60分＝13:50</b>に出る（社長の指示どおり）。工場レイアウトのカードも同じにし、表示を「⚠ 未報告 <b>作業</b>60分」とした（時計の経過ではなく働いた時間であることを示すため）。★一度も入力が無いラインはこれまでどおりすぐ出す。★60分という長さは設定 <code>settings/noRepMin</code> で変えられる。 -->
 <!-- H-Hub v2026.11.23-9 : ★<b>進捗管理ボードの「計画修正」に、行の並べ替え（↑↓）を付けた</b>（2026-11-23 社長指示）。当日やるものは決まっていても<b>順番が入れ替わる</b>（この日のA2は、金型を逆にセットしたことで3行目の 11250-85U-1.2BL が2行目の 0.6BL より先に流れた）。これまで計画修正でできたのは<b>品番・数量・時刻の書き換えと行の削除だけ</b>で、並べ替える手段が無かった。★<b>品番だけを書き換えて入れ替えてはいけない</b>＝実績は行に紐づいているので、<b>別の品番に実績が付いてしまう</b>。→ 行ごと動かす↑↓を足した。保存のとき画面の並びで <code>seq</code> を振り直し、<code>remapCurSeq()</code> が「いま流している行」を貼り直すので、<b>実績は元の品番に付いたまま付いてくる</b>（この仕組みは元から入っていた。足りなかったのはボタンだけ）。★<b>開始・終了の時刻も行に付いて動く</b>ので、枠（時間帯）に合わせたいときは動かしたあとに時刻を直す。先頭の↑と末尾の↓は薄くして押せないようにした。★順番が狂ったまま放っておくと、<b>見込み完了時刻</b>と<b>終品確認が鳴る時刻</b>がずれる（終品確認は予定の終了時刻から30分前で計算しているため）。 -->
 <!-- H-Hub v2026.11.23-8 : ★<b>段取りなしの準備を「表」にした</b>（2026-11-23 社長指示「②材料③空容器などは上段にタイトルとして入れ、チェックボックスをその下にすればもう少しコンパクトになりませんか？」）。これまでは1件ごとに<b>②材料・③空容器…と名前を8つずつ繰り返して</b>いたので、行が横に長く、件数が増えるほど同じ文字が並んでいた。→ <b>項目の名前は上段の見出しに1回だけ</b>、下の行は<b>□だけ</b>にした。縦にそろうので目で追いやすく、横幅も高さも詰まる。やった人の欄は右端にそのまま残した。★クラス名は <code>.nstbl</code>（<code>.ck</code> は段取りブロックが3列折り返しで使っているので使い回さない。-7 の失敗）。 -->
 <!-- H-Hub v2026.11.23-7 : ★<b>段取りなしの準備で「□②材料 □③空容器 □④ｽｸﾗｯﾌﾟ」の3つしか出ていなかった、本当の原因を直した</b>（2026-11-23 社長報告）。チェック欄に <code>class="ck"</code> を使っていたが、<b>この名前は段取りブロックのチェック欄がすでに使っていた</b>。そちらは<code>.ck{display:flex; flex-wrap:wrap}</code>＋<code>.ck span{width:33.33%}</code>＝<b>1項目を欄の1/3幅にして3列で折り返す</b>決まり。段取りなしの行は高さが1行ぶんしかないので、8項目が<b>3列×3行</b>に積まれ、<b>1行目の②③④だけが見えて残り5つ（⑧⑨⑩⑪⑫）は下に隠れていた</b>（実測：1項目62.9mm・欄の高さ13.5mm）。前の2つの版（-5・-7の前）で <code>flex-wrap</code> や <code>flex:0 0 auto</code> を足しても効かなかったのは、<code>display</code> と <code>width:33.33%</code> を上書きしていなかったため。→ <b>クラス名を <code>.nsck</code> に分けた</b>。名前が衝突しなくなったので、8項目とも横1行に出る。 -->
@@ -6511,7 +6512,9 @@ function updateFactoryView(lines){
       const lim = Number(window._pmNoRepMin) > 0 ? Number(window._pmNoRepMin) : FACTORY_NOREP_MIN;
       const noAlert = (window._pmLineNoAlert || {})[lineId];
       const upd = (L && L.updatedAt > 0) ? L.updatedAt : 0;
-      const mins = upd ? Math.round((Date.now() - upd) / 60000) : null;
+      /* ★素の経過ではなく「休憩を引いた正味」で見る（2026-11-23 社長指示）。
+         昼休み(12:10〜12:50)をまたぐと、休んでいた40分まで数えていた。 */
+      const mins = upd ? netMinSince(upd) : null;
       // 終了時刻の入力漏れは、未報告より先に出す（直せば消えるものなので）
       let open = [];
       try{ open = lineOpenEnds(L || {}); }catch(e){ open = []; }
@@ -6519,7 +6522,7 @@ function updateFactoryView(lines){
         alertEl.textContent = `⚠ 終了未入力 ${open.map(x => x.row + '行目').join('・')}`;
       } else {
         const show = isRunning && !noAlert && mins !== null && mins >= lim;
-        alertEl.textContent = show ? `⚠ 未報告 ${mins}分` : '';
+        alertEl.textContent = show ? `⚠ 未報告 作業${mins}分` : '';
       }
     }
 
@@ -8365,6 +8368,39 @@ function calcSetupNetMin(start, end){
   });
   const net = total - overlap;
   return net > 0 ? net : total; // 念のため0以下にならないようにする
+}
+
+/* ★前回の実績入力から、いままでの「正味」の分数（休憩を引いたもの）。
+   2026-11-23 社長指示「休憩時間に入ってから実績入力したと思うので、
+   休憩終わりから60分経ってから出したい」。
+   例＝昼休み(12:10〜12:50)のさなか 12:17 に入力したとき、
+   12:17〜12:50 の33分は休んでいた時間なので引く。
+   13:50 でちょうど正味60分＝休憩明け12:50から60分、となる。
+   ★calcSetupNetMin は「休憩の中だけで終わった段取り」を0分にしないため
+   0以下のとき total を返すが、こちらは 0 を返す（休憩中はまだ数え始めない）。 */
+function netMinSince(ms){
+  if(!ms) return null;
+  const d1 = new Date(ms);
+  const total = Math.round((Date.now() - ms) / 60000);
+  if(total <= 0) return 0;
+  const toMin = t => { const [h,m] = String(t).split(':').map(Number); return h*60+m; };
+  const sMin = d1.getHours()*60 + d1.getMinutes();
+  const eMin = sMin + total;
+  const breaks = (typeof config !== 'undefined' && config.breaks && config.breaks.length)
+               ? config.breaks : DEFAULT_BREAKS;
+  let overlap = 0;
+  breaks.forEach(function(b){
+    let bsM = toMin(b.start), beM = toMin(b.end);
+    if(beM <= bsM) beM += 24*60;
+    /* 日をまたいで数えることがあるので、翌日ぶんの休憩も重ねて見る */
+    [0, 24*60].forEach(function(off){
+      const o1 = Math.max(sMin, bsM + off);
+      const o2 = Math.min(eMin, beM + off);
+      if(o2 > o1) overlap += (o2 - o1);
+    });
+  });
+  const net = total - overlap;
+  return net > 0 ? net : 0;
 }
 
 function renderKanbanCard(d){
@@ -15062,7 +15098,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.23-9';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.23-10';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
@@ -18992,7 +19028,13 @@ function renderAlts(){
     const allJobs5=(l.jobs||[]).filter(j=>j.plan>0&&j.end);
     const lastEndMin5=allJobs5.length?Math.max(...allJobs5.map(j=>timeToMin(j.end)||0)):0;
     const pastLastEnd5=lastEndMin5>0&&(nowH5*60+nowM5)>=lastEndMin5;
-    if(l.status==='running'&&l.plan>0&&isWork5&&nowM5>=10&&!updAfter5&&!allDone5&&!pastLastEnd5&&!lineNoAlertMap[id])
+    /* ★「いまの時台に実績が入っていない」だけでは、12:59に入れても13:10に出てしまう。
+       さらに昼休み(12:10〜12:50)を数えていたので、毎日13:10に全ラインが一斉に鳴っていた。
+       → 前回の入力から「休憩を引いた正味」で60分たつまでは出さない（2026-11-23 社長指示）。
+       一度も入力が無い（updatedAt===0）ときはこれまでどおりすぐ出す。 */
+    const netOver5 = (l.updatedAt===0) ||
+      ((netMinSince(l.updatedAt)||0) >= (Number(window._pmNoRepMin)>0 ? Number(window._pmNoRepMin) : FACTORY_NOREP_MIN));
+    if(l.status==='running'&&l.plan>0&&isWork5&&nowM5>=10&&!updAfter5&&netOver5&&!allDone5&&!pastLastEnd5&&!lineNoAlertMap[id])
       h+='<div class="al warn"><div class="al-txt w">⚠️ 未報告：'+getLineName(id)+'</div><div class="al-sub">'+(l.updatedAt===0?nowH5+'時台の実績が未入力':'前回更新：'+fmtTs(l.updatedAt))+'</div></div>';
     // 終了時刻の入力漏れ（2026-09-21 社長指摘。Cライン①が夜まで稼働中に見えていた原因）
     if(typeof lineOpenEnds==='function'){
