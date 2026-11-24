@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.24-3 : ★<b>ブリーフィングで「今日の計画にこの品番がありません」と出てしまうのを直した</b>（2026-11-24 社長報告。配置表には 18121-5MS があるのに、品番検索の <code>18121-5MS-0000-PR</code> では出なかった）。原因は<b>配置表（段取り計画）の品番のほうが短いこと</b>。記号ゆれを吸収しても「18121-5MS」と「181215MS0000PR」は別物になる。→ <b>まず丸ごと同じものを探し、無ければ頭から一致するもので探す</b>ようにした。その探し方で拾ったときは<b>「※配置表の品番「18121-5MS」から」と出す</b>ので、別の枝番を拾っていないか見て分かる。<b>2つ以上のラインに当たったときは、人のふだにライン名も出す</b>。 -->
 <!-- H-Hub v2026.11.24-2 : ブリーフィングの画面を作り直した（2026-11-24 社長指示・同日2回目）。(1)★<b>全画面</b>にした（枠と余白をなくし、左のPDFと右の欄を目いっぱい広げた。右は最大520px）。(2)★<b>今日この品番に入る人を配置表から出し、押すだけで「進行（司会）」「品質チェック」に入る</b>ようにした。その日の段取り計画（<code>dantori/{日付}</code>）から<b>品番が一致する行</b>を探し、<code>roles</code> の 作業者・金型取付・初品出し・品質確認＋途中交代の人を名前でまとめて出す（品番の記号ゆれは <code>_pnNorm</code> で吸収）。選んだ人のふだは色が付く（青＝進行／緑＝品質／紫＝両方）。もう一度押すと外れる。計画にこの品番が無い日は、これまでどおり手で書ける。(3)★<b>右の改修履歴などが1文字ずつ縦に折れていたのを直した</b>（社長報告）。幅が足りないのが原因なので、<b>ブリーフィングでは見ない列（分類・処置・品番・区分・状況）を落として</b>日付と内容を広げ、折り返しも語単位にした。<b>型改修後かどうかが分かるよう完了日は残している</b>。(4)言う順番を<b>3つ</b>に変えた（①誰がどの工程か＝自工程の注意点 ②前回の不良・注意点・型改修後か ③変化点）。(5)★<b>長田さん（退職）を担当者の選択肢から外した</b>（社長指示）。※<b>A1・A2の「初品出し」が長田さんだったので空にしてある</b>＝誰にするか決めていただきたい。 -->
 <!-- H-Hub v2026.11.24-1 : ★<b>品番検索に「📣 ブリーフィング」を足した</b>（2026-11-24 社長指示）。ブリーフィングは<b>パソコンの前</b>でやる＝画面を見ながら話せるので、<b>作業標準書のPDFと、この品番の注意点を1枚に並べた</b>。押すと全画面になり、<b>左が帳票（作業標準書→品質チェックシートの順にボタンで切り替え）</b>、<b>右が「進行（司会）・品質チェックの担当」「言う順番①〜④」「改修履歴・工程内不良・苦情不適合」</b>。右の注意点は<b>品番検索の画面にすでに出ているものを写している</b>ので、kintoneを二度読みしない。担当は<b>担当者マスターから選べる</b>（手入力も可）。書くと <code>dantori/{日付}Briefing/{品番}</code> に残る（<code>{日付}Locks</code>・<code>{日付}Spot</code> と同じ流儀なので、段取り計画 <code>dantori/{日付}</code> とはぶつからない。Firebaseのルールは<b>変更不要</b>）。※段取り準備シートの⑧「担当と時刻」は<b>いまのまま</b>（社長判断）。なお <code>openDoc</code> に<b>第4引数</b>を足した＝渡すと別タブで開かずURLを返す。既存の呼び出しは1か所も直していない。 -->
 <!-- H-Hub v2026.11.23-24 : ★<b>紙の高さの測り方を間違えていた</b>（2026-11-23）。この日ずっと <code>scrollHeight ÷ iframeの幅1111px × 282</code> で mm に直していたが、<code>.sheet</code> は <code>width:282mm</code> ＝ <b>1066px</b>（1mm=3.78px）で、iframeの幅ではない。<b>4%小さく出ていた</b>。正しく測り直すと <b>1枚目 199.8mm・2枚目 202.1mm</b>で、どちらも紙（196mm＝A4横−余白7mm×2）を超えていた＝印刷すると数mmだけの紙が増える。→ (1)<code>.nstbl</code> の行を詰めた（1行4.3mm→3.6mm、6行で約4mm返る）。(2)朝いちばんの表が出る日の「気づいたこと」を<b>2行</b>にした（-23 の3行からさらに1行）。これで1枚目・2枚目とも196mm以内に収まり、<b>紙は2枚</b>に戻る。★<b>紙ものを足したら必ず高さを測る</b>。測るときは <code>offsetHeight ÷ 3.7795</code>（<code>zoom</code> は offsetHeight に効かない）。 -->
@@ -5211,11 +5212,21 @@ async function brfMembers(){
     const r = await fetch(brfFb() + '/dantori/' + brfYmd() + '.json');
     data = (await r.json()) || {};
   }catch(e){}
-  const same = (a,b) => a && b && (typeof _pnNorm === 'function' ? _pnNorm(a) === _pnNorm(b) : a === b);
-  const hits = Object.keys(data).map(k=>data[k]).filter(v => v && same(v.partNo, pn));
-  const names = [], line = [], when = [];
+  /* ★配置表の品番は短いことがある（例 計画「18121-5MS」／品番検索「18121-5MS-0000-PR」）。
+     まず丸ごと同じものを探し、無ければ頭から一致するもので探す（2026-11-24 社長報告） */
+  const nz = v => (typeof _pnNorm === 'function' ? _pnNorm(v) : String(v||'').toUpperCase());
+  const key = nz(pn);
+  const all = Object.keys(data).map(k=>data[k]).filter(v => v && v.partNo && v.partNo !== '--');
+  let hits = all.filter(v => nz(v.partNo) === key);
+  let rough = false;
+  if(!hits.length && key){
+    hits  = all.filter(v => { const t = nz(v.partNo); return t && (key.indexOf(t) === 0 || t.indexOf(key) === 0); });
+    rough = hits.length > 0;
+  }
+  const names = [], line = [], when = [], froms = [];
   hits.forEach(h => {
     if(h.lineId && line.indexOf(h.lineId) < 0) line.push(h.lineId);
+    if(h.partNo && froms.indexOf(h.partNo) < 0) froms.push(h.partNo);
     const t = (h.setupStart || h.prodStart || '') + (h.prodEnd ? '〜' + h.prodEnd : '');
     if(t && when.indexOf(t) < 0) when.push(t);
     const r = h.roles || {};
@@ -5223,8 +5234,8 @@ async function brfMembers(){
       nm = String(nm||'').trim();
       if(!nm) return;
       const f = names.find(x => x.name === nm);
-      if(f){ if(f.role.indexOf(role) < 0) f.role.push(role); }
-      else   names.push({ name:nm, role:[role] });
+      if(f){ if(f.role.indexOf(role) < 0) f.role.push(role); if(h.lineId && f.lines.indexOf(h.lineId) < 0) f.lines.push(h.lineId); }
+      else   names.push({ name:nm, role:[role], lines: h.lineId ? [h.lineId] : [] });
     };
     (r.作業者||'').split(/[,、]/).forEach(n=>push(n,'作業者'));
     (r.金型取付||'').split(/[,、]/).forEach(n=>push(n,'段取り'));
@@ -5236,6 +5247,7 @@ async function brfMembers(){
   let hd = '<div class="brf-mem-hd">今日この品番に入る人（配置表）'
          + (line.length ? '<span class="brf-mem-line">' + brfEsc(line.join('・')) + '</span>' : '')
          + (when.length ? '<span>' + brfEsc(when.join('／')) + '</span>' : '')
+         + (rough ? '<span>※配置表の品番「' + brfEsc(froms.join('・')) + '」から</span>' : '')
          + '</div>';
   if(!names.length){
     box.innerHTML = hd + '<div class="mold-empty">今日の計画にこの品番がありません。'
@@ -5245,7 +5257,8 @@ async function brfMembers(){
   box.innerHTML = hd + '<div class="brf-mem-list">'
     + names.map((p,i) =>
         '<span class="brf-chip" id="brf-chip-'+i+'"><b>' + brfEsc(p.name) + '</b>'
-        + '<i>' + brfEsc(p.role.join('・')) + '</i>'
+        + '<i>' + (line.length > 1 && p.lines.length ? brfEsc(p.lines.join('・')) + ' ' : '')
+        + brfEsc(p.role.join('・')) + '</i>'
         + '<button title="この人を進行（司会）にする" onclick="brfSet(' + i + ',\'shikai\')">📣 進行</button>'
         + '<button title="この人を品質チェックにする" onclick="brfSet(' + i + ',\'qc\')">✅ 品質</button></span>'
       ).join('')
@@ -15635,7 +15648,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.24-2';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.24-3';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
