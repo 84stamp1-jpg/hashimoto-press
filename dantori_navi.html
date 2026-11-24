@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.25-2 : ブリーフィングの人のふだを<b>横2列</b>にし、<b>ライン名と役割（「Bライン 作業者」）を出すのをやめた</b>（2026-11-25 社長指示）。縦が半分になるので、<b>その下の改修履歴・工程内不良・苦情不適合が画面に入る</b>。時刻は<b>付く人にだけ</b>橙色で残す（途中から／途中まで／段取り）。ふだが2つ並ばない幅（760px以下）では1列に戻る。あわせて「進行（司会）」の欄名を<b>「進行」</b>にした。 -->
 <!-- H-Hub v2026.11.25-1 : ★<b>ブリーフィングの「今日この品番に入る人」に、組立の人が混ざっていたのを直した</b>（2026-11-25 社長指示）。組立の計画は<b>「ライン」のところが人の名前</b>（大塚・鈴木…）なので、見出しが「Bライン・大塚・鈴木」になり、その人たちもふだに並んでいた。→ <b>プレスのライン（<code>PRESS_LINE_MASTER</code> にあるもの）だけ</b>を見るようにした。ライン名の表記ゆれ（「Cライン ②」など）は <code>resolveLineId()</code> で揃えてから判定する。 -->
 <!-- H-Hub v2026.11.24-7 : ★<b>ブリーフィングの人のふだに「何時から何時まで」を出すようにした</b>（2026-11-24 社長指示）。複雑にしないため、<b>工程まるごと入っている人には時刻を書かない</b>（見出しの「生産 15:50〜18:38」がその人の時間）。<b>途中から入る人・途中で抜ける人・段取りの人だけ</b>、橙色で「17:10〜」「〜17:00」「15:40〜15:50」と添える。時刻の付く人は<b>下へ回す</b>ので、上から読めば「ずっといる人」。作業者の時間は <code>entryToWorkerRows()</code>（段取り計画の担当画面と同じもの）で出すので、<b>途中交代もそのまま展開される</b>＝これまで「交代」としか出なかった人に時刻が付く。見出しは<b>生産の帯</b>（段取り開始ではなく生産開始から）にした。 -->
 <!-- H-Hub v2026.11.24-6 : ★<b>計画の担当欄に残った「辞めた人・外れた人」を、画面から消せるようにした</b>（2026-11-24 社長の問い「段取り計画の担当欄とはどこにあるか」）。担当を決める画面（配置表のバーを押すと出るもの）の<b>ふだは作業者マスタの人しか並ばない</b>ので、マスタから外れた人は<b>チェックが付いていても画面に現れず、保存しても残り続ける</b>状態だった＝<b>画面からは直せなかった</b>。→ この画面を開いた時点で<b>マスタに無い名前を落とし</b>、上に<b>「※ ○○ は、いまの作業者マスタに無いので外しました。そのまま保存すれば、この計画からも消えます」</b>と出すようにした。押して保存するだけで直る。※実データで3件見つかっている（A1 1JK-22188-PI の初品出し＝長田／A2 62133-51K00-PR1A の初品出し＝長田／Bライン 18121-5MS の作業者・金型取付＝中野）。 -->
@@ -562,16 +563,18 @@ html, body {
 .brf-mem-hd{font-size:12px;font-weight:800;color:#334155;margin-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .brf-mem-hd span{font-size:11.5px;font-weight:600;color:#64748b;}
 .brf-mem-line{font-size:11.5px;font-weight:800;color:#1d4ed8;background:#eff6ff;border-radius:8px;padding:1px 8px;}
-.brf-mem-list{display:flex;flex-wrap:wrap;gap:5px;}
-.brf-chip{display:inline-flex;align-items:center;gap:4px;border:1px solid #cbd5e1;border-radius:9px;padding:3px 4px 3px 9px;background:#fff;}
-.brf-chip b{font-size:12.5px;font-weight:700;color:#1a1a1a;}
-.brf-chip i{font-size:10px;font-style:normal;color:#94a3b8;}
-.brf-chip i b{font-weight:800;color:#b45309;}
-.brf-chip button{border:1px solid #e2e8f0;background:#f8fafc;border-radius:6px;font-size:11px;padding:2px 6px;cursor:pointer;font-family:inherit;line-height:1.4;}
+.brf-mem-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;}
+.brf-chip{display:flex;align-items:center;gap:3px;border:1px solid #cbd5e1;border-radius:9px;padding:2px 4px 2px 7px;background:#fff;min-width:0;}
+.brf-chip b{font-size:12.5px;font-weight:700;color:#1a1a1a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.brf-chip i{font-size:10px;font-style:normal;color:#b45309;font-weight:800;white-space:nowrap;flex:1 1 auto;min-width:0;overflow:hidden;}
+.brf-chip button{border:1px solid #e2e8f0;background:#f8fafc;border-radius:6px;font-size:10.5px;padding:2px 5px;cursor:pointer;font-family:inherit;line-height:1.4;white-space:nowrap;flex:0 0 auto;margin-left:auto;}
+.brf-chip button + button{margin-left:0;}
+.brf-chip.w2{grid-column:1 / -1;}   /* 時刻が長い人（段取りなど）は2列ぶち抜き */
 .brf-chip button:hover{background:#e0e7ff;border-color:#a5b4fc;}
 .brf-chip.is-sk{border-color:#1d4ed8;background:#eff6ff;}
 .brf-chip.is-qc{border-color:#16a34a;background:#f0fdf4;}
 .brf-chip.is-both{border-color:#7c3aed;background:#f5f3ff;}
+@media (max-width:760px){ .brf-mem-list{grid-template-columns:1fr;} }
 @media (max-width:900px){ .brf-grid{grid-template-columns:1fr;grid-template-rows:minmax(230px,44%) 1fr;} .brf-pdf{border-right:none;border-bottom:1px solid #e5e7eb;} .brf-hd-d{margin-left:0;} .brf-box{max-height:100vh;border-radius:0;} .brf-ov{padding:0;} }
 /* 記録から不良品報告を作る（2026-09-22） */
 .qc-ngr{border:2px solid #fca5a5;background:#fff7f7;border-radius:10px;padding:10px 12px;}
@@ -1789,7 +1792,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
       </div>
       <div class="brf-side">
         <div class="brf-tan">
-          <div class="brf-tan-r"><label>進行（司会）</label><input id="brf-shikai" list="brf-people" placeholder="名前" onchange="brfMarkChips();brfSave()"/></div>
+          <div class="brf-tan-r"><label>進行</label><input id="brf-shikai" list="brf-people" placeholder="名前" onchange="brfMarkChips();brfSave()"/></div>
           <div class="brf-tan-r"><label>品質チェック</label><input id="brf-qc" list="brf-people" placeholder="名前（最終工程の人）" onchange="brfMarkChips();brfSave()"/></div>
           <div class="brf-tan-r"><label>メモ</label><input id="brf-memo" placeholder="今日の注意点など" onchange="brfSave()"/></div>
           <div class="brf-saved" id="brf-saved"></div>
@@ -5312,11 +5315,12 @@ async function brfMembers(){
   }
   box.innerHTML = hd + '<div class="brf-mem-list">'
     + names.map((p,i) =>
-        '<span class="brf-chip" id="brf-chip-'+i+'"><b>' + brfEsc(p.name) + '</b>'
-        + '<i>' + (line.length > 1 && p.lines.length ? brfEsc(p.lines.join('・')) + ' ' : '')
-        + p.parts.map(q => brfEsc(q.role) + (q.t ? ' <b>' + brfEsc(q.t) + '</b>' : '')).join('・') + '</i>'
-        + '<button title="この人を進行（司会）にする" onclick="brfSet(' + i + ',\'shikai\')">📣 進行</button>'
-        + '<button title="この人を品質チェックにする" onclick="brfSet(' + i + ',\'qc\')">✅ 品質</button></span>'
+        '<span class="brf-chip' + (p.parts.map(q=>q.t).filter(Boolean).join('・').length >= 8 ? ' w2' : '')
+        + '" id="brf-chip-'+i+'"><b>' + brfEsc(p.name) + '</b>'
+        /* ★ライン名と役割（「Bライン 作業者」）は出さない。時刻だけ、付く人に添える（2026-11-25 社長指示） */
+        + '<i>' + brfEsc(p.parts.map(q => q.t).filter(Boolean).join('・')) + '</i>'
+        + '<button title="' + brfEsc(p.name) + ' を進行にする" onclick="brfSet(' + i + ',\'shikai\')">📣 進行</button>'
+        + '<button title="' + brfEsc(p.name) + ' を品質チェックにする" onclick="brfSet(' + i + ',\'qc\')">✅ 品質</button></span>'
       ).join('')
     + '</div>';
   brfMarkChips();
@@ -5339,7 +5343,8 @@ function brfMarkChips(){
     const c = document.getElementById('brf-chip-' + i);
     if(!c) return;
     const a = (p.name === sk.trim()), b = (p.name === qc.trim());
-    c.className = 'brf-chip' + (a && b ? ' is-both' : a ? ' is-sk' : b ? ' is-qc' : '');
+    const wide = p.parts.map(q=>q.t).filter(Boolean).join('・').length >= 8 ? ' w2' : '';
+    c.className = 'brf-chip' + wide + (a && b ? ' is-both' : a ? ' is-sk' : b ? ' is-qc' : '');
   });
 }
 
@@ -15719,7 +15724,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.25-1';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.25-2';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
