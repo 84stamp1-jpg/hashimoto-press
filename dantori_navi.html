@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.25-7 : ★<b>言語を切り替えたあと、下の改修履歴・工程内不良・苦情不適合が消えたままになっていた</b>（2026-11-25 社長報告）。-4 で「写した元のHTMLを <code>dataset.src</code> に覚えて、同じなら描き直さない」ようにしたが、言語を切り替えるときに<b>中身（innerHTML）だけ消して <code>dataset.src</code> を消していなかった</b>。そのため「前と同じHTML＝描き直す必要なし」と判断され、<b>空のまま戻らなくなっていた</b>（写しを追いかける8秒も過ぎている）。→ 切り替えのときに <code>dataset.src</code> も消し、さらに<b>中身が空なら必ず描き直す</b>ようにした。ブリーフィングを開くときも先に空にしてから写す（前の品番の内容が残らないように）。 -->
 <!-- H-Hub v2026.11.25-6 : ★<b>kintoneに書かれた文章も英語にできるようにした＋「ことば」の一覧を付けた</b>（2026-11-25 社長指示「事故が起こるかもしれないが、伝わらないよりはマシ。都度直す」）。English のときだけ、右に<b>🌐 Translate the text</b> と <b>📖 Words</b> が出る。(1)<b>文章の翻訳</b>＝改修履歴・工程内不良・苦情の<b>本文</b>を英語にして、日本語の下に青で添える。★<b>翻訳はこの端末の中だけで行う</b>（Chrome が持っている <code>Translator</code>。会社の文章を外のサービスへ送らない）。初めて押したときだけ翻訳データの取り込みが走る（数十MB・1回）。使えない端末では「この端末では文章の翻訳が使えません」と出る。★<b>日本語は必ず残す</b>＝機械の訳は間違うことがあるので、元の文と見比べられるようにしてある。(2)<b>ことばの一覧</b>＝現場と標準書によく出る<b>約150語</b>の日英。<b>打ち込むとすぐ絞り込む</b>ので、紙の対訳表のように探す手間が要らない。日本語でも英語でも引ける。 -->
 <!-- H-Hub v2026.11.25-5 : ★<b>段取り準備シートの「段取りなしの準備」にも、生産開始の予定と実績を書く欄を足した</b>（2026-11-25 社長指示）。段取りの枠には〈外段取り開始／段取り開始／生産開始〉の予定・実際があるのに、<b>段取りなしの行には時刻を書くところが無かった</b>＝段取りが無くても生産は始まるので、始まった時刻を残す場所が要る。表の右（やった人の左）に<b>「生産開始 予定」「実績」</b>の2列を置いた。予定はその日の計画の生産開始（<code>j.ps</code>）を印字し、実績は手で書く空欄。1枚目の「今日の」表と2枚目の「朝いちばん」の表は同じ関数（<code>_ssNsTable()</code>）なので<b>両方に出る</b>。行は増えないので紙の高さはほぼ変わらない（見出しが2行になるぶんだけ）。 -->
 <!-- H-Hub v2026.11.25-4 : ブリーフィングの英語の添え方を直した（2026-11-25）。文字列を何度も置き換えていたため<b>語が途中で割れていた</b>（「工程内不良」が「工程 process」＋「内不良 In-process defects」）。→ <b>出来上がった画面の文字の部分だけを、長い語から順に1回で見て足す</b>（タグや属性には触らない）。あわせて見出しも「📣 Briefing」に切り替わるようにし、辞書に数語足した。 -->
@@ -5174,6 +5175,8 @@ function brfOpen(){
   brfApplyLang();
   document.getElementById('brfModal').style.display = 'flex';
   // 右側：いま品番検索の画面に出ている注意点をそのまま写す（読み込み中なら少しのあいだ追いかける）
+  const ibox = document.getElementById('brf-info');
+  if(ibox){ ibox.innerHTML = ''; ibox.dataset.src = ''; }
   brfCopyInfo();
   let n = 0;
   if(BRF_TICK) clearInterval(BRF_TICK);
@@ -5231,7 +5234,7 @@ function brfCopyInfo(){
     const e = document.getElementById(id);
     return (e && e.innerHTML.trim()) ? '<div class="mold-sec">' + e.innerHTML + '</div>' : '';
   }).join('');
-  if(html && box.dataset.src !== html){
+  if(html && (box.dataset.src !== html || !box.innerHTML)){
     box.dataset.src = html;          // 写した元のHTMLで見比べる（英語を足したあとと比べない）
     box.innerHTML = html;
     brfSlimTables(box);
@@ -5476,7 +5479,9 @@ window.brfToggleLang = function(){
   brfApplyLang();
   brfMembers();
   const box = document.getElementById('brf-info');
-  if(box){ box.innerHTML = ''; brfCopyInfo(); }
+  /* ★dataset.src も消すこと。中身だけ消しても「前と同じHTML」と見なされて描き直されず、
+     情報欄が空のままになっていた（2026-11-25 社長報告） */
+  if(box){ box.innerHTML = ''; box.dataset.src = ''; brfCopyInfo(); }
 };
 
 function brfApplyLang(){
@@ -16031,7 +16036,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.25-6';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.25-7';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
