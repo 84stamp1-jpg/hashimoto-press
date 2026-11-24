@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.24-5 : ★<b>ブリーフィングに、割り振られていない人・辞めた人の名前が出ていたのを直した</b>（2026-11-24 社長報告）。原因は<b>段取り計画の担当欄（roles）に古い名前が残っていた</b>こと。ブリーフィングはそれをそのまま読んでいた。配置表のほうは<b>いまの作業者マスタ（<code>getPressWorkerList()</code>）に載っている人だけを行にする</b>ので、同じ人が出てこない。→ ブリーフィングも<b>作業者マスタに載っている人だけ</b>出すようにした。外した人がいるときは<b>「※ ○○ は、いまの作業者マスタに無いので出していません（段取り計画の担当欄に名前が残っています）」</b>と橙色で出すので、計画のほうを直せばよいと分かる。手で書くときの候補（選べる名前）も、同じく作業者マスタから作るようにした（これまではコードの既定の一覧だった）。 -->
 <!-- H-Hub v2026.11.24-4 : ★★<b>ブリーフィングに配置表の人が出なかった本当の原因</b>（2026-11-24 社長報告・-3で直り切らなかった）。日付の形が違っていた。Firebaseの段取り計画は <code>dantori/<b>20261124</b></code>（ハイフン無しの8桁）なのに、<code>dantori/2026-11-24</code> を読んでいた＝<b>そもそも何も入っていない場所を見ていた</b>。品番の照合（-3）は正しかったが、読む場所が違うので当たりようがなかった。→ 日付は <code>dantoriTodayPath()</code>（段取り計画と同じもの）を使うようにした。ブリーフィングの担当の保存先も <code>dantori/20261124Briefing/{品番}</code> に揃えた（<code>{日付}Locks</code>・<code>{日付}Spot</code> と同じ流儀になった）。★<b>他のシステムのパスを借りるときは、日付の形まで合わせること</b>。 -->
 <!-- H-Hub v2026.11.24-3 : ★<b>ブリーフィングで「今日の計画にこの品番がありません」と出てしまうのを直した</b>（2026-11-24 社長報告。配置表には 18121-5MS があるのに、品番検索の <code>18121-5MS-0000-PR</code> では出なかった）。原因は<b>配置表（段取り計画）の品番のほうが短いこと</b>。記号ゆれを吸収しても「18121-5MS」と「181215MS0000PR」は別物になる。→ <b>まず丸ごと同じものを探し、無ければ頭から一致するもので探す</b>ようにした。その探し方で拾ったときは<b>「※配置表の品番「18121-5MS」から」と出す</b>ので、別の枝番を拾っていないか見て分かる。<b>2つ以上のラインに当たったときは、人のふだにライン名も出す</b>。 -->
 <!-- H-Hub v2026.11.24-2 : ブリーフィングの画面を作り直した（2026-11-24 社長指示・同日2回目）。(1)★<b>全画面</b>にした（枠と余白をなくし、左のPDFと右の欄を目いっぱい広げた。右は最大520px）。(2)★<b>今日この品番に入る人を配置表から出し、押すだけで「進行（司会）」「品質チェック」に入る</b>ようにした。その日の段取り計画（<code>dantori/{日付}</code>）から<b>品番が一致する行</b>を探し、<code>roles</code> の 作業者・金型取付・初品出し・品質確認＋途中交代の人を名前でまとめて出す（品番の記号ゆれは <code>_pnNorm</code> で吸収）。選んだ人のふだは色が付く（青＝進行／緑＝品質／紫＝両方）。もう一度押すと外れる。計画にこの品番が無い日は、これまでどおり手で書ける。(3)★<b>右の改修履歴などが1文字ずつ縦に折れていたのを直した</b>（社長報告）。幅が足りないのが原因なので、<b>ブリーフィングでは見ない列（分類・処置・品番・区分・状況）を落として</b>日付と内容を広げ、折り返しも語単位にした。<b>型改修後かどうかが分かるよう完了日は残している</b>。(4)言う順番を<b>3つ</b>に変えた（①誰がどの工程か＝自工程の注意点 ②前回の不良・注意点・型改修後か ③変化点）。(5)★<b>長田さん（退職）を担当者の選択肢から外した</b>（社長指示）。※<b>A1・A2の「初品出し」が長田さんだったので空にしてある</b>＝誰にするか決めていただきたい。 -->
@@ -5125,10 +5126,8 @@ function brfOpen(){
   document.getElementById('brf-date').textContent = brfYmd();
   // 担当の選び先（担当者マスター）
   const dl = document.getElementById('brf-people');
-  if(dl && !dl.children.length){
-    dl.innerHTML = (typeof WORKER_MASTER !== 'undefined' ? WORKER_MASTER : [])
-      .reduce((a,g)=>a.concat(g.names||[]), [])
-      .map(n=>'<option value="'+n+'"></option>').join('');
+  if(dl){
+    dl.innerHTML = brfRoster().map(n=>'<option value="'+n+'"></option>').join('');
   }
   ['brf-shikai','brf-qc','brf-memo'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
   document.getElementById('brf-saved').textContent = '';
@@ -5208,6 +5207,19 @@ function brfCopyInfo(){
    押すだけで「進行（司会）」「品質チェック」に入る。手で名前を書かなくてよい。 */
 var BRF_MEM = [];
 
+/* いまの作業者マスタに載っている人（配置表が行にしている人と同じ）。
+   計画の担当欄には、辞めた人や外れた人の名前が残っていることがあるため（2026-11-24 社長報告） */
+function brfRoster(){
+  const out = [];
+  try{ if(typeof getPressWorkerList === 'function') getPressWorkerList().forEach(n => out.push(n)); }catch(e){}
+  try{
+    if(typeof WORKER_MASTER !== 'undefined')
+      WORKER_MASTER.filter(g => g.section !== 'プレス')
+                   .forEach(g => (g.names||[]).forEach(n => out.push(n)));
+  }catch(e){}
+  return out.map(n => String(n||'').trim()).filter(Boolean);
+}
+
 async function brfMembers(){
   const box = document.getElementById('brf-mem');
   if(!box) return;
@@ -5250,12 +5262,23 @@ async function brfMembers(){
     push(r.品質確認, '品質確認');
     (h.shiftChanges||[]).forEach(c => push(c.inWorker || '', '交代'));
   });
+  /* ★いまの作業者マスタに無い名前は出さない（計画に残っていた古い名前） */
+  const roster = brfRoster();
+  const soto = [];
+  if(roster.length){
+    for(let i = names.length - 1; i >= 0; i--){
+      if(roster.indexOf(names[i].name) < 0){ soto.unshift(names[i].name); names.splice(i, 1); }
+    }
+  }
   BRF_MEM = names;
   let hd = '<div class="brf-mem-hd">今日この品番に入る人（配置表）'
          + (line.length ? '<span class="brf-mem-line">' + brfEsc(line.join('・')) + '</span>' : '')
          + (when.length ? '<span>' + brfEsc(when.join('／')) + '</span>' : '')
          + (rough ? '<span>※配置表の品番「' + brfEsc(froms.join('・')) + '」から</span>' : '')
-         + '</div>';
+         + '</div>'
+         + (soto.length ? '<div style="font-size:11px;color:#b45309;margin-bottom:5px;">※ '
+             + brfEsc(soto.join('・')) + ' は、いまの作業者マスタに無いので出していません'
+             + '（段取り計画の担当欄に名前が残っています）</div>' : '');
   if(!names.length){
     box.innerHTML = hd + '<div class="mold-empty">今日の計画にこの品番がありません。'
                   + '上の欄に名前を書いてください（担当者マスターから選べます）</div>';
@@ -15655,7 +15678,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.24-4';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.24-5';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
