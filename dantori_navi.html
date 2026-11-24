@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.24-2 : ブリーフィングの画面を作り直した（2026-11-24 社長指示・同日2回目）。(1)★<b>全画面</b>にした（枠と余白をなくし、左のPDFと右の欄を目いっぱい広げた。右は最大520px）。(2)★<b>今日この品番に入る人を配置表から出し、押すだけで「進行（司会）」「品質チェック」に入る</b>ようにした。その日の段取り計画（<code>dantori/{日付}</code>）から<b>品番が一致する行</b>を探し、<code>roles</code> の 作業者・金型取付・初品出し・品質確認＋途中交代の人を名前でまとめて出す（品番の記号ゆれは <code>_pnNorm</code> で吸収）。選んだ人のふだは色が付く（青＝進行／緑＝品質／紫＝両方）。もう一度押すと外れる。計画にこの品番が無い日は、これまでどおり手で書ける。(3)★<b>右の改修履歴などが1文字ずつ縦に折れていたのを直した</b>（社長報告）。幅が足りないのが原因なので、<b>ブリーフィングでは見ない列（分類・処置・品番・区分・状況）を落として</b>日付と内容を広げ、折り返しも語単位にした。<b>型改修後かどうかが分かるよう完了日は残している</b>。(4)言う順番を<b>3つ</b>に変えた（①誰がどの工程か＝自工程の注意点 ②前回の不良・注意点・型改修後か ③変化点）。(5)★<b>長田さん（退職）を担当者の選択肢から外した</b>（社長指示）。※<b>A1・A2の「初品出し」が長田さんだったので空にしてある</b>＝誰にするか決めていただきたい。 -->
 <!-- H-Hub v2026.11.24-1 : ★<b>品番検索に「📣 ブリーフィング」を足した</b>（2026-11-24 社長指示）。ブリーフィングは<b>パソコンの前</b>でやる＝画面を見ながら話せるので、<b>作業標準書のPDFと、この品番の注意点を1枚に並べた</b>。押すと全画面になり、<b>左が帳票（作業標準書→品質チェックシートの順にボタンで切り替え）</b>、<b>右が「進行（司会）・品質チェックの担当」「言う順番①〜④」「改修履歴・工程内不良・苦情不適合」</b>。右の注意点は<b>品番検索の画面にすでに出ているものを写している</b>ので、kintoneを二度読みしない。担当は<b>担当者マスターから選べる</b>（手入力も可）。書くと <code>dantori/{日付}Briefing/{品番}</code> に残る（<code>{日付}Locks</code>・<code>{日付}Spot</code> と同じ流儀なので、段取り計画 <code>dantori/{日付}</code> とはぶつからない。Firebaseのルールは<b>変更不要</b>）。※段取り準備シートの⑧「担当と時刻」は<b>いまのまま</b>（社長判断）。なお <code>openDoc</code> に<b>第4引数</b>を足した＝渡すと別タブで開かずURLを返す。既存の呼び出しは1か所も直していない。 -->
 <!-- H-Hub v2026.11.23-24 : ★<b>紙の高さの測り方を間違えていた</b>（2026-11-23）。この日ずっと <code>scrollHeight ÷ iframeの幅1111px × 282</code> で mm に直していたが、<code>.sheet</code> は <code>width:282mm</code> ＝ <b>1066px</b>（1mm=3.78px）で、iframeの幅ではない。<b>4%小さく出ていた</b>。正しく測り直すと <b>1枚目 199.8mm・2枚目 202.1mm</b>で、どちらも紙（196mm＝A4横−余白7mm×2）を超えていた＝印刷すると数mmだけの紙が増える。→ (1)<code>.nstbl</code> の行を詰めた（1行4.3mm→3.6mm、6行で約4mm返る）。(2)朝いちばんの表が出る日の「気づいたこと」を<b>2行</b>にした（-23 の3行からさらに1行）。これで1枚目・2枚目とも196mm以内に収まり、<b>紙は2枚</b>に戻る。★<b>紙ものを足したら必ず高さを測る</b>。測るときは <code>offsetHeight ÷ 3.7795</code>（<code>zoom</code> は offsetHeight に効かない）。 -->
 <!-- H-Hub v2026.11.23-23 : -22 で2枚目に「朝いちばんの『段取りなしの準備』」を足したところ、<b>紙に入りきらなくなった</b>（実測 2枚目 218mm／紙は196mm）。はみ出すと枠が「つづき」の3枚目へ送られ、<b>2枚で収まっていたものが3枚になる</b>。→ <b>朝いちばんの表が出る日は「気づいたこと」を6行→3行</b>にして2枚に収めた（表が無い日は6行のまま）。見出し＋表で約17mm、3行減らして約25mm返す。 -->
@@ -519,15 +520,15 @@ html, body {
 .mold-morelink:hover{text-decoration:underline;}
 .mold-morning{border:2px solid #fecaca;background:#fff;border-radius:8px;padding:10px 12px;margin:2px 0 12px;}
 /* ブリーフィング画面（2026-11-24 社長指示）：作業標準書PDFと注意点を並べて見ながら話す */
-.brf-ov{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9000;display:flex;align-items:center;justify-content:center;padding:12px;}
-.brf-box{background:#fff;border-radius:12px;width:100%;max-width:1560px;height:100%;max-height:96vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.3);}
+.brf-ov{position:fixed;inset:0;background:#fff;z-index:9000;display:flex;align-items:center;justify-content:center;padding:0;}
+.brf-box{background:#fff;border-radius:0;width:100%;max-width:none;height:100%;max-height:100%;display:flex;flex-direction:column;overflow:hidden;}
 .brf-hd{display:flex;align-items:center;gap:13px;padding:9px 15px;background:#1e3a8a;color:#fff;flex-wrap:wrap;}
 .brf-hd-t{font-size:15px;font-weight:800;}
 .brf-hd-p{font-size:18px;font-weight:800;letter-spacing:.3px;}
 .brf-hd-n{font-size:12.5px;color:#c7d2fe;}
 .brf-hd-d{font-size:13px;color:#c7d2fe;margin-left:auto;}
 .brf-x{background:#fff;color:#1e3a8a;border:none;border-radius:8px;padding:5px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
-.brf-grid{flex:1;display:grid;grid-template-columns:1fr minmax(330px,430px);min-height:0;}
+.brf-grid{flex:1;display:grid;grid-template-columns:1fr minmax(400px,520px);min-height:0;}
 .brf-pdf{display:flex;flex-direction:column;min-width:0;border-right:1px solid #e5e7eb;}
 .brf-tabs{display:flex;gap:6px;padding:7px 10px;border-bottom:1px solid #e5e7eb;flex-wrap:wrap;background:#f8fafc;align-items:center;}
 .brf-tab{font-size:12px;font-weight:700;border:1px solid #cbd5e1;background:#fff;color:#334155;border-radius:8px;padding:4px 12px;cursor:pointer;font-family:inherit;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -544,6 +545,26 @@ html, body {
 .brf-order{background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:8px 11px;font-size:12px;line-height:1.8;color:#78350f;}
 .brf-order b{color:#92400e;}
 .brf-info{display:flex;flex-direction:column;gap:9px;}
+/* 写してきた表が、幅が足りずに1文字ずつ縦に折れていたのを直す（2026-11-24） */
+.brf-info .mold-tbl{table-layout:auto;width:100%;font-size:12px;}
+.brf-info .mold-tbl th,.brf-info .mold-tbl td{padding:3px 6px;white-space:normal;word-break:break-word;}
+.brf-info .mold-tbl td.mn,.brf-info .mold-tbl th:first-child{white-space:nowrap;}
+.brf-info .mold-tbl td.mw{width:auto;}
+.brf-info .mold-shot,.brf-info .mold-morning{display:none;}
+/* 今日この品番に入る人（配置表から） */
+.brf-mem{border:1px solid #cbd5e1;border-radius:10px;padding:8px 10px;}
+.brf-mem-hd{font-size:12px;font-weight:800;color:#334155;margin-bottom:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.brf-mem-hd span{font-size:11.5px;font-weight:600;color:#64748b;}
+.brf-mem-line{font-size:11.5px;font-weight:800;color:#1d4ed8;background:#eff6ff;border-radius:8px;padding:1px 8px;}
+.brf-mem-list{display:flex;flex-wrap:wrap;gap:5px;}
+.brf-chip{display:inline-flex;align-items:center;gap:4px;border:1px solid #cbd5e1;border-radius:9px;padding:3px 4px 3px 9px;background:#fff;}
+.brf-chip b{font-size:12.5px;font-weight:700;color:#1a1a1a;}
+.brf-chip i{font-size:10px;font-style:normal;color:#94a3b8;}
+.brf-chip button{border:1px solid #e2e8f0;background:#f8fafc;border-radius:6px;font-size:11px;padding:2px 6px;cursor:pointer;font-family:inherit;line-height:1.4;}
+.brf-chip button:hover{background:#e0e7ff;border-color:#a5b4fc;}
+.brf-chip.is-sk{border-color:#1d4ed8;background:#eff6ff;}
+.brf-chip.is-qc{border-color:#16a34a;background:#f0fdf4;}
+.brf-chip.is-both{border-color:#7c3aed;background:#f5f3ff;}
 @media (max-width:900px){ .brf-grid{grid-template-columns:1fr;grid-template-rows:minmax(230px,44%) 1fr;} .brf-pdf{border-right:none;border-bottom:1px solid #e5e7eb;} .brf-hd-d{margin-left:0;} .brf-box{max-height:100vh;border-radius:0;} .brf-ov{padding:0;} }
 /* 記録から不良品報告を作る（2026-09-22） */
 .qc-ngr{border:2px solid #fca5a5;background:#fff7f7;border-radius:10px;padding:10px 12px;}
@@ -1761,17 +1782,17 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
       </div>
       <div class="brf-side">
         <div class="brf-tan">
-          <div class="brf-tan-r"><label>進行（司会）</label><input id="brf-shikai" list="brf-people" placeholder="名前" onchange="brfSave()"/></div>
-          <div class="brf-tan-r"><label>品質チェック</label><input id="brf-qc" list="brf-people" placeholder="名前（最終工程の人）" onchange="brfSave()"/></div>
+          <div class="brf-tan-r"><label>進行（司会）</label><input id="brf-shikai" list="brf-people" placeholder="名前" onchange="brfMarkChips();brfSave()"/></div>
+          <div class="brf-tan-r"><label>品質チェック</label><input id="brf-qc" list="brf-people" placeholder="名前（最終工程の人）" onchange="brfMarkChips();brfSave()"/></div>
           <div class="brf-tan-r"><label>メモ</label><input id="brf-memo" placeholder="今日の注意点など" onchange="brfSave()"/></div>
           <div class="brf-saved" id="brf-saved"></div>
         </div>
+        <div class="brf-mem" id="brf-mem"></div>
         <div class="brf-order">
           <b>言う順番</b><br>
-          ① この品番の工程と、誰がどこに入るか<br>
-          ② 前回この品番で出た不良・注意点（下を見る）<br>
-          ③ 変化点（初めて・久しぶり・条件が変わった）＋ 当てはまる人は標準書を読む<br>
-          ④ 安全のひとこと
+          ① 誰がどの工程を担当するか（自工程の注意点を確認する）<br>
+          ② 前回この品番で出た不良・注意点・型改修後か（下を見る）<br>
+          ③ 変化点（初めて・久しぶり・条件が変わった）
         </div>
         <div class="brf-info" id="brf-info"></div>
       </div>
@@ -2588,7 +2609,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
             <option value="">-- 選択してください --</option>
             <optgroup label="プレス">
               <option>仲田　涼真</option><option>見原　一彦</option>
-              <option>長田　由香倫</option><option>大石　章宏</option>
+              <option>大石　章宏</option>
               
               
             </optgroup>
@@ -2725,7 +2746,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
           <option value="">-- 選択してください --</option>
           <optgroup label="プレス">
             <option>仲田　涼真</option><option>見原　一彦</option>
-            <option>長田　由香倫</option><option>大石　章宏</option>
+            <option>大石　章宏</option>
             
             
           </optgroup>
@@ -2776,7 +2797,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
     <div class="qc-fld"><label>入力者<span style="font-size:10px;font-weight:400;color:#888;margin-left:6px;">記録した人</span></label>
       <select id="qc-e-op">
         <option value="">-- 選択 --</option>
-        <optgroup label="プレス"><option>仲田　涼真</option><option>見原　一彦</option><option>長田　由香倫</option><option>大石　章宏</option></optgroup>
+        <optgroup label="プレス"><option>仲田　涼真</option><option>見原　一彦</option><option>大石　章宏</option></optgroup>
         <optgroup label="組立"><option>永丘　克也</option><option>近藤　満</option><option>大塚　圭汰</option><option>鈴木　里美</option><option>野口　敦子</option></optgroup>
         <optgroup label="品管・総務"><option>杉山　好美</option><option>登﨑　千春</option></optgroup>
       </select>
@@ -5119,6 +5140,7 @@ function brfOpen(){
   if(BRF_TICK) clearInterval(BRF_TICK);
   BRF_TICK = setInterval(()=>{ brfCopyInfo(); if(++n > 20) { clearInterval(BRF_TICK); BRF_TICK = null; } }, 400);
   brfLoad();
+  brfMembers();                     // 今日この品番に入る人（配置表から）
   if(BRF_DOCS.length) brfPick(0);   // 作業標準書を先に開いておく
 }
 
@@ -5170,7 +5192,110 @@ function brfCopyInfo(){
     const e = document.getElementById(id);
     return (e && e.innerHTML.trim()) ? '<div class="mold-sec">' + e.innerHTML + '</div>' : '';
   }).join('');
-  if(html && box.innerHTML !== html) box.innerHTML = html;
+  if(html && box.innerHTML !== html){ box.innerHTML = html; brfSlimTables(box); }
+}
+
+
+/* ===== 今日この品番に入る人（配置表＝その日の段取り計画の担当から）2026-11-24 社長指示 =====
+   押すだけで「進行（司会）」「品質チェック」に入る。手で名前を書かなくてよい。 */
+var BRF_MEM = [];
+
+async function brfMembers(){
+  const box = document.getElementById('brf-mem');
+  if(!box) return;
+  const pn = (window.__lastPart||{}).partNo || '';
+  box.innerHTML = '<div class="brf-mem-hd">今日この品番に入る人（配置表）</div>'
+                + '<div class="mold-loading">読み込んでいます…</div>';
+  let data = {};
+  try{
+    const r = await fetch(brfFb() + '/dantori/' + brfYmd() + '.json');
+    data = (await r.json()) || {};
+  }catch(e){}
+  const same = (a,b) => a && b && (typeof _pnNorm === 'function' ? _pnNorm(a) === _pnNorm(b) : a === b);
+  const hits = Object.keys(data).map(k=>data[k]).filter(v => v && same(v.partNo, pn));
+  const names = [], line = [], when = [];
+  hits.forEach(h => {
+    if(h.lineId && line.indexOf(h.lineId) < 0) line.push(h.lineId);
+    const t = (h.setupStart || h.prodStart || '') + (h.prodEnd ? '〜' + h.prodEnd : '');
+    if(t && when.indexOf(t) < 0) when.push(t);
+    const r = h.roles || {};
+    const push = (nm, role) => {
+      nm = String(nm||'').trim();
+      if(!nm) return;
+      const f = names.find(x => x.name === nm);
+      if(f){ if(f.role.indexOf(role) < 0) f.role.push(role); }
+      else   names.push({ name:nm, role:[role] });
+    };
+    (r.作業者||'').split(/[,、]/).forEach(n=>push(n,'作業者'));
+    (r.金型取付||'').split(/[,、]/).forEach(n=>push(n,'段取り'));
+    push(r.初品出し, '初品');
+    push(r.品質確認, '品質確認');
+    (h.shiftChanges||[]).forEach(c => push(c.inWorker || '', '交代'));
+  });
+  BRF_MEM = names;
+  let hd = '<div class="brf-mem-hd">今日この品番に入る人（配置表）'
+         + (line.length ? '<span class="brf-mem-line">' + brfEsc(line.join('・')) + '</span>' : '')
+         + (when.length ? '<span>' + brfEsc(when.join('／')) + '</span>' : '')
+         + '</div>';
+  if(!names.length){
+    box.innerHTML = hd + '<div class="mold-empty">今日の計画にこの品番がありません。'
+                  + '上の欄に名前を書いてください（担当者マスターから選べます）</div>';
+    return;
+  }
+  box.innerHTML = hd + '<div class="brf-mem-list">'
+    + names.map((p,i) =>
+        '<span class="brf-chip" id="brf-chip-'+i+'"><b>' + brfEsc(p.name) + '</b>'
+        + '<i>' + brfEsc(p.role.join('・')) + '</i>'
+        + '<button title="この人を進行（司会）にする" onclick="brfSet(' + i + ',\'shikai\')">📣 進行</button>'
+        + '<button title="この人を品質チェックにする" onclick="brfSet(' + i + ',\'qc\')">✅ 品質</button></span>'
+      ).join('')
+    + '</div>';
+  brfMarkChips();
+}
+
+function brfSet(i, which){
+  const p = BRF_MEM[i];
+  if(!p) return;
+  const e = document.getElementById(which === 'qc' ? 'brf-qc' : 'brf-shikai');
+  if(!e) return;
+  e.value = (e.value.trim() === p.name) ? '' : p.name;   // もう一度押すと外れる
+  brfMarkChips();
+  brfSave();
+}
+
+function brfMarkChips(){
+  const sk = (document.getElementById('brf-shikai')||{}).value || '';
+  const qc = (document.getElementById('brf-qc')||{}).value || '';
+  BRF_MEM.forEach((p,i) => {
+    const c = document.getElementById('brf-chip-' + i);
+    if(!c) return;
+    const a = (p.name === sk.trim()), b = (p.name === qc.trim());
+    c.className = 'brf-chip' + (a && b ? ' is-both' : a ? ' is-sk' : b ? ' is-qc' : '');
+  });
+}
+
+/* 写してきた表から、ブリーフィングでは見ない列を落とす（幅が足りず1文字ずつ縦に折れていたため） */
+function brfSlimTables(box){
+  const DROP = ['分類','処置','品番','区分','状況'];
+  /* 写しなので表のidが裏の画面と同じ＝「すべて見る」が裏の表を開いてしまう。idを付け替える */
+  box.querySelectorAll('table.mold-tbl').forEach(tb => {
+    if(tb.id && tb.id.indexOf('brf_') !== 0) tb.id = 'brf_' + tb.id;
+  });
+  box.querySelectorAll('.mold-morelink').forEach(a => {
+    const oc = a.getAttribute('onclick') || '';
+    const m  = oc.match(/'([^']+)'/);
+    if(m && m[1].indexOf('brf_') !== 0) a.setAttribute('onclick', oc.replace("'"+m[1]+"'", "'brf_"+m[1]+"'"));
+  });
+  box.querySelectorAll('table.mold-tbl').forEach(tb => {
+    const ths = Array.prototype.slice.call(tb.querySelectorAll('th'));
+    if(!ths.length) return;
+    const cut = [];
+    ths.forEach((th,i) => { if(DROP.some(d => th.textContent.indexOf(d) >= 0)) cut.push(i); });
+    if(!cut.length) return;
+    Array.prototype.slice.call(tb.rows).forEach(tr => {
+      cut.slice().reverse().forEach(i => { if(tr.cells[i]) tr.deleteCell(i); });
+    });
+  });
 }
 
 async function brfLoad(){
@@ -5184,6 +5309,7 @@ async function brfLoad(){
     set('brf-shikai', v.shikai);
     set('brf-qc',     v.qc);
     set('brf-memo',   v.memo);
+    brfMarkChips();
   }catch(e){}
 }
 
@@ -9183,7 +9309,7 @@ function _countFreeWorkers(entry){
 // 担当者マスター（セクション付き。設定で上書き可）
 const WORKER_MASTER = [
   // 仲田がプレス主任になったため、配置表の並びは仲田→見原（2026-09-21 社長指示）
-  { section:'プレス', names:['仲田　涼真','見原　一彦','長田　由香倫','大石　章宏',
+  { section:'プレス', names:['仲田　涼真','見原　一彦','大石　章宏',
                               '松浦　広治','吉田　光好','柴田　晃宏','横田川　延広',
                               'ジュン','ノア','ダール','中野','アリ',
                               'ジャン','マット','フン'] },
@@ -9198,8 +9324,9 @@ const WORKER_MASTER = [
 const PRESS_LINE_MASTER = {
   // 2026-10-10 社長指摘：伊藤は作業者マスタにいないので候補から外した。
   // A1の金型取付は、作業者マスタの優先ライン設定と「仲田か見原を必ず1人」の決まりで埋まる。
-  'A1':           { quality:'仲田',   ippin:'長田',  workers:[] },
-  'A2':           { quality:'仲田',   ippin:'長田',  workers:['長田'] },
+  /* ★長田さんは退職（2026-11-24）。A1・A2の初品出しは空にしてある＝社長に決めていただく */
+  'A1':           { quality:'仲田',   ippin:'',      workers:[] },
+  'A2':           { quality:'仲田',   ippin:'',      workers:[] },
   'Bライン':      { quality:'見原',   ippin:'吉田',  workers:['吉田','ジュン','ノア','中野','アリ','柴田'] },
   'B1':           { quality:'見原',   ippin:'吉田',  workers:['松浦'] },
   'B2':           { quality:'見原',   ippin:'吉田',  workers:['ダール','横田川'] },
@@ -13321,7 +13448,7 @@ var QC_HINPYO_DATA = null; // 現品票用の部品マスタデータ（kintone�
 var QC_INITIALIZED = false;
 
 var QC_TEAM_MAP = {
-  'プレス':['仲田　涼真','見原　一彦','長田　由香倫','大石　章宏'],
+  'プレス':['仲田　涼真','見原　一彦','大石　章宏'],
   '組立':['永丘　克也','近藤　満','大塚　圭汰','鈴木　里美','野口　敦子'],
   '品管・総務':['杉山　好美','登﨑　千春']
 };
@@ -15508,7 +15635,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.24-1';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.24-2';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
