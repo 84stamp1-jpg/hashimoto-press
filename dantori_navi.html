@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.24-1 : ★<b>品番検索に「📣 ブリーフィング」を足した</b>（2026-11-24 社長指示）。ブリーフィングは<b>パソコンの前</b>でやる＝画面を見ながら話せるので、<b>作業標準書のPDFと、この品番の注意点を1枚に並べた</b>。押すと全画面になり、<b>左が帳票（作業標準書→品質チェックシートの順にボタンで切り替え）</b>、<b>右が「進行（司会）・品質チェックの担当」「言う順番①〜④」「改修履歴・工程内不良・苦情不適合」</b>。右の注意点は<b>品番検索の画面にすでに出ているものを写している</b>ので、kintoneを二度読みしない。担当は<b>担当者マスターから選べる</b>（手入力も可）。書くと <code>dantori/{日付}Briefing/{品番}</code> に残る（<code>{日付}Locks</code>・<code>{日付}Spot</code> と同じ流儀なので、段取り計画 <code>dantori/{日付}</code> とはぶつからない。Firebaseのルールは<b>変更不要</b>）。※段取り準備シートの⑧「担当と時刻」は<b>いまのまま</b>（社長判断）。なお <code>openDoc</code> に<b>第4引数</b>を足した＝渡すと別タブで開かずURLを返す。既存の呼び出しは1か所も直していない。 -->
 <!-- H-Hub v2026.11.23-24 : ★<b>紙の高さの測り方を間違えていた</b>（2026-11-23）。この日ずっと <code>scrollHeight ÷ iframeの幅1111px × 282</code> で mm に直していたが、<code>.sheet</code> は <code>width:282mm</code> ＝ <b>1066px</b>（1mm=3.78px）で、iframeの幅ではない。<b>4%小さく出ていた</b>。正しく測り直すと <b>1枚目 199.8mm・2枚目 202.1mm</b>で、どちらも紙（196mm＝A4横−余白7mm×2）を超えていた＝印刷すると数mmだけの紙が増える。→ (1)<code>.nstbl</code> の行を詰めた（1行4.3mm→3.6mm、6行で約4mm返る）。(2)朝いちばんの表が出る日の「気づいたこと」を<b>2行</b>にした（-23 の3行からさらに1行）。これで1枚目・2枚目とも196mm以内に収まり、<b>紙は2枚</b>に戻る。★<b>紙ものを足したら必ず高さを測る</b>。測るときは <code>offsetHeight ÷ 3.7795</code>（<code>zoom</code> は offsetHeight に効かない）。 -->
 <!-- H-Hub v2026.11.23-23 : -22 で2枚目に「朝いちばんの『段取りなしの準備』」を足したところ、<b>紙に入りきらなくなった</b>（実測 2枚目 218mm／紙は196mm）。はみ出すと枠が「つづき」の3枚目へ送られ、<b>2枚で収まっていたものが3枚になる</b>。→ <b>朝いちばんの表が出る日は「気づいたこと」を6行→3行</b>にして2枚に収めた（表が無い日は6行のまま）。見出し＋表で約17mm、3行減らして約25mm返す。 -->
 <!-- H-Hub v2026.11.23-22 : ★<b>段取り準備シートの2枚目に「朝いちばんの『段取りなしの準備』」を足した</b>（2026-11-23 社長指示「明日の生産の段取り準備シートも、朝一やるものには『段取りなし』の準備のチェックを入れてほしいです」）。2枚目に出ていたのは<b>段取りのある枠</b>と<b>外段取りの枠</b>だけで、<b>前の日から続けて流す朝いちばんの品番は紙のどこにも出ていなかった</b>（品番が変わらないので <code>_ssSotoList()</code> にも入らない）。金型は替えないが、<b>材料・空容器・スクラップ容器・計測具・標準書・品質シート・現品ラベルは朝そろえないと止まる</b>。→ ラインごとに生産開始がいちばん早いものを見て、<b>段取りも外段取りも無いもの</b>を<code>nextFirst</code> として拾い、1枚目と同じ表（<code>SETUP_NS</code> の8項目）で出す。表を作る部分は <code>_ssNsTable()</code> に1本化した（1枚目と同じものを使う）。 -->
@@ -517,6 +518,33 @@ html, body {
 .mold-morelink{display:inline-block;font-size:11.5px;color:#2563eb;cursor:pointer;margin-top:3px;}
 .mold-morelink:hover{text-decoration:underline;}
 .mold-morning{border:2px solid #fecaca;background:#fff;border-radius:8px;padding:10px 12px;margin:2px 0 12px;}
+/* ブリーフィング画面（2026-11-24 社長指示）：作業標準書PDFと注意点を並べて見ながら話す */
+.brf-ov{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:9000;display:flex;align-items:center;justify-content:center;padding:12px;}
+.brf-box{background:#fff;border-radius:12px;width:100%;max-width:1560px;height:100%;max-height:96vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.3);}
+.brf-hd{display:flex;align-items:center;gap:13px;padding:9px 15px;background:#1e3a8a;color:#fff;flex-wrap:wrap;}
+.brf-hd-t{font-size:15px;font-weight:800;}
+.brf-hd-p{font-size:18px;font-weight:800;letter-spacing:.3px;}
+.brf-hd-n{font-size:12.5px;color:#c7d2fe;}
+.brf-hd-d{font-size:13px;color:#c7d2fe;margin-left:auto;}
+.brf-x{background:#fff;color:#1e3a8a;border:none;border-radius:8px;padding:5px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
+.brf-grid{flex:1;display:grid;grid-template-columns:1fr minmax(330px,430px);min-height:0;}
+.brf-pdf{display:flex;flex-direction:column;min-width:0;border-right:1px solid #e5e7eb;}
+.brf-tabs{display:flex;gap:6px;padding:7px 10px;border-bottom:1px solid #e5e7eb;flex-wrap:wrap;background:#f8fafc;align-items:center;}
+.brf-tab{font-size:12px;font-weight:700;border:1px solid #cbd5e1;background:#fff;color:#334155;border-radius:8px;padding:4px 12px;cursor:pointer;font-family:inherit;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.brf-tab.on{background:#1e40af;border-color:#1e40af;color:#fff;}
+.brf-frame{flex:1;position:relative;min-height:0;background:#f1f5f9;}
+.brf-frame iframe{width:100%;height:100%;border:0;display:block;}
+.brf-pdf-msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;font-size:13px;color:#64748b;padding:20px;background:#f1f5f9;line-height:1.8;}
+.brf-side{display:flex;flex-direction:column;gap:9px;padding:11px 13px;overflow:auto;min-width:0;}
+.brf-tan{border:2px solid #1e40af;border-radius:10px;padding:9px 11px;}
+.brf-tan-r{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.brf-tan-r label{font-size:12px;font-weight:800;color:#1e3a8a;width:88px;flex:0 0 auto;}
+.brf-tan-r input{flex:1;min-width:0;font-family:inherit;font-size:14px;padding:5px 8px;border:1px solid #cbd5e1;border-radius:7px;}
+.brf-saved{font-size:11px;color:#16a34a;height:14px;text-align:right;}
+.brf-order{background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:8px 11px;font-size:12px;line-height:1.8;color:#78350f;}
+.brf-order b{color:#92400e;}
+.brf-info{display:flex;flex-direction:column;gap:9px;}
+@media (max-width:900px){ .brf-grid{grid-template-columns:1fr;grid-template-rows:minmax(230px,44%) 1fr;} .brf-pdf{border-right:none;border-bottom:1px solid #e5e7eb;} .brf-hd-d{margin-left:0;} .brf-box{max-height:100vh;border-radius:0;} .brf-ov{padding:0;} }
 /* 記録から不良品報告を作る（2026-09-22） */
 .qc-ngr{border:2px solid #fca5a5;background:#fff7f7;border-radius:10px;padding:10px 12px;}
 .qc-ngr-hd{font-size:14px;font-weight:800;color:#b91c1c;margin-bottom:4px;}
@@ -1711,6 +1739,45 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
       <span style="font-size:12px;margin-top:6px;display:block;">製造条件・作業標準書・品質チェックシートをすぐに表示します</span>
     </div>
   </div>
+</div>
+
+<!-- ===== ブリーフィング画面（2026-11-24 社長指示） ===== -->
+<div class="brf-ov" id="brfModal" style="display:none;">
+  <div class="brf-box">
+    <div class="brf-hd">
+      <div class="brf-hd-t">📣 ブリーフィング</div>
+      <div class="brf-hd-p" id="brf-part"></div>
+      <div class="brf-hd-n" id="brf-name"></div>
+      <div class="brf-hd-d" id="brf-date"></div>
+      <button class="brf-x" onclick="brfClose()">✕ 閉じる</button>
+    </div>
+    <div class="brf-grid">
+      <div class="brf-pdf">
+        <div class="brf-tabs" id="brf-tabs"></div>
+        <div class="brf-frame">
+          <iframe id="brf-iframe" title="帳票"></iframe>
+          <div class="brf-pdf-msg" id="brf-pdfmsg">上のボタンから帳票を選んでください</div>
+        </div>
+      </div>
+      <div class="brf-side">
+        <div class="brf-tan">
+          <div class="brf-tan-r"><label>進行（司会）</label><input id="brf-shikai" list="brf-people" placeholder="名前" onchange="brfSave()"/></div>
+          <div class="brf-tan-r"><label>品質チェック</label><input id="brf-qc" list="brf-people" placeholder="名前（最終工程の人）" onchange="brfSave()"/></div>
+          <div class="brf-tan-r"><label>メモ</label><input id="brf-memo" placeholder="今日の注意点など" onchange="brfSave()"/></div>
+          <div class="brf-saved" id="brf-saved"></div>
+        </div>
+        <div class="brf-order">
+          <b>言う順番</b><br>
+          ① この品番の工程と、誰がどこに入るか<br>
+          ② 前回この品番で出た不良・注意点（下を見る）<br>
+          ③ 変化点（初めて・久しぶり・条件が変わった）＋ 当てはまる人は標準書を読む<br>
+          ④ 安全のひとこと
+        </div>
+        <div class="brf-info" id="brf-info"></div>
+      </div>
+    </div>
+  </div>
+  <datalist id="brf-people"></datalist>
 </div>
 
 <!-- ===== 工場レイアウトタブ ===== -->
@@ -4896,6 +4963,7 @@ async function doSearch(){
 }
 
 function renderResult(part){
+  window.__lastPart = part;   // ブリーフィング画面から使う（2026-11-24）
   const el = document.getElementById('searchResult');
   const source = part.fromKintone
     ? '<span style="font-size:11px;color:#16a34a;background:#dcfce7;padding:2px 7px;border-radius:10px;margin-left:8px;">kintone連携</span>'
@@ -4957,6 +5025,8 @@ function renderResult(part){
   const recBtn = `<button class="doc-btn" style="font-size:12px;background:#f0fdf4;border-color:#86efac;color:#166534;" onclick="qcFromSearch('${part.partNo}')">✅ 品質チェック記録</button>`;
   /* ★この品番だけの現品ラベル（2026-11-14 社長指示）。生産数は進捗管理ボードの予定から拾う */
   const lbBtn = `<button class="doc-btn" style="font-size:12px;background:#fffbeb;border-color:#fcd34d;color:#b45309;" onclick="rtOpenLabelFor('${part.partNo}')">🏷 現品ラベル</button>`;
+  /* ★ブリーフィング（2026-11-24 社長指示）。標準書PDFと注意点を並べ、進行と品質チェックの担当も書く */
+  const brfBtn = `<button class="doc-btn" style="font-size:13.5px;font-weight:800;padding:9px 12px;background:#1e40af;border-color:#1e40af;color:#fff;" onclick="brfOpen()">📣 ブリーフィング</button>`;
   if(!part.fromKintone){
     // デモデータは従来の並び
     el.innerHTML = `
@@ -4987,6 +5057,7 @@ function renderResult(part){
     <div class="rs-grid">
       <div class="rs-left">
         ${docSectionHtml}
+        <div style="margin-top:12px;">${brfBtn}</div>
         <div style="margin-top:10px;">${recBtn}</div>
         <div style="margin-top:6px;">${lbBtn}</div>
       </div>
@@ -4998,6 +5069,139 @@ function renderResult(part){
     </div>
   </div>`;
   if(typeof moldRenderInfo === 'function') moldRenderInfo(part.partNo);
+}
+
+// ===== ブリーフィング画面（2026-11-24 社長指示）=====
+//   朝（と段取りのあと）の品質チェックの5分の中で、ラインごとに集まって話す場。
+//   パソコンの前でこの画面を開き、左に作業標準書PDF・右にこの品番の注意点を並べて見る。
+//   進行（司会）と品質チェックの担当も、ここにメモとして残す。
+//   保存先は dantori/{日付}Briefing/{品番}（dantori は既に書き込みが許可されているパス。
+//   {日付}Locks・{日付}Spot と同じ流儀なので、段取り計画 dantori/{日付} とはぶつからない）
+var BRF_DOCS = [], BRF_SEL = -1, BRF_TICK = null;
+
+function brfEsc(t){ return String(t||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function brfFb(){ return (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/, ''); }
+function brfYmd(){
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function brfKey(pn){ return String(pn||'').replace(/[.#$\[\]\/]/g, '_').replace(/\s+/g, '_'); }
+
+function brfOpen(){
+  const p = window.__lastPart;
+  if(!p){ alert('品番を検索してから押してください'); return; }
+  document.getElementById('brf-part').textContent = p.partNo || '';
+  document.getElementById('brf-name').textContent =
+    (p.name || '') + (p.customer ? '（' + p.customer + '）' : '');
+  document.getElementById('brf-date').textContent = brfYmd();
+  // 担当の選び先（担当者マスター）
+  const dl = document.getElementById('brf-people');
+  if(dl && !dl.children.length){
+    dl.innerHTML = (typeof WORKER_MASTER !== 'undefined' ? WORKER_MASTER : [])
+      .reduce((a,g)=>a.concat(g.names||[]), [])
+      .map(n=>'<option value="'+n+'"></option>').join('');
+  }
+  ['brf-shikai','brf-qc','brf-memo'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
+  document.getElementById('brf-saved').textContent = '';
+  // 帳票（作業標準書→品質チェックシートの順）
+  BRF_DOCS = []
+    .concat((p.standardWork || []).map(d=>({ name:d.name||'作業標準書',      key:d.key||'', lbl:'📋 ' })))
+    .concat((p.qualitySheet || []).map(d=>({ name:d.name||'品質チェックシート', key:d.key||'', lbl:'✅ ' })));
+  BRF_SEL = -1;
+  brfDrawTabs();
+  const fr = document.getElementById('brf-iframe');
+  if(fr) fr.removeAttribute('src');
+  brfMsg(BRF_DOCS.length ? '' : 'この品番には帳票が登録されていません');
+  document.getElementById('brfModal').style.display = 'flex';
+  // 右側：いま品番検索の画面に出ている注意点をそのまま写す（読み込み中なら少しのあいだ追いかける）
+  brfCopyInfo();
+  let n = 0;
+  if(BRF_TICK) clearInterval(BRF_TICK);
+  BRF_TICK = setInterval(()=>{ brfCopyInfo(); if(++n > 20) { clearInterval(BRF_TICK); BRF_TICK = null; } }, 400);
+  brfLoad();
+  if(BRF_DOCS.length) brfPick(0);   // 作業標準書を先に開いておく
+}
+
+function brfClose(){
+  document.getElementById('brfModal').style.display = 'none';
+  const fr = document.getElementById('brf-iframe');
+  if(fr) fr.removeAttribute('src');
+  if(BRF_TICK){ clearInterval(BRF_TICK); BRF_TICK = null; }
+}
+
+function brfMsg(t){
+  const e = document.getElementById('brf-pdfmsg');
+  if(!e) return;
+  e.innerHTML = t || '';
+  e.style.display = t ? 'flex' : 'none';
+}
+
+function brfDrawTabs(){
+  const box = document.getElementById('brf-tabs');
+  if(!box) return;
+  if(!BRF_DOCS.length){ box.innerHTML = '<span style="font-size:12px;color:#94a3b8;">帳票なし</span>'; return; }
+  box.innerHTML = BRF_DOCS.map((d,i)=>
+    '<button class="brf-tab'+(i===BRF_SEL?' on':'')+'" onclick="brfPick('+i+')">'+d.lbl+brfEsc(d.name)+'</button>'
+  ).join('') + '<span style="font-size:11px;color:#94a3b8;margin-left:4px;">PDFが開かないときは押し直してください</span>';
+}
+
+function brfPick(i){
+  const d = BRF_DOCS[i];
+  if(!d) return;
+  BRF_SEL = i;
+  brfDrawTabs();
+  const fr = document.getElementById('brf-iframe');
+  if(fr) fr.removeAttribute('src');
+  brfMsg(brfEsc(d.name) + ' を読み込んでいます…<br><span style="font-size:11.5px;">はじめて開くPDFは30秒ほどかかることがあります</span>');
+  openDoc(d.name, d.key, (window.__lastPart||{}).partNo || '', function(url, err){
+    if(BRF_SEL !== i) return;            // そのあいだに別の帳票を押していたら何もしない
+    if(!url){ brfMsg(brfEsc(err || '開けませんでした')); return; }
+    const f = document.getElementById('brf-iframe');
+    if(f) f.src = url;
+    brfMsg('');
+  });
+}
+
+/* 品番検索の画面に出ている「改修履歴・工程内不良・苦情不適合」をそのまま写す（取り直さない） */
+function brfCopyInfo(){
+  const box = document.getElementById('brf-info');
+  if(!box) return;
+  const html = ['moldRepair','moldNg','moldCmp'].map(id=>{
+    const e = document.getElementById(id);
+    return (e && e.innerHTML.trim()) ? '<div class="mold-sec">' + e.innerHTML + '</div>' : '';
+  }).join('');
+  if(html && box.innerHTML !== html) box.innerHTML = html;
+}
+
+async function brfLoad(){
+  const pn = (window.__lastPart||{}).partNo;
+  if(!pn) return;
+  try{
+    const r = await fetch(brfFb() + '/dantori/' + brfYmd() + 'Briefing/' + brfKey(pn) + '.json');
+    const v = await r.json();
+    if(!v) return;
+    const set = (id,val)=>{ const e=document.getElementById(id); if(e && !e.value) e.value = val || ''; };
+    set('brf-shikai', v.shikai);
+    set('brf-qc',     v.qc);
+    set('brf-memo',   v.memo);
+  }catch(e){}
+}
+
+async function brfSave(){
+  const pn = (window.__lastPart||{}).partNo;
+  if(!pn) return;
+  const g = id => { const e=document.getElementById(id); return e ? e.value.trim() : ''; };
+  const body = { part:pn, shikai:g('brf-shikai'), qc:g('brf-qc'), memo:g('brf-memo'), ts:Date.now() };
+  const lbl = document.getElementById('brf-saved');
+  try{
+    const r = await fetch(brfFb() + '/dantori/' + brfYmd() + 'Briefing/' + brfKey(pn) + '.json',
+                { method:'PUT', body: JSON.stringify(body) });
+    /* ★Firebaseは断るときも例外を投げず401を返すので、ここを見ないと「保存しました」と嘘をつく */
+    if(!r.ok) throw new Error(r.status);
+    if(lbl){ lbl.textContent = '保存しました'; lbl.style.color = '#16a34a'; }
+  }catch(e){
+    if(lbl){ lbl.textContent = '保存できませんでした（' + (e.message||'') + '）'; lbl.style.color = '#dc2626'; }
+  }
 }
 
 // ===== 金型・ジグの情報（ショット数・改修履歴・工程内不良・苦情不適合）2026-09-22 社長指示 =====
@@ -5579,14 +5783,17 @@ window.hhubRefreshPart = async function(partNo){
       + 'この画面を開いているあいだは、どの品番も新しいPDFを開きます。');
 };
 
-async function openDoc(docName, fileKey, partNo){
+async function openDoc(docName, fileKey, partNo, onUrl){
+  /* ★onUrl を渡すと、別タブで開かずにそのURL（または失敗の理由）を返す（2026-11-24 ブリーフィング用） */
+  const _deliver = (u) => { if(typeof onUrl === 'function') onUrl(u, ''); else window.open(u, '_blank'); };
+  const _fail    = (m) => { if(typeof onUrl === 'function') onUrl(null, m);  else alert(m); };
   if(!fileKey){
-    alert(`【${partNo}】${docName}\nkintoneにPDFが登録されていません`);
+    _fail(`【${partNo}】${docName}\nkintoneにPDFが登録されていません`);
     return;
   }
   // ① このページですでに開いたもの
   if(_pdfCache.has(fileKey)){
-    window.open(_pdfCache.get(fileKey), '_blank');
+    _deliver(_pdfCache.get(fileKey));
     return;
   }
   // ② このPCに保存してあるもの（翌日以降もここから開く）
@@ -5595,13 +5802,13 @@ async function openDoc(docName, fileKey, partNo){
     if(hit && hit.blob){
       const u = URL.createObjectURL(hit.blob);
       _pdfCache.set(fileKey, u);
-      window.open(u, '_blank');
+      _deliver(u);
       return;
     }
   }catch(e){}
   const pdfGasUrl = config.proxyUrl || config.gasUrl;
   if(!pdfGasUrl){
-    alert('設定画面でPDF表示用GAS URLを入力してください');
+    _fail('設定画面でPDF表示用GAS URLを入力してください');
     return;
   }
   // 同じPDFをもう取りに行っている最中なら、重ねて取りに行かない
@@ -5635,7 +5842,7 @@ async function openDoc(docName, fileKey, partNo){
 
   const timer = setTimeout(() => {
     cleanup();
-    alert(`【${partNo}】${docName}\n`
+    _fail(`【${partNo}】${docName}\n`
       + `PDFの取得に${Math.round(PDF_TIMEOUT_MS/60000)}分以上かかったため、中止しました。\n\n`
       + `もう一度押してください。\n`
       + `何度も続くときは、画面右下の版を確かめ、Ctrl＋F5 で読み込み直してください。`);
@@ -5671,19 +5878,19 @@ async function openDoc(docName, fileKey, partNo){
             msg = new TextDecoder('utf-8').decode(bytes.slice(0, 600));
             const j = JSON.parse(msg); msg = (j && (j.message || j.code)) || msg;
           }catch(e){}
-          alert(`【${partNo}】${docName}\nPDFではないデータが返ってきました（kintone側のエラー）。\n${String(msg).slice(0,200)}`);
+          _fail(`【${partNo}】${docName}\nPDFではないデータが返ってきました（kintone側のエラー）。\n${String(msg).slice(0,200)}`);
           return;
         }
         const blob   = new Blob([bytes], {type:'application/pdf'});
         const bUrl   = URL.createObjectURL(blob);
         _pdfCache.set(fileKey, bUrl);
         _pdfPut(fileKey, blob, partNo + '_' + docName);   // このPCに保存（翌日以降すぐ開く）
-        window.open(bUrl, '_blank');
+        _deliver(bUrl);
       } catch(e){
-        alert(`【${partNo}】${docName}\nPDF表示エラー: ${e.message}`);
+        _fail(`【${partNo}】${docName}\nPDF表示エラー: ${e.message}`);
       }
     } else {
-      alert(`【${partNo}】${docName}\nファイルの取得に失敗しました\n${(data && data.error)||''}`);
+      _fail(`【${partNo}】${docName}\nファイルの取得に失敗しました\n${(data && data.error)||''}`);
     }
   };
 
@@ -5692,7 +5899,7 @@ async function openDoc(docName, fileKey, partNo){
   script.onerror = () => {
     if(done) return;
     cleanup();
-    alert(`【${partNo}】${docName}\nGASにつながりませんでした。\nもう一度押してください。`);
+    _fail(`【${partNo}】${docName}\nGASにつながりませんでした。\nもう一度押してください。`);
   };
   document.head.appendChild(script);
   script.src = url;
@@ -15301,7 +15508,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.23-24';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.24-1';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
