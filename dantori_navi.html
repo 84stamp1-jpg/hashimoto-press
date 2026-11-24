@@ -112,6 +112,8 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.25-4 : ブリーフィングの英語の添え方を直した（2026-11-25）。文字列を何度も置き換えていたため<b>語が途中で割れていた</b>（「工程内不良」が「工程 process」＋「内不良 In-process defects」）。→ <b>出来上がった画面の文字の部分だけを、長い語から順に1回で見て足す</b>（タグや属性には触らない）。あわせて見出しも「📣 Briefing」に切り替わるようにし、辞書に数語足した。 -->
+<!-- H-Hub v2026.11.25-3 : ★<b>ブリーフィングに「English」の切り替えを付けた</b>（2026-11-25 社長指示・外国の方が進行することがあるため）。右上の<b>English／日本語</b>で切り替わり、<b>その人の端末に覚える</b>（次に開いても同じ言語）。英語になるのは<b>この画面の決まった言葉</b>＝見出し・欄名（Facilitator／Quality check／Notes）・<b>言う順番①②③</b>・ボタン・案内文。<b>表の見出しと、不良の名前のような決まった言葉には、日本語を消さずに英語を青で添える</b>（カミコミ pinched material／バリ burr／カジリ galling／マクレ turned-up edge／ダコン dent／キズ scratch／サビ rust／汚損 stain／キレツ crack など約50語）。日本人と一緒に同じ画面を見るため、日本語は消していない。★<b>訳さないもの</b>＝kintoneに入っている文章（改修の内容など自由に書かれた文）と<b>作業標準書のPDF</b>。機械で訳すと現場で事故になるため、ここは日本語のまま。 -->
 <!-- H-Hub v2026.11.25-2 : ブリーフィングの人のふだを<b>横2列</b>にし、<b>ライン名と役割（「Bライン 作業者」）を出すのをやめた</b>（2026-11-25 社長指示）。縦が半分になるので、<b>その下の改修履歴・工程内不良・苦情不適合が画面に入る</b>。時刻は<b>付く人にだけ</b>橙色で残す（途中から／途中まで／段取り）。ふだが2つ並ばない幅（760px以下）では1列に戻る。あわせて「進行（司会）」の欄名を<b>「進行」</b>にした。 -->
 <!-- H-Hub v2026.11.25-1 : ★<b>ブリーフィングの「今日この品番に入る人」に、組立の人が混ざっていたのを直した</b>（2026-11-25 社長指示）。組立の計画は<b>「ライン」のところが人の名前</b>（大塚・鈴木…）なので、見出しが「Bライン・大塚・鈴木」になり、その人たちもふだに並んでいた。→ <b>プレスのライン（<code>PRESS_LINE_MASTER</code> にあるもの）だけ</b>を見るようにした。ライン名の表記ゆれ（「Cライン ②」など）は <code>resolveLineId()</code> で揃えてから判定する。 -->
 <!-- H-Hub v2026.11.24-7 : ★<b>ブリーフィングの人のふだに「何時から何時まで」を出すようにした</b>（2026-11-24 社長指示）。複雑にしないため、<b>工程まるごと入っている人には時刻を書かない</b>（見出しの「生産 15:50〜18:38」がその人の時間）。<b>途中から入る人・途中で抜ける人・段取りの人だけ</b>、橙色で「17:10〜」「〜17:00」「15:40〜15:50」と添える。時刻の付く人は<b>下へ回す</b>ので、上から読めば「ずっといる人」。作業者の時間は <code>entryToWorkerRows()</code>（段取り計画の担当画面と同じもの）で出すので、<b>途中交代もそのまま展開される</b>＝これまで「交代」としか出なかった人に時刻が付く。見出しは<b>生産の帯</b>（段取り開始ではなく生産開始から）にした。 -->
@@ -552,6 +554,8 @@ html, body {
 .brf-order{background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;padding:8px 11px;font-size:12px;line-height:1.8;color:#78350f;}
 .brf-order b{color:#92400e;}
 .brf-info{display:flex;flex-direction:column;gap:9px;}
+.brf-en{color:#2563eb;font-size:.85em;font-weight:600;}   /* 決まった言葉に添える英語 */
+#brf-lang{background:#fde68a;color:#78350f;}
 /* 写してきた表が、幅が足りずに1文字ずつ縦に折れていたのを直す（2026-11-24） */
 .brf-info .mold-tbl{table-layout:auto;width:100%;font-size:12px;}
 .brf-info .mold-tbl th,.brf-info .mold-tbl td{padding:3px 6px;white-space:normal;word-break:break-word;}
@@ -1776,11 +1780,12 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
 <div class="brf-ov" id="brfModal" style="display:none;">
   <div class="brf-box">
     <div class="brf-hd">
-      <div class="brf-hd-t">📣 ブリーフィング</div>
+      <div class="brf-hd-t" id="brf-l-title">📣 ブリーフィング</div>
       <div class="brf-hd-p" id="brf-part"></div>
       <div class="brf-hd-n" id="brf-name"></div>
       <div class="brf-hd-d" id="brf-date"></div>
-      <button class="brf-x" onclick="brfClose()">✕ 閉じる</button>
+      <button class="brf-x" id="brf-lang" onclick="brfToggleLang()" title="日本語 / English">English</button>
+      <button class="brf-x" id="brf-close" onclick="brfClose()">✕ 閉じる</button>
     </div>
     <div class="brf-grid">
       <div class="brf-pdf">
@@ -1792,18 +1797,13 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
       </div>
       <div class="brf-side">
         <div class="brf-tan">
-          <div class="brf-tan-r"><label>進行</label><input id="brf-shikai" list="brf-people" placeholder="名前" onchange="brfMarkChips();brfSave()"/></div>
-          <div class="brf-tan-r"><label>品質チェック</label><input id="brf-qc" list="brf-people" placeholder="名前（最終工程の人）" onchange="brfMarkChips();brfSave()"/></div>
-          <div class="brf-tan-r"><label>メモ</label><input id="brf-memo" placeholder="今日の注意点など" onchange="brfSave()"/></div>
+          <div class="brf-tan-r"><label id="brf-l-lead">進行</label><input id="brf-shikai" list="brf-people" placeholder="名前" onchange="brfMarkChips();brfSave()"/></div>
+          <div class="brf-tan-r"><label id="brf-l-qc">品質チェック</label><input id="brf-qc" list="brf-people" placeholder="名前（最終工程の人）" onchange="brfMarkChips();brfSave()"/></div>
+          <div class="brf-tan-r"><label id="brf-l-memo">メモ</label><input id="brf-memo" placeholder="今日の注意点など" onchange="brfSave()"/></div>
           <div class="brf-saved" id="brf-saved"></div>
         </div>
         <div class="brf-mem" id="brf-mem"></div>
-        <div class="brf-order">
-          <b>言う順番</b><br>
-          ① 誰がどの工程を担当するか（自工程の注意点を確認する）<br>
-          ② 前回この品番で出た不良・注意点・型改修後か（下を見る）<br>
-          ③ 変化点（初めて・久しぶり・条件が変わった）
-        </div>
+        <div class="brf-order" id="brf-order"></div>
         <div class="brf-info" id="brf-info"></div>
       </div>
     </div>
@@ -5146,7 +5146,8 @@ function brfOpen(){
   brfDrawTabs();
   const fr = document.getElementById('brf-iframe');
   if(fr) fr.removeAttribute('src');
-  brfMsg(BRF_DOCS.length ? '' : 'この品番には帳票が登録されていません');
+  brfMsg(BRF_DOCS.length ? '' : brfT('no_doc'));
+  brfApplyLang();
   document.getElementById('brfModal').style.display = 'flex';
   // 右側：いま品番検索の画面に出ている注意点をそのまま写す（読み込み中なら少しのあいだ追いかける）
   brfCopyInfo();
@@ -5175,10 +5176,10 @@ function brfMsg(t){
 function brfDrawTabs(){
   const box = document.getElementById('brf-tabs');
   if(!box) return;
-  if(!BRF_DOCS.length){ box.innerHTML = '<span style="font-size:12px;color:#94a3b8;">帳票なし</span>'; return; }
+  if(!BRF_DOCS.length){ box.innerHTML = '<span style="font-size:12px;color:#94a3b8;">' + brfT('no_form') + '</span>'; return; }
   box.innerHTML = BRF_DOCS.map((d,i)=>
     '<button class="brf-tab'+(i===BRF_SEL?' on':'')+'" onclick="brfPick('+i+')">'+d.lbl+brfEsc(d.name)+'</button>'
-  ).join('') + '<span style="font-size:11px;color:#94a3b8;margin-left:4px;">PDFが開かないときは押し直してください</span>';
+  ).join('') + '<span style="font-size:11px;color:#94a3b8;margin-left:4px;">' + brfT('pdf_hint') + '</span>';
 }
 
 function brfPick(i){
@@ -5188,7 +5189,7 @@ function brfPick(i){
   brfDrawTabs();
   const fr = document.getElementById('brf-iframe');
   if(fr) fr.removeAttribute('src');
-  brfMsg(brfEsc(d.name) + ' を読み込んでいます…<br><span style="font-size:11.5px;">はじめて開くPDFは30秒ほどかかることがあります</span>');
+  brfMsg(brfEsc(d.name) + ' ' + brfT('loading') + '<br><span style="font-size:11.5px;">' + brfT('loading_sub') + '</span>');
   openDoc(d.name, d.key, (window.__lastPart||{}).partNo || '', function(url, err){
     if(BRF_SEL !== i) return;            // そのあいだに別の帳票を押していたら何もしない
     if(!url){ brfMsg(brfEsc(err || '開けませんでした')); return; }
@@ -5206,7 +5207,12 @@ function brfCopyInfo(){
     const e = document.getElementById(id);
     return (e && e.innerHTML.trim()) ? '<div class="mold-sec">' + e.innerHTML + '</div>' : '';
   }).join('');
-  if(html && box.innerHTML !== html){ box.innerHTML = html; brfSlimTables(box); }
+  if(html && box.dataset.src !== html){
+    box.dataset.src = html;          // 写した元のHTMLで見比べる（英語を足したあとと比べない）
+    box.innerHTML = html;
+    brfSlimTables(box);
+    brfEnDom(box);
+  }
 }
 
 
@@ -5231,8 +5237,8 @@ async function brfMembers(){
   const box = document.getElementById('brf-mem');
   if(!box) return;
   const pn = (window.__lastPart||{}).partNo || '';
-  box.innerHTML = '<div class="brf-mem-hd">今日この品番に入る人（配置表）</div>'
-                + '<div class="mold-loading">読み込んでいます…</div>';
+  box.innerHTML = '<div class="brf-mem-hd">' + brfT('mem_hd') + '</div>'
+                + '<div class="mold-loading">…</div>';
   let data = {};
   try{
     const r = await fetch(brfFb() + '/dantori/' + brfYmdPath() + '.json');
@@ -5259,7 +5265,7 @@ async function brfMembers(){
     if(h.lineId && line.indexOf(h.lineId) < 0) line.push(h.lineId);
     if(h.partNo && froms.indexOf(h.partNo) < 0) froms.push(h.partNo);
     /* 見出しは生産の帯。段取りの人には段取りの帯を添える（2026-11-24 社長指示） */
-    const t = '生産 ' + (h.prodStart || h.setupStart || '') + (h.prodEnd ? '〜' + h.prodEnd : '');
+    const t = brfT('prod') + ' ' + (h.prodStart || h.setupStart || '') + (h.prodEnd ? '〜' + h.prodEnd : '');
     if(t.length > 4 && when.indexOf(t) < 0) when.push(t);
     const r = h.roles || {};
     /* 「◯時から◯時まで」。工程まるごとの人は空にする＝見出しの帯と同じなので書かない */
@@ -5300,17 +5306,15 @@ async function brfMembers(){
     }
   }
   BRF_MEM = names;
-  let hd = '<div class="brf-mem-hd">今日この品番に入る人（配置表）'
+  let hd = '<div class="brf-mem-hd">' + brfT('mem_hd')
          + (line.length ? '<span class="brf-mem-line">' + brfEsc(line.join('・')) + '</span>' : '')
          + (when.length ? '<span>' + brfEsc(when.join('／')) + '</span>' : '')
-         + (rough ? '<span>※配置表の品番「' + brfEsc(froms.join('・')) + '」から</span>' : '')
+         + (rough ? '<span>' + brfT('from').replace('%s', brfEsc(froms.join('・'))) + '</span>' : '')
          + '</div>'
          + (soto.length ? '<div style="font-size:11px;color:#b45309;margin-bottom:5px;">※ '
-             + brfEsc(soto.join('・')) + ' は、いまの作業者マスタに無いので出していません'
-             + '（段取り計画の担当欄に名前が残っています）</div>' : '');
+             + brfEsc(soto.join('・')) + ' ' + brfT('not_master') + '</div>' : '');
   if(!names.length){
-    box.innerHTML = hd + '<div class="mold-empty">今日の計画にこの品番がありません。'
-                  + '上の欄に名前を書いてください（担当者マスターから選べます）</div>';
+    box.innerHTML = hd + '<div class="mold-empty">' + brfT('no_plan') + '</div>';
     return;
   }
   box.innerHTML = hd + '<div class="brf-mem-list">'
@@ -5319,8 +5323,8 @@ async function brfMembers(){
         + '" id="brf-chip-'+i+'"><b>' + brfEsc(p.name) + '</b>'
         /* ★ライン名と役割（「Bライン 作業者」）は出さない。時刻だけ、付く人に添える（2026-11-25 社長指示） */
         + '<i>' + brfEsc(p.parts.map(q => q.t).filter(Boolean).join('・')) + '</i>'
-        + '<button title="' + brfEsc(p.name) + ' を進行にする" onclick="brfSet(' + i + ',\'shikai\')">📣 進行</button>'
-        + '<button title="' + brfEsc(p.name) + ' を品質チェックにする" onclick="brfSet(' + i + ',\'qc\')">✅ 品質</button></span>'
+        + '<button title="' + brfEsc(p.name) + ' ' + brfT('t_lead') + '" onclick="brfSet(' + i + ',\'shikai\')">' + brfT('b_lead') + '</button>'
+        + '<button title="' + brfEsc(p.name) + ' ' + brfT('t_qc')   + '" onclick="brfSet(' + i + ',\'qc\')">'     + brfT('b_qc')   + '</button></span>'
       ).join('')
     + '</div>';
   brfMarkChips();
@@ -5372,6 +5376,139 @@ function brfSlimTables(box){
   });
 }
 
+/* ===== 日本語 / English の切り替え（2026-11-25 社長指示）=====
+   外国の方がブリーフィングを進めることがあるため。
+   ★訳すのは<b>この画面の決まった言葉だけ</b>。kintoneに入っている文章（改修の内容など）と
+     作業標準書のPDFは日本語のまま＝機械で訳すと現場で事故になるので訳さない。
+     ただし<b>不良の名前のような決まった言葉</b>には、英語を括弧で添える。 */
+var BRF_LANG = 'ja';
+try{ BRF_LANG = localStorage.getItem('brfLang') || 'ja'; }catch(e){}
+
+var BRF_TXT = {
+  ja: {
+    lang:'English', close:'\u2715 閉じる', title:'📣 ブリーフィング',
+    lead:'進行', qc:'品質チェック', memo:'メモ',
+    ph_name:'名前', ph_qc:'名前（最終工程の人）', ph_memo:'今日の注意点など',
+    order:'<b>言う順番</b><br>\u2460 誰がどの工程を担当するか（自工程の注意点を確認する）<br>'
+         +'\u2461 前回この品番で出た不良・注意点・型改修後か（下を見る）<br>'
+         +'\u2462 変化点（初めて・久しぶり・条件が変わった）',
+    mem_hd:'今日この品番に入る人（配置表）', prod:'生産',
+    b_lead:'📣 進行', b_qc:'\u2705 品質',
+    t_lead:'を進行にする', t_qc:'を品質チェックにする',
+    no_plan:'今日の計画にこの品番がありません。上の欄に名前を書いてください（担当者マスターから選べます）',
+    from:'※配置表の品番「%s」から',
+    not_master:'は、いまの作業者マスタに無いので出していません（段取り計画の担当欄に名前が残っています）',
+    saved:'保存しました', save_ng:'保存できませんでした',
+    pdf_hint:'PDFが開かないときは押し直してください', no_doc:'この品番には帳票が登録されていません',
+    loading:'を読み込んでいます…', loading_sub:'はじめて開くPDFは30秒ほどかかることがあります',
+    pick:'上のボタンから帳票を選んでください', no_form:'帳票なし'
+  },
+  en: {
+    lang:'日本語', close:'\u2715 Close', title:'📣 Briefing',
+    lead:'Facilitator', qc:'Quality check', memo:'Notes',
+    ph_name:'Name', ph_qc:'Name (last process)', ph_memo:'Notes for today',
+    order:'<b>What to cover</b><br>\u2460 Who does which process (check the points for your own process)<br>'
+         +'\u2461 Defects and warnings from the last run of this part, and whether the die was repaired (see below)<br>'
+         +'\u2462 Changes (first time / after a long gap / conditions changed)',
+    mem_hd:'People on this part today (roster)', prod:'Production',
+    b_lead:'📣 Lead', b_qc:'\u2705 QC',
+    t_lead:'as facilitator', t_qc:'as quality check',
+    no_plan:'This part is not in today\u2019s plan. Type the names in the fields above.',
+    from:'* from the roster part \u201c%s\u201d',
+    not_master:'is not in the current worker list, so it is not shown (the name is still in the plan)',
+    saved:'Saved', save_ng:'Could not save',
+    pdf_hint:'If the PDF does not open, press the button again', no_doc:'No document is registered for this part',
+    loading:'loading\u2026', loading_sub:'The first time, a PDF can take about 30 seconds',
+    pick:'Choose a document above', no_form:'No document'
+  }
+};
+function brfT(k){ return (BRF_TXT[BRF_LANG] && BRF_TXT[BRF_LANG][k]) || BRF_TXT.ja[k] || ''; }
+
+/* 現場の決まった言葉（不良の名前・状況・表の見出し）。英語のときだけ添える／置き換える */
+var BRF_WORDS = {
+  '依頼日':'Requested', '完了日':'Completed', '内容':'Details', '状況':'Status', '分類':'Type',
+  '発生日':'Date', '数量':'Qty', '不具合内容':'Defect', '処置':'Action', '品番':'Part No.',
+  '区分':'Class', '是正':'Correction', '改修履歴':'Die repair history', '工程内不良':'In-process defects',
+  '苦情・不適合':'Complaints / Nonconformities', 'すべて見る':'Show all', '閉じる':'Close',
+  '直近1年':'last 12 months', '件':'', '個':'pcs',
+  'カミコミ':'pinched material', 'バリ':'burr', 'カジリ':'galling', 'マクレ':'turned-up edge',
+  'ダコン':'dent', '打痕':'dent', '落下変形':'drop deformation', 'キズ':'scratch', '汚損':'stain',
+  'サビ':'rust', 'キレツ':'crack', '割れ':'crack', 'シワ':'wrinkle', '変形':'deformation',
+  '欠け':'chipping', '寸法不良':'dimension NG', '取扱い':'handling', 'トライ用':'trial',
+  'サンプル':'sample', '外観不良':'appearance defect', '精度不良':'accuracy defect',
+  '定期メンテナンス':'periodic maintenance', '廃棄':'scrap', '保留':'hold', '選別':'sorting',
+  '手直し':'rework', '不適合':'nonconformity', '苦情':'complaint',
+  '品質確認中':'under quality check', '製造確認中':'under production check',
+  '是正確認済':'correction verified', '依頼書発行':'request issued', '作業着手':'work started',
+  '完了':'completed', '金型':'die', '段取り':'setup', '初品':'first piece',
+  '読み込み中':'loading', '読み込めませんでした':'could not load',
+  '品質チェックシート':'quality check sheet', '作業標準書':'work standard',
+  'ショット数':'shot count', '残り':'remaining'
+};
+
+window.brfToggleLang = function(){
+  BRF_LANG = (BRF_LANG === 'ja') ? 'en' : 'ja';
+  try{ localStorage.setItem('brfLang', BRF_LANG); }catch(e){}
+  brfApplyLang();
+  brfMembers();
+  const box = document.getElementById('brf-info');
+  if(box){ box.innerHTML = ''; brfCopyInfo(); }
+};
+
+function brfApplyLang(){
+  const set = (id, v, attr) => {
+    const e = document.getElementById(id);
+    if(!e) return;
+    if(attr) e.setAttribute(attr, v); else e.textContent = v;
+  };
+  set('brf-lang',  brfT('lang'));
+  set('brf-l-title', brfT('title'));
+  set('brf-close', brfT('close'));
+  set('brf-l-lead', brfT('lead'));
+  set('brf-l-qc',   brfT('qc'));
+  set('brf-l-memo', brfT('memo'));
+  set('brf-shikai', brfT('ph_name'), 'placeholder');
+  set('brf-qc',     brfT('ph_qc'),   'placeholder');
+  set('brf-memo',   brfT('ph_memo'), 'placeholder');
+  const o = document.getElementById('brf-order');
+  if(o) o.innerHTML = brfT('order');
+  brfDrawTabs();
+}
+
+/* 決まった言葉に英語を添える（日本語は消さない＝日本人と一緒に見るため）。
+   ★文字列を何度も置き換えると語が途中で割れる（「工程内不良」が「工程」＋「内不良」になった）。
+     出来上がった画面の<b>文字の部分だけ</b>を、長い語から順に<b>1回で</b>見て足す。 */
+function brfEnDom(box){
+  if(BRF_LANG !== 'en' || !box) return;
+  const keys = Object.keys(BRF_WORDS).filter(k => BRF_WORDS[k]).sort((a,b) => b.length - a.length);
+  if(!keys.length) return;
+  const re = new RegExp('(' + keys.join('|') + ')', 'g');   // 日本語の語だけなので記号の逃がしは不要
+  const walk = document.createTreeWalker(box, NodeFilter.SHOW_TEXT, null);
+  const todo = [];
+  while(walk.nextNode()){
+    const n = walk.currentNode;
+    if(n.parentNode && n.parentNode.className === 'brf-en') continue;   // 足した英語は見ない
+    re.lastIndex = 0;
+    if(re.test(n.nodeValue)) todo.push(n);
+  }
+  todo.forEach(n => {
+    const t = n.nodeValue, frag = document.createDocumentFragment();
+    let last = 0, m;
+    re.lastIndex = 0;
+    while((m = re.exec(t)) !== null){
+      if(m.index > last) frag.appendChild(document.createTextNode(t.slice(last, m.index)));
+      frag.appendChild(document.createTextNode(m[0]));
+      const sp = document.createElement('span');
+      sp.className = 'brf-en';
+      sp.textContent = ' ' + BRF_WORDS[m[0]];
+      frag.appendChild(sp);
+      last = m.index + m[0].length;
+    }
+    if(last < t.length) frag.appendChild(document.createTextNode(t.slice(last)));
+    n.parentNode.replaceChild(frag, n);
+  });
+}
+
 async function brfLoad(){
   const pn = (window.__lastPart||{}).partNo;
   if(!pn) return;
@@ -5398,9 +5535,9 @@ async function brfSave(){
                 { method:'PUT', body: JSON.stringify(body) });
     /* ★Firebaseは断るときも例外を投げず401を返すので、ここを見ないと「保存しました」と嘘をつく */
     if(!r.ok) throw new Error(r.status);
-    if(lbl){ lbl.textContent = '保存しました'; lbl.style.color = '#16a34a'; }
+    if(lbl){ lbl.textContent = brfT('saved'); lbl.style.color = '#16a34a'; }
   }catch(e){
-    if(lbl){ lbl.textContent = '保存できませんでした（' + (e.message||'') + '）'; lbl.style.color = '#dc2626'; }
+    if(lbl){ lbl.textContent = brfT('save_ng') + '（' + (e.message||'') + '）'; lbl.style.color = '#dc2626'; }
   }
 }
 
@@ -15724,7 +15861,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.25-2';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.25-4';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
