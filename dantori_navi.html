@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.25-13 : ★<b>-11／-12 でブリーフィングの処理が二重に入っていた</b>のを取り除いた。差し替えのときに<b>消す範囲の終わりを、始まりより前の場所で指していた</b>ため、古い版がそのまま後ろに残り、<b>あとに書かれたほう（古い中身）が使われて</b>いた＝-12 で直したはずの「工程1〜5の番号が取れない」が直らなかった。同じ関数が2つある状態（<code>brfDocBlocks</code>・<code>brfTranslateDoc</code>・ことば検索）を解消し、それぞれ1つだけ残っていることを確かめた。★<b>差し替えたあとは、同じ関数が2つ無いか必ず数えること</b>。 -->
 <!-- H-Hub v2026.11.25-12 : -11 の積み残し。工程の見出しが<b>「工程順 工程名」と「1 DR」の2行に分かれる様式</b>があり、1行で「工程順 1 工程名 DR」と並ぶ前提だけで読んでいたため、<b>1ページ目の工程1〜5の番号と名前が取れていなかった</b>（実物で確認）。2行に分かれる形にも対応し、<b>番号が読めない枠（空の工程・過去トラブル欄）は出さない</b>ようにした。実物の 18120-6Y0 で、製造条件4行＋工程1〜8がそれぞれの作業ポイント付きで番号順に並ぶことを確認。 -->
 <!-- H-Hub v2026.11.25-11 : ★<b>作業標準書の訳を「製造条件 → 工程1・2・3…の作業ポイント」の形に組み直した</b>（2026-11-25 社長指示「表題・承認欄・品番・品名はいらない。工程順と工程名、それぞれの作業ポイントを1から順に。製造条件は一番上に」）。これまでは<b>PDFの上から順に全部の行</b>を並べていたので、表題や承認欄まで訳され、横に並んだ2工程の作業ポイントが1行に混ざっていた。→ <b>標準書は工程の枠が格子に並んでいる</b>（実測：列 x=24/209/394、段 y=742/507/271）ので、<b>「工程順」の文字の位置から格子を割り出し、枠ごとに読む</b>ようにした。枠の中で「工程順 N 工程名 XXX」を見出しにし、「作業ポイント」から下を箇条書きにする。<b>製造条件の枠は先頭へ</b>。表題・承認欄・品番・品名は<b>枠の外なので自然に落ちる</b>。工程は<b>番号順</b>に並ぶ（ページをまたいでも通し）。★この格子に当てはまらない様式のときは、これまでどおり上から全部の行を並べる。 -->
 <!-- H-Hub v2026.11.25-10 : ★<b>1枚目の「段取りなしの準備」に、朝いちばんに流すものが出ていなかった</b>（2026-11-25 社長報告「A1やB1・Bライン・Cラインのものが出ていない。リーダーが朝やるものを忘れるので出したい」）。原因は <code>_ssSotoList()</code> が<b>「品番が変わるのに段取りが無い行」</b>を拾う作りで、<b>その日いちばん最初の工程は前の品番が分からないため拾えなかった</b>こと。金型は替えなくても<b>材料・空容器・スクラップ容器・計測具・紙ものは朝そろえないと止まる</b>。→ 2枚目の「朝いちばんの段取りなしの準備」と同じ拾い方（ラインごとに生産開始がいちばん早く、段取りが無いもの）を<b>今日にも当てて</b>、生産の早い順に混ぜて並べた。見出しの説明も「<b>朝いちばんに流すもの</b>・外段取り・前日に終えたぶん」に直した。 -->
@@ -5889,186 +5890,6 @@ window.brfTranslateDoc = async function(){
     if(msg) msg.textContent = 'Document: ' + (i+1) + ' / ' + rows.length;
   }
   if(msg) msg.textContent = 'Done — the Japanese line below each is the original';
-  if(btn) btn.disabled = false;
-};
-
-/* ことば検索（標準書を読むときに引く） */
-window.brfGlossToggle = function(){
-  const g = document.getElementById('brf-gloss');
-  if(!g) return;
-  const open = g.style.display !== 'none';
-  g.style.display = open ? 'none' : 'block';
-  if(!open){ brfGlossSearch(); const q = document.getElementById('brf-gloss-q'); if(q) q.focus(); }
-};
-window.brfGlossSearch = function(){
-  const q = (document.getElementById('brf-gloss-q') || {}).value || '';
-  const list = document.getElementById('brf-gloss-list');
-  if(!list) return;
-  const k = q.trim().toLowerCase();
-  const hit = Object.keys(BRF_GLOSS).filter(ja =>
-    !k || ja.indexOf(k) >= 0 || BRF_GLOSS[ja].toLowerCase().indexOf(k) >= 0);
-  list.innerHTML = hit.length
-    ? hit.slice(0, 200).map(ja => '<div><b>' + brfEsc(ja) + '</b><i>' + brfEsc(BRF_GLOSS[ja]) + '</i></div>').join('')
-    : '<div style="color:#94a3b8;">見つかりません / not found</div>';
-};
-
-/* ===== 作業標準書（PDF）の文字を取り出して訳す（2026-11-25 社長指示）=====
-   ★PDFの見た目は変えない。<b>横に「原文 → 訳」を並べる</b>。
-   ★取り出せるのは<b>文字が入っているPDF</b>だけ（Excelや Word から作ったもの）。
-     紙をスキャンした画像だけのPDFは文字が無いので取り出せない。
-   ★訳すのは端末の中だけ（kintoneの文章と同じ Translator）。機械の訳なので<b>原文を必ず並べる</b>。 */
-var BRF_PDFJS = null;
-
-async function brfPdfLib(){
-  if(BRF_PDFJS) return BRF_PDFJS;
-  const base = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/';
-  const lib = await import(base + 'pdf.min.mjs');
-  lib.GlobalWorkerOptions.workerSrc = base + 'pdf.worker.min.mjs';
-  BRF_PDFJS = lib;
-  return lib;
-}
-
-/* 同じ高さに並ぶ文字を1行にまとめ、左から並べる */
-function brfToLines(items){
-  const rows = {};
-  items.forEach(function(o){
-    const y = Math.round(o.y / 4) * 4;
-    (rows[y] = rows[y] || []).push(o);
-  });
-  return Object.keys(rows)
-    .sort(function(a,b){ return b - a; })
-    .map(function(y){
-      return rows[y].sort(function(a,b){ return a.x - b.x; })
-                    .map(function(o){ return o.s; }).join(' ').replace(/\s+/g,' ').trim();
-    })
-    .filter(function(t){ return t && t.length > 1; });
-}
-
-/* ★作業標準書は「工程の枠」が格子に並んでいる（実測：列 x=24/209/394、段 y=742/507/271）。
-   「工程順」の文字の位置から格子を割り出し、枠ごとに読む。
-   こうすると〈製造条件〉と〈工程1・2・3…の作業ポイント〉に分けて出せる（2026-11-25 社長指示）。
-   表題・承認欄・品番・品名は枠の外なので、自然に落ちる。
-   ★この形に当てはまらない様式のときは、これまでどおり全部の行を上から並べる。 */
-async function brfDocBlocks(url){
-  const lib = await brfPdfLib();
-  const buf = await (await fetch(url)).arrayBuffer();
-  const doc = await lib.getDocument({ data: buf }).promise;
-  const steps = [], conds = [], plain = [];
-  let fit = false;
-  for(let p = 1; p <= doc.numPages; p++){
-    const pg = await doc.getPage(p);
-    const tc = await pg.getTextContent();
-    const items = tc.items
-      .map(function(it){ return { x: it.transform[4], y: it.transform[5], s: (it.str||'').trim() }; })
-      .filter(function(o){ return o.s; });
-    plain.push(brfToLines(items));
-    const marks = items.filter(function(o){ return o.s.indexOf('工程順') === 0; });
-    if(!marks.length) continue;
-    fit = true;
-    const uniq = function(a){ const o = {}; a.forEach(function(v){ o[v] = 1; }); return Object.keys(o).map(Number); };
-    const cols  = uniq(marks.map(function(o){ return Math.round(o.x); })).sort(function(a,b){ return a - b; });
-    const bands = uniq(marks.map(function(o){ return Math.round(o.y); })).sort(function(a,b){ return b - a; });
-    const cw = (cols.length  > 1) ? (cols[1] - cols[0]) : 185;
-    const bh = (bands.length > 1) ? (bands[0] - bands[1]) : 235;
-    cols.forEach(function(c){
-      bands.forEach(function(b){
-        const inB = items.filter(function(o){
-          return o.x >= c - 3 && o.x < c + cw - 3 && o.y <= b + 3 && o.y > b - bh;
-        });
-        if(!inB.length) return;
-        const lines = brfToLines(inB);
-        if(!lines.length) return;
-        const iCond = lines.findIndex(function(t){ return t.indexOf('製造条件') >= 0; });
-        if(iCond >= 0){
-          lines.slice(iCond + 1).forEach(function(t){
-            if(t.length > 1 && !/^[\d\s.]+$/.test(t)) conds.push(t);
-          });
-          return;
-        }
-        const head = lines.find(function(t){ return t.indexOf('工程順') >= 0; });
-        if(!head) return;
-        const m = head.match(/工程順\s*(\d+)\s*工程名\s*(.*)$/);
-        const no   = m ? +m[1] : 999;
-        const name = m ? (m[2] || '').trim() : head.replace(/工程順|工程名/g, '').trim();
-        const iPt = lines.findIndex(function(t){ return t.indexOf('作業ポイント') >= 0; });
-        const pts = (iPt >= 0 ? lines.slice(iPt + 1) : [])
-          .filter(function(t){ return t.length > 1; });
-        if(!name && !pts.length) return;
-        steps.push({ no: no, name: name, pts: pts });
-      });
-    });
-  }
-  steps.sort(function(a,b){ return a.no - b.no; });
-  return { fit: fit && (steps.length > 0), steps: steps, conds: conds, plain: plain };
-}
-
-window.brfDocTrClose = function(){
-  const p = document.getElementById('brf-doc-tr');
-  if(p) p.style.display = 'none';
-};
-
-window.brfTranslateDoc = async function(){
-  const d = BRF_DOCS[BRF_SEL];
-  const btn = document.getElementById('brf-doc-btn');
-  const msg = document.getElementById('brf-tr-msg');
-  const panel = document.getElementById('brf-doc-tr');
-  const body = document.getElementById('brf-dtr-body');
-  if(!d || !panel || !body) return;
-  const url = _pdfCache.get(d.key);
-  if(!url){ if(msg) msg.textContent = 'Open the document first'; return; }
-  if(btn) btn.disabled = true;
-  panel.style.display = 'flex';
-  const ttl = document.getElementById('brf-dtr-ttl');
-  if(ttl) ttl.textContent = d.name;
-  body.innerHTML = '<div style="color:#64748b;">Reading the document…</div>';
-
-  let pages = null;
-  try{ pages = await brfPdfLines(url); }
-  catch(e){
-    body.innerHTML = '<div style="color:#b45309;">この帳票の文字を取り出せませんでした（' + brfEsc(e.message||'') + '）</div>';
-    if(btn) btn.disabled = false;
-    return;
-  }
-  const total = pages.reduce(function(n,p){ return n + p.length; }, 0);
-  if(!total){
-    body.innerHTML = '<div style="color:#b45309;">この帳票には<b>文字が入っていません</b>'
-      + '（紙をスキャンした画像だけのPDF）。<br>ことばの一覧（Words）をお使いください。</div>';
-    if(btn) btn.disabled = false;
-    return;
-  }
-  /* まず原文だけ出す（訳を待たずに読める） */
-  body.innerHTML = pages.map(function(lines, i){
-    return '<div class="dtr-pg">p.' + (i+1) + '</div>'
-      + lines.map(function(t, j){
-          return '<div class="dtr-row" id="dtr-' + i + '-' + j + '"><div class="ja">' + brfEsc(t) + '</div></div>';
-        }).join('');
-  }).join('');
-
-  let tr = null;
-  try{ tr = await brfTrGet(msg); }catch(e){}
-  if(!tr){
-    body.insertAdjacentHTML('afterbegin',
-      '<div style="color:#b45309;">この端末では翻訳が使えないので、原文だけ出しています</div>');
-    if(btn) btn.disabled = false;
-    return;
-  }
-  let done = 0;
-  for(let i = 0; i < pages.length; i++){
-    for(let j = 0; j < pages[i].length; j++){
-      const row = document.getElementById('dtr-' + i + '-' + j);
-      if(!row) continue;
-      try{
-        const en = await brfRace(tr.translate(pages[i][j]), 20000);
-        const e2 = document.createElement('div');
-        e2.className = 'en';
-        e2.textContent = en;
-        row.appendChild(e2);
-      }catch(err){}
-      done++;
-      if(msg) msg.textContent = 'Document: ' + done + ' / ' + total;
-    }
-  }
-  if(msg) msg.textContent = 'Done — the Japanese line above is the original';
   if(btn) btn.disabled = false;
 };
 
@@ -16451,7 +16272,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.25-12';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.25-13';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
