@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.25-6 : ★<b>kintoneに書かれた文章も英語にできるようにした＋「ことば」の一覧を付けた</b>（2026-11-25 社長指示「事故が起こるかもしれないが、伝わらないよりはマシ。都度直す」）。English のときだけ、右に<b>🌐 Translate the text</b> と <b>📖 Words</b> が出る。(1)<b>文章の翻訳</b>＝改修履歴・工程内不良・苦情の<b>本文</b>を英語にして、日本語の下に青で添える。★<b>翻訳はこの端末の中だけで行う</b>（Chrome が持っている <code>Translator</code>。会社の文章を外のサービスへ送らない）。初めて押したときだけ翻訳データの取り込みが走る（数十MB・1回）。使えない端末では「この端末では文章の翻訳が使えません」と出る。★<b>日本語は必ず残す</b>＝機械の訳は間違うことがあるので、元の文と見比べられるようにしてある。(2)<b>ことばの一覧</b>＝現場と標準書によく出る<b>約150語</b>の日英。<b>打ち込むとすぐ絞り込む</b>ので、紙の対訳表のように探す手間が要らない。日本語でも英語でも引ける。 -->
 <!-- H-Hub v2026.11.25-5 : ★<b>段取り準備シートの「段取りなしの準備」にも、生産開始の予定と実績を書く欄を足した</b>（2026-11-25 社長指示）。段取りの枠には〈外段取り開始／段取り開始／生産開始〉の予定・実際があるのに、<b>段取りなしの行には時刻を書くところが無かった</b>＝段取りが無くても生産は始まるので、始まった時刻を残す場所が要る。表の右（やった人の左）に<b>「生産開始 予定」「実績」</b>の2列を置いた。予定はその日の計画の生産開始（<code>j.ps</code>）を印字し、実績は手で書く空欄。1枚目の「今日の」表と2枚目の「朝いちばん」の表は同じ関数（<code>_ssNsTable()</code>）なので<b>両方に出る</b>。行は増えないので紙の高さはほぼ変わらない（見出しが2行になるぶんだけ）。 -->
 <!-- H-Hub v2026.11.25-4 : ブリーフィングの英語の添え方を直した（2026-11-25）。文字列を何度も置き換えていたため<b>語が途中で割れていた</b>（「工程内不良」が「工程 process」＋「内不良 In-process defects」）。→ <b>出来上がった画面の文字の部分だけを、長い語から順に1回で見て足す</b>（タグや属性には触らない）。あわせて見出しも「📣 Briefing」に切り替わるようにし、辞書に数語足した。 -->
 <!-- H-Hub v2026.11.25-3 : ★<b>ブリーフィングに「English」の切り替えを付けた</b>（2026-11-25 社長指示・外国の方が進行することがあるため）。右上の<b>English／日本語</b>で切り替わり、<b>その人の端末に覚える</b>（次に開いても同じ言語）。英語になるのは<b>この画面の決まった言葉</b>＝見出し・欄名（Facilitator／Quality check／Notes）・<b>言う順番①②③</b>・ボタン・案内文。<b>表の見出しと、不良の名前のような決まった言葉には、日本語を消さずに英語を青で添える</b>（カミコミ pinched material／バリ burr／カジリ galling／マクレ turned-up edge／ダコン dent／キズ scratch／サビ rust／汚損 stain／キレツ crack など約50語）。日本人と一緒に同じ画面を見るため、日本語は消していない。★<b>訳さないもの</b>＝kintoneに入っている文章（改修の内容など自由に書かれた文）と<b>作業標準書のPDF</b>。機械で訳すと現場で事故になるため、ここは日本語のまま。 -->
@@ -556,6 +557,19 @@ html, body {
 .brf-order b{color:#92400e;}
 .brf-info{display:flex;flex-direction:column;gap:9px;}
 .brf-en{color:#2563eb;font-size:.85em;font-weight:600;}   /* 決まった言葉に添える英語 */
+.brf-tr{color:#1d4ed8;font-size:.9em;line-height:1.5;margin-top:2px;}  /* 文章の英訳 */
+.brf-tools{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+.brf-tools button{border:1px solid #93c5fd;background:#eff6ff;color:#1e40af;border-radius:8px;
+  font-size:11.5px;font-weight:700;padding:4px 10px;cursor:pointer;font-family:inherit;}
+.brf-tools button:disabled{opacity:.5;cursor:default;}
+.brf-tools span{font-size:11px;color:#64748b;}
+.brf-gloss{border:1px solid #93c5fd;border-radius:10px;padding:8px 10px;background:#f8fafc;}
+.brf-gloss input{width:100%;font-family:inherit;font-size:13px;padding:5px 8px;
+  border:1px solid #cbd5e1;border-radius:7px;box-sizing:border-box;}
+.brf-gloss-list{max-height:190px;overflow:auto;margin-top:6px;font-size:12px;}
+.brf-gloss-list div{display:flex;gap:8px;padding:2px 0;border-bottom:1px solid #eef2f7;}
+.brf-gloss-list b{flex:0 0 42%;font-weight:600;color:#1a1a1a;}
+.brf-gloss-list i{font-style:normal;color:#1d4ed8;font-weight:600;}
 #brf-lang{background:#fde68a;color:#78350f;}
 /* 写してきた表が、幅が足りずに1文字ずつ縦に折れていたのを直す（2026-11-24） */
 .brf-info .mold-tbl{table-layout:auto;width:100%;font-size:12px;}
@@ -1805,6 +1819,15 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
         </div>
         <div class="brf-mem" id="brf-mem"></div>
         <div class="brf-order" id="brf-order"></div>
+        <div class="brf-tools" id="brf-tools" style="display:none;">
+          <button onclick="brfTranslateBody()" id="brf-tr-btn">🌐 Translate the text</button>
+          <button onclick="brfGlossToggle()">📖 Words</button>
+          <span id="brf-tr-msg"></span>
+        </div>
+        <div class="brf-gloss" id="brf-gloss" style="display:none;">
+          <input id="brf-gloss-q" placeholder="日本語で入力 / type Japanese (例 バリ)" oninput="brfGlossSearch()"/>
+          <div class="brf-gloss-list" id="brf-gloss-list"></div>
+        </div>
         <div class="brf-info" id="brf-info"></div>
       </div>
     </div>
@@ -5473,6 +5496,10 @@ function brfApplyLang(){
   set('brf-memo',   brfT('ph_memo'), 'placeholder');
   const o = document.getElementById('brf-order');
   if(o) o.innerHTML = brfT('order');
+  const tools = document.getElementById('brf-tools');
+  if(tools) tools.style.display = (BRF_LANG === 'en') ? 'flex' : 'none';
+  const g = document.getElementById('brf-gloss');
+  if(g && BRF_LANG !== 'en') g.style.display = 'none';
   brfDrawTabs();
 }
 
@@ -5509,6 +5536,142 @@ function brfEnDom(box){
     n.parentNode.replaceChild(frag, n);
   });
 }
+
+/* ===== 現場のことば 日英（ことば検索用）=====
+   画面に自動で英語を添えるのは BRF_WORDS（不良の名前など）だけ。
+   こちらは「標準書を読むときに引く」ための一覧。探す手間が要らないよう検索を付けてある。 */
+var BRF_GLOSS = {
+  '作業標準書':'work standard', '品質チェックシート':'quality check sheet', '検査基準書':'inspection standard',
+  '品番':'part number', '品名':'part name', '得意先':'customer', '金型':'die', '治具':'jig',
+  '工程順':'process order', '工程名':'process name', '品質確認箇所':'quality check point',
+  '作業ポイント':'work point', '製造条件':'process conditions', '管理項目':'control item',
+  '設定値':'set value', '単位':'unit', '基準':'standard', '規格':'specification',
+  'クッションピン':'cushion pin', 'クッション高さ':'cushion height', 'クッション圧':'cushion pressure',
+  'ダイハイト':'die height', 'ストローク':'stroke', '上型':'upper die', '下型':'lower die',
+  'パンチ':'punch', 'ダイ':'die', 'ストリッパ':'stripper', 'ガイドピン':'guide pin',
+  '位置決め':'locating', '芯出し':'centering', 'シム':'shim', 'ボルト':'bolt', 'クランプ':'clamp',
+  '材料':'material', '板厚':'thickness', 'コイル材':'coil', '送りピッチ':'feed pitch',
+  'スクラップ':'scrap', '空容器':'empty container', '容器':'container', 'パレット':'pallet',
+  '台車':'cart', 'リフト':'forklift', '現品ラベル':'part label',
+  '計測具':'measuring tool', '検具':'gauge', 'ノギス':'caliper', 'マイクロメータ':'micrometer',
+  '限度見本':'limit sample', 'ゲージ':'gauge',
+  '初品':'first piece', '初品確認':'first piece check', '終品':'last piece',
+  '中間確認':'in-process check', '全数検査':'100% inspection', '抜き取り':'sampling',
+  'カウンター数':'counter reading', '良品数':'good quantity', '不良数':'defect quantity',
+  '生産数':'production quantity', '数量':'quantity',
+  '段取り':'setup', '外段取り':'external setup', '内段取り':'internal setup',
+  '金型交換':'die change', '取付':'mounting', '取外し':'removal',
+  '日常点検':'daily check', '定期メンテナンス':'periodic maintenance', '給油':'lubrication',
+  '清掃':'cleaning', '点検':'inspection',
+  '安全':'safety', '保護具':'protective equipment', '手袋':'gloves', '保護メガネ':'safety glasses',
+  '耳栓':'earplugs', '安全靴':'safety shoes', '非常停止':'emergency stop',
+  '両手押し':'two-hand control', '光線式安全装置':'light curtain',
+  '挟まれ':'getting caught', '巻き込まれ':'entanglement',
+  '注意':'caution', '禁止':'prohibited', '必ず':'must', '確認':'check', '記録':'record',
+  '報告':'report', '異常':'abnormality', '停止':'stop', '再開':'restart', '連絡':'inform',
+  'カミコミ':'pinched material', 'バリ':'burr', 'カジリ':'galling', 'マクレ':'turned-up edge',
+  'ダコン':'dent', '打痕':'dent', '落下変形':'drop deformation', 'キズ':'scratch', '汚損':'stain',
+  'サビ':'rust', 'キレツ':'crack', '割れ':'crack', 'シワ':'wrinkle', '変形':'deformation',
+  '欠け':'chipping', '寸法不良':'dimension NG', '2枚打ち':'double blank', 'カス上がり':'slug pulling',
+  '送り不良':'feed error', '材料切れ':'material out', 'ズレ':'misalignment', '傾き':'tilt',
+  '選別':'sorting', '手直し':'rework', '廃棄':'scrap', '保留':'hold', '流出':'escape to customer',
+  '不適合':'nonconformity', '苦情':'complaint', '是正':'corrective action', '改修':'die repair',
+  '変化点':'change point', '新人':'new worker', '応援':'helper', '引き継ぎ':'handover',
+  '朝礼':'morning meeting', 'ブリーフィング':'briefing', '進行':'facilitator',
+  '工程内不良':'in-process defect', '客先不良':'customer defect'
+};
+
+/* ===== 文章の翻訳（この端末の中だけで訳す）=====
+   ★会社の文章を外のサービスへ送らない。Chrome が端末に持っている翻訳の仕組み（Translator）を使う。
+     初めて使うときだけ、ブラウザが翻訳のデータを取りに行く（数十MB・1回だけ）。
+   ★機械の訳なので間違うことがある。社長の判断（2026-11-25）＝
+     「事故が起こるかもしれないが、伝わらないよりはマシ。都度直す」。だから<b>日本語は必ず残す</b>。 */
+var BRF_TR = null;
+
+/* ★返事が来ないことがある（翻訳の仕組みが止められている端末）。
+     待ちっぱなしにすると押したまま固まって見えるので、時間を切る。 */
+function brfRace(p, ms){
+  return Promise.race([p, new Promise(function(_, rj){ setTimeout(function(){ rj(new Error('timeout')); }, ms); })]);
+}
+
+async function brfTrGet(msg){
+  if(BRF_TR) return BRF_TR;
+  if(!('Translator' in self)) return null;
+  let av = '';
+  try{ av = await brfRace(Translator.availability({sourceLanguage:'ja', targetLanguage:'en'}), 10000); }
+  catch(e){ return null; }
+  if(av === 'unavailable') return null;
+  if(av !== 'available' && msg) msg.textContent = 'Downloading the translation data (first time only)…';
+  BRF_TR = await brfRace(Translator.create({
+    sourceLanguage:'ja', targetLanguage:'en',
+    monitor(m){
+      m.addEventListener('downloadprogress', e => {
+        if(msg) msg.textContent = 'Downloading… ' + Math.round((e.loaded||0) * 100) + '%';
+      });
+    }
+  }), 300000);   /* 初めての取り込みは長いので5分まで待つ */
+  return BRF_TR;
+}
+
+window.brfTranslateBody = async function(){
+  const btn = document.getElementById('brf-tr-btn');
+  const msg = document.getElementById('brf-tr-msg');
+  const box = document.getElementById('brf-info');
+  if(!box) return;
+  btn.disabled = true;
+  msg.textContent = 'Preparing…';
+  let tr = null;
+  try{ tr = await brfTrGet(msg); }catch(e){}
+  if(!tr){
+    msg.textContent = 'この端末では文章の翻訳が使えません（Chromeの翻訳機能が無効）。ことばの一覧をお使いください';
+    btn.disabled = false;
+    return;
+  }
+  /* 日本語が入っているセルだけ。日付や数字だけの欄は訳さない */
+  const cells = Array.prototype.slice.call(box.querySelectorAll('td, .mold-warn, .mold-empty'))
+    .filter(e => !e.dataset.tr && /[ぁ-んァ-ヶ一-龥]/.test(e.textContent) && e.textContent.trim().length > 3);
+  if(!cells.length){ msg.textContent = 'Nothing to translate'; btn.disabled = false; return; }
+  let done = 0;
+  for(const e of cells){
+    /* すでに添えた英語（brf-en）は外して、元の日本語だけを渡す */
+    const src = Array.prototype.slice.call(e.childNodes)
+      .filter(n => !(n.nodeType === 1 && n.className === 'brf-en'))
+      .map(n => n.textContent).join('').trim();
+    if(!src){ continue; }
+    try{
+      const out = await brfRace(tr.translate(src), 20000);
+      const d = document.createElement('div');
+      d.className = 'brf-tr';
+      d.textContent = out;
+      e.appendChild(d);
+      e.dataset.tr = '1';
+    }catch(err){}
+    done++;
+    msg.textContent = done + ' / ' + cells.length;
+  }
+  msg.textContent = 'Translated by the browser — the Japanese above is the original';
+  btn.disabled = false;
+};
+
+/* ことば検索（標準書を読むときに引く） */
+window.brfGlossToggle = function(){
+  const g = document.getElementById('brf-gloss');
+  if(!g) return;
+  const open = g.style.display !== 'none';
+  g.style.display = open ? 'none' : 'block';
+  if(!open){ brfGlossSearch(); const q = document.getElementById('brf-gloss-q'); if(q) q.focus(); }
+};
+window.brfGlossSearch = function(){
+  const q = (document.getElementById('brf-gloss-q') || {}).value || '';
+  const list = document.getElementById('brf-gloss-list');
+  if(!list) return;
+  const k = q.trim().toLowerCase();
+  const hit = Object.keys(BRF_GLOSS).filter(ja =>
+    !k || ja.indexOf(k) >= 0 || BRF_GLOSS[ja].toLowerCase().indexOf(k) >= 0);
+  list.innerHTML = hit.length
+    ? hit.slice(0, 200).map(ja => '<div><b>' + brfEsc(ja) + '</b><i>' + brfEsc(BRF_GLOSS[ja]) + '</i></div>').join('')
+    : '<div style="color:#94a3b8;">見つかりません / not found</div>';
+};
 
 async function brfLoad(){
   const pn = (window.__lastPart||{}).partNo;
@@ -15868,7 +16031,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.25-5';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.25-6';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
