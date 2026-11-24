@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.24-4 : ★★<b>ブリーフィングに配置表の人が出なかった本当の原因</b>（2026-11-24 社長報告・-3で直り切らなかった）。日付の形が違っていた。Firebaseの段取り計画は <code>dantori/<b>20261124</b></code>（ハイフン無しの8桁）なのに、<code>dantori/2026-11-24</code> を読んでいた＝<b>そもそも何も入っていない場所を見ていた</b>。品番の照合（-3）は正しかったが、読む場所が違うので当たりようがなかった。→ 日付は <code>dantoriTodayPath()</code>（段取り計画と同じもの）を使うようにした。ブリーフィングの担当の保存先も <code>dantori/20261124Briefing/{品番}</code> に揃えた（<code>{日付}Locks</code>・<code>{日付}Spot</code> と同じ流儀になった）。★<b>他のシステムのパスを借りるときは、日付の形まで合わせること</b>。 -->
 <!-- H-Hub v2026.11.24-3 : ★<b>ブリーフィングで「今日の計画にこの品番がありません」と出てしまうのを直した</b>（2026-11-24 社長報告。配置表には 18121-5MS があるのに、品番検索の <code>18121-5MS-0000-PR</code> では出なかった）。原因は<b>配置表（段取り計画）の品番のほうが短いこと</b>。記号ゆれを吸収しても「18121-5MS」と「181215MS0000PR」は別物になる。→ <b>まず丸ごと同じものを探し、無ければ頭から一致するもので探す</b>ようにした。その探し方で拾ったときは<b>「※配置表の品番「18121-5MS」から」と出す</b>ので、別の枝番を拾っていないか見て分かる。<b>2つ以上のラインに当たったときは、人のふだにライン名も出す</b>。 -->
 <!-- H-Hub v2026.11.24-2 : ブリーフィングの画面を作り直した（2026-11-24 社長指示・同日2回目）。(1)★<b>全画面</b>にした（枠と余白をなくし、左のPDFと右の欄を目いっぱい広げた。右は最大520px）。(2)★<b>今日この品番に入る人を配置表から出し、押すだけで「進行（司会）」「品質チェック」に入る</b>ようにした。その日の段取り計画（<code>dantori/{日付}</code>）から<b>品番が一致する行</b>を探し、<code>roles</code> の 作業者・金型取付・初品出し・品質確認＋途中交代の人を名前でまとめて出す（品番の記号ゆれは <code>_pnNorm</code> で吸収）。選んだ人のふだは色が付く（青＝進行／緑＝品質／紫＝両方）。もう一度押すと外れる。計画にこの品番が無い日は、これまでどおり手で書ける。(3)★<b>右の改修履歴などが1文字ずつ縦に折れていたのを直した</b>（社長報告）。幅が足りないのが原因なので、<b>ブリーフィングでは見ない列（分類・処置・品番・区分・状況）を落として</b>日付と内容を広げ、折り返しも語単位にした。<b>型改修後かどうかが分かるよう完了日は残している</b>。(4)言う順番を<b>3つ</b>に変えた（①誰がどの工程か＝自工程の注意点 ②前回の不良・注意点・型改修後か ③変化点）。(5)★<b>長田さん（退職）を担当者の選択肢から外した</b>（社長指示）。※<b>A1・A2の「初品出し」が長田さんだったので空にしてある</b>＝誰にするか決めていただきたい。 -->
 <!-- H-Hub v2026.11.24-1 : ★<b>品番検索に「📣 ブリーフィング」を足した</b>（2026-11-24 社長指示）。ブリーフィングは<b>パソコンの前</b>でやる＝画面を見ながら話せるので、<b>作業標準書のPDFと、この品番の注意点を1枚に並べた</b>。押すと全画面になり、<b>左が帳票（作業標準書→品質チェックシートの順にボタンで切り替え）</b>、<b>右が「進行（司会）・品質チェックの担当」「言う順番①〜④」「改修履歴・工程内不良・苦情不適合」</b>。右の注意点は<b>品番検索の画面にすでに出ているものを写している</b>ので、kintoneを二度読みしない。担当は<b>担当者マスターから選べる</b>（手入力も可）。書くと <code>dantori/{日付}Briefing/{品番}</code> に残る（<code>{日付}Locks</code>・<code>{日付}Spot</code> と同じ流儀なので、段取り計画 <code>dantori/{日付}</code> とはぶつからない。Firebaseのルールは<b>変更不要</b>）。※段取り準備シートの⑧「担当と時刻」は<b>いまのまま</b>（社長判断）。なお <code>openDoc</code> に<b>第4引数</b>を足した＝渡すと別タブで開かずURLを返す。既存の呼び出しは1か所も直していない。 -->
@@ -5103,9 +5104,15 @@ var BRF_DOCS = [], BRF_SEL = -1, BRF_TICK = null;
 
 function brfEsc(t){ return String(t||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function brfFb(){ return (config.firebaseUrl || FIREBASE_URL).replace(/\/+$/, ''); }
-function brfYmd(){
+function brfYmd(){   /* 画面に出す日付（2026-11-24） */
   const d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+/* ★Firebaseの段取り計画は dantori/20261124（ハイフン無しの8桁）。
+   ここを 2026-11-24 で読んでいたため、配置表に品番があっても「計画がありません」と出ていた（2026-11-24 社長報告） */
+function brfYmdPath(){
+  if(typeof dantoriTodayPath === 'function') return dantoriTodayPath();
+  return brfYmd().replace(/-/g, '');
 }
 function brfKey(pn){ return String(pn||'').replace(/[.#$\[\]\/]/g, '_').replace(/\s+/g, '_'); }
 
@@ -5209,7 +5216,7 @@ async function brfMembers(){
                 + '<div class="mold-loading">読み込んでいます…</div>';
   let data = {};
   try{
-    const r = await fetch(brfFb() + '/dantori/' + brfYmd() + '.json');
+    const r = await fetch(brfFb() + '/dantori/' + brfYmdPath() + '.json');
     data = (await r.json()) || {};
   }catch(e){}
   /* ★配置表の品番は短いことがある（例 計画「18121-5MS」／品番検索「18121-5MS-0000-PR」）。
@@ -5315,7 +5322,7 @@ async function brfLoad(){
   const pn = (window.__lastPart||{}).partNo;
   if(!pn) return;
   try{
-    const r = await fetch(brfFb() + '/dantori/' + brfYmd() + 'Briefing/' + brfKey(pn) + '.json');
+    const r = await fetch(brfFb() + '/dantori/' + brfYmdPath() + 'Briefing/' + brfKey(pn) + '.json');
     const v = await r.json();
     if(!v) return;
     const set = (id,val)=>{ const e=document.getElementById(id); if(e && !e.value) e.value = val || ''; };
@@ -5333,7 +5340,7 @@ async function brfSave(){
   const body = { part:pn, shikai:g('brf-shikai'), qc:g('brf-qc'), memo:g('brf-memo'), ts:Date.now() };
   const lbl = document.getElementById('brf-saved');
   try{
-    const r = await fetch(brfFb() + '/dantori/' + brfYmd() + 'Briefing/' + brfKey(pn) + '.json',
+    const r = await fetch(brfFb() + '/dantori/' + brfYmdPath() + 'Briefing/' + brfKey(pn) + '.json',
                 { method:'PUT', body: JSON.stringify(body) });
     /* ★Firebaseは断るときも例外を投げず401を返すので、ここを見ないと「保存しました」と嘘をつく */
     if(!r.ok) throw new Error(r.status);
@@ -15648,7 +15655,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.24-3';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.24-4';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
