@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.25-8 : ★<b>作業標準書（PDF）の文字も英語にできるようにした</b>（2026-11-25 社長指示）。English のとき、帳票のボタンの横に <b>📄 Translate this document</b> が出る。押すと<b>PDFの横に「原文 → 訳」を1行ずつ並べる</b>（PDFの見た目は変えない＝写真や赤枠はそのまま見ながら読める）。文字の取り出しは <code>pdfjs-dist@4.0.379</code>（jsDelivr）。同じ高さに並ぶ文字を1行にまとめ、左から順につなぐ。訳は<b>端末の中だけ</b>（kintoneの文章と同じ Translator）。★<b>原文を先に全部出してから</b>訳を足していくので、待たずに読み始められる。★<b>文字が入っているPDFだけ</b>取り出せる（ExcelやWordから作ったもの）。紙をスキャンした画像だけのPDFは文字が無いので「文字が入っていません」と出す。翻訳が使えない端末では<b>原文だけ</b>並べる。 -->
 <!-- H-Hub v2026.11.25-7 : ★<b>言語を切り替えたあと、下の改修履歴・工程内不良・苦情不適合が消えたままになっていた</b>（2026-11-25 社長報告）。-4 で「写した元のHTMLを <code>dataset.src</code> に覚えて、同じなら描き直さない」ようにしたが、言語を切り替えるときに<b>中身（innerHTML）だけ消して <code>dataset.src</code> を消していなかった</b>。そのため「前と同じHTML＝描き直す必要なし」と判断され、<b>空のまま戻らなくなっていた</b>（写しを追いかける8秒も過ぎている）。→ 切り替えのときに <code>dataset.src</code> も消し、さらに<b>中身が空なら必ず描き直す</b>ようにした。ブリーフィングを開くときも先に空にしてから写す（前の品番の内容が残らないように）。 -->
 <!-- H-Hub v2026.11.25-6 : ★<b>kintoneに書かれた文章も英語にできるようにした＋「ことば」の一覧を付けた</b>（2026-11-25 社長指示「事故が起こるかもしれないが、伝わらないよりはマシ。都度直す」）。English のときだけ、右に<b>🌐 Translate the text</b> と <b>📖 Words</b> が出る。(1)<b>文章の翻訳</b>＝改修履歴・工程内不良・苦情の<b>本文</b>を英語にして、日本語の下に青で添える。★<b>翻訳はこの端末の中だけで行う</b>（Chrome が持っている <code>Translator</code>。会社の文章を外のサービスへ送らない）。初めて押したときだけ翻訳データの取り込みが走る（数十MB・1回）。使えない端末では「この端末では文章の翻訳が使えません」と出る。★<b>日本語は必ず残す</b>＝機械の訳は間違うことがあるので、元の文と見比べられるようにしてある。(2)<b>ことばの一覧</b>＝現場と標準書によく出る<b>約150語</b>の日英。<b>打ち込むとすぐ絞り込む</b>ので、紙の対訳表のように探す手間が要らない。日本語でも英語でも引ける。 -->
 <!-- H-Hub v2026.11.25-5 : ★<b>段取り準備シートの「段取りなしの準備」にも、生産開始の予定と実績を書く欄を足した</b>（2026-11-25 社長指示）。段取りの枠には〈外段取り開始／段取り開始／生産開始〉の予定・実際があるのに、<b>段取りなしの行には時刻を書くところが無かった</b>＝段取りが無くても生産は始まるので、始まった時刻を残す場所が要る。表の右（やった人の左）に<b>「生産開始 予定」「実績」</b>の2列を置いた。予定はその日の計画の生産開始（<code>j.ps</code>）を印字し、実績は手で書く空欄。1枚目の「今日の」表と2枚目の「朝いちばん」の表は同じ関数（<code>_ssNsTable()</code>）なので<b>両方に出る</b>。行は増えないので紙の高さはほぼ変わらない（見出しが2行になるぶんだけ）。 -->
@@ -545,8 +546,21 @@ html, body {
 .brf-tabs{display:flex;gap:6px;padding:7px 10px;border-bottom:1px solid #e5e7eb;flex-wrap:wrap;background:#f8fafc;align-items:center;}
 .brf-tab{font-size:12px;font-weight:700;border:1px solid #cbd5e1;background:#fff;color:#334155;border-radius:8px;padding:4px 12px;cursor:pointer;font-family:inherit;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .brf-tab.on{background:#1e40af;border-color:#1e40af;color:#fff;}
-.brf-frame{flex:1;position:relative;min-height:0;background:#f1f5f9;}
+.brf-frame{flex:1;min-height:0;background:#f1f5f9;display:flex;}
+.brf-pdfwrap{flex:1 1 auto;position:relative;min-width:0;}
 .brf-frame iframe{width:100%;height:100%;border:0;display:block;}
+/* 標準書の文字（日→英）。PDFの横に並べる */
+.brf-doc-tr{flex:0 0 38%;max-width:430px;min-width:260px;background:#fff;border-left:1px solid #e5e7eb;
+  display:flex;flex-direction:column;min-height:0;}
+.dtr-hd{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid #e5e7eb;
+  font-size:12px;font-weight:800;color:#1e3a8a;background:#f8fafc;}
+.dtr-hd button{margin-left:auto;border:1px solid #cbd5e1;background:#fff;border-radius:6px;
+  font-size:11px;padding:2px 7px;cursor:pointer;font-family:inherit;}
+.dtr-body{flex:1;overflow:auto;padding:6px 10px;font-size:12px;line-height:1.5;}
+.dtr-pg{font-size:10.5px;font-weight:800;color:#94a3b8;margin:7px 0 3px;}
+.dtr-row{padding:3px 0;border-bottom:1px solid #f1f5f9;}
+.dtr-row .ja{color:#334155;}
+.dtr-row .en{color:#1d4ed8;font-weight:600;}
 .brf-pdf-msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;font-size:13px;color:#64748b;padding:20px;background:#f1f5f9;line-height:1.8;}
 .brf-side{display:flex;flex-direction:column;gap:9px;padding:11px 13px;overflow:auto;min-width:0;}
 .brf-tan{border:2px solid #1e40af;border-radius:10px;padding:9px 11px;}
@@ -1807,8 +1821,15 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
       <div class="brf-pdf">
         <div class="brf-tabs" id="brf-tabs"></div>
         <div class="brf-frame">
-          <iframe id="brf-iframe" title="帳票"></iframe>
-          <div class="brf-pdf-msg" id="brf-pdfmsg">上のボタンから帳票を選んでください</div>
+          <div class="brf-pdfwrap">
+            <iframe id="brf-iframe" title="帳票"></iframe>
+            <div class="brf-pdf-msg" id="brf-pdfmsg">上のボタンから帳票を選んでください</div>
+          </div>
+          <div class="brf-doc-tr" id="brf-doc-tr" style="display:none;">
+            <div class="dtr-hd"><span id="brf-dtr-ttl">📄 Text of this document</span>
+              <button onclick="brfDocTrClose()">✕</button></div>
+            <div class="dtr-body" id="brf-dtr-body"></div>
+          </div>
         </div>
       </div>
       <div class="brf-side">
@@ -5206,13 +5227,19 @@ function brfDrawTabs(){
   if(!BRF_DOCS.length){ box.innerHTML = '<span style="font-size:12px;color:#94a3b8;">' + brfT('no_form') + '</span>'; return; }
   box.innerHTML = BRF_DOCS.map((d,i)=>
     '<button class="brf-tab'+(i===BRF_SEL?' on':'')+'" onclick="brfPick('+i+')">'+d.lbl+brfEsc(d.name)+'</button>'
-  ).join('') + '<span style="font-size:11px;color:#94a3b8;margin-left:4px;">' + brfT('pdf_hint') + '</span>';
+  ).join('')
+    + (BRF_LANG === 'en'
+        ? '<button class="brf-tab" id="brf-doc-btn" style="background:#eff6ff;border-color:#93c5fd;color:#1e40af;"'
+          + ' onclick="brfTranslateDoc()" title="この帳票の文字を取り出して英語にします">📄 Translate this document</button>'
+        : '')
+    + '<span style="font-size:11px;color:#94a3b8;margin-left:4px;">' + brfT('pdf_hint') + '</span>';
 }
 
 function brfPick(i){
   const d = BRF_DOCS[i];
   if(!d) return;
   BRF_SEL = i;
+  brfDocTrClose();
   brfDrawTabs();
   const fr = document.getElementById('brf-iframe');
   if(fr) fr.removeAttribute('src');
@@ -5676,6 +5703,120 @@ window.brfGlossSearch = function(){
   list.innerHTML = hit.length
     ? hit.slice(0, 200).map(ja => '<div><b>' + brfEsc(ja) + '</b><i>' + brfEsc(BRF_GLOSS[ja]) + '</i></div>').join('')
     : '<div style="color:#94a3b8;">見つかりません / not found</div>';
+};
+
+/* ===== 作業標準書（PDF）の文字を取り出して訳す（2026-11-25 社長指示）=====
+   ★PDFの見た目は変えない。<b>横に「原文 → 訳」を並べる</b>。
+   ★取り出せるのは<b>文字が入っているPDF</b>だけ（Excelや Word から作ったもの）。
+     紙をスキャンした画像だけのPDFは文字が無いので取り出せない。
+   ★訳すのは端末の中だけ（kintoneの文章と同じ Translator）。機械の訳なので<b>原文を必ず並べる</b>。 */
+var BRF_PDFJS = null;
+
+async function brfPdfLib(){
+  if(BRF_PDFJS) return BRF_PDFJS;
+  const base = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.0.379/build/';
+  const lib = await import(base + 'pdf.min.mjs');
+  lib.GlobalWorkerOptions.workerSrc = base + 'pdf.worker.min.mjs';
+  BRF_PDFJS = lib;
+  return lib;
+}
+
+/* PDFの文字を「ページごとの行」に直す。同じ高さに並ぶ文字を1行にまとめ、左から並べる */
+async function brfPdfLines(url){
+  const lib = await brfPdfLib();
+  const buf = await (await fetch(url)).arrayBuffer();
+  const doc = await lib.getDocument({ data: buf }).promise;
+  const pages = [];
+  for(let i = 1; i <= doc.numPages; i++){
+    const pg = await doc.getPage(i);
+    const tc = await pg.getTextContent();
+    const rows = {};
+    tc.items.forEach(function(it){
+      const str = (it.str || '').trim();
+      if(!str) return;
+      const y = Math.round(it.transform[5] / 4) * 4;   // 4ポイントの幅で同じ行とみなす
+      (rows[y] = rows[y] || []).push([it.transform[4], str]);
+    });
+    const lines = Object.keys(rows)
+      .sort(function(a,b){ return b - a; })
+      .map(function(y){
+        return rows[y].sort(function(a,b){ return a[0] - b[0]; })
+                      .map(function(x){ return x[1]; }).join(' ').replace(/\s+/g, ' ').trim();
+      })
+      .filter(function(t){ return t && t.length > 1; });
+    pages.push(lines);
+  }
+  return pages;
+}
+
+window.brfDocTrClose = function(){
+  const p = document.getElementById('brf-doc-tr');
+  if(p) p.style.display = 'none';
+};
+
+window.brfTranslateDoc = async function(){
+  const d = BRF_DOCS[BRF_SEL];
+  const btn = document.getElementById('brf-doc-btn');
+  const msg = document.getElementById('brf-tr-msg');
+  const panel = document.getElementById('brf-doc-tr');
+  const body = document.getElementById('brf-dtr-body');
+  if(!d || !panel || !body) return;
+  const url = _pdfCache.get(d.key);
+  if(!url){ if(msg) msg.textContent = 'Open the document first'; return; }
+  if(btn) btn.disabled = true;
+  panel.style.display = 'flex';
+  const ttl = document.getElementById('brf-dtr-ttl');
+  if(ttl) ttl.textContent = d.name;
+  body.innerHTML = '<div style="color:#64748b;">Reading the document…</div>';
+
+  let pages = null;
+  try{ pages = await brfPdfLines(url); }
+  catch(e){
+    body.innerHTML = '<div style="color:#b45309;">この帳票の文字を取り出せませんでした（' + brfEsc(e.message||'') + '）</div>';
+    if(btn) btn.disabled = false;
+    return;
+  }
+  const total = pages.reduce(function(n,p){ return n + p.length; }, 0);
+  if(!total){
+    body.innerHTML = '<div style="color:#b45309;">この帳票には<b>文字が入っていません</b>'
+      + '（紙をスキャンした画像だけのPDF）。<br>ことばの一覧（Words）をお使いください。</div>';
+    if(btn) btn.disabled = false;
+    return;
+  }
+  /* まず原文だけ出す（訳を待たずに読める） */
+  body.innerHTML = pages.map(function(lines, i){
+    return '<div class="dtr-pg">p.' + (i+1) + '</div>'
+      + lines.map(function(t, j){
+          return '<div class="dtr-row" id="dtr-' + i + '-' + j + '"><div class="ja">' + brfEsc(t) + '</div></div>';
+        }).join('');
+  }).join('');
+
+  let tr = null;
+  try{ tr = await brfTrGet(msg); }catch(e){}
+  if(!tr){
+    body.insertAdjacentHTML('afterbegin',
+      '<div style="color:#b45309;">この端末では翻訳が使えないので、原文だけ出しています</div>');
+    if(btn) btn.disabled = false;
+    return;
+  }
+  let done = 0;
+  for(let i = 0; i < pages.length; i++){
+    for(let j = 0; j < pages[i].length; j++){
+      const row = document.getElementById('dtr-' + i + '-' + j);
+      if(!row) continue;
+      try{
+        const en = await brfRace(tr.translate(pages[i][j]), 20000);
+        const e2 = document.createElement('div');
+        e2.className = 'en';
+        e2.textContent = en;
+        row.appendChild(e2);
+      }catch(err){}
+      done++;
+      if(msg) msg.textContent = 'Document: ' + done + ' / ' + total;
+    }
+  }
+  if(msg) msg.textContent = 'Done — the Japanese line above is the original';
+  if(btn) btn.disabled = false;
 };
 
 async function brfLoad(){
@@ -16036,7 +16177,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.25-7';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.25-8';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
