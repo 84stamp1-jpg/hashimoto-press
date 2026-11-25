@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.25-18 : ★<b>品質チェックシートも読みやすい形に整えて訳すようにした</b>（2026-11-25 社長指示）。この帳票は〈様-7-1 製造条件〉〈様-7-2 品質記録〉の2枚組で、作業標準書とは様式が違う（工程の格子が無い）。そのままだと<b>①②（1回目・2回目の生産）の列が横に並ぶので同じ言葉が1行に2回出る</b>（「1 DR 527.3 1 DR 527.3」）し、<b>図の上の番号（20 10 15 14…）まで文字として拾う</b>。→ <b>前半と後半が同じ行は半分にたたみ</b>、<b>■の行は小見出し</b>にし、<b>改訂履歴・部品番号・数字だけの行は落とす</b>ようにした。〈管理項目（NO.／管理項目／判定基準／確認方法／頻度）〉〈異常処置記入欄〉〈変化点〉が順に読める。 -->
 <!-- H-Hub v2026.11.25-17 : ★<b>呼び出しの帯が出ていると、ブリーフィングの「English／日本語」が押せなかった</b>（2026-11-25 社長報告）。帯は <code>position:fixed; top:0; z-index:10000</code> で必ずいちばん上に出るのに、ブリーフィングは <code>inset:0</code> で画面の天井から始まっていたため、<b>見出しの右にあるボタンが帯の下に潜っていた</b>。→ <b><code>--callh</code>（帯の高さ）の分だけ下げた</b>（現品ラベルで同じことをしたときと同じ直し方）。帯が消えれば元に戻る。 -->
 <!-- H-Hub v2026.11.25-16 : 標準書の訳に<b>「品質確認箇所」も入れた</b>（2026-11-25 社長指示）。枠の中の「品質確認箇所」から「作業ポイント」までの行を拾う。工程ごとに<b>〈品質確認箇所 / Quality check point〉〈作業ポイント / Work points〉の小見出し</b>を付けたので、どちらの話か分かる。どちらも無い工程は「（記載なし）」。 -->
 <!-- H-Hub v2026.11.25-15 : ★<b>1枚目の右に余白があるのに、段取りの枠が「つづき」の紙へ送られることがあった</b>（2026-11-25 社長指摘）。送ったあとに高さを測って「減っていなければ戻す」歯止めは入れてあったが、<b>送る前に「その枠が横に並んでいるか」を見ていなかった</b>。→ <b>枠がぜんぶ同じ行に収まっているなら、そもそも送らない</b>ようにした（横に並んだ枠を送っても高さは1mmも減らず、紙だけが増えるため）。※-14 で「担当」の列を外して枠が低くなったので、今日のデータでは2つとも1枚目に並んでいる（実測で確認）。 -->
@@ -5750,6 +5751,54 @@ function brfToLines(items){
     .filter(function(t){ return t && t.length > 1; });
 }
 
+/* ===== 品質チェックシートの読み方（2026-11-25 社長指示）=====
+   ★この帳票は〈様-7-1 製造条件〉と〈様-7-2 品質記録〉の2枚組で、作業標準書とは様式が違う。
+     ①②（1回目・2回目の生産）の列が横に並ぶので、同じ言葉が1行に2回出る。
+     図の上の番号（20 10 15 14…）も文字として拾えてしまう。
+   → 二重になっている行はたたみ、見出し（■）は小見出しにし、
+     改訂履歴・部品番号・図の番号だけの行は落とす。 */
+function brfQcFold(t){
+  /* 「1 DR 527.3 1 DR 527.3」のように、前半と後半が同じものは半分にする */
+  const w = t.split(' ');
+  if(w.length >= 4 && w.length % 2 === 0){
+    const h = w.length / 2;
+    if(w.slice(0, h).join(' ') === w.slice(h).join(' ')) return w.slice(0, h).join(' ');
+  }
+  const n = t.length;
+  if(n > 8 && n % 2 === 0 && t.slice(0, n/2) === t.slice(n/2)) return t.slice(0, n/2).trim();
+  return t;
+}
+const BRF_QC_SKIP = [
+  /^＜様-/, /^改訂/, /^部\s*品\s*番\s*号/, /^部\s*品\s*名\s*称/,
+  /承認$/, /新規作成/, /^△\s*\d/, /^N\s/, /八木$/,
+  /^[\d\s.:：／\/①-⑳－ー・＝=\-±↑]+$/
+];
+function brfQcLines(pages){
+  const out = [];
+  const seen = {};
+  pages.forEach(function(lines, pi){
+    let head = '';
+    lines.forEach(function(raw){
+      let t = brfQcFold(raw).trim();
+      if(!t || t.length < 2) return;
+      if(/品\s*質\s*チ\s*ェ\s*ッ\s*ク\s*シ\s*ー\s*ト/.test(t)){
+        head = t.replace(/\s+/g, '').replace('マザーサンユタカ技研㈱三重', '');
+        out.push({ type:'hd', text: head });
+        return;
+      }
+      if(BRF_QC_SKIP.some(function(re){ return re.test(t); })) return;
+      if(t.indexOf('■') === 0){
+        out.push({ type:'sub', text: t.replace(/^■\s*/, '') });
+        return;
+      }
+      if(seen[t]) return;        /* ①②で丸ごと同じ行が2度出ることがある */
+      seen[t] = 1;
+      out.push({ type:'row', text: t });
+    });
+  });
+  return out;
+}
+
 /* ★作業標準書は「工程の枠」が格子に並んでいる（実測：列 x=24/209/394、段 y=742/507/271）。
    「工程順」の文字の位置から格子を割り出し、枠ごとに読む。
    こうすると〈製造条件〉と〈工程1・2・3…の作業ポイント〉に分けて出せる（2026-11-25 社長指示）。
@@ -5816,7 +5865,10 @@ async function brfDocBlocks(url){
     });
   }
   steps.sort(function(a,b){ return a.no - b.no; });
-  return { fit: fit && (steps.length > 0), steps: steps, conds: conds, plain: plain };
+  /* 品質チェックシートかどうか（1枚目の見出しで見分ける） */
+  const all = plain.map(function(a){ return a.join(''); }).join('').replace(/\s/g, '');
+  const isQc = all.indexOf('品質チェックシート') >= 0 && !(fit && steps.length);
+  return { fit: fit && (steps.length > 0), qc: isQc, steps: steps, conds: conds, plain: plain };
 }
 
 window.brfDocTrClose = function(){
@@ -5866,8 +5918,11 @@ window.brfTranslateDoc = async function(){
       }
       if(!st.pts.length && !(st.qc && st.qc.length)) out.push({ type:'row', text:'（記載なし）' });
     });
+  }else if(r.qc){
+    /* 品質チェックシート：二重の行をたたみ、見出しを立て、改訂履歴や図の番号は落とす */
+    brfQcLines(r.plain).forEach(function(o){ out.push(o); });
   }else{
-    /* 様式が違うときは、これまでどおり上から全部 */
+    /* どちらの様式でもないときは、これまでどおり上から全部 */
     r.plain.forEach(function(lines, i){
       out.push({ type:'hd', text:'p.' + (i+1) });
       lines.forEach(function(t){ out.push({ type:'row', text:t }); });
@@ -16295,7 +16350,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.25-17';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.25-18';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
