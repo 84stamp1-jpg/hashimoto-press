@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.25-30 : ★<b>品質チェックの欄を「品質 測定」「品質 確認」の2つに分けた</b>（2026-11-25 社長指示）。立ち上げ手順書で<b>品質チェックを2人でやる</b>と決めたため（<b>測定者＝最終工程の人が測り、確認者＝測定者以外が様-7-2に記録して確認者サインをする</b>）。1つの欄に2人の名前を並べて入れていたのをやめ、どちらが誰か分かるようにした。ふだのボタンも<b>📣進行／✅測定／📝確認</b>の3つ。★<b>同じ人を測定と確認の両方に入れない</b>＝片方に入れると、もう片方から自動で外れる（ダブルチェックのため）。ふだの色は 青＝進行／緑＝測定／<b>青緑＝確認</b>／紫＝かけもち。ボタンが3つで入らない幅では折り返す。保存は <code>dantori/{日付}Briefing/{品番}</code> に <code>qc2</code> を足しただけなので、前に保存した分（<code>qc</code>）はそのまま測定者として読める。英語は <b>Quality – measure／Quality – record</b>。 -->
 <!-- H-Hub v2026.11.25-29 : ★<b>配置表に入っているのに「今日この品番に入る人」に出ない</b>（2026-11-25 社長報告：46488-78R00-PR）。配置表の品番は <code>46488-78R00<b>-3人（W610）</b></code>、品番検索は <code>46488-78R00<b>-PR</b></code> で、<b>3つめから分かれる</b>ため、丸ごと一致でも頭から一致でも当たらなかった。→ 最後の手として<b>「製品の品番（ハイフンで区切った頭の2つ）」で探す</b>ようにした（工程内不良・苦情不適合と同じ <code>moldBase()</code>）。この探し方で拾ったときは「※配置表の品番「…」から」と出るので、別の枝番でないか目で確かめられる。 -->
 <!-- H-Hub v2026.11.25-28 : 配置表の印刷をさらに5つ直した（2026-11-25 社長指示）。(1)<b>時間の数字を大きく</b>（印刷のとき11px）。(2)<b>バーを薄く</b>＝白地に細い黒枠（段取りは薄い灰）。白黒で刷るので文字を優先した。(3)★<b>A/B/Cラインを見分けやすく</b>＝バーの中のライン名を<b>黒地に白ぬき</b>にした。(4)★<b>文字が重なっていた</b>のを直した（-26で全部のバーをはみ出させたため）。複製する前に画面で測り、<b>右に10px以上の余白があるバーだけ</b>はみ出させる。(5)★<b>「この日の計画」の名前に、途中で入る人・抜ける人の時刻を添えた</b>（例「柴田晃宏(〜17:00)・大石章宏(17:10〜)」）。担当を決める画面と同じ <code>entryToWorkerRows()</code> を使うので、画面と必ず一致する。 -->
 <!-- H-Hub v2026.11.25-27 : ★<b>品番が変わるのに「今日の段取り」の枠が出なかった</b>（2026-11-25 社長指摘：B1 63431/831-69T00P）。紙は進捗管理ボードの予定を見ており、そこで<b>「型数も人数も0なら段取りなし」</b>と決めていたのが原因（<code>j.noSetup || (kata===0 && ninzu===0)</code>）。この行は<b>段取りありなのに型数が空</b>だった。→ <b>前の行と品番が変わるなら、型数・人数が空でも段取りあり</b>として扱う。品番が変われば段取りは必ずあり、外段取りで済ませるときは計画で「段取りなし」に印を付ける決まりだから。<b>その日いちばん最初の行だけは今までどおり</b>（前の品番が分からない＝前日から続いている）。 -->
@@ -632,7 +633,9 @@ html, body {
 .brf-chip button:hover{background:#e0e7ff;border-color:#a5b4fc;}
 .brf-chip.is-sk{border-color:#1d4ed8;background:#eff6ff;}
 .brf-chip.is-qc{border-color:#16a34a;background:#f0fdf4;}
+.brf-chip.is-qc2{border-color:#0d9488;background:#f0fdfa;}   /* 品質 確認（2026-11-25） */
 .brf-chip.is-both{border-color:#7c3aed;background:#f5f3ff;}
+.brf-chip{flex-wrap:wrap;}   /* ★ボタンが3つになったので、入らない幅では折り返す（2026-11-25） */
 @media (max-width:760px){ .brf-mem-list{grid-template-columns:1fr;} }
 @media (max-width:900px){ .brf-grid{grid-template-columns:1fr;grid-template-rows:minmax(230px,44%) 1fr;} .brf-pdf{border-right:none;border-bottom:1px solid #e5e7eb;} .brf-hd-d{margin-left:0;} .brf-box{max-height:100vh;border-radius:0;} .brf-ov{padding:0;} }
 /* 記録から不良品報告を作る（2026-09-22） */
@@ -1861,7 +1864,8 @@ body{font-family:'Noto Sans JP',sans-serif;background:#eceae3;color:#1a1a1a;disp
       <div class="brf-side">
         <div class="brf-tan">
           <div class="brf-tan-r"><label id="brf-l-lead">進行</label><input id="brf-shikai" list="brf-people" placeholder="名前" onchange="brfMarkChips();brfSave()"/></div>
-          <div class="brf-tan-r"><label id="brf-l-qc">品質チェック</label><input id="brf-qc" list="brf-people" placeholder="名前（最終工程の人）" onchange="brfMarkChips();brfSave()"/></div>
+          <div class="brf-tan-r"><label id="brf-l-qc">品質 測定</label><input id="brf-qc" list="brf-people" placeholder="名前（最終工程の人）" onchange="brfMarkChips();brfSave()"/></div>
+          <div class="brf-tan-r"><label id="brf-l-qc2">品質 確認</label><input id="brf-qc2" list="brf-people" placeholder="名前（測定者以外・記録して確認者サイン）" onchange="brfMarkChips();brfSave()"/></div>
           <div class="brf-tan-r"><label id="brf-l-memo">メモ</label><input id="brf-memo" placeholder="今日の注意点など" onchange="brfSave()"/></div>
           <div class="brf-saved" id="brf-saved"></div>
         </div>
@@ -5208,7 +5212,7 @@ function brfOpen(){
   if(dl){
     dl.innerHTML = brfRoster().map(n=>'<option value="'+n+'"></option>').join('');
   }
-  ['brf-shikai','brf-qc','brf-memo'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
+  ['brf-shikai','brf-qc','brf-qc2','brf-memo'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
   document.getElementById('brf-saved').textContent = '';
   // 帳票（作業標準書→品質チェックシートの順）
   BRF_DOCS = []
@@ -5415,7 +5419,8 @@ async function brfMembers(){
         /* ★ライン名と役割（「Bライン 作業者」）は出さない。時刻だけ、付く人に添える（2026-11-25 社長指示） */
         + '<i>' + brfEsc(p.parts.map(q => q.t).filter(Boolean).join('・')) + '</i>'
         + '<button title="' + brfEsc(p.name) + ' ' + brfT('t_lead') + '" onclick="brfSet(' + i + ',\'shikai\')">' + brfT('b_lead') + '</button>'
-        + '<button title="' + brfEsc(p.name) + ' ' + brfT('t_qc')   + '" onclick="brfSet(' + i + ',\'qc\')">'     + brfT('b_qc')   + '</button></span>'
+        + '<button title="' + brfEsc(p.name) + ' ' + brfT('t_qc')   + '" onclick="brfSet(' + i + ',\'qc\')">'     + brfT('b_qc')   + '</button>'
+        + '<button title="' + brfEsc(p.name) + ' ' + brfT('t_qc2')  + '" onclick="brfSet(' + i + ',\'qc2\')">'    + brfT('b_qc2')  + '</button></span>'
       ).join('')
     + '</div>';
   brfMarkChips();
@@ -5424,22 +5429,31 @@ async function brfMembers(){
 function brfSet(i, which){
   const p = BRF_MEM[i];
   if(!p) return;
-  const e = document.getElementById(which === 'qc' ? 'brf-qc' : 'brf-shikai');
+  const ID = { shikai:'brf-shikai', qc:'brf-qc', qc2:'brf-qc2' };
+  const e = document.getElementById(ID[which] || 'brf-shikai');
   if(!e) return;
-  e.value = (e.value.trim() === p.name) ? '' : p.name;   // もう一度押すと外れる
+  const off = (e.value.trim() === p.name);
+  e.value = off ? '' : p.name;                           // もう一度押すと外れる
+  /* ★確認者は測定者以外（様-7-2のダブルチェック）。片方に入れたら、もう片方から外す */
+  if(!off && (which === 'qc' || which === 'qc2')){
+    const o = document.getElementById(which === 'qc' ? 'brf-qc2' : 'brf-qc');
+    if(o && o.value.trim() === p.name) o.value = '';
+  }
   brfMarkChips();
   brfSave();
 }
 
 function brfMarkChips(){
-  const sk = (document.getElementById('brf-shikai')||{}).value || '';
-  const qc = (document.getElementById('brf-qc')||{}).value || '';
+  const v  = id => ((document.getElementById(id)||{}).value || '').trim();
+  const sk = v('brf-shikai'), qc = v('brf-qc'), qc2 = v('brf-qc2');
   BRF_MEM.forEach((p,i) => {
     const c = document.getElementById('brf-chip-' + i);
     if(!c) return;
-    const a = (p.name === sk.trim()), b = (p.name === qc.trim());
+    const a = (p.name === sk), b = (p.name === qc), d = (p.name === qc2);
+    const n = (a?1:0) + (b?1:0) + (d?1:0);
     const wide = p.parts.map(q=>q.t).filter(Boolean).join('・').length >= 8 ? ' w2' : '';
-    c.className = 'brf-chip' + wide + (a && b ? ' is-both' : a ? ' is-sk' : b ? ' is-qc' : '');
+    c.className = 'brf-chip' + wide
+      + (n > 1 ? ' is-both' : a ? ' is-sk' : b ? ' is-qc' : d ? ' is-qc2' : '');
   });
 }
 
@@ -5478,14 +5492,16 @@ try{ BRF_LANG = localStorage.getItem('brfLang') || 'ja'; }catch(e){}
 var BRF_TXT = {
   ja: {
     lang:'English', close:'\u2715 閉じる', title:'📣 ブリーフィング',
-    lead:'進行', qc:'品質チェック', memo:'メモ',
-    ph_name:'名前', ph_qc:'名前（最終工程の人）', ph_memo:'今日の注意点など',
+    lead:'進行', qc:'品質 測定', qc2:'品質 確認', memo:'メモ',
+    ph_name:'名前', ph_qc:'名前（最終工程の人）',
+    ph_qc2:'名前（測定者以外・記録して確認者サイン）', ph_memo:'今日の注意点など',
     order:'<b>言う順番</b><br>\u2460 誰がどの工程を担当するか（自工程の注意点を確認する）<br>'
          +'\u2461 前回この品番で出た不良・注意点・型改修後か（下を見る）<br>'
          +'\u2462 変化点（初めて・久しぶり・条件が変わった）',
     mem_hd:'今日この品番に入る人（配置表）', prod:'生産',
-    b_lead:'📣 進行', b_qc:'\u2705 品質',
-    t_lead:'を進行にする', t_qc:'を品質チェックにする',
+    b_lead:'📣 進行', b_qc:'\u2705 測定', b_qc2:'📝 確認',
+    t_lead:'を進行にする', t_qc:'を品質チェックの測定者にする',
+    t_qc2:'を品質チェックの確認者（記録してサインする人）にする',
     no_plan:'今日の計画にこの品番がありません。上の欄に名前を書いてください（担当者マスターから選べます）',
     from:'※配置表の品番「%s」から',
     not_master:'は、いまの作業者マスタに無いので出していません（段取り計画の担当欄に名前が残っています）',
@@ -5496,14 +5512,16 @@ var BRF_TXT = {
   },
   en: {
     lang:'日本語', close:'\u2715 Close', title:'📣 Briefing',
-    lead:'Facilitator', qc:'Quality check', memo:'Notes',
-    ph_name:'Name', ph_qc:'Name (last process)', ph_memo:'Notes for today',
+    lead:'Facilitator', qc:'Quality \u2013 measure', qc2:'Quality \u2013 record', memo:'Notes',
+    ph_name:'Name', ph_qc:'Name (last process)',
+    ph_qc2:'Name (not the measurer \u2013 records and signs)', ph_memo:'Notes for today',
     order:'<b>What to cover</b><br>\u2460 Who does which process (check the points for your own process)<br>'
          +'\u2461 Defects and warnings from the last run of this part, and whether the die was repaired (see below)<br>'
          +'\u2462 Changes (first time / after a long gap / conditions changed)',
     mem_hd:'People on this part today (roster)', prod:'Production',
-    b_lead:'📣 Lead', b_qc:'\u2705 QC',
-    t_lead:'as facilitator', t_qc:'as quality check',
+    b_lead:'📣 Lead', b_qc:'\u2705 Measure', b_qc2:'📝 Record',
+    t_lead:'as facilitator', t_qc:'as the one who measures',
+    t_qc2:'as the one who records and signs (not the measurer)',
     no_plan:'This part is not in today\u2019s plan. Type the names in the fields above.',
     from:'* from the roster part \u201c%s\u201d',
     not_master:'is not in the current worker list, so it is not shown (the name is still in the plan)',
@@ -5559,9 +5577,11 @@ function brfApplyLang(){
   set('brf-close', brfT('close'));
   set('brf-l-lead', brfT('lead'));
   set('brf-l-qc',   brfT('qc'));
+  set('brf-l-qc2',  brfT('qc2'));
   set('brf-l-memo', brfT('memo'));
   set('brf-shikai', brfT('ph_name'), 'placeholder');
   set('brf-qc',     brfT('ph_qc'),   'placeholder');
+  set('brf-qc2',    brfT('ph_qc2'),  'placeholder');
   set('brf-memo',   brfT('ph_memo'), 'placeholder');
   const o = document.getElementById('brf-order');
   if(o) o.innerHTML = brfT('order');
@@ -6000,6 +6020,7 @@ async function brfLoad(){
     const set = (id,val)=>{ const e=document.getElementById(id); if(e && !e.value) e.value = val || ''; };
     set('brf-shikai', v.shikai);
     set('brf-qc',     v.qc);
+    set('brf-qc2',    v.qc2);
     set('brf-memo',   v.memo);
     brfMarkChips();
   }catch(e){}
@@ -6009,7 +6030,8 @@ async function brfSave(){
   const pn = (window.__lastPart||{}).partNo;
   if(!pn) return;
   const g = id => { const e=document.getElementById(id); return e ? e.value.trim() : ''; };
-  const body = { part:pn, shikai:g('brf-shikai'), qc:g('brf-qc'), memo:g('brf-memo'), ts:Date.now() };
+  const body = { part:pn, shikai:g('brf-shikai'), qc:g('brf-qc'), qc2:g('brf-qc2'),
+                 memo:g('brf-memo'), ts:Date.now() };
   const lbl = document.getElementById('brf-saved');
   try{
     const r = await fetch(brfFb() + '/dantori/' + brfYmdPath() + 'Briefing/' + brfKey(pn) + '.json',
@@ -16443,7 +16465,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.25-29';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.25-30';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
