@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.25-16 : 標準書の訳に<b>「品質確認箇所」も入れた</b>（2026-11-25 社長指示）。枠の中の「品質確認箇所」から「作業ポイント」までの行を拾う。工程ごとに<b>〈品質確認箇所 / Quality check point〉〈作業ポイント / Work points〉の小見出し</b>を付けたので、どちらの話か分かる。どちらも無い工程は「（記載なし）」。 -->
 <!-- H-Hub v2026.11.25-15 : ★<b>1枚目の右に余白があるのに、段取りの枠が「つづき」の紙へ送られることがあった</b>（2026-11-25 社長指摘）。送ったあとに高さを測って「減っていなければ戻す」歯止めは入れてあったが、<b>送る前に「その枠が横に並んでいるか」を見ていなかった</b>。→ <b>枠がぜんぶ同じ行に収まっているなら、そもそも送らない</b>ようにした（横に並んだ枠を送っても高さは1mmも減らず、紙だけが増えるため）。※-14 で「担当」の列を外して枠が低くなったので、今日のデータでは2つとも1枚目に並んでいる（実測で確認）。 -->
 <!-- H-Hub v2026.11.25-14 : 段取り準備シートから<b>「担当」と「やった人」の列を外した</b>（2026-11-25 社長指示「シートは1人1枚持っているので要らない」）。外したのは <b>①今日の段取りの枠の「担当」</b>（予定・実際の右にあった欄）と<b>②段取りなしの準備の「やった人」</b>。誰のぶんかは<b>紙そのもの</b>で分かるので、書く場所を持つ意味がない。空いたぶんは残りの列が広がる。※段取り準備の<b>⑧「担当と時刻」のチェックは残してある</b>＝これは「誰が何時から入るか・応援やリフトの手配が済んだか」を<b>決めたかどうかの印</b>で、名前を書く欄ではない。 -->
 <!-- H-Hub v2026.11.25-13 : ★<b>-11／-12 でブリーフィングの処理が二重に入っていた</b>のを取り除いた。差し替えのときに<b>消す範囲の終わりを、始まりより前の場所で指していた</b>ため、古い版がそのまま後ろに残り、<b>あとに書かれたほう（古い中身）が使われて</b>いた＝-12 で直したはずの「工程1〜5の番号が取れない」が直らなかった。同じ関数が2つある状態（<code>brfDocBlocks</code>・<code>brfTranslateDoc</code>・ことば検索）を解消し、それぞれ1つだけ残っていることを確かめた。★<b>差し替えたあとは、同じ関数が2つ無いか必ず数えること</b>。 -->
@@ -566,6 +567,7 @@ html, body {
 .dtr-body{flex:1;min-height:0;overflow-y:auto;padding:6px 10px;font-size:12px;line-height:1.5;}
 .dtr-pg{font-size:12px;font-weight:800;color:#1e3a8a;margin:9px 0 3px;padding:2px 6px;background:#eff6ff;border-radius:5px;}
 /* ★英語の人が読むので英語を主役にする。日本語は下に小さく添える（2026-11-25 社長報告「読みにくい」） */
+.dtr-sub{font-size:10.5px;font-weight:700;color:#64748b;margin:4px 0 0;}
 .dtr-row{display:flex;flex-direction:column;padding:3px 0 4px;border-bottom:1px solid #f1f5f9;}
 .dtr-row .ja{order:2;color:#94a3b8;font-size:10.5px;line-height:1.35;margin-top:1px;}
 .dtr-row .en{order:1;color:#0f172a;font-size:12.5px;font-weight:600;line-height:1.45;}
@@ -5802,7 +5804,12 @@ async function brfDocBlocks(url){
         const iPt = lines.findIndex(function(t){ return t.indexOf('作業ポイント') >= 0; });
         const pts = (iPt >= 0 ? lines.slice(iPt + 1) : [])
           .filter(function(t){ return t.length > 1; });
-        steps.push({ no: no, name: name, pts: pts });
+        /* ★品質確認箇所も入れる（2026-11-25 社長指示）。「品質確認箇所」から「作業ポイント」の間 */
+        const iQc = lines.findIndex(function(t){ return t.indexOf('品質確認箇所') >= 0; });
+        const qc = (iQc >= 0)
+          ? lines.slice(iQc + 1, (iPt > iQc ? iPt : undefined)).filter(function(t){ return t.length > 1; })
+          : [];
+        steps.push({ no: no, name: name, qc: qc, pts: pts });
       });
     });
   }
@@ -5847,8 +5854,15 @@ window.brfTranslateDoc = async function(){
     }
     r.steps.forEach(function(st){
       out.push({ type:'hd', text:st.no + '. ' + (st.name || '') });
-      if(!st.pts.length) out.push({ type:'row', text:'（作業ポイントの記載なし）' });
-      st.pts.forEach(function(t){ out.push({ type:'row', text:t }); });
+      if(st.qc && st.qc.length){
+        out.push({ type:'sub', text:'品質確認箇所 / Quality check point' });
+        st.qc.forEach(function(t){ out.push({ type:'row', text:t }); });
+      }
+      if(st.pts.length){
+        out.push({ type:'sub', text:'作業ポイント / Work points' });
+        st.pts.forEach(function(t){ out.push({ type:'row', text:t }); });
+      }
+      if(!st.pts.length && !(st.qc && st.qc.length)) out.push({ type:'row', text:'（記載なし）' });
     });
   }else{
     /* 様式が違うときは、これまでどおり上から全部 */
@@ -5867,7 +5881,8 @@ window.brfTranslateDoc = async function(){
   /* まず原文だけ出す（訳を待たずに読める） */
   let k = 0;
   body.innerHTML = out.map(function(o){
-    if(o.type === 'hd') return '<div class="dtr-pg">' + brfEsc(o.text) + '</div>';
+    if(o.type === 'hd')  return '<div class="dtr-pg">' + brfEsc(o.text) + '</div>';
+    if(o.type === 'sub') return '<div class="dtr-sub">' + brfEsc(o.text) + '</div>';
     return '<div class="dtr-row" id="dtr-' + (k++) + '"><div class="ja">' + brfEsc(o.text) + '</div></div>';
   }).join('');
 
@@ -16278,7 +16293,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.25-15';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.25-16';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
