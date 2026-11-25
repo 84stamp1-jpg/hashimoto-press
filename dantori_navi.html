@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.25-17 : ★<b>呼び出しの帯が出ていると、ブリーフィングの「English／日本語」が押せなかった</b>（2026-11-25 社長報告）。帯は <code>position:fixed; top:0; z-index:10000</code> で必ずいちばん上に出るのに、ブリーフィングは <code>inset:0</code> で画面の天井から始まっていたため、<b>見出しの右にあるボタンが帯の下に潜っていた</b>。→ <b><code>--callh</code>（帯の高さ）の分だけ下げた</b>（現品ラベルで同じことをしたときと同じ直し方）。帯が消えれば元に戻る。 -->
 <!-- H-Hub v2026.11.25-16 : 標準書の訳に<b>「品質確認箇所」も入れた</b>（2026-11-25 社長指示）。枠の中の「品質確認箇所」から「作業ポイント」までの行を拾う。工程ごとに<b>〈品質確認箇所 / Quality check point〉〈作業ポイント / Work points〉の小見出し</b>を付けたので、どちらの話か分かる。どちらも無い工程は「（記載なし）」。 -->
 <!-- H-Hub v2026.11.25-15 : ★<b>1枚目の右に余白があるのに、段取りの枠が「つづき」の紙へ送られることがあった</b>（2026-11-25 社長指摘）。送ったあとに高さを測って「減っていなければ戻す」歯止めは入れてあったが、<b>送る前に「その枠が横に並んでいるか」を見ていなかった</b>。→ <b>枠がぜんぶ同じ行に収まっているなら、そもそも送らない</b>ようにした（横に並んだ枠を送っても高さは1mmも減らず、紙だけが増えるため）。※-14 で「担当」の列を外して枠が低くなったので、今日のデータでは2つとも1枚目に並んでいる（実測で確認）。 -->
 <!-- H-Hub v2026.11.25-14 : 段取り準備シートから<b>「担当」と「やった人」の列を外した</b>（2026-11-25 社長指示「シートは1人1枚持っているので要らない」）。外したのは <b>①今日の段取りの枠の「担当」</b>（予定・実際の右にあった欄）と<b>②段取りなしの準備の「やった人」</b>。誰のぶんかは<b>紙そのもの</b>で分かるので、書く場所を持つ意味がない。空いたぶんは残りの列が広がる。※段取り準備の<b>⑧「担当と時刻」のチェックは残してある</b>＝これは「誰が何時から入るか・応援やリフトの手配が済んだか」を<b>決めたかどうかの印</b>で、名前を書く欄ではない。 -->
@@ -541,7 +542,8 @@ html, body {
 .mold-morelink:hover{text-decoration:underline;}
 .mold-morning{border:2px solid #fecaca;background:#fff;border-radius:8px;padding:10px 12px;margin:2px 0 12px;}
 /* ブリーフィング画面（2026-11-24 社長指示）：作業標準書PDFと注意点を並べて見ながら話す */
-.brf-ov{position:fixed;inset:0;background:#fff;z-index:9000;display:flex;align-items:center;justify-content:center;padding:0;}
+/* ★呼び出しの帯（position:fixed; top:0; z-index:10000）の分だけ下げる。下げないと帯が上にかぶさって English の切り替えが押せない（2026-11-25 社長報告・現品ラベルと同じ対処） */
+.brf-ov{position:fixed;left:0;right:0;bottom:0;top:var(--callh,0px);background:#fff;z-index:9000;display:flex;align-items:center;justify-content:center;padding:0;}
 .brf-box{background:#fff;border-radius:0;width:100%;max-width:none;height:100%;max-height:100%;display:flex;flex-direction:column;overflow:hidden;}
 .brf-hd{display:flex;align-items:center;gap:13px;padding:9px 15px;background:#1e3a8a;color:#fff;flex-wrap:wrap;}
 .brf-hd-t{font-size:15px;font-weight:800;}
@@ -16293,7 +16295,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.25-16';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.25-17';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
