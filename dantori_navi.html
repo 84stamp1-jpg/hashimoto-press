@@ -112,6 +112,7 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.25-26 : 配置表の印刷を4つ直した（2026-11-25 社長指示）。(1)★<b>時間の目盛りが白黒で薄くて読めなかった</b>→ 印刷のときだけ<b>黒・太字</b>にし、下の罫線も黒に。(2)★<b>短いバーは中に文字が入らなかった</b>→ 印刷のときだけ <code>overflow:visible</code> にして、<b>わきに余白があればそこへ文字を出す</b>。(3)★<b>「この日の計画」に作業者の名前を出した</b>（👷の人数のうしろ）。途中から入る人も入れ、姓名のあいだの空白は詰める。(4)★<b>配置表の途中で紙が変わらないようにした</b>（<code>.rt-outer{break-inside:avoid}</code>）。1枚に入れば配置表と計画が同じ紙に、入らなければ計画が<b>丸ごと次の紙</b>へ移る。 -->
 <!-- H-Hub v2026.11.25-25 : 「朝の計画との差」の帯の<b>時刻の書き方</b>を直した（2026-11-25 社長の問い「ここに出る表示は実績入力時点のものでないと、入力前は常に遅れになってしまわないですか？」）。★<b>仕組みはもとから入力時点で比べている</b>＝<code>calcPlanDiff()</code> も <code>getProRata()</code> も<b>そのラインが最後に実績を入れた時刻（<code>updatedAt</code>）</b>を基準にしており、いまの時刻では計算していない。さらに「いま遅れ」は <code>l.actual>0 && l.updatedAt>0</code> が条件なので<b>実績が1個も入っていないラインには出ない</b>（そちらは「まだ実績が入っていない：…」で別に出す）。ただし帯の見出しが「<b>09:16〜10:07 時点</b>」で、<b>その間ずっと</b>と読めてしまうのが誤解のもとだった。→「<b>それぞれの入力時点 09:16〜10:07</b>」に変え、各ラインの札にマウスを乗せると「<b>09:16 に入れた実績で比べています（実績○個／そのときの計画○個）</b>」と出るようにした。 -->
 <!-- H-Hub v2026.11.25-24 : 段取り準備シートの<b>①「○容器 △ｽｸﾗｯﾌﾟ／□材料」の行を詰め</b>（8.4mm→<b>6.2mm</b>＝終品の ※ と時刻が入るだけの高さ。5ライン分で約11mm返る）、<b>②「段取りなしの準備」のチェックの行を広げた</b>（上下の余白 .15mm→<b>.9mm</b>）。□が押しやすく、手で書き込みやすくなる（2026-11-25 社長指示）。 -->
 <!-- H-Hub v2026.11.25-23 : -22 でも表が紙より広いままだった（286mm／紙282mm）。原因は<b>メモ欄を width:auto にしていた</b>こと＝余りを取るどころか、品番のように指定より長い中身があると表ごと広がってしまう。<b>メモを62mm固定</b>にして紙の中に収めた。 -->
@@ -1007,6 +1008,7 @@ html, body {
 .rt-plan-nobody{border-color:#fca5a5;background:#fff5f5;}
 .rt-plan-cnt{margin-left:5px;font-size:12px;font-weight:700;color:#0369a1;background:#e0f2fe;border-radius:9px;padding:1px 7px;}
 .rt-plan-nobody .rt-plan-cnt{color:#b91c1c;background:#fee2e2;}
+.rt-plan-who{margin-left:5px;font-size:11px;color:#334155;}   /* 作業者の名前（2026-11-25） */
 /* 優先ライン上書きモード */
 .rt-ovr-mode .rt-name{flex-direction:column;align-items:flex-start;justify-content:center;white-space:normal;gap:2px;min-height:50px;}
 .rt-ovr-mode .rt-track{min-height:50px;}
@@ -12237,6 +12239,15 @@ body{font-family:'Noto Sans JP',sans-serif;background:#fff;margin:0;padding:8px;
     -webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .rt-row{break-inside:avoid;}
   .rt-plan,.rt-plan-row{break-inside:avoid;}
+  /* ★白黒で刷ると時間の目盛りが薄くて読めない（2026-11-25 社長指示）。印刷のときだけ黒にする */
+  .rt-hdr, .rt-hdr *{ color:#000!important; font-weight:700!important; }
+  .rt-hdr{ border-bottom:2px solid #000!important; }
+  /* ★短いバーは中に文字が入らない。わきに余白があればそこへ出す（同日 社長指示） */
+  .rt-block{ overflow:visible!important; }
+  .rt-block > *{ overflow:visible!important; }
+  /* ★配置表の途中で紙が変わらないようにする。入らなければ「この日の計画」が次の紙へ丸ごと移る */
+  .rt-outer{ break-inside:avoid; }
+  .rt-plan{ break-inside:avoid; }
 }
 </style></head>
 <body>
@@ -12523,6 +12534,13 @@ function _rtBuildPlanList(allEntries){
       const nW    = (((d.roles||{}).作業者)||'').split(/[,、]/).map(s=>s.trim()).filter(Boolean).length;
       const nAdd  = (d.shiftChanges||[]).filter(c => c.inWorker).length;
       const noOne = !nW && !nAdd && !d.noWorker;
+      /* ★人数のうしろに名前も出す（2026-11-25 社長指示）。途中から入る人も入れる。
+         姓と名のあいだの空白は詰める（紙の横幅を食うため） */
+      const whoList = (((d.roles||{}).作業者)||'').split(/[,、]/).map(x=>x.trim()).filter(Boolean)
+        .concat((d.shiftChanges||[]).filter(c=>c.inWorker).map(c=>String(c.inWorker).trim()))
+        .map(x=>x.replace(/[\s\u3000]+/g,''));
+      const whoTxt = whoList.length
+        ? `<span class="rt-plan-who">${whoList.join('・')}</span>` : '';
       const shift = nAdd ? `<span style="color:#6366f1;font-weight:700;" title="途中で担当が変わります">⏱</span>` : '';
       html += `<span class="rt-plan-job${noOne?' rt-plan-nobody':''}" onclick="rtOpenEntryEdit('${eid}',event)"
         title="${d.partNo||''}　${d.prodStart||''}〜${d.prodEnd||''}">
@@ -12530,6 +12548,7 @@ function _rtBuildPlanList(allEntries){
         <span style="opacity:.5;">〜</span>${d.prodEnd||''}
         <span style="margin-left:4px;">${d.partNo||'（品番なし）'}</span>
         <span class="rt-plan-cnt">${noOne ? '担当なし' : `👷${nW + nAdd}`}${shift}</span>
+        ${whoTxt}
       </span>`;
     });
     html += `</div></div>`;
@@ -16363,7 +16382,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.25-25';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.25-26';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
