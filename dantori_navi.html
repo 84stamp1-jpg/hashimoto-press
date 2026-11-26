@@ -112,6 +112,8 @@
 })();
 </script>
 <title>H-Hub｜橋本工業</title>
+<!-- H-Hub v2026.11.26-3 : 配置表の印刷で<b>1枚に収まるかの見積りを正直にした</b>。「この日の計画」の高さを画面の実物から測るとき、<b>紙に出さない行（ロボットライン・組立）ぶんを引く</b>ようにした。引かないと余分に高く見えて、担当者の行を無駄に落としてしまう。 -->
+<!-- H-Hub v2026.11.26-2 : ★<b>配置表の「この日の計画」から、画面でも組立の行を外した</b>（2026-11-26 社長指示「配置表の画面でも組立は非表示にしてください。名前のもの」）。組立は<b>人の名前がそのままライン名</b>（例「坂田」）なので、配置表（担当者はプレス係だけ）には使えない行だった。判定は既存の <code>isAssyLine()</code>＝頭がA/B/Cでもロボットラインでもないもの。<b>ロボットラインは今までどおり画面に出る</b>。組立の予定しか無い日は「プレスの予定はありません」と出す。※<b>紙はもっと狭く、A〜Cラインだけ</b>（印刷の <code>SETUP_LINE_RE</code>）。ここは前から変わらない。 -->
 <!-- H-Hub v2026.11.26-1 : ★<b>配置表の印刷が2枚に分かれていたのを、1枚に収まるようにした</b>（2026-11-26 社長指示「縦が入りきらないときは仲田と見原(リフトマンなど)の表示はなしでいい」）。「この日の計画」は <code>break-inside:avoid</code> なので、<b>残りの余白に入らないと丸ごと次の紙へ移る</b>。実際 15行＋計画で数十pxだけ溢れて2枚になっていた。→ 刷る前に高さを見積もり、<b>A4横1枚（720px）に入らないときだけ、生産のバーが無い人の行を落とす</b>。★見分け方は<b>生産のバーの中の <code>.rt-bl</code>（ライン名の札）</b>。段取り（取付・初品＝<code>rt-setup</code>）だけの行・突発作業だけの行・空の行には付かないので、<b>リフトマン（仲田・見原）と、その日 配置の無い人（松浦・松本）だけ</b>が落ちる。入るときは今までどおり全員出る。※<b>組立（坂田さんのような人名のライン）は前から紙に出ない</b>（<code>SETUP_LINE_RE</code> で頭がA/B/Cの行だけ残している）。 -->
 <!-- H-Hub v2026.11.25-30 : ★<b>品質チェックの欄を「品質 測定」「品質 確認」の2つに分けた</b>（2026-11-25 社長指示）。立ち上げ手順書で<b>品質チェックを2人でやる</b>と決めたため（<b>測定者＝最終工程の人が測り、確認者＝測定者以外が様-7-2に記録して確認者サインをする</b>）。1つの欄に2人の名前を並べて入れていたのをやめ、どちらが誰か分かるようにした。ふだのボタンも<b>📣進行／✅測定／📝確認</b>の3つ。★<b>同じ人を測定と確認の両方に入れない</b>＝片方に入れると、もう片方から自動で外れる（ダブルチェックのため）。ふだの色は 青＝進行／緑＝測定／<b>青緑＝確認</b>／紫＝かけもち。ボタンが3つで入らない幅では折り返す。保存は <code>dantori/{日付}Briefing/{品番}</code> に <code>qc2</code> を足しただけなので、前に保存した分（<code>qc</code>）はそのまま測定者として読める。英語は <b>Quality – measure／Quality – record</b>。 -->
 <!-- H-Hub v2026.11.25-29 : ★<b>配置表に入っているのに「今日この品番に入る人」に出ない</b>（2026-11-25 社長報告：46488-78R00-PR）。配置表の品番は <code>46488-78R00<b>-3人（W610）</b></code>、品番検索は <code>46488-78R00<b>-PR</b></code> で、<b>3つめから分かれる</b>ため、丸ごと一致でも頭から一致でも当たらなかった。→ 最後の手として<b>「製品の品番（ハイフンで区切った頭の2つ）」で探す</b>ようにした（工程内不良・苦情不適合と同じ <code>moldBase()</code>）。この探し方で拾ったときは「※配置表の品番「…」から」と出るので、別の枝番でないか目で確かめられる。 -->
@@ -12221,8 +12223,17 @@ window.rtPrintRoster = function(){
      2026-09-03 にいったん外したが、余白が空くので戻した。
      ロボットライン以降は出さない＝A〜Cラインだけ（準備チェック表と同じ決まり）。 */
   let planHtml = '';
+  let planH = 0;                 // ★紙に残る計画だけの高さ（1枚に収まるかの判定に使う）
   const planEl = document.querySelector('.rt-plan');
   if(planEl){
+    /* ★高さは画面の実物から測る（複製は画面に無いので測れない）。
+       紙に出さない行（ロボットライン・組立）の高さは引いておく。
+       引かないと余分に高く見えて、担当者の行を無駄に落としてしまう。 */
+    planH = planEl.scrollHeight;
+    planEl.querySelectorAll('.rt-plan-row').forEach(row => {
+      const el = row.querySelector('.rt-plan-line');
+      if(!SETUP_LINE_RE.test((el ? el.textContent : '').trim())) planH -= row.offsetHeight;
+    });
     const pc = planEl.cloneNode(true);
     pc.querySelectorAll('.rt-plan-row').forEach(row => {
       const el = row.querySelector('.rt-plan-line');
@@ -12271,7 +12282,7 @@ window.rtPrintRoster = function(){
        空の行には付かないので、リフトマンと配置の無い人だけが落ちる。 */
   const PR_PAGE_H = 720;        // A4横 210mm − body余白8mm×2 ≒ 733px。少し安全を見て720
   const _prH = sel => { const e = document.querySelector(sel); return e ? e.scrollHeight : 0; };
-  let prNeed = (40 + _prH('.rt-outer') + (planHtml ? _prH('.rt-plan') : 0)) * zoom;
+  let prNeed = (40 + _prH('.rt-outer') + (planHtml ? Math.max(0, planH) : 0)) * zoom;
   if(prNeed > PR_PAGE_H){
     clone.querySelectorAll('.rt-row').forEach(row => {
       if(prNeed <= PR_PAGE_H) return;                 // もう入るならここで止める
@@ -12608,14 +12619,31 @@ function renderPressTimeline(allEntries){
 // 品番を押すと担当者の選択画面が開き、そのまま上の配置表へ反映される。
 function _rtBuildPlanList(allEntries){
   const byLine = {};
+  let _hadAssy = false;            // 組立の予定だけはあったか（文の出し分けのため）
   (allEntries||[]).forEach(e => {
     if(!e || !e.lineId) return;
+    /* ★組立（人の名前がそのままライン名のもの。例「坂田」）は画面にも出さない
+       （2026-11-26 社長指示「配置表の画面でも組立は非表示に。名前のもの」）。
+       配置表に並ぶ担当者はプレス係だけなので、組立の行は配置に使えない。
+       ロボットラインは今までどおり出す（判定は isAssyLine）。
+       ※紙はもっと狭く、A〜Cラインだけ（印刷の SETUP_LINE_RE）。 */
+    let _assy = false;
+    try{ _assy = isAssyLine(e.lineId); }
+    catch(_e){                       /* 万一 isAssyLine が使えないときは表示名で見る */
+      const _nm = (typeof getLineDisplayName === 'function' ? getLineDisplayName(e.lineId) : '')
+                  || String(e.lineId || '');
+      _assy = !(SETUP_LINE_RE.test(_nm) || _nm === 'ロボットライン');
+    }
+    if(_assy){ _hadAssy = true; return; }
     (byLine[e.lineId] = byLine[e.lineId] || []).push(e);
   });
   const lineIds = Object.keys(byLine).sort();
   if(!lineIds.length){
     return `<div class="rt-plan"><div class="rt-plan-hdr">📋 この日の計画</div>
-      <div style="padding:10px;font-size:11px;color:#94a3b8;">予定がありません。「＋ 追加」か「📥 今すぐ同期」で取り込んでください。</div></div>`;
+      <div style="padding:10px;font-size:11px;color:#94a3b8;">` + (_hadAssy
+        ? 'プレスの予定はありません。（組立の予定は「🔧 組立計画」で見てください）'
+        : '予定がありません。「＋ 追加」か「📥 今すぐ同期」で取り込んでください。')
+      + `</div></div>`;
   }
   let html = `<div class="rt-plan">
     <div class="rt-plan-hdr">📋 この日の計画　<span style="font-weight:400;color:#94a3b8;font-size:10px;">品番を押すと、その工程の担当者と作業時間を設定できます</span></div>`;
@@ -16485,7 +16513,7 @@ else setTimeout(qcRestoreView, 0);
 //  ※LOGINUSER() はAPIトークンでは効かない（トークンに利用者がいない）ため、
 //    kintone側の「作業者が自分」ビューの条件は使わず、直近レコードを取って品番で突き合わせる。
 // ============================================================
-var QC_UI_VERSION = 'v2026.11.26-1';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
+var QC_UI_VERSION = 'v2026.11.26-3';   // ★版の番号はここと、先頭のコメントの2か所だけ（右下の表示はここから入れる）
 // ★右下の版表示はここで入れる（2026-11-11）。ページの終わりにも同じ処理があるが、
 //   そこは別のスクリプトで QC_UI_VERSION が見えず、try/catch に吸われて★ずっと空欄だった
 //   （社長から「バージョンはどこに出ていますか？」）。
